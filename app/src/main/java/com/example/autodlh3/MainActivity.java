@@ -57,6 +57,7 @@ public class MainActivity extends Activity {
     private static final String LLM_KEY_CIPHER_KEY = "llm_key_cipher";
     private static final String LLM_KEY_IV_KEY = "llm_key_iv";
     private static final String LLM_EP_KEY = "llm_endpoint";
+    private static final String LLM_MODEL_KEY = "llm_model";
     private static final String TOKEN_ALIAS = "AutoDLH3TokenKey";
 
     private WebView webView;
@@ -130,6 +131,7 @@ public class MainActivity extends Activity {
         else registerReceiver(downloadReceiver, filter);
 
         reconcileDownloads();
+        pollTasks();
     }
 
     private String loadAssetString(String path) {
@@ -285,13 +287,19 @@ public class MainActivity extends Activity {
                     if (!"Success".equalsIgnoreCase(json.optString("code"))) continue;
                     JSONObject data = json.optJSONObject("data");
                     if (data == null) continue;
-                    String status = data.optString("status", task.status);
+                    String rawStatus = data.optString("status", task.status);
+                    String normalizedStatus = rawStatus == null ? "QUEUED" : rawStatus.toUpperCase();
+                    if ("SUCCESSFUL".equals(normalizedStatus)) normalizedStatus = "SUCCESS";
+                    if ("PENDING".equals(normalizedStatus)) normalizedStatus = "QUEUED";
+                    if ("EXECUTING".equals(normalizedStatus) || "PROCESSING".equals(normalizedStatus)) normalizedStatus = "RUNNING";
+
+                    final String finalStatus = normalizedStatus;
                     String resultUrl = extractVideoUrl(data.optJSONArray("results"));
                     runOnUiThread(() -> {
-                        task.status = status;
+                        task.status = finalStatus;
                         if (!resultUrl.isEmpty()) task.videoUrl = resultUrl;
                         task.updatedAt = System.currentTimeMillis();
-                        if ("SUCCESS".equalsIgnoreCase(status) && !task.videoUrl.isEmpty()) startDownloadIfNeeded(task);
+                        if ("SUCCESS".equalsIgnoreCase(finalStatus) && !task.videoUrl.isEmpty()) startDownloadIfNeeded(task);
                         saveTasks();
                         notifyWebTasks();
                     });
@@ -402,6 +410,10 @@ public class MainActivity extends Activity {
 
     public void saveTasksJson(String jsonStr) {
         prefs().edit().putString(TASKS_KEY, jsonStr).apply();
+        runOnUiThread(() -> {
+            loadTasks();
+            pollTasks();
+        });
     }
 
     private void notifyWebTasks() {
@@ -417,8 +429,12 @@ public class MainActivity extends Activity {
 
     public String readLlmApiKeySecure() { return readSecure(LLM_KEY_CIPHER_KEY, LLM_KEY_IV_KEY); }
     public String readLlmEndpointSecure() { return prefs().getString(LLM_EP_KEY, "https://api.minimax.chat/v1/text/chatcompletion_v2"); }
+    public String readLlmModelSecure() { return prefs().getString(LLM_MODEL_KEY, "abab6.5s-chat"); }
     public boolean saveLlmConfigSecure(String apiKey, String endpoint) {
-        prefs().edit().putString(LLM_EP_KEY, endpoint).apply();
+        return saveLlmConfigSecure(apiKey, endpoint, "abab6.5s-chat");
+    }
+    public boolean saveLlmConfigSecure(String apiKey, String endpoint, String model) {
+        prefs().edit().putString(LLM_EP_KEY, endpoint).putString(LLM_MODEL_KEY, model).apply();
         return saveSecure(LLM_KEY_CIPHER_KEY, LLM_KEY_IV_KEY, apiKey);
     }
 

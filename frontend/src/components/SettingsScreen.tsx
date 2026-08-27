@@ -16,6 +16,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const initialLlm = nativeReadLlmConfig();
   const [llmApiKey, setLlmApiKey] = useState(initialLlm.apiKey || settings.llmApiKey || '');
   const [llmEndpoint, setLlmEndpoint] = useState(initialLlm.endpoint || settings.llmEndpoint || 'https://api.minimax.chat/v1/text/chatcompletion_v2');
+  const [llmModel, setLlmModel] = useState(initialLlm.model || settings.llmModel || 'abab6.5s-chat');
 
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -31,8 +32,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   };
 
   const handleSaveLlmConfig = () => {
-    nativeSaveLlmConfig(llmApiKey.trim(), llmEndpoint.trim());
-    onUpdateSettings({ llmApiKey: llmApiKey.trim(), llmEndpoint: llmEndpoint.trim() });
+    nativeSaveLlmConfig(llmApiKey.trim(), llmEndpoint.trim(), llmModel.trim());
+    onUpdateSettings({ llmApiKey: llmApiKey.trim(), llmEndpoint: llmEndpoint.trim(), llmModel: llmModel.trim() });
     showToast('Prompt 助手 LLM 配置已保存！');
   };
 
@@ -115,6 +116,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             onChange={(e) => setLlmApiKey(e.target.value)}
             className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2.5 px-3 font-mono text-xs text-slate-200 focus:outline-none focus:border-indigo-500 placeholder-slate-600"
             placeholder="如: sk-xxxxxxxxxxxxxxxxxxxxxxxx"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-slate-400 font-mono text-[10px] uppercase tracking-wider">LLM Model (模型名称)</label>
+          <input
+            type="text"
+            value={llmModel}
+            onChange={(e) => setLlmModel(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2.5 px-3 font-mono text-xs text-slate-200 focus:outline-none focus:border-indigo-500 placeholder-slate-600"
+            placeholder="默认: abab6.5s-chat (也可指定 deepseek-chat, gpt-4o-mini 等)"
           />
         </div>
 

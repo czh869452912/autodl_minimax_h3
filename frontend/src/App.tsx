@@ -23,24 +23,48 @@ export default function App() {
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [initialCreatePrompt, setInitialCreatePrompt] = useState<string>('');
 
-  // Load initial tasks on mount
+  // 1. Register Android native push event callback for task status & download updates
   useEffect(() => {
-    const loaded = nativeLoadTasks();
-    if (loaded && loaded.length > 0) {
-      setTasks(loaded);
-    }
+    window.onTaskStatusUpdated = (tasksJson: string) => {
+      try {
+        const updatedTasks: VideoTask[] = JSON.parse(tasksJson);
+        if (updatedTasks && Array.isArray(updatedTasks)) {
+          setTasks(updatedTasks);
+        }
+      } catch (e) {
+        console.error('Failed to parse task status update from native:', e);
+      }
+    };
+    return () => {
+      delete window.onTaskStatusUpdated;
+    };
   }, []);
 
-  // Save tasks to native/localStorage on change
+  // 2. Initial load & 3s polling timer to ensure tasks state stays in sync
   useEffect(() => {
-    if (tasks.length > 0) {
-      nativeSaveTasks(tasks);
-    }
-  }, [tasks]);
+    const syncTasks = () => {
+      const loaded = nativeLoadTasks();
+      if (loaded && Array.isArray(loaded) && loaded.length > 0) {
+        setTasks((prev) => {
+          if (JSON.stringify(prev) !== JSON.stringify(loaded)) {
+            return loaded;
+          }
+          return prev;
+        });
+      }
+    };
+    syncTasks();
+    const timer = setInterval(syncTasks, 3000);
+    return () => clearInterval(timer);
+  }, []);
 
-  // Sync tasks into Gallery items when SUCCESS
+  // 3. Sync tasks into Gallery items when SUCCESS or downloaded
   useEffect(() => {
-    const successful = tasks.filter((t) => t.status === 'SUCCESS' && (t.videoUrl || t.localUri));
+    const successful = tasks.filter(
+      (t) =>
+        (t.status?.toUpperCase() === 'SUCCESS' || t.downloadState === '已下载') &&
+        (t.videoUrl || t.localUri)
+    );
     const galleryItems: GalleryItem[] = successful.map((t) => ({
       id: t.id,
       title: `任务 ${t.id}`,
@@ -50,7 +74,7 @@ export default function App() {
       videoUrl: t.localUri || t.videoUrl || '',
       localUri: t.localUri,
       resolution: t.resolution,
-      timestamp: new Date(t.createdAt).toLocaleDateString()
+      timestamp: new Date(t.createdAt || Date.now()).toLocaleDateString()
     }));
     setGallery(galleryItems);
   }, [tasks]);
@@ -68,29 +92,28 @@ export default function App() {
   };
 
   // Handle Generate Video from Create Screen
-  const handleGenerateVideo = (taskData: Partial<VideoTask>) => {
-    const newTask: VideoTask = {
-      id: `TSK-${Math.floor(1000 + Math.random() * 9000)}`,
-      prompt: taskData.prompt || '',
-      status: 'QUEUED',
-      resolution: taskData.resolution || '768p竖',
-      duration: taskData.duration || 5,
-      seed: taskData.seed,
-      images: taskData.images,
-      audios: taskData.audios,
-      createdAt: Date.now()
-    };
-
-    setTasks((prev) => [newTask, ...prev]);
+  const handleGenerateVideo = (_taskData: Partial<VideoTask>) => {
+    setTimeout(() => {
+      const loaded = nativeLoadTasks();
+      if (loaded && loaded.length > 0) {
+        setTasks(loaded);
+      }
+    }, 400);
     navigateTo('tasks');
   };
 
   const handleCancelTask = (taskId: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    const updated = tasks.filter((t) => t.id !== taskId);
+    setTasks(updated);
+    nativeSaveTasks(updated);
   };
 
   const handleClearHistory = () => {
-    setTasks((prev) => prev.filter((t) => t.status === 'QUEUED' || t.status === 'RUNNING'));
+    const updated = tasks.filter(
+      (t) => t.status === 'QUEUED' || t.status === 'RUNNING'
+    );
+    setTasks(updated);
+    nativeSaveTasks(updated);
   };
 
   const handleDeleteGalleryItem = (id: string) => {

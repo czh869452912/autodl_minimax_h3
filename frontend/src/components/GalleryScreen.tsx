@@ -43,7 +43,7 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
   const handleCardClick = (item: GalleryItem) => {
     if (isSelectMode) {
       toggleSelectCard(item.id);
-    } else if (item.status === 'done') {
+    } else {
       onSelectVideo(item);
     }
   };

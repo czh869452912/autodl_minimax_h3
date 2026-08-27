@@ -4,9 +4,10 @@ export interface AndroidBridgeInterface {
   isNativeAvailable?(): boolean;
   saveToken?(token: string): boolean;
   readToken?(): string;
-  saveLlmConfig?(apiKey: string, endpoint: string): boolean;
+  saveLlmConfig?(apiKey: string, endpoint: string, model?: string): boolean;
   readLlmApiKey?(): string;
   readLlmEndpoint?(): string;
+  readLlmModel?(): string;
   submitTask?(taskJson: string): boolean;
   loadTasks?(): string;
   saveTasks?(tasksJson: string): void;
@@ -40,24 +41,31 @@ export const nativeReadToken = (): string => {
   return localStorage.getItem('autodl_token') || '';
 };
 
-export const nativeSaveLlmConfig = (apiKey: string, endpoint: string): boolean => {
+export const nativeSaveLlmConfig = (apiKey: string, endpoint: string, model: string): boolean => {
   if (window.AndroidBridge?.saveLlmConfig) {
-    return window.AndroidBridge.saveLlmConfig(apiKey, endpoint);
+    return window.AndroidBridge.saveLlmConfig(apiKey, endpoint, model);
   }
   localStorage.setItem('llm_api_key', apiKey);
   localStorage.setItem('llm_endpoint', endpoint);
+  localStorage.setItem('llm_model', model);
   return true;
 };
 
-export const nativeReadLlmConfig = (): { apiKey: string; endpoint: string } => {
+export const nativeReadLlmConfig = (): { apiKey: string; endpoint: string; model: string } => {
   if (window.AndroidBridge) {
     const key = window.AndroidBridge.readLlmApiKey ? window.AndroidBridge.readLlmApiKey() : '';
     const ep = window.AndroidBridge.readLlmEndpoint ? window.AndroidBridge.readLlmEndpoint() : '';
-    return { apiKey: key, endpoint: ep };
+    const mod = window.AndroidBridge.readLlmModel ? window.AndroidBridge.readLlmModel() : '';
+    return {
+      apiKey: key,
+      endpoint: ep || 'https://api.minimax.chat/v1/text/chatcompletion_v2',
+      model: mod || 'abab6.5s-chat'
+    };
   }
   return {
     apiKey: localStorage.getItem('llm_api_key') || '',
-    endpoint: localStorage.getItem('llm_endpoint') || 'https://api.minimax.chat/v1/text/chatcompletion_v2'
+    endpoint: localStorage.getItem('llm_endpoint') || 'https://api.minimax.chat/v1/text/chatcompletion_v2',
+    model: localStorage.getItem('llm_model') || 'abab6.5s-chat'
   };
 };
 

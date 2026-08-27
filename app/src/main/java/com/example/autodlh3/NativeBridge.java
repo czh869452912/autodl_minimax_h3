@@ -25,6 +25,11 @@ public class NativeBridge {
     }
 
     @JavascriptInterface
+    public boolean saveLlmConfig(String apiKey, String endpoint, String model) {
+        return activity.saveLlmConfigSecure(apiKey, endpoint, model);
+    }
+
+    @JavascriptInterface
     public String readLlmApiKey() {
         return activity.readLlmApiKeySecure();
     }
@@ -32,6 +37,11 @@ public class NativeBridge {
     @JavascriptInterface
     public String readLlmEndpoint() {
         return activity.readLlmEndpointSecure();
+    }
+
+    @JavascriptInterface
+    public String readLlmModel() {
+        return activity.readLlmModelSecure();
     }
 
     @JavascriptInterface

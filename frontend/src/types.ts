@@ -41,6 +41,7 @@ export interface AppSettings {
   token: string;
   llmApiKey: string;
   llmEndpoint: string;
+  llmModel?: string;
   theme: 'dark' | 'light';
 }
 
@@ -48,5 +49,6 @@ export interface AgentMessage {
   id: string;
   sender: 'user' | 'agent';
   text: string;
+  images?: string[];
   timestamp: number;
 }
