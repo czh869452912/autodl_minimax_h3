@@ -2,15 +2,61 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SDK_DIR="${ANDROID_SDK_ROOT:-$ROOT_DIR/../build-tools/android-sdk}"
-BUILD_TOOLS_DIR="$SDK_DIR/build-tools/35.0.0"
+DEFAULT_SDK_DIR="$HOME/AppData/Local/Android/Sdk"
+SDK_DIR="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$DEFAULT_SDK_DIR}}"
+
+if [[ ! -d "$SDK_DIR" ]]; then
+  SDK_DIR="$ROOT_DIR/../build-tools/android-sdk"
+fi
+
+if [[ -d "$SDK_DIR/build-tools/36.0.0" ]]; then
+  BUILD_TOOLS_DIR="$SDK_DIR/build-tools/36.0.0"
+elif [[ -d "$SDK_DIR/build-tools/35.0.0" ]]; then
+  BUILD_TOOLS_DIR="$SDK_DIR/build-tools/35.0.0"
+else
+  BUILD_TOOLS_DIR="$(ls -d "$SDK_DIR/build-tools/"* 2>/dev/null | tail -n 1)"
+fi
+
 PLATFORM_DIR="$SDK_DIR/platforms/android-35"
 OUT_DIR="$ROOT_DIR/app/build/manual"
 CLASS_DIR="$OUT_DIR/classes"
 GEN_DIR="$OUT_DIR/generated"
-JAVA_HOME_DIR="${JAVA_HOME:-$ROOT_DIR/../build-tools/jdk17}"
+
+DEFAULT_JBR="C:/Program Files/Android/Android Studio/jbr"
+if [[ -n "${JAVA_HOME:-}" ]]; then
+  JAVA_HOME_DIR="$JAVA_HOME"
+elif [[ -d "$DEFAULT_JBR" ]]; then
+  JAVA_HOME_DIR="$DEFAULT_JBR"
+else
+  JAVA_HOME_DIR="$ROOT_DIR/../build-tools/jdk17"
+fi
+
+export JAVA_HOME="$JAVA_HOME_DIR"
+export PATH="$JAVA_HOME_DIR/bin:$PATH"
+
 JAVAC_BIN="$JAVA_HOME_DIR/bin/javac"
 KEYTOOL_BIN="$JAVA_HOME_DIR/bin/keytool"
+JAR_BIN="$JAVA_HOME_DIR/bin/jar"
+
+D8_BIN="$BUILD_TOOLS_DIR/d8"
+if [[ -f "$BUILD_TOOLS_DIR/d8.bat" ]]; then
+  D8_BIN="$BUILD_TOOLS_DIR/d8.bat"
+fi
+
+APKSIGNER_BIN="$BUILD_TOOLS_DIR/apksigner"
+if [[ -f "$BUILD_TOOLS_DIR/apksigner.bat" ]]; then
+  APKSIGNER_BIN="$BUILD_TOOLS_DIR/apksigner.bat"
+fi
+
+ZIPALIGN_BIN="$BUILD_TOOLS_DIR/zipalign"
+if [[ -f "$BUILD_TOOLS_DIR/zipalign.exe" ]]; then
+  ZIPALIGN_BIN="$BUILD_TOOLS_DIR/zipalign.exe"
+fi
+
+AAPT2_BIN="$BUILD_TOOLS_DIR/aapt2"
+if [[ -f "$BUILD_TOOLS_DIR/aapt2.exe" ]]; then
+  AAPT2_BIN="$BUILD_TOOLS_DIR/aapt2.exe"
+fi
 
 if [[ ! -f "$PLATFORM_DIR/android.jar" ]]; then
   echo "Android SDK platform android-35 not found: $PLATFORM_DIR" >&2
@@ -25,28 +71,39 @@ find "$ROOT_DIR/app/src/main/java" -name '*.java' -print0 \
   | xargs -0 "$JAVAC_BIN" -source 17 -target 17 -encoding UTF-8 \
       -classpath "$PLATFORM_DIR/android.jar" -d "$CLASS_DIR"
 
-"$BUILD_TOOLS_DIR/aapt2" compile --dir "$ROOT_DIR/app/src/main/res" -o "$OUT_DIR/resources.zip"
-"$BUILD_TOOLS_DIR/aapt2" link \
-  -o "$OUT_DIR/unaligned.apk" \
-  --manifest "$ROOT_DIR/app/src/main/AndroidManifest.xml" \
-  -I "$PLATFORM_DIR/android.jar" \
-  --java "$GEN_DIR" \
-  --min-sdk-version 23 \
-  --target-sdk-version 35 \
-  "$OUT_DIR/resources.zip"
+"$AAPT2_BIN" compile --dir "$ROOT_DIR/app/src/main/res" -o "$OUT_DIR/resources.zip"
 
-"$BUILD_TOOLS_DIR/d8" \
+AAPT_LINK_CMD=(
+  "$AAPT2_BIN" link
+  -o "$OUT_DIR/unaligned.apk"
+  --manifest "$ROOT_DIR/app/src/main/AndroidManifest.xml"
+  -I "$PLATFORM_DIR/android.jar"
+  --java "$GEN_DIR"
+  --min-sdk-version 23
+  --target-sdk-version 35
+  -0 html -0 css -0 js -0 json
+)
+
+if [[ -d "$ROOT_DIR/app/src/main/assets" ]]; then
+  AAPT_LINK_CMD+=(-A "$ROOT_DIR/app/src/main/assets")
+fi
+
+AAPT_LINK_CMD+=("$OUT_DIR/resources.zip")
+
+"${AAPT_LINK_CMD[@]}"
+
+"$D8_BIN" \
   --lib "$PLATFORM_DIR/android.jar" \
   --min-api 23 \
   --output "$OUT_DIR/dex" \
   $(find "$CLASS_DIR" -name '*.class' -print)
 
 pushd "$OUT_DIR" >/dev/null
-  # Android expects classes.dex at the APK root, not under the d8 output folder.
-  zip -q -u -j unaligned.apk dex/classes.dex
+  # Insert classes.dex into APK using jar
+  "$JAR_BIN" uf unaligned.apk -C dex classes.dex
 popd >/dev/null
 
-"$BUILD_TOOLS_DIR/zipalign" -p -f 4 "$OUT_DIR/unaligned.apk" "$OUT_DIR/aligned.apk"
+"$ZIPALIGN_BIN" -p -f 4 "$OUT_DIR/unaligned.apk" "$OUT_DIR/aligned.apk"
 
 KEYSTORE="$ROOT_DIR/app/build/autodl-h3-debug.keystore"
 if [[ ! -f "$KEYSTORE" ]]; then
@@ -59,8 +116,8 @@ if [[ ! -f "$KEYSTORE" ]]; then
     -dname "CN=Android Debug,O=Android,C=US" >/dev/null 2>&1
 fi
 
-"$BUILD_TOOLS_DIR/apksigner" sign \
+"$APKSIGNER_BIN" sign \
   --ks "$KEYSTORE" --ks-pass pass:android --key-pass pass:android \
   --out "$ROOT_DIR/app/build/AutoDL-H3-debug.apk" "$OUT_DIR/aligned.apk"
-"$BUILD_TOOLS_DIR/apksigner" verify "$ROOT_DIR/app/build/AutoDL-H3-debug.apk"
+"$APKSIGNER_BIN" verify "$ROOT_DIR/app/build/AutoDL-H3-debug.apk"
 echo "Built: $ROOT_DIR/app/build/AutoDL-H3-debug.apk"
