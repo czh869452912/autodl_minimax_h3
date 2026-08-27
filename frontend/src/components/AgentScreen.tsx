@@ -1,78 +1,38 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AgentMessage, MediaItem } from '../types';
 import { nativeReadLlmConfig, nativePickMedia } from '../utils/nativeBridge';
+import { MarkdownRenderer } from './MarkdownRenderer';
+import { runH3AgentHarness } from '../agent/h3AgentHarness';
 
 interface AgentScreenProps {
   onApplyPrompt: (prompt: string) => void;
 }
 
-const H3_SKILL_SYSTEM_PROMPT = `你是 MiniMax-H3 全模态视频生成模型的官方 Skill 导师 Agent (Prompt Engineer)。
-你的任务是将用户的文本创意或参考图片，严格遵循 GitHub 官方 MiniMax-AI/MiniMax-H3 (h3-prompt-writing skill) 规范，构造成高水准、符合模型解析特性的结构化提示词。
+const H3_HARNESS_SYSTEM_PROMPT = `你是 MiniMax-H3 全模态视频生成模型的官方 Skill Harness Agent。
+你的任务是将用户的文本创意或参考图片，依据注册的 H3 技能工具库 (t2vaSkill, i2vaSkill, fl2vaSkill, ref2vaSkill) 及自主 Self-Refine 机制，构造成高水准、符合模型解析特性的结构化提示词。
 
-【模式自动判断与首行指令规范】
-1. T2VA (纯文本转视频音效)：无图片参考。无首行对齐指令，直接输出三大核心字段。
-2. I2VA (首帧图文生成)：有 1 张参考图作为首帧。第一行指令严格使用：
-   For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
-3. FL2VA (首尾帧间插)：有 2 张参考图（Picture 1 为 0.00s 首帧，Picture 2 为 S.SSs 尾帧）。第一行指令严格使用：
-   How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot N) aligns with the S.SS-second mark of the target video.
-4. Ref2VA (全要素/多图多素材模式)：多张主体/风格/音效参考时，采用官方 6 Section 格式：
-   - subject_definitions: 定义 <Subject 1>, <Picture 1>, <Audio 1> 等
-   - summary: [reference generation] ... 概要
-   - retention_analysis: 迁移与保留分析
-   - detailed_description: [Shot 1] ... [Shot 2] At 00:03.500 ...
-   - overall_soundscape: 环境音与物理动作音效
-   - non_diegetic_music: 观众听到的背景音乐
-
-【核心分镜与镜头切分规范】
-- 镜头切分：[Shot 1] 开头不含时间戳。[Shot 2] 及后续镜头必须标注严格递增切分点，如 [Shot 2] At 00:03.500, the camera cuts to...
-- 镜头运动：描述三要素——运动类型 (Pan, Dolly, Tracking, Zoom) + 幅度 + 速度 (如 slow, steady, rapid)。
-- 音频分轨：区分场景内物理音效 (overall_soundscape) 与非场景背景乐 (non_diegetic_music)。
-
-请以中文撰写分析与说明，提示词核心结构保留官方标准格式。`;
-
-const H3_AUDIT_SYSTEM_PROMPT = `你是 MiniMax-H3 官方规范的代码级 Self-Refine Audit 专家。
-你的任务是对上一轮生成的 H3 Prompt 草案进行严格的规范审计与二次精雕重构：
-
-【审计与校准清单】
-1. 模式指令匹配：检查 I2VA/FL2VA/Ref2VA 首行指令与参考素材对齐格式是否精准无误。
-2. 时间轴切分：检查 [Shot N] 后的时间戳格式（如 At 00:03.500）是否严密且递增。
-3. 镜头语言强化：确认镜头运动包含了类型、幅度与速度，增强画面电影质感。
-4. 音画分轨严密性：场景音效与 BGM 是否彻底隔离。
-
-请完成重构，输出带有【H3 Skill Agent Multi-Pass Validated】校验标记的高质量最终 Prompt 方案。`;
-
-const getEffectiveEndpoint = (ep: string): string => {
-  let target = (ep || '').trim();
-  if (!target) return 'https://api.minimax.chat/v1/text/chatcompletion_v2';
-  target = target.replace(/\/+$/, '');
-  // Auto-append /chat/completions if endpoint is OpenAI base URL without chat path
-  if (
-    !target.endsWith('/chat/completions') &&
-    !target.endsWith('/chatcompletion_v2') &&
-    !target.endsWith('/completions')
-  ) {
-    if (target.endsWith('/v1')) {
-      target += '/chat/completions';
-    } else {
-      target += '/v1/chat/completions';
-    }
-  }
-  return target;
-};
+【Agent Harness 选型与 Skill 调用流程】
+1. 观察用户意图与素材：
+   - 0 张图 / 纯文本 ➔ 优先选择 t2vaSkill。
+   - 1 张图 ➔ 优先选择 i2vaSkill（设置 Picture 1 首帧锚定与向前推演）。
+   - 2 张图 ➔ 优先选择 fl2vaSkill（建立 Picture 1 与 Picture 2 的平滑插值）。
+   - 3+ 张图 / 多要素素材 ➔ 优先选择 ref2vaSkill（采用 6 Section 格式：subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music）。
+2. 执行初步 Skill 推演后，必须自主调用 auditAndRefineSkill 校验时间戳切分 ([Shot 2] At 00:03.500)、镜头运动三要素 (类型, 幅度, 速度) 与双声道隔绝。
+3. 最终呈献经过 Harness 校验的完整 Markdown 格式提示词。`;
 
 export const AgentScreen: React.FC<AgentScreenProps> = ({ onApplyPrompt }) => {
   const [messages, setMessages] = useState<AgentMessage[]>([
     {
       id: 'welcome-1',
       sender: 'agent',
-      text: '你好！我是 MiniMax-H3 官方技能库 Agent。现已集成多 Pass 迭代与 Self-Refine 机制，支持 T2VA、I2VA、FL2VA 及 Ref2VA 多模态全模式场景推演！',
+      text: '你好！我是 MiniMax-H3 官方 Agent Harness。基于 Vercel AI SDK 驱动，可自主根据用户输入匹配 H3 Skill 工具库并进行多阶段 Tool Loop 校验推演！',
       timestamp: Date.now()
     }
   ]);
   const [inputText, setInputText] = useState('');
   const [attachedImages, setAttachedImages] = useState<MediaItem[]>([]);
   const [isThinking, setIsThinking] = useState(false);
-  const [thinkingStep, setThinkingStep] = useState<'analyzing' | 'drafting' | 'refining' | null>(null);
+  const [harnessProgress, setHarnessProgress] = useState<{ step: string; detail?: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -241,48 +201,30 @@ export const AgentScreen: React.FC<AgentScreenProps> = ({ onApplyPrompt }) => {
     setIsThinking(true);
 
     const { apiKey, endpoint, model } = nativeReadLlmConfig();
-    const effectiveEndpoint = getEffectiveEndpoint(endpoint);
 
     if (apiKey) {
       try {
-        // Prepare user input payload with optional vision
-        let userContent: any = displayQuery;
-        if (currentImages.length > 0) {
-          const contentArr: any[] = [{ type: 'text', text: displayQuery }];
-          currentImages.forEach((imgUri) => {
-            contentArr.push({ type: 'image_url', image_url: { url: imgUri } });
-          });
-          userContent = contentArr;
-        }
+        setHarnessProgress({ step: 'Agent Harness 启动中', detail: '加载 H3 Skill 工具库...' });
 
-        // --- PASS 1: Mode Selection & Initial H3 Draft ---
-        setThinkingStep('analyzing');
-        const pass1Draft = await executeLlmStep(
-          effectiveEndpoint,
+        const finalOutputText = await runH3AgentHarness({
           apiKey,
-          model,
-          H3_SKILL_SYSTEM_PROMPT,
-          userContent
-        );
-
-        // --- PASS 2: Self-Refine Audit & Final Formatting ---
-        setThinkingStep('refining');
-        const auditInput = `【初步分镜草案与规则匹配】:\n${pass1Draft}\n\n请针对 MiniMax-H3 官方规范执行 Self-Refine 精焦校验，生成最终高质量格式化提示词。`;
-
-        const finalReplyText = await executeLlmStep(
-          effectiveEndpoint,
-          apiKey,
-          model,
-          H3_AUDIT_SYSTEM_PROMPT,
-          auditInput
-        );
+          endpoint,
+          modelName: model,
+          systemPrompt: H3_HARNESS_SYSTEM_PROMPT,
+          userPrompt: displayQuery,
+          images: currentImages,
+          maxSteps: 5,
+          onStepProgress: (step, detail) => {
+            setHarnessProgress({ step, detail });
+          }
+        });
 
         setMessages((prev) => [
           ...prev,
           {
             id: `agent-${Date.now()}`,
             sender: 'agent',
-            text: finalReplyText,
+            text: finalOutputText,
             timestamp: Date.now()
           }
         ]);
@@ -292,24 +234,24 @@ export const AgentScreen: React.FC<AgentScreenProps> = ({ onApplyPrompt }) => {
           {
             id: `agent-err-${Date.now()}`,
             sender: 'agent',
-            text: `❌ 请求 Agent Loop 失败: ${err?.message || '网络连接超时'}\n\n请求地址: \`${effectiveEndpoint}\`\n建议检查【系统设置】中的 API Key、Endpoint 与 Model 名称是否正确。`,
+            text: `❌ Vercel AI SDK Agent Harness 运行异常: ${err?.message || '网络连接超时'}\n\n建议检查【系统设置】中的 API Key 与 Model 配置。`,
             timestamp: Date.now()
           }
         ]);
       } finally {
-        setThinkingStep(null);
+        setHarnessProgress(null);
         setIsThinking(false);
       }
     } else {
-      // Multi-step simulation in demo mode
-      setThinkingStep('analyzing');
+      // Demo Harness mode simulation
+      setHarnessProgress({ step: 'Agent 观察场景特征', detail: '匹配 H3 Skill 工具...' });
       setTimeout(() => {
-        setThinkingStep('drafting');
+        setHarnessProgress({ step: 'Agent 触发 Tool Call', detail: '关联工具执行数据合成...' });
         setTimeout(() => {
-          setThinkingStep('refining');
+          setHarnessProgress({ step: 'Agent 触发 auditAndRefineSkill', detail: 'Self-Refine 校验与高亮输出...' });
           setTimeout(() => {
             simulateFallbackResponse(displayQuery, currentImages.length);
-            setThinkingStep(null);
+            setHarnessProgress(null);
             setIsThinking(false);
           }, 600);
         }, 600);
@@ -318,25 +260,27 @@ export const AgentScreen: React.FC<AgentScreenProps> = ({ onApplyPrompt }) => {
   };
 
   const simulateFallbackResponse = (query: string, imgCount: number) => {
-    let modeTag = 'T2VA (纯文本转视频音效)';
+    let modeTag = 't2vaSkill (纯文本转视频音效)';
     let headerInstruction = '';
 
     if (imgCount === 1) {
-      modeTag = 'I2VA (首帧生成模式)';
+      modeTag = 'i2vaSkill (首帧生成模式)';
       headerInstruction = 'For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\n\n';
     } else if (imgCount === 2) {
-      modeTag = 'FL2VA (首尾帧间插模式)';
+      modeTag = 'fl2vaSkill (首尾帧间插模式)';
       headerInstruction = 'How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot 2) aligns with the 5.00-second mark of the target video.\n\n';
     } else if (imgCount > 2) {
-      modeTag = 'Ref2VA (全要素参考 6 Section 模式)';
+      modeTag = 'ref2vaSkill (全要素参考 6 Section 模式)';
     }
 
     let simulatedText = '';
 
     if (imgCount > 2) {
-      simulatedText = `🎯 [H3 Skill Agent Multi-Pass Validated]
-模式判定: ${modeTag}
+      simulatedText = `🎯 [H3 Agent Harness Audit Certified]
 
+*Agent Autonomously Executed Tool*: \`${modeTag}\`
+
+\`\`\`text
 subject_definitions:
 - <Subject 1> is the main character from <Picture 1>, with detailed attire and visual features.
 - <Picture 1> is the visual style and composition anchor for [Shot 1].
@@ -356,16 +300,20 @@ overall_soundscape:
 Heavy rain patter, footstep acoustics on wet pavement, distant cyberpunk city rumble.
 
 non_diegetic_music:
-Deep synth-wave pulse building emotional tension towards the end.`;
+Deep synth-wave pulse building emotional tension towards the end.
+\`\`\``;
     } else {
-      simulatedText = `🎯 [H3 Skill Agent Multi-Pass Validated]
-模式判定: ${modeTag}
+      simulatedText = `🎯 [H3 Agent Harness Audit Certified]
 
+*Agent Autonomously Executed Tool*: \`${modeTag}\`
+
+\`\`\`text
 ${headerInstruction}integrated_multimodal_description: [Shot 1] Live-action, cinematic, slow dolly-in medium shot capturing the scene of "${query}". Character and light composition gradually intensify. [Shot 2] At 00:03.500, the shot cuts to a low-angle tracking shot following the main subject smooth motion.
 
 overall_soundscape: Ambient environmental sound, realistic physical motion acoustics, and crisp subtle details.
 
-non_diegetic_music: Cinematic ambient music with subtle synthesizer chords elevating tension.`;
+non_diegetic_music: Cinematic ambient music with subtle synthesizer chords elevating tension.
+\`\`\``;
     }
 
     setMessages((prev) => [
@@ -381,16 +329,12 @@ non_diegetic_music: Cinematic ambient music with subtle synthesizer chords eleva
 
   const handleQuickSkill = (skillType: string) => {
     const textMap: Record<string, string> = {
-      t2va:
-        '请基于以下想法，按照 MiniMax-H3 官方 T2VA 规范构建多镜头切分与双声道音画分轨：',
-      i2va:
-        '请针对上传的首帧参考图，按 H3 官方 I2VA 规范建立 Picture 1 锚定指令并向前推演动作：',
-      fl2va:
-        '请针对首尾两张参考图，按 H3 官方 FL2VA 规范建立 Picture 1 与 Picture 2 的平滑插值路径：',
-      ref2va:
-        '请针对上传的多张素材，按 H3 官方 Ref2VA 6-Section 格式（subject_definitions, detailed_description 等）重构全要素分镜：'
+      t2va: '请调用 t2vaSkill 为我生成纯文本多镜头与音画分轨提示词：',
+      i2va: '请调用 i2vaSkill 为我上传的首帧图构建向前演变的视频提示词：',
+      fl2va: '请调用 fl2vaSkill 为我构建首尾两张参考图之间的平滑过渡分镜：',
+      ref2va: '请调用 ref2vaSkill 为上传的多张素材构建 6-Section 全要素 Prompt：'
     };
-    const prefix = textMap[skillType] || '请按 H3 官方规范优化这个 Prompt：';
+    const prefix = textMap[skillType] || '请使用 Agent Harness 优化该提示词：';
     if (inputText.trim()) {
       handleSendMessage(`${prefix} "${inputText.trim()}"`);
     } else {
@@ -406,17 +350,16 @@ non_diegetic_music: Cinematic ambient music with subtle synthesizer chords eleva
           <span className="material-symbols-outlined text-indigo-400">
             smart_toy
           </span>
-          Prompt 助手 Agent Loop (MiniMax-H3 Skill)
+          Agent Harness Studio (Vercel AI SDK)
         </h1>
         <p className="text-slate-400 text-sm">
-          装载 GitHub 官方 <code className="text-indigo-300 bg-indigo-950/60 px-1.5 py-0.5 rounded font-mono">MiniMax-AI/MiniMax-H3</code> 技能库，支持 T2VA / I2VA / FL2VA / Ref2VA 多 Pass 自动推演与 Self-Refine 校准。
+          基于标准 Agent Harness 驱动，自主路由 MiniMax-H3 Skill 工具库，搭配 Markdown 渲染与框内一键复制。
         </p>
       </div>
 
       {/* Status Warning / Connection Badge Banner */}
       {(() => {
         const { apiKey, endpoint, model } = nativeReadLlmConfig();
-        const effective = getEffectiveEndpoint(endpoint);
         if (!apiKey) {
           return (
             <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs flex items-center justify-between shadow-sm">
@@ -425,7 +368,7 @@ non_diegetic_music: Cinematic ambient music with subtle synthesizer chords eleva
                   warning
                 </span>
                 <span>
-                  当前未配置 LLM API Key，Prompt 助手处于 Agent Loop 演示模式。可前往【系统设置】配置 Key 以对接实时大模型。
+                  当前未配置 LLM API Key，Agent Harness 运行于演示/模拟模式。配置 API Key 后可进行标准 API Tool Call 推演。
                 </span>
               </div>
             </div>
@@ -438,11 +381,7 @@ non_diegetic_music: Cinematic ambient music with subtle synthesizer chords eleva
                 check_circle
               </span>
               <span>
-                已连接 AI 模型:{' '}
-                <strong className="font-mono text-indigo-200">
-                  {model || 'abab6.5s-chat'}
-                </strong>{' '}
-                <span className="text-[10px] text-indigo-400/80">({effective})</span>
+                Agent Harness 已就绪 (模型: <strong className="font-mono text-indigo-200">{model || 'abab6.5s-chat'}</strong>)
               </span>
             </div>
           </div>
@@ -457,7 +396,7 @@ non_diegetic_music: Cinematic ambient music with subtle synthesizer chords eleva
           className="whitespace-nowrap px-3 py-1.5 rounded-lg border border-indigo-500/30 text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined text-sm">movie</span>
-          🎬 T2VA 纯文本
+          🎬 t2vaSkill
         </button>
         <button
           type="button"
@@ -465,7 +404,7 @@ non_diegetic_music: Cinematic ambient music with subtle synthesizer chords eleva
           className="whitespace-nowrap px-3 py-1.5 rounded-lg border border-indigo-500/30 text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined text-sm">image</span>
-          🖼️ I2VA 首帧演变
+          🖼️ i2vaSkill
         </button>
         <button
           type="button"
@@ -473,7 +412,7 @@ non_diegetic_music: Cinematic ambient music with subtle synthesizer chords eleva
           className="whitespace-nowrap px-3 py-1.5 rounded-lg border border-indigo-500/30 text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined text-sm">view_carousel</span>
-          🎞️ FL2VA 首尾帧
+          🎞️ fl2vaSkill
         </button>
         <button
           type="button"
@@ -481,7 +420,7 @@ non_diegetic_music: Cinematic ambient music with subtle synthesizer chords eleva
           className="whitespace-nowrap px-3 py-1.5 rounded-lg border border-indigo-500/30 text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined text-sm">theater_comedy</span>
-          🎭 Ref2VA 全要素 6 Section
+          🎭 ref2vaSkill
         </button>
       </div>
 
@@ -498,7 +437,7 @@ non_diegetic_music: Cinematic ambient music with subtle synthesizer chords eleva
               className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                 msg.sender === 'user'
                   ? 'bg-indigo-600 text-white rounded-br-none'
-                  : 'bg-slate-800/90 text-slate-200 border border-slate-700/60 rounded-bl-none font-mono whitespace-pre-wrap text-xs'
+                  : 'bg-slate-900/90 text-slate-200 border border-slate-800 rounded-bl-none w-full'
               }`}
             >
               {/* Image Previews inside message bubble */}
@@ -514,7 +453,11 @@ non_diegetic_music: Cinematic ambient music with subtle synthesizer chords eleva
                   ))}
                 </div>
               )}
-              {msg.text}
+              {msg.sender === 'agent' ? (
+                <MarkdownRenderer content={msg.text} onApplyPrompt={onApplyPrompt} />
+              ) : (
+                msg.text
+              )}
             </div>
             {msg.sender === 'agent' && msg.id !== 'welcome-1' && (
               <button
@@ -532,48 +475,18 @@ non_diegetic_music: Cinematic ambient music with subtle synthesizer chords eleva
         ))}
 
         {isThinking && (
-          <div className="flex flex-col gap-2.5 p-3.5 bg-slate-900/90 rounded-xl border border-indigo-500/40 shadow-lg text-xs w-full max-w-md">
+          <div className="flex flex-col gap-2 p-3.5 bg-slate-900/90 rounded-xl border border-indigo-500/40 shadow-lg text-xs w-full max-w-md">
             <div className="flex items-center gap-2 text-indigo-300 font-semibold">
               <span className="material-symbols-outlined text-indigo-400 animate-spin text-base">
                 sync
               </span>
-              <span>MiniMax-H3 Agent Loop 多阶段推演中...</span>
+              <span>{harnessProgress?.step || 'Agent Harness 思考中...'}</span>
             </div>
-
-            <div className="grid grid-cols-3 gap-2 text-[11px]">
-              <div
-                className={`p-2 rounded-lg border text-center transition-all flex flex-col items-center gap-1 ${
-                  thinkingStep === 'analyzing'
-                    ? 'bg-indigo-600/30 border-indigo-400 text-indigo-200 animate-pulse font-semibold shadow-sm'
-                    : 'bg-slate-800/60 border-slate-700/60 text-slate-400'
-                }`}
-              >
-                <span>🔍 Step 1</span>
-                <span>模式识别</span>
+            {harnessProgress?.detail && (
+              <div className="text-[11px] font-mono text-indigo-300/80 bg-slate-950/60 p-2 rounded border border-slate-800 truncate">
+                {harnessProgress.detail}
               </div>
-              <div
-                className={`p-2 rounded-lg border text-center transition-all flex flex-col items-center gap-1 ${
-                  thinkingStep === 'drafting'
-                    ? 'bg-indigo-600/30 border-indigo-400 text-indigo-200 animate-pulse font-semibold shadow-sm'
-                    : thinkingStep === 'refining'
-                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-medium'
-                    : 'bg-slate-800/60 border-slate-700/60 text-slate-400'
-                }`}
-              >
-                <span>📝 Step 2</span>
-                <span>分镜构形</span>
-              </div>
-              <div
-                className={`p-2 rounded-lg border text-center transition-all flex flex-col items-center gap-1 ${
-                  thinkingStep === 'refining'
-                    ? 'bg-indigo-600/30 border-indigo-400 text-indigo-200 animate-pulse font-semibold shadow-sm'
-                    : 'bg-slate-800/60 border-slate-700/60 text-slate-400'
-                }`}
-              >
-                <span>🪄 Step 3</span>
-                <span>Self-Refine 校准</span>
-              </div>
-            </div>
+            )}
           </div>
         )}
         <div ref={messagesEndRef} />
