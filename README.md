@@ -13,7 +13,8 @@
 - 提交任务并保存最近 30 条本机任务记录
 - 轮询显示 `QUEUED`、`RUNNING`、`SUCCESS`、`FAILED` 等状态
 - 成功后自动通过 Android 系统下载器保存到 `Movies/AutoDL-H3`
-- 结果页可直接播放已下载的视频
+- 下载状态会主动查询 `DownloadManager`，即使 ColorOS 没有及时转发完成广播也会更新
+- 结果页自动显示视频首帧封面，可直接预览并通过“全屏播放”按钮打开全屏播放器
 
 ## API 对接
 

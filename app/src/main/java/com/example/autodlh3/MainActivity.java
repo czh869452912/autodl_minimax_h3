@@ -1,6 +1,7 @@
 package com.example.autodlh3;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
@@ -9,8 +10,10 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.database.Cursor;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
@@ -26,6 +29,7 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -99,6 +103,11 @@ public class MainActivity extends Activity {
 
     private final Runnable pollRunnable = new Runnable() {
         @Override public void run() { pollTasks(); }
+    };
+
+    /** DownloadManager broadcasts are not delivered reliably by every Android vendor ROM. */
+    private final Runnable downloadPollRunnable = new Runnable() {
+        @Override public void run() { refreshAllViews(); }
     };
 
     private final BroadcastReceiver downloadReceiver = new BroadcastReceiver() {
@@ -570,26 +579,62 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void reconcileDownloads() {
+    private boolean reconcileDownloads() {
         DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
         boolean changed = false;
+        boolean pending = false;
         for (TaskItem task : tasks) {
+            // Recover tasks created by an earlier build where the result URL was saved but
+            // enqueue() had not happened yet (for example, if the app was backgrounded).
+            if (task.downloadId <= 0 && task.localUri.isEmpty()
+                    && "SUCCESS".equalsIgnoreCase(task.status) && !task.videoUrl.isEmpty()) {
+                startDownloadIfNeeded(task);
+                changed = true;
+            }
             if (task.downloadId <= 0 || !task.localUri.isEmpty()) continue;
             try (Cursor cursor = manager.query(new DownloadManager.Query().setFilterById(task.downloadId))) {
-                if (cursor == null || !cursor.moveToFirst()) continue;
+                if (cursor == null || !cursor.moveToFirst()) {
+                    // Keep polling an ID that DownloadManager has not exposed yet.
+                    pending = true;
+                    continue;
+                }
                 int status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
                 if (status == DownloadManager.STATUS_SUCCESSFUL) {
                     int uriColumn = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
-                    task.localUri = uriColumn >= 0 ? cursor.getString(uriColumn) : "";
-                    task.downloadState = "已下载";
+                    String localUri = uriColumn >= 0 ? cursor.getString(uriColumn) : "";
+                    if (!localUri.isEmpty()) {
+                        task.localUri = localUri;
+                        task.downloadState = "已下载";
+                    } else {
+                        task.downloadState = "下载状态未知";
+                        pending = true;
+                    }
                     changed = true;
                 } else if (status == DownloadManager.STATUS_FAILED) {
                     task.downloadState = "下载失败";
                     changed = true;
+                } else {
+                    // PENDING, RUNNING and PAUSED all mean the file is still being handled.
+                    if (!"下载中".equals(task.downloadState)) {
+                        task.downloadState = "下载中";
+                        changed = true;
+                    }
+                    pending = true;
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+                pending = true;
+            }
         }
         if (changed) saveTasks();
+        return pending;
+    }
+
+    private boolean hasPendingDownloads() {
+        for (TaskItem task : tasks) {
+            if (task.downloadId > 0 && task.localUri.isEmpty()
+                    && !task.downloadState.startsWith("下载失败")) return true;
+        }
+        return false;
     }
 
     private String extractVideoUrl(JSONArray results) {
@@ -607,9 +652,12 @@ public class MainActivity extends Activity {
     }
 
     private void refreshAllViews() {
+        handler.removeCallbacks(downloadPollRunnable);
+        reconcileDownloads();
         refreshMediaView();
         refreshTaskViews();
         refreshResultViews();
+        if (hasPendingDownloads()) handler.postDelayed(downloadPollRunnable, 1000);
     }
 
     private void refreshTaskViews() {
@@ -644,10 +692,11 @@ public class MainActivity extends Activity {
             card.addView(title, matchWrap());
             String source = !task.localUri.isEmpty() ? task.localUri : task.videoUrl;
             if (!source.isEmpty()) {
-                VideoView video = new VideoView(this);
-                video.setMediaController(new MediaController(this));
-                video.setVideoURI(Uri.parse(source));
-                card.addView(video, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(220)));
+                card.addView(createVideoPreview(source), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(220)));
+                Button fullscreen = new Button(this);
+                fullscreen.setText("全屏播放");
+                fullscreen.setOnClickListener(v -> playFullscreen(source));
+                card.addView(fullscreen, wrapParams());
             } else card.addView(text("正在等待视频下载链接…", 13, Color.GRAY), matchWrap());
             card.addView(text(task.downloadState.isEmpty() ? "视频已生成，正在准备下载" : task.downloadState, 12, Color.GRAY), matchWrapWithBottom(3));
             if (task.localUri.isEmpty() && !task.videoUrl.isEmpty() && task.downloadId == 0) {
@@ -659,6 +708,95 @@ public class MainActivity extends Activity {
             resultsContainer.addView(card, matchWrapWithBottom(10));
         }
         if (!any) resultsContainer.addView(text("暂无已完成结果。完成的视频会自动出现在这里。", 13, Color.GRAY), matchWrap());
+    }
+
+    private FrameLayout createVideoPreview(String source) {
+        FrameLayout frame = new FrameLayout(this);
+        frame.setBackgroundColor(Color.BLACK);
+
+        VideoView video = new VideoView(this);
+        video.setMediaController(new MediaController(this));
+        ImageView cover = new ImageView(this);
+        cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        cover.setBackgroundColor(Color.BLACK);
+        cover.setTag(Boolean.FALSE);
+
+        video.setVideoURI(Uri.parse(source));
+        video.setOnPreparedListener(mp -> {
+            // Force the first decoded frame onto the surface. A plain setVideoURI() often
+            // leaves a black surface until the user presses play on ColorOS/Android 16.
+            video.seekTo(100);
+            video.start();
+            video.postDelayed(() -> {
+                if (video.isPlaying()) video.pause();
+                cover.setTag(Boolean.TRUE);
+                cover.setVisibility(View.GONE);
+            }, 250);
+        });
+        video.setOnErrorListener((mp, what, extra) -> {
+            cover.setTag(Boolean.FALSE);
+            cover.setVisibility(View.VISIBLE);
+            return false;
+        });
+        cover.setOnClickListener(v -> {
+            cover.setVisibility(View.GONE);
+            video.start();
+        });
+
+        frame.addView(video, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        frame.addView(cover, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        loadVideoCover(source, cover);
+        return frame;
+    }
+
+    private void loadVideoCover(String source, ImageView cover) {
+        // The result is normally a local file by the time it appears here. Retrieving one
+        // frame gives the user an actual cover instead of a black placeholder while the
+        // VideoView is preparing. Remote URLs are left to VideoView's prepared callback.
+        executor.execute(() -> {
+            MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+            Bitmap bitmap = null;
+            try {
+                retriever.setDataSource(this, Uri.parse(source));
+                bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+            } catch (Exception ignored) {
+            } finally {
+                try { retriever.release(); } catch (Exception ignored) {}
+            }
+            if (bitmap != null) {
+                Bitmap frameBitmap = bitmap;
+                runOnUiThread(() -> {
+                    if (!Boolean.TRUE.equals(cover.getTag())) {
+                        cover.setImageBitmap(frameBitmap);
+                        cover.setVisibility(View.VISIBLE);
+                    }
+                });
+            }
+        });
+    }
+
+    private void playFullscreen(String source) {
+        Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        FrameLayout frame = new FrameLayout(this);
+        frame.setBackgroundColor(Color.BLACK);
+        VideoView video = new VideoView(this);
+        video.setMediaController(new MediaController(this));
+        video.setVideoURI(Uri.parse(source));
+        video.setOnPreparedListener(mp -> video.start());
+        frame.addView(video, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        Button close = new Button(this);
+        close.setText("关闭");
+        close.setOnClickListener(v -> dialog.dismiss());
+        FrameLayout.LayoutParams closeParams = new FrameLayout.LayoutParams(dp(80), dp(48), Gravity.TOP | Gravity.RIGHT);
+        closeParams.topMargin = dp(16);
+        closeParams.rightMargin = dp(8);
+        frame.addView(close, closeParams);
+
+        dialog.setContentView(frame);
+        dialog.show();
+        Window window = dialog.getWindow();
+        if (window != null) window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
     }
 
     private LinearLayout card() {
@@ -821,6 +959,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         handler.removeCallbacks(pollRunnable);
+        handler.removeCallbacks(downloadPollRunnable);
         stopAudio();
         try { unregisterReceiver(downloadReceiver); } catch (Exception ignored) {}
         executor.shutdownNow();
