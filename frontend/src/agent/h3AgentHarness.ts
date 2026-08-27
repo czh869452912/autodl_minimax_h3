@@ -11,7 +11,7 @@ export interface RunAgentHarnessOptions {
 
 /**
  * Standard Vercel AI SDK Agent Harness for MiniMax-H3.
- * Uses dynamic imports to keep browser component loading 100% lightweight and crash-safe.
+ * Uses AI SDK native multi-step tool execution loop (maxSteps) with ModelMessage compliant formatting.
  */
 export const runH3AgentHarness = async (options: RunAgentHarnessOptions): Promise<string> => {
   const {
@@ -25,7 +25,6 @@ export const runH3AgentHarness = async (options: RunAgentHarnessOptions): Promis
     onStepProgress
   } = options;
 
-  // Dynamic import Vercel AI SDK to prevent top-level module load errors in WebViews
   const { createOpenAI } = await import('@ai-sdk/openai');
   const { generateText } = await import('ai');
   const {
@@ -60,70 +59,65 @@ export const runH3AgentHarness = async (options: RunAgentHarnessOptions): Promis
     auditAndRefineSkill
   };
 
-  onStepProgress?.('Agent Harness 启动中', '准备匹配 H3 Skill 工具...');
+  onStepProgress?.('Agent Harness 启动中', '选择适配的 H3 Skill 工具库...');
 
-  let currentMessages: any[] = [
-    {
-      role: 'user',
-      content:
-        images && images.length > 0
-          ? [
-              { type: 'text', text: userPrompt },
-              ...images.map((imgUri) => ({ type: 'image', image: imgUri }))
-            ]
-          : userPrompt
-    }
-  ];
+  // Build standard CoreMessage payload for Vercel AI SDK
+  const initialMessage: any = {
+    role: 'user',
+    content:
+      images && images.length > 0
+        ? [
+            { type: 'text', text: userPrompt },
+            ...images.map((imgUri) => {
+              try {
+                return { type: 'image', image: new URL(imgUri) };
+              } catch {
+                return { type: 'image', image: imgUri };
+              }
+            })
+          ]
+        : userPrompt
+  };
 
-  let stepCount = 0;
-  let finalOutput = '';
-
-  while (stepCount < maxSteps) {
-    stepCount++;
-    const res = await generateText({
+  try {
+    // Execute native multi-step Tool Calling loop in Vercel AI SDK
+    const result = await generateText({
       model,
       system: systemPrompt,
-      messages: currentMessages,
-      tools
-    });
-
-    const { text, toolCalls, toolResults } = res as any;
-
-    if (toolCalls && toolCalls.length > 0) {
-      for (const call of toolCalls) {
-        const toolName = call.toolName || call.name || 'H3 Skill Tool';
-        const argsData = call.args || call.input || {};
-        onStepProgress?.(
-          `Step ${stepCount}: 触发 Skill [${toolName}]`,
-          `参数: ${JSON.stringify(argsData).slice(0, 70)}...`
-        );
-      }
-
-      currentMessages.push({ role: 'assistant', content: toolCalls });
-
-      if (toolResults && toolResults.length > 0) {
-        for (const tr of toolResults) {
-          const resultStr = String(tr.result || tr.output || '');
-          finalOutput = resultStr;
-          currentMessages.push({
-            role: 'tool',
-            content: [
-              {
-                type: 'tool-result',
-                toolCallId: tr.toolCallId || tr.id,
-                toolName: tr.toolName || tr.name,
-                result: resultStr
-              }
-            ]
+      messages: [initialMessage],
+      tools,
+      maxSteps,
+      onStepFinish({ text, toolCalls, toolResults }) {
+        if (toolCalls && toolCalls.length > 0) {
+          toolCalls.forEach((call: any) => {
+            const name = call.toolName || call.name || 'H3 Skill Tool';
+            const args = call.args || call.input || {};
+            onStepProgress?.(
+              `Agent 触发 Skill [${name}]`,
+              `参数: ${JSON.stringify(args).slice(0, 70)}...`
+            );
           });
+        } else if (text) {
+          onStepProgress?.('Agent 完成推演与 Audit 重构', '准备呈献最终分镜 Prompt');
         }
       }
-    } else {
-      if (text) finalOutput = text;
-      break;
-    }
-  }
+    });
 
-  onStepProgress?.('Agent Harness 审计校准完成', '呈献最终分镜 Prompt');
-  return finalOutput || 'MiniMax-H3 Agent Harness 推演完成。';
+    let output = result.text;
+    if (!output && result.steps && result.steps.length > 0) {
+      for (let i = result.steps.length - 1; i >= 0; i--) {
+        const step = result.steps[i];
+        if (step.toolResults && step.toolResults.length > 0) {
+          const lastRes = step.toolResults[step.toolResults.length - 1];
+          output = String(lastRes.result || lastRes.output || '');
+          if (output) break;
+        }
+      }
+    }
+
+    return output || 'MiniMax-H3 Agent Harness 推演完成。';
+  } catch (err: any) {
+    console.error('Agent Harness execution error:', err);
+    throw err;
+  }
 };
