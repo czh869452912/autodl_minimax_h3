@@ -123,7 +123,8 @@ export default function App() {
       videoUrl: t.localUri || t.videoUrl || '',
       localUri: t.localUri,
       resolution: t.resolution,
-      timestamp: new Date(t.createdAt || Date.now()).toLocaleDateString()
+      timestamp: new Date(t.createdAt || Date.now()).toLocaleDateString(),
+      status: t.status
     }));
     setGallery(galleryItems);
   }, [tasks]);

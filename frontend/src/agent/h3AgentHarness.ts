@@ -26,7 +26,7 @@ export const runH3AgentHarness = async (options: RunAgentHarnessOptions): Promis
   } = options;
 
   const { createOpenAI } = await import('@ai-sdk/openai');
-  const { generateText } = await import('ai');
+  const { generateText, stepCountIs } = await import('ai');
   const {
     t2vaSkill,
     i2vaSkill,
@@ -86,7 +86,7 @@ export const runH3AgentHarness = async (options: RunAgentHarnessOptions): Promis
       system: systemPrompt,
       messages: [initialMessage],
       tools,
-      maxSteps,
+      stopWhen: stepCountIs(maxSteps),
       onStepFinish({ text, toolCalls, toolResults }) {
         if (toolCalls && toolCalls.length > 0) {
           toolCalls.forEach((call: any) => {
@@ -109,7 +109,7 @@ export const runH3AgentHarness = async (options: RunAgentHarnessOptions): Promis
         const step = result.steps[i];
         if (step.toolResults && step.toolResults.length > 0) {
           const lastRes = step.toolResults[step.toolResults.length - 1];
-          output = String(lastRes.result || lastRes.output || '');
+          output = String(lastRes.output || '');
           if (output) break;
         }
       }

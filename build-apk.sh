@@ -2,6 +2,21 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+NPM_BIN="$(command -v npm.exe || command -v npm || command -v npm.cmd || true)"
+if [[ -z "$NPM_BIN" ]]; then
+  echo "npm/npm.cmd not found; install Node.js or add it to PATH" >&2
+  exit 1
+fi
+
+# Build the web client before packaging so the APK never embeds a stale bundle.
+pushd "$ROOT_DIR/frontend" >/dev/null
+  "$NPM_BIN" run build
+popd >/dev/null
+
+WEB_ASSETS_DIR="$ROOT_DIR/app/src/main/assets/web"
+find "$WEB_ASSETS_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+cp -R "$ROOT_DIR/frontend/dist/." "$WEB_ASSETS_DIR/"
+
 DEFAULT_SDK_DIR="$HOME/AppData/Local/Android/Sdk"
 SDK_DIR="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$DEFAULT_SDK_DIR}}"
 
