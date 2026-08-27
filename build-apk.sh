@@ -84,10 +84,6 @@ AAPT_LINK_CMD=(
   -0 html -0 css -0 js -0 json
 )
 
-if [[ -d "$ROOT_DIR/app/src/main/assets" ]]; then
-  AAPT_LINK_CMD+=(-A "$ROOT_DIR/app/src/main/assets")
-fi
-
 AAPT_LINK_CMD+=("$OUT_DIR/resources.zip")
 
 "${AAPT_LINK_CMD[@]}"
@@ -99,9 +95,23 @@ AAPT_LINK_CMD+=("$OUT_DIR/resources.zip")
   $(find "$CLASS_DIR" -name '*.class' -print)
 
 pushd "$OUT_DIR" >/dev/null
+  # aapt2 -A writes backslashes into asset ZIP entries when invoked on Windows.
+  # Add the asset tree with jar instead so Android AssetManager sees web/... paths.
+  if [[ -d "$ROOT_DIR/app/src/main/assets" ]]; then
+    "$JAR_BIN" uf unaligned.apk -C "$ROOT_DIR/app/src/main" assets
+  fi
   # Insert classes.dex into APK using jar
   "$JAR_BIN" uf unaligned.apk -C dex classes.dex
 popd >/dev/null
+
+if ! "$JAR_BIN" tf "$OUT_DIR/unaligned.apk" | grep -qx 'assets/web/index.html'; then
+  echo "APK asset validation failed: web/index.html is missing" >&2
+  exit 1
+fi
+if "$JAR_BIN" tf "$OUT_DIR/unaligned.apk" | grep -qE '^assets/web\\'; then
+  echo "APK asset validation failed: backslash asset path detected" >&2
+  exit 1
+fi
 
 "$ZIPALIGN_BIN" -p -f 4 "$OUT_DIR/unaligned.apk" "$OUT_DIR/aligned.apk"
 
