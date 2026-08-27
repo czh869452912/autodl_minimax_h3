@@ -753,11 +753,14 @@ public class MainActivity extends Activity {
         // The result is normally a local file by the time it appears here. Retrieving one
         // frame gives the user an actual cover instead of a black placeholder while the
         // VideoView is preparing. Remote URLs are left to VideoView's prepared callback.
+        Uri sourceUri = Uri.parse(source);
+        String scheme = sourceUri.getScheme();
+        if (!"file".equalsIgnoreCase(scheme) && !"content".equalsIgnoreCase(scheme)) return;
         executor.execute(() -> {
             MediaMetadataRetriever retriever = new MediaMetadataRetriever();
             Bitmap bitmap = null;
             try {
-                retriever.setDataSource(this, Uri.parse(source));
+                retriever.setDataSource(this, sourceUri);
                 bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
             } catch (Exception ignored) {
             } finally {
@@ -955,7 +958,13 @@ public class MainActivity extends Activity {
         return generator.generateKey();
     }
 
-    @Override protected void onResume() { super.onResume(); if (tokenInput != null) pollTasks(); }
+    @Override protected void onResume() {
+        super.onResume();
+        if (tokenInput != null) {
+            refreshAllViews();
+            pollTasks();
+        }
+    }
 
     @Override protected void onDestroy() {
         handler.removeCallbacks(pollRunnable);
