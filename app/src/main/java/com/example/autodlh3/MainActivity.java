@@ -118,6 +118,8 @@ public class MainActivity extends Activity {
         IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(downloadReceiver, filter, RECEIVER_NOT_EXPORTED);
         else registerReceiver(downloadReceiver, filter);
+        reconcileDownloads();
+        refreshAllViews();
     }
 
     private SharedPreferences prefs() { return getSharedPreferences(PREFS_NAME, MODE_PRIVATE); }
@@ -566,6 +568,28 @@ public class MainActivity extends Activity {
             saveTasks();
             refreshAllViews();
         }
+    }
+
+    private void reconcileDownloads() {
+        DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+        boolean changed = false;
+        for (TaskItem task : tasks) {
+            if (task.downloadId <= 0 || !task.localUri.isEmpty()) continue;
+            try (Cursor cursor = manager.query(new DownloadManager.Query().setFilterById(task.downloadId))) {
+                if (cursor == null || !cursor.moveToFirst()) continue;
+                int status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+                if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                    int uriColumn = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
+                    task.localUri = uriColumn >= 0 ? cursor.getString(uriColumn) : "";
+                    task.downloadState = "已下载";
+                    changed = true;
+                } else if (status == DownloadManager.STATUS_FAILED) {
+                    task.downloadState = "下载失败";
+                    changed = true;
+                }
+            } catch (Exception ignored) {}
+        }
+        if (changed) saveTasks();
     }
 
     private String extractVideoUrl(JSONArray results) {
