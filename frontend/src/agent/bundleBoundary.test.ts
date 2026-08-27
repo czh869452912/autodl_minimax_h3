@@ -19,4 +19,11 @@ describe("browser agent bundle boundary", () => {
     expect(packageJson.dependencies).not.toHaveProperty("express");
     expect(existsSync(join(root, "utils", "runtimeUrl.ts"))).toBe(false);
   });
+
+  it("provides browser process constants required by deepagents dependencies", () => {
+    const viteConfig = readFileSync(join(process.cwd(), "vite.config.ts"), "utf8");
+    expect(viteConfig).toContain("process.platform");
+    expect(viteConfig).toContain("process.version");
+    expect(viteConfig).toContain("process.env.NODE_ENV");
+  });
 });
