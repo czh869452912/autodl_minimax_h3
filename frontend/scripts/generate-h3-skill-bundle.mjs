@@ -49,7 +49,6 @@ function quote(value) {
 const files = await filesUnder(sourceRoot);
 const entries = [];
 const manifest = [];
-const now = new Date().toISOString();
 
 for (const filePath of files) {
   const bytes = await readFile(filePath);
@@ -63,7 +62,7 @@ for (const filePath of files) {
     ? JSON.stringify(bytes.toString("utf8"))
     : `new Uint8Array(${JSON.stringify([...bytes])})`;
 
-  entries.push(`  ${quote(virtualPath)}: { content: ${content}, mimeType: ${quote(mimeType)}, created_at: ${quote(now)}, modified_at: ${quote(modifiedAt)} }`);
+  entries.push(`  ${quote(virtualPath)}: { content: ${content}, mimeType: ${quote(mimeType)}, created_at: ${quote(modifiedAt)}, modified_at: ${quote(modifiedAt)} }`);
   manifest.push(`  ${quote(virtualPath)}: ${quote(digest)}`);
 }
 

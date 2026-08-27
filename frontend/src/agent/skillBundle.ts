@@ -16,5 +16,5 @@ export function getOfficialH3SkillFiles(): Record<string, FileData> {
         content: fileData.content instanceof Uint8Array ? new Uint8Array(fileData.content) : fileData.content,
       },
     ]),
-  );
+  ) as Record<string, FileData>;
 }
