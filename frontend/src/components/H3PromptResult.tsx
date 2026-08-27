@@ -1,87 +1,85 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  CopilotChat,
-  CopilotKitProvider,
-  UseAgentUpdate,
-  useAgent,
-} from '@copilotkit/react-core/v2';
-import '@copilotkit/react-core/v2/styles.css';
-import { isNativeApp, nativeReadAgentRuntimeUrl } from '../utils/nativeBridge';
-import { resolveCopilotRuntimeUrl } from '../utils/runtimeUrl';
+  AssistantRuntimeProvider,
+  ComposerPrimitive,
+  MessagePrimitive,
+  SimpleImageAttachmentAdapter,
+  ThreadPrimitive,
+  useAuiState,
+  useLocalRuntime,
+} from "@assistant-ui/react";
+import type { AppSettings } from "../types";
+import { createH3ChatModelAdapter } from "../agent/assistantAdapter";
+import { loadThread, saveThread } from "../agent/threadStore";
 
 interface H3PromptResultProps {
   onApplyPrompt: (prompt: string) => void;
+  llmConfig: Pick<AppSettings, "llmApiKey" | "llmEndpoint" | "llmModel">;
 }
 
 function getMessageText(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content.map((part) => {
-      if (typeof part === 'string') return part;
-      if (part && typeof part === 'object' && 'text' in part) return String((part as { text?: unknown }).text || '');
-      return '';
-    }).join('');
-  }
-  return '';
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content.map((part) => {
+    if (typeof part === "string") return part;
+    if (part && typeof part === "object" && "text" in part) return String((part as { text?: unknown }).text || "");
+    return "";
+  }).join("");
 }
 
 function extractPrompt(messages: readonly { role?: string; content?: unknown }[]): string | null {
   const assistantText = [...messages]
     .reverse()
-    .filter((message) => message.role === 'assistant')
+    .filter((message) => message.role === "assistant")
     .map((message) => getMessageText(message.content))
-    .find((text) => text.includes('integrated_multimodal_description:'));
+    .find((text) => text.includes("integrated_multimodal_description:"));
   if (!assistantText) return null;
-
-  const start = assistantText.indexOf('integrated_multimodal_description:');
-  const prompt = assistantText.slice(start).trim();
-  return prompt || null;
+  return assistantText.slice(assistantText.indexOf("integrated_multimodal_description:")).trim() || null;
 }
 
-function AgentChat({ onApplyPrompt }: H3PromptResultProps) {
-  const { agent } = useAgent({
-    agentId: 'default',
-    updates: [UseAgentUpdate.OnMessagesChanged, UseAgentUpdate.OnRunStatusChanged],
-  });
-  const [prompt, setPrompt] = useState<string | null>(null);
+function AgentThread({ onApplyPrompt, savedThread }: { onApplyPrompt: (prompt: string) => void; savedThread: ReturnType<typeof loadThread> }) {
+  const messages = useAuiState((state) => state.thread.messages);
+  const prompt = extractPrompt(messages);
 
   useEffect(() => {
-    setPrompt(extractPrompt(agent.messages));
-  }, [agent.messages]);
-
-  const threadId = useMemo(() => {
-    const storageKey = 'h3-prompt-assistant-thread';
-    const existing = window.localStorage.getItem(storageKey);
-    if (existing) return existing;
-    const next = crypto.randomUUID();
-    window.localStorage.setItem(storageKey, next);
-    return next;
-  }, []);
+    const threadId = savedThread?.threadId || "h3-prompt-assistant";
+    saveThread({
+      threadId,
+      messages: messages.map((message) => ({ id: message.id, role: message.role, content: message.content })),
+      finalPrompt: prompt,
+    });
+  }, [messages, prompt, savedThread?.threadId]);
 
   return (
     <div className="space-y-4">
-      <div className="h-[min(68vh,720px)] min-h-[480px] overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70 shadow-2xl">
-        <CopilotChat
-          agentId="default"
-          threadId={threadId}
-          className="h-full"
-          labels={{
-            modalHeaderTitle: 'MiniMax H3 Prompt Assistant',
-            welcomeMessageText: '描述你想生成的视频，我会自主选择官方 skill 并多轮迭代提示词。',
-            chatInputPlaceholder: '描述场景、镜头、声音或上传参考图…',
-          }}
-          attachments={{
-            enabled: true,
-            accept: 'image/*',
-            maxSize: 20 * 1024 * 1024,
-            onUpload: async (file) => ({
-              type: 'data',
-              value: `data:${file.type};base64,${btoa(String.fromCharCode(...new Uint8Array(await file.arrayBuffer())))}`,
-              mimeType: file.type,
-            }),
-          }}
-        />
-      </div>
+      <ThreadPrimitive.Root className="flex h-[min(68vh,720px)] min-h-[480px] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70 shadow-2xl">
+        <ThreadPrimitive.Viewport className="min-h-0 flex-1 overflow-y-auto px-4 py-5" autoScroll>
+          <ThreadPrimitive.Messages
+            components={{
+              Message: () => (
+                <MessagePrimitive.Root className="mb-4 rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 text-sm text-slate-200">
+                  <MessagePrimitive.Parts />
+                </MessagePrimitive.Root>
+              ),
+            }}
+          />
+        </ThreadPrimitive.Viewport>
+        <ComposerPrimitive.Root className="border-t border-slate-800 bg-slate-950/50 p-3">
+          <ComposerPrimitive.Input
+            className="min-h-20 w-full resize-none rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
+            placeholder="描述场景、镜头、声音或上传参考图…"
+            submitMode="enter"
+          />
+          <div className="mt-2 flex justify-end gap-2">
+            <ComposerPrimitive.Cancel className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-slate-500">
+              停止
+            </ComposerPrimitive.Cancel>
+            <ComposerPrimitive.Send className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500">
+              发送
+            </ComposerPrimitive.Send>
+          </div>
+        </ComposerPrimitive.Root>
+      </ThreadPrimitive.Root>
       {prompt && (
         <section className="rounded-2xl border border-indigo-400/30 bg-indigo-500/10 p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
@@ -101,15 +99,31 @@ function AgentChat({ onApplyPrompt }: H3PromptResultProps) {
   );
 }
 
-export function H3PromptResult({ onApplyPrompt }: H3PromptResultProps) {
-  const runtimeUrl = resolveCopilotRuntimeUrl({
-    isNative: isNativeApp(),
-    storedUrl: nativeReadAgentRuntimeUrl(),
+export function H3PromptResult({ onApplyPrompt, llmConfig }: H3PromptResultProps) {
+  const savedThread = useMemo(() => loadThread(), []);
+  const adapter = useMemo(() => createH3ChatModelAdapter({
+    apiKey: llmConfig.llmApiKey || "",
+    endpoint: llmConfig.llmEndpoint || "",
+    model: llmConfig.llmModel || "",
+  }), [llmConfig.llmApiKey, llmConfig.llmEndpoint, llmConfig.llmModel]);
+  const runtime = useLocalRuntime(adapter, {
+    initialMessages: savedThread?.messages,
+    adapters: { attachments: new SimpleImageAttachmentAdapter() },
   });
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!llmConfig.llmApiKey || !llmConfig.llmEndpoint || !llmConfig.llmModel) {
+      setRuntimeError("请先在设置中填写 OpenAI-compatible API Key、Endpoint 和 Model");
+    } else {
+      setRuntimeError(null);
+    }
+  }, [llmConfig.llmApiKey, llmConfig.llmEndpoint, llmConfig.llmModel]);
 
   return (
-    <CopilotKitProvider runtimeUrl={runtimeUrl}>
-      <AgentChat onApplyPrompt={onApplyPrompt} />
-    </CopilotKitProvider>
+    <AssistantRuntimeProvider runtime={runtime}>
+      {runtimeError && <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">{runtimeError}</div>}
+      <AgentThread onApplyPrompt={onApplyPrompt} savedThread={savedThread} />
+    </AssistantRuntimeProvider>
   );
 }

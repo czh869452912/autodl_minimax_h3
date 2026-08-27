@@ -193,7 +193,10 @@ export default function App() {
           )}
 
           {currentScreen === 'agent' && (
-            <AgentScreen onApplyPrompt={handleApplyPromptFromAgent} />
+            <AgentScreen
+              onApplyPrompt={handleApplyPromptFromAgent}
+              llmConfig={settings}
+            />
           )}
 
           {currentScreen === 'tasks' && (
