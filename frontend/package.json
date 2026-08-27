@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "prebuild": "node scripts/generate-h3-skill-bundle.mjs",
     "dev": "vite --port=3000 --host=0.0.0.0",
     "server": "node --import tsx/esm server/index.ts",
     "build": "vite build",
