@@ -8,4 +8,5 @@ local.properties
 # Frontend dependencies and build outputs
 frontend/node_modules/
 frontend/dist/
+app/src/main/assets/web/
 *.log

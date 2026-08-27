@@ -14,6 +14,7 @@ pushd "$ROOT_DIR/frontend" >/dev/null
 popd >/dev/null
 
 WEB_ASSETS_DIR="$ROOT_DIR/app/src/main/assets/web"
+mkdir -p "$WEB_ASSETS_DIR"
 find "$WEB_ASSETS_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 cp -R "$ROOT_DIR/frontend/dist/." "$WEB_ASSETS_DIR/"
 

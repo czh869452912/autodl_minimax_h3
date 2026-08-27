@@ -71,6 +71,17 @@ export const nativeReadLlmConfig = (): { apiKey: string; endpoint: string; model
   };
 };
 
+const AGENT_RUNTIME_URL_KEY = 'agent_runtime_url';
+
+export const nativeSaveAgentRuntimeUrl = (url: string): boolean => {
+  localStorage.setItem(AGENT_RUNTIME_URL_KEY, url);
+  return true;
+};
+
+export const nativeReadAgentRuntimeUrl = (): string => {
+  return localStorage.getItem(AGENT_RUNTIME_URL_KEY) || '';
+};
+
 export const nativeSubmitTask = (taskData: any): boolean => {
   if (window.AndroidBridge?.submitTask) {
     return window.AndroidBridge.submitTask(JSON.stringify(taskData));

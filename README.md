@@ -72,6 +72,8 @@ npm run server   # CopilotKit runtime: http://127.0.0.1:8787/api/copilotkit
 npm run dev      # Vite: http://127.0.0.1:3000
 ```
 
+APK 中的 Prompt 助手默认连接 Android Emulator 的 `http://10.0.2.2:8787/api/copilotkit`。真机调试时，请在“系统设置”中把 Agent Runtime 地址改成电脑在同一局域网中的地址，并确保后端监听端口可被手机访问。
+
 ### 方式 1：使用一键打包脚本（推荐）
 
 1. **编译前端 Web 资源**：
@@ -80,11 +82,7 @@ npm run dev      # Vite: http://127.0.0.1:3000
    npm install
    npm run build
    ```
-2. **同步前端产物至 Android 资源目录**：
-   ```bash
-   cp -r dist/* ../app/src/main/assets/web/
-   ```
-3. **命令行构建 APK**：
+2. **命令行构建 APK**：
    在项目根目录下运行 bash 构建脚本：
    ```bash
    ./build-apk.sh
@@ -92,7 +90,7 @@ npm run dev      # Vite: http://127.0.0.1:3000
    生成的调试包位于：`app/build/AutoDL-H3-debug.apk`。
 
 ### 方式 2：使用 Android Studio 导入
-完成前端编译与资源同步后，直接使用 **Android Studio** 打开 `autodl_minimax_h3` 根目录，即可进行真机/模拟器可视化调试与 Gradle 编译打包。
+直接使用 **Android Studio** 打开 `autodl_minimax_h3` 根目录，即可进行真机/模拟器可视化调试与 Gradle 编译打包。Gradle 的 `preBuild` 会自动执行前端构建并同步 `frontend/dist` 到 Android WebView 资源目录，无需手工复制。
 
 ---
 

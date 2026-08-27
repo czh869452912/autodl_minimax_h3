@@ -67,6 +67,7 @@ export default function App() {
     token: nativeReadToken() || '',
     llmApiKey: '',
     llmEndpoint: '',
+    runtimeUrl: '',
     theme: 'dark'
   });
   const [selectedVideo, setSelectedVideo] = useState<any>(null);

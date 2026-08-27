@@ -6,6 +6,8 @@ import {
   useAgent,
 } from '@copilotkit/react-core/v2';
 import '@copilotkit/react-core/v2/styles.css';
+import { isNativeApp, nativeReadAgentRuntimeUrl } from '../utils/nativeBridge';
+import { resolveCopilotRuntimeUrl } from '../utils/runtimeUrl';
 
 interface H3PromptResultProps {
   onApplyPrompt: (prompt: string) => void;
@@ -100,8 +102,13 @@ function AgentChat({ onApplyPrompt }: H3PromptResultProps) {
 }
 
 export function H3PromptResult({ onApplyPrompt }: H3PromptResultProps) {
+  const runtimeUrl = resolveCopilotRuntimeUrl({
+    isNative: isNativeApp(),
+    storedUrl: nativeReadAgentRuntimeUrl(),
+  });
+
   return (
-    <CopilotKitProvider runtimeUrl="/api/copilotkit">
+    <CopilotKitProvider runtimeUrl={runtimeUrl}>
       <AgentChat onApplyPrompt={onApplyPrompt} />
     </CopilotKitProvider>
   );
