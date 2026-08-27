@@ -48,10 +48,15 @@ export function saveThread(input: Pick<StoredThread, "threadId" | "messages" | "
 }
 
 export function loadThread(): StoredThread | null {
-  const raw = storage().getItem(STORAGE_KEY);
+  let raw: string | null;
+  try {
+    raw = storage().getItem(STORAGE_KEY);
+  } catch (error) {
+    throw new Error(`thread storage read failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
   if (!raw) return null;
   try {
-    const value = JSON.parse(raw) as Partial<StoredThread>;
+    const value = JSON.parse(raw.replace(/^\uFEFF/, "").trim()) as Partial<StoredThread>;
     if (value.version !== VERSION || typeof value.threadId !== "string" || !Array.isArray(value.messages)) {
       throw new Error("invalid schema");
     }
@@ -63,6 +68,12 @@ export function loadThread(): StoredThread | null {
       updatedAt: typeof value.updatedAt === "number" ? value.updatedAt : 0,
     };
   } catch (error) {
-    throw new Error(`thread storage read failed: ${error instanceof Error ? error.message : String(error)}`);
+    // A stale or partially written thread must not prevent the app from mounting.
+    try {
+      storage().removeItem(STORAGE_KEY);
+    } catch {
+      // Ignore cleanup failures; the next read will retry the same recovery path.
+    }
+    return null;
   }
 }

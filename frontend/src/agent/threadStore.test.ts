@@ -29,8 +29,20 @@ describe("local prompt assistant thread store", () => {
     });
   });
 
-  it("rejects corrupt persisted data", () => {
+  it("discards corrupt persisted data so the page can start a new thread", () => {
     localStorage.setItem("h3-prompt-assistant-thread", "{not-json");
-    expect(() => loadThread()).toThrow("thread storage");
+    expect(loadThread()).toBeNull();
+    expect(localStorage.getItem("h3-prompt-assistant-thread")).toBeNull();
+  });
+
+  it("accepts a UTF-8 BOM around a valid persisted record", () => {
+    saveThread({
+      threadId: "thread-bom",
+      messages: [],
+      finalPrompt: null,
+    });
+    const value = localStorage.getItem("h3-prompt-assistant-thread");
+    localStorage.setItem("h3-prompt-assistant-thread", `\uFEFF${value}`);
+    expect(loadThread()?.threadId).toBe("thread-bom");
   });
 });
