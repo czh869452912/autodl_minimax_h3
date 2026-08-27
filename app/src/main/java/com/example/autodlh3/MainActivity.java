@@ -587,7 +587,8 @@ public class MainActivity extends Activity {
             // Recover tasks created by an earlier build where the result URL was saved but
             // enqueue() had not happened yet (for example, if the app was backgrounded).
             if (task.downloadId <= 0 && task.localUri.isEmpty()
-                    && "SUCCESS".equalsIgnoreCase(task.status) && !task.videoUrl.isEmpty()) {
+                    && "SUCCESS".equalsIgnoreCase(task.status) && !task.videoUrl.isEmpty()
+                    && !task.downloadState.startsWith("下载失败")) {
                 startDownloadIfNeeded(task);
                 changed = true;
             }
