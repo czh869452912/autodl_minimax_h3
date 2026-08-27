@@ -12,6 +12,8 @@ export interface AndroidBridgeInterface {
   loadTasks?(): string;
   saveTasks?(tasksJson: string): void;
   pickMedia?(kind: number): void;
+  retryDownload?(taskId: string): void;
+  deleteTask?(taskId: string): void;
 }
 
 declare global {
@@ -94,7 +96,7 @@ export const nativeLoadTasks = (): VideoTask[] => {
 };
 
 export const nativeSaveTasks = (tasks: VideoTask[]) => {
-  const jsonStr = JSON.stringify(tasks.slice(0, 30));
+  const jsonStr = JSON.stringify(tasks.slice(0, 50));
   if (window.AndroidBridge?.saveTasks) {
     window.AndroidBridge.saveTasks(jsonStr);
   } else {
@@ -106,4 +108,28 @@ export const nativePickMedia = (kind: 'image' | 'audio') => {
   if (window.AndroidBridge?.pickMedia) {
     window.AndroidBridge.pickMedia(kind === 'image' ? 0 : 1);
   }
+};
+
+export const nativeRetryDownload = (taskId: string) => {
+  if (window.AndroidBridge?.retryDownload) {
+    window.AndroidBridge.retryDownload(taskId);
+  }
+};
+
+export const nativeDeleteTask = (taskId: string) => {
+  if (window.AndroidBridge?.deleteTask) {
+    window.AndroidBridge.deleteTask(taskId);
+  }
+};
+
+export const resolveMediaSrc = (item?: { id: string; localUri?: string; videoUrl?: string }): string => {
+  if (!item) return '';
+  if (item.localUri && item.localUri.trim()) {
+    // If localUri starts with file://, in Android WebView intercepted request or local file
+    return item.localUri;
+  }
+  if (item.videoUrl && item.videoUrl.trim()) {
+    return item.videoUrl;
+  }
+  return '';
 };

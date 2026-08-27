@@ -116,14 +116,17 @@ export default function App() {
     );
     const galleryItems: GalleryItem[] = successful.map((t) => ({
       id: t.id,
-      title: `任务 ${t.id}`,
+      title: t.title || `任务 ${t.id}`,
       prompt: t.prompt,
-      duration: `00:0${t.duration}`,
+      duration: typeof t.duration === 'number' ? `${t.duration}s` : `${t.duration}`,
       thumbnailUrl: t.localUri || t.videoUrl || '',
-      videoUrl: t.localUri || t.videoUrl || '',
+      videoUrl: t.videoUrl || '',
       localUri: t.localUri,
+      downloadId: t.downloadId,
+      downloadState: t.downloadState,
       resolution: t.resolution,
       timestamp: new Date(t.createdAt || Date.now()).toLocaleDateString(),
+      createdAt: t.createdAt,
       status: t.status
     }));
     setGallery(galleryItems);
@@ -167,7 +170,9 @@ export default function App() {
   };
 
   const handleDeleteGalleryItem = (id: string) => {
-    setGallery((prev) => prev.filter((item) => item.id !== id));
+    const updated = tasks.filter((item) => item.id !== id);
+    setTasks(updated);
+    nativeSaveTasks(updated);
   };
 
   const handleUpdateSettings = (newSettings: Partial<AppSettings>) => {
@@ -218,7 +223,11 @@ export default function App() {
       </div>
 
       {/* Video Modal Player */}
-      <VideoModal item={selectedVideo} onClose={() => setSelectedVideo(null)} />
+      <VideoModal
+        item={selectedVideo}
+        onClose={() => setSelectedVideo(null)}
+        onReusePrompt={(promptText) => handleApplyPromptFromAgent(promptText)}
+      />
 
       {/* Mobile Bottom Navigation Bar */}
       <BottomNav currentScreen={currentScreen} onNavigate={(s) => navigateTo(s)} />

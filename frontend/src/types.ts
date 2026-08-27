@@ -20,6 +20,7 @@ export interface VideoTask {
   audios?: MediaItem[];
   videoUrl?: string;
   localUri?: string;
+  downloadId?: number;
   title?: string;
   thumbnailUrl?: string;
   downloadState?: string;
@@ -35,8 +36,11 @@ export interface GalleryItem {
   thumbnailUrl: string;
   videoUrl: string;
   localUri?: string;
+  downloadId?: number;
+  downloadState?: string;
   resolution: string;
   timestamp: string;
+  createdAt?: number;
   status?: string;
 }
 

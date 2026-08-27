@@ -31,11 +31,15 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -94,6 +98,7 @@ public class MainActivity extends Activity {
         settings.setDatabaseEnabled(true);
         settings.setAllowFileAccessFromFileURLs(true);
         settings.setAllowUniversalAccessFromFileURLs(true);
+        settings.setMediaPlaybackRequiresUserGesture(false);
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -108,6 +113,25 @@ public class MainActivity extends Activity {
                         return new WebResourceResponse(mimeType, "UTF-8", is);
                     } catch (IOException ignored) {
                     }
+                } else if (url.contains("local-media/") || url.contains("local-video/") || url.startsWith("file:///storage/")) {
+                    try {
+                        File targetFile = null;
+                        if (url.startsWith("file:///")) {
+                            targetFile = new File(Uri.parse(url).getPath());
+                        } else {
+                            String fileName = url.substring(url.lastIndexOf('/') + 1);
+                            if (fileName.contains("?")) fileName = fileName.substring(0, fileName.indexOf('?'));
+                            if (!fileName.endsWith(".mp4")) fileName += ".mp4";
+                            targetFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "AutoDL-H3/" + fileName);
+                        }
+                        if (targetFile != null && targetFile.exists() && targetFile.length() > 0) {
+                            FileInputStream fis = new FileInputStream(targetFile);
+                            Map<String, String> headers = new HashMap<>();
+                            headers.put("Access-Control-Allow-Origin", "*");
+                            headers.put("Accept-Ranges", "bytes");
+                            return new WebResourceResponse("video/mp4", "UTF-8", 200, "OK", headers, fis);
+                        }
+                    } catch (Exception ignored) {}
                 }
                 return super.shouldInterceptRequest(view, request);
             }
@@ -314,8 +338,49 @@ public class MainActivity extends Activity {
         });
     }
 
+    public void retryDownload(String taskId) {
+        if (taskId == null || taskId.isEmpty()) return;
+        for (TaskItem task : tasks) {
+            if (taskId.equals(task.id)) {
+                task.downloadId = 0;
+                task.downloadState = "";
+                startDownloadIfNeeded(task);
+                saveTasks();
+                notifyWebTasks();
+                break;
+            }
+        }
+    }
+
+    public void deleteTask(String taskId) {
+        if (taskId == null || taskId.isEmpty()) return;
+        boolean removed = false;
+        for (int i = tasks.size() - 1; i >= 0; i--) {
+            if (taskId.equals(tasks.get(i).id)) {
+                tasks.remove(i);
+                removed = true;
+            }
+        }
+        if (removed) {
+            saveTasks();
+            notifyWebTasks();
+        }
+    }
+
     private void startDownloadIfNeeded(TaskItem task) {
-        if (task.videoUrl.isEmpty() || !task.localUri.isEmpty() || task.downloadId > 0) return;
+        if (task.videoUrl == null || task.videoUrl.isEmpty()) return;
+
+        // 1. Check if the video file already exists on local disk
+        File localFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "AutoDL-H3/" + task.id + ".mp4");
+        if (localFile.exists() && localFile.length() > 0) {
+            task.localUri = Uri.fromFile(localFile).toString();
+            task.downloadState = "已下载";
+            return;
+        }
+
+        // 2. Prevent duplicate downloads if already downloaded or in flight
+        if ("已下载".equals(task.downloadState) || task.downloadId > 0) return;
+
         try {
             DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
             DownloadManager.Request request = new DownloadManager.Request(Uri.parse(task.videoUrl));
@@ -330,7 +395,7 @@ public class MainActivity extends Activity {
     }
 
     private void handleDownloadComplete(long downloadId) {
-        if (downloadId < 0) return;
+        if (downloadId <= 0) return;
         TaskItem target = null;
         for (TaskItem task : tasks) if (task.downloadId == downloadId) { target = task; break; }
         if (target == null) return;
@@ -339,10 +404,18 @@ public class MainActivity extends Activity {
             if (cursor != null && cursor.moveToFirst()) {
                 int status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
                 if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                    File localFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "AutoDL-H3/" + target.id + ".mp4");
                     int uriColumn = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
-                    target.localUri = uriColumn >= 0 ? cursor.getString(uriColumn) : "";
+                    String rawUri = uriColumn >= 0 ? cursor.getString(uriColumn) : "";
+                    if (rawUri != null && !rawUri.isEmpty()) {
+                        target.localUri = rawUri;
+                    } else if (localFile.exists() && localFile.length() > 0) {
+                        target.localUri = Uri.fromFile(localFile).toString();
+                    }
                     target.downloadState = "已下载";
-                } else target.downloadState = "下载失败";
+                } else {
+                    target.downloadState = "下载失败";
+                }
                 saveTasks();
                 notifyWebTasks();
             }
@@ -357,22 +430,43 @@ public class MainActivity extends Activity {
         DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
         boolean changed = false;
         for (TaskItem task : tasks) {
-            if (task.downloadId <= 0 && task.localUri.isEmpty() && "SUCCESS".equalsIgnoreCase(task.status) && !task.videoUrl.isEmpty()) {
+            File localFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "AutoDL-H3/" + task.id + ".mp4");
+            if (localFile.exists() && localFile.length() > 0) {
+                if (!"已下载".equals(task.downloadState) || task.localUri == null || task.localUri.isEmpty()) {
+                    task.localUri = Uri.fromFile(localFile).toString();
+                    task.downloadState = "已下载";
+                    changed = true;
+                }
+                continue;
+            }
+
+            if (task.downloadId > 0) {
+                try (Cursor cursor = manager.query(new DownloadManager.Query().setFilterById(task.downloadId))) {
+                    if (cursor != null && cursor.moveToFirst()) {
+                        int status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                            int uriColumn = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
+                            String rawUri = uriColumn >= 0 ? cursor.getString(uriColumn) : "";
+                            task.localUri = (rawUri != null && !rawUri.isEmpty()) ? rawUri : Uri.fromFile(localFile).toString();
+                            task.downloadState = "已下载";
+                            changed = true;
+                        } else if (status == DownloadManager.STATUS_RUNNING || status == DownloadManager.STATUS_PENDING) {
+                            if (!"下载中".equals(task.downloadState)) {
+                                task.downloadState = "下载中";
+                                changed = true;
+                            }
+                        } else if (status == DownloadManager.STATUS_FAILED) {
+                            if (!"下载失败".equals(task.downloadState)) {
+                                task.downloadState = "下载失败";
+                                changed = true;
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {}
+            } else if ("SUCCESS".equalsIgnoreCase(task.status) && task.videoUrl != null && !task.videoUrl.isEmpty() && !"已下载".equals(task.downloadState)) {
                 startDownloadIfNeeded(task);
                 changed = true;
             }
-            if (task.downloadId <= 0 || !task.localUri.isEmpty()) continue;
-            try (Cursor cursor = manager.query(new DownloadManager.Query().setFilterById(task.downloadId))) {
-                if (cursor != null && cursor.moveToFirst()) {
-                    int status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
-                    if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                        int uriColumn = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
-                        task.localUri = uriColumn >= 0 ? cursor.getString(uriColumn) : "";
-                        task.downloadState = "已下载";
-                        changed = true;
-                    }
-                }
-            } catch (Exception ignored) {}
         }
         if (changed) { saveTasks(); notifyWebTasks(); }
     }
@@ -399,8 +493,10 @@ public class MainActivity extends Activity {
                 object.put("resolution", task.resolution);
                 object.put("duration", task.duration);
                 object.put("createdAt", task.createdAt);
+                object.put("updatedAt", task.updatedAt);
                 object.put("videoUrl", task.videoUrl);
                 object.put("localUri", task.localUri);
+                object.put("downloadId", task.downloadId);
                 object.put("downloadState", task.downloadState);
                 array.put(object);
             }
@@ -492,6 +588,7 @@ public class MainActivity extends Activity {
             for (int i = 0; i < array.length(); i++) {
                 JSONObject object = array.getJSONObject(i);
                 TaskItem task = new TaskItem(object.optString("id"), object.optString("status", "QUEUED"), object.optLong("createdAt", System.currentTimeMillis()));
+                task.updatedAt = object.optLong("updatedAt", task.createdAt);
                 task.prompt = object.optString("prompt", "");
                 task.resolution = object.optString("resolution", "768p竖");
                 task.duration = object.optInt("duration", 5);

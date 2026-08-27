@@ -1,5 +1,6 @@
 import React from 'react';
 import { VideoTask } from '../types';
+import { nativeRetryDownload } from '../utils/nativeBridge';
 
 interface TasksScreenProps {
   tasks: VideoTask[];
@@ -21,13 +22,29 @@ export const TasksScreen: React.FC<TasksScreenProps> = ({
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'QUEUED':
-        return <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2.5 py-1 rounded-md text-xs font-semibold">排队中 QUEUED</span>;
+        return (
+          <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2.5 py-1 rounded-md text-xs font-semibold">
+            排队中 QUEUED
+          </span>
+        );
       case 'RUNNING':
-        return <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1"><span className="material-symbols-outlined text-xs animate-spin">sync</span>执行中 RUNNING</span>;
+        return (
+          <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1">
+            <span className="material-symbols-outlined text-xs animate-spin">sync</span>执行中 RUNNING
+          </span>
+        );
       case 'SUCCESS':
-        return <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1"><span className="material-symbols-outlined text-xs">check_circle</span>已完成 SUCCESS</span>;
+        return (
+          <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1">
+            <span className="material-symbols-outlined text-xs">check_circle</span>已完成 SUCCESS
+          </span>
+        );
       case 'FAILED':
-        return <span className="bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded-md text-xs font-semibold">失败 FAILED</span>;
+        return (
+          <span className="bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded-md text-xs font-semibold">
+            失败 FAILED
+          </span>
+        );
       default:
         return <span className="bg-slate-800 text-slate-400 px-2.5 py-1 rounded-md text-xs">{status}</span>;
     }
@@ -69,7 +86,7 @@ export const TasksScreen: React.FC<TasksScreenProps> = ({
                   <button
                     type="button"
                     onClick={() => onCancelTask(task.id)}
-                    className="text-slate-500 hover:text-red-400 transition-colors p-1"
+                    className="text-slate-500 hover:text-red-400 transition-colors p-1 cursor-pointer"
                     title="移除任务"
                   >
                     <span className="material-symbols-outlined text-lg">close</span>
@@ -107,32 +124,87 @@ export const TasksScreen: React.FC<TasksScreenProps> = ({
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {pastTasks.map((task) => (
-              <div
-                key={task.id}
-                onClick={() => task.status === 'SUCCESS' && onSelectTask(task)}
-                className={`bg-slate-900/40 border rounded-xl p-4 flex items-center justify-between transition-all ${
-                  task.status === 'SUCCESS'
-                    ? 'border-slate-800 hover:border-slate-700 hover:bg-slate-900/80 cursor-pointer'
-                    : 'border-red-900/30 bg-red-950/10'
-                }`}
-              >
-                <div className="flex flex-col min-w-0 pr-4">
-                  <span className="font-semibold text-slate-200 text-sm truncate">{task.prompt}</span>
-                  <span className="font-mono text-xs text-slate-500 mt-1">
-                    ID: {task.id} • {task.resolution} • {task.duration}s
-                    {task.downloadState && ` • 视频: ${task.downloadState}`}
-                  </span>
-                </div>
+            {pastTasks.map((task) => {
+              const isSuccess = task.status === 'SUCCESS';
+              return (
+                <div
+                  key={task.id}
+                  onClick={() => isSuccess && onSelectTask(task)}
+                  className={`bg-slate-900/40 border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                    isSuccess
+                      ? 'border-slate-800 hover:border-indigo-500/50 hover:bg-slate-900/80 cursor-pointer'
+                      : 'border-red-900/30 bg-red-950/10'
+                  }`}
+                >
+                  <div className="flex flex-col min-w-0 pr-4">
+                    <span className="font-semibold text-slate-200 text-sm truncate">{task.prompt}</span>
+                    <div className="flex flex-wrap items-center gap-2 font-mono text-xs text-slate-500 mt-1">
+                      <span>ID: {task.id}</span>
+                      <span>•</span>
+                      <span>{task.resolution}</span>
+                      <span>•</span>
+                      <span>{task.duration}s</span>
+                      {task.downloadState === '已下载' && (
+                        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded text-[10px]">
+                          本地视频就绪
+                        </span>
+                      )}
+                      {task.downloadState === '下载中' && (
+                        <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 px-1.5 py-0.2 rounded text-[10px] flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[10px] animate-spin">sync</span>
+                          下载中
+                        </span>
+                      )}
+                      {task.downloadState && task.downloadState.startsWith('下载失败') && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            nativeRetryDownload(task.id);
+                          }}
+                          className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded text-[10px] flex items-center gap-1 cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[12px]">refresh</span>
+                          重试下载
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
-                <div className="flex items-center gap-3 shrink-0">
-                  {getStatusBadge(task.status)}
+                  <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                    {getStatusBadge(task.status)}
+                    {isSuccess && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectTask(task);
+                        }}
+                        className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer shadow-sm"
+                      >
+                        <span className="material-symbols-outlined text-sm">play_arrow</span>
+                        播放
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCancelTask(task.id);
+                      }}
+                      className="p-1 text-slate-500 hover:text-red-400 transition-colors cursor-pointer"
+                      title="移除记录"
+                    >
+                      <span className="material-symbols-outlined text-base">close</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
     </main>
   );
 };
+

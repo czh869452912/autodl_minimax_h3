@@ -66,6 +66,16 @@ public class NativeBridge {
     }
 
     @JavascriptInterface
+    public void retryDownload(String taskId) {
+        activity.retryDownload(taskId);
+    }
+
+    @JavascriptInterface
+    public void deleteTask(String taskId) {
+        activity.deleteTask(taskId);
+    }
+
+    @JavascriptInterface
     public boolean isNativeAvailable() {
         return true;
     }
