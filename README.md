@@ -12,10 +12,10 @@
   - 支持逐个添加与移除最多 **9 张参考图片**（`@image0` ~ `@image8`）与 **3 段参考音频**（`@audio0` ~ `@audio2`）。
   - 已选图片实时缩略图预览，音频支持在提交前直接播放测试。
 - **Prompt 助手 (Skill Agent)**：
-  - **内置 MiniMax-H3 官方 Skill** (`h3-prompt-writing` 规范)，指导用户构思与扩展电影级分镜。
-  - 提供 `🎬 镜头语言`、`🎵 音画同步`、`🎨 电影质感`、`🪄 结构化重构` 快捷技能芯片。
-  - 支持调用用户配置的大语言模型（如 MiniMax `abab6.5s`、DeepSeek 或兼容 OpenAI 接口）。
-  - Agent 生成分镜后，点击 **`🚀 一键填入生成页`** 自动填入主界面并跳转。
+  - 使用 **Deep Agents** 作为服务端 agent harness，通过 LangGraph 原生多轮循环自主读取并组合 MiniMax H3 官方 skills。
+  - 使用 **CopilotKit v2 + AG-UI** 提供现成聊天、流式消息、工具轨迹、线程和图片附件 UI，不再维护浏览器端 harness 或固定模板编排。
+  - 官方 skills 原样存放在 `frontend/server/skills/minimax-h3/`，包含完整 `SKILL.md` 与 references；需要 MiniMax Hub 的 skill 在当前未连接 Hub 时会降级为明确的 pre-production 结果。
+  - Agent 生成最终 H3 Prompt 后，可点击 **应用到生成器** 自动填入主界面并跳转。
 - **任务队列 (Tasks Queue)**：
   - 显示本机提交的异步任务进度与状态（`QUEUED`、`RUNNING`、`SUCCESS`、`FAILED`、`CANCELLED`）。
   - 自动后台轮询，支持手动清空已完成历史。
@@ -52,6 +52,25 @@
 ---
 
 ## 🏗️ 编译与打包指南
+
+### Prompt Agent 服务端配置
+
+在 `frontend/.env` 配置兼容 OpenAI API 的模型（默认 MiniMax）：
+
+```bash
+MINIMAX_API_KEY=your-key
+MINIMAX_BASE_URL=https://api.minimaxi.com/v1
+MINIMAX_MODEL=MiniMax-M2.7
+```
+
+启动开发服务：
+
+```bash
+cd frontend
+npm install
+npm run server   # CopilotKit runtime: http://127.0.0.1:8787/api/copilotkit
+npm run dev      # Vite: http://127.0.0.1:3000
+```
 
 ### 方式 1：使用一键打包脚本（推荐）
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AssistantChatSurface } from './AssistantChatSurface';
+import { H3PromptResult } from './H3PromptResult';
 
 interface AgentScreenProps { onApplyPrompt: (prompt: string) => void; }
 
@@ -7,8 +7,8 @@ export const AgentScreen: React.FC<AgentScreenProps> = ({ onApplyPrompt }) => (
   <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-4 px-4 pb-28 pt-24 md:px-8">
     <div>
       <h1 className="text-2xl font-bold text-slate-100">Prompt 助手</h1>
-      <p className="text-sm text-slate-400">LangGraph 状态图工作流 · 多模态分镜路由 · 流式轨迹推演</p>
+      <p className="text-sm text-slate-400">Deep Agents 自主选择官方 MiniMax H3 skills，并通过多轮调用迭代提示词</p>
     </div>
-    <AssistantChatSurface onApplyPrompt={onApplyPrompt} />
+    <H3PromptResult onApplyPrompt={onApplyPrompt} />
   </main>
 );
