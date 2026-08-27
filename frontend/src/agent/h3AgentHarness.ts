@@ -1,13 +1,3 @@
-import { createOpenAI } from '@ai-sdk/openai';
-import { generateText, streamText } from 'ai';
-import {
-  t2vaSkill,
-  i2vaSkill,
-  fl2vaSkill,
-  ref2vaSkill,
-  auditAndRefineSkill
-} from '../skills/h3Skills';
-
 export interface RunAgentHarnessOptions {
   apiKey: string;
   endpoint: string;
@@ -21,7 +11,7 @@ export interface RunAgentHarnessOptions {
 
 /**
  * Standard Vercel AI SDK Agent Harness for MiniMax-H3.
- * Autonomously selects H3 skills based on tool descriptions and executes multi-step tool calls up to maxSteps.
+ * Uses dynamic imports to keep browser component loading 100% lightweight and crash-safe.
  */
 export const runH3AgentHarness = async (options: RunAgentHarnessOptions): Promise<string> => {
   const {
@@ -31,9 +21,20 @@ export const runH3AgentHarness = async (options: RunAgentHarnessOptions): Promis
     systemPrompt,
     userPrompt,
     images,
-    maxSteps = 5,
+    maxSteps = 4,
     onStepProgress
   } = options;
+
+  // Dynamic import Vercel AI SDK to prevent top-level module load errors in WebViews
+  const { createOpenAI } = await import('@ai-sdk/openai');
+  const { generateText } = await import('ai');
+  const {
+    t2vaSkill,
+    i2vaSkill,
+    fl2vaSkill,
+    ref2vaSkill,
+    auditAndRefineSkill
+  } = await import('../skills/h3Skills');
 
   let baseURL = (endpoint || '').trim();
   if (!baseURL) baseURL = 'https://api.minimax.chat/v1';
@@ -51,16 +52,6 @@ export const runH3AgentHarness = async (options: RunAgentHarnessOptions): Promis
 
   const model = customOpenAI(modelName || 'abab6.5s-chat');
 
-  // Build message content payload with vision support
-  let contentPayload: any = userPrompt;
-  if (images && images.length > 0) {
-    const arr: any[] = [{ type: 'text', text: userPrompt }];
-    images.forEach((imgUri) => {
-      arr.push({ type: 'image', image: imgUri });
-    });
-    contentPayload = arr;
-  }
-
   const tools = {
     t2vaSkill,
     i2vaSkill,
@@ -69,46 +60,70 @@ export const runH3AgentHarness = async (options: RunAgentHarnessOptions): Promis
     auditAndRefineSkill
   };
 
-  onStepProgress?.('Agent Harness 启动中', '选择适配的 H3 Skill 工具库...');
+  onStepProgress?.('Agent Harness 启动中', '准备匹配 H3 Skill 工具...');
 
-  try {
-    const result = await generateText({
+  let currentMessages: any[] = [
+    {
+      role: 'user',
+      content:
+        images && images.length > 0
+          ? [
+              { type: 'text', text: userPrompt },
+              ...images.map((imgUri) => ({ type: 'image', image: imgUri }))
+            ]
+          : userPrompt
+    }
+  ];
+
+  let stepCount = 0;
+  let finalOutput = '';
+
+  while (stepCount < maxSteps) {
+    stepCount++;
+    const res = await generateText({
       model,
       system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: contentPayload
-        }
-      ],
-      tools,
-      maxSteps,
-      onStepFinish({ text, toolCalls, toolResults }) {
-        if (toolCalls && toolCalls.length > 0) {
-          toolCalls.forEach((call) => {
-            onStepProgress?.(
-              `Agent 触发 Skill: ${call.toolName}`,
-              `工具参数: ${JSON.stringify(call.args).slice(0, 80)}...`
-            );
-          });
-        } else if (text) {
-          onStepProgress?.('Agent 完成推演与 Audit 重构', '准备呈献最终分镜 Prompt');
-        }
-      }
+      messages: currentMessages,
+      tools
     });
 
-    let finalOutput = result.text;
-    if (!finalOutput && result.steps && result.steps.length > 0) {
-      // Collect tool results if text was empty in last step
-      const lastStep = result.steps[result.steps.length - 1];
-      if (lastStep.toolResults && lastStep.toolResults.length > 0) {
-        finalOutput = String(lastStep.toolResults[0].result);
-      }
-    }
+    const { text, toolCalls, toolResults } = res as any;
 
-    return finalOutput || 'Agent 选型及 Skill 运行完成。';
-  } catch (err: any) {
-    console.error('Agent Harness execution error:', err);
-    throw err;
+    if (toolCalls && toolCalls.length > 0) {
+      for (const call of toolCalls) {
+        const toolName = call.toolName || call.name || 'H3 Skill Tool';
+        const argsData = call.args || call.input || {};
+        onStepProgress?.(
+          `Step ${stepCount}: 触发 Skill [${toolName}]`,
+          `参数: ${JSON.stringify(argsData).slice(0, 70)}...`
+        );
+      }
+
+      currentMessages.push({ role: 'assistant', content: toolCalls });
+
+      if (toolResults && toolResults.length > 0) {
+        for (const tr of toolResults) {
+          const resultStr = String(tr.result || tr.output || '');
+          finalOutput = resultStr;
+          currentMessages.push({
+            role: 'tool',
+            content: [
+              {
+                type: 'tool-result',
+                toolCallId: tr.toolCallId || tr.id,
+                toolName: tr.toolName || tr.name,
+                result: resultStr
+              }
+            ]
+          });
+        }
+      }
+    } else {
+      if (text) finalOutput = text;
+      break;
+    }
   }
+
+  onStepProgress?.('Agent Harness 审计校准完成', '呈献最终分镜 Prompt');
+  return finalOutput || 'MiniMax-H3 Agent Harness 推演完成。';
 };

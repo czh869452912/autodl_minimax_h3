@@ -37,7 +37,7 @@ export const AgentScreen: React.FC<AgentScreenProps> = ({ onApplyPrompt }) => {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isThinking, thinkingStep]);
+  }, [messages, isThinking, harnessProgress]);
 
   // Handle native media pick callback
   useEffect(() => {
