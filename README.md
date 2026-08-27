@@ -12,9 +12,9 @@
   - 支持逐个添加与移除最多 **9 张参考图片**（`@image0` ~ `@image8`）与 **3 段参考音频**（`@audio0` ~ `@audio2`）。
   - 已选图片实时缩略图预览，音频支持在提交前直接播放测试。
 - **Prompt 助手 (Skill Agent)**：
-  - 使用 **Deep Agents** 作为服务端 agent harness，通过 LangGraph 原生多轮循环自主读取并组合 MiniMax H3 官方 skills。
-  - 使用 **CopilotKit v2 + AG-UI** 提供现成聊天、流式消息、工具轨迹、线程和图片附件 UI，不再维护浏览器端 harness 或固定模板编排。
-  - 官方 skills 原样存放在 `frontend/server/skills/minimax-h3/`，包含完整 `SKILL.md` 与 references；需要 MiniMax Hub 的 skill 在当前未连接 Hub 时会降级为明确的 pre-production 结果。
+- 使用 `deepagents/browser` 作为 APK 内的 agent harness，通过多轮自主循环读取并组合 MiniMax H3 官方 skills。
+- 使用 `assistant-ui` LocalRuntime 提供聊天、流式消息、工具轨迹、线程和图片附件 UI；agent runtime、上下文和 skill 文件全部随 APK 运行。
+- 官方 skills 原样存放在 `frontend/src/agent/skills/minimax-h3/`，构建时以完整文件树打包（包含 `SKILL.md` 与 references）；需要 MiniMax Hub 的 skill 在当前未连接 Hub 时会降级为明确的 pre-production 结果。
   - Agent 生成最终 H3 Prompt 后，可点击 **应用到生成器** 自动填入主界面并跳转。
 - **任务队列 (Tasks Queue)**：
   - 显示本机提交的异步任务进度与状态（`QUEUED`、`RUNNING`、`SUCCESS`、`FAILED`、`CANCELLED`）。
@@ -53,26 +53,17 @@
 
 ## 🏗️ 编译与打包指南
 
-### Prompt Agent 服务端配置
+### Prompt Agent 配置
 
-在 `frontend/.env` 配置兼容 OpenAI API 的模型（默认 MiniMax）：
+Prompt Agent 不需要单独的服务端、Node runtime 或局域网电脑。打开 APK 的“系统设置”，填写 OpenAI-compatible API Key、Endpoint（默认 `https://api.minimaxi.com/v1`）和模型名（默认 `MiniMax-M2.7`）。配置和对话线程保存在本机。
 
-```bash
-MINIMAX_API_KEY=your-key
-MINIMAX_BASE_URL=https://api.minimaxi.com/v1
-MINIMAX_MODEL=MiniMax-M2.7
-```
-
-启动开发服务：
+启动前端开发预览（仅用于 UI 开发）：
 
 ```bash
 cd frontend
 npm install
-npm run server   # CopilotKit runtime: http://127.0.0.1:8787/api/copilotkit
 npm run dev      # Vite: http://127.0.0.1:3000
 ```
-
-APK 中的 Prompt 助手默认连接 Android Emulator 的 `http://10.0.2.2:8787/api/copilotkit`。真机调试时，请在“系统设置”中把 Agent Runtime 地址改成电脑在同一局域网中的地址，并确保后端监听端口可被手机访问。
 
 ### 方式 1：使用一键打包脚本（推荐）
 

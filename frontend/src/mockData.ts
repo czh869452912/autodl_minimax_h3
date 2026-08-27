@@ -52,7 +52,7 @@ export const initialSettings: AppSettings = {
   token: '',
   llmApiKey: '',
   llmEndpoint: '',
-  llmModel: 'abab6.5s-chat',
+  llmModel: 'MiniMax-M2.7',
   theme: 'dark'
 };
 

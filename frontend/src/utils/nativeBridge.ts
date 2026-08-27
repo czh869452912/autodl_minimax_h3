@@ -60,26 +60,15 @@ export const nativeReadLlmConfig = (): { apiKey: string; endpoint: string; model
     const mod = window.AndroidBridge.readLlmModel ? window.AndroidBridge.readLlmModel() : '';
     return {
       apiKey: key,
-      endpoint: ep || 'https://api.minimax.chat/v1/text/chatcompletion_v2',
-      model: mod || 'abab6.5s-chat'
+      endpoint: ep || 'https://api.minimaxi.com/v1',
+      model: mod || 'MiniMax-M2.7'
     };
   }
   return {
     apiKey: localStorage.getItem('llm_api_key') || '',
-    endpoint: localStorage.getItem('llm_endpoint') || 'https://api.minimax.chat/v1/text/chatcompletion_v2',
-    model: localStorage.getItem('llm_model') || 'abab6.5s-chat'
+    endpoint: localStorage.getItem('llm_endpoint') || 'https://api.minimaxi.com/v1',
+    model: localStorage.getItem('llm_model') || 'MiniMax-M2.7'
   };
-};
-
-const AGENT_RUNTIME_URL_KEY = 'agent_runtime_url';
-
-export const nativeSaveAgentRuntimeUrl = (url: string): boolean => {
-  localStorage.setItem(AGENT_RUNTIME_URL_KEY, url);
-  return true;
-};
-
-export const nativeReadAgentRuntimeUrl = (): string => {
-  return localStorage.getItem(AGENT_RUNTIME_URL_KEY) || '';
 };
 
 export const nativeSubmitTask = (taskData: any): boolean => {

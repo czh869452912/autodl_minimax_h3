@@ -5,8 +5,6 @@ import {
   nativeReadToken,
   nativeSaveLlmConfig,
   nativeReadLlmConfig,
-  nativeSaveAgentRuntimeUrl,
-  nativeReadAgentRuntimeUrl,
 } from '../utils/nativeBridge';
 
 interface SettingsScreenProps {
@@ -22,9 +20,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   
   const initialLlm = nativeReadLlmConfig();
   const [llmApiKey, setLlmApiKey] = useState(initialLlm.apiKey || settings.llmApiKey || '');
-  const [llmEndpoint, setLlmEndpoint] = useState(initialLlm.endpoint || settings.llmEndpoint || 'https://api.minimax.chat/v1/text/chatcompletion_v2');
-  const [llmModel, setLlmModel] = useState(initialLlm.model || settings.llmModel || 'abab6.5s-chat');
-  const [runtimeUrl, setRuntimeUrl] = useState(settings.runtimeUrl || nativeReadAgentRuntimeUrl());
+  const [llmEndpoint, setLlmEndpoint] = useState(initialLlm.endpoint || settings.llmEndpoint || 'https://api.minimaxi.com/v1');
+  const [llmModel, setLlmModel] = useState(initialLlm.model || settings.llmModel || 'MiniMax-M2.7');
 
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -43,12 +40,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     nativeSaveLlmConfig(llmApiKey.trim(), llmEndpoint.trim(), llmModel.trim());
     onUpdateSettings({ llmApiKey: llmApiKey.trim(), llmEndpoint: llmEndpoint.trim(), llmModel: llmModel.trim() });
     showToast('Prompt 助手 LLM 配置已保存！');
-  };
-
-  const handleSaveRuntimeUrl = () => {
-    nativeSaveAgentRuntimeUrl(runtimeUrl.trim());
-    onUpdateSettings({ runtimeUrl: runtimeUrl.trim() });
-    showToast(runtimeUrl.trim() ? 'Agent Runtime 地址已保存' : '已恢复默认 Agent Runtime 地址');
   };
 
   return (
@@ -119,7 +110,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           Prompt 助手 Agent LLM 设置
         </h2>
         <p className="text-slate-400 text-xs leading-relaxed">
-          用于在“Prompt 助手”Tab 中调用大语言模型进行 Skill 分镜构思。支持 MiniMax (`abab6.5s`)、DeepSeek 或兼容 OpenAI 格式的 API 接入。
+          用于在“Prompt 助手”Tab 中调用大语言模型进行 Skill 分镜构思。Agent runtime 在 APK 内运行，接口仅用于访问兼容 OpenAI 格式的模型。
         </p>
 
         <div className="flex flex-col gap-1.5">
@@ -140,7 +131,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             value={llmModel}
             onChange={(e) => setLlmModel(e.target.value)}
             className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2.5 px-3 font-mono text-xs text-slate-200 focus:outline-none focus:border-indigo-500 placeholder-slate-600"
-            placeholder="默认: abab6.5s-chat (也可指定 deepseek-chat, gpt-4o-mini 等)"
+            placeholder="默认: MiniMax-M2.7 (也可指定 deepseek-chat, gpt-4o-mini 等)"
           />
         </div>
 
@@ -151,7 +142,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             value={llmEndpoint}
             onChange={(e) => setLlmEndpoint(e.target.value)}
             className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2.5 px-3 font-mono text-xs text-slate-200 focus:outline-none focus:border-indigo-500 placeholder-slate-600"
-            placeholder="默认: https://api.minimax.chat/v1/text/chatcompletion_v2"
+            placeholder="默认: https://api.minimaxi.com/v1"
           />
         </div>
 
@@ -163,33 +154,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           >
             <span className="material-symbols-outlined text-[16px]">save</span>
             保存 Agent 配置
-          </button>
-        </div>
-      </section>
-
-      <section className="bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col gap-4 shadow-lg">
-        <h2 className="text-sm font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-          <span className="material-symbols-outlined text-[18px] text-indigo-400">link</span>
-          Agent Runtime 地址
-        </h2>
-        <p className="text-slate-400 text-xs leading-relaxed">
-          APK 默认连接 Android Emulator 主机的 8787 端口（10.0.2.2）。真机请填写电脑在同一局域网中的 IP，例如 http://192.168.1.20:8787/api/copilotkit。
-        </p>
-        <input
-          type="url"
-          value={runtimeUrl}
-          onChange={(e) => setRuntimeUrl(e.target.value)}
-          className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2.5 px-3 font-mono text-xs text-slate-200 focus:outline-none focus:border-indigo-500 placeholder-slate-600"
-          placeholder="留空使用默认地址；浏览器开发环境使用 /api/copilotkit"
-        />
-        <div className="flex justify-end pt-1">
-          <button
-            type="button"
-            onClick={handleSaveRuntimeUrl}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-semibold text-xs text-white transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-lg shadow-indigo-600/20"
-          >
-            <span className="material-symbols-outlined text-[16px]">save</span>
-            保存 Runtime 地址
           </button>
         </div>
       </section>

@@ -49,7 +49,6 @@ export interface AppSettings {
   llmApiKey: string;
   llmEndpoint: string;
   llmModel?: string;
-  runtimeUrl?: string;
   theme: 'dark' | 'light';
 }
 

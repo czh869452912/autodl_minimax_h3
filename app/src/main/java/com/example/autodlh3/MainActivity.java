@@ -524,10 +524,10 @@ public class MainActivity extends Activity {
     public boolean saveTokenSecure(String token) { return saveSecure(TOKEN_CIPHER_KEY, TOKEN_IV_KEY, token); }
 
     public String readLlmApiKeySecure() { return readSecure(LLM_KEY_CIPHER_KEY, LLM_KEY_IV_KEY); }
-    public String readLlmEndpointSecure() { return prefs().getString(LLM_EP_KEY, "https://api.minimax.chat/v1/text/chatcompletion_v2"); }
-    public String readLlmModelSecure() { return prefs().getString(LLM_MODEL_KEY, "abab6.5s-chat"); }
+    public String readLlmEndpointSecure() { return prefs().getString(LLM_EP_KEY, "https://api.minimaxi.com/v1"); }
+    public String readLlmModelSecure() { return prefs().getString(LLM_MODEL_KEY, "MiniMax-M2.7"); }
     public boolean saveLlmConfigSecure(String apiKey, String endpoint) {
-        return saveLlmConfigSecure(apiKey, endpoint, "abab6.5s-chat");
+        return saveLlmConfigSecure(apiKey, endpoint, "MiniMax-M2.7");
     }
     public boolean saveLlmConfigSecure(String apiKey, String endpoint, String model) {
         prefs().edit().putString(LLM_EP_KEY, endpoint).putString(LLM_MODEL_KEY, model).apply();
