@@ -1,0 +1,2 @@
+import { TelemetryClient, isTelemetryDisabled } from "./telemetry-client.mjs";
+import { LambdaSendOptions, lambdaClient, parseAndWarnTelemetryId, parseTelemetryIdFromLicense } from "./lambda-client.mjs";
