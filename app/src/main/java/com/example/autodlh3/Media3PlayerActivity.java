@@ -11,7 +11,6 @@ import android.view.WindowInsetsController;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 
-import androidx.annotation.Nullable;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
@@ -28,7 +27,7 @@ public final class Media3PlayerActivity extends Activity {
     private boolean fullscreen;
 
     @Override
-    protected void onCreate(@Nullable Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         playerView = new PlayerView(this);
