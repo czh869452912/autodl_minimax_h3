@@ -53,6 +53,74 @@ function chunkToolCalls(chunk: Record<string, unknown>): Array<{ id?: string; na
   return calls.filter((call): call is { id?: string; name?: string; args?: unknown } => Boolean(call && typeof call === "object" && (call as { name?: unknown }).name));
 }
 
+function extractMessagesFromItem(item: unknown): Array<Record<string, unknown>> {
+  if (!item || typeof item !== "object") return [];
+  if (Array.isArray(item)) {
+    const [first] = item;
+    if (first && typeof first === "object") return [first as Record<string, unknown>];
+    return [];
+  }
+  const obj = item as Record<string, unknown>;
+  if ("content" in obj || "kwargs" in obj) {
+    return [obj];
+  }
+  const messages: Array<Record<string, unknown>> = [];
+  for (const value of Object.values(obj)) {
+    if (!value || typeof value !== "object") continue;
+    const nodeState = value as Record<string, unknown>;
+    if (Array.isArray(nodeState.messages)) {
+      for (const msg of nodeState.messages) {
+        if (msg && typeof msg === "object") {
+          messages.push(msg as Record<string, unknown>);
+        }
+      }
+    } else if ("messages" in nodeState && nodeState.messages && typeof nodeState.messages === "object") {
+      messages.push(nodeState.messages as Record<string, unknown>);
+    }
+  }
+  return messages;
+}
+
+function extractMessageContent(msg: Record<string, unknown>): string {
+  const content = msg.content ?? (msg.kwargs as Record<string, unknown> | undefined)?.content ?? msg.text;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((part) => {
+      if (typeof part === "string") return part;
+      if (part && typeof part === "object" && "text" in part) {
+        return String((part as { text?: unknown }).text || "");
+      }
+      return "";
+    }).join("");
+  }
+  return "";
+}
+
+function extractMessageToolCalls(msg: Record<string, unknown>): Array<{ id?: string; name: string; args: unknown }> {
+  const rawCalls =
+    msg.tool_calls ??
+    (msg.kwargs as Record<string, unknown> | undefined)?.tool_calls ??
+    (msg.additional_kwargs as Record<string, unknown> | undefined)?.tool_calls ??
+    msg.tool_call_chunks ??
+    [];
+  if (!Array.isArray(rawCalls)) return [];
+  return rawCalls
+    .filter((call): call is Record<string, unknown> => Boolean(call && typeof call === "object" && ((call as { name?: unknown }).name || (call as { function?: { name?: unknown } }).function?.name)))
+    .map((call) => {
+      const name = String(call.name || (call.function as { name?: unknown })?.name);
+      let args = call.args ?? (call.function as { arguments?: unknown })?.arguments ?? {};
+      if (typeof args === "string") {
+        try {
+          args = JSON.parse(args);
+        } catch {
+          // ignore invalid json string
+        }
+      }
+      const id = String(call.id || crypto.randomUUID());
+      return { id, name, args };
+    });
+}
+
 async function* streamDeepAgent(agent: DeepAgent, input: H3AgentInput): AsyncGenerator<H3AgentEvent> {
   const stream = await agent.stream(
     { messages: input.messages as any, files: getOfficialH3SkillFiles() },
@@ -64,14 +132,36 @@ async function* streamDeepAgent(agent: DeepAgent, input: H3AgentInput): AsyncGen
 
   for await (const item of stream as AsyncIterable<unknown>) {
     if (input.signal.aborted) return;
-    const chunk = asChunk(Array.isArray(item) ? item[0] : item);
-    for (const call of chunkToolCalls(chunk)) {
-      const id = call.id || crypto.randomUUID();
-      yield { type: "tool-start", id, name: String(call.name), args: call.args || {} };
-      yield { type: "tool-end", id };
+    const messages = extractMessagesFromItem(item);
+    if (messages.length === 0) {
+      const chunk = asChunk(Array.isArray(item) ? item[0] : item);
+      for (const call of chunkToolCalls(chunk)) {
+        const id = call.id || crypto.randomUUID();
+        yield { type: "tool-start", id, name: String(call.name), args: call.args || {} };
+        yield { type: "tool-end", id };
+      }
+      const text = chunkText(chunk);
+      if (text) yield { type: "text", delta: text };
+      continue;
     }
-    const text = chunkText(chunk);
-    if (text) yield { type: "text", delta: text };
+
+    for (const msg of messages) {
+      const toolCalls = extractMessageToolCalls(msg);
+      for (const call of toolCalls) {
+        yield { type: "tool-start", id: call.id || crypto.randomUUID(), name: call.name, args: call.args || {} };
+        yield { type: "tool-end", id: call.id || crypto.randomUUID() };
+      }
+      const isTool = (
+        msg.type === "tool" ||
+        (msg.kwargs as Record<string, unknown> | undefined)?.status !== undefined ||
+        "tool_call_id" in msg ||
+        (msg.kwargs as Record<string, unknown> | undefined)?.tool_call_id !== undefined
+      );
+      const text = extractMessageContent(msg);
+      if (text && !isTool) {
+        yield { type: "text", delta: text };
+      }
+    }
   }
 }
 

@@ -12,6 +12,8 @@ import type { AppSettings } from "../types";
 import { createH3ChatModelAdapter } from "../agent/assistantAdapter";
 import { loadThread, saveThread } from "../agent/threadStore";
 
+import { MarkdownRenderer } from "./MarkdownRenderer";
+
 interface H3PromptResultProps {
   onApplyPrompt: (prompt: string) => void;
   llmConfig: Pick<AppSettings, "llmApiKey" | "llmEndpoint" | "llmModel">;
@@ -37,6 +39,52 @@ function extractPrompt(messages: readonly { role?: string; content?: unknown }[]
   return assistantText.slice(assistantText.indexOf("integrated_multimodal_description:")).trim() || null;
 }
 
+const CustomMessage: React.FC = () => {
+  return (
+    <MessagePrimitive.Root className="mb-5">
+      <MessagePrimitive.If user>
+        <div className="flex justify-end">
+          <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-indigo-600 px-4 py-2.5 text-sm text-white shadow-md">
+            <MessagePrimitive.Parts
+              components={{
+                Text: ({ text }) => <p className="whitespace-pre-wrap leading-relaxed">{text}</p>,
+              }}
+            />
+          </div>
+        </div>
+      </MessagePrimitive.If>
+      <MessagePrimitive.If assistant>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2 text-xs font-medium text-indigo-300">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500/20 text-[11px]">✨</span>
+            <span>H3 Prompt 助手</span>
+          </div>
+          <div className="rounded-2xl rounded-tl-sm border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-200 shadow-xl">
+            <MessagePrimitive.Parts
+              components={{
+                Text: ({ text }) => <MarkdownRenderer content={text} />,
+                tools: {
+                  Fallback: ({ toolName }) => (
+                    <div className="my-2 flex items-center gap-2 rounded-lg border border-indigo-500/20 bg-indigo-950/40 px-3 py-1.5 font-mono text-xs text-indigo-300">
+                      <span className="inline-block animate-spin text-[11px]">⚙️</span>
+                      <span>正在检索/阅读技能: <code className="text-indigo-200">{toolName}</code></span>
+                    </div>
+                  ),
+                },
+              }}
+            />
+            <MessagePrimitive.Error>
+              <div className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
+                ⚠️ 请求失败：请检查设置中的 LLM API Key、Endpoint 与 Model 是否填写正确，以及网络连接是否通畅。
+              </div>
+            </MessagePrimitive.Error>
+          </div>
+        </div>
+      </MessagePrimitive.If>
+    </MessagePrimitive.Root>
+  );
+};
+
 function AgentThread({ onApplyPrompt, savedThread }: { onApplyPrompt: (prompt: string) => void; savedThread: ReturnType<typeof loadThread> }) {
   const messages = useAuiState((state) => state.thread.messages);
   const prompt = extractPrompt(messages);
@@ -56,11 +104,7 @@ function AgentThread({ onApplyPrompt, savedThread }: { onApplyPrompt: (prompt: s
         <ThreadPrimitive.Viewport className="min-h-0 flex-1 overflow-y-auto px-4 py-5" autoScroll>
           <ThreadPrimitive.Messages
             components={{
-              Message: () => (
-                <MessagePrimitive.Root className="mb-4 rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 text-sm text-slate-200">
-                  <MessagePrimitive.Parts />
-                </MessagePrimitive.Root>
-              ),
+              Message: CustomMessage,
             }}
           />
         </ThreadPrimitive.Viewport>

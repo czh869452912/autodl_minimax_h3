@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { fakeModel } from "@langchain/core/testing";
+import { AIMessage } from "@langchain/core/messages";
 import { createH3Agent, streamH3Agent } from "./h3Agent";
 
 describe("in-app H3 agent", () => {
@@ -43,5 +45,32 @@ describe("in-app H3 agent", () => {
       "text",
     ]);
     expect(events[0]).toMatchObject({ name: "read_file" });
+  });
+
+  it("handles real agent.stream with fakeModel extracting tools and text", async () => {
+    const mock = fakeModel()
+      .respondWithTools([{ name: "read_file", args: { file_path: "/skills/h3-prompt-writing/SKILL.md" } }])
+      .respond(new AIMessage({ content: "Here is your generated prompt:\nintegrated_multimodal_description: Camera pushes into miniature paper forest." }));
+
+    const events: any[] = [];
+    for await (const event of streamH3Agent({
+      threadId: "thread-real-stream",
+      messages: [{ role: "user", content: "制作一个纸艺微缩视频提示词" }],
+      signal: new AbortController().signal,
+    }, {
+      apiKey: "test-key",
+      endpoint: "https://example.test/v1",
+      model: "test-model",
+    }, {
+      modelFactory: () => mock as any,
+    })) {
+      events.push(event);
+    }
+
+    expect(events.map((e) => e.type)).toEqual(
+      expect.arrayContaining(["status", "tool-start", "tool-end", "text"]),
+    );
+    const textEvents = events.filter((e) => e.type === "text");
+    expect(textEvents.map((e) => e.delta).join("")).toContain("integrated_multimodal_description:");
   });
 });

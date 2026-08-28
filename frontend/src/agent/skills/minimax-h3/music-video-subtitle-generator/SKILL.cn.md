@@ -2,7 +2,8 @@
 name: music-video-subtitle-generator
 description: |
   面向音乐人、视频创作者和社交媒体剪辑者，用于制作带歌词贴字的 AI MV 或情绪短片。用户提供音乐、歌词、参考图、角色、字体方向、情绪意图或发布平台。Skill 会分析节拍与人声时序，区分人物、场景和文字参考，设计随节奏变化的空间字幕，拆解长视频为可衔接镜头，审查提示词并路由 H3 等视频生成工具。最终输出 MV 概念、分镜提示词、歌词文字方案和拼接建议。适用于风格化音乐视觉和动态字幕 MV，不适用于普通字幕校对、照搬已有 IP 或完全手工后期剪辑。
-trigger-words: [MV, music video, lyric typography, on-screen text, prompt audit, Trap MV, Gospel hip-hop, Dark-pop, Cyber-grunge, MV提示词, 歌词文字, 字幕MV, 贴字MV, 卡点MV, 多镜头拼接]
+metadata:
+  trigger-words: ["MV", "music video", "lyric typography", "on-screen text", "prompt audit", "Trap MV", "Gospel hip-hop", "Dark-pop", "Cyber-grunge", "MV提示词", "歌词文字", "字幕MV", "贴字MV", "卡点MV", "多镜头拼接"]
 ---
 
 # 音乐美学MV
