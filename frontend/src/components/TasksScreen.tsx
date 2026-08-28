@@ -1,6 +1,7 @@
 import React from 'react';
 import { VideoTask } from '../types';
 import { nativeRetryDownload } from '../utils/nativeBridge';
+import { getTaskDownloadPresentation } from '../utils/taskPresentation';
 
 interface TasksScreenProps {
   tasks: VideoTask[];
@@ -126,6 +127,7 @@ export const TasksScreen: React.FC<TasksScreenProps> = ({
           <div className="flex flex-col gap-3">
             {pastTasks.map((task) => {
               const isSuccess = task.status === 'SUCCESS';
+              const downloadPresentation = getTaskDownloadPresentation(task);
               return (
                 <div
                   key={task.id}
@@ -144,18 +146,18 @@ export const TasksScreen: React.FC<TasksScreenProps> = ({
                       <span>{task.resolution}</span>
                       <span>•</span>
                       <span>{task.duration}s</span>
-                      {task.downloadState === '已下载' && (
+                      {downloadPresentation.state === 'ready' && (
                         <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded text-[10px]">
-                          本地视频就绪
+                          {downloadPresentation.label}
                         </span>
                       )}
-                      {task.downloadState === '下载中' && (
+                      {downloadPresentation.state === 'downloading' && (
                         <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 px-1.5 py-0.2 rounded text-[10px] flex items-center gap-1">
                           <span className="material-symbols-outlined text-[10px] animate-spin">sync</span>
                           下载中
                         </span>
                       )}
-                      {task.downloadState && task.downloadState.startsWith('下载失败') && (
+                      {downloadPresentation.state === 'failed' && (
                         <button
                           type="button"
                           onClick={(e) => {

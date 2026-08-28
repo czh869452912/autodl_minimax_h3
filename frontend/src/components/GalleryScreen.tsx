@@ -246,10 +246,15 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
                       {mediaSrc ? (
                         <video
                           src={mediaSrc}
-                          preload="metadata"
+                          preload="auto"
                           muted
                           playsInline
                           className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500"
+                          onLoadedData={(e) => {
+                            if (e.currentTarget.currentTime !== 0) {
+                              e.currentTarget.currentTime = 0;
+                            }
+                          }}
                           onMouseEnter={(e) => {
                             e.currentTarget.play().catch(() => {});
                           }}

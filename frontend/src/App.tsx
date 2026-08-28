@@ -9,6 +9,7 @@ import { GalleryScreen } from './components/GalleryScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { VideoModal } from './components/VideoModal';
 import { nativeLoadTasks, nativeSaveTasks, nativeReadToken, nativeReadLlmConfig } from './utils/nativeBridge';
+import { resolveTaskMediaSource, toGalleryItem } from './utils/taskPresentation';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -73,7 +74,7 @@ export default function App() {
       theme: 'dark'
     };
   });
-  const [selectedVideo, setSelectedVideo] = useState<any>(null);
+  const [selectedVideo, setSelectedVideo] = useState<GalleryItem | VideoTask | null>(null);
   const [initialCreatePrompt, setInitialCreatePrompt] = useState<string>('');
 
   // 1. Register Android native push event callback for task status & download updates
@@ -114,25 +115,9 @@ export default function App() {
   // 3. Sync tasks into Gallery items when SUCCESS or downloaded
   useEffect(() => {
     const successful = tasks.filter(
-      (t) =>
-        (t.status?.toUpperCase() === 'SUCCESS' || t.downloadState === '已下载') &&
-        (t.videoUrl || t.localUri)
+      (t) => t.status?.toUpperCase() === 'SUCCESS' && resolveTaskMediaSource(t),
     );
-    const galleryItems: GalleryItem[] = successful.map((t) => ({
-      id: t.id,
-      title: t.title || `任务 ${t.id}`,
-      prompt: t.prompt,
-      duration: typeof t.duration === 'number' ? `${t.duration}s` : `${t.duration}`,
-      thumbnailUrl: t.localUri || t.videoUrl || '',
-      videoUrl: t.videoUrl || '',
-      localUri: t.localUri,
-      downloadId: t.downloadId,
-      downloadState: t.downloadState,
-      resolution: t.resolution,
-      timestamp: new Date(t.createdAt || Date.now()).toLocaleDateString(),
-      createdAt: t.createdAt,
-      status: t.status
-    }));
+    const galleryItems: GalleryItem[] = successful.map(toGalleryItem);
     setGallery(galleryItems);
   }, [tasks]);
 
