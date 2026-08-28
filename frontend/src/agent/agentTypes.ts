@@ -11,7 +11,7 @@ export type H3AgentInput = {
 };
 
 export type H3AgentEvent =
-  | { type: "text"; delta: string }
+  | { type: "text"; delta: string; phase: "thinking" | "final" }
   | { type: "tool-start"; id: string; name: string; args: unknown }
   | { type: "tool-end"; id: string }
   | { type: "status"; message: string }

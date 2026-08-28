@@ -167,7 +167,8 @@ async function* streamDeepAgent(agent: DeepAgent, input: H3AgentInput): AsyncGen
     const messages = extractMessagesFromItem(item);
     if (messages.length === 0) {
       const chunk = asChunk(Array.isArray(item) ? item[0] : item);
-      for (const call of chunkToolCalls(chunk)) {
+      const chunkCalls = chunkToolCalls(chunk);
+      for (const call of chunkCalls) {
         const id = call.id || crypto.randomUUID();
         if (!emittedToolIds.has(id)) {
           emittedToolIds.add(id);
@@ -178,7 +179,11 @@ async function* streamDeepAgent(agent: DeepAgent, input: H3AgentInput): AsyncGen
       const text = chunkText(chunk);
       const normalized = normalizeCumulativeText(lastChunkText, text);
       lastChunkText = normalized.previous;
-      if (normalized.delta) yield { type: "text", delta: normalized.delta };
+      if (normalized.delta) yield {
+        type: "text",
+        delta: normalized.delta,
+        phase: chunkCalls.length > 0 ? "thinking" : "final",
+      };
       continue;
     }
 
@@ -203,7 +208,11 @@ async function* streamDeepAgent(agent: DeepAgent, input: H3AgentInput): AsyncGen
       if (text && !isTool && !(toolCalls.length > 0 && userText.has(text.trim()))) {
         const normalized = normalizeCumulativeText(lastTextByMessage.get(messageKey) || "", text);
         lastTextByMessage.set(messageKey, normalized.previous);
-        if (normalized.delta) yield { type: "text", delta: normalized.delta };
+        if (normalized.delta) yield {
+          type: "text",
+          delta: normalized.delta,
+          phase: toolCalls.length > 0 ? "thinking" : "final",
+        };
       }
     }
   }

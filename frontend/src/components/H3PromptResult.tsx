@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import {
   AssistantRuntimeProvider,
+  ActionBarPrimitive,
   AttachmentPrimitive,
   ChainOfThoughtPrimitive,
   ComposerPrimitive,
@@ -26,7 +27,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import type { AppSettings } from "../types";
-import { createH3ChatModelAdapter, hasFinalOutputMarker } from "../agent/assistantAdapter";
+import { createH3ChatModelAdapter } from "../agent/assistantAdapter";
 import {
   createNewThreadId,
   deleteThread,
@@ -65,8 +66,33 @@ const UserMessageComponent: React.FC = () => {
             ),
           }}
         />
+        <MessagePrimitive.Attachments
+          components={{
+            Image: () => <UserImageAttachment />,
+            Attachment: () => <UserImageAttachment />,
+          }}
+        />
       </div>
     </div>
+  );
+};
+
+const UserImageAttachment: React.FC = () => {
+  const attachment = useAuiState((state) => state.attachment);
+  const [open, setOpen] = useState(false);
+  const image = attachment.content?.find((part) => part.type === "image");
+  if (!image || image.type !== "image") return null;
+  return (
+    <>
+      <button type="button" className="mt-2 block overflow-hidden rounded-xl border border-indigo-300/30" onClick={() => setOpen(true)} title="查看大图">
+        <img src={image.image} className="max-h-60 max-w-xs object-contain" alt={attachment.name || "用户上传图片"} />
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" onClick={() => setOpen(false)}>
+          <img src={image.image} className="max-h-[90vh] max-w-[95vw] object-contain" alt={attachment.name || "用户上传图片"} />
+        </div>
+      )}
+    </>
   );
 };
 
@@ -75,9 +101,8 @@ const IntermediateProcess: React.FC = () => {
   const collapsed = useAuiState((state) => state.chainOfThought.collapsed);
   const finalOutputStarted = useAuiState((state) => {
     const parts = state.message.parts;
-    const hasFinalMarker = parts.some((part) => part.type === "text" && hasFinalOutputMarker(part.text));
     const hasText = parts.some((part) => part.type === "text" && part.text.trim().length > 0);
-    return hasFinalMarker || (state.message.status?.type === "complete" && hasText);
+    return hasText;
   });
 
   useEffect(() => {
@@ -92,7 +117,7 @@ const IntermediateProcess: React.FC = () => {
       </ChainOfThoughtPrimitive.AccordionTrigger>
       {!collapsed && <ChainOfThoughtPrimitive.Parts
           components={{
-            Reasoning: ({ text }) => <MarkdownRenderer content={text} showCopy={false} />,
+            Reasoning: ({ text }) => <MarkdownRenderer content={text} />,
             tools: {
               Fallback: ({ toolName }) => (
                 <div className="my-2 flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 font-mono text-xs text-slate-300">
@@ -135,6 +160,11 @@ const AssistantMessageComponent: React.FC = () => {
             ChainOfThought: IntermediateProcess,
           }}
         />
+        <ActionBarPrimitive.Root hideWhenRunning autohide="not-last" className="mt-2 flex justify-end">
+          <ActionBarPrimitive.Copy className="rounded-md border border-slate-700 bg-slate-800/80 px-2 py-1 text-[11px] text-slate-400 hover:text-indigo-300">
+            复制最终回答
+          </ActionBarPrimitive.Copy>
+        </ActionBarPrimitive.Root>
         <MessagePrimitive.Error>
           <div className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
             ⚠️ 请求出错：请检查设置中的 LLM API Key、Endpoint 与 Model 是否填写正确。
@@ -174,13 +204,23 @@ function StandardThread({
 
   useEffect(() => {
     if (!messages || messages.length === 0) return;
-    const serialized = JSON.stringify(messages.map((m) => ({ id: m.id, role: m.role, content: m.content })));
+    const serialized = JSON.stringify(messages.map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      attachments: m.attachments,
+    })));
     if (serialized === prevMessagesRef.current) return;
     prevMessagesRef.current = serialized;
 
     saveThread({
       threadId,
-      messages: messages.map((message) => ({ id: message.id, role: message.role, content: message.content })),
+      messages: messages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        attachments: message.attachments,
+      })),
     });
     onThreadUpdatedRef.current?.();
   }, [messages, threadId]);

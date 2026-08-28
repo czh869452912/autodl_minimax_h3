@@ -58,8 +58,8 @@ describe("in-app H3 agent", () => {
       agentFactory: async function* () {
         yield { type: "tool-start", id: "call-1", name: "read_file", args: { file_path: "/skills/h3-prompt-writing/SKILL.md" } };
         yield { type: "tool-end", id: "call-1" };
-        yield { type: "text", delta: "第一轮分析" };
-        yield { type: "text", delta: "第二轮迭代" };
+        yield { type: "text", delta: "第一轮分析", phase: "thinking" };
+        yield { type: "text", delta: "第二轮迭代", phase: "thinking" };
       },
     })) {
       events.push(event);
@@ -100,5 +100,6 @@ describe("in-app H3 agent", () => {
     const textEvents = events.filter((e) => e.type === "text");
     expect(textEvents.map((e) => e.delta)).not.toContain("制作一个纸艺微缩视频提示词");
     expect(textEvents.map((e) => e.delta).join("")).toContain("integrated_multimodal_description:");
+    expect(textEvents.at(-1)).toMatchObject({ phase: "final" });
   });
 });

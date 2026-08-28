@@ -29,6 +29,35 @@ describe("local prompt assistant thread store", () => {
     });
   });
 
+  it("preserves completed attachment content without serializing the File object", () => {
+    const image = "data:image/png;base64,ZmFrZQ==";
+    saveThread({
+      threadId: "thread-attachment",
+      messages: [{
+        role: "user",
+        content: [{ type: "text", text: "分析这张图" }],
+        attachments: [{
+          id: "attachment-1",
+          type: "image",
+          name: "reference.png",
+          contentType: "image/png",
+          file: new File(["fake"], "reference.png", { type: "image/png" }),
+          status: { type: "complete" },
+          content: [{ type: "image", image }],
+        }],
+      } as any],
+    });
+
+    expect(loadThread("thread-attachment")?.messages[0]).toMatchObject({
+      attachments: [{
+        id: "attachment-1",
+        name: "reference.png",
+        content: [{ type: "image", image }],
+      }],
+    });
+    expect((loadThread("thread-attachment")?.messages[0] as any).attachments[0].file).toBeUndefined();
+  });
+
   it("discards corrupt persisted data so the page can start a new thread", () => {
     localStorage.setItem("h3-prompt-assistant-thread", "{not-json");
     expect(loadThread()).toBeNull();

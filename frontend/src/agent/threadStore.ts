@@ -36,10 +36,12 @@ function storage(): Storage {
 }
 
 function sanitizeMessage(message: ThreadMessageLike): ThreadMessageLike {
+  const attachments = message.attachments?.map(({ file: _file, ...attachment }) => attachment);
   return JSON.parse(JSON.stringify({
     id: message.id,
     role: message.role,
     content: message.content,
+    ...(attachments ? { attachments } : {}),
   }));
 }
 

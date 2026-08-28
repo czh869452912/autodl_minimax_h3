@@ -7,8 +7,8 @@ vi.mock("./h3Agent", () => ({ streamH3Agent: streamH3AgentMock }));
 describe("assistant-ui local adapter", () => {
   it("separates thinking parts from the final output part", async () => {
     streamH3AgentMock.mockReturnValue((async function* () {
-      yield { type: "text", delta: "先检查参考图\n" };
-      yield { type: "text", delta: "integrated_multimodal_description: 最终画面" };
+      yield { type: "text", delta: "中间过程提到 integrated_multimodal_description: 字段\n", phase: "thinking" };
+      yield { type: "text", delta: "这里是最终回答", phase: "final" };
     })());
     const adapter = createH3ChatModelAdapter({ apiKey: "key", endpoint: "https://example.test/v1", model: "model" });
     const stream = adapter.run({
@@ -23,20 +23,20 @@ describe("assistant-ui local adapter", () => {
     for await (const update of stream) updates.push(update);
 
     expect(updates[0]).toEqual({
-      content: [{ type: "reasoning", text: "先检查参考图\n" }],
+      content: [{ type: "reasoning", text: "中间过程提到 integrated_multimodal_description: 字段\n" }],
     });
     expect(updates[1]).toEqual({
       content: [
-        { type: "reasoning", text: "先检查参考图\n" },
-        { type: "text", text: "integrated_multimodal_description: 最终画面" },
+        { type: "reasoning", text: "中间过程提到 integrated_multimodal_description: 字段\n" },
+        { type: "text", text: "这里是最终回答" },
       ],
     });
   });
 
-  it("handles a final output marker split across stream chunks", async () => {
+  it("handles final output split across stream chunks", async () => {
     streamH3AgentMock.mockReturnValue((async function* () {
-      yield { type: "text", delta: "integrated_multi" };
-      yield { type: "text", delta: "modal_description: 最终" };
+      yield { type: "text", delta: "integrated_multi", phase: "final" };
+      yield { type: "text", delta: "modal_description: 最终", phase: "final" };
     })());
     const adapter = createH3ChatModelAdapter({ apiKey: "key", endpoint: "https://example.test/v1", model: "model" });
     const stream = adapter.run({
@@ -57,9 +57,9 @@ describe("assistant-ui local adapter", () => {
 
   it("returns cumulative text snapshots for assistant-ui streaming", async () => {
     streamH3AgentMock.mockReturnValue((async function* () {
-      yield { type: "text", delta: "最" };
-      yield { type: "text", delta: "终" };
-      yield { type: "text", delta: "输出" };
+      yield { type: "text", delta: "最", phase: "final" };
+      yield { type: "text", delta: "终", phase: "final" };
+      yield { type: "text", delta: "输出", phase: "final" };
     })());
     const adapter = createH3ChatModelAdapter({ apiKey: "key", endpoint: "https://example.test/v1", model: "model" });
     const stream = adapter.run({
@@ -74,9 +74,8 @@ describe("assistant-ui local adapter", () => {
     for await (const update of stream) updates.push(update);
 
     expect(updates).toEqual([
-      { content: [{ type: "reasoning", text: "最" }] },
-      { content: [{ type: "reasoning", text: "最终" }] },
-      { content: [{ type: "reasoning", text: "最终输出" }] },
+      { content: [{ type: "text", text: "最" }] },
+      { content: [{ type: "text", text: "最终" }] },
       { content: [{ type: "text", text: "最终输出" }] },
     ]);
   });
@@ -111,7 +110,7 @@ describe("assistant-ui local adapter", () => {
 
   it("passes the image part through the adapter request sent to the agent", async () => {
     streamH3AgentMock.mockReturnValue((async function* () {
-      yield { type: "text", delta: "收到图片" };
+      yield { type: "text", delta: "收到图片", phase: "final" };
     })());
     const image = "data:image/jpeg;base64,anBlZw==";
     const adapter = createH3ChatModelAdapter({ apiKey: "key", endpoint: "https://example.test/v1", model: "model" });
@@ -153,7 +152,7 @@ describe("assistant-ui local adapter", () => {
     streamH3AgentMock.mockReturnValue((async function* () {
       yield { type: "status", message: "Reading official H3 skills" };
       yield { type: "tool-start", id: "call-1", name: "read_file", args: { file_path: "/skills/h3-prompt-writing/SKILL.md" } };
-      yield { type: "text", delta: "integrated_multimodal_description: local result" };
+      yield { type: "text", delta: "integrated_multimodal_description: local result", phase: "final" };
     })());
 
     const adapter = createH3ChatModelAdapter({ apiKey: "key", endpoint: "https://example.test/v1", model: "model" });
