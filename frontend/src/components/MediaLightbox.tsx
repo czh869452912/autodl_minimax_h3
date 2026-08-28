@@ -34,6 +34,19 @@ export const MediaLightbox: React.FC<MediaLightboxProps> = ({ item, onClose, onR
     setCopiedType(null);
   }, [item?.id]);
 
+  useEffect(() => {
+    const handleNativeBack = () => {
+      if (item) onClose();
+    };
+    const windowState = window as Window & { __autodlMediaLightboxOpen?: boolean };
+    windowState.__autodlMediaLightboxOpen = Boolean(item);
+    window.addEventListener("nativeBackPressed", handleNativeBack);
+    return () => {
+      window.removeEventListener("nativeBackPressed", handleNativeBack);
+      windowState.__autodlMediaLightboxOpen = false;
+    };
+  }, [item, onClose]);
+
   if (!item) return null;
 
   const id = item.id;

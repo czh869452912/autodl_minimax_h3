@@ -17,6 +17,8 @@ describe("result media lightbox", () => {
     expect(source).toContain("aspect-video");
     expect(source).toContain("overflow-y-auto");
     expect(source).toContain("onClose");
+    expect(source).toContain("nativeBackPressed");
+    expect(source).toContain("__autodlMediaLightboxOpen");
     expect(source).toContain("复制 Prompt");
     expect(source).toContain("在生成页重用此 Prompt");
   });

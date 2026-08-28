@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.ActivityInfo;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
@@ -26,6 +27,8 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.ValueCallback;
 import android.widget.Toast;
+import android.view.View;
+import android.view.ViewGroup;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -67,6 +70,10 @@ public class MainActivity extends Activity {
     private static final String TOKEN_ALIAS = "AutoDLH3TokenKey";
 
     private WebView webView;
+    private View customView;
+    private WebChromeClient.CustomViewCallback customViewCallback;
+    private int previousOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+    private int previousSystemUiVisibility = 0;
     // Pending callback for assistant-ui's standard <input type="file"> flow.
     private ValueCallback<Uri[]> webFilePathCallback;
     private int pendingMediaKind = 0;
@@ -76,7 +83,10 @@ public class MainActivity extends Activity {
     private boolean pollInFlight = false;
 
     private final Runnable pollRunnable = new Runnable() {
-        @Override public void run() { pollTasks(); }
+        @Override public void run() {
+            reconcileDownloads();
+            pollTasks();
+        }
     };
 
     private final BroadcastReceiver downloadReceiver = new BroadcastReceiver() {
@@ -143,6 +153,36 @@ public class MainActivity extends Activity {
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
+            public void onShowCustomView(View view, CustomViewCallback callback) {
+                if (customView != null) {
+                    callback.onCustomViewHidden();
+                    return;
+                }
+                customView = view;
+                customViewCallback = callback;
+                previousOrientation = getRequestedOrientation();
+                previousSystemUiVisibility = getWindow().getDecorView().getSystemUiVisibility();
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+                getWindow().getDecorView().setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_FULLSCREEN
+                                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                );
+                addContentView(customView, new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                ));
+            }
+
+            @Override
+            public void onHideCustomView() {
+                hideCustomView();
+            }
+
+            @Override
             public boolean onShowFileChooser(
                     WebView view,
                     ValueCallback<Uri[]> filePathCallback,
@@ -186,6 +226,47 @@ public class MainActivity extends Activity {
 
         reconcileDownloads();
         pollTasks();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        reconcileDownloads();
+        notifyWebTasks();
+        pollTasks();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (customView != null) {
+            hideCustomView();
+            return;
+        }
+        if (webView != null) {
+            webView.evaluateJavascript("(window.__autodlMediaLightboxOpen === true)", value -> {
+                if ("true".equals(value)) {
+                    webView.evaluateJavascript("window.dispatchEvent(new Event('nativeBackPressed'))", null);
+                } else {
+                    MainActivity.super.onBackPressed();
+                }
+            });
+            return;
+        }
+        super.onBackPressed();
+    }
+
+    private void hideCustomView() {
+        if (customView == null) return;
+        View view = customView;
+        WebChromeClient.CustomViewCallback callback = customViewCallback;
+        customView = null;
+        customViewCallback = null;
+        if (view.getParent() instanceof ViewGroup) {
+            ((ViewGroup) view.getParent()).removeView(view);
+        }
+        getWindow().getDecorView().setSystemUiVisibility(previousSystemUiVisibility);
+        setRequestedOrientation(previousOrientation);
+        if (callback != null) callback.onCustomViewHidden();
     }
 
     private String loadAssetString(String path) {
@@ -347,7 +428,9 @@ public class MainActivity extends Activity {
         final String token = readTokenSecure();
         if (token.isEmpty() || pollInFlight || tasks.isEmpty()) return;
         boolean pending = false;
-        for (TaskItem task : tasks) if (!task.isTerminal()) pending = true;
+        for (TaskItem task : tasks) {
+            if (!task.isTerminal() || needsDownloadReconciliation(task)) pending = true;
+        }
         if (!pending) return;
         pollInFlight = true;
         ArrayList<TaskItem> snapshot = new ArrayList<>(tasks);
@@ -381,7 +464,9 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 pollInFlight = false;
                 boolean stillPending = false;
-                for (TaskItem task : tasks) if (!task.isTerminal()) stillPending = true;
+                for (TaskItem task : tasks) {
+                    if (!task.isTerminal() || needsDownloadReconciliation(task)) stillPending = true;
+                }
                 if (stillPending) handler.postDelayed(pollRunnable, 5000);
             });
         });
@@ -456,10 +541,10 @@ public class MainActivity extends Activity {
                     File localFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "AutoDL-H3/" + target.id + ".mp4");
                     int uriColumn = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
                     String rawUri = uriColumn >= 0 ? cursor.getString(uriColumn) : "";
-                    if (rawUri != null && !rawUri.isEmpty()) {
-                        target.localUri = rawUri;
-                    } else if (localFile.exists() && localFile.length() > 0) {
+                    if (localFile.exists() && localFile.length() > 0) {
                         target.localUri = Uri.fromFile(localFile).toString();
+                    } else if (rawUri != null && !rawUri.isEmpty()) {
+                        target.localUri = rawUri;
                     }
                     target.downloadState = "已下载";
                 } else {
@@ -496,7 +581,9 @@ public class MainActivity extends Activity {
                         if (status == DownloadManager.STATUS_SUCCESSFUL) {
                             int uriColumn = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
                             String rawUri = uriColumn >= 0 ? cursor.getString(uriColumn) : "";
-                            task.localUri = (rawUri != null && !rawUri.isEmpty()) ? rawUri : Uri.fromFile(localFile).toString();
+                            task.localUri = localFile.exists() && localFile.length() > 0
+                                    ? Uri.fromFile(localFile).toString()
+                                    : (rawUri != null && !rawUri.isEmpty() ? rawUri : Uri.fromFile(localFile).toString());
                             task.downloadState = "已下载";
                             changed = true;
                         } else if (status == DownloadManager.STATUS_RUNNING || status == DownloadManager.STATUS_PENDING) {
@@ -518,6 +605,12 @@ public class MainActivity extends Activity {
             }
         }
         if (changed) { saveTasks(); notifyWebTasks(); }
+    }
+
+    private boolean needsDownloadReconciliation(TaskItem task) {
+        return task.downloadId > 0
+                && !"已下载".equals(task.downloadState)
+                && !"下载失败".equals(task.downloadState);
     }
 
     private String extractVideoUrl(JSONArray results) {
@@ -680,6 +773,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        hideCustomView();
         handler.removeCallbacks(pollRunnable);
         try { unregisterReceiver(downloadReceiver); } catch (Exception ignored) {}
         executor.shutdownNow();
