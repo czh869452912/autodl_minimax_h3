@@ -16,6 +16,11 @@ export function createApp(config: ServerConfig, runtimeHandler?: RuntimeHandler)
       return;
     }
     if (request.url?.startsWith('/api/copilotkit')) {
+      const authorization = request.headers.authorization;
+      if (authorization !== `Bearer ${config.authSecret}`) {
+        json(response, 401, { error: 'unauthorized' });
+        return;
+      }
       if (!runtimeHandler) {
         json(response, 503, { error: 'runtime_not_ready' });
         return;

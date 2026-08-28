@@ -33,4 +33,10 @@ describe('agent server HTTP shell', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ status: 'ok', agent: 'h3-prompt-assistant' });
   });
+
+  it('rejects AG-UI requests without the app auth token', async () => {
+    const response = await fetch(`${baseUrl}/api/copilotkit/info`);
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: 'unauthorized' });
+  });
 });
