@@ -32,12 +32,12 @@ function sanitizeMessage(message: ThreadMessageLike): ThreadMessageLike {
   }));
 }
 
-export function saveThread(input: Pick<StoredThread, "threadId" | "messages" | "finalPrompt">): void {
+export function saveThread(input: Pick<StoredThread, "threadId" | "messages"> & { finalPrompt?: string | null }): void {
   const record: StoredThread = {
     version: VERSION,
     threadId: input.threadId,
     messages: input.messages.map(sanitizeMessage),
-    finalPrompt: input.finalPrompt || null,
+    finalPrompt: input.finalPrompt ?? null,
     updatedAt: Date.now(),
   };
   try {
