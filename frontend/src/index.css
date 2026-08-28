@@ -180,6 +180,35 @@
 @custom-variant data-closed (&:where([data-state="closed"], [data-closed]:not([data-closed="false"])));
 
 @theme inline {
+  /* Map the app palette to the semantic tokens used by assistant-ui/shadcn. */
+  --color-background: var(--background);
+  --color-foreground: var(--on-surface);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--on-surface);
+  --color-popover: var(--surface-container-high);
+  --color-popover-foreground: var(--on-surface);
+  --color-muted: var(--surface-container);
+  --color-muted-foreground: var(--on-surface-variant);
+  --color-accent: var(--surface-container-high);
+  --color-accent-foreground: var(--on-surface);
+  --color-border: var(--outline-variant);
+  --color-input: var(--surface-container);
+  --color-ring: var(--primary);
+  --color-primary: var(--primary-container);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--secondary-container);
+  --color-secondary-foreground: #ffffff;
+  --color-destructive: var(--error);
+  --color-destructive-foreground: #ffffff;
+  --color-sidebar: var(--surface);
+  --color-sidebar-foreground: var(--on-surface);
+  --color-sidebar-primary: var(--primary-container);
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: var(--surface-container-high);
+  --color-sidebar-accent-foreground: var(--on-surface);
+  --color-sidebar-border: var(--outline-variant);
+  --color-sidebar-ring: var(--primary);
+
   @keyframes collapsible-down {
   from {
     height: 0;

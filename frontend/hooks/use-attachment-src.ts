@@ -4,6 +4,23 @@ import { useEffect, useState } from "react";
 import { useAuiState } from "@assistant-ui/react";
 import { useShallow } from "zustand/react/shallow";
 
+export const createAttachmentObjectUrl = (
+  value: unknown,
+  createObjectUrl: (object: Blob) => string = URL.createObjectURL,
+): string | undefined => {
+  if (typeof Blob === "undefined" || !(value instanceof Blob)) {
+    return undefined;
+  }
+
+  try {
+    return createObjectUrl(value);
+  } catch {
+    // Some WebViews reject stale or cross-context Blob values. Treat those
+    // attachments as unavailable and let the content URI fallback render.
+    return undefined;
+  }
+};
+
 const useFileSrc = (file: File | undefined) => {
   const [entry, setEntry] = useState<{ file: File; url: string } | undefined>(
     undefined,
@@ -15,7 +32,12 @@ const useFileSrc = (file: File | undefined) => {
       return;
     }
 
-    const objectUrl = URL.createObjectURL(file);
+    const objectUrl = createAttachmentObjectUrl(file);
+    if (!objectUrl) {
+      setEntry(undefined);
+      return;
+    }
+
     setEntry({ file, url: objectUrl });
 
     return () => {
