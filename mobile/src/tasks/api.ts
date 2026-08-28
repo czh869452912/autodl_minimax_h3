@@ -32,4 +32,20 @@ export async function getTask(token: string, task: TaskRecord): Promise<TaskReco
 }
 
 function normalize(value: unknown): TaskStatus { const s = String(value || 'QUEUED').toUpperCase(); if (s === 'SUCCESSFUL') return 'SUCCESS'; if (s === 'PENDING') return 'QUEUED'; if (s === 'EXECUTING' || s === 'PROCESSING') return 'RUNNING'; if (s === 'FAILED' || s === 'CANCELLED') return s; return s === 'SUCCESS' ? 'SUCCESS' : 'QUEUED'; }
-function findVideoUrl(results: unknown): string { if (!Array.isArray(results)) return ''; for (const item of results) { if (typeof item === 'string' && /\.mp4(?:\?|$)/i.test(item)) return item; if (item && typeof item === 'object') { const value = Object.values(item as Record<string, unknown>).find((v) => typeof v === 'string' && /^https?:\/\//.test(v) && /\.mp4(?:\?|$)/i.test(v)); if (typeof value === 'string') return value; } } return ''; }
+function findVideoUrl(results: unknown): string {
+  if (!Array.isArray(results)) return '';
+  for (const item of results) {
+    if (typeof item === 'string' && /^https?:\/\//.test(item)) return item;
+    if (!item || typeof item !== 'object') continue;
+    const record = item as Record<string, unknown>;
+    const direct = record.url ?? record.video_url ?? record.videoUrl ?? record.output;
+    if (typeof direct === 'string' && /^https?:\/\//.test(direct)) return direct;
+    for (const value of Object.values(record)) {
+      if (value && typeof value === 'object') {
+        const nested = findVideoUrl(Array.isArray(value) ? value : [value]);
+        if (nested) return nested;
+      }
+    }
+  }
+  return '';
+}
