@@ -39,7 +39,7 @@ export function toGalleryItem(task: VideoTask): GalleryItem {
     title: task.title || `任务 ${task.id}`,
     prompt: task.prompt,
     duration: `${task.duration}s`,
-    thumbnailUrl: mediaSource,
+    thumbnailUrl: task.thumbnailUrl?.trim() || "",
     videoUrl: task.videoUrl || "",
     localUri: task.localUri,
     downloadId: task.downloadId,

@@ -243,26 +243,18 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
                 <div className="relative flex-grow min-h-[110px] overflow-hidden bg-slate-950 flex items-center justify-center">
                   {isSuccess ? (
                     <>
-                      {mediaSrc ? (
-                        <video
-                          src={mediaSrc}
-                          preload="auto"
-                          muted
-                          playsInline
+                      {item.thumbnailUrl ? (
+                        <img
+                          src={item.thumbnailUrl}
+                          alt=""
+                          loading="lazy"
                           className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500"
-                          onLoadedData={(e) => {
-                            if (e.currentTarget.currentTime !== 0) {
-                              e.currentTarget.currentTime = 0;
-                            }
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.play().catch(() => {});
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.pause();
-                            e.currentTarget.currentTime = 0;
-                          }}
                         />
+                      ) : mediaSrc ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-slate-500">
+                          <span className="material-symbols-outlined text-3xl mb-1">smart_display</span>
+                          <span className="text-[10px] font-mono">正在准备首帧…</span>
+                        </div>
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-slate-500">
                           <span className="material-symbols-outlined text-3xl mb-1">smart_display</span>

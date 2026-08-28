@@ -14,6 +14,7 @@ export interface AndroidBridgeInterface {
   pickMedia?(kind: number): void;
   retryDownload?(taskId: string): void;
   deleteTask?(taskId: string): void;
+  openNativeVideo?(source: string, title?: string): void;
 }
 
 declare global {
@@ -120,6 +121,14 @@ export const nativeDeleteTask = (taskId: string) => {
   if (window.AndroidBridge?.deleteTask) {
     window.AndroidBridge.deleteTask(taskId);
   }
+};
+
+export const nativeOpenVideo = (source: string, title?: string): boolean => {
+  if (window.AndroidBridge?.openNativeVideo) {
+    window.AndroidBridge.openNativeVideo(source, title || 'AutoDL H3 视频');
+    return true;
+  }
+  return false;
 };
 
 export const resolveMediaSrc = (item?: { id: string; localUri?: string; videoUrl?: string }): string => {

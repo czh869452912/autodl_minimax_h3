@@ -18,7 +18,8 @@ public class LocalMediaProvider extends ContentProvider {
     @Override public boolean onCreate() { return true; }
 
     @Override public String getType(Uri uri) {
-        return resolveFile(uri).getName().toLowerCase().endsWith(".mp4") ? "video/mp4" : null;
+        String name = resolveFile(uri).getName().toLowerCase();
+        return name.endsWith(".mp4") ? "video/mp4" : name.endsWith(".jpg") || name.endsWith(".jpeg") ? "image/jpeg" : null;
     }
 
     @Override public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
@@ -40,7 +41,7 @@ public class LocalMediaProvider extends ContentProvider {
 
     private File resolveFile(Uri uri) {
         String name = uri.getLastPathSegment();
-        if (name == null || !name.toLowerCase().endsWith(".mp4") || !name.matches("[A-Za-z0-9._-]+")) {
+        if (name == null || !(name.toLowerCase().endsWith(".mp4") || name.toLowerCase().endsWith(".jpg") || name.toLowerCase().endsWith(".jpeg")) || !name.matches("[A-Za-z0-9._-]+")) {
             throw new IllegalArgumentException("非法媒体文件名");
         }
         File root = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "AutoDL-H3");

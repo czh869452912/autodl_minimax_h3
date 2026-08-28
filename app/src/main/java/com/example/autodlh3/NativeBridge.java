@@ -76,6 +76,11 @@ public class NativeBridge {
     }
 
     @JavascriptInterface
+    public void openNativeVideo(String source, String title) {
+        activity.openNativeVideo(source, title);
+    }
+
+    @JavascriptInterface
     public boolean isNativeAvailable() {
         return true;
     }
