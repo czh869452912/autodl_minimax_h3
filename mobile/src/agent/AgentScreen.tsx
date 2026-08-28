@@ -3,6 +3,8 @@ import { useComposerAddAttachment } from '@assistant-ui/core/react';
 import { openDatabaseSync } from 'expo-sqlite';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Clipboard from 'expo-clipboard';
+import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppIcon } from '../ui/icons';
@@ -11,7 +13,11 @@ import { adapter, createHistoryAdapter, officialSkillCount } from './runtime';
 
 function MessageBubble() {
   const role = useAuiState((state) => state.message.role);
+  const content = useAuiState((state) => state.message.content);
   const isUser = role === 'user';
+  const router = useRouter();
+  const text = content.filter((part) => part.type === 'text').map((part) => part.text).join('\n').trim();
+  const applyPrompt = async () => { if (!text) return; await Clipboard.setStringAsync(text); router.push({ pathname: '/(tabs)/create', params: { prompt: text } }); };
   return (
     <MessagePrimitive.Root style={[styles.messageRow, isUser ? styles.userRow : styles.assistantRow]}>
       <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
@@ -20,6 +26,7 @@ function MessageBubble() {
           renderReasoning={({ part }) => <Text selectable style={styles.reasoningText}>{part.text}</Text>}
           renderFile={({ part }) => <Text style={styles.attachmentText}>附件：{part.filename || '文件'}</Text>}
         />
+        {!isUser && text ? <Pressable accessibilityRole="button" onPress={() => void applyPrompt()} style={styles.applyButton}><AppIcon name="content_copy" size={16} color={COLORS.primaryActive} /><Text style={styles.applyText}>复制并应用到生成</Text></Pressable> : null}
       </View>
     </MessagePrimitive.Root>
   );
@@ -93,5 +100,5 @@ const styles = StyleSheet.create({
   messages: { flex: 1 }, messagesContent: { padding: SPACING.lg, gap: SPACING.md, flexGrow: 1 }, messageRow: { width: '100%', flexDirection: 'row' }, userRow: { justifyContent: 'flex-end' }, assistantRow: { justifyContent: 'flex-start' }, bubble: { maxWidth: '88%', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 11 }, userBubble: { backgroundColor: COLORS.primarySoft, borderBottomRightRadius: 4 }, assistantBubble: { backgroundColor: COLORS.surfaceRaised, borderBottomLeftRadius: 4 }, messageText: { color: COLORS.text, fontSize: 15, lineHeight: 22 }, reasoningText: { color: COLORS.textMuted, fontSize: 13, lineHeight: 19, fontStyle: 'italic' }, attachmentText: { color: COLORS.textMuted, fontSize: 13 },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xxl, gap: SPACING.md }, emptyTitle: { color: COLORS.text, fontSize: 18, fontWeight: '800', textAlign: 'center' }, emptyBody: { color: COLORS.textMuted, fontSize: 14, lineHeight: 21, textAlign: 'center' }, suggestion: { backgroundColor: COLORS.surface, borderColor: COLORS.border, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10 }, suggestionText: { color: COLORS.primaryActive, fontWeight: '700' },
   composerRoot: { flexDirection: 'row', alignItems: 'flex-end', gap: SPACING.sm, padding: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.background }, input: { flex: 1, minHeight: 48, maxHeight: 130, color: COLORS.text, backgroundColor: COLORS.surface, borderColor: COLORS.border, borderWidth: 1, borderRadius: 14, paddingHorizontal: 13, paddingTop: 12, paddingBottom: 10, fontSize: 15 }, sendButton: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary },
-  attachButton: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
+  attachButton: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border }, applyButton: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10, alignSelf: 'flex-start' }, applyText: { color: COLORS.primaryActive, fontSize: 12, fontWeight: '700' },
 });
