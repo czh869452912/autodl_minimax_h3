@@ -6,7 +6,17 @@ import { readSettings } from '../settings/storage';
 const skillEntries = Object.entries(officialH3Skills);
 const promptSkill = skillEntries.find(([key]) => key.endsWith('/h3-prompt-writing/SKILL.md'))?.[1] as { content: string } | undefined;
 const promptReferences = skillEntries.filter(([key]) => key.includes('/h3-prompt-writing/references/')).map(([key, value]) => `${key}: ${(value as { content: string }).content}`).join('\n');
-const SYSTEM = `你是 AutoDL H3 Prompt 助手。遵循官方 H3 技能规范，先澄清画幅、时长、风格和参考素材，再输出可直接用于 MiniMax H3 的 integrated_multimodal_description。必须保留用户明确台词，不编造素材。以下是随 APK 发布的官方 h3-prompt-writing 技能全文与参考资料：\n${promptSkill?.content || ''}\n${promptReferences}`;
+const styleSkills = skillEntries.filter(([key]) => /\/skills\/[^/]+\/SKILL\.md$/.test(key)).map(([key, value]) => ({ key, content: (value as { content: string }).content }));
+
+export function buildSystemPrompt(userText = '') {
+  const normalized = userText.toLowerCase();
+  const selected = styleSkills.filter(({ key }) => {
+    const name = key.split('/').at(-2) || '';
+    return normalized.includes(name.replaceAll('-', ' ')) || normalized.includes(name.split('-')[0]);
+  }).slice(0, 2);
+  const selectedText = selected.map(({ key, content }) => `\n\n--- 官方技能 ${key} ---\n${content}`).join('');
+  return `你是 AutoDL H3 Prompt 助手。遵循官方 H3 技能规范，先澄清画幅、时长、风格和参考素材，再输出可直接用于 MiniMax H3 的 integrated_multimodal_description。必须保留用户明确台词，不编造素材。APK 已内置完整官方技能目录（${styleSkills.length + 1} 个 SKILL.md）；根据用户意图选择下面匹配的完整技能执行。\n${promptSkill?.content || ''}\n${promptReferences}${selectedText}`;
+}
 
 /** Converts cumulative provider deltas into the text expected by assistant-ui. */
 export function normalizeCumulativeText(previous: string, next: string) {
@@ -40,7 +50,8 @@ export const adapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
     const settings = await readSettings(); if (!settings.apiKey) throw new Error('请先在设置中配置 LLM API Key。');
     const endpoint = settings.endpoint.replace(/\/$/, '') + '/chat/completions';
-    const response = await fetch(endpoint, { method: 'POST', signal: abortSignal, headers: { Authorization: `Bearer ${settings.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: settings.model, stream: true, messages: [{ role: 'system', content: SYSTEM }, ...messages.map((message: any) => ({ role: message.role, content: toOpenAIContent(message) }))] }) });
+          const latestUserText = [...messages].reverse().find((message: any) => message.role === 'user')?.content?.filter?.((part: any) => part.type === 'text').map?.((part: any) => part.text).join(' ') || '';
+          const response = await fetch(endpoint, { method: 'POST', signal: abortSignal, headers: { Authorization: `Bearer ${settings.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: settings.model, stream: true, messages: [{ role: 'system', content: buildSystemPrompt(latestUserText) }, ...messages.map((message: any) => ({ role: message.role, content: toOpenAIContent(message) }))] }) });
     if (!response.ok) throw new Error(`Agent 请求失败（${response.status}）`);
     if (!response.body) { const payload = await response.json() as any; yield { content: [{ type: 'text', text: payload.choices?.[0]?.message?.content || '' }] }; return; }
     const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ''; let answer = '';
