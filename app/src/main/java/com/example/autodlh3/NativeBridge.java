@@ -1,0 +1,87 @@
+package com.example.autodlh3;
+
+import android.webkit.JavascriptInterface;
+
+public class NativeBridge {
+    private final MainActivity activity;
+
+    public NativeBridge(MainActivity activity) {
+        this.activity = activity;
+    }
+
+    @JavascriptInterface
+    public boolean saveToken(String token) {
+        return activity.saveTokenSecure(token);
+    }
+
+    @JavascriptInterface
+    public String readToken() {
+        return activity.readTokenSecure();
+    }
+
+    @JavascriptInterface
+    public boolean saveLlmConfig(String apiKey, String endpoint) {
+        return activity.saveLlmConfigSecure(apiKey, endpoint);
+    }
+
+    @JavascriptInterface
+    public boolean saveLlmConfig(String apiKey, String endpoint, String model) {
+        return activity.saveLlmConfigSecure(apiKey, endpoint, model);
+    }
+
+    @JavascriptInterface
+    public String readLlmApiKey() {
+        return activity.readLlmApiKeySecure();
+    }
+
+    @JavascriptInterface
+    public String readLlmEndpoint() {
+        return activity.readLlmEndpointSecure();
+    }
+
+    @JavascriptInterface
+    public String readLlmModel() {
+        return activity.readLlmModelSecure();
+    }
+
+    @JavascriptInterface
+    public boolean submitTask(String taskJson) {
+        activity.submitTaskFromWeb(taskJson);
+        return true;
+    }
+
+    @JavascriptInterface
+    public String loadTasks() {
+        return activity.getTasksJson();
+    }
+
+    @JavascriptInterface
+    public void saveTasks(String tasksJson) {
+        activity.saveTasksJson(tasksJson);
+    }
+
+    @JavascriptInterface
+    public void pickMedia(int kind) {
+        activity.pickMediaFromWeb(kind);
+    }
+
+    @JavascriptInterface
+    public void retryDownload(String taskId) {
+        activity.retryDownload(taskId);
+    }
+
+    @JavascriptInterface
+    public void deleteTask(String taskId) {
+        activity.deleteTask(taskId);
+    }
+
+    @JavascriptInterface
+    public void openNativeVideo(String source, String title) {
+        activity.openNativeVideo(source, title);
+    }
+
+    @JavascriptInterface
+    public boolean isNativeAvailable() {
+        return true;
+    }
+}

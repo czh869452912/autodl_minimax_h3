@@ -5,6 +5,7 @@
     <application
         android:allowBackup="true"
         android:label="AutoDL H3 视频生成"
+        android:usesCleartextTraffic="true"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
         <activity
@@ -16,5 +17,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".Media3PlayerActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
+        <provider
+            android:name=".LocalMediaProvider"
+            android:authorities="com.example.autodlh3.localmedia"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

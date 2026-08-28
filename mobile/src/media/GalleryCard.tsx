@@ -1,0 +1,23 @@
+import React from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { MediaAsset } from './types';
+
+export function GalleryCard({ asset, onPress }: { asset: MediaAsset; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`打开视频 ${asset.title}`} onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+      {asset.posterPath ? <Image source={{ uri: asset.posterPath }} style={styles.poster} resizeMode="cover" /> : <View style={styles.posterFallback}><Text style={styles.fallbackText}>视频就绪</Text></View>}
+      <View style={styles.footer}><Text numberOfLines={1} style={styles.title}>{asset.title || asset.taskId}</Text><Text style={styles.meta}>{asset.durationMs ? `${Math.round(asset.durationMs / 1000)}s` : '—'} · {asset.status}</Text></View>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: { flex: 1, overflow: 'hidden', borderRadius: 14, backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#1e293b' },
+  pressed: { opacity: 0.8 },
+  poster: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#020617' },
+  posterFallback: { width: '100%', aspectRatio: 16 / 9, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111827' },
+  fallbackText: { color: '#94a3b8', fontSize: 12 },
+  footer: { padding: 10 },
+  title: { color: '#e2e8f0', fontWeight: '600', fontSize: 13 },
+  meta: { color: '#64748b', fontSize: 11, marginTop: 4 },
+});
