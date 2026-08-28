@@ -6,6 +6,7 @@ const source = readFileSync(
   join(process.cwd(), "..", "app", "src", "main", "java", "com", "example", "autodlh3", "MainActivity.java"),
   "utf8",
 );
+const manifest = readFileSync(join(process.cwd(), "..", "app", "src", "main", "AndroidManifest.xml"), "utf8");
 
 describe("Android media lifecycle contract", () => {
   it("reconciles downloads when the Activity returns to the foreground", () => {
@@ -19,10 +20,9 @@ describe("Android media lifecycle contract", () => {
     expect(source).toContain("nativeBackPressed");
   });
 
-  it("serves local MP4 range requests as binary partial responses", () => {
-    expect(source).toContain("getRequestHeaders");
-    expect(source).toContain("Content-Range");
-    expect(source).toContain("new WebResourceResponse(\"video/mp4\", null");
-    expect(source).toContain("206");
+  it("exposes downloaded MP4 files through a seekable content provider", () => {
+    expect(source).toContain("content://com.example.autodlh3.localmedia/");
+    expect(source).toContain("getLocalMediaUri");
+    expect(manifest).toContain("LocalMediaProvider");
   });
 });

@@ -36,14 +36,11 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -127,21 +124,6 @@ public class MainActivity extends Activity {
                         return new WebResourceResponse(mimeType, "UTF-8", is);
                     } catch (IOException ignored) {
                     }
-                } else if (url.contains("local-media/") || url.contains("local-video/") || url.startsWith("file:///storage/")) {
-                    try {
-                        File targetFile = null;
-                        if (url.startsWith("file:///")) {
-                            targetFile = new File(Uri.parse(url).getPath());
-                        } else {
-                            String fileName = url.substring(url.lastIndexOf('/') + 1);
-                            if (fileName.contains("?")) fileName = fileName.substring(0, fileName.indexOf('?'));
-                            if (!fileName.endsWith(".mp4")) fileName += ".mp4";
-                            targetFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "AutoDL-H3/" + fileName);
-                        }
-                        if (targetFile != null && targetFile.exists() && targetFile.length() > 0) {
-                            return createLocalVideoResponse(targetFile, request);
-                        }
-                    } catch (Exception ignored) {}
                 }
                 return super.shouldInterceptRequest(view, request);
             }
@@ -265,83 +247,10 @@ public class MainActivity extends Activity {
         if (callback != null) callback.onCustomViewHidden();
     }
 
-    private WebResourceResponse createLocalVideoResponse(File targetFile, WebResourceRequest request) throws IOException {
-        long fileLength = targetFile.length();
-        long start = 0;
-        long end = fileLength - 1;
-        int status = 200;
-        String reason = "OK";
+    private static final String LOCAL_MEDIA_BASE = "content://com.example.autodlh3.localmedia/";
 
-        String rangeHeader = request.getRequestHeaders().get("Range");
-        if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
-            String range = rangeHeader.substring("bytes=".length()).split(",", 2)[0].trim();
-            int separator = range.indexOf('-');
-            if (separator >= 0) {
-                String startText = range.substring(0, separator).trim();
-                String endText = range.substring(separator + 1).trim();
-                if (startText.isEmpty()) {
-                    long suffixLength = Long.parseLong(endText);
-                    start = Math.max(0, fileLength - suffixLength);
-                } else {
-                    start = Long.parseLong(startText);
-                    if (!endText.isEmpty()) end = Math.min(end, Long.parseLong(endText));
-                }
-                if (start >= 0 && start < fileLength && end >= start) {
-                    status = 206;
-                    reason = "Partial Content";
-                } else {
-                    start = 0;
-                    end = fileLength - 1;
-                }
-            }
-        }
-
-        long contentLength = end - start + 1;
-        FileInputStream input = new FileInputStream(targetFile);
-        long skipped = 0;
-        while (skipped < start) {
-            long count = input.skip(start - skipped);
-            if (count <= 0) {
-                input.close();
-                throw new IOException("无法定位视频分段");
-            }
-            skipped += count;
-        }
-
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Access-Control-Allow-Origin", "*");
-        headers.put("Accept-Ranges", "bytes");
-        headers.put("Content-Length", String.valueOf(contentLength));
-        if (status == 206) headers.put("Content-Range", "bytes " + start + "-" + end + "/" + fileLength);
-        return new WebResourceResponse("video/mp4", null, status, reason, headers,
-                new BoundedInputStream(input, contentLength));
-    }
-
-    private static final class BoundedInputStream extends InputStream {
-        private final InputStream source;
-        private long remaining;
-
-        BoundedInputStream(InputStream source, long length) {
-            this.source = source;
-            this.remaining = length;
-        }
-
-        @Override public int read() throws IOException {
-            if (remaining <= 0) return -1;
-            int value = source.read();
-            if (value >= 0) remaining--;
-            return value;
-        }
-
-        @Override public int read(byte[] buffer, int offset, int length) throws IOException {
-            if (remaining <= 0) return -1;
-            int requested = (int) Math.min(length, remaining);
-            int count = source.read(buffer, offset, requested);
-            if (count > 0) remaining -= count;
-            return count;
-        }
-
-        @Override public void close() throws IOException { source.close(); }
+    private String getLocalMediaUri(String taskId) {
+        return LOCAL_MEDIA_BASE + Uri.encode(taskId + ".mp4");
     }
 
     private String loadAssetString(String path) {
@@ -582,7 +491,7 @@ public class MainActivity extends Activity {
         // 1. Check if the video file already exists on local disk
         File localFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "AutoDL-H3/" + task.id + ".mp4");
         if (localFile.exists() && localFile.length() > 0) {
-            task.localUri = Uri.fromFile(localFile).toString();
+            task.localUri = getLocalMediaUri(task.id);
             task.downloadState = "已下载";
             return;
         }
@@ -617,7 +526,7 @@ public class MainActivity extends Activity {
                     int uriColumn = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
                     String rawUri = uriColumn >= 0 ? cursor.getString(uriColumn) : "";
                     if (localFile.exists() && localFile.length() > 0) {
-                        target.localUri = Uri.fromFile(localFile).toString();
+                        target.localUri = getLocalMediaUri(target.id);
                     } else if (rawUri != null && !rawUri.isEmpty()) {
                         target.localUri = rawUri;
                     }
@@ -641,8 +550,9 @@ public class MainActivity extends Activity {
         for (TaskItem task : tasks) {
             File localFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "AutoDL-H3/" + task.id + ".mp4");
             if (localFile.exists() && localFile.length() > 0) {
-                if (!"已下载".equals(task.downloadState) || task.localUri == null || task.localUri.isEmpty()) {
-                    task.localUri = Uri.fromFile(localFile).toString();
+                String localMediaUri = getLocalMediaUri(task.id);
+                if (!"已下载".equals(task.downloadState) || !localMediaUri.equals(task.localUri)) {
+                    task.localUri = localMediaUri;
                     task.downloadState = "已下载";
                     changed = true;
                 }
@@ -657,7 +567,7 @@ public class MainActivity extends Activity {
                             int uriColumn = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
                             String rawUri = uriColumn >= 0 ? cursor.getString(uriColumn) : "";
                             task.localUri = localFile.exists() && localFile.length() > 0
-                                    ? Uri.fromFile(localFile).toString()
+                                    ? getLocalMediaUri(task.id)
                                     : (rawUri != null && !rawUri.isEmpty() ? rawUri : Uri.fromFile(localFile).toString());
                             task.downloadState = "已下载";
                             changed = true;

@@ -14,6 +14,7 @@ describe("result media lightbox", () => {
     expect(source).toContain('from "yet-another-react-lightbox"');
     expect(source).toContain('from "yet-another-react-lightbox/plugins/video"');
     expect(source).toContain('from "yet-another-react-lightbox/plugins/fullscreen"');
+    expect(source).toContain("slideContainer");
     expect(source).toContain("aspect-video");
     expect(source).toContain("overflow-y-auto");
     expect(source).toContain("onClose");

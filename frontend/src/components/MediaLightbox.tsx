@@ -13,7 +13,6 @@ interface MediaLightboxProps {
 
 export const MediaLightbox: React.FC<MediaLightboxProps> = ({ item, onClose, onReusePrompt }) => {
   const [copiedType, setCopiedType] = useState<"id" | "prompt" | null>(null);
-  const [loadError, setLoadError] = useState(false);
 
   const mediaSrc = resolveMediaSrc(item || undefined);
   const slides = useMemo(
@@ -30,7 +29,6 @@ export const MediaLightbox: React.FC<MediaLightboxProps> = ({ item, onClose, onR
   );
 
   useEffect(() => {
-    setLoadError(false);
     setCopiedType(null);
   }, [item?.id]);
 
@@ -75,32 +73,14 @@ export const MediaLightbox: React.FC<MediaLightboxProps> = ({ item, onClose, onR
       index={0}
       plugins={[Video, Fullscreen]}
       controller={{ closeOnBackdropClick: true, closeOnEscape: true }}
-      toolbar={{ buttons: ["close"] }}
-      labels={{ Close: "关闭预览", Lightbox: "视频预览" }}
-      className="autodl-media-lightbox"
-      render={{
-        slide: ({ slide }) => {
-          if (slide.type !== "video") return null;
-          return (
+       toolbar={{ buttons: ["close"] }}
+       labels={{ Close: "关闭预览", Lightbox: "视频预览" }}
+       className="autodl-media-lightbox"
+       render={{
+          slideContainer: ({ children }) => (
             <div className="grid h-full min-h-0 w-full grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
               <div className="relative flex min-h-0 aspect-video items-center justify-center bg-black md:aspect-auto">
-                {loadError ? (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center text-slate-300">
-                    <span className="material-symbols-outlined text-5xl text-amber-400">error_outline</span>
-                    <p className="text-sm font-semibold">视频加载失败或格式不受支持</p>
-                    <p className="text-xs text-slate-500">可以尝试重新下载或使用远程地址打开。</p>
-                  </div>
-                ) : (
-                  <video
-                    src={mediaSrc}
-                    autoPlay
-                    controls
-                    playsInline
-                    preload="auto"
-                    className="h-full w-full object-contain"
-                    onError={() => setLoadError(true)}
-                  />
-                )}
+                {children}
               </div>
 
               <aside className="min-h-0 max-h-[42dvh] overflow-y-auto border-t border-slate-800 bg-slate-950 p-4 text-slate-100 md:max-h-none md:border-l md:border-t-0 md:p-5">
@@ -165,9 +145,8 @@ export const MediaLightbox: React.FC<MediaLightboxProps> = ({ item, onClose, onR
                 </div>
               </aside>
             </div>
-          );
-        },
-      }}
+          ),
+        }}
     />
   );
 };
