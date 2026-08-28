@@ -2,8 +2,8 @@ import type { MediaAsset, MediaStatus, MediaStore } from './types';
 
 type SqlDatabase = {
   execSync?: (source: string) => void;
-  runSync?: (source: string, ...params: unknown[]) => unknown;
-  getAllSync?: <T>(source: string, ...params: unknown[]) => T[];
+  runSync?: (source: string, ...params: any[]) => unknown;
+  getAllSync?: <T>(source: string, ...params: any[]) => T[];
 };
 
 const schema = `CREATE TABLE IF NOT EXISTS media_assets (
