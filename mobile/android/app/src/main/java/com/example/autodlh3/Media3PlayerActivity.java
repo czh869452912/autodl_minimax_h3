@@ -6,6 +6,7 @@ import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.widget.FrameLayout;
+import android.graphics.Color;
 
 import androidx.annotation.Nullable;
 import android.app.Activity;
@@ -27,6 +28,7 @@ public final class Media3PlayerActivity extends Activity {
       return;
     }
     playerView = new PlayerView(this);
+    playerView.setBackgroundColor(Color.BLACK);
     playerView.setLayoutParams(new FrameLayout.LayoutParams(
       FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
     playerView.setControllerAutoShow(true);
@@ -61,6 +63,7 @@ public final class Media3PlayerActivity extends Activity {
   }
 
   @Override protected void onStop() {
+    setFullscreen(false);
     super.onStop();
     if (player != null) { resumeOnStart = player.isPlaying(); player.pause(); }
   }
