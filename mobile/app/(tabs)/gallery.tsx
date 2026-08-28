@@ -1,51 +1,29 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Alert, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { openDatabaseSync } from 'expo-sqlite';
 import { GalleryCard } from '../../src/media/GalleryCard';
-import { extractPoster } from '../../src/native/media';
+import type { MediaAsset, MediaStatus } from '../../src/media/types';
 import { createTaskRepository } from '../../src/tasks/repository';
-import type { MediaAsset } from '../../src/media/types';
+import type { TaskRecord } from '../../src/tasks/types';
+import { projectGallery } from '../../src/gallery/presentation';
+import { extractPoster } from '../../src/native/media';
+import { AppIcon } from '../../src/ui/icons';
+import { COLORS, SPACING } from '../../src/ui/theme';
 
-const database = openDatabaseSync('autodl-h3.db');
-const taskStore = createTaskRepository(database);
+const taskStore = createTaskRepository(openDatabaseSync('autodl-h3.db'));
+const filters: Array<{ id: 'all' | MediaStatus; label: string }> = [{ id: 'all', label: '全部' }, { id: 'downloaded', label: '已下载' }, { id: 'downloading', label: '准备中' }, { id: 'failed', label: '失败' }];
 
 export default function GalleryScreen() {
-  const [query, setQuery] = useState('');
-  const [assets, setAssets] = useState<MediaAsset[]>([]);
-  const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const loadAssets = useCallback(async () => {
-    setLoading(true);
-    try {
-      const tasks = await taskStore.list();
-      const successful = tasks.filter((task) => task.status === 'SUCCESS').filter((task) => `${task.prompt} ${task.id}`.toLowerCase().includes(query.toLowerCase()));
-      const mapped = await Promise.all(successful.map(async (task) => {
-        let posterPath = task.thumbnailUrl;
-        if (!posterPath && (task.localUri || task.videoUrl)) { try { posterPath = await extractPoster(task.localUri || task.videoUrl || '', task.id); if (posterPath) await taskStore.upsert({ ...task, thumbnailUrl: posterPath, updatedAt: Date.now() }); } catch {} }
-        return { id: task.id, taskId: task.id, title: task.prompt.slice(0, 48) || task.id, prompt: task.prompt, sourceUrl: task.videoUrl || '', localPath: task.localUri, posterPath, mimeType: 'video/mp4', durationMs: task.duration * 1000, status: 'downloaded' as const, createdAt: task.createdAt, updatedAt: task.updatedAt };
-      }));
-      setAssets(mapped);
-    } finally { setLoading(false); }
-  }, [query]);
-  useEffect(() => { void loadAssets(); }, [loadAssets]);
-  const items = useMemo(() => assets, [assets]);
-  const openAsset = (asset: MediaAsset) => router.push({ pathname: '/video/[id]', params: { id: asset.id } });
-  return <View style={styles.container}>
-    <Text style={styles.title}>作品画廊 Gallery</Text>
-    <Text style={styles.subtitle}>浏览、播放与管理所有由 MiniMax H3 渲染生成的视频。</Text>
-    <TextInput value={query} onChangeText={setQuery} placeholder="搜索 Prompt 或任务 ID..." placeholderTextColor="#64748b" style={styles.input} />
-    <FlatList data={items} numColumns={2} keyExtractor={(item) => item.id} columnWrapperStyle={styles.row} contentContainerStyle={styles.list} renderItem={({ item }) => <GalleryCard asset={item} onPress={() => openAsset(item)} />} ListEmptyComponent={<Text style={styles.empty}>{loading ? '正在加载视频作品…' : '暂无视频作品'}</Text>} />
+  const [query, setQuery] = useState(''); const [filter, setFilter] = useState<'all' | MediaStatus>('all'); const [assets, setAssets] = useState<MediaAsset[]>([]); const [loading, setLoading] = useState(true); const [selected, setSelected] = useState<string[]>([]); const [detail, setDetail] = useState<MediaAsset | null>(null);
+  const load = useCallback(async () => { setLoading(true); try { const tasks = await taskStore.list(); const mapped = projectGallery(tasks, { query, status: filter }); const refreshed = await Promise.all(mapped.map(async (asset) => { if (!asset.posterPath) { try { const poster = await extractPoster(asset.localPath || asset.sourceUrl, asset.id); if (poster) { const task = tasks.find((item) => item.id === asset.id); if (task) await taskStore.upsert({ ...task, thumbnailUrl: poster, updatedAt: Date.now() }); return { ...asset, posterPath: poster }; } } catch {} } return asset; })); setAssets(refreshed); } finally { setLoading(false); } }, [filter, query]);
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  const toggle = (id: string) => setSelected((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]);
+  const removeSelected = () => Alert.alert('删除作品', `确定删除 ${selected.length} 个本地作品吗？`, [{ text: '取消' }, { text: '删除', style: 'destructive', onPress: async () => { for (const id of selected) await taskStore.remove(id); setSelected([]); void load(); } }]);
+  return <View style={styles.container}><View style={styles.heading}><View><Text style={styles.title}>作品画廊 Gallery</Text><Text style={styles.subtitle}>浏览、播放与管理所有由 MiniMax H3 渲染生成的视频。</Text></View>{selected.length > 0 && <Pressable onPress={removeSelected} style={styles.deleteAll}><AppIcon name="delete" size={19} color={COLORS.danger} /><Text style={styles.deleteText}>删除 {selected.length}</Text></Pressable>}</View><View style={styles.search}><AppIcon name="search" size={21} color={COLORS.textSubtle} /><TextInput value={query} onChangeText={setQuery} placeholder="搜索 Prompt 或任务 ID..." placeholderTextColor={COLORS.textSubtle} style={styles.searchInput} /></View><View style={styles.filters}>{filters.map((item) => <Pressable key={item.id} onPress={() => setFilter(item.id)} style={[styles.filter, filter === item.id && styles.filterActive]}><Text style={[styles.filterText, filter === item.id && styles.filterTextActive]}>{item.label}</Text></Pressable>)}</View><FlatList data={assets} numColumns={2} keyExtractor={(item) => item.id} columnWrapperStyle={styles.row} contentContainerStyle={styles.list} renderItem={({ item }) => <GalleryCard asset={item} selected={selected.includes(item.id)} onLongPress={() => toggle(item.id)} onPress={() => selected.length ? toggle(item.id) : setDetail(item)} />} ListEmptyComponent={<Text style={styles.empty}>{loading ? '正在加载视频作品…' : '暂无视频作品'}</Text>} />
+    <Modal visible={Boolean(detail)} transparent animationType="slide" onRequestClose={() => setDetail(null)}><View style={styles.modalBackdrop}><View style={styles.sheet}><View style={styles.sheetHeader}><Text style={styles.sheetTitle}>作品详情</Text><Pressable onPress={() => setDetail(null)}><AppIcon name="close" size={24} color={COLORS.textMuted} /></Pressable></View><Text style={styles.sheetMeta}>{detail?.id} · {detail?.durationMs ? `${Math.round(detail.durationMs / 1000)}s` : '—'} · {detail?.status}</Text><Text style={styles.sheetPrompt}>{detail?.prompt}</Text><View style={styles.sheetActions}><Pressable style={styles.primaryAction} onPress={() => { const id = detail?.id; setDetail(null); if (id) router.push({ pathname: '/video/[id]', params: { id } }); }}><AppIcon name="play_arrow" size={18} color={COLORS.text} /><Text style={styles.primaryText}>播放视频</Text></Pressable><Pressable style={styles.secondaryAction} onPress={() => { void import('expo-clipboard').then(({ setStringAsync }) => setStringAsync(detail?.prompt || '')); Alert.alert('已复制', 'Prompt 已复制到剪贴板'); }}><Text style={styles.secondaryText}>复制 Prompt</Text></Pressable></View></View></View></Modal>
   </View>;
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617', padding: 20, paddingTop: 60 },
-  title: { color: '#f8fafc', fontSize: 30, fontWeight: '800' },
-  subtitle: { color: '#94a3b8', marginTop: 6, marginBottom: 20 },
-  input: { backgroundColor: '#0f172a', color: '#e2e8f0', borderRadius: 12, borderWidth: 1, borderColor: '#1e293b', paddingHorizontal: 14, paddingVertical: 12, marginBottom: 16 },
-  list: { gap: 14, paddingBottom: 30 },
-  row: { gap: 14 },
-  empty: { color: '#64748b', textAlign: 'center', marginTop: 64 },
-  selection: { color: '#818cf8', marginTop: 8 },
-});
+const styles = StyleSheet.create({ container: { flex: 1, backgroundColor: COLORS.background, padding: SPACING.xl }, heading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }, title: { color: COLORS.text, fontSize: 29, fontWeight: '800' }, subtitle: { color: COLORS.textMuted, marginTop: 6, marginBottom: SPACING.lg, lineHeight: 20 }, deleteAll: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 8, borderRadius: 9, backgroundColor: '#7f1d1d33' }, deleteText: { color: COLORS.danger, fontSize: 12, fontWeight: '700' }, search: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.surface, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 13 }, searchInput: { flex: 1, color: COLORS.text, height: 50, fontSize: 14 }, filters: { flexDirection: 'row', gap: 8, marginVertical: 15 }, filter: { paddingHorizontal: 15, paddingVertical: 9, borderRadius: 10, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border }, filterActive: { backgroundColor: COLORS.primarySoft, borderColor: COLORS.primaryActive }, filterText: { color: COLORS.textMuted, fontSize: 12, fontWeight: '700' }, filterTextActive: { color: '#c7d2fe' }, list: { gap: 13, paddingBottom: 130 }, row: { gap: 13 }, empty: { color: COLORS.textSubtle, textAlign: 'center', marginTop: 64 }, modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000099' }, sheet: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: SPACING.xl, minHeight: 290, borderTopWidth: 1, borderColor: COLORS.border }, sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, sheetTitle: { color: COLORS.text, fontSize: 19, fontWeight: '800' }, sheetMeta: { color: COLORS.textMuted, marginTop: 13, fontSize: 12, fontFamily: 'monospace' }, sheetPrompt: { color: COLORS.text, marginTop: 18, lineHeight: 22, fontSize: 14 }, sheetActions: { flexDirection: 'row', gap: 10, marginTop: 24 }, primaryAction: { flex: 1, minHeight: 46, borderRadius: 11, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }, primaryText: { color: COLORS.text, fontWeight: '800' }, secondaryAction: { flex: 1, minHeight: 46, borderRadius: 11, backgroundColor: COLORS.primarySoft, alignItems: 'center', justifyContent: 'center' }, secondaryText: { color: '#c7d2fe', fontWeight: '700' } });
