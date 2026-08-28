@@ -139,11 +139,7 @@ public class MainActivity extends Activity {
                             targetFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "AutoDL-H3/" + fileName);
                         }
                         if (targetFile != null && targetFile.exists() && targetFile.length() > 0) {
-                            FileInputStream fis = new FileInputStream(targetFile);
-                            Map<String, String> headers = new HashMap<>();
-                            headers.put("Access-Control-Allow-Origin", "*");
-                            headers.put("Accept-Ranges", "bytes");
-                            return new WebResourceResponse("video/mp4", "UTF-8", 200, "OK", headers, fis);
+                            return createLocalVideoResponse(targetFile, request);
                         }
                     } catch (Exception ignored) {}
                 }
@@ -267,6 +263,85 @@ public class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(previousSystemUiVisibility);
         setRequestedOrientation(previousOrientation);
         if (callback != null) callback.onCustomViewHidden();
+    }
+
+    private WebResourceResponse createLocalVideoResponse(File targetFile, WebResourceRequest request) throws IOException {
+        long fileLength = targetFile.length();
+        long start = 0;
+        long end = fileLength - 1;
+        int status = 200;
+        String reason = "OK";
+
+        String rangeHeader = request.getRequestHeaders().get("Range");
+        if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
+            String range = rangeHeader.substring("bytes=".length()).split(",", 2)[0].trim();
+            int separator = range.indexOf('-');
+            if (separator >= 0) {
+                String startText = range.substring(0, separator).trim();
+                String endText = range.substring(separator + 1).trim();
+                if (startText.isEmpty()) {
+                    long suffixLength = Long.parseLong(endText);
+                    start = Math.max(0, fileLength - suffixLength);
+                } else {
+                    start = Long.parseLong(startText);
+                    if (!endText.isEmpty()) end = Math.min(end, Long.parseLong(endText));
+                }
+                if (start >= 0 && start < fileLength && end >= start) {
+                    status = 206;
+                    reason = "Partial Content";
+                } else {
+                    start = 0;
+                    end = fileLength - 1;
+                }
+            }
+        }
+
+        long contentLength = end - start + 1;
+        FileInputStream input = new FileInputStream(targetFile);
+        long skipped = 0;
+        while (skipped < start) {
+            long count = input.skip(start - skipped);
+            if (count <= 0) {
+                input.close();
+                throw new IOException("无法定位视频分段");
+            }
+            skipped += count;
+        }
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Access-Control-Allow-Origin", "*");
+        headers.put("Accept-Ranges", "bytes");
+        headers.put("Content-Length", String.valueOf(contentLength));
+        if (status == 206) headers.put("Content-Range", "bytes " + start + "-" + end + "/" + fileLength);
+        return new WebResourceResponse("video/mp4", null, status, reason, headers,
+                new BoundedInputStream(input, contentLength));
+    }
+
+    private static final class BoundedInputStream extends InputStream {
+        private final InputStream source;
+        private long remaining;
+
+        BoundedInputStream(InputStream source, long length) {
+            this.source = source;
+            this.remaining = length;
+        }
+
+        @Override public int read() throws IOException {
+            if (remaining <= 0) return -1;
+            int value = source.read();
+            if (value >= 0) remaining--;
+            return value;
+        }
+
+        @Override public int read(byte[] buffer, int offset, int length) throws IOException {
+            if (remaining <= 0) return -1;
+            int requested = (int) Math.min(length, remaining);
+            int count = source.read(buffer, offset, requested);
+            if (count > 0) remaining -= count;
+            return count;
+        }
+
+        @Override public void close() throws IOException { source.close(); }
     }
 
     private String loadAssetString(String path) {

@@ -11,5 +11,7 @@ describe("gallery video previews", () => {
     expect(source).toContain('preload="auto"');
     expect(source).toMatch(/onLoadedData|onCanPlay/);
     expect(source).toContain("currentTime = 0");
+    expect(source).toContain("查看详情");
+    expect(source).toContain("aria-label");
   });
 });

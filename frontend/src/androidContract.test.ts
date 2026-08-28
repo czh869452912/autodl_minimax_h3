@@ -18,4 +18,11 @@ describe("Android media lifecycle contract", () => {
     expect(source).toContain("onHideCustomView");
     expect(source).toContain("nativeBackPressed");
   });
+
+  it("serves local MP4 range requests as binary partial responses", () => {
+    expect(source).toContain("getRequestHeaders");
+    expect(source).toContain("Content-Range");
+    expect(source).toContain("new WebResourceResponse(\"video/mp4\", null");
+    expect(source).toContain("206");
+  });
 });

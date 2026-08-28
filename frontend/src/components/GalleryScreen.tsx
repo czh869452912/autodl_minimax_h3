@@ -295,6 +295,21 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
                           <span className="text-[10px] text-emerald-400 font-mono">本地</span>
                         )}
                       </div>
+
+                      {!isSelectMode && (
+                        <button
+                          type="button"
+                          aria-label="查看详情"
+                          title="查看详情"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onSelectVideo(item);
+                          }}
+                          className="absolute top-2 left-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-slate-950/80 text-slate-200 shadow-lg backdrop-blur-md transition-colors hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">info</span>
+                        </button>
+                      )}
                     </>
                   ) : isGenerating ? (
                     <div className="relative h-full flex flex-col items-center justify-center bg-slate-900 animate-pulse p-4 text-center">
