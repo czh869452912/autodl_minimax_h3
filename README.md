@@ -1,6 +1,6 @@
-# AutoDL H3 视频生成 Android 客户端 (Web-Native 混合架构)
+# AutoDL H3 视频生成 Android 客户端 (React Native + Media3)
 
-这是一个基于 **Web-Native 混合架构**（React + Vite + Tailwind CSS + Android WebView + JSBridge）的原生 Android 客户端，专门用于调用 AutoDL.Art 的 `minimax_h3_image_audio_to_video_v2_15s` ComfyUI 视频生成工作流。
+这是一个面向 Android 的 React Native/Expo 客户端，使用 `@assistant-ui/react-native` 提供 Prompt Agent 原生交互，并使用 AndroidX Media3 播放本地/远程视频。现有 `frontend/` WebView 页面保留作迁移期间的构建参考；新的统一 UI 入口位于 `mobile/`。
 
 ---
 
@@ -64,6 +64,16 @@ cd frontend
 npm install
 npm run dev      # Vite: http://127.0.0.1:3000
 ```
+
+### React Native 开发预览
+
+```bash
+cd mobile
+npm ci --legacy-peer-deps
+npm start
+```
+
+`mobile/` 使用 Expo Router、assistant-ui Native、SQLite 媒体仓储和统一的 `VideoPlayer` 契约。Android 生产构建将 `VideoPlayer` 绑定到 Media3；非 Android/开发预览可使用 Expo Video 适配器。
 
 ### 方式 1：使用一键打包脚本（推荐）
 
