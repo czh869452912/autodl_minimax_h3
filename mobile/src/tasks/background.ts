@@ -18,11 +18,21 @@ export async function syncTasks() {
     if (task.status !== 'SUCCESS' || !task.videoUrl || task.localUri) continue;
     const dir = `${FileSystem.documentDirectory || ''}media`;
     await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-    const result = await FileSystem.downloadAsync(task.videoUrl, `${dir}/${task.id}.mp4`);
+    const result = await downloadWithRetry(task.videoUrl, `${dir}/${task.id}.mp4`);
     let thumbnailUrl = task.thumbnailUrl;
     try { thumbnailUrl = await extractPoster(result.uri, task.id); } catch {}
     await store.upsert({ ...task, localUri: result.uri, thumbnailUrl, updatedAt: Date.now() });
   }
+}
+
+async function downloadWithRetry(source: string, target: string) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const partial = `${target}.part`;
+    try { await FileSystem.deleteAsync(partial, { idempotent: true }); const result = await FileSystem.downloadAsync(source, partial); await FileSystem.moveAsync({ from: result.uri, to: target }); return { ...result, uri: target }; }
+    catch (error) { lastError = error; }
+  }
+  throw lastError instanceof Error ? lastError : new Error('视频下载失败');
 }
 
 TaskManager.defineTask(H3_BACKGROUND_TASK, async () => {
