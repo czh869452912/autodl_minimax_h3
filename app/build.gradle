@@ -4,16 +4,33 @@ def frontendDir = file("../frontend")
 def frontendDistDir = file("../frontend/dist")
 def webAssetsDir = file("src/main/assets/web")
 def npmCommand = System.getProperty("os.name").toLowerCase().contains("win") ? "npm.cmd" : "npm"
+def frontendPackageJson = new File(frontendDir, "package.json")
+def frontendPackageLock = new File(frontendDir, "package-lock.json")
+def frontendNodeModules = new File(frontendDir, "node_modules")
+
+// Dependencies are intentionally not checked into git. Restore them from the
+// lockfile before invoking Vite so a fresh Android Studio checkout is buildable.
+tasks.register("installFrontendDependencies", Exec) {
+    workingDir frontendDir
+    commandLine npmCommand, "ci", "--no-audit", "--no-fund"
+    inputs.files(frontendPackageJson, frontendPackageLock)
+    outputs.dir(frontendNodeModules)
+}
 
 // Keep Android Studio/Gradle builds from embedding a stale WebView bundle.
 tasks.register("buildFrontend", Exec) {
     workingDir frontendDir
     commandLine npmCommand, "run", "build"
-    inputs.dir(new File(frontendDir, "src"))
+    dependsOn("installFrontendDependencies")
+    ["src", "components", "hooks", "lib", "scripts"].each { sourceDir ->
+        inputs.dir(new File(frontendDir, sourceDir))
+    }
     inputs.files(
+        frontendPackageJson,
+        frontendPackageLock,
         new File(frontendDir, "index.html"),
-        new File(frontendDir, "package.json"),
-        new File(frontendDir, "package-lock.json"),
+        new File(frontendDir, "metadata.json"),
+        new File(frontendDir, "components.json"),
         new File(frontendDir, "vite.config.ts"),
         new File(frontendDir, "tsconfig.json")
     )
