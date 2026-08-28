@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import {
   AssistantRuntimeProvider,
   AttachmentPrimitive,
@@ -8,6 +8,7 @@ import {
   SimpleImageAttachmentAdapter,
   SimpleTextAttachmentAdapter,
   ThreadPrimitive,
+  useAui,
   useAuiState,
   useLocalRuntime,
 } from "@assistant-ui/react";
@@ -35,6 +36,7 @@ import {
   setActiveThreadId,
   type StoredThreadSummary,
 } from "../agent/threadStore";
+import { nativePickMedia } from "../utils/nativeBridge";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 
 interface H3PromptResultProps {
@@ -131,10 +133,12 @@ function StandardThread({
   threadId: string;
   onThreadUpdated: () => void;
 }) {
+  const aui = useAui();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messages = useAuiState((state) => state.thread.messages);
   const isRunning = useAuiState((state) => state.thread.isRunning);
-  const prevMessagesRef = React.useRef<string>("");
-  const onThreadUpdatedRef = React.useRef(onThreadUpdated);
+  const prevMessagesRef = useRef<string>("");
+  const onThreadUpdatedRef = useRef(onThreadUpdated);
   onThreadUpdatedRef.current = onThreadUpdated;
 
   useEffect(() => {
@@ -149,6 +153,50 @@ function StandardThread({
     });
     onThreadUpdatedRef.current?.();
   }, [messages, threadId]);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    for (const file of Array.from(files)) {
+      try {
+        await aui.composer.addAttachment(file);
+      } catch (err) {
+        console.warn("Failed to add attachment via aui:", err);
+      }
+    }
+    e.target.value = "";
+  };
+
+  const handleAttachmentClick = () => {
+    if (typeof window !== "undefined" && window.AndroidBridge?.pickMedia) {
+      nativePickMedia("image");
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
+  useEffect(() => {
+    const prevHandler = window.onMediaPicked;
+    window.onMediaPicked = async (mediaJson: string) => {
+      try {
+        const parsed = JSON.parse(mediaJson);
+        const uri = parsed.uri || parsed.url || parsed.data;
+        if (uri) {
+          const res = await fetch(uri);
+          const blob = await res.blob();
+          const file = new File([blob], parsed.name || `image-${Date.now()}.png`, {
+            type: parsed.mimeType || blob.type || "image/png",
+          });
+          await aui.composer.addAttachment(file);
+        }
+      } catch (err) {
+        console.error("onMediaPicked parse error in agent:", err);
+      }
+    };
+    return () => {
+      window.onMediaPicked = prevHandler;
+    };
+  }, [aui]);
 
   return (
     <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-950">
@@ -192,12 +240,23 @@ function StandardThread({
         </div>
 
         <div className="relative flex items-end gap-2 rounded-xl border border-slate-700 bg-slate-950 px-2.5 py-2 transition-colors focus-within:border-indigo-500">
-          <ComposerPrimitive.AddAttachment
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-800 hover:text-indigo-300 cursor-pointer"
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/*,text/*,.txt,.md,.json"
+            multiple
+            className="hidden"
+          />
+
+          <button
+            type="button"
+            onClick={handleAttachmentClick}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-800 hover:text-indigo-300 active:scale-95 cursor-pointer"
             title="上传图片或文件"
           >
             <Paperclip className="h-4 w-4" />
-          </ComposerPrimitive.AddAttachment>
+          </button>
 
           <ComposerPrimitive.Input
             className="max-h-32 min-h-8 flex-1 resize-none bg-transparent py-1 text-sm leading-relaxed text-slate-100 placeholder-slate-500 outline-none"
@@ -220,7 +279,7 @@ function StandardThread({
       </ComposerPrimitive.Root>
     </ThreadPrimitive.Root>
   );
-};
+}
 
 function ActiveThreadContainer({
   threadId,
