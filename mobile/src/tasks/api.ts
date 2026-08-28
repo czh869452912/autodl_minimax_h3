@@ -1,4 +1,4 @@
-import type { TaskRecord, TaskStatus } from './types';
+import type { TaskRecord, TaskStatus, TaskMediaInput } from './types';
 
 const API_ROOT = 'https://autodl.art/api/v1/comfyui/comfyui_workflow/';
 const WORKFLOW_ID = 'minimax_h3_image_audio_to_video_v2_15s';
@@ -9,8 +9,16 @@ async function parse(response: Response) {
   return body.data;
 }
 
-export async function submitTask(token: string, input: Pick<TaskRecord, 'prompt' | 'duration' | 'resolution'>): Promise<TaskRecord> {
-  const response = await fetch(API_ROOT + WORKFLOW_ID, { method: 'POST', headers: { Authorization: token, 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+type SubmitInput = Pick<TaskRecord, 'prompt' | 'duration' | 'resolution'> & { seed?: string; images?: TaskMediaInput[]; audios?: TaskMediaInput[] };
+export function buildTaskPayload(input: SubmitInput): Record<string, unknown> {
+  const payload: Record<string, unknown> = { prompt: input.prompt, duration: input.duration, resolution: input.resolution };
+  if (input.seed?.trim()) payload.seed = Number(input.seed) || input.seed.trim();
+  input.images?.slice(0, 9).forEach((item, index) => { if (item.dataUri) payload[`ref_image_${index + 1}`] = item.dataUri; });
+  input.audios?.slice(0, 3).forEach((item, index) => { if (item.dataUri) payload[`ref_audio_${index + 1}`] = item.dataUri; });
+  return payload;
+}
+export async function submitTask(token: string, input: SubmitInput): Promise<TaskRecord> {
+  const response = await fetch(API_ROOT + WORKFLOW_ID, { method: 'POST', headers: { Authorization: token, 'Content-Type': 'application/json' }, body: JSON.stringify(buildTaskPayload(input)) });
   const data = await parse(response);
   const now = Date.now();
   return { ...input, id: String(data.task_id), status: normalize(data.status), createdAt: now, updatedAt: now };

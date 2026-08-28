@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { openDatabaseSync } from 'expo-sqlite';
 import { GalleryCard } from '../../src/media/GalleryCard';
-import { openNativeVideo } from '../../src/native/media';
+import { extractPoster } from '../../src/native/media';
 import { createTaskRepository } from '../../src/tasks/repository';
 import type { MediaAsset } from '../../src/media/types';
 
@@ -12,26 +13,29 @@ const taskStore = createTaskRepository(database);
 export default function GalleryScreen() {
   const [query, setQuery] = useState('');
   const [assets, setAssets] = useState<MediaAsset[]>([]);
-  const [selected, setSelected] = useState<MediaAsset | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
   const loadAssets = useCallback(async () => {
     setLoading(true);
     try {
       const tasks = await taskStore.list();
-      setAssets(tasks.filter((task) => task.status === 'SUCCESS').filter((task) => `${task.prompt} ${task.id}`.toLowerCase().includes(query.toLowerCase())).map((task) => ({ id: task.id, taskId: task.id, title: task.prompt.slice(0, 48) || task.id, prompt: task.prompt, sourceUrl: task.videoUrl || '', localPath: task.localUri, posterPath: task.thumbnailUrl, mimeType: 'video/mp4', durationMs: task.duration * 1000, status: 'downloaded' as const, createdAt: task.createdAt, updatedAt: task.updatedAt })));
+      const successful = tasks.filter((task) => task.status === 'SUCCESS').filter((task) => `${task.prompt} ${task.id}`.toLowerCase().includes(query.toLowerCase()));
+      const mapped = await Promise.all(successful.map(async (task) => {
+        let posterPath = task.thumbnailUrl;
+        if (!posterPath && (task.localUri || task.videoUrl)) { try { posterPath = await extractPoster(task.localUri || task.videoUrl || '', task.id); if (posterPath) await taskStore.upsert({ ...task, thumbnailUrl: posterPath, updatedAt: Date.now() }); } catch {} }
+        return { id: task.id, taskId: task.id, title: task.prompt.slice(0, 48) || task.id, prompt: task.prompt, sourceUrl: task.videoUrl || '', localPath: task.localUri, posterPath, mimeType: 'video/mp4', durationMs: task.duration * 1000, status: 'downloaded' as const, createdAt: task.createdAt, updatedAt: task.updatedAt };
+      }));
+      setAssets(mapped);
     } finally { setLoading(false); }
   }, [query]);
   useEffect(() => { void loadAssets(); }, [loadAssets]);
   const items = useMemo(() => assets, [assets]);
-  const openAsset = (asset: MediaAsset) => {
-    if (!openNativeVideo(asset.localPath || asset.sourceUrl)) setSelected(asset);
-  };
+  const openAsset = (asset: MediaAsset) => router.push({ pathname: '/video/[id]', params: { id: asset.id } });
   return <View style={styles.container}>
     <Text style={styles.title}>作品画廊 Gallery</Text>
     <Text style={styles.subtitle}>浏览、播放与管理所有由 MiniMax H3 渲染生成的视频。</Text>
     <TextInput value={query} onChangeText={setQuery} placeholder="搜索 Prompt 或任务 ID..." placeholderTextColor="#64748b" style={styles.input} />
     <FlatList data={items} numColumns={2} keyExtractor={(item) => item.id} columnWrapperStyle={styles.row} contentContainerStyle={styles.list} renderItem={({ item }) => <GalleryCard asset={item} onPress={() => openAsset(item)} />} ListEmptyComponent={<Text style={styles.empty}>{loading ? '正在加载视频作品…' : '暂无视频作品'}</Text>} />
-    {selected && <Text accessibilityLiveRegion="polite" style={styles.selection}>已选择：{selected.title}</Text>}
   </View>;
 }
 

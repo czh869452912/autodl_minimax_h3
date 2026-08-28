@@ -17,6 +17,7 @@ public final class Media3PlayerActivity extends Activity {
   public static final String EXTRA_SOURCE = "source";
   private ExoPlayer player;
   private PlayerView playerView;
+  private boolean resumeOnStart;
 
   @Override protected void onCreate(@Nullable Bundle state) {
     super.onCreate(state);
@@ -38,6 +39,7 @@ public final class Media3PlayerActivity extends Activity {
     player.setMediaItem(MediaItem.fromUri(Uri.parse(source)));
     player.prepare();
     player.play();
+    resumeOnStart = true;
   }
 
   private void setFullscreen(boolean fullscreen) {
@@ -60,12 +62,12 @@ public final class Media3PlayerActivity extends Activity {
 
   @Override protected void onStop() {
     super.onStop();
-    if (player != null) player.pause();
+    if (player != null) { resumeOnStart = player.isPlaying(); player.pause(); }
   }
 
   @Override protected void onStart() {
     super.onStart();
-    if (player != null) player.play();
+    if (player != null && resumeOnStart) player.play();
   }
 
   @Override protected void onDestroy() {
