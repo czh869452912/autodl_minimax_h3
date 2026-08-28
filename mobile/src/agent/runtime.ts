@@ -8,6 +8,17 @@ const promptSkill = skillEntries.find(([key]) => key.endsWith('/h3-prompt-writin
 const promptReferences = skillEntries.filter(([key]) => key.includes('/h3-prompt-writing/references/')).map(([key, value]) => `${key}: ${(value as { content: string }).content}`).join('\n');
 const SYSTEM = `你是 AutoDL H3 Prompt 助手。遵循官方 H3 技能规范，先澄清画幅、时长、风格和参考素材，再输出可直接用于 MiniMax H3 的 integrated_multimodal_description。必须保留用户明确台词，不编造素材。以下是随 APK 发布的官方 h3-prompt-writing 技能全文与参考资料：\n${promptSkill?.content || ''}\n${promptReferences}`;
 
+/** Converts cumulative provider deltas into the text expected by assistant-ui. */
+export function normalizeCumulativeText(previous: string, next: string) {
+  if (!next) return { previous, delta: '' };
+  if (previous && next.startsWith(previous)) return { previous: next, delta: next.slice(previous.length) };
+  return { previous: next, delta: next };
+}
+
+export function officialSkillCount() {
+  return Object.keys(officialH3Skills).filter((key) => key.endsWith('/SKILL.md')).length;
+}
+
 export function createHistoryAdapter(db: SQLiteDatabase): ThreadHistoryAdapter {
   db.execSync('CREATE TABLE IF NOT EXISTS agent_messages (id TEXT PRIMARY KEY NOT NULL, parent_id TEXT, message_json TEXT NOT NULL, run_config_json TEXT, created_at INTEGER NOT NULL)');
   return {
@@ -21,7 +32,7 @@ export function createHistoryAdapter(db: SQLiteDatabase): ThreadHistoryAdapter {
 function toOpenAIContent(message: any) {
   const parts = Array.isArray(message.content) ? message.content : [];
   const text = parts.filter((part: any) => part.type === 'text').map((part: any) => part.text).join('\n');
-  const media = parts.filter((part: any) => part.type === 'image' || part.type === 'file').map((part: any) => part.type === 'image' ? { type: 'image_url', image_url: { url: part.image } } : { type: 'text', text: `[附件 ${part.filename || 'file'}: ${part.data}]` });
+  const media = parts.filter((part: any) => part.type === 'image' || part.type === 'file').map((part: any) => part.type === 'image' ? { type: 'image_url', image_url: { url: part.image || part.source?.url } } : { type: 'text', text: `[附件 ${part.filename || 'file'}: ${part.data || part.url || ''}]` });
   return media.length ? [{ type: 'text', text }, ...media] : text;
 }
 
@@ -35,8 +46,16 @@ export const adapter: ChatModelAdapter = {
     const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ''; let answer = '';
     while (true) {
       const { done, value } = await reader.read(); if (done) break; buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n'); buffer = lines.pop() || '';
-      for (const line of lines) { if (!line.startsWith('data:')) continue; const raw = line.slice(5).trim(); if (!raw || raw === '[DONE]') continue; try { const delta = JSON.parse(raw).choices?.[0]?.delta?.content; if (delta) { answer += delta; yield { content: [{ type: 'text', text: answer }] }; } } catch {} }
+      const lines = buffer.split(/\r?\n/); buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        const raw = line.slice(5).trim(); if (!raw || raw === '[DONE]') continue;
+        try {
+          const delta = JSON.parse(raw).choices?.[0]?.delta;
+          const value = typeof delta?.content === 'string' ? delta.content : Array.isArray(delta?.content) ? delta.content.map((part: any) => part?.text || '').join('') : (delta?.reasoning_content || '');
+          if (value) { answer += value; yield { content: [{ type: 'text', text: answer }] }; }
+        } catch { /* Ignore keep-alive and malformed provider frames. */ }
+      }
     }
   },
 };
