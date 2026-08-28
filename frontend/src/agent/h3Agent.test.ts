@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { fakeModel } from "@langchain/core/testing";
 import { AIMessage } from "@langchain/core/messages";
-import { createH3Agent, normalizeCumulativeText, streamH3Agent } from "./h3Agent";
+import { createH3Agent, isAssistantMessage, normalizeCumulativeText, streamH3Agent } from "./h3Agent";
 
 describe("in-app H3 agent", () => {
+  it("only forwards assistant messages from state snapshots", () => {
+    expect(isAssistantMessage({ role: "user" })).toBe(false);
+    expect(isAssistantMessage({ type: "human" })).toBe(false);
+    expect(isAssistantMessage({ role: "assistant" })).toBe(true);
+    expect(isAssistantMessage({ type: "ai" })).toBe(true);
+  });
+
   it("converts cumulative stream snapshots into suffix deltas", () => {
     expect(normalizeCumulativeText("", "read")).toEqual({ previous: "read", delta: "read" });
     expect(normalizeCumulativeText("read", "read official")).toEqual({

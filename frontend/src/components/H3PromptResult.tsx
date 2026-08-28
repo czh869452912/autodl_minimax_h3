@@ -19,7 +19,6 @@ import {
   MessageSquare,
   Trash2,
   Paperclip,
-  Image as ImageIcon,
   FileText,
   X,
   History,
@@ -36,8 +35,8 @@ import {
   setActiveThreadId,
   type StoredThreadSummary,
 } from "../agent/threadStore";
-import { nativePickMedia } from "../utils/nativeBridge";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { parseNativeMediaPayload } from "./nativeMediaPayload";
 
 interface H3PromptResultProps {
   onApplyPrompt?: (prompt: string) => void;
@@ -134,7 +133,6 @@ function StandardThread({
   onThreadUpdated: () => void;
 }) {
   const aui = useAui();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const messages = useAuiState((state) => state.thread.messages);
   const isRunning = useAuiState((state) => state.thread.isRunning);
   const prevMessagesRef = useRef<string>("");
@@ -154,38 +152,17 @@ function StandardThread({
     onThreadUpdatedRef.current?.();
   }, [messages, threadId]);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    for (const file of Array.from(files)) {
-      try {
-        await aui.composer.addAttachment(file);
-      } catch (err) {
-        console.warn("Failed to add attachment via aui:", err);
-      }
-    }
-    e.target.value = "";
-  };
-
-  const handleAttachmentClick = () => {
-    if (typeof window !== "undefined" && window.AndroidBridge?.pickMedia) {
-      nativePickMedia("image");
-    } else {
-      fileInputRef.current?.click();
-    }
-  };
-
   useEffect(() => {
     const prevHandler = window.onMediaPicked;
     window.onMediaPicked = async (mediaJson: string) => {
       try {
-        const parsed = JSON.parse(mediaJson);
-        const uri = parsed.uri || parsed.url || parsed.data;
-        if (uri) {
-          const res = await fetch(uri);
+        const media = parseNativeMediaPayload(mediaJson);
+        if (media) {
+          const res = await fetch(media.uri);
+          if (!res.ok) throw new Error(`无法读取附件 (${res.status})`);
           const blob = await res.blob();
-          const file = new File([blob], parsed.name || `image-${Date.now()}.png`, {
-            type: parsed.mimeType || blob.type || "image/png",
+          const file = new File([blob], media.name || `image-${Date.now()}.png`, {
+            type: media.mimeType || blob.type || "image/png",
           });
           await aui.composer.addAttachment(file);
         }
@@ -203,13 +180,8 @@ function StandardThread({
       <ThreadPrimitive.Viewport className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6" autoScroll>
         {messages.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center px-4 text-center">
-            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-500/30 bg-indigo-600/20 text-xl text-indigo-400 shadow-inner">
-              ✨
-            </div>
-            <h2 className="mb-1 text-base font-bold text-slate-100">欢迎使用 Prompt 助手</h2>
-            <p className="max-w-sm text-xs leading-relaxed text-slate-400">
-              您可以输入视频场景构想，或上传参考图片、脚本文件，AI 将自主阅读官方技能库为您撰写和迭代精准提示词。
-            </p>
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-500/30 bg-indigo-600/20 text-xl text-indigo-400 shadow-inner">✦</div>
+            <h2 className="text-base font-semibold text-slate-100">今天想做什么？</h2>
           </div>
         )}
         <ThreadPrimitive.Messages
@@ -219,7 +191,7 @@ function StandardThread({
         />
       </ThreadPrimitive.Viewport>
 
-      <ComposerPrimitive.Root className="border-t border-slate-800/80 bg-slate-900/90 p-3">
+      <ComposerPrimitive.Root className="shrink-0 border-t border-slate-800/80 bg-slate-900/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-2 md:px-5 md:pb-3">
         {/* Attachment Previews */}
         <div className="mb-2 flex flex-wrap gap-2">
           <ComposerPrimitive.Attachments
@@ -240,23 +212,13 @@ function StandardThread({
         </div>
 
         <div className="relative flex items-end gap-2 rounded-xl border border-slate-700 bg-slate-950 px-2.5 py-2 transition-colors focus-within:border-indigo-500">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept="image/*,text/*,.txt,.md,.json"
+          <ComposerPrimitive.AddAttachment
             multiple
-            className="hidden"
-          />
-
-          <button
-            type="button"
-            onClick={handleAttachmentClick}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-800 hover:text-indigo-300 active:scale-95 cursor-pointer"
             title="上传图片或文件"
           >
             <Paperclip className="h-4 w-4" />
-          </button>
+          </ComposerPrimitive.AddAttachment>
 
           <ComposerPrimitive.Input
             className="max-h-32 min-h-8 flex-1 resize-none bg-transparent py-1 text-sm leading-relaxed text-slate-100 placeholder-slate-500 outline-none"
@@ -365,14 +327,14 @@ export function H3PromptResult({ llmConfig }: H3PromptResultProps) {
   }, [llmConfig.llmApiKey, llmConfig.llmEndpoint, llmConfig.llmModel]);
 
   return (
-    <div className="flex h-[min(76vh,780px)] min-h-[520px] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl">
+    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-slate-950">
       {/* Top Conversation Header & Controls */}
-      <div className="flex items-center justify-between border-b border-slate-800/80 bg-slate-900/90 px-4 py-2.5">
+      <div className="flex min-h-11 shrink-0 items-center justify-between border-b border-slate-800/80 bg-slate-950 px-4 py-2 md:px-6">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setIsDrawerOpen((prev) => !prev)}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/70 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:border-indigo-500/50 hover:bg-slate-800"
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-800/70 hover:text-slate-100"
             title="查看历史对话列表"
           >
             <History className="h-3.5 w-3.5 text-indigo-400" />
@@ -387,7 +349,7 @@ export function H3PromptResult({ llmConfig }: H3PromptResultProps) {
           <button
             type="button"
             onClick={handleCreateNewThread}
-            className="flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-indigo-500 active:scale-95"
+            className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-indigo-300 transition-colors hover:bg-indigo-500/15 hover:text-indigo-200 active:scale-95"
             title="开启新对话"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -398,7 +360,7 @@ export function H3PromptResult({ llmConfig }: H3PromptResultProps) {
 
       {/* History Drawer / Modal */}
       {isDrawerOpen && (
-        <div className="border-b border-slate-800 bg-slate-900/95 p-3 shadow-xl backdrop-blur">
+        <div className="absolute left-3 right-3 top-12 z-20 border border-slate-800 bg-slate-900 p-3 shadow-xl backdrop-blur md:left-6 md:right-6">
           <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-300">
             <span className="flex items-center gap-1.5">
               <MessageSquare className="h-3.5 w-3.5 text-indigo-400" />

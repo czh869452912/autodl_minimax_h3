@@ -42,6 +42,15 @@ function asChunk(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+export function isAssistantMessage(message: Record<string, unknown>): boolean {
+  const kwargs = asChunk(message.kwargs);
+  const role = message.role ?? kwargs.role;
+  const type = message.type ?? kwargs.type;
+  if (role === "user" || role === "human" || role === "system" || role === "tool") return false;
+  if (type === "human" || type === "user" || type === "system" || type === "tool") return false;
+  return role === "assistant" || role === "ai" || type === "assistant" || type === "ai" || (!role && !type);
+}
+
 function chunkText(chunk: Record<string, unknown>): string {
   const content = chunk.content ?? chunk.text;
   if (typeof content === "string") return content;
@@ -158,6 +167,7 @@ async function* streamDeepAgent(agent: DeepAgent, input: H3AgentInput): AsyncGen
     }
 
     for (const msg of messages) {
+      if (!isAssistantMessage(msg)) continue;
       const toolCalls = extractMessageToolCalls(msg);
       for (const call of toolCalls) {
         yield { type: "tool-start", id: call.id || crypto.randomUUID(), name: call.name, args: call.args || {} };

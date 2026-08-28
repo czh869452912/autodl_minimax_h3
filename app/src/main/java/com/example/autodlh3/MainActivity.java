@@ -24,6 +24,7 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.ValueCallback;
 import android.widget.Toast;
 
 import org.json.JSONArray;
@@ -52,6 +53,7 @@ public class MainActivity extends Activity {
     private static final String WORKFLOW_ID = "minimax_h3_image_audio_to_video_v2_15s";
     private static final String API_ROOT = "https://autodl.art/api/v1/comfyui/comfyui_workflow/";
     private static final int PICK_FILE_REQUEST = 401;
+    private static final int WEB_FILE_CHOOSER_REQUEST = 402;
     private static final long MAX_TOTAL_UPLOAD_BYTES = 50L * 1024L * 1024L;
 
     private static final String PREFS_NAME = "autodl_h3";
@@ -65,6 +67,8 @@ public class MainActivity extends Activity {
     private static final String TOKEN_ALIAS = "AutoDLH3TokenKey";
 
     private WebView webView;
+    // Pending callback for assistant-ui's standard <input type="file"> flow.
+    private ValueCallback<Uri[]> webFilePathCallback;
     private int pendingMediaKind = 0;
     private final ArrayList<TaskItem> tasks = new ArrayList<>();
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -137,7 +141,33 @@ public class MainActivity extends Activity {
             }
         });
 
-        webView.setWebChromeClient(new WebChromeClient());
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(
+                    WebView view,
+                    ValueCallback<Uri[]> filePathCallback,
+                    FileChooserParams fileChooserParams
+            ) {
+                if (webFilePathCallback != null) {
+                    webFilePathCallback.onReceiveValue(null);
+                }
+                webFilePathCallback = filePathCallback;
+                try {
+                    Intent intent = fileChooserParams.createIntent();
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    if (intent.getType() == null || intent.getType().isEmpty()) {
+                        intent.setType("*/*");
+                    }
+                    startActivityForResult(intent, WEB_FILE_CHOOSER_REQUEST);
+                    return true;
+                } catch (Exception e) {
+                    webFilePathCallback = null;
+                    filePathCallback.onReceiveValue(null);
+                    toast("无法打开文件选择器: " + e.getMessage());
+                    return false;
+                }
+            }
+        });
         webView.addJavascriptInterface(new NativeBridge(this), "AndroidBridge");
 
         loadTasks();
@@ -197,6 +227,25 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == WEB_FILE_CHOOSER_REQUEST) {
+            Uri[] results = null;
+            if (resultCode == RESULT_OK && data != null) {
+                if (data.getClipData() != null) {
+                    int count = data.getClipData().getItemCount();
+                    results = new Uri[count];
+                    for (int i = 0; i < count; i++) {
+                        results[i] = data.getClipData().getItemAt(i).getUri();
+                    }
+                } else if (data.getData() != null) {
+                    results = new Uri[]{data.getData()};
+                }
+            }
+            if (webFilePathCallback != null) {
+                webFilePathCallback.onReceiveValue(results);
+                webFilePathCallback = null;
+            }
+            return;
+        }
         if (requestCode != PICK_FILE_REQUEST || resultCode != RESULT_OK || data == null || data.getData() == null) return;
         final Uri uri = data.getData();
         final int kind = pendingMediaKind;
