@@ -16,6 +16,8 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.MediaStore;
+import android.media.MediaMetadataRetriever;
+import android.graphics.Bitmap;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
@@ -36,6 +38,7 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -138,9 +141,7 @@ public class MainActivity extends Activity {
                 }
                 customView = view;
                 customViewCallback = callback;
-                previousOrientation = getRequestedOrientation();
                 previousSystemUiVisibility = getWindow().getDecorView().getSystemUiVisibility();
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
                 getWindow().getDecorView().setSystemUiVisibility(
                         View.SYSTEM_UI_FLAG_FULLSCREEN
                                 | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
@@ -243,7 +244,6 @@ public class MainActivity extends Activity {
             ((ViewGroup) view.getParent()).removeView(view);
         }
         getWindow().getDecorView().setSystemUiVisibility(previousSystemUiVisibility);
-        setRequestedOrientation(previousOrientation);
         if (callback != null) callback.onCustomViewHidden();
     }
 
@@ -485,6 +485,39 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void ensurePoster(TaskItem task, File videoFile) {
+        if (task.thumbnailUrl != null && !task.thumbnailUrl.isEmpty()) return;
+        File poster = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "AutoDL-H3/" + task.id + ".jpg");
+        if (!poster.getParentFile().exists() && !poster.getParentFile().mkdirs()) return;
+        try {
+            if (!poster.exists() || poster.length() == 0) {
+                MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+                retriever.setDataSource(videoFile.getAbsolutePath());
+                Bitmap frame = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+                if (frame != null) {
+                    try (FileOutputStream output = new FileOutputStream(poster)) {
+                        frame.compress(Bitmap.CompressFormat.JPEG, 88, output);
+                    }
+                    frame.recycle();
+                }
+                retriever.release();
+            }
+            if (poster.exists() && poster.length() > 0) {
+                task.thumbnailUrl = LOCAL_MEDIA_BASE + Uri.encode(task.id + ".jpg");
+            }
+        } catch (Exception ignored) {
+            task.thumbnailUrl = "";
+        }
+    }
+
+    public void openNativeVideo(String source, String title) {
+        if (source == null || source.trim().isEmpty()) return;
+        Intent intent = new Intent(this, Media3PlayerActivity.class);
+        intent.putExtra(Media3PlayerActivity.EXTRA_SOURCE, Uri.parse(source));
+        intent.putExtra(Media3PlayerActivity.EXTRA_TITLE, title == null ? "AutoDL H3 视频" : title);
+        startActivity(intent);
+    }
+
     private void startDownloadIfNeeded(TaskItem task) {
         if (task.videoUrl == null || task.videoUrl.isEmpty()) return;
 
@@ -492,6 +525,7 @@ public class MainActivity extends Activity {
         File localFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "AutoDL-H3/" + task.id + ".mp4");
         if (localFile.exists() && localFile.length() > 0) {
             task.localUri = getLocalMediaUri(task.id);
+            ensurePoster(task, localFile);
             task.downloadState = "已下载";
             return;
         }
@@ -527,6 +561,7 @@ public class MainActivity extends Activity {
                     String rawUri = uriColumn >= 0 ? cursor.getString(uriColumn) : "";
                     if (localFile.exists() && localFile.length() > 0) {
                         target.localUri = getLocalMediaUri(target.id);
+                        ensurePoster(target, localFile);
                     } else if (rawUri != null && !rawUri.isEmpty()) {
                         target.localUri = rawUri;
                     }
@@ -553,6 +588,7 @@ public class MainActivity extends Activity {
                 String localMediaUri = getLocalMediaUri(task.id);
                 if (!"已下载".equals(task.downloadState) || !localMediaUri.equals(task.localUri)) {
                     task.localUri = localMediaUri;
+                    ensurePoster(task, localFile);
                     task.downloadState = "已下载";
                     changed = true;
                 }
@@ -623,6 +659,7 @@ public class MainActivity extends Activity {
                 object.put("updatedAt", task.updatedAt);
                 object.put("videoUrl", task.videoUrl);
                 object.put("localUri", task.localUri);
+                object.put("thumbnailUrl", task.thumbnailUrl);
                 object.put("downloadId", task.downloadId);
                 object.put("downloadState", task.downloadState);
                 array.put(object);
@@ -721,6 +758,7 @@ public class MainActivity extends Activity {
                 task.duration = object.optInt("duration", 5);
                 task.videoUrl = object.optString("videoUrl", "");
                 task.localUri = object.optString("localUri", "");
+                task.thumbnailUrl = object.optString("thumbnailUrl", "");
                 task.downloadId = object.optLong("downloadId", 0);
                 task.downloadState = object.optString("downloadState", "");
                 tasks.add(task);
@@ -768,7 +806,7 @@ public class MainActivity extends Activity {
     private static final class TaskItem {
         final String id; String status; final long createdAt; long updatedAt;
         String prompt = ""; String resolution = "768p竖"; int duration = 5;
-        String videoUrl = ""; String localUri = ""; long downloadId = 0; String downloadState = "";
+        String videoUrl = ""; String localUri = ""; String thumbnailUrl = ""; long downloadId = 0; String downloadState = "";
         TaskItem(String id, String status, long createdAt) { this.id = id; this.status = status; this.createdAt = createdAt; this.updatedAt = createdAt; }
         boolean isTerminal() { return "SUCCESS".equalsIgnoreCase(status) || "FAILED".equalsIgnoreCase(status) || "CANCELLED".equalsIgnoreCase(status); }
     }

@@ -7,10 +7,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const source = readFileSync(resolve(here, "GalleryScreen.tsx"), "utf8");
 
 describe("gallery video previews", () => {
-  it("preloads and decodes the first video frame for card previews", () => {
-    expect(source).toContain('preload="auto"');
-    expect(source).toMatch(/onLoadedData|onCanPlay/);
-    expect(source).toContain("currentTime = 0");
+  it("renders the native-generated poster without mounting gallery video players", () => {
+    expect(source).toContain("item.thumbnailUrl");
+    expect(source).toContain('loading="lazy"');
+    expect(source).not.toContain('<video');
     expect(source).toContain("查看详情");
     expect(source).toContain("aria-label");
   });

@@ -8,7 +8,7 @@ import { TasksScreen } from './components/TasksScreen';
 import { GalleryScreen } from './components/GalleryScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { MediaLightbox } from './components/MediaLightbox';
-import { nativeLoadTasks, nativeSaveTasks, nativeReadToken, nativeReadLlmConfig } from './utils/nativeBridge';
+import { nativeLoadTasks, nativeSaveTasks, nativeReadToken, nativeReadLlmConfig, nativeOpenVideo } from './utils/nativeBridge';
 import { resolveTaskMediaSource, toGalleryItem } from './utils/taskPresentation';
 
 interface ErrorBoundaryProps {
@@ -193,14 +193,18 @@ export default function App() {
               onCancelTask={handleCancelTask}
               onRestartTask={() => {}}
               onClearHistory={handleClearHistory}
-              onSelectTask={(task) => setSelectedVideo(task)}
+              onSelectTask={(task) => {
+                if (!nativeOpenVideo(task.localUri || task.videoUrl || '', task.title || `任务 ${task.id}`)) setSelectedVideo(task);
+              }}
             />
           )}
 
           {currentScreen === 'gallery' && (
             <GalleryScreen
               galleryItems={gallery}
-              onSelectVideo={(item) => setSelectedVideo(item)}
+              onSelectVideo={(item) => {
+                if (!nativeOpenVideo(item.localUri || item.videoUrl, item.title)) setSelectedVideo(item);
+              }}
               onDeleteItem={handleDeleteGalleryItem}
             />
           )}

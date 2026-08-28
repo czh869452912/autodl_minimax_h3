@@ -1,0 +1,42 @@
+import type { MediaAsset, MediaStatus, MediaStore } from './types';
+
+type SqlDatabase = {
+  execSync?: (source: string) => void;
+  runSync?: (source: string, ...params: unknown[]) => unknown;
+  getAllSync?: <T>(source: string, ...params: unknown[]) => T[];
+};
+
+const schema = `CREATE TABLE IF NOT EXISTS media_assets (
+  id TEXT PRIMARY KEY NOT NULL, task_id TEXT NOT NULL, title TEXT NOT NULL, prompt TEXT NOT NULL,
+  source_url TEXT NOT NULL, local_path TEXT, poster_path TEXT, mime_type TEXT NOT NULL,
+  width INTEGER, height INTEGER, duration_ms INTEGER, status TEXT NOT NULL,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+); CREATE INDEX IF NOT EXISTS idx_media_assets_created_at ON media_assets(created_at DESC);`;
+
+const toAsset = (row: Record<string, unknown>): MediaAsset => ({
+  id: String(row.id), taskId: String(row.task_id), title: String(row.title), prompt: String(row.prompt),
+  sourceUrl: String(row.source_url), localPath: row.local_path ? String(row.local_path) : undefined,
+  posterPath: row.poster_path ? String(row.poster_path) : undefined, mimeType: String(row.mime_type),
+  width: row.width == null ? undefined : Number(row.width), height: row.height == null ? undefined : Number(row.height),
+  durationMs: row.duration_ms == null ? undefined : Number(row.duration_ms), status: row.status as MediaStatus,
+  createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
+});
+
+export function createSqliteMediaStore(database: SqlDatabase): MediaStore {
+  database.execSync?.(schema);
+  return {
+    async upsert(asset) {
+      database.runSync?.('INSERT OR REPLACE INTO media_assets (id, task_id, title, prompt, source_url, local_path, poster_path, mime_type, width, height, duration_ms, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', asset.id, asset.taskId, asset.title, asset.prompt, asset.sourceUrl, asset.localPath ?? null, asset.posterPath ?? null, asset.mimeType, asset.width ?? null, asset.height ?? null, asset.durationMs ?? null, asset.status, asset.createdAt, asset.updatedAt);
+    },
+    async list(options = {}) {
+      const query = options.query?.trim().toLowerCase();
+      const rows = database.getAllSync?.<Record<string, unknown>>('SELECT * FROM media_assets WHERE (? IS NULL OR status = ?) AND (? IS NULL OR lower(title) LIKE ? OR lower(prompt) LIKE ? OR lower(task_id) LIKE ?) ORDER BY created_at DESC', options.status ?? null, options.status ?? null, query ?? null, query ? `%${query}%` : null, query ? `%${query}%` : null, query ? `%${query}%` : null) ?? [];
+      return rows.map(toAsset);
+    },
+    async get(id) {
+      const rows = database.getAllSync?.<Record<string, unknown>>('SELECT * FROM media_assets WHERE id = ? LIMIT 1', id) ?? [];
+      return rows[0] ? toAsset(rows[0]) : null;
+    },
+    async remove(id) { database.runSync?.('DELETE FROM media_assets WHERE id = ?', id); },
+  };
+}

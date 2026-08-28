@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "AutoDL H3",
+    "slug": "autodl-h3",
+    "scheme": "autodlh3",
+    "version": "1.0.0",
+    "orientation": "default",
+    "plugins": ["expo-router", "expo-sqlite", "expo-video"],
+    "android": {
+      "package": "com.example.autodlh3",
+      "permissions": ["INTERNET", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_MEDIA_PLAYBACK"]
+    }
+  }
+}
