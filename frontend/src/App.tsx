@@ -7,7 +7,7 @@ import { AgentScreen } from './components/AgentScreen';
 import { TasksScreen } from './components/TasksScreen';
 import { GalleryScreen } from './components/GalleryScreen';
 import { SettingsScreen } from './components/SettingsScreen';
-import { VideoModal } from './components/VideoModal';
+import { MediaLightbox } from './components/MediaLightbox';
 import { nativeLoadTasks, nativeSaveTasks, nativeReadToken, nativeReadLlmConfig } from './utils/nativeBridge';
 import { resolveTaskMediaSource, toGalleryItem } from './utils/taskPresentation';
 
@@ -214,8 +214,8 @@ export default function App() {
         </ErrorBoundary>
       </div>
 
-      {/* Video Modal Player */}
-      <VideoModal
+      {/* Result media lightbox */}
+      <MediaLightbox
         item={selectedVideo}
         onClose={() => setSelectedVideo(null)}
         onReusePrompt={(promptText) => handleApplyPromptFromAgent(promptText)}
