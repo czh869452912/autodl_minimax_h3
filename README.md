@@ -1,6 +1,6 @@
 # AutoDL H3 视频生成 Android 客户端 (React Native + Media3)
 
-这是一个面向 Android 的 React Native/Expo 客户端，使用 `@assistant-ui/react-native` 提供 Prompt Agent 原生交互，并使用 AndroidX Media3 播放本地/远程视频。现有 `frontend/` WebView 页面保留作迁移期间的构建参考；新的统一 UI 入口位于 `mobile/`。
+这是一个面向 Android 的 React Native/Expo 客户端，使用 `@assistant-ui/react-native` 提供 Prompt Agent 交互，并使用 AndroidX Media3 播放本地/远程视频。`mobile/` 是当前迁移主线；`frontend/` 和根目录 WebView 仅保留作 `v1.0.0` 参考。
 
 ---
 
@@ -32,19 +32,18 @@
 
 ```text
 +-------------------------------------------------------------------+
-|               Android App (Native Container / APK)               |
+|               Android App (React Native / Expo APK)              |
 |                                                                   |
 |  +-------------------------------------------------------------+  |
-|  |           WebView (加载本地 Assets 编译出的 H5 网页)          |  |
-|  |  frontend/ (React 19 + TypeScript + Tailwind CSS)            |  |
+|  |  Expo Router + native screens                              |  |
+|  |  SQLite task/media index · SecureStore · assistant-ui       |  |
 |  +------------------------------|------------------------------+  |
-|                                 | window.AndroidBridge            |
 |                                 v                                 |
 |  +-------------------------------------------------------------+  |
-|  | Native Bridge & Services (Java)                             |  |
-|  |  - KeystoreTokenStore   (安全加解密 Token / LLM Key)         |  |
-|  |  - AutoDLApiClient       (HTTP POST/GET 任务与轮询)          |  |
-|  |  - DownloadManagerHelper (自动下载 MP4 至 Movies/AutoDL-H3)   |  |
+|  | Native Android modules                                      |  |
+|  |  - Media3 ExoPlayer Activity (portrait-safe fullscreen)     |  |
+|  |  - Expo SecureStore (Android Keystore-backed secrets)       |  |
+|  |  - Expo FileSystem (app-private MP4 download/cache)         |  |
 |  +-------------------------------------------------------------+  |
 +-------------------------------------------------------------------+
 ```
@@ -73,7 +72,14 @@ npm ci --legacy-peer-deps
 npm start
 ```
 
-`mobile/` 使用 Expo Router、assistant-ui Native、SQLite 媒体仓储和统一的 `VideoPlayer` 契约。Android 生产构建将 `VideoPlayer` 绑定到 Media3；非 Android/开发预览可使用 Expo Video 适配器。
+`mobile/` 使用 Expo Router、assistant-ui Native、SQLite 任务/媒体仓储和 Media3 Activity。设置、任务提交/轮询、下载缓存和 Gallery 均由 RN 主线负责；不再依赖 `window.AndroidBridge`。
+
+Android 构建：
+
+```bash
+cd mobile/android
+./gradlew :app:assembleDebug -PreactNativeArchitectures=arm64-v8a
+```
 
 ### 方式 1：使用一键打包脚本（推荐）
 

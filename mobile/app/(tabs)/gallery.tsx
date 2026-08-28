@@ -2,12 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { openDatabaseSync } from 'expo-sqlite';
 import { GalleryCard } from '../../src/media/GalleryCard';
-import { createSqliteMediaStore } from '../../src/media/repository';
 import { openNativeVideo } from '../../src/native/media';
+import { createTaskRepository } from '../../src/tasks/repository';
 import type { MediaAsset } from '../../src/media/types';
 
 const database = openDatabaseSync('autodl-h3.db');
-const mediaStore = createSqliteMediaStore(database);
+const taskStore = createTaskRepository(database);
 
 export default function GalleryScreen() {
   const [query, setQuery] = useState('');
@@ -16,7 +16,10 @@ export default function GalleryScreen() {
   const [loading, setLoading] = useState(true);
   const loadAssets = useCallback(async () => {
     setLoading(true);
-    try { setAssets(await mediaStore.list({ query })); } finally { setLoading(false); }
+    try {
+      const tasks = await taskStore.list();
+      setAssets(tasks.filter((task) => task.status === 'SUCCESS').filter((task) => `${task.prompt} ${task.id}`.toLowerCase().includes(query.toLowerCase())).map((task) => ({ id: task.id, taskId: task.id, title: task.prompt.slice(0, 48) || task.id, prompt: task.prompt, sourceUrl: task.videoUrl || '', localPath: task.localUri, posterPath: task.thumbnailUrl, mimeType: 'video/mp4', durationMs: task.duration * 1000, status: 'downloaded' as const, createdAt: task.createdAt, updatedAt: task.updatedAt })));
+    } finally { setLoading(false); }
   }, [query]);
   useEffect(() => { void loadAssets(); }, [loadAssets]);
   const items = useMemo(() => assets, [assets]);

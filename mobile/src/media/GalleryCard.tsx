@@ -1,11 +1,16 @@
 import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo } from 'react';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import type { MediaAsset } from './types';
 
 export function GalleryCard({ asset, onPress }: { asset: MediaAsset; onPress: () => void }) {
+  const source = asset.localPath || asset.sourceUrl;
+  const player = useVideoPlayer(source ? source : null, (instance) => { instance.muted = true; });
+  const poster = useMemo(() => asset.posterPath, [asset.posterPath]);
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`打开视频 ${asset.title}`} onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-      {asset.posterPath ? <Image source={{ uri: asset.posterPath }} style={styles.poster} resizeMode="cover" /> : <View style={styles.posterFallback}><Text style={styles.fallbackText}>视频就绪</Text></View>}
+      {poster ? <Image source={{ uri: poster }} style={styles.poster} resizeMode="cover" /> : player ? <VideoView player={player} nativeControls={false} contentFit="cover" useExoShutter style={styles.poster} /> : <View style={styles.posterFallback}><Text style={styles.fallbackText}>{asset.sourceUrl || asset.localPath ? '正在准备首帧…' : '视频就绪'}</Text></View>}
       <View style={styles.footer}><Text numberOfLines={1} style={styles.title}>{asset.title || asset.taskId}</Text><Text style={styles.meta}>{asset.durationMs ? `${Math.round(asset.durationMs / 1000)}s` : '—'} · {asset.status}</Text></View>
     </Pressable>
   );

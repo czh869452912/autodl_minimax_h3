@@ -8,20 +8,19 @@ import {
   useLocalRuntime,
   type ChatModelAdapter,
 } from '@assistant-ui/react-native';
+import { readSettings } from '../../src/settings/storage';
 
 const adapter: ChatModelAdapter = {
   async *run({ messages }) {
-    const endpoint = process.env.EXPO_PUBLIC_CHAT_ENDPOINT_URL;
-    const latest = messages[messages.length - 1];
-    const text = latest?.content?.filter((part) => part.type === 'text').map((part) => part.text).join('') ?? '';
-    if (!endpoint) {
-      yield { content: [{ type: 'text', text: `已收到：${text}\n\n请在设置中配置 EXPO_PUBLIC_CHAT_ENDPOINT_URL 以连接 H3 Agent。` }] };
-      return;
-    }
-    const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages }) });
+    const settings = await readSettings();
+    if (!settings.apiKey) throw new Error('请先在设置中配置 LLM API Key。');
+    const endpoint = settings.endpoint.replace(/\/$/, '') + '/chat/completions';
+    const apiMessages = messages.map((message) => ({ role: message.role, content: message.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n') }));
+    const response = await fetch(endpoint, { method: 'POST', headers: { Authorization: `Bearer ${settings.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: settings.model, messages: [{ role: 'system', content: '你是 MiniMax H3 视频 Prompt 助手。将用户意图整理为清晰、连续、可执行的镜头、动作、声音和风格描述；保留用户明确提供的台词。' }, ...apiMessages] }) });
     if (!response.ok) throw new Error(`Agent 请求失败（${response.status}）`);
-    const payload = await response.json() as { text?: string; message?: string };
-    yield { content: [{ type: 'text', text: payload.text || payload.message || '服务端未返回文本。' }] };
+    const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }>; error?: { message?: string } };
+    if (payload.error?.message) throw new Error(payload.error.message);
+    yield { content: [{ type: 'text', text: payload.choices?.[0]?.message?.content || '服务端未返回文本。' }] };
   },
 };
 
