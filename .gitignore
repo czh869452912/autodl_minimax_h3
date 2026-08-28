@@ -1,6 +1,8 @@
 .gradle/
 **/build/
 mobile/node_modules/
+server/node_modules/
+server/.env
 mobile/android/local.properties
 *.iml
 *.log
