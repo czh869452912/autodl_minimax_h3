@@ -4,19 +4,21 @@ const LEGACY_STORAGE_KEY = "h3-prompt-assistant-thread";
 const STORAGE_INDEX_KEY = "h3-prompt-assistant-threads-index";
 const STORAGE_THREAD_PREFIX = "h3-prompt-assistant-thread:";
 const STORAGE_ACTIVE_KEY = "h3-prompt-assistant-active-thread";
-const VERSION = 1;
+const VERSION = 2;
 
 export type StoredThreadSummary = {
   threadId: string;
   title: string;
+  createdAt: number;
   updatedAt: number;
   messageCount: number;
 };
 
 export type StoredThread = {
-  version: 1;
+  version: 2;
   threadId: string;
   title?: string;
+  createdAt: number;
   messages: ThreadMessageLike[];
   finalPrompt: string | null;
   updatedAt: number;
@@ -96,6 +98,7 @@ export function listThreads(): StoredThreadSummary[] {
       const summary: StoredThreadSummary = {
         threadId: legacy.threadId,
         title: extractThreadTitle(legacy.messages),
+        createdAt: legacy.createdAt,
         updatedAt: legacy.updatedAt || Date.now(),
         messageCount: legacy.messages.length,
       };
@@ -109,7 +112,9 @@ export function listThreads(): StoredThreadSummary[] {
   try {
     const list = JSON.parse(raw) as StoredThreadSummary[];
     if (!Array.isArray(list)) return [];
-    return list.sort((a, b) => b.updatedAt - a.updatedAt);
+    return list
+      .filter((item) => item && typeof item.threadId === "string" && typeof item.createdAt === "number")
+      .sort(sortByCreationTime);
   } catch {
     return [];
   }
@@ -127,18 +132,25 @@ function saveThreadToKey(threadId: string, record: StoredThread): void {
   storage().setItem(`${STORAGE_THREAD_PREFIX}${threadId}`, JSON.stringify(record));
 }
 
+function sortByCreationTime(a: StoredThreadSummary, b: StoredThreadSummary): number {
+  return b.createdAt - a.createdAt || b.updatedAt - a.updatedAt;
+}
+
 function loadLegacyThread(): StoredThread | null {
   try {
     const raw = storage().getItem(LEGACY_STORAGE_KEY);
     if (!raw) return null;
     const value = JSON.parse(raw.replace(/^\uFEFF/, "").trim()) as Partial<StoredThread>;
-    if (value.version !== VERSION || typeof value.threadId !== "string" || !Array.isArray(value.messages)) {
+    if (value.version !== VERSION || typeof value.threadId !== "string" || typeof value.createdAt !== "number" || !Array.isArray(value.messages)) {
       throw new Error("invalid schema");
     }
     return {
       version: VERSION,
       threadId: value.threadId,
       title: value.title || extractThreadTitle(value.messages),
+      createdAt: typeof value.createdAt === "number"
+        ? value.createdAt
+        : 0,
       messages: value.messages,
       finalPrompt: typeof value.finalPrompt === "string" ? value.finalPrompt : null,
       updatedAt: typeof value.updatedAt === "number" ? value.updatedAt : Date.now(),
@@ -155,11 +167,14 @@ export function saveThread(input: Pick<StoredThread, "threadId" | "messages"> & 
   const sanitizedMessages = input.messages.map(sanitizeMessage);
   const title = input.title || extractThreadTitle(sanitizedMessages);
   const now = Date.now();
+  const existing = loadThread(input.threadId);
+  const createdAt = existing?.createdAt ?? now;
 
   const record: StoredThread = {
     version: VERSION,
     threadId: input.threadId,
     title,
+    createdAt,
     messages: sanitizedMessages,
     finalPrompt: input.finalPrompt ?? null,
     updatedAt: now,
@@ -176,6 +191,7 @@ export function saveThread(input: Pick<StoredThread, "threadId" | "messages"> & 
     currentList.unshift({
       threadId: input.threadId,
       title,
+      createdAt,
       updatedAt: now,
       messageCount: sanitizedMessages.length,
     });
@@ -204,13 +220,16 @@ export function loadThread(threadId?: string): StoredThread | null {
 
   try {
     const value = JSON.parse(raw.replace(/^\uFEFF/, "").trim()) as Partial<StoredThread>;
-    if (value.version !== VERSION || typeof value.threadId !== "string" || !Array.isArray(value.messages)) {
+    if (value.version !== VERSION || typeof value.threadId !== "string" || typeof value.createdAt !== "number" || !Array.isArray(value.messages)) {
       throw new Error("invalid schema");
     }
     return {
       version: VERSION,
       threadId: value.threadId,
       title: value.title || extractThreadTitle(value.messages),
+      createdAt: typeof value.createdAt === "number"
+        ? value.createdAt
+        : 0,
       messages: value.messages,
       finalPrompt: typeof value.finalPrompt === "string" ? value.finalPrompt : null,
       updatedAt: typeof value.updatedAt === "number" ? value.updatedAt : 0,

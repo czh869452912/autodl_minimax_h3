@@ -99,6 +99,7 @@ const UserImageAttachment: React.FC = () => {
 const IntermediateProcess: React.FC = () => {
   const aui = useAui();
   const collapsed = useAuiState((state) => state.chainOfThought.collapsed);
+  const autoCollapsedRef = useRef(false);
   const finalOutputStarted = useAuiState((state) => {
     const parts = state.message.parts;
     const hasText = parts.some((part) => part.type === "text" && part.text.trim().length > 0);
@@ -106,7 +107,10 @@ const IntermediateProcess: React.FC = () => {
   });
 
   useEffect(() => {
-    aui.chainOfThought.setCollapsed(finalOutputStarted);
+    if (finalOutputStarted && !autoCollapsedRef.current) {
+      autoCollapsedRef.current = true;
+      aui.chainOfThought.setCollapsed(true);
+    }
   }, [aui, finalOutputStarted]);
 
   return (
@@ -115,7 +119,7 @@ const IntermediateProcess: React.FC = () => {
         <span>{collapsed ? "展开中间过程" : "中间过程"}</span>
         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${collapsed ? "" : "rotate-180"}`} />
       </ChainOfThoughtPrimitive.AccordionTrigger>
-      {!collapsed && <ChainOfThoughtPrimitive.Parts
+      <ChainOfThoughtPrimitive.Parts
           components={{
             Reasoning: ({ text }) => <MarkdownRenderer content={text} />,
             tools: {
@@ -128,7 +132,7 @@ const IntermediateProcess: React.FC = () => {
             },
             Layout: ({ children }) => <div className="space-y-2 border-t border-slate-800/60 px-3 py-2 text-slate-400">{children}</div>,
           }}
-        />}
+        />
     </ChainOfThoughtPrimitive.Root>
   );
 };

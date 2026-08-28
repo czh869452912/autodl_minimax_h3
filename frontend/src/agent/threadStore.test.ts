@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { deleteThread, listThreads, loadThread, saveThread } from "./threadStore";
 
 if (!globalThis.localStorage) {
@@ -95,5 +95,24 @@ describe("local prompt assistant thread store", () => {
     deleteThread("thread-b");
     expect(listThreads().length).toBe(1);
     expect(listThreads()[0].threadId).toBe("thread-a");
+  });
+
+  it("keeps thread order based on creation time when an older thread is reopened", () => {
+    const now = vi.spyOn(Date, "now")
+      .mockReturnValueOnce(1000)
+      .mockReturnValueOnce(2000)
+      .mockReturnValueOnce(3000);
+    try {
+      saveThread({ threadId: "thread-old", messages: [] });
+      saveThread({ threadId: "thread-new", messages: [] });
+      saveThread({ threadId: "thread-old", messages: [] });
+
+      expect(listThreads().map((thread) => thread.threadId)).toEqual([
+        "thread-new",
+        "thread-old",
+      ]);
+    } finally {
+      now.mockRestore();
+    }
   });
 });
