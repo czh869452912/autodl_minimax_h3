@@ -133,14 +133,22 @@ function StandardThread({
 }) {
   const messages = useAuiState((state) => state.thread.messages);
   const isRunning = useAuiState((state) => state.thread.isRunning);
+  const prevMessagesRef = React.useRef<string>("");
+  const onThreadUpdatedRef = React.useRef(onThreadUpdated);
+  onThreadUpdatedRef.current = onThreadUpdated;
 
   useEffect(() => {
+    if (!messages || messages.length === 0) return;
+    const serialized = JSON.stringify(messages.map((m) => ({ id: m.id, role: m.role, content: m.content })));
+    if (serialized === prevMessagesRef.current) return;
+    prevMessagesRef.current = serialized;
+
     saveThread({
       threadId,
       messages: messages.map((message) => ({ id: message.id, role: message.role, content: message.content })),
     });
-    onThreadUpdated();
-  }, [messages, threadId, onThreadUpdated]);
+    onThreadUpdatedRef.current?.();
+  }, [messages, threadId]);
 
   return (
     <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-950">
@@ -231,13 +239,15 @@ function ActiveThreadContainer({
     model: llmConfig.llmModel || "",
   }), [llmConfig.llmApiKey, llmConfig.llmEndpoint, llmConfig.llmModel]);
 
+  const attachmentAdapters = useMemo(() => new CompositeAttachmentAdapter([
+    new SimpleImageAttachmentAdapter(),
+    new SimpleTextAttachmentAdapter(),
+  ]), []);
+
   const runtime = useLocalRuntime(adapter, {
     initialMessages: currentThreadData?.messages,
     adapters: {
-      attachments: new CompositeAttachmentAdapter([
-        new SimpleImageAttachmentAdapter(),
-        new SimpleTextAttachmentAdapter(),
-      ]),
+      attachments: attachmentAdapters,
     },
   });
 
@@ -253,9 +263,9 @@ export function H3PromptResult({ llmConfig }: H3PromptResultProps) {
   const [threads, setThreads] = useState<StoredThreadSummary[]>(() => listThreads());
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  const refreshThreads = () => {
+  const refreshThreads = React.useCallback(() => {
     setThreads(listThreads());
-  };
+  }, []);
 
   const handleSelectThread = (id: string) => {
     setActiveThreadId(id);
