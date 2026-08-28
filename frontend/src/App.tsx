@@ -8,7 +8,7 @@ import { TasksScreen } from './components/TasksScreen';
 import { GalleryScreen } from './components/GalleryScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { VideoModal } from './components/VideoModal';
-import { nativeLoadTasks, nativeSaveTasks, nativeReadToken } from './utils/nativeBridge';
+import { nativeLoadTasks, nativeSaveTasks, nativeReadToken, nativeReadLlmConfig } from './utils/nativeBridge';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -63,11 +63,15 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('create');
   const [tasks, setTasks] = useState<VideoTask[]>([]);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
-  const [settings, setSettings] = useState<AppSettings>({
-    token: nativeReadToken() || '',
-    llmApiKey: '',
-    llmEndpoint: '',
-    theme: 'dark'
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    const initialLlm = nativeReadLlmConfig();
+    return {
+      token: nativeReadToken() || '',
+      llmApiKey: initialLlm.apiKey || '',
+      llmEndpoint: initialLlm.endpoint || 'https://api.minimaxi.com/v1',
+      llmModel: initialLlm.model || 'MiniMax-M2.7',
+      theme: 'dark'
+    };
   });
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [initialCreatePrompt, setInitialCreatePrompt] = useState<string>('');

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { loadThread, saveThread } from "./threadStore";
+import { deleteThread, listThreads, loadThread, saveThread } from "./threadStore";
 
 if (!globalThis.localStorage) {
   const values = new Map<string, string>();
@@ -44,5 +44,27 @@ describe("local prompt assistant thread store", () => {
     const value = localStorage.getItem("h3-prompt-assistant-thread");
     localStorage.setItem("h3-prompt-assistant-thread", `\uFEFF${value}`);
     expect(loadThread()?.threadId).toBe("thread-bom");
+  });
+
+  it("manages multiple threads, auto-generates title, lists and deletes threads", () => {
+    saveThread({
+      threadId: "thread-a",
+      messages: [{ role: "user", content: [{ type: "text", text: "生成一段产品广告提示词" }] } as any],
+    });
+    saveThread({
+      threadId: "thread-b",
+      messages: [{ role: "user", content: "制作赛博朋克手绘视频" } as any],
+    });
+
+    const list = listThreads();
+    expect(list.length).toBe(2);
+    expect(list[0].threadId).toBe("thread-b");
+    expect(list[0].title).toContain("制作赛博朋克手绘视频");
+
+    expect(loadThread("thread-a")?.title).toContain("生成一段产品广告提示词");
+
+    deleteThread("thread-b");
+    expect(listThreads().length).toBe(1);
+    expect(listThreads()[0].threadId).toBe("thread-a");
   });
 });

@@ -1,17 +1,40 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   AssistantRuntimeProvider,
+  AttachmentPrimitive,
   ComposerPrimitive,
+  CompositeAttachmentAdapter,
   MessagePrimitive,
   SimpleImageAttachmentAdapter,
+  SimpleTextAttachmentAdapter,
   ThreadPrimitive,
   useAuiState,
   useLocalRuntime,
 } from "@assistant-ui/react";
-import { Copy, Check, RotateCcw, ArrowUp, Square } from "lucide-react";
+import {
+  ArrowUp,
+  Square,
+  Plus,
+  MessageSquare,
+  Trash2,
+  Paperclip,
+  Image as ImageIcon,
+  FileText,
+  X,
+  History,
+} from "lucide-react";
 import type { AppSettings } from "../types";
 import { createH3ChatModelAdapter } from "../agent/assistantAdapter";
-import { loadThread, saveThread } from "../agent/threadStore";
+import {
+  createNewThreadId,
+  deleteThread,
+  getActiveThreadId,
+  listThreads,
+  loadThread,
+  saveThread,
+  setActiveThreadId,
+  type StoredThreadSummary,
+} from "../agent/threadStore";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 
 interface H3PromptResultProps {
@@ -21,11 +44,22 @@ interface H3PromptResultProps {
 
 const UserMessageComponent: React.FC = () => {
   return (
-    <div className="flex justify-end mb-4">
-      <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-indigo-600 px-4 py-2.5 text-sm text-white shadow-sm">
+    <div className="mb-4 flex justify-end">
+      <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-indigo-600 px-4 py-2.5 text-sm text-white shadow-md">
         <MessagePrimitive.Parts
           components={{
             Text: ({ text }) => <p className="whitespace-pre-wrap leading-relaxed">{text}</p>,
+            Image: ({ image, filename }) => (
+              <div className="my-2 max-w-xs overflow-hidden rounded-xl border border-indigo-400/40 bg-indigo-950/50 shadow-inner">
+                <img src={image} className="max-h-60 w-full object-cover" alt={filename || "用户上传图片"} />
+              </div>
+            ),
+            File: ({ filename, mimeType }) => (
+              <div className="my-1 inline-flex items-center gap-1.5 rounded-lg border border-indigo-400/30 bg-indigo-950/40 px-2.5 py-1 text-xs text-indigo-100">
+                <FileText className="h-3.5 w-3.5" />
+                <span>{filename || mimeType || "文件附件"}</span>
+              </div>
+            ),
           }}
         />
       </div>
@@ -34,20 +68,29 @@ const UserMessageComponent: React.FC = () => {
 };
 
 const AssistantMessageComponent: React.FC = () => {
-  const [copied, setCopied] = useState(false);
-
   return (
-    <div className="flex flex-col gap-2 mb-6">
+    <div className="mb-6 flex flex-col gap-2">
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs text-white font-bold shadow-sm">
+        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white shadow-sm">
           AI
         </div>
-        <span>Assistant</span>
+        <span>Prompt 助手</span>
       </div>
       <div className="rounded-2xl rounded-tl-sm border border-slate-800 bg-slate-900/90 p-4 text-sm text-slate-200 shadow-md">
         <MessagePrimitive.Parts
           components={{
             Text: ({ text }) => <MarkdownRenderer content={text} />,
+            Image: ({ image, filename }) => (
+              <div className="my-2 max-w-sm overflow-hidden rounded-xl border border-slate-700 bg-slate-950 shadow-md">
+                <img src={image} className="max-h-64 w-full object-contain" alt={filename || "参考图片"} />
+              </div>
+            ),
+            File: ({ filename, mimeType }) => (
+              <div className="my-1.5 inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-1.5 text-xs text-slate-200">
+                <FileText className="h-4 w-4 text-indigo-400" />
+                <span className="font-mono">{filename || mimeType || "附件文件"}</span>
+              </div>
+            ),
             tools: {
               Fallback: ({ toolName }) => (
                 <div className="my-2 flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 font-mono text-xs text-slate-300">
@@ -81,29 +124,35 @@ const MessageItem: React.FC = () => {
   );
 };
 
-function StandardThread({ savedThread }: { savedThread: ReturnType<typeof loadThread> }) {
+function StandardThread({
+  threadId,
+  onThreadUpdated,
+}: {
+  threadId: string;
+  onThreadUpdated: () => void;
+}) {
   const messages = useAuiState((state) => state.thread.messages);
   const isRunning = useAuiState((state) => state.thread.isRunning);
 
   useEffect(() => {
-    const threadId = savedThread?.threadId || "h3-prompt-assistant";
     saveThread({
       threadId,
       messages: messages.map((message) => ({ id: message.id, role: message.role, content: message.content })),
     });
-  }, [messages, savedThread?.threadId]);
+    onThreadUpdated();
+  }, [messages, threadId, onThreadUpdated]);
 
   return (
-    <ThreadPrimitive.Root className="flex h-[min(72vh,740px)] min-h-[500px] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl">
-      <ThreadPrimitive.Viewport className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-6" autoScroll>
+    <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-950">
+      <ThreadPrimitive.Viewport className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6" autoScroll>
         {messages.length === 0 && (
-          <div className="flex h-full flex-col items-center justify-center text-center px-4">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600/20 text-2xl text-indigo-400 border border-indigo-500/30 shadow-inner">
+          <div className="flex h-full flex-col items-center justify-center px-4 text-center">
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-500/30 bg-indigo-600/20 text-xl text-indigo-400 shadow-inner">
               ✨
             </div>
-            <h2 className="text-lg font-bold text-slate-100 mb-1">欢迎使用 Prompt 助手</h2>
-            <p className="text-xs text-slate-400 max-w-sm mb-6">
-              在下方输入您的创作想法或场景描述，AI 将自主调用官方技能库为您撰写和优化视频生成提示词。
+            <h2 className="mb-1 text-base font-bold text-slate-100">欢迎使用 Prompt 助手</h2>
+            <p className="max-w-sm text-xs leading-relaxed text-slate-400">
+              您可以输入视频场景构想，或上传参考图片、脚本文件，AI 将自主阅读官方技能库为您撰写和迭代精准提示词。
             </p>
           </div>
         )}
@@ -115,19 +164,46 @@ function StandardThread({ savedThread }: { savedThread: ReturnType<typeof loadTh
       </ThreadPrimitive.Viewport>
 
       <ComposerPrimitive.Root className="border-t border-slate-800/80 bg-slate-900/90 p-3">
-        <div className="relative flex items-end gap-2 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 focus-within:border-indigo-500 transition-colors">
+        {/* Attachment Previews */}
+        <div className="mb-2 flex flex-wrap gap-2">
+          <ComposerPrimitive.Attachments
+            components={{
+              Attachment: () => (
+                <AttachmentPrimitive.Root className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-slate-800 px-2.5 py-1 text-xs text-slate-200 shadow-sm">
+                  <Paperclip className="h-3.5 w-3.5 text-indigo-400" />
+                  <span className="max-w-[140px] truncate text-[11px]">
+                    <AttachmentPrimitive.Name />
+                  </span>
+                  <AttachmentPrimitive.Remove className="ml-1 text-slate-400 transition-colors hover:text-red-400 cursor-pointer">
+                    <X className="h-3 w-3" />
+                  </AttachmentPrimitive.Remove>
+                </AttachmentPrimitive.Root>
+              ),
+            }}
+          />
+        </div>
+
+        <div className="relative flex items-end gap-2 rounded-xl border border-slate-700 bg-slate-950 px-2.5 py-2 transition-colors focus-within:border-indigo-500">
+          <ComposerPrimitive.AddAttachment
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-800 hover:text-indigo-300 cursor-pointer"
+            title="上传图片或文件"
+          >
+            <Paperclip className="h-4 w-4" />
+          </ComposerPrimitive.AddAttachment>
+
           <ComposerPrimitive.Input
-            className="max-h-32 min-h-12 flex-1 resize-none bg-transparent text-sm text-slate-100 placeholder-slate-500 outline-none leading-relaxed"
-            placeholder="输入消息，按 Enter 发送..."
+            className="max-h-32 min-h-8 flex-1 resize-none bg-transparent py-1 text-sm leading-relaxed text-slate-100 placeholder-slate-500 outline-none"
+            placeholder="输入创作构想或上传参考图，按 Enter 发送..."
             submitMode="enter"
           />
+
           <div className="flex items-center gap-1">
             {isRunning ? (
-              <ComposerPrimitive.Cancel className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors">
+              <ComposerPrimitive.Cancel className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-600 text-white transition-colors hover:bg-red-500">
                 <Square className="h-3.5 w-3.5 fill-current" />
               </ComposerPrimitive.Cancel>
             ) : (
-              <ComposerPrimitive.Send className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              <ComposerPrimitive.Send className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40">
                 <ArrowUp className="h-4 w-4" />
               </ComposerPrimitive.Send>
             )}
@@ -136,10 +212,19 @@ function StandardThread({ savedThread }: { savedThread: ReturnType<typeof loadTh
       </ComposerPrimitive.Root>
     </ThreadPrimitive.Root>
   );
-}
+};
 
-export function H3PromptResult({ llmConfig }: H3PromptResultProps) {
-  const savedThread = useMemo(() => loadThread(), []);
+function ActiveThreadContainer({
+  threadId,
+  llmConfig,
+  onThreadUpdated,
+}: {
+  threadId: string;
+  llmConfig: Pick<AppSettings, "llmApiKey" | "llmEndpoint" | "llmModel">;
+  onThreadUpdated: () => void;
+}) {
+  const currentThreadData = useMemo(() => loadThread(threadId), [threadId]);
+
   const adapter = useMemo(() => createH3ChatModelAdapter({
     apiKey: llmConfig.llmApiKey || "",
     endpoint: llmConfig.llmEndpoint || "",
@@ -147,9 +232,58 @@ export function H3PromptResult({ llmConfig }: H3PromptResultProps) {
   }), [llmConfig.llmApiKey, llmConfig.llmEndpoint, llmConfig.llmModel]);
 
   const runtime = useLocalRuntime(adapter, {
-    initialMessages: savedThread?.messages,
-    adapters: { attachments: new SimpleImageAttachmentAdapter() },
+    initialMessages: currentThreadData?.messages,
+    adapters: {
+      attachments: new CompositeAttachmentAdapter([
+        new SimpleImageAttachmentAdapter(),
+        new SimpleTextAttachmentAdapter(),
+      ]),
+    },
   });
+
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <StandardThread threadId={threadId} onThreadUpdated={onThreadUpdated} />
+    </AssistantRuntimeProvider>
+  );
+}
+
+export function H3PromptResult({ llmConfig }: H3PromptResultProps) {
+  const [activeThreadId, setActiveThreadState] = useState<string>(() => getActiveThreadId());
+  const [threads, setThreads] = useState<StoredThreadSummary[]>(() => listThreads());
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  const refreshThreads = () => {
+    setThreads(listThreads());
+  };
+
+  const handleSelectThread = (id: string) => {
+    setActiveThreadId(id);
+    setActiveThreadState(id);
+    setIsDrawerOpen(false);
+  };
+
+  const handleCreateNewThread = () => {
+    const newId = createNewThreadId();
+    setActiveThreadId(newId);
+    setActiveThreadState(newId);
+    refreshThreads();
+    setIsDrawerOpen(false);
+  };
+
+  const handleDeleteThread = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    deleteThread(id);
+    const updated = listThreads();
+    setThreads(updated);
+    if (activeThreadId === id) {
+      const nextId = updated.length > 0 ? updated[0].threadId : createNewThreadId();
+      setActiveThreadId(nextId);
+      setActiveThreadState(nextId);
+    }
+  };
+
+  const activeSummary = threads.find((t) => t.threadId === activeThreadId);
 
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
 
@@ -162,13 +296,109 @@ export function H3PromptResult({ llmConfig }: H3PromptResultProps) {
   }, [llmConfig.llmApiKey, llmConfig.llmEndpoint, llmConfig.llmModel]);
 
   return (
-    <AssistantRuntimeProvider runtime={runtime}>
+    <div className="flex h-[min(76vh,780px)] min-h-[520px] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl">
+      {/* Top Conversation Header & Controls */}
+      <div className="flex items-center justify-between border-b border-slate-800/80 bg-slate-900/90 px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsDrawerOpen((prev) => !prev)}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/70 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:border-indigo-500/50 hover:bg-slate-800"
+            title="查看历史对话列表"
+          >
+            <History className="h-3.5 w-3.5 text-indigo-400" />
+            <span className="max-w-[130px] truncate">{activeSummary?.title || "当前对话"}</span>
+            <span className="rounded bg-indigo-500/20 px-1 text-[10px] text-indigo-300 font-mono">
+              {threads.length}
+            </span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleCreateNewThread}
+            className="flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-indigo-500 active:scale-95"
+            title="开启新对话"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>新对话</span>
+          </button>
+        </div>
+      </div>
+
+      {/* History Drawer / Modal */}
+      {isDrawerOpen && (
+        <div className="border-b border-slate-800 bg-slate-900/95 p-3 shadow-xl backdrop-blur">
+          <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-300">
+            <span className="flex items-center gap-1.5">
+              <MessageSquare className="h-3.5 w-3.5 text-indigo-400" />
+              对话记录 ({threads.length})
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsDrawerOpen(false)}
+              className="text-slate-400 transition-colors hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="max-h-52 space-y-1.5 overflow-y-auto pr-1">
+            {threads.length === 0 ? (
+              <p className="py-3 text-center text-xs text-slate-500">暂无历史对话记录</p>
+            ) : (
+              threads.map((t) => {
+                const isActive = t.threadId === activeThreadId;
+                return (
+                  <div
+                    key={t.threadId}
+                    onClick={() => handleSelectThread(t.threadId)}
+                    className={`group flex items-center justify-between rounded-xl px-3 py-2 text-xs transition-colors cursor-pointer ${
+                      isActive
+                        ? "border border-indigo-500/40 bg-indigo-950/40 text-indigo-200"
+                        : "border border-transparent hover:bg-slate-800/80 text-slate-300"
+                    }`}
+                  >
+                    <div className="flex flex-1 items-center gap-2 overflow-hidden pr-2">
+                      <span className={`h-1.5 w-1.5 rounded-full ${isActive ? "bg-indigo-400" : "bg-slate-600"}`} />
+                      <span className="truncate font-medium">{t.title}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-500">
+                        {new Date(t.updatedAt).toLocaleDateString([], { month: "numeric", day: "numeric" })}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteThread(e, t.threadId)}
+                        className="rounded p-1 text-slate-500 opacity-80 transition-colors hover:bg-red-500/20 hover:text-red-300 group-hover:opacity-100"
+                        title="删除对话"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
       {runtimeError && (
-        <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+        <div className="m-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
           {runtimeError}
         </div>
       )}
-      <StandardThread savedThread={savedThread} />
-    </AssistantRuntimeProvider>
+
+      {/* Active Conversation Runtime */}
+      <ActiveThreadContainer
+        key={activeThreadId}
+        threadId={activeThreadId}
+        llmConfig={llmConfig}
+        onThreadUpdated={refreshThreads}
+      />
+    </div>
   );
 }
+
