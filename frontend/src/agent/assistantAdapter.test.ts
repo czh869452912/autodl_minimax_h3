@@ -1,10 +1,78 @@
 import { describe, expect, it, vi } from "vitest";
-import { createH3ChatModelAdapter } from "./assistantAdapter";
+import { createH3ChatModelAdapter, messageContent, toAgentMessages } from "./assistantAdapter";
 
 const streamH3AgentMock = vi.hoisted(() => vi.fn());
 vi.mock("./h3Agent", () => ({ streamH3Agent: streamH3AgentMock }));
 
 describe("assistant-ui local adapter", () => {
+  it("includes completed assistant-ui image attachments in the model message", () => {
+    const image = "data:image/png;base64,ZmFrZQ==";
+    const message = {
+      role: "user",
+      content: [{ type: "text", text: "用这张图生成提示词" }],
+      attachments: [{
+        id: "attachment-1",
+        type: "image",
+        name: "reference.png",
+        contentType: "image/png",
+        status: { type: "complete" },
+        content: [{ type: "image", image }],
+      }],
+    } as any;
+
+    expect(messageContent(message)).toEqual([
+      { type: "text", text: "用这张图生成提示词" },
+      { type: "image_url", image_url: { url: image } },
+    ]);
+    expect(toAgentMessages([message])).toEqual([{
+      role: "user",
+      content: [
+        { type: "text", text: "用这张图生成提示词" },
+        { type: "image_url", image_url: { url: image } },
+      ],
+    }]);
+  });
+
+  it("passes the image part through the adapter request sent to the agent", async () => {
+    streamH3AgentMock.mockReturnValue((async function* () {
+      yield { type: "text", delta: "收到图片" };
+    })());
+    const image = "data:image/jpeg;base64,anBlZw==";
+    const adapter = createH3ChatModelAdapter({ apiKey: "key", endpoint: "https://example.test/v1", model: "model" });
+    const stream = adapter.run({
+      messages: [{
+        role: "user",
+        content: [{ type: "text", text: "分析图片" }],
+        attachments: [{
+          id: "attachment-2",
+          type: "image",
+          name: "reference.jpg",
+          status: { type: "complete" },
+          content: [{ type: "image", image }],
+        }],
+      }] as any,
+      runConfig: {} as any,
+      abortSignal: new AbortController().signal,
+      context: {} as any,
+      unstable_threadId: "thread-image",
+      unstable_getMessage: () => ({ role: "user", content: [] } as any),
+    }) as AsyncGenerator<any>;
+    for await (const _update of stream) {
+      // consume the adapter stream so the agent request is made
+    }
+
+    expect(streamH3AgentMock).toHaveBeenCalledWith(expect.objectContaining({
+      threadId: "thread-image",
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: "分析图片" },
+          { type: "image_url", image_url: { url: image } },
+        ],
+      }],
+    }), expect.anything());
+  });
+
   it("maps local agent text and tool events into assistant-ui updates", async () => {
     streamH3AgentMock.mockReturnValue((async function* () {
       yield { type: "status", message: "Reading official H3 skills" };

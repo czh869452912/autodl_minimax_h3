@@ -9,6 +9,14 @@ describe("in-app H3 agent", () => {
     expect(isAssistantMessage({ type: "human" })).toBe(false);
     expect(isAssistantMessage({ role: "assistant" })).toBe(true);
     expect(isAssistantMessage({ type: "ai" })).toBe(true);
+    expect(isAssistantMessage({
+      id: ["langchain_core", "messages", "ToolMessage"],
+      kwargs: { content: "tool result" },
+    })).toBe(false);
+    expect(isAssistantMessage({
+      id: ["langchain_core", "messages", "AIMessage"],
+      kwargs: { content: "assistant result" },
+    })).toBe(true);
   });
 
   it("converts cumulative stream snapshots into suffix deltas", () => {
@@ -90,6 +98,7 @@ describe("in-app H3 agent", () => {
       expect.arrayContaining(["status", "tool-start", "tool-end", "text"]),
     );
     const textEvents = events.filter((e) => e.type === "text");
+    expect(textEvents.map((e) => e.delta)).not.toContain("制作一个纸艺微缩视频提示词");
     expect(textEvents.map((e) => e.delta).join("")).toContain("integrated_multimodal_description:");
   });
 });

@@ -2,18 +2,32 @@ import type { ChatModelAdapter, ChatModelRunOptions, ChatModelRunResult, ThreadM
 import { streamH3Agent } from "./h3Agent";
 import type { H3AgentConfig, H3AgentEvent } from "./agentTypes";
 
-function messageContent(message: ThreadMessage): unknown {
-  if (typeof message.content === "string") return message.content;
-  if (!Array.isArray(message.content)) return "";
-  return message.content.map((part) => {
+export function messageContent(message: ThreadMessage): unknown {
+  const contentParts = typeof message.content === "string"
+    ? [{ type: "text" as const, text: message.content }]
+    : Array.isArray(message.content) ? [...message.content] : [];
+  const attachmentParts = (message.attachments ?? []).flatMap((attachment) => attachment.content ?? []);
+  const parts = [...contentParts, ...attachmentParts];
+  if (parts.length === 0) return "";
+  if (parts.every((part) => part.type === "text")) {
+    return parts.map((part) => part.text).join("");
+  }
+  return parts.map((part) => {
     if (part.type === "text") return { type: "text", text: part.text };
     if (part.type === "image" && "image" in part) return { type: "image_url", image_url: { url: part.image } };
-    if (part.type === "file" && "url" in part) return { type: "file", url: part.url };
+    if (part.type === "file") {
+      return {
+        type: "file",
+        data: part.data,
+        mimeType: part.mimeType,
+        ...(part.filename ? { filename: part.filename } : {}),
+      };
+    }
     return null;
   }).filter(Boolean);
 }
 
-function toAgentMessages(messages: readonly ThreadMessage[]) {
+export function toAgentMessages(messages: readonly ThreadMessage[]) {
   return messages.map((message) => ({
     role: message.role,
     content: messageContent(message),

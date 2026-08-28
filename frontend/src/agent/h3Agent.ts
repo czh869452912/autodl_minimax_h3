@@ -46,6 +46,9 @@ export function isAssistantMessage(message: Record<string, unknown>): boolean {
   const kwargs = asChunk(message.kwargs);
   const role = message.role ?? kwargs.role;
   const type = message.type ?? kwargs.type;
+  const constructorId = Array.isArray(message.id) ? message.id.join("/") : String(message.id || "");
+  if (/HumanMessage|ToolMessage|SystemMessage/i.test(constructorId)) return false;
+  if (/AIMessage|AssistantMessage/i.test(constructorId)) return true;
   if (role === "user" || role === "human" || role === "system" || role === "tool") return false;
   if (type === "human" || type === "user" || type === "system" || type === "tool") return false;
   return role === "assistant" || role === "ai" || type === "assistant" || type === "ai" || (!role && !type);
@@ -141,11 +144,21 @@ function extractMessageToolCalls(msg: Record<string, unknown>): Array<{ id?: str
 async function* streamDeepAgent(agent: DeepAgent, input: H3AgentInput): AsyncGenerator<H3AgentEvent> {
   const lastTextByMessage = new Map<string, string>();
   let lastChunkText = "";
+  const emittedToolIds = new Set<string>();
+  const userText = new Set(input.messages.map((message) => {
+    const content = (message as { content?: unknown }).content;
+    if (typeof content === "string") return content.trim();
+    if (!Array.isArray(content)) return "";
+    return content.map((part) => typeof part === "string"
+      ? part
+      : String((part as { text?: unknown }).text || "")).join("").trim();
+  }).filter(Boolean));
   const stream = await agent.stream(
     { messages: input.messages as any, files: getOfficialH3SkillFiles() },
     {
       configurable: { thread_id: input.threadId },
       signal: input.signal,
+      streamMode: "messages",
     } as any,
   );
 
@@ -156,8 +169,11 @@ async function* streamDeepAgent(agent: DeepAgent, input: H3AgentInput): AsyncGen
       const chunk = asChunk(Array.isArray(item) ? item[0] : item);
       for (const call of chunkToolCalls(chunk)) {
         const id = call.id || crypto.randomUUID();
-        yield { type: "tool-start", id, name: String(call.name), args: call.args || {} };
-        yield { type: "tool-end", id };
+        if (!emittedToolIds.has(id)) {
+          emittedToolIds.add(id);
+          yield { type: "tool-start", id, name: String(call.name), args: call.args || {} };
+          yield { type: "tool-end", id };
+        }
       }
       const text = chunkText(chunk);
       const normalized = normalizeCumulativeText(lastChunkText, text);
@@ -169,9 +185,13 @@ async function* streamDeepAgent(agent: DeepAgent, input: H3AgentInput): AsyncGen
     for (const msg of messages) {
       if (!isAssistantMessage(msg)) continue;
       const toolCalls = extractMessageToolCalls(msg);
-      for (const call of toolCalls) {
-        yield { type: "tool-start", id: call.id || crypto.randomUUID(), name: call.name, args: call.args || {} };
-        yield { type: "tool-end", id: call.id || crypto.randomUUID() };
+      const messageKey = String(msg.id || (msg.kwargs as Record<string, unknown> | undefined)?.id || "assistant");
+      for (const [index, call] of toolCalls.entries()) {
+        const id = call.id || `${messageKey}:tool:${index}`;
+        if (emittedToolIds.has(id)) continue;
+        emittedToolIds.add(id);
+        yield { type: "tool-start", id, name: call.name, args: call.args || {} };
+        yield { type: "tool-end", id };
       }
       const isTool = (
         msg.type === "tool" ||
@@ -180,8 +200,7 @@ async function* streamDeepAgent(agent: DeepAgent, input: H3AgentInput): AsyncGen
         (msg.kwargs as Record<string, unknown> | undefined)?.tool_call_id !== undefined
       );
       const text = extractMessageContent(msg);
-      if (text && !isTool) {
-        const messageKey = String(msg.id || (msg.kwargs as Record<string, unknown> | undefined)?.id || "assistant");
+      if (text && !isTool && !(toolCalls.length > 0 && userText.has(text.trim()))) {
         const normalized = normalizeCumulativeText(lastTextByMessage.get(messageKey) || "", text);
         lastTextByMessage.set(messageKey, normalized.previous);
         if (normalized.delta) yield { type: "text", delta: normalized.delta };
