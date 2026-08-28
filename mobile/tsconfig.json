@@ -4,7 +4,8 @@
     "strict": true,
     "noEmit": true,
     "moduleResolution": "bundler",
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "types": ["jest", "react"]
   },
   "include": ["**/*.ts", "**/*.tsx"]
 }
