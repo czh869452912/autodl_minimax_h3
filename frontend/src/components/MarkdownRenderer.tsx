@@ -6,11 +6,31 @@ import { Check, Copy } from 'lucide-react';
 interface MarkdownRendererProps {
   content: string;
   onApplyPrompt?: (promptText: string) => void;
+  normalizeStructuredPrompt?: boolean;
+}
+
+export function ensureStructuredPromptCodeBlock(content: string): string {
+  if (content.includes("```")) return content;
+  const marker = /(^|\n)\s*integrated_multimodal_description\s*:/i.exec(content);
+  if (!marker || marker.index < 0) return content;
+
+  const markerStart = marker.index + marker[0].indexOf("integrated_multimodal_description");
+  const before = content.slice(0, markerStart).trimEnd();
+  const remainder = content.slice(markerStart);
+  const trailingHeading = /\n\s*(?:#{1,6}\s*)?(?:assumptions?|unresolved requirements|假设|未解决需求)\s*:?/i.exec(remainder);
+  const prompt = (trailingHeading ? remainder.slice(0, trailingHeading.index) : remainder).trim();
+  const after = trailingHeading ? remainder.slice(trailingHeading.index).trimStart() : "";
+  if (!prompt) return content;
+
+  const prefix = before ? `${before}\n\n` : "";
+  const suffix = after ? `\n\n${after}` : "";
+  return `${prefix}\`\`\`\n${prompt}\n\`\`\`${suffix}`;
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   onApplyPrompt,
+  normalizeStructuredPrompt = false,
 }) => {
   const [copiedCode, setCopiedCode] = useState(false);
 
@@ -81,7 +101,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           }
         }}
       >
-        {content}
+        {normalizeStructuredPrompt ? ensureStructuredPromptCodeBlock(content) : content}
       </ReactMarkdown>
     </div>
   );

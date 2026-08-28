@@ -119,17 +119,9 @@ const IntermediateProcess: React.FC = () => {
         <span>{collapsed ? "展开中间过程" : "中间过程"}</span>
         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${collapsed ? "" : "rotate-180"}`} />
       </ChainOfThoughtPrimitive.AccordionTrigger>
-      <ChainOfThoughtPrimitive.Parts
+        <ChainOfThoughtPrimitive.Parts
           components={{
             Reasoning: ({ text }) => <MarkdownRenderer content={text} />,
-            tools: {
-              Fallback: ({ toolName }) => (
-                <div className="my-2 flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 font-mono text-xs text-slate-300">
-                  <span className="inline-block animate-spin text-[11px]">⚙️</span>
-                  <span>Tool: <code className="text-indigo-300">{toolName}</code></span>
-                </div>
-              ),
-            },
             Layout: ({ children }) => <div className="space-y-2 border-t border-slate-800/60 px-3 py-2 text-slate-400">{children}</div>,
           }}
         />
@@ -138,6 +130,8 @@ const IntermediateProcess: React.FC = () => {
 };
 
 const AssistantMessageComponent: React.FC = () => {
+  const isRunning = useAuiState((state) => state.thread.isRunning);
+
   return (
     <div className="mb-6 flex flex-col gap-2">
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
@@ -149,7 +143,9 @@ const AssistantMessageComponent: React.FC = () => {
       <div className="rounded-2xl rounded-tl-sm border border-slate-800 bg-slate-900/90 p-4 text-sm text-slate-200 shadow-md">
         <MessagePrimitive.Parts
           components={{
-            Text: ({ text }) => <MarkdownRenderer content={text} />,
+            Text: ({ text }) => (
+              <MarkdownRenderer content={text} normalizeStructuredPrompt={!isRunning} />
+            ),
             Image: ({ image, filename }) => (
               <div className="my-2 max-w-sm overflow-hidden rounded-xl border border-slate-700 bg-slate-950 shadow-md">
                 <img src={image} className="max-h-64 w-full object-contain" alt={filename || "参考图片"} />

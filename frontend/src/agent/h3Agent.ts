@@ -9,7 +9,7 @@ const H3_SYSTEM_POLICY = [
   "Read the complete matching SKILL.md and referenced files through the filesystem tools before drafting.",
   "Iterate through multiple model and tool rounds when needed; do not use a fixed application template or skill branch table.",
   "This APK has no MiniMax Hub hub_* or canvas tools. If a selected skill requires them, return a clearly marked pre-production package and never claim final generation occurred.",
-  "Return the final H3 prompt with integrated_multimodal_description: clearly labeled, followed by assumptions and unresolved requirements.",
+  "Return the final H3 prompt in a fenced Markdown code block (use triple backticks) with integrated_multimodal_description: clearly labeled. Keep assumptions and unresolved requirements outside that code block.",
 ].join("\n");
 
 type AgentFactory = (config: H3AgentConfig) => DeepAgent;
