@@ -1,9 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { fakeModel } from "@langchain/core/testing";
 import { AIMessage } from "@langchain/core/messages";
-import { createH3Agent, streamH3Agent } from "./h3Agent";
+import { createH3Agent, normalizeCumulativeText, streamH3Agent } from "./h3Agent";
 
 describe("in-app H3 agent", () => {
+  it("converts cumulative stream snapshots into suffix deltas", () => {
+    expect(normalizeCumulativeText("", "read")).toEqual({ previous: "read", delta: "read" });
+    expect(normalizeCumulativeText("read", "read official")).toEqual({
+      previous: "read official",
+      delta: " official",
+    });
+    expect(normalizeCumulativeText("read official", "new segment")).toEqual({
+      previous: "new segment",
+      delta: "new segment",
+    });
+  });
+
   it("rejects an incomplete OpenAI-compatible configuration before a request", () => {
     expect(() => createH3Agent({ apiKey: "", endpoint: "https://example.test/v1", model: "test" }))
       .toThrow("LLM API key");

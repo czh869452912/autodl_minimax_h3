@@ -14,6 +14,14 @@ const H3_SYSTEM_POLICY = [
 
 type AgentFactory = (config: H3AgentConfig) => DeepAgent;
 
+export function normalizeCumulativeText(previous: string, next: string): { previous: string; delta: string } {
+  if (!next) return { previous, delta: "" };
+  if (previous && next.startsWith(previous)) {
+    return { previous: next, delta: next.slice(previous.length) };
+  }
+  return { previous: next, delta: next };
+}
+
 export type H3AgentDependencies = {
   modelFactory?: ModelFactory;
   agentFactory?: () => AsyncIterable<H3AgentEvent> | Promise<AsyncIterable<H3AgentEvent>>;
@@ -122,6 +130,8 @@ function extractMessageToolCalls(msg: Record<string, unknown>): Array<{ id?: str
 }
 
 async function* streamDeepAgent(agent: DeepAgent, input: H3AgentInput): AsyncGenerator<H3AgentEvent> {
+  const lastTextByMessage = new Map<string, string>();
+  let lastChunkText = "";
   const stream = await agent.stream(
     { messages: input.messages as any, files: getOfficialH3SkillFiles() },
     {
@@ -141,7 +151,9 @@ async function* streamDeepAgent(agent: DeepAgent, input: H3AgentInput): AsyncGen
         yield { type: "tool-end", id };
       }
       const text = chunkText(chunk);
-      if (text) yield { type: "text", delta: text };
+      const normalized = normalizeCumulativeText(lastChunkText, text);
+      lastChunkText = normalized.previous;
+      if (normalized.delta) yield { type: "text", delta: normalized.delta };
       continue;
     }
 
@@ -159,7 +171,10 @@ async function* streamDeepAgent(agent: DeepAgent, input: H3AgentInput): AsyncGen
       );
       const text = extractMessageContent(msg);
       if (text && !isTool) {
-        yield { type: "text", delta: text };
+        const messageKey = String(msg.id || (msg.kwargs as Record<string, unknown> | undefined)?.id || "assistant");
+        const normalized = normalizeCumulativeText(lastTextByMessage.get(messageKey) || "", text);
+        lastTextByMessage.set(messageKey, normalized.previous);
+        if (normalized.delta) yield { type: "text", delta: normalized.delta };
       }
     }
   }
