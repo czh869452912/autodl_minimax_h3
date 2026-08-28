@@ -20,7 +20,7 @@ describe('DeepAgents to AG-UI adapter', () => {
     const agent = new H3AgUiAgent(graph as any);
     const events = await collect(agent, {
       threadId: 'thread-1', runId: 'run-1', state: {}, messages: [{ id: 'user-1', role: 'user', content: '写 prompt' }],
-    } as RunAgentInput);
+    } as unknown as RunAgentInput);
     expect(events.map((event) => event.type)).toEqual([
       EventType.RUN_STARTED,
       EventType.TOOL_CALL_START,
@@ -32,5 +32,26 @@ describe('DeepAgents to AG-UI adapter', () => {
       EventType.RUN_FINISHED,
     ]);
     expect(events.find((event) => event.type === EventType.TEXT_MESSAGE_CONTENT).delta).toBe('完成');
+  });
+
+  it('converts cumulative DeepAgents message chunks into text deltas', async () => {
+    const graph = {
+      stream: async function* () {
+        yield [{ id: 'assistant-1', type: 'ai', content: '第' }];
+        yield [{ id: 'assistant-1', type: 'ai', content: '第二' }];
+      },
+    };
+    const events = await collect(new H3AgUiAgent(graph as any), {
+      threadId: 'thread-1', runId: 'run-2', state: {}, messages: [],
+    } as unknown as RunAgentInput);
+    expect(events.filter((event) => event.type === EventType.TEXT_MESSAGE_CONTENT).map((event) => event.delta)).toEqual(['第', '二']);
+  });
+
+  it('emits a visible AG-UI error event when the graph fails', async () => {
+    const graph = { stream: async function* () { throw new Error('provider unavailable'); } };
+    const events = await collect(new H3AgUiAgent(graph as any), {
+      threadId: 'thread-1', runId: 'run-3', state: {}, messages: [],
+    } as unknown as RunAgentInput);
+    expect(events.at(-1)).toMatchObject({ type: EventType.RUN_ERROR, message: 'provider unavailable' });
   });
 });

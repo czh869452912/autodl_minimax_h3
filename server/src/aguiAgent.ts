@@ -51,7 +51,11 @@ export class H3AgUiAgent extends AbstractAgent {
     return new Observable<BaseEvent>((subscriber) => {
       const abortController = new AbortController();
       this.abortController = abortController;
-      void this.runStream(input, abortController.signal, subscriber).catch((error) => subscriber.error(error));
+      void this.runStream(input, abortController.signal, subscriber).catch((error) => {
+        if (abortController.signal.aborted) return;
+        subscriber.next({ type: EventType.RUN_ERROR, message: error instanceof Error ? error.message : String(error) });
+        subscriber.complete();
+      });
       return () => abortController.abort();
     });
   }
@@ -68,6 +72,7 @@ export class H3AgUiAgent extends AbstractAgent {
     subscriber.next({ type: EventType.RUN_STARTED, threadId: input.threadId, runId: input.runId });
     const stream = await this.graph.stream({ messages: input.messages }, { configurable: { thread_id: input.threadId }, signal, streamMode: 'messages' });
     const openMessages = new Set<string>();
+    const previousText = new Map<string, string>();
     const completedTools = new Set<string>();
     for await (const item of stream) {
       if (signal.aborted) return;
@@ -99,12 +104,17 @@ export class H3AgUiAgent extends AbstractAgent {
             openMessages.add(`text:${id}`);
             subscriber.next({ type: EventType.TEXT_MESSAGE_START, messageId: id, role: 'assistant' });
           }
-          subscriber.next({ type: EventType.TEXT_MESSAGE_CONTENT, messageId: id, delta: text });
-          subscriber.next({ type: EventType.TEXT_MESSAGE_END, messageId: id });
+          const prior = previousText.get(id) ?? '';
+          const delta = text.startsWith(prior) ? text.slice(prior.length) : text;
+          previousText.set(id, text);
+          if (delta) subscriber.next({ type: EventType.TEXT_MESSAGE_CONTENT, messageId: id, delta });
         }
       }
     }
     if (!signal.aborted) {
+      for (const key of openMessages) {
+        if (key.startsWith('text:')) subscriber.next({ type: EventType.TEXT_MESSAGE_END, messageId: key.slice(5) });
+      }
       subscriber.next({ type: EventType.RUN_FINISHED, threadId: input.threadId, runId: input.runId, outcome: { type: 'success' } });
       subscriber.complete();
     }
