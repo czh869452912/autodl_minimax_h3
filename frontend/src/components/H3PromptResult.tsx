@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useRef, useCallback } from "react"
 import {
   AssistantRuntimeProvider,
   AttachmentPrimitive,
+  ChainOfThoughtPrimitive,
   ComposerPrimitive,
   CompositeAttachmentAdapter,
   MessagePrimitive,
@@ -22,9 +23,10 @@ import {
   FileText,
   X,
   History,
+  ChevronDown,
 } from "lucide-react";
 import type { AppSettings } from "../types";
-import { createH3ChatModelAdapter } from "../agent/assistantAdapter";
+import { createH3ChatModelAdapter, hasFinalOutputMarker } from "../agent/assistantAdapter";
 import {
   createNewThreadId,
   deleteThread,
@@ -68,6 +70,44 @@ const UserMessageComponent: React.FC = () => {
   );
 };
 
+const IntermediateProcess: React.FC = () => {
+  const aui = useAui();
+  const collapsed = useAuiState((state) => state.chainOfThought.collapsed);
+  const finalOutputStarted = useAuiState((state) => {
+    const parts = state.message.parts;
+    const hasFinalMarker = parts.some((part) => part.type === "text" && hasFinalOutputMarker(part.text));
+    const hasText = parts.some((part) => part.type === "text" && part.text.trim().length > 0);
+    return hasFinalMarker || (state.message.status?.type === "complete" && hasText);
+  });
+
+  useEffect(() => {
+    aui.chainOfThought.setCollapsed(finalOutputStarted);
+  }, [aui, finalOutputStarted]);
+
+  return (
+    <ChainOfThoughtPrimitive.Root className="mb-3 overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/50">
+      <ChainOfThoughtPrimitive.AccordionTrigger className="flex w-full items-center justify-between px-3 py-2 text-left text-xs text-slate-400 transition-colors hover:bg-slate-800/60 hover:text-slate-200">
+        <span>{collapsed ? "展开中间过程" : "中间过程"}</span>
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${collapsed ? "" : "rotate-180"}`} />
+      </ChainOfThoughtPrimitive.AccordionTrigger>
+      {!collapsed && <ChainOfThoughtPrimitive.Parts
+          components={{
+            Reasoning: ({ text }) => <MarkdownRenderer content={text} showCopy={false} />,
+            tools: {
+              Fallback: ({ toolName }) => (
+                <div className="my-2 flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 font-mono text-xs text-slate-300">
+                  <span className="inline-block animate-spin text-[11px]">⚙️</span>
+                  <span>Tool: <code className="text-indigo-300">{toolName}</code></span>
+                </div>
+              ),
+            },
+            Layout: ({ children }) => <div className="space-y-2 border-t border-slate-800/60 px-3 py-2 text-slate-400">{children}</div>,
+          }}
+        />}
+    </ChainOfThoughtPrimitive.Root>
+  );
+};
+
 const AssistantMessageComponent: React.FC = () => {
   return (
     <div className="mb-6 flex flex-col gap-2">
@@ -92,14 +132,7 @@ const AssistantMessageComponent: React.FC = () => {
                 <span className="font-mono">{filename || mimeType || "附件文件"}</span>
               </div>
             ),
-            tools: {
-              Fallback: ({ toolName }) => (
-                <div className="my-2 flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 font-mono text-xs text-slate-300">
-                  <span className="inline-block animate-spin text-[11px]">⚙️</span>
-                  <span>Tool: <code className="text-indigo-300">{toolName}</code></span>
-                </div>
-              ),
-            },
+            ChainOfThought: IntermediateProcess,
           }}
         />
         <MessagePrimitive.Error>
