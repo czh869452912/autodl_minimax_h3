@@ -8,7 +8,7 @@ interface AgentScreenProps {
 }
 
 export const AgentScreen: React.FC<AgentScreenProps> = ({ onApplyPrompt, llmConfig }) => (
-  <main className="h-[100dvh] min-h-0 bg-slate-950 px-0 pb-20 pt-16 md:pb-0">
+  <main className="h-[100dvh] min-h-0 bg-slate-950 px-0 pb-[5.5rem] pt-16 md:pb-0">
     <H3PromptResult onApplyPrompt={onApplyPrompt} llmConfig={llmConfig} />
   </main>
 );
