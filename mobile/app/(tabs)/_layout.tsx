@@ -6,7 +6,7 @@ import type { AppTabId } from '../../src/ui/theme';
 export default function TabsLayout() {
   const pathname = usePathname();
   const router = useRouter();
-  const activeId = (pathname.match(/\/\(tabs\)\/([^/]+)/)?.[1] || 'create') as AppTabId;
+  const activeId = ((pathname.split('/').filter(Boolean).pop() || 'create')) as AppTabId;
   return (
     <>
       <AppHeader />
