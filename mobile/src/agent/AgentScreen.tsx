@@ -79,7 +79,7 @@ function AgentThread() {
 }
 
 export default function AgentScreen() {
-  const db = useMemo(() => openDatabaseSync('autodl.db'), []);
+  const db = useMemo(() => openDatabaseSync('autodl-h3.db'), []);
   const history = useMemo(() => createHistoryAdapter(db), [db]);
   const runtime = useLocalRuntime(adapter, { adapters: { history }, unstable_enableMessageQueue: true });
   return <AssistantRuntimeProvider runtime={runtime}><AgentThread /></AssistantRuntimeProvider>;

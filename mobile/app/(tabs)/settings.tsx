@@ -1,17 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { readSettings, saveSettings } from '../../src/settings/storage';
+import { AppIcon } from '../../src/ui/icons';
+import { COLORS, SPACING } from '../../src/ui/theme';
 
+type Settings = Awaited<ReturnType<typeof readSettings>>;
 export default function SettingsScreen() {
-  const [values, setValues] = useState({ token: '', apiKey: '', endpoint: 'https://api.minimaxi.com/v1', model: 'MiniMax-M2.7' });
+  const [values, setValues] = useState<Settings>({ token: '', apiKey: '', endpoint: 'https://api.minimaxi.com/v1', model: 'MiniMax-M2.7' });
+  const [saving, setSaving] = useState(false);
   useEffect(() => { void readSettings().then(setValues); }, []);
-  const update = (key: keyof typeof values, value: string) => setValues((current) => ({ ...current, [key]: value }));
-  const save = async () => { await saveSettings(values); Alert.alert('已保存', '密钥已使用 Android Keystore 加密存储。'); };
-  return <View style={styles.container}><Text style={styles.title}>设置</Text><Text style={styles.subtitle}>配置 AutoDL 和 Prompt Assistant，密钥不写入源码。</Text>{[['token','AutoDL ComfyUI Token'],['apiKey','LLM API Key'],['endpoint','LLM API Endpoint'],['model','LLM Model']].map(([key,label]) => <View key={key} style={styles.group}><Text style={styles.label}>{label}</Text><TextInput secureTextEntry={key === 'token' || key === 'apiKey'} value={values[key as keyof typeof values]} onChangeText={(text) => update(key as keyof typeof values, text)} style={styles.input} /></View>)}<Pressable onPress={() => void save()} style={styles.button}><Text style={styles.buttonText}>保存设置</Text></Pressable></View>;
+  const update = (key: keyof Settings, value: string) => setValues((current) => ({ ...current, [key]: value }));
+  const save = async () => { setSaving(true); try { await saveSettings({ ...values, endpoint: values.endpoint.trim().replace(/\/$/, ''), model: values.model.trim() }); Alert.alert('已保存', '配置已使用 Android Keystore 加密存储。'); } catch (error) { Alert.alert('保存失败', error instanceof Error ? error.message : '无法保存设置'); } finally { setSaving(false); } };
+  return <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <View><Text style={styles.title}>系统设置</Text><Text style={styles.subtitle}>配置 AutoDL 连接令牌与 Prompt 助手 LLM。所有密钥仅保存在本机安全存储中。</Text></View>
+    <View style={styles.card}><View style={styles.cardHeading}><AppIcon name="key" size={20} color={COLORS.primaryActive} /><Text style={styles.cardTitle}>AutoDL ComfyUI Token</Text></View><Text style={styles.help}>用于提交任务、查询状态和自动下载结果。Token 不会写入源码或上传到第三方。</Text><Field label="ComfyUI Token" value={values.token} secure placeholder="输入 AutoDL ComfyUI 分组 Token" onChangeText={(text) => update('token', text)} /></View>
+    <View style={styles.card}><View style={styles.cardHeading}><AppIcon name="smart_toy" size={20} color={COLORS.primaryActive} /><Text style={styles.cardTitle}>Prompt 助手 Agent LLM</Text></View><Text style={styles.help}>assistant-ui RN runtime 会调用兼容 OpenAI Chat Completions 的模型，并在本机加载官方 H3 skills。</Text><Field label="LLM API Key" value={values.apiKey} secure placeholder="sk-xxxxxxxx" onChangeText={(text) => update('apiKey', text)} /><Field label="LLM Model" value={values.model} placeholder="MiniMax-M2.7" onChangeText={(text) => update('model', text)} /><Field label="LLM API Endpoint" value={values.endpoint} placeholder="https://api.minimaxi.com/v1" autoCapitalize="none" keyboardType="url" onChangeText={(text) => update('endpoint', text)} /></View>
+    <View style={styles.card}><View style={styles.cardHeading}><AppIcon name="info" size={20} color={COLORS.primaryActive} /><Text style={styles.cardTitle}>工作流说明</Text></View><Text style={styles.infoLine}>工作流：MiniMax H3 图像与音频生视频 v2（15s）</Text><Text style={styles.infoLine}>ID：minimax_h3_image_audio_to_video_v2_15s</Text><Text style={styles.infoLine}>参考素材：最多 9 张图片、3 段音频，单个文件 50MB</Text><Text style={styles.infoLine}>下载目录：Movies/AutoDL-H3（同时保留应用私有缓存）</Text></View>
+    <Pressable disabled={saving} onPress={() => void save()} style={[styles.saveButton, saving && styles.disabled]}><AppIcon name="save" size={20} color={COLORS.text} /><Text style={styles.saveText}>{saving ? '保存中…' : '保存设置'}</Text></Pressable>
+  </ScrollView>;
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617', padding: 24, paddingTop: 64 },
-  title: { color: '#f8fafc', fontSize: 28, fontWeight: '700' },
-  subtitle: { color: '#94a3b8', marginTop: 8, marginBottom: 28 }, group: { marginBottom: 18 }, label: { color: '#94a3b8', fontSize: 12, marginBottom: 8 }, input: { backgroundColor: '#0f172a', color: '#e2e8f0', borderRadius: 12, borderWidth: 1, borderColor: '#1e293b', paddingHorizontal: 14, paddingVertical: 12 }, button: { backgroundColor: '#4f46e5', borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginTop: 8 }, buttonText: { color: '#fff', fontWeight: '700' },
-});
+function Field({ label, secure, ...props }: { label: string; secure?: boolean } & React.ComponentProps<typeof TextInput>) { return <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput {...props} secureTextEntry={secure} placeholderTextColor={COLORS.textSubtle} style={styles.input} /></View>; }
+const styles = StyleSheet.create({ container: { flex: 1, backgroundColor: COLORS.background }, content: { padding: SPACING.xl, paddingBottom: 150, gap: SPACING.lg }, title: { color: COLORS.text, fontSize: 30, fontWeight: '800' }, subtitle: { color: COLORS.textMuted, fontSize: 14, lineHeight: 21, marginTop: SPACING.sm }, card: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: SPACING.lg, gap: SPACING.md }, cardHeading: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm }, cardTitle: { color: COLORS.text, fontSize: 16, fontWeight: '800' }, help: { color: COLORS.textMuted, fontSize: 12, lineHeight: 18 }, field: { gap: SPACING.xs }, label: { color: COLORS.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.4 }, input: { color: COLORS.text, backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, fontSize: 14 }, infoLine: { color: COLORS.textMuted, fontSize: 12, lineHeight: 19 }, saveButton: { minHeight: 54, borderRadius: 14, backgroundColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm }, saveText: { color: COLORS.text, fontSize: 16, fontWeight: '800' }, disabled: { opacity: 0.5 } });
