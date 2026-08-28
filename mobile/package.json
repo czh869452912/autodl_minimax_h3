@@ -15,6 +15,7 @@
     "@expo/vector-icons": "^15.1.1",
     "expo": "~57.0.18",
     "expo-asset": "~57.0.15",
+    "expo-audio": "~57.0.4",
     "expo-background-task": "~57.0.14",
     "expo-clipboard": "~57.0.1",
     "expo-document-picker": "~57.0.1",
