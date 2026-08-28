@@ -5,6 +5,31 @@ const streamH3AgentMock = vi.hoisted(() => vi.fn());
 vi.mock("./h3Agent", () => ({ streamH3Agent: streamH3AgentMock }));
 
 describe("assistant-ui local adapter", () => {
+  it("returns cumulative text snapshots for assistant-ui streaming", async () => {
+    streamH3AgentMock.mockReturnValue((async function* () {
+      yield { type: "text", delta: "最" };
+      yield { type: "text", delta: "终" };
+      yield { type: "text", delta: "输出" };
+    })());
+    const adapter = createH3ChatModelAdapter({ apiKey: "key", endpoint: "https://example.test/v1", model: "model" });
+    const stream = adapter.run({
+      messages: [{ role: "user", content: [{ type: "text", text: "hello" }] }] as any,
+      runConfig: {} as any,
+      abortSignal: new AbortController().signal,
+      context: {} as any,
+      unstable_threadId: "thread-stream",
+      unstable_getMessage: () => ({ role: "user", content: [] } as any),
+    }) as AsyncGenerator<any>;
+    const updates = [];
+    for await (const update of stream) updates.push(update);
+
+    expect(updates).toEqual([
+      { content: [{ type: "text", text: "最" }] },
+      { content: [{ type: "text", text: "最终" }] },
+      { content: [{ type: "text", text: "最终输出" }] },
+    ]);
+  });
+
   it("includes completed assistant-ui image attachments in the model message", () => {
     const image = "data:image/png;base64,ZmFrZQ==";
     const message = {
@@ -95,9 +120,12 @@ describe("assistant-ui local adapter", () => {
     }
 
     expect(streamH3AgentMock).toHaveBeenCalledWith(expect.objectContaining({ threadId: "thread-1" }), expect.anything());
-    expect(updates).toEqual(expect.arrayContaining([
-      { content: [{ type: "text", text: "integrated_multimodal_description: local result" }] },
-      expect.objectContaining({ content: [expect.objectContaining({ type: "tool-call", toolCallId: "call-1", toolName: "read_file" })] }),
-    ]));
+    expect(updates).toEqual([
+      { content: [expect.objectContaining({ type: "tool-call", toolCallId: "call-1", toolName: "read_file" })] },
+      { content: [
+        expect.objectContaining({ type: "tool-call", toolCallId: "call-1", toolName: "read_file" }),
+        { type: "text", text: "integrated_multimodal_description: local result" },
+      ] },
+    ]);
   });
 });

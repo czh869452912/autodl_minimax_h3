@@ -1,6 +1,6 @@
 import type { ChatModelAdapter, ChatModelRunOptions, ChatModelRunResult, ThreadMessage } from "@assistant-ui/react";
 import { streamH3Agent } from "./h3Agent";
-import type { H3AgentConfig, H3AgentEvent } from "./agentTypes";
+import type { H3AgentConfig } from "./agentTypes";
 
 export function messageContent(message: ThreadMessage): unknown {
   const contentParts = typeof message.content === "string"
@@ -34,22 +34,6 @@ export function toAgentMessages(messages: readonly ThreadMessage[]) {
   }));
 }
 
-function updateForEvent(event: H3AgentEvent): ChatModelRunResult | null {
-  if (event.type === "text") return { content: [{ type: "text", text: event.delta }] };
-  if (event.type === "tool-start") {
-    return {
-      content: [{
-        type: "tool-call",
-        toolCallId: event.id,
-        toolName: event.name,
-        args: event.args as any,
-        argsText: JSON.stringify(event.args || {}),
-      }],
-    };
-  }
-  return null;
-}
-
 export function createH3ChatModelAdapter(config: H3AgentConfig): ChatModelAdapter {
   return {
     async *run(options: ChatModelRunOptions) {
@@ -58,10 +42,30 @@ export function createH3ChatModelAdapter(config: H3AgentConfig): ChatModelAdapte
         messages: toAgentMessages(options.messages),
         signal: options.abortSignal,
       };
+      let content: NonNullable<ChatModelRunResult["content"]> = [];
       for await (const event of streamH3Agent(input, config)) {
         if (event.type === "error") throw event.error;
-        const update = updateForEvent(event);
-        if (update) yield update;
+        if (event.type === "text") {
+          const lastPart = content.at(-1);
+          content = lastPart?.type === "text"
+            ? [...content.slice(0, -1), { ...lastPart, text: lastPart.text + event.delta }]
+            : [...content, { type: "text", text: event.delta }];
+          yield { content };
+        } else if (event.type === "tool-start") {
+          content = [...content, {
+            type: "tool-call",
+            toolCallId: event.id,
+            toolName: event.name,
+            args: event.args as any,
+            argsText: JSON.stringify(event.args || {}),
+          }];
+          yield { content };
+        } else if (event.type === "tool-end") {
+          content = content.map((part) => part.type === "tool-call" && part.toolCallId === event.id
+            ? { ...part, result: null }
+            : part);
+          yield { content };
+        }
       }
     },
   };
