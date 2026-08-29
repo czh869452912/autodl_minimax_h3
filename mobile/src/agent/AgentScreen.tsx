@@ -14,6 +14,7 @@ import { createLocalThreadStore, type LocalThreadStore } from './threadStore';
 import { isH3AgentConfigReady } from './agentTypes';
 import { applyAgentSettings } from './agentConfig';
 import { readImageAsDataSource } from './imageAttachmentUpload';
+import { getH3AgentConfigError } from './modelAdapter';
 
 type AgentConfig = { apiKey: string; endpoint: string; model: string };
 
@@ -43,6 +44,13 @@ export default function AgentScreen() {
   if (error) return <StatusView message={error} />;
   if (!config) return <StatusView loading />;
   if (!isH3AgentConfigReady(config)) return <StatusView message="尚未配置完整的 LLM 设置" />;
+  const configError = getH3AgentConfigError(config);
+  if (configError) {
+    const message = configError === 'LLM API endpoint must be an HTTP(S) URL'
+      ? 'LLM API 地址格式无效'
+      : configError;
+    return <StatusView message={message} />;
+  }
 
   return <ReadyAgent key={`${config.endpoint}\u0000${config.model}\u0000${config.apiKey}`} config={config} onError={setError} />;
 }
@@ -146,11 +154,14 @@ function AttachmentBridge({ agent }: { agent: H3AgUiAgent }) {
 }
 
 function StatusView({ loading, message }: { loading?: boolean; message?: string }) {
+  const endpointHint = message === 'LLM API 地址格式无效'
+    ? 'DeepSeek 示例：API 地址填 https://api.deepseek.com，模型填 deepseek-v4-flash-vision-exp。'
+    : '请在设置中检查 LLM API 地址、模型和 API Key。';
   return (
     <View style={styles.status}>
       {loading ? <ActivityIndicator color={COLORS.primaryActive} /> : null}
       <Text style={styles.statusText}>{message ?? '正在加载 Prompt 助手…'}</Text>
-      {!loading ? <Text style={styles.statusHint}>请在设置中检查 LLM API 地址、模型和 API Key。</Text> : null}
+      {!loading ? <Text style={styles.statusHint}>{endpointHint}</Text> : null}
     </View>
   );
 }

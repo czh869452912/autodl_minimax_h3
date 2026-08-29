@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { readSettings, saveSettings } from '../../src/settings/storage';
+import { prepareSettingsForSave } from '../../src/settings/validation';
 import { AppIcon } from '../../src/ui/icons';
 import { COLORS, SPACING } from '../../src/ui/theme';
 
@@ -10,7 +11,7 @@ export default function SettingsScreen() {
   const [saving, setSaving] = useState(false);
   useEffect(() => { void readSettings().then(setValues); }, []);
   const update = (key: keyof Settings, value: string) => setValues((current) => ({ ...current, [key]: value }));
-  const save = async () => { setSaving(true); try { await saveSettings({ ...values, llmEndpoint: values.llmEndpoint.trim().replace(/\/$/, ''), llmModel: values.llmModel.trim() }); Alert.alert('已保存', '配置已使用 Android Keystore 加密存储。'); } catch (error) { Alert.alert('保存失败', error instanceof Error ? error.message : '无法保存设置'); } finally { setSaving(false); } };
+  const save = async () => { setSaving(true); try { await saveSettings(prepareSettingsForSave(values)); Alert.alert('已保存', '配置已使用 Android Keystore 加密存储。'); } catch (error) { Alert.alert('保存失败', error instanceof Error ? error.message : '无法保存设置'); } finally { setSaving(false); } };
   return <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <View><Text style={styles.title}>系统设置</Text><Text style={styles.subtitle}>配置 AutoDL 连接令牌与 Prompt 助手 LLM。所有密钥仅保存在本机安全存储中。</Text></View>
     <View style={styles.card}><View style={styles.cardHeading}><AppIcon name="key" size={20} color={COLORS.primaryActive} /><Text style={styles.cardTitle}>AutoDL ComfyUI Token</Text></View><Text style={styles.help}>用于提交任务、查询状态和自动下载结果。Token 不会写入源码或上传到第三方。</Text><Field label="ComfyUI Token" value={values.token} secure placeholder="输入 AutoDL ComfyUI 分组 Token" onChangeText={(text) => update('token', text)} /></View>

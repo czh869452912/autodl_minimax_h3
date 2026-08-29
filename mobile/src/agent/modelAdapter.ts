@@ -3,13 +3,17 @@ import type { H3AgentConfig } from './agentTypes';
 
 export type ModelFactory = (config: H3AgentConfig) => ChatOpenAI;
 
+export function getH3AgentConfigError(config: H3AgentConfig): string | null {
+  if (!config.apiKey.trim()) return 'LLM API key is required';
+  if (!config.endpoint.trim()) return 'LLM API endpoint is required';
+  if (!/^https?:\/\//i.test(config.endpoint.trim())) return 'LLM API endpoint must be an HTTP(S) URL';
+  if (!config.model.trim()) return 'LLM model is required';
+  return null;
+}
+
 export function validateH3AgentConfig(config: H3AgentConfig): void {
-  if (!config.apiKey.trim()) throw new Error('LLM API key is required');
-  if (!config.endpoint.trim()) throw new Error('LLM API endpoint is required');
-  if (!/^https?:\/\//i.test(config.endpoint.trim())) {
-    throw new Error('LLM API endpoint must be an HTTP(S) URL');
-  }
-  if (!config.model.trim()) throw new Error('LLM model is required');
+  const error = getH3AgentConfigError(config);
+  if (error) throw new Error(error);
 }
 
 export function createOpenAICompatibleModel(config: H3AgentConfig): ChatOpenAI {
