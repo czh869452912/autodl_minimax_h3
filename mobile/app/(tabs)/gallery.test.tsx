@@ -24,6 +24,8 @@ jest.mock('../../src/ui/icons', () => ({ AppIcon: () => null }));
 import GalleryScreen from './gallery';
 
 describe('gallery navigation', () => {
+  beforeAll(() => jest.useFakeTimers());
+  afterAll(() => jest.useRealTimers());
   beforeEach(() => mockPush.mockClear());
 
   it('opens the video detail route directly without an intermediate modal', async () => {
@@ -32,5 +34,6 @@ describe('gallery navigation', () => {
     await act(async () => renderer!.root.findByProps({ accessibilityLabel: '打开视频 cinematic city' }).props.onPress());
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/video/[id]', params: { id: 'task-1' } });
     expect(renderer!.root.findAllByType(Modal)).toHaveLength(0);
+    act(() => { renderer!.unmount(); jest.runOnlyPendingTimers(); });
   });
 });
