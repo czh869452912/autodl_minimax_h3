@@ -8,6 +8,7 @@
     "plugins": ["expo-router", "expo-sqlite", "expo-video"],
     "android": {
       "package": "com.example.autodlh3",
+      "usesCleartextTraffic": true,
       "permissions": ["INTERNET", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_MEDIA_PLAYBACK"]
     }
   }

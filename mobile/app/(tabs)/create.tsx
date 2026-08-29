@@ -1,10 +1,15 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { CreateForm } from '../../src/create/CreateForm';
+import { useLocalSearchParams } from 'expo-router';
 
 export default function CreateScreen() {
-  return <View style={styles.container}><Text style={styles.title}>AutoDL H3 视频生成</Text></View>;
+  const { prompt, draftId } = useLocalSearchParams<{
+    prompt?: string | string[];
+    draftId?: string | string[];
+  }>();
+  return (
+    <CreateForm
+      initialPrompt={Array.isArray(prompt) ? prompt[0] : prompt || ''}
+      draftId={Array.isArray(draftId) ? draftId[0] : draftId}
+    />
+  );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617', padding: 24, paddingTop: 64 },
-  title: { color: '#f8fafc', fontSize: 28, fontWeight: '700' },
-});

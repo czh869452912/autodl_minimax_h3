@@ -1,9 +1,10 @@
 import type { MediaAsset, MediaStatus, MediaStore } from './types';
+import * as FileSystem from 'expo-file-system/legacy';
 
 type SqlDatabase = {
   execSync?: (source: string) => void;
-  runSync?: (source: string, ...params: unknown[]) => unknown;
-  getAllSync?: <T>(source: string, ...params: unknown[]) => T[];
+  runSync?: (source: string, ...params: any[]) => unknown;
+  getAllSync?: <T>(source: string, ...params: any[]) => T[];
 };
 
 const schema = `CREATE TABLE IF NOT EXISTS media_assets (
@@ -37,6 +38,6 @@ export function createSqliteMediaStore(database: SqlDatabase): MediaStore {
       const rows = database.getAllSync?.<Record<string, unknown>>('SELECT * FROM media_assets WHERE id = ? LIMIT 1', id) ?? [];
       return rows[0] ? toAsset(rows[0]) : null;
     },
-    async remove(id) { database.runSync?.('DELETE FROM media_assets WHERE id = ?', id); },
+    async remove(id) { const rows = database.getAllSync?.<Record<string, unknown>>('SELECT local_path, poster_path FROM media_assets WHERE id = ? LIMIT 1', id) ?? []; database.runSync?.('DELETE FROM media_assets WHERE id = ?', id); for (const row of rows) for (const uri of [row.local_path, row.poster_path]) if (uri) { try { await FileSystem.deleteAsync(String(uri), { idempotent: true }); } catch {} } },
   };
 }

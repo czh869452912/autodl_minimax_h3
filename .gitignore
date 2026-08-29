@@ -1,14 +1,10 @@
 .gradle/
-build/
-app/build/
-local.properties
-*.iml
-.idea/
-
-# Frontend dependencies and build outputs
-frontend/node_modules/
-frontend/dist/
+**/build/
 mobile/node_modules/
-app/src/main/assets/web/
+server/node_modules/
+server/.env
+mobile/android/local.properties
+*.iml
 *.log
+.idea/
 .superpowers/
