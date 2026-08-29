@@ -7,7 +7,7 @@ import { COLORS, SPACING } from '../../src/ui/theme';
 
 type Settings = Awaited<ReturnType<typeof readSettings>>;
 export default function SettingsScreen() {
-  const [values, setValues] = useState<Settings>({ token: '', llmEndpoint: 'https://api.openai.com/v1', llmModel: 'gpt-4o-mini', llmApiKey: '', llmTimeoutSeconds: '600', llmMaxRetries: '2' });
+  const [values, setValues] = useState<Settings>({ token: '', llmEndpoint: 'https://api.openai.com/v1', llmModel: 'gpt-4o-mini', llmApiKey: '', llmTimeoutSeconds: '600', llmMaxRetries: '2', autoExportToGallery: true, keepPrivateCopy: true });
   const [saving, setSaving] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   useEffect(() => { void readSettings().then(setValues); }, []);

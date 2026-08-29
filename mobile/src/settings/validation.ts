@@ -8,6 +8,8 @@ export function prepareSettingsForSave(values: AppSettings): AppSettings {
     llmApiKey: values.llmApiKey.trim(),
     llmTimeoutSeconds: values.llmTimeoutSeconds.trim(),
     llmMaxRetries: values.llmMaxRetries.trim(),
+    autoExportToGallery: values.autoExportToGallery,
+    keepPrivateCopy: values.keepPrivateCopy,
   };
   if (normalized.llmEndpoint && !/^https?:\/\//i.test(normalized.llmEndpoint)) {
     throw new Error('LLM API 地址必须是以 http:// 或 https:// 开头的完整地址');

@@ -9,6 +9,8 @@ describe('settings validation before secure persistence', () => {
       llmApiKey: 'test-key',
       llmTimeoutSeconds: '600',
       llmMaxRetries: '2',
+      autoExportToGallery: true,
+      keepPrivateCopy: true,
     })).toThrow('LLM API 地址必须是以 http:// 或 https:// 开头的完整地址');
   });
 
@@ -20,6 +22,8 @@ describe('settings validation before secure persistence', () => {
       llmApiKey: ' test-key ',
       llmTimeoutSeconds: ' 900 ',
       llmMaxRetries: ' 3 ',
+      autoExportToGallery: false,
+      keepPrivateCopy: true,
     })).toEqual({
       token: 'token',
       llmEndpoint: 'https://api.deepseek.com',
@@ -27,6 +31,8 @@ describe('settings validation before secure persistence', () => {
       llmApiKey: 'test-key',
       llmTimeoutSeconds: '900',
       llmMaxRetries: '3',
+      autoExportToGallery: false,
+      keepPrivateCopy: true,
     });
   });
 
@@ -43,6 +49,8 @@ describe('settings validation before secure persistence', () => {
       llmApiKey: 'key',
       llmTimeoutSeconds: timeout,
       llmMaxRetries: retries,
+      autoExportToGallery: true,
+      keepPrivateCopy: true,
     })).toThrow(message);
   });
 });
