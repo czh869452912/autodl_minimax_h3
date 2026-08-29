@@ -9,7 +9,7 @@ jest.mock('@copilotkit/react-native/components', () => ({ CopilotMarkdown: ({ co
 jest.mock('@copilotkit/shared', () => ({ getSourceUrl: (source: { value?: string }) => source.value || '' }));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
-import { PromptResultCard, ToolTimeline, Composer } from './PromptAssistantUi';
+import { PromptResultCard, ToolTimeline, Composer, ConversationTimeline } from './PromptAssistantUi';
 
 describe('Prompt assistant UI primitives', () => {
   it('keeps tool details collapsed until expanded', () => {
@@ -38,6 +38,13 @@ describe('Prompt assistant UI primitives', () => {
     let tree!: ReturnType<typeof create>;
     act(() => { tree = create(<Composer value="" onChangeText={() => undefined} onSubmit={() => undefined} onOpenPicker={() => Promise.resolve()} onCancel={() => undefined} isRunning={false} attachments={[{ id: 'a1', status: 'uploading' }]} />); });
     expect(tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.accessibilityState.disabled).toBe(true);
+    act(() => tree.unmount());
+  });
+
+  it('shows visible progress while the assistant is running', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<ConversationTimeline rows={[]} isRunning onExportPrompt={() => Promise.resolve()} />); });
+    expect(tree.root.findAllByType(Text).some((node) => node.props.children === '正在生成 Prompt…')).toBe(true);
     act(() => tree.unmount());
   });
 });

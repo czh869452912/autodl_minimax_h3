@@ -20,8 +20,25 @@ function memoryDatabase() {
         rows.delete(String(params[0]));
       }
     }),
+    runAsync: jest.fn(async (sql: string, ...params: unknown[]) => {
+      if (sql.startsWith('INSERT OR REPLACE')) {
+        const [threadId, messagesJson, stateJson, createdAt, updatedAt, customTitle] = params;
+        rows.set(String(threadId), {
+          thread_id: threadId,
+          messages_json: messagesJson,
+          state_json: stateJson,
+          created_at: createdAt,
+          updated_at: updatedAt,
+          custom_title: customTitle,
+        });
+      } else if (sql.startsWith('DELETE')) {
+        rows.delete(String(params[0]));
+      }
+    }),
     getFirstSync: jest.fn((_sql: string, threadId: unknown) => rows.get(String(threadId)) ?? null),
     getAllSync: jest.fn(() => [...rows.values()].sort((a, b) => Number(b.updated_at) - Number(a.updated_at))),
+    getFirstAsync: jest.fn(async (_sql: string, threadId: unknown) => rows.get(String(threadId)) ?? null),
+    getAllAsync: jest.fn(async () => [...rows.values()].sort((a, b) => Number(b.updated_at) - Number(a.updated_at))),
   };
 }
 
@@ -57,5 +74,7 @@ describe('local agent thread store', () => {
       customTitle: '自定义标题',
     });
     expect(db.execSync).toHaveBeenCalledTimes(2);
+    expect(db.runAsync).toHaveBeenCalled();
+    expect(db.runSync).not.toHaveBeenCalled();
   });
 });

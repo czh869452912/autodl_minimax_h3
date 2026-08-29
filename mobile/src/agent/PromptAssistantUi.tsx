@@ -55,7 +55,8 @@ export function PromptAssistantUi({
   onDelete: onDeleteThread,
   onRename: onRenameThread,
   onExportPrompt,
-}: HistoryProps & { onExportPrompt: (prompt: string) => Promise<void> }) {
+  notice,
+}: HistoryProps & { onExportPrompt: (prompt: string) => Promise<void>; notice?: string }) {
   const {
     messages,
     isRunning,
@@ -128,6 +129,12 @@ export function PromptAssistantUi({
       <View style={styles.body}>
         {wide ? <View style={styles.sidebar}>{history}</View> : null}
         <View style={styles.conversation}>
+          {notice ? (
+            <View style={styles.notice}>
+              <AppIcon name="info" size={16} color={LIGHT_PROMPT_COLORS.accent} />
+              <Text style={styles.noticeText}>{notice}</Text>
+            </View>
+          ) : null}
           <ConversationTimeline
             rows={rows}
             isRunning={isRunning}
@@ -199,26 +206,9 @@ export function ConversationTimeline({
       contentContainerStyle={styles.timelineContent}
       keyboardShouldPersistTaps="handled"
       ListEmptyComponent={
-        <View style={styles.empty}>
-          <View style={styles.emptyMark}>
-            <AppIcon
-              name="auto_awesome"
-              size={24}
-              color={LIGHT_PROMPT_COLORS.ink}
-            />
-          </View>
-          <Text style={styles.emptyTitle}>
-            把一个想法，变成可执行的 H3 Prompt
-          </Text>
-          <Text style={styles.emptySubtitle}>
-            描述主体、动作、镜头和氛围；我会帮你补全细节。
-          </Text>
-          <View style={styles.suggestions}>
-            <Text style={styles.suggestion}>“一镜到底的城市夜跑”</Text>
-            <Text style={styles.suggestion}>“纸艺风格的产品广告”</Text>
-          </View>
-        </View>
+        isRunning ? <RunningIndicator /> : <EmptyTimeline />
       }
+      ListFooterComponent={rows.length && isRunning ? <RunningIndicator compact /> : null}
       renderItem={({ item }) =>
         item.kind === 'user' ? (
           <View style={styles.userRow}>
@@ -271,6 +261,39 @@ export function ConversationTimeline({
         )
       }
     />
+  );
+}
+
+function EmptyTimeline() {
+  return (
+    <View style={styles.empty}>
+      <View style={styles.emptyMark}>
+        <AppIcon
+          name="auto_awesome"
+          size={24}
+          color={LIGHT_PROMPT_COLORS.ink}
+        />
+      </View>
+      <Text style={styles.emptyTitle}>
+        把一个想法，变成可执行的 H3 Prompt
+      </Text>
+      <Text style={styles.emptySubtitle}>
+        描述主体、动作、镜头和氛围；我会帮你补全细节。
+      </Text>
+      <View style={styles.suggestions}>
+        <Text style={styles.suggestion}>“一镜到底的城市夜跑”</Text>
+        <Text style={styles.suggestion}>“纸艺风格的产品广告”</Text>
+      </View>
+    </View>
+  );
+}
+
+function RunningIndicator({ compact = false }: { compact?: boolean }) {
+  return (
+    <View style={[styles.runningIndicator, compact && styles.runningIndicatorCompact]}>
+      <View style={styles.runningDot} />
+      <Text style={styles.runningText}>正在生成 Prompt…</Text>
+    </View>
   );
 }
 
@@ -724,8 +747,39 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   conversation: { flex: 1, maxWidth: 820, alignSelf: 'center', width: '100%' },
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    backgroundColor: '#FFF4D6',
+  },
+  noticeText: { flex: 1, color: '#8A5A00', fontSize: 12, lineHeight: 17 },
   timeline: { flex: 1 },
   timelineContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 18 },
+  runningIndicator: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
+    backgroundColor: LIGHT_PROMPT_COLORS.surface,
+  },
+  runningIndicatorCompact: { alignSelf: 'flex-start', marginTop: 8, marginBottom: 8 },
+  runningDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: LIGHT_PROMPT_COLORS.accent,
+  },
+  runningText: { color: LIGHT_PROMPT_COLORS.muted, fontSize: 13, fontWeight: '600' },
   empty: { alignItems: 'center', paddingHorizontal: 28, paddingTop: 70 },
   emptyMark: {
     width: 48,

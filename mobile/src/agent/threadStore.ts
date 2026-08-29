@@ -92,7 +92,7 @@ export function createLocalThreadStore(db: SQLiteDatabase) {
   return {
     async load(threadId: string): Promise<LocalThreadSnapshot | null> {
       return mapRow(
-        db.getFirstSync<ThreadRow>(
+        await db.getFirstAsync<ThreadRow>(
           'SELECT * FROM agent_threads WHERE thread_id = ? LIMIT 1',
           threadId,
         ),
@@ -100,20 +100,20 @@ export function createLocalThreadStore(db: SQLiteDatabase) {
     },
     async latest(): Promise<LocalThreadSnapshot | null> {
       return mapRow(
-        db.getFirstSync<ThreadRow>(
+        await db.getFirstAsync<ThreadRow>(
           'SELECT * FROM agent_threads ORDER BY updated_at DESC LIMIT 1',
         ),
       );
     },
     async list(): Promise<LocalThreadSnapshot[]> {
       return (
-        db.getAllSync<ThreadRow>(
+        await db.getAllAsync<ThreadRow>(
           'SELECT * FROM agent_threads ORDER BY updated_at DESC',
         ) ?? []
       ).map((row) => mapRow(row)!);
     },
     async save(snapshot: LocalThreadSnapshot): Promise<void> {
-      db.runSync(
+      await db.runAsync(
         'INSERT OR REPLACE INTO agent_threads (thread_id,messages_json,state_json,created_at,updated_at,custom_title) VALUES (?,?,?,?,?,?)',
         snapshot.threadId,
         JSON.stringify(sanitizePersistedValue(snapshot.messages)),
@@ -124,7 +124,7 @@ export function createLocalThreadStore(db: SQLiteDatabase) {
       );
     },
     async remove(threadId: string): Promise<void> {
-      db.runSync('DELETE FROM agent_threads WHERE thread_id = ?', threadId);
+      await db.runAsync('DELETE FROM agent_threads WHERE thread_id = ?', threadId);
     },
   };
 }

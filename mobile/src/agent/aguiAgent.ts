@@ -40,9 +40,13 @@ const messagesForDeepAgent = (messages: RunAgentInput['messages']): unknown[] =>
     const source = rec(attachment.source);
     if (attachment.type !== 'image') continue;
     if (source.type === 'data') {
-      content.push({ type: 'image', source_type: 'base64', data: source.value, mime_type: source.mimeType });
+      const value = String(source.value ?? '');
+      const url = value.startsWith('data:')
+        ? value
+        : `data:${source.mimeType || 'image/png'};base64,${value}`;
+      content.push({ type: 'image_url', image_url: { url } });
     } else if (source.type === 'url') {
-      content.push({ type: 'image', source_type: 'url', url: source.value });
+      content.push({ type: 'image_url', image_url: { url: String(source.value ?? '') } });
     }
   }
   return [{ ...record, role: 'user', content }];

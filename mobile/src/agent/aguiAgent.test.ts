@@ -62,10 +62,8 @@ it('keeps the official chat message renderable and sends selected images to Deep
   expect(graphInput.messages[0].content).toEqual([
     { type: 'text', text: 'describe this image' },
     {
-      type: 'image',
-      source_type: 'base64',
-      data: 'base64-data',
-      mime_type: 'image/png',
+      type: 'image_url',
+      image_url: { url: 'data:image/png;base64,base64-data' },
     },
   ]);
 });

@@ -201,7 +201,6 @@ function ReadyAgent({
       config={config}
       snapshot={activeSnapshot}
       threadStore={threadStore}
-      onError={onError}
       onSnapshotChange={handleSnapshotChange}
       threads={threads}
       activeThreadId={activeSnapshot.threadId}
@@ -224,7 +223,6 @@ function AgentSession({
   config,
   snapshot,
   threadStore,
-  onError,
   onSnapshotChange,
   onExportPrompt,
   ...uiProps
@@ -232,7 +230,6 @@ function AgentSession({
   config: AgentConfig;
   snapshot: LocalThreadSnapshot;
   threadStore: LocalThreadStore;
-  onError: (message: string) => void;
   onSnapshotChange: (snapshot: LocalThreadSnapshot) => void;
   threads: LocalThreadSnapshot[];
   activeThreadId: string;
@@ -242,6 +239,7 @@ function AgentSession({
   onRename: (id: string, title: string) => void;
   onExportPrompt: (prompt: string) => Promise<void>;
 }) {
+  const [notice, setNotice] = useState<string | undefined>();
   const agent = useMemo(
     () => new H3AgUiAgent(createH3Agent(config) as never),
     [config, snapshot.threadId],
@@ -267,7 +265,7 @@ function AgentSession({
         saveQueue = saveQueue
           .then(() => threadStore.save(next))
           .catch((reason) =>
-            onError(
+            setNotice(
               reason instanceof Error
                 ? `本地会话保存失败：${reason.message}`
                 : '本地会话保存失败',
@@ -276,11 +274,11 @@ function AgentSession({
       },
     });
     return () => subscription.unsubscribe();
-  }, [agent, onError, onSnapshotChange, threadStore]);
+  }, [agent, onSnapshotChange, threadStore]);
   return (
     <LocalCopilotKitProvider
       agent={agent}
-      onError={(reason) => onError(reason.message)}
+      onError={(reason) => setNotice(reason.message)}
     >
       <CopilotChat
         agentId={agent.agentId}
@@ -290,7 +288,7 @@ function AgentSession({
           onUpload: readImageAsDataSource,
         }}
       >
-        <PromptAssistantUi {...uiProps} onExportPrompt={onExportPrompt} />
+        <PromptAssistantUi {...uiProps} onExportPrompt={onExportPrompt} notice={notice} />
       </CopilotChat>
     </LocalCopilotKitProvider>
   );
