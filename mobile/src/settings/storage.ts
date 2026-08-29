@@ -1,20 +1,36 @@
 import * as SecureStore from 'expo-secure-store';
 
-const keys = { token: 'autodl.token', agentUrl: 'agent.runtimeUrl', agentAccessToken: 'agent.accessToken' } as const;
+const keys = {
+  token: 'autodl.token',
+  llmEndpoint: 'llm.endpoint',
+  llmModel: 'llm.model',
+  llmApiKey: 'llm.apiKey',
+} as const;
 
-export async function readSettings() {
-  const [token, agentUrl, agentAccessToken] = await Promise.all(Object.values(keys).map((key) => SecureStore.getItemAsync(key)));
+export type AppSettings = {
+  token: string;
+  llmEndpoint: string;
+  llmModel: string;
+  llmApiKey: string;
+};
+
+export async function readSettings(): Promise<AppSettings> {
+  const [token, llmEndpoint, llmModel, llmApiKey] = await Promise.all(
+    Object.values(keys).map((key) => SecureStore.getItemAsync(key)),
+  );
   return {
     token: token ?? '',
-    agentUrl: agentUrl || 'http://10.0.2.2:8200',
-    agentAccessToken: agentAccessToken ?? '',
+    llmEndpoint: llmEndpoint || 'https://api.openai.com/v1',
+    llmModel: llmModel || 'gpt-4o-mini',
+    llmApiKey: llmApiKey ?? '',
   };
 }
 
-export async function saveSettings(values: Partial<{ token: string; agentUrl: string; agentAccessToken: string }>) {
+export async function saveSettings(values: Partial<AppSettings>): Promise<void> {
   await Promise.all([
     values.token === undefined ? undefined : SecureStore.setItemAsync(keys.token, values.token),
-    values.agentUrl === undefined ? undefined : SecureStore.setItemAsync(keys.agentUrl, values.agentUrl),
-    values.agentAccessToken === undefined ? undefined : SecureStore.setItemAsync(keys.agentAccessToken, values.agentAccessToken),
-  ].filter(Boolean));
+    values.llmEndpoint === undefined ? undefined : SecureStore.setItemAsync(keys.llmEndpoint, values.llmEndpoint),
+    values.llmModel === undefined ? undefined : SecureStore.setItemAsync(keys.llmModel, values.llmModel),
+    values.llmApiKey === undefined ? undefined : SecureStore.setItemAsync(keys.llmApiKey, values.llmApiKey),
+  ].filter((value): value is Promise<void> => Boolean(value)));
 }
