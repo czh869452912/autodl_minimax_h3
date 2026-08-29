@@ -26,6 +26,18 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (moduleName === 'langsmith/experimental/sandbox') {
     return { filePath: path.resolve(__dirname, 'src/shims/langsmithSandbox.ts'), type: 'sourceFile' };
   }
+  // react-native-streamdown 0.2 schedules remend across a Worklets runtime,
+  // which is incompatible with Expo 57 / Worklets 0.10. Keep CopilotKit's
+  // complete chat UI and enriched-markdown renderer, but process remend on JS.
+  if (moduleName === 'react-native-streamdown') {
+    return { filePath: path.resolve(__dirname, 'src/shims/reactNativeStreamdown.tsx'), type: 'sourceFile' };
+  }
+  // CopilotKit's bundled XHR fetch can race a consumer cancellation with
+  // onload and close Expo's ReadableStream controller twice. Use the small
+  // idempotent adapter for Android while retaining CopilotKit's public API.
+  if (moduleName.includes('streaming-fetch-') && context.originModulePath.includes(`${path.sep}node_modules${path.sep}@copilotkit${path.sep}react-native${path.sep}dist`)) {
+    return { filePath: path.resolve(__dirname, 'src/shims/copilotKitStreamingFetch.ts'), type: 'sourceFile' };
+  }
   return defaultResolver
     ? defaultResolver(context, moduleName, platform)
     : context.resolveRequest(context, moduleName, platform);

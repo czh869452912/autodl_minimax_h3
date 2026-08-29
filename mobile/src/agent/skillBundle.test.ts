@@ -15,4 +15,11 @@ describe('official H3 skill bundle', () => {
     expect(first).not.toBe(second);
     expect(first['/skills/h3-prompt-writing/SKILL.md']).not.toBe(second['/skills/h3-prompt-writing/SKILL.md']);
   });
+
+  it('normalizes flow-style trigger arrays for the Hermes YAML parser', () => {
+    const files = getOfficialH3SkillFiles();
+    const content = files['/skills/handdrawn-live-video-generator/SKILL.md'].content as string;
+    expect(content).toMatch(/trigger-words:\n\s+- "手绘发光动画实拍融合"/);
+    expect(content).not.toMatch(/trigger-words:\s*\[/);
+  });
 });

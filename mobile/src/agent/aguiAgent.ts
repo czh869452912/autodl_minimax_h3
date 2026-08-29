@@ -57,7 +57,9 @@ export class H3AgUiAgent extends AbstractAgent {
       this.abortController = controller;
       void this.runStream(input, controller.signal, subscriber).catch((error) => {
         if (!controller.signal.aborted) {
-          subscriber.next({ type: EventType.RUN_ERROR, message: error instanceof Error ? error.message : String(error) });
+          const normalized = error instanceof Error ? error : new Error(String(error));
+          console.error('[H3AgUiAgent] DeepAgents run failed', normalized.stack ?? normalized.message);
+          subscriber.next({ type: EventType.RUN_ERROR, message: normalized.message, rawEvent: normalized } as never);
           subscriber.complete();
         }
       });

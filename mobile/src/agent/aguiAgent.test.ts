@@ -69,3 +69,9 @@ it('keeps the official chat message renderable and sends selected images to Deep
     },
   ]);
 });
+
+it('normalizes DeepAgents failures into an Error-backed RUN_ERROR event', async () => {
+  const graph = { stream: async function* () { throw new TypeError('provider failed'); } };
+  const events = await collect(new H3AgUiAgent(graph as never), { threadId: 't1', runId: 'r1', state: {}, messages: [] } as never);
+  expect(events.at(-1)).toMatchObject({ type: EventType.RUN_ERROR, message: 'provider failed', rawEvent: expect.any(Error) });
+});

@@ -31,7 +31,10 @@ export function LocalCopilotKitProvider({ children, agent, onError }: {
         next.delete(toolCallId);
         return next;
       }),
-      onError: ({ error }) => onError?.(error),
+      onError: ({ error }) => {
+        console.error('[LocalCopilotKitProvider] Agent runtime error', error.stack ?? error.message);
+        onError?.(error);
+      },
     });
     return () => subscription.unsubscribe();
   }, [core, onError]);
