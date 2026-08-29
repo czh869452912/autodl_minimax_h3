@@ -41,12 +41,17 @@ type ThreadRow = {
 };
 
 /** Keep persisted chat data independent from credentials and transport config. */
-export function sanitizePersistedValue(value: unknown, seen = new WeakSet<object>()): unknown {
+export function sanitizePersistedValue(
+  value: unknown,
+  seen = new WeakSet<object>(),
+): unknown {
   if (value === null || typeof value !== 'object') return value;
   if (seen.has(value)) return undefined;
   seen.add(value);
   if (Array.isArray(value)) {
-    return value.map((item) => sanitizePersistedValue(item, seen)).filter((item) => item !== undefined);
+    return value
+      .map((item) => sanitizePersistedValue(item, seen))
+      .filter((item) => item !== undefined);
   }
   const sanitized: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
@@ -58,7 +63,11 @@ export function sanitizePersistedValue(value: unknown, seen = new WeakSet<object
 }
 
 function parseJson<T>(source: string, fallback: T): T {
-  try { return JSON.parse(source) as T; } catch { return fallback; }
+  try {
+    return JSON.parse(source) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 function mapRow(row: ThreadRow | null): LocalThreadSnapshot | null {
@@ -75,16 +84,33 @@ function mapRow(row: ThreadRow | null): LocalThreadSnapshot | null {
 
 export function createLocalThreadStore(db: SQLiteDatabase) {
   db.execSync(schema);
-  try { db.execSync('ALTER TABLE agent_threads ADD COLUMN custom_title TEXT'); } catch { /* already exists */ }
+  try {
+    db.execSync('ALTER TABLE agent_threads ADD COLUMN custom_title TEXT');
+  } catch {
+    /* already exists */
+  }
   return {
     async load(threadId: string): Promise<LocalThreadSnapshot | null> {
-      return mapRow(db.getFirstSync<ThreadRow>('SELECT * FROM agent_threads WHERE thread_id = ? LIMIT 1', threadId));
+      return mapRow(
+        db.getFirstSync<ThreadRow>(
+          'SELECT * FROM agent_threads WHERE thread_id = ? LIMIT 1',
+          threadId,
+        ),
+      );
     },
     async latest(): Promise<LocalThreadSnapshot | null> {
-      return mapRow(db.getFirstSync<ThreadRow>('SELECT * FROM agent_threads ORDER BY updated_at DESC LIMIT 1'));
+      return mapRow(
+        db.getFirstSync<ThreadRow>(
+          'SELECT * FROM agent_threads ORDER BY updated_at DESC LIMIT 1',
+        ),
+      );
     },
     async list(): Promise<LocalThreadSnapshot[]> {
-      return (db.getAllSync<ThreadRow>('SELECT * FROM agent_threads ORDER BY updated_at DESC') ?? []).map((row) => mapRow(row)!);
+      return (
+        db.getAllSync<ThreadRow>(
+          'SELECT * FROM agent_threads ORDER BY updated_at DESC',
+        ) ?? []
+      ).map((row) => mapRow(row)!);
     },
     async save(snapshot: LocalThreadSnapshot): Promise<void> {
       db.runSync(
