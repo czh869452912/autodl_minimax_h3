@@ -164,7 +164,10 @@ export function PromptAssistantUi({
   );
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      // Android's adjustResize already reports the keyboard-safe window height.
+      // Applying KAV's `height` behavior here would subtract the keyboard again
+      // and collapse the conversation into the keyboard area.
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
       style={[styles.root, { paddingBottom: Math.max(insets.bottom, 8) }]}
     >

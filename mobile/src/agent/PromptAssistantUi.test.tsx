@@ -93,7 +93,7 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
-  it('keeps the composer above the Android keyboard', () => {
+  it('lets Android adjustResize provide the keyboard-safe height', () => {
     const originalPlatform = Platform.OS;
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
     let tree!: ReturnType<typeof create>;
@@ -111,7 +111,7 @@ describe('Prompt assistant UI primitives', () => {
           />,
         );
       });
-      expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBe('height');
+      expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBeUndefined();
     } finally {
       act(() => tree?.unmount());
       Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
