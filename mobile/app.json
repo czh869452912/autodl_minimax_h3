@@ -3,7 +3,7 @@
     "name": "AutoDL H3",
     "slug": "autodl-h3",
     "scheme": "autodlh3",
-    "version": "1.1.1",
+    "version": "1.2.0",
     "orientation": "default",
     "plugins": ["expo-router", "expo-sqlite", "expo-video"],
     "android": {
