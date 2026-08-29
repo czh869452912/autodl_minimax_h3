@@ -3,6 +3,10 @@ import type { TaskRecord } from '../tasks/types';
 
 export function mediaSource(task: Pick<TaskRecord, 'localUri' | 'videoUrl'>) { return task.localUri?.trim() || task.videoUrl?.trim() || ''; }
 
+export function mediaStatusLabel(status: MediaStatus): string {
+  return status === 'downloaded' ? '已下载' : status === 'failed' ? '下载失败' : '准备中';
+}
+
 export function taskToMediaAsset(task: TaskRecord): MediaAsset | null {
   const source = mediaSource(task);
   if (task.status !== 'SUCCESS' || !source) return null;
