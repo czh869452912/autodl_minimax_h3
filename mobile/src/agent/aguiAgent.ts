@@ -22,6 +22,20 @@ const callsOf = (message: Record<string, any>): Record<string, any>[] => {
   const calls = message.tool_calls ?? message.kwargs?.tool_calls ?? message.additional_kwargs?.tool_calls;
   return Array.isArray(calls) ? calls.map(rec) : [];
 };
+const imageContentPart = (part: Record<string, any>): Record<string, unknown> | null => {
+  if (part.type === 'image_url' || part.type === 'file') return part;
+  if (part.type !== 'image') return null;
+  const source = rec(part.source);
+  const value = String(source.value ?? part.data ?? '');
+  if (!value) return null;
+  if (source.type === 'url' || part.source_type === 'url') {
+    return { type: 'image_url', image_url: { url: value } };
+  }
+  const url = value.startsWith('data:')
+    ? value
+    : `data:${source.mimeType ?? part.mime_type ?? 'image/png'};base64,${value}`;
+  return { type: 'image_url', image_url: { url } };
+};
 const messagesForDeepAgent = (messages: RunAgentInput['messages']): unknown[] => messages.flatMap((message): unknown[] => {
   const record = rec(message);
   const role = String(record.role ?? '').toLowerCase();
@@ -33,9 +47,19 @@ const messagesForDeepAgent = (messages: RunAgentInput['messages']): unknown[] =>
   }
   if (role && !['user', 'human', 'assistant', 'ai', 'system', 'developer', 'tool'].includes(role)) return [];
   const attachments = Array.isArray(record.attachments) ? record.attachments.map(rec) : [];
-  if ((role !== 'user' && role !== 'human') || attachments.length === 0) return [message];
+  const rawContent = Array.isArray(record.content) ? record.content.map(rec) : [];
+  const contentImages = rawContent.some((part) => part.type === 'image');
+  if ((role !== 'user' && role !== 'human') || (attachments.length === 0 && !contentImages)) return [message];
   const content: Record<string, unknown>[] = [];
   if (typeof record.content === 'string' && record.content.trim()) content.push({ type: 'text', text: record.content });
+  for (const part of rawContent) {
+    if (part.type === 'text' && String(part.text ?? '').trim()) content.push({ type: 'text', text: String(part.text) });
+    else if (part.type === 'image_url' || part.type === 'file') content.push(part);
+    else if (part.type === 'image') {
+      const normalized = imageContentPart(part);
+      if (normalized) content.push(normalized);
+    }
+  }
   for (const attachment of attachments) {
     const source = rec(attachment.source);
     if (attachment.type !== 'image') continue;

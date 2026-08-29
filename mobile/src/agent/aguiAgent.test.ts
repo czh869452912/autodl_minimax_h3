@@ -68,6 +68,26 @@ it('keeps the official chat message renderable and sends selected images to Deep
   ]);
 });
 
+it('normalizes CopilotKit image parts stored directly in message content', async () => {
+  let graphInput: any;
+  const agent = new H3AgUiAgent({ stream: async function* (input: any) { graphInput = input; } } as never);
+  const message = {
+    id: 'persisted-image-1',
+    role: 'user',
+    content: [
+      { type: 'text', text: 'use this reference' },
+      { type: 'image', source: { type: 'data', value: 'persisted-base64', mimeType: 'image/png' } },
+    ],
+  };
+
+  await collect(agent, { threadId: 't1', runId: 'r-content-image', state: {}, messages: [message] } as never);
+
+  expect(graphInput.messages[0].content).toEqual([
+    { type: 'text', text: 'use this reference' },
+    { type: 'image_url', image_url: { url: 'data:image/png;base64,persisted-base64' } },
+  ]);
+});
+
 it('normalizes CopilotKit tool result messages before sending history to DeepAgents', async () => {
   let graphInput: any;
   const graph = { stream: async function* (input: any) { graphInput = input; } };
