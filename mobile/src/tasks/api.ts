@@ -21,17 +21,35 @@ export async function submitTask(token: string, input: SubmitInput): Promise<Tas
   const response = await fetch(API_ROOT + WORKFLOW_ID, { method: 'POST', headers: { Authorization: token, 'Content-Type': 'application/json' }, body: JSON.stringify(buildTaskPayload(input)) });
   const data = await parse(response);
   const now = Date.now();
-  return { ...input, id: String(data.task_id), status: normalize(data.status), createdAt: now, updatedAt: now };
+  return { ...input, id: String(data.task_id), status: normalize(data.status), createdAt: parseProviderTimestamp(data.created_at) ?? now, updatedAt: now };
 }
 
 export async function getTask(token: string, task: TaskRecord): Promise<TaskRecord> {
   const response = await fetch(API_ROOT + 'result/' + encodeURIComponent(task.id), { headers: { Authorization: token } });
   const data = await parse(response);
   const url = findVideoUrl(data?.results);
-  return { ...task, status: normalize(data?.status ?? task.status), videoUrl: url || task.videoUrl, updatedAt: Date.now() };
+  const createdAt = parseProviderTimestamp(data?.created_at) ?? task.createdAt;
+  const startedAt = parseProviderTimestamp(data?.started_at) ?? task.startedAt;
+  const executionDuration = toSeconds(data?.duration) ?? task.executionDuration;
+  return { ...task, status: normalize(data?.status ?? task.status), videoUrl: url || task.videoUrl, createdAt, startedAt, executionDuration, updatedAt: Date.now() };
 }
 
-function normalize(value: unknown): TaskStatus { const s = String(value || 'QUEUED').toUpperCase(); if (s === 'SUCCESSFUL') return 'SUCCESS'; if (s === 'PENDING') return 'QUEUED'; if (s === 'EXECUTING' || s === 'PROCESSING') return 'RUNNING'; if (s === 'FAILED' || s === 'CANCELLED') return s; return s === 'SUCCESS' ? 'SUCCESS' : 'QUEUED'; }
+function normalize(value: unknown): TaskStatus { const s = String(value || 'QUEUED').toUpperCase(); if (s === 'SUCCESSFUL') return 'SUCCESS'; if (s === 'PENDING') return 'QUEUED'; if (s === 'EXECUTING' || s === 'PROCESSING') return 'RUNNING'; if (s === 'RUNNING') return 'RUNNING'; if (s === 'FAILED' || s === 'CANCELLED') return s; return s === 'SUCCESS' ? 'SUCCESS' : 'QUEUED'; }
+function toSeconds(value: unknown): number | undefined { const seconds = Number(value); return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined; }
+function parseProviderTimestamp(value: unknown): number | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  const zoned = /(?:Z|[+-]\d{2}:\d{2})$/i.test(trimmed);
+  if (zoned) {
+    const timestamp = Date.parse(trimmed);
+    return Number.isFinite(timestamp) ? timestamp : undefined;
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/.exec(trimmed);
+  if (!match) return undefined;
+  const [, year, month, day, hour, minute, second] = match;
+  const timestamp = Date.parse(`${year}-${month}-${day}T${hour}:${minute}:${second}+08:00`);
+  return Number.isFinite(timestamp) ? timestamp : undefined;
+}
 function findVideoUrl(results: unknown): string {
   if (!Array.isArray(results)) return '';
   for (const item of results) {

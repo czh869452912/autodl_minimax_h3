@@ -56,12 +56,13 @@ export function CreateForm({
     });
   }, [draftId]);
 
-  const addMedia = async (kind: 'image' | 'audio') => {
+  const addMedia = async (kind: 'image' | 'audio', source: 'gallery' | 'file' = 'file') => {
     try {
       const current = kind === 'image' ? images : audios;
       const picked = await pickTaskMedia(
         kind,
         (kind === 'image' ? 9 : 3) - current.length,
+        source,
       );
       if (kind === 'image') setImages((items) => [...items, ...picked]);
       else setAudios((items) => [...items, ...picked]);
@@ -71,6 +72,13 @@ export function CreateForm({
         error instanceof Error ? error.message : '读取素材失败',
       );
     }
+  };
+  const addImage = () => {
+    Alert.alert('添加参考图片', '选择图片来源', [
+      { text: '从相册选择', onPress: () => void addMedia('image', 'gallery') },
+      { text: '从文件选择', onPress: () => void addMedia('image', 'file') },
+      { text: '取消', style: 'cancel' },
+    ]);
   };
   const submit = async () => {
     if (!prompt.trim()) {
@@ -199,7 +207,7 @@ export function CreateForm({
         <View style={styles.mediaButtons}>
           <Pressable
             disabled={images.length >= 9}
-            onPress={() => void addMedia('image')}
+            onPress={addImage}
             style={[styles.mediaButton, images.length >= 9 && styles.disabled]}
           >
             <AppIcon

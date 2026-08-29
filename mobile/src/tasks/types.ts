@@ -5,4 +5,5 @@ export interface TaskRecord {
   id: string; prompt: string; status: TaskStatus; resolution: string; duration: number;
   seed?: string; images?: TaskMediaInput[]; audios?: TaskMediaInput[];
   videoUrl?: string; localUri?: string; thumbnailUrl?: string; downloadState?: DownloadState; downloadError?: string; downloadProgress?: number; createdAt: number; updatedAt: number;
+  startedAt?: number; executionDuration?: number;
 }

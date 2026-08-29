@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCopilotChatContext } from '@copilotkit/react-native';
 import { CopilotMarkdown } from '@copilotkit/react-native/components';
 import { getSourceUrl } from '@copilotkit/shared';
@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { AppIcon } from '../ui/icons';
 import { LIGHT_PROMPT_COLORS } from '../ui/theme';
+import { pickAssistantImages, type AssistantImageAttachment } from './assistantImagePicker';
 import {
   groupSessions,
   matchesSessionQuery,
@@ -37,6 +38,7 @@ type AttachmentLike = {
   status: 'uploading' | 'ready';
   source?: { type?: string; value?: string; url?: string };
   filename?: string;
+  size?: number;
 };
 type HistoryProps = {
   threads: LocalThreadSnapshot[];
@@ -67,6 +69,7 @@ export function PromptAssistantUi({
     agent,
   } = useCopilotChatContext();
   const [draft, setDraft] = useState('');
+  const [galleryAttachments, setGalleryAttachments] = useState<AssistantImageAttachment[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -100,10 +103,10 @@ export function PromptAssistantUi({
     }
   }, [pendingRow, persistedRows]);
   const handleSubmit = async (value: string) => {
-    if (!value.trim() && !attachments.some((item) => item.status === 'ready'))
+    const ready = [...attachments.filter((item) => item.status === 'ready'), ...galleryAttachments];
+    if (!value.trim() && !ready.length)
       return;
-    const readyAttachments: Array<{ uri: string; filename?: string }> = attachments
-      .filter((item) => item.status === 'ready')
+    const readyAttachments: Array<{ uri: string; filename?: string }> = ready
       .map((item) => {
         if (!item.source) return null;
         return {
@@ -119,7 +122,29 @@ export function PromptAssistantUi({
       attachments: readyAttachments,
     });
     setDraft('');
+    if (galleryAttachments.length) {
+      agent.setPendingAttachments?.(
+        galleryAttachments,
+        () => setGalleryAttachments([]),
+      );
+    }
     await submitMessage(value);
+  };
+  const addGalleryImages = async () => {
+    try {
+      const remaining = Math.max(0, 9 - attachments.filter((item) => item.status === 'ready').length - galleryAttachments.length);
+      const picked = await pickAssistantImages('gallery', remaining);
+      setGalleryAttachments((current) => [...current, ...picked]);
+    } catch (error) {
+      Alert.alert('相册不可用', error instanceof Error ? error.message : '读取相册图片失败');
+    }
+  };
+  const handleOpenPicker = async () => {
+    Alert.alert('添加图片附件', '选择图片来源', [
+      { text: '从相册选择', onPress: () => void addGalleryImages() },
+      { text: '从文件选择', onPress: () => void openPicker() },
+      { text: '取消', style: 'cancel' },
+    ]);
   };
   const history = (
     <HistoryList
@@ -138,7 +163,11 @@ export function PromptAssistantUi({
     />
   );
   return (
-    <View style={[styles.root, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
+      style={[styles.root, { paddingBottom: Math.max(insets.bottom, 8) }]}
+    >
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="打开对话历史"
@@ -183,21 +212,21 @@ export function PromptAssistantUi({
             isRunning={isRunning}
             onExportPrompt={onExportPrompt}
           />
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.composerDock}
-          >
+          <View style={styles.composerDock}>
             <Composer
               value={draft}
               onChangeText={setDraft}
               onSubmit={handleSubmit}
-              onOpenPicker={openPicker}
+              onOpenPicker={handleOpenPicker}
               onCancel={() => agent.abortRun?.()}
               isRunning={isRunning}
-              attachments={attachments as AttachmentLike[]}
-              onRemoveAttachment={removeAttachment}
+              attachments={[...attachments, ...galleryAttachments] as AttachmentLike[]}
+              onRemoveAttachment={(id) => {
+                if (galleryAttachments.some((item) => item.id === id)) setGalleryAttachments((current) => current.filter((item) => item.id !== id));
+                else removeAttachment(id);
+              }}
             />
-          </KeyboardAvoidingView>
+          </View>
         </View>
       </View>
       {!wide ? (
@@ -228,7 +257,7 @@ export function PromptAssistantUi({
           </View>
         </Modal>
       ) : null}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -241,13 +270,30 @@ export function ConversationTimeline({
   isRunning: boolean;
   onExportPrompt: (prompt: string) => Promise<void>;
 }) {
+  const listRef = useRef<FlatList<ReturnType<typeof normalizeMessages>[number]>>(null);
+  const timelineSignature = rows
+    .map((row) =>
+      row.kind === 'assistant'
+        ? `${row.id}:${row.text}:${row.tools.map((step) => `${step.id}:${step.status}:${step.summary ?? ''}`).join(',')}`
+        : `${row.id}:${row.text}`,
+    )
+    .join('\u0001');
+  const scrollToLatest = useCallback(() => {
+    listRef.current?.scrollToEnd({ animated: true });
+  }, []);
+  useEffect(() => {
+    scrollToLatest();
+  }, [isRunning, scrollToLatest, timelineSignature]);
   return (
     <FlatList
+      ref={listRef}
       data={rows}
       keyExtractor={(item) => item.id}
       style={styles.timeline}
       contentContainerStyle={styles.timelineContent}
       keyboardShouldPersistTaps="handled"
+      onContentSizeChange={scrollToLatest}
+      onLayout={() => scrollToLatest()}
       ListEmptyComponent={
         isRunning ? <RunningIndicator /> : <EmptyTimeline />
       }
