@@ -1,60 +1,85 @@
-# CopilotKit React Native Agent UI 迁移设计
+# React Native 本地 Agent Harness 设计（修订版）
 
 ## 目标
 
-将 Prompt 助手从当前“assistant-ui Native primitives + 自定义消息/工具 UI”迁移为 CopilotKit React Native 的完整渲染组件，并通过 AG-UI 连接服务端 DeepAgents。RN 端只维护原生应用壳、导航和业务专属卡片；通用 agent 交互由 CopilotKit 提供，官方 H3 多文件 skills、模型调用、工具执行和会话状态由服务端维护。
+Prompt 助手必须是 Android APK 内的完整 agent harness：DeepAgents、官方 H3 多文件 skills、工具调用、循环、取消、线程状态和恢复都在本地运行。网络层只允许访问用户配置的 OpenAI-compatible LLM API；不需要 CopilotKit Runtime、Express、LangGraph Server、云端线程服务或局域网服务。
 
-## 决策
+同时，通用聊天交互尽量使用现成的 CopilotKit React Native 组件，不重新设计消息气泡、composer、timeline、tool-call 状态和 session 生命周期。
 
-- 前端：Expo/React Native Android，使用 `@copilotkit/react-native/components` 的 rendered chat surface。
-- Agent 协议：AG-UI SSE，统一传递文本、reasoning 摘要、工具调用、工具结果、状态更新和 interrupt。
-- Runtime：服务端 Copilot Runtime，负责鉴权、agent 路由和 AG-UI 代理；不在 APK 内运行 DeepAgents 或直接携带模型密钥。
-- Agent：服务端 LangChain DeepAgents，加载官方 H3 skills 的完整多文件目录，并保留真实工具调用 harness。
-- 持久化：服务端保存 agent thread/checkpoint；RN 本地只保存用户设置、任务/媒体索引和必要的 UI 偏好。
-- 新安装基线：不提供旧版 assistant-ui runtime、旧版 agent adapter 或数据迁移兼容层。
+## 核心决策
+
+- **宿主**：Expo/React Native Android，生产入口不加载 WebView agent，也不启动 Node/HTTP 服务。
+- **Harness**：APK 内运行 `deepagents/browser`，负责模型/工具循环、计划、技能渐进读取、上下文管理、取消和迭代限制。
+- **聊天 UI**：使用 `@copilotkit/react-native/components` 的 `CopilotChat`。它拥有消息流、输入、停止、重试和工具调用渲染管线；业务代码只注册必要的业务工具 renderer。
+- **本地连接**：由于 RN 官方 `CopilotKitProvider` 只接受 `runtimeUrl`，不能直接注入本地 agent，因此封装一个很薄的 `LocalCopilotKitProvider`，内部使用 CopilotKit Core 的本地 agent 注册能力（`agents__unsafe_dev_only`）。不修改 CopilotKit 的消息/timeline 协议。
+- **模型**：`ChatModelAdapter` 只向用户配置的 LLM API 发请求。API key 由 Android Keystore-backed SecureStore 提供，不进入 bundle、日志或线程记录。
+- **技能**：完整官方 H3 `skills/` 目录在构建时原样打包到 APK，运行时作为 DeepAgents 的本地文件树；不生成缩短 prompt、不维护技能分支表。
+- **存储**：使用 `expo-sqlite` 做一个隔离的本地存储适配器，保存 thread 元数据、CopilotKit message records、最终结果和 DeepAgents checkpoint/event snapshot。UI 不直接操作 SQLite。适配器只负责序列化/恢复，不实现第二套 timeline。
 
 ## 数据流
 
 ```text
-RN App
-  ├─ AutoDL 原生 Header / Tabs / 业务页面
-  └─ CopilotKitProvider + CopilotChat
-       │ HTTPS + AG-UI SSE
-       ▼
-Copilot Runtime
-       │ authenticated agent route
-       ▼
-DeepAgents
-  ├─ official H3 skill files
-  ├─ model adapter / provider credentials
-  ├─ real tools and tool results
-  ├─ interrupts / approvals
-  └─ checkpoint / thread persistence
+Android APK
+├─ React Native shell / navigation
+├─ LocalCopilotKitProvider (thin local-agent adapter)
+├─ CopilotChat (official rendered chat surface)
+├─ DeepAgents browser harness
+│  ├─ complete H3 skill files
+│  ├─ local tools and tool results
+│  ├─ local checkpoint + event snapshot
+│  └─ OpenAI-compatible model adapter
+└─ expo-sqlite LocalThreadStore
+                 │
+                 └─ HTTPS only to configured LLM API
 ```
 
-## 边界和实现约束
+## 不可避免的两个薄适配器
 
-1. `AgentScreen.tsx` 不再定义通用消息气泡、timeline、composer、tool-call fallback 或 reasoning 展示。
-2. CopilotKit 的 `CopilotChat` 是 Prompt 助手唯一通用聊天表面；外层只包装品牌 Header、Safe Area 和应用导航。
-3. 视频生成、任务进度、参考素材预览等业务内容通过明确的 frontend/backend tool renderer 或任务页面展示，不混入通用聊天协议。
-4. 服务端必须暴露 `/info` 和 agent run/connect/stop 的 AG-UI 端点，并在 Android emulator 上使用可达地址（开发环境默认 `10.0.2.2`，生产使用 HTTPS 域名）。
-5. RN 不再把完整 skill bundle 打进 APK；服务端 skills 目录是唯一事实来源。
-6. API key、AutoDL token 和其他服务端凭证不得下发给 RN agent runtime。RN 只发送用户认证凭证和业务输入。
-7. 流式错误必须进入 CopilotKit 的错误状态；不得出现空 assistant 气泡或静默失败。
+### `LocalCopilotKitProvider`
+
+将本地 `AbstractAgent` 注册到 CopilotKit Core，并提供 RN 上下文、错误订阅和工具执行跟踪。所有消息、流式事件和 renderer 仍使用 CopilotKit 官方协议；该文件不包含消息气泡或时间线状态机。
+
+### `LocalThreadStore`
+
+以稳定 `threadId` 为键保存和恢复 CopilotKit message records、工具调用/结果、附件引用、agent checkpoint 和最终 H3 prompt。它是 SQLite 的序列化边界，不向 UI 暴露数据库细节。若某项记录无法恢复，必须显示可重试的持久化错误。
+
+这是当前约束下无法由 CopilotKit RN 直接提供的最小基础设施：官方 RN threads persistence 依赖 Enterprise 平台，且官方自托管说明明确指出普通 framework checkpointer 不会恢复 AG-UI 可视化事件历史。该适配器应保持独立、可替换，并配合上游版本升级测试。
+
+## 会话和可视化行为
+
+1. `CopilotChat` 通过 `threadId` 绑定 `LocalThreadStore`，负责消息列表、流式更新、停止、重试和错误展示。
+2. 创建/切换会话只改变稳定 `threadId` 并调用 store 的 hydrate/save；不在业务页面维护第二份消息数组。
+3. DeepAgents 的工具调用、工具结果、interrupt 和多轮文本事件直接转成 CopilotKit Core 接受的 agent events，由官方 chat surface 渲染。
+4. 只为视频生成等业务工具注册 renderer；通用工具使用 CopilotKit 默认显示。不得重新实现 timeline、stage reducer 或自定义 message bubble 系统。
+5. 重启后先恢复 message records 和 checkpoint，再继续同一 `threadId`；无法恢复 checkpoint 时允许以已恢复 transcript 创建新 run，并明确提示用户。
+
+## 失败边界
+
+- 缺少 LLM endpoint/key/model：在 composer 上显示配置错误，不调用任何 agent。
+- 网络/TLS/模型能力错误：显示可重试的 transport/capability 状态，不伪造结果。
+- skill 文件缺失：报告具体路径并停止本轮。
+- 取消或达到迭代限制：保留部分 trace，状态为 cancelled/limit，不把部分文本标记为最终结果。
+- SQLite 读写失败：显示持久化错误，禁止静默丢失会话。
+
+## 明确排除
+
+- 生产路径不依赖远端 CopilotKit Runtime 或任何 agent server。
+- 不维护第二套手写 chatbot、timeline、SSE parser、session reducer 或固定技能模板。
+- 不为旧版数据提供迁移；以新安装、无历史数据为基线。
 
 ## 验收标准
 
-- 新安装启动后，Prompt 助手显示 CopilotKit rendered chat，而不是当前自定义 `MessageParts`/`Composer`。
-- 发送消息可以看到流式文本；agent 触发工具时能看到工具进行中、完成和失败状态。
-- interrupt/approval 可以暂停并继续 agent run。
-- 重启应用后，服务端 thread 可以恢复；断线重连不丢失已完成消息。
-- Android emulator 使用 debug APK 时，首次发送不会因为 `localhost`、Hermes polyfill 或 SSE 解析失败而出现空白消息。
-- TypeScript、单元测试、Metro release bundle 和 Android debug APK 均通过。
-- 当前自定义 assistant runtime、端侧 skills bundle 和旧版 Web assistant adapter 不再被生产入口引用。
+- 关闭所有服务端进程，APK 仍可启动 Prompt 助手；仅配置 LLM API 后即可运行。
+- 一次请求可产生真实的多轮模型/工具调用，并在 CopilotChat 中显示进行中、完成、失败状态。
+- APK 中存在完整官方 H3 skills，agent 能按需读取多文件 references。
+- 新建、切换、重启恢复 thread 不丢失文本、工具调用/结果、附件引用和最终 prompt。
+- Android emulator 上不因 `localhost`、远端 health check 或 SSE 解析导致白屏。
+- TypeScript、单元/集成测试、Metro bundle、debug APK 和本地离线 mock LLM 流程全部通过。
 
-## 不在本次范围内
+## 参考依据
 
-- 重新设计 Gallery、视频播放器或设置页的业务视觉。
-- 迁移旧版 Web UI 到 WebView。
-- 为 CopilotKit RN 重新实现一套通用 timeline。
-- 为旧版本地 agent 会话提供数据迁移。
+- [CopilotKit RN `useThreads` 限制](https://docs.copilotkit.ai/reference/react-native/hooks/useThreads)
+- [CopilotKit 自托管 threads 与持久化边界](https://docs.copilotkit.ai/deepagents/threads-self-managed)
+- [CopilotKit thread 生命周期](https://docs.copilotkit.ai/deepagents/threads-lifecycle)
+- [DeepAgents backends](https://docs.langchain.com/oss/javascript/deepagents/backends)
+- [DeepAgents production persistence](https://docs.langchain.com/oss/javascript/deepagents/going-to-production)
