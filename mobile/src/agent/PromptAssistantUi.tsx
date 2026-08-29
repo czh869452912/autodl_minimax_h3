@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { AppIcon } from '../ui/icons';
 import { LIGHT_PROMPT_COLORS } from '../ui/theme';
+import { pickAssistantImages, type AssistantImageAttachment } from './assistantImagePicker';
 import {
   groupSessions,
   matchesSessionQuery,
@@ -37,6 +38,7 @@ type AttachmentLike = {
   status: 'uploading' | 'ready';
   source?: { type?: string; value?: string; url?: string };
   filename?: string;
+  size?: number;
 };
 type HistoryProps = {
   threads: LocalThreadSnapshot[];
@@ -67,6 +69,7 @@ export function PromptAssistantUi({
     agent,
   } = useCopilotChatContext();
   const [draft, setDraft] = useState('');
+  const [galleryAttachments, setGalleryAttachments] = useState<AssistantImageAttachment[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -100,10 +103,10 @@ export function PromptAssistantUi({
     }
   }, [pendingRow, persistedRows]);
   const handleSubmit = async (value: string) => {
-    if (!value.trim() && !attachments.some((item) => item.status === 'ready'))
+    const ready = [...attachments.filter((item) => item.status === 'ready'), ...galleryAttachments];
+    if (!value.trim() && !ready.length)
       return;
-    const readyAttachments: Array<{ uri: string; filename?: string }> = attachments
-      .filter((item) => item.status === 'ready')
+    const readyAttachments: Array<{ uri: string; filename?: string }> = ready
       .map((item) => {
         if (!item.source) return null;
         return {
@@ -119,7 +122,29 @@ export function PromptAssistantUi({
       attachments: readyAttachments,
     });
     setDraft('');
+    if (galleryAttachments.length) {
+      agent.setPendingAttachments?.(
+        galleryAttachments,
+        () => setGalleryAttachments([]),
+      );
+    }
     await submitMessage(value);
+  };
+  const addGalleryImages = async () => {
+    try {
+      const remaining = Math.max(0, 9 - attachments.filter((item) => item.status === 'ready').length - galleryAttachments.length);
+      const picked = await pickAssistantImages('gallery', remaining);
+      setGalleryAttachments((current) => [...current, ...picked]);
+    } catch (error) {
+      Alert.alert('相册不可用', error instanceof Error ? error.message : '读取相册图片失败');
+    }
+  };
+  const handleOpenPicker = async () => {
+    Alert.alert('添加图片附件', '选择图片来源', [
+      { text: '从相册选择', onPress: () => void addGalleryImages() },
+      { text: '从文件选择', onPress: () => void openPicker() },
+      { text: '取消', style: 'cancel' },
+    ]);
   };
   const history = (
     <HistoryList
@@ -191,11 +216,14 @@ export function PromptAssistantUi({
               value={draft}
               onChangeText={setDraft}
               onSubmit={handleSubmit}
-              onOpenPicker={openPicker}
+              onOpenPicker={handleOpenPicker}
               onCancel={() => agent.abortRun?.()}
               isRunning={isRunning}
-              attachments={attachments as AttachmentLike[]}
-              onRemoveAttachment={removeAttachment}
+              attachments={[...attachments, ...galleryAttachments] as AttachmentLike[]}
+              onRemoveAttachment={(id) => {
+                if (galleryAttachments.some((item) => item.id === id)) setGalleryAttachments((current) => current.filter((item) => item.id !== id));
+                else removeAttachment(id);
+              }}
             />
           </KeyboardAvoidingView>
         </View>
