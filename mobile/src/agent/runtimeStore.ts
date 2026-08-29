@@ -1,11 +1,8 @@
 import type { H3AgUiAgent } from './aguiAgent';
+import type { H3AgentConfig } from './agentTypes';
 import type { LocalThreadSnapshot, LocalThreadStore } from './threadStore';
 
-export type PromptAgentConfig = {
-  apiKey: string;
-  endpoint: string;
-  model: string;
-};
+export type PromptAgentConfig = H3AgentConfig;
 
 type RuntimeEvent =
   | { type: 'snapshot'; snapshot: LocalThreadSnapshot }
@@ -31,7 +28,7 @@ function defaultAgentFactory(config: PromptAgentConfig): H3AgUiAgent {
 }
 
 function configKey(config: PromptAgentConfig): string {
-  return `${config.endpoint}\u0000${config.model}\u0000${config.apiKey}`;
+  return `${config.endpoint}\u0000${config.model}\u0000${config.apiKey}\u0000${config.timeoutMs}\u0000${config.maxRetries}`;
 }
 
 export function createPromptRuntimeRegistry(

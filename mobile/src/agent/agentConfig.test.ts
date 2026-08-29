@@ -6,7 +6,9 @@ it('maps secure settings into the local harness configuration', () => {
     llmApiKey: 'key',
     llmEndpoint: 'https://llm.example/v1',
     llmModel: 'model',
-  })).toEqual({ apiKey: 'key', endpoint: 'https://llm.example/v1', model: 'model' });
+    llmTimeoutSeconds: '900',
+    llmMaxRetries: '3',
+  })).toEqual({ apiKey: 'key', endpoint: 'https://llm.example/v1', model: 'model', timeoutMs: 900000, maxRetries: 3 });
 });
 
 it('clears a stale screen error when settings are loaded successfully', () => {
@@ -15,8 +17,10 @@ it('clears a stale screen error when settings are loaded successfully', () => {
     llmApiKey: 'key',
     llmEndpoint: 'https://llm.example/v1',
     llmModel: 'model',
+    llmTimeoutSeconds: '600',
+    llmMaxRetries: '2',
   })).toEqual({
-    config: { apiKey: 'key', endpoint: 'https://llm.example/v1', model: 'model' },
+    config: { apiKey: 'key', endpoint: 'https://llm.example/v1', model: 'model', timeoutMs: 600000, maxRetries: 2 },
     error: null,
   });
 });

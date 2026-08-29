@@ -14,4 +14,5 @@ it('keeps the production agent boundary inside the Android app', () => {
   expect(metroConfig).toContain('copilotKitStreamingFetch.ts');
   const streamingFetch = fs.readFileSync(path.join(root, 'src', 'shims', 'copilotKitStreamingFetch.ts'), 'utf8');
   expect(streamingFetch).toMatch(/cancel\(\).*closed = true/s);
+  expect(streamingFetch).toContain('configureStreamingFetch');
 });

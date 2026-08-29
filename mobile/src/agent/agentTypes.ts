@@ -2,6 +2,8 @@ export type H3AgentConfig = {
   apiKey: string;
   endpoint: string;
   model: string;
+  timeoutMs: number;
+  maxRetries: number;
 };
 
 export type H3AgentInput = {

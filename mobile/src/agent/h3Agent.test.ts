@@ -17,7 +17,7 @@ describe('local H3 DeepAgent harness', () => {
     const events: H3AgentEvent[] = [];
     for await (const event of streamH3Agent(
       { threadId: 'thread-1', messages: [{ role: 'user', content: '写一个视频提示词' }], signal: new AbortController().signal },
-      { apiKey: 'test', endpoint: 'https://llm.example.test/v1', model: 'test-model' },
+      { apiKey: 'test', endpoint: 'https://llm.example.test/v1', model: 'test-model', timeoutMs: 600000, maxRetries: 2 },
       { agentFactory: scripted },
     )) events.push(event);
 
@@ -36,7 +36,7 @@ describe('local H3 DeepAgent harness', () => {
     const events: H3AgentEvent[] = [];
     for await (const event of streamH3Agent(
       { threadId: 'thread-1', messages: [], signal: controller.signal },
-      { apiKey: 'test', endpoint: 'https://llm.example.test/v1', model: 'test-model' },
+      { apiKey: 'test', endpoint: 'https://llm.example.test/v1', model: 'test-model', timeoutMs: 600000, maxRetries: 2 },
       { agentFactory: scripted },
     )) events.push(event);
     expect(events).toEqual([]);

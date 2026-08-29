@@ -1,7 +1,7 @@
 import { createPromptRuntimeRegistry } from './runtimeStore';
 import type { LocalThreadSnapshot, LocalThreadStore } from './threadStore';
 
-const config = { apiKey: 'key', endpoint: 'https://example.invalid', model: 'h3' };
+const config = { apiKey: 'key', endpoint: 'https://example.invalid', model: 'h3', timeoutMs: 600000, maxRetries: 2 };
 const snapshot = (threadId: string, updatedAt = 1): LocalThreadSnapshot => ({
   threadId,
   messages: [{ id: `${threadId}-message`, role: 'user', content: 'hello' }] as never,
@@ -35,5 +35,13 @@ describe('prompt runtime registry', () => {
     expect(second.agent).toBe(first.agent);
     expect(first.agent.messages).toHaveLength(1);
     expect(otherThread.agent).not.toBe(first.agent);
+  });
+
+  it('creates a new runtime when network settings change', () => {
+    const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
+    const first = registry.ensure(config, snapshot('thread-1'), store);
+    const changed = registry.ensure({ ...config, timeoutMs: 120000 }, snapshot('thread-1'), store);
+
+    expect(changed.agent).not.toBe(first.agent);
   });
 });

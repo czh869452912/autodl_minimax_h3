@@ -1,5 +1,6 @@
 import { ChatOpenAI } from '@langchain/openai';
 import type { H3AgentConfig } from './agentTypes';
+import { configureStreamingFetch } from '../shims/copilotKitStreamingFetch';
 
 export type ModelFactory = (config: H3AgentConfig) => ChatOpenAI;
 
@@ -18,9 +19,12 @@ export function validateH3AgentConfig(config: H3AgentConfig): void {
 
 export function createOpenAICompatibleModel(config: H3AgentConfig): ChatOpenAI {
   validateH3AgentConfig(config);
+  configureStreamingFetch({ timeoutMs: config.timeoutMs });
   return new ChatOpenAI({
     model: config.model.trim(),
     temperature: 0.3,
+    timeout: config.timeoutMs,
+    maxRetries: config.maxRetries,
     apiKey: config.apiKey.trim(),
     configuration: {
       baseURL: config.endpoint.trim(),

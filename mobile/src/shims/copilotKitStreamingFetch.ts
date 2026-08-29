@@ -11,6 +11,17 @@ function abortError(): Error {
   return DomException ? new DomException('The operation was aborted.', 'AbortError') : new Error('The operation was aborted');
 }
 
+let streamingFetchTimeoutMs = 600_000;
+
+export function configureStreamingFetch({ timeoutMs }: { timeoutMs: number }): void {
+  if (Number.isFinite(timeoutMs) && timeoutMs > 0)
+    streamingFetchTimeoutMs = Math.floor(timeoutMs);
+}
+
+export function getStreamingFetchTimeout(): number {
+  return streamingFetchTimeoutMs;
+}
+
 export function installStreamingFetch(): void {
   try {
     const response = new Response('');
@@ -32,7 +43,8 @@ export function installStreamingFetch(): void {
       if (signal?.aborted) { reject(abortError()); return; }
       const xhr = new XMLHttpRequest();
       xhr.open(method, url);
-      xhr.timeout = 60_000;
+      const timeoutMs = streamingFetchTimeoutMs;
+      xhr.timeout = timeoutMs;
       xhr.responseType = 'text';
       const entries = headers instanceof Headers ? Array.from(headers.entries()) : Object.entries(headers);
       for (const [key, value] of entries as [string, string][]) xhr.setRequestHeader(key, value);
@@ -79,8 +91,8 @@ export function installStreamingFetch(): void {
         try { flush(); } catch (error) { fail(error); return; }
         close(); cleanup(); resolveText(xhr.responseText);
       }, 0);
-      xhr.onerror = () => setTimeout(() => fail(new TypeError('Network request failed')), 0);
-      xhr.ontimeout = () => setTimeout(() => fail(new TypeError('Network request timed out')), 0);
+      xhr.onerror = () => setTimeout(() => fail(new TypeError('LLM 网络连接失败，请检查 API 地址、网络和服务状态。')), 0);
+      xhr.ontimeout = () => setTimeout(() => fail(new TypeError(`LLM 请求超过 ${Math.round(timeoutMs / 1000)} 秒未完成，请在设置的高级选项中增大请求超时。`)), 0);
       xhr.onreadystatechange = () => {
         const readyState = xhr.readyState;
         const status = xhr.status;

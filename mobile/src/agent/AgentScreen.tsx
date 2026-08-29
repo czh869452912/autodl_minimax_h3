@@ -12,14 +12,14 @@ import {
   type LocalThreadSnapshot,
   type LocalThreadStore,
 } from './threadStore';
-import { isH3AgentConfigReady } from './agentTypes';
+import { isH3AgentConfigReady, type H3AgentConfig } from './agentTypes';
 import { applyAgentSettings } from './agentConfig';
 import { readImageAsDataSource } from './imageAttachmentUpload';
 import { getH3AgentConfigError } from './modelAdapter';
 import { PromptAssistantUi } from './PromptAssistantUi';
 import { createPromptDraftStore } from './promptDraft';
 
-type AgentConfig = { apiKey: string; endpoint: string; model: string };
+type AgentConfig = H3AgentConfig;
 
 export default function AgentScreen() {
   const [config, setConfig] = useState<AgentConfig | null>(null);
@@ -70,7 +70,7 @@ export default function AgentScreen() {
     );
   return (
     <ReadyAgent
-      key={`${config.endpoint}\u0000${config.model}\u0000${config.apiKey}`}
+      key={`${config.endpoint}\u0000${config.model}\u0000${config.apiKey}\u0000${config.timeoutMs}\u0000${config.maxRetries}`}
       config={config}
       onError={setError}
     />
