@@ -70,6 +70,25 @@ it('keeps the official chat message renderable and sends selected images to Deep
   ]);
 });
 
+it('normalizes CopilotKit tool result messages before sending history to DeepAgents', async () => {
+  let graphInput: any;
+  const graph = { stream: async function* (input: any) { graphInput = input; } };
+  const toolResult = {
+    id: 'run-tool-call-result',
+    toolCallId: 'call_123',
+    content: '/skills/README.md',
+    tool: 'tool',
+  };
+
+  await collect(new H3AgUiAgent(graph as never), {
+    threadId: 't1', runId: 'r2', state: {}, messages: [toolResult],
+  } as never);
+
+  expect(graphInput.messages).toEqual([{
+    role: 'tool', content: '/skills/README.md', tool_call_id: 'call_123',
+  }]);
+});
+
 it('normalizes DeepAgents failures into an Error-backed RUN_ERROR event', async () => {
   const graph = { stream: async function* () { throw new TypeError('provider failed'); } };
   const events = await collect(new H3AgUiAgent(graph as never), { threadId: 't1', runId: 'r1', state: {}, messages: [] } as never);

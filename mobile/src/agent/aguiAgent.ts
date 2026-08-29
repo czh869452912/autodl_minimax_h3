@@ -22,10 +22,18 @@ const callsOf = (message: Record<string, any>): Record<string, any>[] => {
   const calls = message.tool_calls ?? message.kwargs?.tool_calls ?? message.additional_kwargs?.tool_calls;
   return Array.isArray(calls) ? calls.map(rec) : [];
 };
-const messagesForDeepAgent = (messages: RunAgentInput['messages']): unknown[] => messages.map((message) => {
+const messagesForDeepAgent = (messages: RunAgentInput['messages']): unknown[] => messages.flatMap((message): unknown[] => {
   const record = rec(message);
+  const role = String(record.role ?? '').toLowerCase();
+  const toolCallId = record.tool_call_id ?? record.toolCallId;
+  // CopilotKit stores TOOL_CALL_RESULT events as UI-shaped objects without a
+  // LangChain role. Normalize them before handing the transcript to LangChain.
+  if (toolCallId && (role === 'tool' || record.tool === 'tool' || !role)) {
+    return [{ role: 'tool' as const, content: textOf(record), tool_call_id: String(toolCallId) }];
+  }
+  if (role && !['user', 'human', 'assistant', 'ai', 'system', 'developer', 'tool'].includes(role)) return [];
   const attachments = Array.isArray(record.attachments) ? record.attachments.map(rec) : [];
-  if (record.role !== 'user' || attachments.length === 0) return message;
+  if ((role !== 'user' && role !== 'human') || attachments.length === 0) return [message];
   const content: Record<string, unknown>[] = [];
   if (typeof record.content === 'string' && record.content.trim()) content.push({ type: 'text', text: record.content });
   for (const attachment of attachments) {
@@ -37,7 +45,7 @@ const messagesForDeepAgent = (messages: RunAgentInput['messages']): unknown[] =>
       content.push({ type: 'image', source_type: 'url', url: source.value });
     }
   }
-  return { ...record, content };
+  return [{ ...record, role: 'user', content }];
 });
 
 export class H3AgUiAgent extends AbstractAgent {
