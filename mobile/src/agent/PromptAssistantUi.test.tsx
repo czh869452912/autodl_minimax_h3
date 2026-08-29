@@ -3,15 +3,29 @@ import { act, create } from 'react-test-renderer';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from 'react-native';
 
+let mockChatContext: Record<string, unknown>;
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resolve()) }));
-jest.mock('@copilotkit/react-native', () => ({ useCopilotChatContext: () => ({}) }));
+jest.mock('@copilotkit/react-native', () => ({ useCopilotChatContext: () => mockChatContext }));
 jest.mock('@copilotkit/react-native/components', () => ({ CopilotMarkdown: ({ content }: { content: string }) => <>{content}</> }));
 jest.mock('@copilotkit/shared', () => ({ getSourceUrl: (source: { value?: string }) => source.value || '' }));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
 
-import { PromptResultCard, ToolTimeline, Composer, ConversationTimeline } from './PromptAssistantUi';
+import { PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline } from './PromptAssistantUi';
 
 describe('Prompt assistant UI primitives', () => {
+  beforeEach(() => {
+    mockChatContext = {
+      messages: [],
+      isRunning: false,
+      submitMessage: jest.fn(() => new Promise(() => undefined)),
+      attachments: [],
+      openPicker: jest.fn(),
+      removeAttachment: jest.fn(),
+      agent: {},
+    };
+  });
+
   it('keeps tool details collapsed until expanded', () => {
     let tree!: ReturnType<typeof create>;
     act(() => { tree = create(<ToolTimeline steps={[{ id: 't1', name: 'skill', status: 'complete' }]} />); });
@@ -45,6 +59,53 @@ describe('Prompt assistant UI primitives', () => {
     let tree!: ReturnType<typeof create>;
     act(() => { tree = create(<ConversationTimeline rows={[]} isRunning onExportPrompt={() => Promise.resolve()} />); });
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === '正在生成 Prompt…')).toBe(true);
+    act(() => tree.unmount());
+  });
+
+  it('shows the submitted user bubble before the agent run resolves', async () => {
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <PromptAssistantUi
+          threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
+          activeThreadId="t1"
+          onSelect={() => undefined}
+          onNew={() => undefined}
+          onDelete={() => undefined}
+          onRename={() => undefined}
+          onExportPrompt={() => Promise.resolve()}
+        />,
+      );
+    });
+    await act(async () => {
+      tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.onChangeText('雨中的城市夜跑');
+    });
+    await act(async () => {
+      tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.onPress();
+    });
+    expect(tree.root.findAllByType(Text).some((node) => node.props.children === '雨中的城市夜跑')).toBe(true);
+    act(() => tree.unmount());
+  });
+
+  it('aborts the long-lived agent when stop is pressed', async () => {
+    const abortRun = jest.fn();
+    mockChatContext = { ...mockChatContext, isRunning: true, agent: { abortRun } };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <PromptAssistantUi
+          threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
+          activeThreadId="t1"
+          onSelect={() => undefined}
+          onNew={() => undefined}
+          onDelete={() => undefined}
+          onRename={() => undefined}
+          onExportPrompt={() => Promise.resolve()}
+        />,
+      );
+    });
+    act(() => tree.root.findByProps({ accessibilityLabel: '停止生成' }).props.onPress());
+    expect(abortRun).toHaveBeenCalledTimes(1);
     act(() => tree.unmount());
   });
 });

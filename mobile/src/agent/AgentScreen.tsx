@@ -1,13 +1,12 @@
 import { CopilotChat } from '@copilotkit/react-native';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { openDatabaseSync } from 'expo-sqlite';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { readSettings } from '../settings/storage';
 import { COLORS } from '../ui/theme';
-import { createH3Agent } from './h3Agent';
 import { LocalCopilotKitProvider } from './LocalCopilotKitProvider';
-import { H3AgUiAgent } from './aguiAgent';
+import { promptRuntimeRegistry } from './runtimeStore';
 import {
   createLocalThreadStore,
   type LocalThreadSnapshot,
@@ -240,41 +239,18 @@ function AgentSession({
   onExportPrompt: (prompt: string) => Promise<void>;
 }) {
   const [notice, setNotice] = useState<string | undefined>();
-  const agent = useMemo(
-    () => new H3AgUiAgent(createH3Agent(config) as never),
-    [config, snapshot.threadId],
+  const runtime = useMemo(
+    () => promptRuntimeRegistry.ensure(config, snapshot, threadStore),
+    [config, snapshot.threadId, threadStore],
   );
-  const initialSnapshot = useRef(snapshot);
+  const agent = runtime.agent;
   useEffect(() => {
-    const initial = initialSnapshot.current;
-    agent.threadId = initial.threadId;
-    agent.setMessages(initial.messages);
-    agent.setState(initial.state);
-    let saveQueue = Promise.resolve();
-    const subscription = agent.subscribe({
-      onMessagesChanged: ({ messages, state }) => {
-        const next = {
-          threadId: agent.threadId,
-          messages: [...messages] as never,
-          state: { ...state },
-          createdAt: initial.createdAt,
-          updatedAt: Date.now(),
-          customTitle: initial.customTitle,
-        };
-        onSnapshotChange(next);
-        saveQueue = saveQueue
-          .then(() => threadStore.save(next))
-          .catch((reason) =>
-            setNotice(
-              reason instanceof Error
-                ? `本地会话保存失败：${reason.message}`
-                : '本地会话保存失败',
-            ),
-          );
-      },
+    const unsubscribe = runtime.subscribe((event) => {
+      if (event.type === 'snapshot') onSnapshotChange(event.snapshot);
+      else setNotice(event.message);
     });
-    return () => subscription.unsubscribe();
-  }, [agent, onSnapshotChange, threadStore]);
+    return unsubscribe;
+  }, [runtime, onSnapshotChange]);
   return (
     <LocalCopilotKitProvider
       agent={agent}

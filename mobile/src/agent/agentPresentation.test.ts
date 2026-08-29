@@ -21,6 +21,17 @@ describe('agent presentation helpers', () => {
     expect(normalizeMessages([{ id: 'u1', role: 'user', content: '看这张图', attachments: [{ type: 'image', filename: 'ref.png', source: { value: 'data:image/png;base64,a' } }] }])[0]).toMatchObject({ attachments: [{ filename: 'ref.png' }] });
   });
 
+  it('rebuilds a displayable data URI for persisted image content', () => {
+    expect(normalizeMessages([{
+      id: 'u2',
+      role: 'user',
+      content: [
+        { type: 'text', text: '看这张图' },
+        { type: 'image', source: { type: 'data', mimeType: 'image/jpeg', value: 'abc' }, metadata: { filename: 'ref.jpg' } },
+      ],
+    }])[0]).toMatchObject({ attachments: [{ uri: 'data:image/jpeg;base64,abc', filename: 'ref.jpg' }] });
+  });
+
   it('summarizes tool steps in a collapsed timeline', () => {
     expect(toolTimelineSummary([{ id: 't1', name: 'skill', status: 'running' }])).toBe('正在分析…');
     expect(toolTimelineSummary([{ id: 't1', name: 'skill', status: 'complete' }])).toBe('已完成 1 个步骤');

@@ -5,14 +5,20 @@ import { CopilotKitCoreReact } from '@copilotkit/react-core/v2/headless';
 import { createLicenseContextValue } from '@copilotkit/shared';
 import type { AbstractAgent } from '@ag-ui/client';
 
+const localCores = new WeakMap<AbstractAgent, CopilotKitCoreReactInstance>();
+
 export function createLocalCopilotKitCore(agent: AbstractAgent): CopilotKitCoreReactInstance {
+  const existing = localCores.get(agent);
+  if (existing) return existing;
   const agentId = String(agent.agentId || 'h3-prompt-assistant');
-  return new CopilotKitCoreReact({
+  const core = new CopilotKitCoreReact({
     // CopilotKit uses the in-memory agent registry when no runtime URL is set.
     // This is the same local-agent hook used by its own RN tests.
     agents__unsafe_dev_only: { [agentId]: agent },
     deferInitialConnection: true,
   });
+  localCores.set(agent, core);
+  return core;
 }
 
 export function LocalCopilotKitProvider({ children, agent, onError }: {

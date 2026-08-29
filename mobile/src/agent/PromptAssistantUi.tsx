@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useCopilotChatContext } from '@copilotkit/react-native';
 import { CopilotMarkdown } from '@copilotkit/react-native/components';
 import { getSourceUrl } from '@copilotkit/shared';
@@ -71,12 +71,55 @@ export function PromptAssistantUi({
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const wide = width >= 720;
-  const rows = useMemo(() => normalizeMessages(messages), [messages]);
+  // AbstractAgent mutates its messages array when addMessage() is called. Do
+  // not memoize by array identity or the first user bubble waits for the next
+  // streamed event before becoming visible.
+  const persistedRows = normalizeMessages(messages);
+  const [pendingRow, setPendingRow] = useState<Extract<ReturnType<typeof normalizeMessages>[number], { kind: 'user' }> | null>(null);
+  const rows = useMemo(() => {
+    if (!pendingRow) return persistedRows;
+    const alreadyPersisted = persistedRows.some(
+      (row) =>
+        row.kind === 'user' &&
+        row.text === pendingRow.text &&
+        row.attachments.length === pendingRow.attachments.length,
+    );
+    return alreadyPersisted ? persistedRows : [...persistedRows, pendingRow];
+  }, [pendingRow, persistedRows]);
+  useEffect(() => {
+    if (!pendingRow) return;
+    if (
+      persistedRows.some(
+        (row) =>
+          row.kind === 'user' &&
+          row.text === pendingRow.text &&
+          row.attachments.length === pendingRow.attachments.length,
+      )
+    ) {
+      setPendingRow(null);
+    }
+  }, [pendingRow, persistedRows]);
   const handleSubmit = async (value: string) => {
     if (!value.trim() && !attachments.some((item) => item.status === 'ready'))
       return;
-    await submitMessage(value);
+    const readyAttachments: Array<{ uri: string; filename?: string }> = attachments
+      .filter((item) => item.status === 'ready')
+      .map((item) => {
+        if (!item.source) return null;
+        return {
+          uri: getSourceUrl(item.source as never),
+          ...(item.filename ? { filename: item.filename } : {}),
+        };
+      })
+      .filter((item): item is { uri: string; filename?: string } => Boolean(item && item.uri));
+    setPendingRow({
+      id: `pending-${Date.now()}`,
+      kind: 'user',
+      text: value,
+      attachments: readyAttachments,
+    });
     setDraft('');
+    await submitMessage(value);
   };
   const history = (
     <HistoryList
@@ -149,7 +192,7 @@ export function PromptAssistantUi({
               onChangeText={setDraft}
               onSubmit={handleSubmit}
               onOpenPicker={openPicker}
-              onCancel={() => agent.stop?.()}
+              onCancel={() => agent.abortRun?.()}
               isRunning={isRunning}
               attachments={attachments as AttachmentLike[]}
               onRemoveAttachment={removeAttachment}

@@ -50,14 +50,22 @@ function attachmentsContent(
     (part) => {
       const item = part as {
         type?: string;
-        source?: { type?: string; value?: string };
+        source?: { type?: string; value?: string; url?: string; mimeType?: string };
+        image_url?: { url?: string };
         metadata?: { filename?: string };
       };
       const filename =
         item.metadata?.filename ?? (part as { filename?: string }).filename;
-      return item.type === 'image' && item.source?.value
-        ? { uri: item.source.value, filename }
-        : null;
+      if (item.type === 'image_url' && item.image_url?.url)
+        return { uri: item.image_url.url, filename };
+      if (item.type !== 'image') return null;
+      const sourceValue = item.source?.value ?? item.source?.url;
+      if (!sourceValue) return null;
+      const uri =
+        item.source?.type === 'data' && !sourceValue.startsWith('data:')
+          ? `data:${item.source.mimeType ?? 'image/png'};base64,${sourceValue}`
+          : sourceValue;
+      return { uri, filename };
     },
   );
   return items.filter((item): item is { uri: string; filename?: string } =>

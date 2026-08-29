@@ -19,3 +19,10 @@ it('registers the local H3 agent without a runtime URL', () => {
   }));
   expect((core as unknown as { config: Record<string, unknown> }).config).not.toHaveProperty('runtimeUrl');
 });
+
+it('reuses one core for the same long-lived agent', () => {
+  const agent = { agentId: 'h3-prompt-assistant' };
+  expect(createLocalCopilotKitCore(agent as never)).toBe(
+    createLocalCopilotKitCore(agent as never),
+  );
+});
