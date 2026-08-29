@@ -13,6 +13,18 @@ export const COLORS = {
   danger: '#ef4444',
 } as const;
 
+export const LIGHT_PROMPT_COLORS = {
+  background: '#FAFAF7',
+  surface: '#FFFFFF',
+  ink: '#171715',
+  muted: '#777771',
+  placeholder: '#A4A49D',
+  line: '#E6E5DF',
+  accent: '#171715',
+  success: '#68856D',
+  danger: '#B35E53',
+} as const;
+
 export const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 
 export const APP_TABS = [

@@ -11,10 +11,14 @@ import { COLORS, SPACING } from '../ui/theme';
 import { AudioPreviewList, ImagePreviewGrid } from './AttachmentPreview';
 import { pickTaskMedia } from './MediaPicker';
 import { RESOLUTION_OPTIONS, type Resolution } from './resolutions';
+import { createPromptDraftStore } from '../agent/promptDraft';
+import { resolveDraftPrompt } from './draftPrompt';
 
 const taskStore = createTaskRepository(openDatabaseSync('autodl-h3.db'));
 
-export function CreateForm({ initialPrompt = '' }: { initialPrompt?: string }) {
+const promptDraftStore = createPromptDraftStore(openDatabaseSync('autodl-h3.db'));
+
+export function CreateForm({ initialPrompt = '', draftId }: { initialPrompt?: string; draftId?: string }) {
   const router = useRouter();
   const [prompt, setPrompt] = useState(initialPrompt);
   const [resolution, setResolution] = useState<Resolution>(RESOLUTION_OPTIONS[0]);
@@ -24,6 +28,10 @@ export function CreateForm({ initialPrompt = '' }: { initialPrompt?: string }) {
   const [audios, setAudios] = useState<TaskMediaInput[]>([]);
   const [submitting, setSubmitting] = useState(false);
   useEffect(() => { if (initialPrompt) setPrompt(initialPrompt); }, [initialPrompt]);
+  useEffect(() => {
+    if (!draftId) return;
+    void promptDraftStore.consume(draftId).then((draft) => { if (draft) setPrompt((current) => resolveDraftPrompt(current, draft.prompt)); });
+  }, [draftId]);
 
   const addMedia = async (kind: 'image' | 'audio') => {
     try {

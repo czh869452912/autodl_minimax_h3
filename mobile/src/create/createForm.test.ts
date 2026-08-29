@@ -1,10 +1,15 @@
 import { buildTaskPayload } from '../tasks/api';
+import { resolveDraftPrompt } from './draftPrompt';
 import { RESOLUTION_OPTIONS } from './resolutions';
 import type { TaskMediaInput } from '../tasks/types';
 
 const image: TaskMediaInput = { dataUri: 'data:image/png;base64,a', name: 'ref.png', mime: 'image/png' };
 
 describe('create form contracts', () => {
+  it('hydrates a draft only when the form still has its initial value', () => {
+    expect(resolveDraftPrompt('', 'exported prompt')).toBe('exported prompt');
+    expect(resolveDraftPrompt('manual edit', 'exported prompt')).toBe('manual edit');
+  });
   it('serializes every API resolution without renaming it', () => {
     for (const resolution of RESOLUTION_OPTIONS) {
       expect(buildTaskPayload({ prompt: 'p', duration: 5, resolution })).toMatchObject({ resolution });
