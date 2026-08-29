@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
 const mockBack = jest.fn();
@@ -59,5 +59,15 @@ describe('video detail screen', () => {
     await act(async () => { tree = create(<VideoDetailScreen />); });
     expect(tree!.root.findByProps({ accessibilityLabel: '视频源不可用' })).toBeTruthy();
     expect(tree!.root.findAllByProps({ testID: 'video-player-mock' })).toHaveLength(0);
+  });
+
+  it('expands media through available height and pins the bounded prompt section below it', async () => {
+    let tree: ReturnType<typeof create>;
+    await act(async () => { tree = create(<VideoDetailScreen />); });
+    expect(StyleSheet.flatten(tree!.root.findByProps({ testID: 'detail-content' }).props.contentContainerStyle)).toMatchObject({ flexGrow: 1 });
+    expect(StyleSheet.flatten(tree!.root.findByProps({ testID: 'adaptive-media-region' }).props.style)).toMatchObject({ flex: 1 });
+    expect(StyleSheet.flatten(tree!.root.findByProps({ testID: 'video-frame' }).props.style)).not.toHaveProperty('aspectRatio');
+    expect(StyleSheet.flatten(tree!.root.findByProps({ accessibilityLabel: '滚动 Prompt' }).props.style)).toMatchObject({ maxHeight: 240 });
+    expect(tree!.root.findByProps({ testID: 'bottom-prompt-card' })).toBeTruthy();
   });
 });
