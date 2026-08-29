@@ -8,10 +8,11 @@ jest.mock('../../src/tasks/sync', () => ({
   syncTasks: jest.fn(async () => [{ id: 'task-1', prompt: 'x', status: 'RUNNING', resolution: '768p竖', duration: 5, createdAt: 1_000, startedAt: 1_500, updatedAt: 2_000 }]),
 }));
 jest.mock('../../src/tasks/download', () => ({ downloadTask: jest.fn() }));
+jest.mock('../../src/tasks/media', () => ({ exportTaskVideo: jest.fn(async (task) => ({ ...task, exportState: 'EXPORTED', galleryUri: 'content://media/video/7' })) }));
 jest.mock('../../src/ui/icons', () => ({ AppIcon: () => null }));
 
 import TasksScreen from './tasks';
-import { syncTasks } from '../../src/tasks/sync';
+import { syncTasks, taskStore } from '../../src/tasks/sync';
 
 afterEach(() => {
   jest.useRealTimers();
@@ -46,5 +47,18 @@ test('refresh button exposes busy state and a completion timestamp', async () =>
   await act(async () => { finishRefresh?.([{ id: 'task-1', prompt: 'x', status: 'RUNNING', resolution: '768p竖', duration: 5, createdAt: 1_000, startedAt: 1_500, updatedAt: 2_000 }]); });
   const texts = renderer!.root.findAllByType(Text).map((node) => [node.props.children].flat(Infinity).join(''));
   expect(texts.some((text) => /^已更新 \d{2}:\d{2}:\d{2}$/.test(text))).toBe(true);
+  act(() => { renderer!.unmount(); });
+});
+
+test('offers gallery retry without calling a successful download failed', async () => {
+  const failedExport = { id: 'task-1', prompt: 'x', status: 'SUCCESS' as const, resolution: '768p竖', duration: 5, localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED' as const, exportState: 'EXPORT_FAILED' as const, exportError: '空间不足', createdAt: 1_000, updatedAt: 2_000 };
+  jest.mocked(taskStore.list).mockResolvedValueOnce([failedExport]);
+  jest.mocked(syncTasks).mockResolvedValueOnce([failedExport]);
+  let renderer: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<TasksScreen />); });
+  expect(renderer!.root.findByProps({ accessibilityLabel: '重试保存到系统相册' })).toBeTruthy();
+  const texts = renderer!.root.findAllByType(Text).map((node) => [node.props.children].flat(Infinity).join(''));
+  expect(texts).toContain('保存到相册失败');
+  expect(texts).not.toContain('下载失败');
   act(() => { renderer!.unmount(); });
 });

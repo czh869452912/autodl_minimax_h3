@@ -5,6 +5,7 @@ import { act, create } from 'react-test-renderer';
 const mockBack = jest.fn();
 const mockCopy = jest.fn(async (_value: string) => undefined);
 const mockList = jest.fn();
+const mockExport = jest.fn(async (value: typeof task) => ({ ...value, exportState: 'EXPORTED' as const, galleryUri: 'content://media/video/7' }));
 const task = {
   id: 'task-1', prompt: 'A very long prompt. '.repeat(300), status: 'SUCCESS' as const,
   resolution: '768p竖', duration: 5, videoUrl: 'https://example/video.mp4',
@@ -19,6 +20,7 @@ jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
 jest.mock('../../src/tasks/repository', () => ({
   createTaskRepository: jest.fn(() => ({ list: () => mockList() })),
 }));
+jest.mock('../../src/tasks/media', () => ({ exportTaskVideo: (...args: unknown[]) => mockExport(args[0] as typeof task) }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: (value: string) => mockCopy(value) }));
 jest.mock('../../src/media/VideoPlayer', () => ({
   VideoPlayer: (props: Record<string, unknown>) => require('react').createElement('View', { ...props, testID: 'video-player-mock' }),
@@ -51,6 +53,14 @@ describe('video detail screen', () => {
     await act(async () => tree!.root.findByProps({ accessibilityLabel: '复制 Prompt' }).props.onPress());
     expect(mockCopy).toHaveBeenCalledWith(task.prompt);
     expect(Alert.alert).toHaveBeenCalledWith('已复制', 'Prompt 已复制到剪贴板');
+  });
+
+  it('manually saves a downloaded private video to the gallery', async () => {
+    mockList.mockResolvedValue([{ ...task, localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED', exportState: 'NOT_REQUESTED' }]);
+    let tree: ReturnType<typeof create>;
+    await act(async () => { tree = create(<VideoDetailScreen />); });
+    await act(async () => tree!.root.findByProps({ accessibilityLabel: '保存到系统相册' }).props.onPress());
+    expect(mockExport).toHaveBeenCalled();
   });
 
   it('shows a recoverable state when a successful task has no media source', async () => {
