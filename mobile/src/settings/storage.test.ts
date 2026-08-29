@@ -24,6 +24,8 @@ describe('local LLM settings', () => {
       llmApiKey: 'llm-key',
       llmTimeoutSeconds: '900',
       llmMaxRetries: '4',
+      autoExportToGallery: true,
+      keepPrivateCopy: true,
     });
   });
 
@@ -32,6 +34,8 @@ describe('local LLM settings', () => {
     await expect(readSettings()).resolves.toMatchObject({
       llmTimeoutSeconds: '600',
       llmMaxRetries: '2',
+      autoExportToGallery: true,
+      keepPrivateCopy: true,
     });
   });
 
@@ -42,5 +46,11 @@ describe('local LLM settings', () => {
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('llm.apiKey', 'secret');
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('llm.timeoutSeconds', '1200');
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('llm.maxRetries', '3');
+  });
+
+  it('persists disabled media policy as explicit booleans', async () => {
+    await saveSettings({ autoExportToGallery: false, keepPrivateCopy: false });
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('media.autoExportToGallery', 'false');
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('media.keepPrivateCopy', 'false');
   });
 });

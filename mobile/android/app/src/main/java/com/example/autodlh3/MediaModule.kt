@@ -10,9 +10,11 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.Arguments
 
 class MediaModule(private val context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
   private val executor = Executors.newSingleThreadExecutor()
+  private val publisher = MediaStorePublisher(context.contentResolver)
   override fun getName() = "AutoDLMedia"
 
   @ReactMethod
@@ -38,6 +40,23 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
         FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 88, it) }
         bitmap.recycle(); promise.resolve(file.toURI().toString())
       } catch (error: Exception) { promise.reject("POSTER_FAILED", error.message, error) } finally { retriever.release() }
+    }
+  }
+
+  @ReactMethod
+  fun exportVideo(source: String, mediaId: String, displayName: String, promise: Promise) {
+    executor.execute {
+      try {
+        val result = publisher.publish(source, mediaId, displayName)
+        promise.resolve(Arguments.createMap().apply {
+          putString("uri", result.uri.toString())
+          putString("displayName", result.displayName)
+          putString("relativePath", "Movies/AutoDL-H3/")
+          putBoolean("alreadyExisted", result.alreadyExisted)
+        })
+      } catch (error: Exception) {
+        promise.reject("EXPORT_FAILED", error.message ?: "保存到系统相册失败", error)
+      }
     }
   }
 }

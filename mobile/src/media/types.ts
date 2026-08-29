@@ -13,6 +13,8 @@ export interface MediaAsset {
   height?: number;
   durationMs?: number;
   status: MediaStatus;
+  /** Human-readable publication state for the system gallery. */
+  exportStatus?: string;
   createdAt: number;
   updatedAt: number;
 }

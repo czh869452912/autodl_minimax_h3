@@ -6,6 +6,12 @@ describe('video navigation contract', () => {
     const task: Pick<TaskRecord, 'localUri' | 'videoUrl'> = { localUri: 'file:///local.mp4', videoUrl: 'https://example/video.mp4' };
     expect(mediaSource(task)).toBe('file:///local.mp4');
   });
+  it('falls back from the private file to the published gallery item', () => {
+    expect(mediaSource({
+      galleryUri: 'content://media/video/7',
+      videoUrl: 'https://example/video.mp4',
+    })).toBe('content://media/video/7');
+  });
   it('returns an empty source for a task without media', () => {
     expect(mediaSource({})).toBe('');
   });
