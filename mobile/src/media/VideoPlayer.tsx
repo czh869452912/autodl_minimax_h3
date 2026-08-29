@@ -29,7 +29,7 @@ function InlineVideoPlayer({ source, poster }: { source: string; poster?: string
 
   return <View style={styles.container}>
     <VideoView testID="inline-video-view" player={player} nativeControls contentFit="contain" surfaceType="textureView" useExoShutter={false} fullscreenOptions={{ enable: true, orientation: 'default' }} onFirstFrameRender={() => setHasFirstFrame(true)} style={styles.video} />
-    {!hasFirstFrame && poster ? <Image source={{ uri: poster }} style={styles.poster} resizeMode="contain" /> : null}
+    {!hasFirstFrame && poster ? <View testID="video-poster" pointerEvents="none" style={styles.poster}><Image source={{ uri: poster }} style={styles.posterImage} resizeMode="contain" /></View> : null}
     {status === 'loading' ? <View pointerEvents="none" style={styles.loading}><ActivityIndicator color={COLORS.primaryActive} /></View> : null}
     {status === 'error' ? <View style={styles.error}><Text numberOfLines={2} style={styles.errorText}>{error?.message || '视频播放失败'}</Text><Pressable accessibilityRole="button" accessibilityLabel="重试播放" onPress={retry} style={styles.retry}><AppIcon name="refresh" size={18} color={COLORS.text} /><Text style={styles.retryText}>重试播放</Text></Pressable></View> : null}
   </View>;
@@ -39,6 +39,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   video: { flex: 1, backgroundColor: '#000' },
   poster: { ...StyleSheet.absoluteFill, width: undefined, height: undefined, backgroundColor: '#000' },
+  posterImage: { flex: 1 },
   loading: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   error: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 20, backgroundColor: '#020617e6' },
   errorText: { color: COLORS.textMuted, fontSize: 13, textAlign: 'center' },

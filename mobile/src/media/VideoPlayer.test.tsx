@@ -41,6 +41,7 @@ describe('inline video player', () => {
     expect(view.props.fullscreenOptions).toMatchObject({ enable: true, orientation: 'default' });
     expect(view.props.surfaceType).toBe('textureView');
     expect(view.props.useExoShutter).toBe(false);
+    expect(tree!.root.findByProps({ testID: 'video-poster' }).props.pointerEvents).toBe('none');
   });
 
   it('renders an empty state without constructing a player', () => {
