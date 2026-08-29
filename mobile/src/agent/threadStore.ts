@@ -6,7 +6,8 @@ const schema = `CREATE TABLE IF NOT EXISTS agent_threads (
   messages_json TEXT NOT NULL,
   state_json TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  custom_title TEXT
 );`;
 
 const privateKeys = new Set([
@@ -27,6 +28,7 @@ export type LocalThreadSnapshot = {
   state: State;
   createdAt: number;
   updatedAt: number;
+  customTitle?: string;
 };
 
 type ThreadRow = {
@@ -35,6 +37,7 @@ type ThreadRow = {
   state_json: string;
   created_at: number;
   updated_at: number;
+  custom_title?: string | null;
 };
 
 /** Keep persisted chat data independent from credentials and transport config. */
@@ -66,11 +69,13 @@ function mapRow(row: ThreadRow | null): LocalThreadSnapshot | null {
     state: parseJson<State>(row.state_json, {}),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
+    ...(row.custom_title ? { customTitle: row.custom_title } : {}),
   };
 }
 
 export function createLocalThreadStore(db: SQLiteDatabase) {
   db.execSync(schema);
+  try { db.execSync('ALTER TABLE agent_threads ADD COLUMN custom_title TEXT'); } catch { /* already exists */ }
   return {
     async load(threadId: string): Promise<LocalThreadSnapshot | null> {
       return mapRow(db.getFirstSync<ThreadRow>('SELECT * FROM agent_threads WHERE thread_id = ? LIMIT 1', threadId));
@@ -83,12 +88,13 @@ export function createLocalThreadStore(db: SQLiteDatabase) {
     },
     async save(snapshot: LocalThreadSnapshot): Promise<void> {
       db.runSync(
-        'INSERT OR REPLACE INTO agent_threads (thread_id,messages_json,state_json,created_at,updated_at) VALUES (?,?,?,?,?)',
+        'INSERT OR REPLACE INTO agent_threads (thread_id,messages_json,state_json,created_at,updated_at,custom_title) VALUES (?,?,?,?,?,?)',
         snapshot.threadId,
         JSON.stringify(sanitizePersistedValue(snapshot.messages)),
         JSON.stringify(sanitizePersistedValue(snapshot.state)),
         snapshot.createdAt,
         snapshot.updatedAt,
+        snapshot.customTitle ?? null,
       );
     },
     async remove(threadId: string): Promise<void> {

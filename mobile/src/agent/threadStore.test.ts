@@ -4,16 +4,17 @@ import { createLocalThreadStore, sanitizePersistedValue } from './threadStore';
 function memoryDatabase() {
   const rows = new Map<string, Record<string, unknown>>();
   return {
-    execSync: jest.fn(),
+    execSync: jest.fn((sql: string) => sql.includes('CREATE TABLE') ? undefined : undefined),
     runSync: jest.fn((sql: string, ...params: unknown[]) => {
       if (sql.startsWith('INSERT OR REPLACE')) {
-        const [threadId, messagesJson, stateJson, createdAt, updatedAt] = params;
+        const [threadId, messagesJson, stateJson, createdAt, updatedAt, customTitle] = params;
         rows.set(String(threadId), {
           thread_id: threadId,
           messages_json: messagesJson,
           state_json: stateJson,
           created_at: createdAt,
           updated_at: updatedAt,
+          custom_title: customTitle,
         });
       } else if (sql.startsWith('DELETE')) {
         rows.delete(String(params[0]));
@@ -44,6 +45,7 @@ describe('local agent thread store', () => {
       state: { draft: 'prompt', apiKey: 'must-not-persist' },
       createdAt: 10,
       updatedAt: 20,
+      customTitle: '自定义标题',
     });
 
     expect(await store.load('thread-1')).toEqual({
@@ -52,7 +54,8 @@ describe('local agent thread store', () => {
       state: { draft: 'prompt' },
       createdAt: 10,
       updatedAt: 20,
+      customTitle: '自定义标题',
     });
-    expect(db.execSync).toHaveBeenCalledTimes(1);
+    expect(db.execSync).toHaveBeenCalledTimes(2);
   });
 });
