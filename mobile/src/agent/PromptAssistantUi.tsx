@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCopilotChatContext } from '@copilotkit/react-native';
 import { CopilotMarkdown } from '@copilotkit/react-native/components';
 import { getSourceUrl } from '@copilotkit/shared';
@@ -163,7 +163,11 @@ export function PromptAssistantUi({
     />
   );
   return (
-    <View style={[styles.root, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
+      style={[styles.root, { paddingBottom: Math.max(insets.bottom, 8) }]}
+    >
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="打开对话历史"
@@ -208,10 +212,7 @@ export function PromptAssistantUi({
             isRunning={isRunning}
             onExportPrompt={onExportPrompt}
           />
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.composerDock}
-          >
+          <View style={styles.composerDock}>
             <Composer
               value={draft}
               onChangeText={setDraft}
@@ -225,7 +226,7 @@ export function PromptAssistantUi({
                 else removeAttachment(id);
               }}
             />
-          </KeyboardAvoidingView>
+          </View>
         </View>
       </View>
       {!wide ? (
@@ -256,7 +257,7 @@ export function PromptAssistantUi({
           </View>
         </Modal>
       ) : null}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -269,13 +270,30 @@ export function ConversationTimeline({
   isRunning: boolean;
   onExportPrompt: (prompt: string) => Promise<void>;
 }) {
+  const listRef = useRef<FlatList<ReturnType<typeof normalizeMessages>[number]>>(null);
+  const timelineSignature = rows
+    .map((row) =>
+      row.kind === 'assistant'
+        ? `${row.id}:${row.text}:${row.tools.map((step) => `${step.id}:${step.status}:${step.summary ?? ''}`).join(',')}`
+        : `${row.id}:${row.text}`,
+    )
+    .join('\u0001');
+  const scrollToLatest = useCallback(() => {
+    listRef.current?.scrollToEnd({ animated: true });
+  }, []);
+  useEffect(() => {
+    scrollToLatest();
+  }, [isRunning, scrollToLatest, timelineSignature]);
   return (
     <FlatList
+      ref={listRef}
       data={rows}
       keyExtractor={(item) => item.id}
       style={styles.timeline}
       contentContainerStyle={styles.timelineContent}
       keyboardShouldPersistTaps="handled"
+      onContentSizeChange={scrollToLatest}
+      onLayout={() => scrollToLatest()}
       ListEmptyComponent={
         isRunning ? <RunningIndicator /> : <EmptyTimeline />
       }

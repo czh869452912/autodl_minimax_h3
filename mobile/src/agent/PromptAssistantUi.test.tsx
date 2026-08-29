@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import * as Clipboard from 'expo-clipboard';
-import { Alert, Text } from 'react-native';
+import { Alert, FlatList, KeyboardAvoidingView, Platform, Text } from 'react-native';
 import { pickAssistantImages } from './assistantImagePicker';
 
 let mockChatContext: Record<string, unknown>;
@@ -90,6 +90,42 @@ describe('Prompt assistant UI primitives', () => {
     let tree!: ReturnType<typeof create>;
     act(() => { tree = create(<ConversationTimeline rows={[]} isRunning onExportPrompt={() => Promise.resolve()} />); });
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === '正在生成 Prompt…')).toBe(true);
+    act(() => tree.unmount());
+  });
+
+  it('keeps the composer above the Android keyboard', () => {
+    const originalPlatform = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+    let tree!: ReturnType<typeof create>;
+    try {
+      act(() => {
+        tree = create(
+          <PromptAssistantUi
+            threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
+            activeThreadId="t1"
+            onSelect={() => undefined}
+            onNew={() => undefined}
+            onDelete={() => undefined}
+            onRename={() => undefined}
+            onExportPrompt={() => Promise.resolve()}
+          />,
+        );
+      });
+      expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBe('height');
+    } finally {
+      act(() => tree?.unmount());
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
+    }
+  });
+
+  it('auto-scrolls when streamed output changes size', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<ConversationTimeline rows={[]} isRunning onExportPrompt={() => Promise.resolve()} />);
+    });
+    const list = tree.root.findByType(FlatList);
+    expect(typeof list.props.onContentSizeChange).toBe('function');
+    expect(typeof list.props.onLayout).toBe('function');
     act(() => tree.unmount());
   });
 
