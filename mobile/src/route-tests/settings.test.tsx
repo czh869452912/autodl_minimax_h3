@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Text } from 'react-native';
+import { Linking, Text } from 'react-native';
 
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(),
@@ -55,5 +55,18 @@ describe('Prompt assistant advanced LLM settings', () => {
     await act(async () => { renderer = create(<SettingsScreen />); });
     await act(async () => renderer!.root.findByProps({ accessibilityLabel: '将已有下载保存到相册' }).props.onPress());
     expect(migrateDownloadedVideos).toHaveBeenCalled();
+  });
+
+  it('offers a direct link to the AutoDL access token page', async () => {
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    let renderer: ReturnType<typeof create>;
+    await act(async () => { renderer = create(<SettingsScreen />); });
+
+    const link = renderer!.root.findByProps({ accessibilityLabel: '打开 AutoDL Token 获取页面' });
+    expect(link).toBeTruthy();
+    await act(async () => link.props.onPress());
+
+    expect(openURL).toHaveBeenCalledWith('https://autodl.art/large-model/tokens');
+    openURL.mockRestore();
   });
 });
