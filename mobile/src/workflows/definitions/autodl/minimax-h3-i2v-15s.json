@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1.0",
+  "id": "autodl.minimax-h3.i2v-15s",
+  "version": "1.0.0",
+  "kind": "atomic",
+  "platform": { "adapter": "autodl-comfyui", "operation": "workflow.submit" },
+  "metadata": { "title": "MiniMax H3 Image/Audio to Video", "category": "video", "description": "MiniMax H3 视频生成" },
+  "inputs": {
+    "type": "object",
+    "required": ["prompt", "resolution", "duration"],
+    "properties": {
+      "prompt": { "type": "string", "minLength": 1, "x-workflow.semantic": "prompt", "x-workflow.widget": "textarea" },
+      "resolution": { "type": "string", "enum": ["768p竖", "480p竖", "768p横", "480p横"], "default": "768p竖", "x-workflow.semantic": "enum", "x-workflow.widget": "segmented" },
+      "duration": { "type": "integer", "minimum": 1, "maximum": 15, "default": 5, "x-workflow.semantic": "integer", "x-workflow.widget": "stepper" },
+      "seed": { "type": "string", "x-workflow.semantic": "seed", "x-workflow.widget": "seed" },
+      "images": { "type": "array", "maxItems": 9, "items": { "type": "object" }, "x-workflow.semantic": "image[]", "x-workflow.widget": "asset-list" },
+      "audios": { "type": "array", "maxItems": 3, "items": { "type": "object" }, "x-workflow.semantic": "audio[]", "x-workflow.widget": "asset-list" }
+    }
+  },
+  "ui": { "sections": [{ "id": "prompt", "title": "Prompt", "fields": ["prompt"] }, { "id": "generation", "title": "Generation", "fields": ["resolution", "duration", "seed"] }, { "id": "references", "title": "References", "fields": ["images", "audios"] }] },
+  "request": { "operation": "workflow.submit", "bindings": { "prompt": "prompt", "resolution": "resolution", "duration": "duration", "seed": "seed", "images": "images", "audios": "audios" } },
+  "outputs": { "artifacts": [{ "kind": "video", "from": "result.video" }] }
+}
