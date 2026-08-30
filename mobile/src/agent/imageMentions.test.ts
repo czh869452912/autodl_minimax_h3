@@ -1,0 +1,50 @@
+import {
+  insertImageMention,
+  reconcileImageMentions,
+  type ImageMention,
+} from './imageMentions';
+
+describe('image mention text helpers', () => {
+  const attachment = { id: 'image-1', filename: '角色正面.png' };
+
+  it('inserts a display token at the captured cursor and returns the next cursor', () => {
+    expect(insertImageMention('雨中的', { start: 3, end: 3 }, attachment, [])).toEqual({
+      text: '雨中的@角色正面 ',
+      mention: { attachmentId: 'image-1', label: '@角色正面', start: 3, end: 8 },
+      mentions: [{ attachmentId: 'image-1', label: '@角色正面', start: 3, end: 8 }],
+      selection: { start: 9, end: 9 },
+    });
+  });
+
+  it('replaces a selected range and falls back to 图片 when the filename is missing', () => {
+    expect(insertImageMention('画面草稿', { start: 1, end: 2 }, { id: 'image-2' }, [])).toMatchObject({
+      text: '画@图片 草稿',
+      mention: { attachmentId: 'image-2', label: '@图片', start: 1, end: 4 },
+      selection: { start: 5, end: 5 },
+    });
+  });
+
+  it('shifts later ranges while preserving earlier ranges and repeated references', () => {
+    const earlier: ImageMention = { attachmentId: 'old', label: '@旧', start: 0, end: 2 };
+    const later: ImageMention = { attachmentId: 'later', label: '@后', start: 5, end: 7 };
+    const first = insertImageMention('@旧 abc @后', { start: 3, end: 3 }, attachment, [earlier, later]);
+    const second = insertImageMention(first.text, first.selection, attachment, first.mentions);
+    expect(first.mentions).toEqual([
+      earlier,
+      first.mention,
+      { ...later, start: 11, end: 13 },
+    ]);
+    expect(second.mentions.filter((mention) => mention.attachmentId === 'image-1')).toHaveLength(2);
+  });
+
+  it('drops missing attachments and ranges whose text no longer matches', () => {
+    const mentions: ImageMention[] = [
+      { attachmentId: 'image-1', label: '@角色正面', start: 0, end: 5 },
+      { attachmentId: 'gone', label: '@旧', start: 6, end: 8 },
+    ];
+    expect(reconcileImageMentions('@角色正面 已编辑', mentions, new Set(['image-1']))).toEqual([
+      mentions[0],
+    ]);
+    expect(reconcileImageMentions('@破损 已编辑', mentions, new Set(['image-1']))).toEqual([]);
+  });
+});
