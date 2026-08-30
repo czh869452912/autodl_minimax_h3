@@ -150,27 +150,24 @@ describe('Prompt assistant UI primitives', () => {
       expect.objectContaining({ flex: 1 }),
     );
     expect(tree.root.findAllByType(Image).some((node) => node.props.source?.uri === 'file://ready-1')).toBe(true);
-    expect(tree.root.findAllByType(Text).some((node) => node.props.children === '角色正面')).toBe(true);
+    expect(tree.root.findAllByType(Text).some((node) => node.props.children === '@角色正面')).toBe(true);
     const mentionLayer = tree.root.findByProps({ testID: 'mention-token-layer' });
-    const inputArea = tree.root.findByProps({ testID: 'composer-input-area' });
     const richInput = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
     expect(mentionLayer.props.pointerEvents).toBe('none');
-    expect(inputArea.props.style).toEqual(
-      expect.objectContaining({ flexDirection: 'column' }),
+    expect(mentionLayer.findAllByType(Text).map((node) => node.props.children)).toEqual(
+      expect.arrayContaining(['镜头', '@角色正面', ' 前后']),
     );
-    expect(mentionLayer.findAllByType(Text).map((node) => node.props.children)).toEqual([
-      '角色正面',
-    ]);
-    expect(richInput.props.style).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ color: 'transparent' })]),
-    );
-    expect(richInput.props.style).not.toEqual(
-      expect.objectContaining({ flex: 1 }),
-    );
-    expect(mentionLayer.props.style).not.toEqual(
+    expect(mentionLayer.props.style).toEqual(
       expect.objectContaining({ position: 'absolute' }),
     );
+    expect(richInput.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ color: 'transparent' })]),
+    );
     expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件 角色正面.png' })).toHaveLength(0);
+    act(() => richInput.props.onSelectionChange({ nativeEvent: { selection: { start: 5, end: 5 } } }));
+    const editingMentionLayer = tree.root.findByProps({ testID: 'mention-token-layer' });
+    expect(editingMentionLayer.findAllByType(Text).some((node) => node.props.children === '@角色正面')).toBe(true);
+    expect(editingMentionLayer.findAllByProps({ testID: 'mention-token' })).toHaveLength(0);
     act(() => tree.unmount());
   });
 
