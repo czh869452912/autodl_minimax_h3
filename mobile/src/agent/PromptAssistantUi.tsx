@@ -8,6 +8,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -84,8 +85,39 @@ export function PromptAssistantUi({
   const [stopNotice, setStopNotice] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const [keyboardHeight, setKeyboardHeight] = useState<number | null>(null);
+  // Keep the keyboard-hidden height captured at mount. Updating this while
+  // Android is resizing the window would make the resize delta look like zero
+  // and re-apply the full keyboard height (the extra tab-bar-sized lift seen
+  // on some edge-to-edge devices).
+  const baselineHeight = useRef(height);
   const wide = width >= 720;
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
+      setKeyboardHeight(event.endCoordinates.height);
+    });
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(null);
+    });
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+  const keyboardPadding =
+    Platform.OS === 'android' && keyboardHeight != null
+      ? getKeyboardAvoidancePadding(
+        height,
+        keyboardHeight,
+        baselineHeight.current,
+        // The custom tab bar is hidden by React Navigation while the keyboard
+        // is open. Its freed layout space must not be treated as keyboard
+        // overlap, otherwise the composer rises by one tab-bar height.
+        8 + 66 + Math.max(insets.bottom, 8),
+      )
+      : 0;
   // AbstractAgent mutates its messages array when addMessage() is called. Do
   // not memoize by array identity or the first user bubble waits for the next
   // streamed event before becoming visible.
@@ -210,14 +242,15 @@ export function PromptAssistantUi({
   );
   return (
     <KeyboardAvoidingView
-      // Android's adjustResize already reports the keyboard-safe window height;
-      // keeping KAV disabled there prevents applying the keyboard offset twice.
+      // Android adjustResize usually reports the keyboard-safe window height.
+      // Residual padding covers edge-to-edge devices where it does not, while
+      // remaining zero when the viewport was already resized.
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
       style={[
         styles.root,
         {
-          paddingBottom: Math.max(insets.bottom, 8),
+          paddingBottom: Math.max(insets.bottom, 8) + keyboardPadding,
         },
       ]}
     >
@@ -316,6 +349,16 @@ export function PromptAssistantUi({
       />
     </KeyboardAvoidingView>
   );
+}
+
+export function getKeyboardAvoidancePadding(
+  viewportHeight: number,
+  keyboardHeight: number,
+  baselineViewportHeight: number,
+  hiddenBottomBarHeight = 0,
+): number {
+  const viewportResize = Math.max(baselineViewportHeight - viewportHeight, 0);
+  return Math.max(keyboardHeight - viewportResize - hiddenBottomBarHeight, 0);
 }
 
 export function ConversationTimeline({

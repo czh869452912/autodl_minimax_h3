@@ -14,7 +14,7 @@ jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
 jest.mock('./assistantImagePicker', () => ({ pickAssistantImages: jest.fn(() => Promise.resolve([])) }));
 
-import { PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline } from './PromptAssistantUi';
+import { getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline } from './PromptAssistantUi';
 
 describe('Prompt assistant UI primitives', () => {
   beforeEach(() => {
@@ -281,7 +281,15 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
-  it('does not subscribe to Android keyboard events or add a second lift', () => {
+  it('only compensates for keyboard overlap left by the Android viewport', () => {
+    expect(getKeyboardAvoidancePadding(800, 300, 800)).toBe(300);
+    expect(getKeyboardAvoidancePadding(500, 300, 800)).toBe(0);
+    expect(getKeyboardAvoidancePadding(500, 500, 800)).toBe(200);
+    expect(getKeyboardAvoidancePadding(500, 300, 730, 80)).toBe(0);
+    expect(getKeyboardAvoidancePadding(500, 380, 730, 80)).toBe(70);
+  });
+
+  it('adds Android keyboard overlap to the root and removes it when hidden', () => {
     const originalPlatform = Platform.OS;
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
     const addListener = jest.spyOn(Keyboard, 'addListener');
@@ -304,7 +312,18 @@ describe('Prompt assistant UI primitives', () => {
       act(() => {
         addListener.mock.calls
           .filter(([eventName]) => eventName === 'keyboardDidShow')
-          .forEach(([, listener]) => listener({ endCoordinates: { screenY: -100 } } as never));
+          .forEach(([, listener]) => listener({ endCoordinates: { screenY: -100, height: 300 } } as never));
+      });
+      expect(tree.root.findByType(KeyboardAvoidingView).props.style).toEqual(
+        expect.arrayContaining([expect.objectContaining({ paddingBottom: expect.any(Number) })]),
+      );
+      const liftedPadding = tree.root.findByType(KeyboardAvoidingView).props.style
+        .find((style: { paddingBottom?: number }) => style.paddingBottom != null).paddingBottom;
+      expect(liftedPadding).toBeGreaterThan(8);
+      act(() => {
+        addListener.mock.calls
+          .filter(([eventName]) => eventName === 'keyboardDidHide')
+          .forEach(([, listener]) => listener(undefined as never));
       });
       expect(tree.root.findByType(KeyboardAvoidingView).props.style).toEqual(
         expect.arrayContaining([expect.objectContaining({ paddingBottom: 8 })]),
