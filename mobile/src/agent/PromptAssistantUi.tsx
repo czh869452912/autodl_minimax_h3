@@ -702,12 +702,6 @@ export function Composer({
   const disabled =
     uploading ||
     (!value.trim() && !attachments.some((item) => item.status === 'ready'));
-  const hasRichMentions = (mentions ?? []).some((mention) =>
-    attachments.some(
-      (attachment) =>
-        attachment.id === mention.attachmentId && attachment.status === 'ready',
-    ),
-  );
   return (
     <View style={styles.composer}>
       <AttachmentStrip
@@ -716,7 +710,11 @@ export function Composer({
         onRemoveAttachment={onRemoveAttachment}
       />
       <View style={styles.inputArea}>
-        <MentionTokenLayer value={value} mentions={mentions ?? []} attachments={attachments} />
+        <MentionTokenLayer
+          mentions={mentions ?? []}
+          attachments={attachments}
+          selection={selection}
+        />
         <TextInput
           ref={inputRef}
           value={value}
@@ -725,7 +723,7 @@ export function Composer({
           placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder}
           multiline
           maxLength={4000}
-          style={[styles.input, hasRichMentions && styles.inputWithMentionMirror]}
+          style={styles.input}
           editable={!isRunning}
           selection={selection}
           onSelectionChange={onSelectionChange}
@@ -782,13 +780,13 @@ export function Composer({
 }
 
 function MentionTokenLayer({
-  value,
   mentions,
   attachments,
+  selection,
 }: {
-  value: string;
   mentions: ImageMention[];
   attachments: AttachmentLike[];
+  selection?: { start: number; end: number };
 }) {
   const tokens = mentions
     .slice()
@@ -800,43 +798,27 @@ function MentionTokenLayer({
     .filter(
       (item): item is { mention: ImageMention; attachment: AttachmentLike } =>
         Boolean(item.attachment && item.attachment.status === 'ready'),
-    );
+    )
+    .filter(({ mention }) => {
+      const cursor = selection?.start ?? -1;
+      return !(cursor >= mention.start && cursor <= mention.end);
+    });
   if (!tokens.length) return null;
-  const segments: React.ReactNode[] = [];
-  let cursor = 0;
-  tokens.forEach(({ mention, attachment }) => {
-    if (mention.start > cursor) {
-      segments.push(
-        <Text key={`text-${cursor}`} style={styles.mentionMirrorText}>
-          {value.slice(cursor, mention.start)}
-        </Text>,
-      );
-    }
-    segments.push(
-      <View key={`${mention.attachmentId}-${mention.start}-${mention.end}`} style={styles.mentionToken}>
-        {attachment.source ? (
-          <Image
-            source={{ uri: getSourceUrl(attachment.source as never) }}
-            style={styles.mentionTokenImage}
-          />
-        ) : null}
-        <Text style={styles.mentionTokenText} numberOfLines={1}>
-          {getImageMentionDisplayName(attachment.filename)}
-        </Text>
-      </View>,
-    );
-    cursor = mention.end;
-  });
-  if (cursor < value.length) {
-    segments.push(
-      <Text key={`text-${cursor}`} style={styles.mentionMirrorText}>
-        {value.slice(cursor)}
-      </Text>,
-    );
-  }
   return (
     <View testID="mention-token-layer" pointerEvents="none" style={styles.mentionTokenLayer}>
-      {segments}
+      {tokens.map(({ mention, attachment }) => (
+        <View key={`${mention.attachmentId}-${mention.start}-${mention.end}`} style={styles.mentionToken}>
+          {attachment.source ? (
+            <Image
+              source={{ uri: getSourceUrl(attachment.source as never) }}
+              style={styles.mentionTokenImage}
+            />
+          ) : null}
+          <Text style={styles.mentionTokenText} numberOfLines={1}>
+            {getImageMentionDisplayName(attachment.filename)}
+          </Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -1241,23 +1223,14 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   mentionTokenLayer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1,
-    minHeight: 36,
-    paddingTop: 7,
-    paddingBottom: 6,
+    minHeight: 32,
+    marginBottom: 2,
+    paddingTop: 2,
+    paddingBottom: 2,
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
-  },
-  mentionMirrorText: {
-    color: LIGHT_PROMPT_COLORS.ink,
-    fontSize: 15,
-    lineHeight: 28,
   },
   mentionToken: {
     minHeight: 28,
@@ -1281,7 +1254,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  inputWithMentionMirror: { color: 'transparent', zIndex: 2 },
   toolbarSpacer: { flex: 1 },
   addButton: {
     width: 36,

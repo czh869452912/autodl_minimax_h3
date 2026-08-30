@@ -154,8 +154,14 @@ describe('Prompt assistant UI primitives', () => {
     const mentionLayer = tree.root.findByProps({ testID: 'mention-token-layer' });
     const richInput = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
     expect(mentionLayer.props.pointerEvents).toBe('none');
-    expect(richInput.props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ zIndex: 2 })]),
+    expect(mentionLayer.findAllByType(Text).map((node) => node.props.children)).toEqual([
+      '角色正面',
+    ]);
+    expect(richInput.props.style).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ color: 'transparent' })]),
+    );
+    expect(mentionLayer.props.style).not.toEqual(
+      expect.objectContaining({ position: 'absolute' }),
     );
     expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件 角色正面.png' })).toHaveLength(0);
     act(() => tree.unmount());
