@@ -25,6 +25,7 @@ import { pickAssistantImages, type AssistantImageAttachment } from './assistantI
 import {
   insertImageMention,
   reconcileImageMentions,
+  getImageMentionDisplayName,
   type ImageMention,
 } from './imageMentions';
 import {
@@ -37,6 +38,7 @@ import {
 } from './agentPresentation';
 import { type PromptParseResult } from './promptParser';
 import type { LocalThreadSnapshot } from './threadStore';
+import { DraggableBottomSheet } from '../ui/DraggableSheet';
 
 type AttachmentLike = {
   id: string;
@@ -272,6 +274,7 @@ export function PromptAssistantUi({
               isRunning={isRunning}
               attachments={composerAttachments}
               inputRef={inputRef}
+              mentions={mentions}
               selection={inputSelection}
               onSelectionChange={(event) =>
                 setInputSelection(event.nativeEvent.selection)
@@ -288,32 +291,13 @@ export function PromptAssistantUi({
         </View>
       </View>
       {!wide ? (
-        <Modal
+        <DraggableBottomSheet
           visible={historyOpen}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setHistoryOpen(false)}
+          title="对话历史"
+          onClose={() => setHistoryOpen(false)}
         >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.sheet}>
-              <View style={styles.sheetHandle} />
-              <View style={styles.sheetHeader}>
-                <Text style={styles.sheetTitle}>对话历史</Text>
-                <Pressable
-                  accessibilityLabel="关闭对话历史"
-                  onPress={() => setHistoryOpen(false)}
-                >
-                  <AppIcon
-                    name="close"
-                    size={22}
-                    color={LIGHT_PROMPT_COLORS.muted}
-                  />
-                </Pressable>
-              </View>
-              {history}
-            </View>
-          </View>
-        </Modal>
+          {history}
+        </DraggableBottomSheet>
       ) : null}
       <ImageMentionSheet
         visible={mentionSheetOpen}
@@ -569,25 +553,7 @@ function ImageMentionSheet({
 }) {
   const ready = attachments.filter((attachment) => attachment.status === 'ready');
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <Pressable
-        accessibilityLabel="引用图片菜单背景"
-        style={styles.mentionBackdrop}
-        onPress={onClose}
-      >
-        <Pressable style={styles.mentionSheet} onPress={(event) => event.stopPropagation()}>
-          <View style={styles.sheetHandle} />
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>引用图片附件</Text>
-            <Pressable accessibilityLabel="关闭引用图片菜单" onPress={onClose}>
-              <AppIcon name="close" size={22} color={LIGHT_PROMPT_COLORS.muted} />
-            </Pressable>
-          </View>
+    <DraggableBottomSheet visible={visible} title="引用图片附件" onClose={onClose}>
           {ready.length ? (
             <ScrollView
               style={styles.mentionList}
@@ -629,9 +595,7 @@ function ImageMentionSheet({
               </Pressable>
             </View>
           )}
-        </Pressable>
-      </Pressable>
-    </Modal>
+    </DraggableBottomSheet>
   );
 }
 
@@ -716,6 +680,7 @@ export function Composer({
   attachments,
   onRemoveAttachment,
   inputRef,
+  mentions,
   selection,
   onSelectionChange,
 }: {
@@ -729,6 +694,7 @@ export function Composer({
   attachments: AttachmentLike[];
   onRemoveAttachment?: (id: string) => void;
   inputRef?: React.RefObject<TextInput | null>;
+  mentions?: ImageMention[];
   selection?: { start: number; end: number };
   onSelectionChange?: (event: { nativeEvent: { selection: { start: number; end: number } } }) => void;
 }) {
@@ -736,6 +702,12 @@ export function Composer({
   const disabled =
     uploading ||
     (!value.trim() && !attachments.some((item) => item.status === 'ready'));
+  const hasRichMentions = (mentions ?? []).some((mention) =>
+    attachments.some(
+      (attachment) =>
+        attachment.id === mention.attachmentId && attachment.status === 'ready',
+    ),
+  );
   return (
     <View style={styles.composer}>
       <AttachmentStrip
@@ -744,6 +716,7 @@ export function Composer({
         onRemoveAttachment={onRemoveAttachment}
       />
       <View style={styles.inputArea}>
+        <MentionTokenLayer value={value} mentions={mentions ?? []} attachments={attachments} />
         <TextInput
           ref={inputRef}
           value={value}
@@ -752,7 +725,7 @@ export function Composer({
           placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder}
           multiline
           maxLength={4000}
-          style={styles.input}
+          style={[styles.input, hasRichMentions && styles.inputWithMentionMirror]}
           editable={!isRunning}
           selection={selection}
           onSelectionChange={onSelectionChange}
@@ -784,6 +757,7 @@ export function Composer({
             color={LIGHT_PROMPT_COLORS.ink}
           />
         </Pressable>
+        <View testID="composer-toolbar-spacer" style={styles.toolbarSpacer} />
         <Pressable
           accessibilityLabel={isRunning ? '停止生成' : '发送消息'}
           accessibilityState={{ disabled: !isRunning && disabled }}
@@ -803,6 +777,66 @@ export function Composer({
           />
         </Pressable>
       </View>
+    </View>
+  );
+}
+
+function MentionTokenLayer({
+  value,
+  mentions,
+  attachments,
+}: {
+  value: string;
+  mentions: ImageMention[];
+  attachments: AttachmentLike[];
+}) {
+  const tokens = mentions
+    .slice()
+    .sort((left, right) => left.start - right.start)
+    .map((mention) => ({
+      mention,
+      attachment: attachments.find((item) => item.id === mention.attachmentId),
+    }))
+    .filter(
+      (item): item is { mention: ImageMention; attachment: AttachmentLike } =>
+        Boolean(item.attachment && item.attachment.status === 'ready'),
+    );
+  if (!tokens.length) return null;
+  const segments: React.ReactNode[] = [];
+  let cursor = 0;
+  tokens.forEach(({ mention, attachment }) => {
+    if (mention.start > cursor) {
+      segments.push(
+        <Text key={`text-${cursor}`} style={styles.mentionMirrorText}>
+          {value.slice(cursor, mention.start)}
+        </Text>,
+      );
+    }
+    segments.push(
+      <View key={`${mention.attachmentId}-${mention.start}-${mention.end}`} style={styles.mentionToken}>
+        {attachment.source ? (
+          <Image
+            source={{ uri: getSourceUrl(attachment.source as never) }}
+            style={styles.mentionTokenImage}
+          />
+        ) : null}
+        <Text style={styles.mentionTokenText} numberOfLines={1}>
+          {getImageMentionDisplayName(attachment.filename)}
+        </Text>
+      </View>,
+    );
+    cursor = mention.end;
+  });
+  if (cursor < value.length) {
+    segments.push(
+      <Text key={`text-${cursor}`} style={styles.mentionMirrorText}>
+        {value.slice(cursor)}
+      </Text>,
+    );
+  }
+  return (
+    <View pointerEvents="none" style={styles.mentionTokenLayer}>
+      {segments}
     </View>
   );
 }
@@ -1204,7 +1238,51 @@ const styles = StyleSheet.create({
   },
   inputArea: {
     minHeight: 44,
+    position: 'relative',
   },
+  mentionTokenLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1,
+    minHeight: 36,
+    paddingTop: 7,
+    paddingBottom: 6,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+  },
+  mentionMirrorText: {
+    color: LIGHT_PROMPT_COLORS.ink,
+    fontSize: 15,
+    lineHeight: 28,
+  },
+  mentionToken: {
+    minHeight: 28,
+    maxWidth: 190,
+    paddingHorizontal: 7,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#E9E7E1',
+  },
+  mentionTokenImage: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#D8D6CF',
+  },
+  mentionTokenText: {
+    flexShrink: 1,
+    color: LIGHT_PROMPT_COLORS.ink,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  inputWithMentionMirror: { color: 'transparent' },
+  toolbarSpacer: { flex: 1 },
   addButton: {
     width: 36,
     height: 36,

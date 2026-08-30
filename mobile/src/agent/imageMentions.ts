@@ -16,10 +16,14 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
-function mentionLabel(filename?: string): string {
+export function getImageMentionDisplayName(filename?: string): string {
   const trimmed = filename?.trim() ?? '';
   const withoutExtension = trimmed.replace(/\.[^.]+$/, '').trim();
-  return `@${withoutExtension || '图片'}`;
+  return withoutExtension || '图片';
+}
+
+function mentionLabel(filename?: string): string {
+  return `@${getImageMentionDisplayName(filename)}`;
 }
 
 export function insertImageMention(

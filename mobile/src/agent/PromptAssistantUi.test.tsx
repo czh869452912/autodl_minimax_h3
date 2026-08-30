@@ -3,6 +3,7 @@ import { act, create } from 'react-test-renderer';
 import * as Clipboard from 'expo-clipboard';
 import { Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Platform, Text } from 'react-native';
 import { pickAssistantImages } from './assistantImagePicker';
+import { DraggableBottomSheet } from '../ui/DraggableSheet';
 
 let mockChatContext: Record<string, unknown>;
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resolve()) }));
@@ -111,6 +112,7 @@ describe('Prompt assistant UI primitives', () => {
     });
     expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件' }).length).toBeGreaterThan(0);
     act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
+    expect(tree.root.findAllByType(DraggableBottomSheet).filter((node) => node.props.visible)).toHaveLength(1);
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === '引用图片附件')).toBe(true);
     expect(tree.root.findByProps({ accessibilityLabel: '引用图片附件 角色正面.png' })).toBeTruthy();
     expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件 上传中' })).toHaveLength(0);
@@ -144,6 +146,11 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
     act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件 角色正面.png' }).props.onPress());
     expect(tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.value).toBe('镜头@角色正面 前后');
+    expect(tree.root.findByProps({ testID: 'composer-toolbar-spacer' }).props.style).toEqual(
+      expect.objectContaining({ flex: 1 }),
+    );
+    expect(tree.root.findAllByType(Image).some((node) => node.props.source?.uri === 'file://ready-1')).toBe(true);
+    expect(tree.root.findAllByType(Text).some((node) => node.props.children === '角色正面')).toBe(true);
     expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件 角色正面.png' })).toHaveLength(0);
     act(() => tree.unmount());
   });
