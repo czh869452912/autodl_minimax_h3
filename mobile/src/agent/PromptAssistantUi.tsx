@@ -81,6 +81,7 @@ export function PromptAssistantUi({
   const [inputSelection, setInputSelection] = useState({ start: 0, end: 0 });
   const [mentionSheetOpen, setMentionSheetOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [stopNotice, setStopNotice] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -117,6 +118,7 @@ export function PromptAssistantUi({
     const ready = [...attachments.filter((item) => item.status === 'ready'), ...galleryAttachments];
     if (!value.trim() && !ready.length)
       return;
+    setStopNotice(null);
     const readyAttachments: Array<{ uri: string; filename?: string }> = ready
       .map((item) => {
         if (!item.source) return null;
@@ -252,10 +254,10 @@ export function PromptAssistantUi({
       <View style={styles.body}>
         {wide ? <View style={styles.sidebar}>{history}</View> : null}
         <View style={styles.conversation}>
-          {notice ? (
+          {stopNotice ?? notice ? (
             <View style={styles.notice}>
               <AppIcon name="info" size={16} color={LIGHT_PROMPT_COLORS.accent} />
-              <Text style={styles.noticeText}>{notice}</Text>
+              <Text style={styles.noticeText}>{stopNotice ?? notice}</Text>
             </View>
           ) : null}
           <ConversationTimeline
@@ -270,7 +272,10 @@ export function PromptAssistantUi({
               onSubmit={handleSubmit}
               onOpenPicker={handleOpenPicker}
               onOpenMentionPicker={() => setMentionSheetOpen(true)}
-              onCancel={() => agent.abortRun?.()}
+              onCancel={() => {
+                agent.abortRun?.();
+                setStopNotice('已停止生成');
+              }}
               isRunning={isRunning}
               attachments={composerAttachments}
               inputRef={inputRef}

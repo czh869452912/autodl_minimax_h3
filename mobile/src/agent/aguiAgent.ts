@@ -96,8 +96,10 @@ export class H3AgUiAgent extends AbstractAgent {
           const normalized = error instanceof Error ? error : new Error(String(error));
           console.error('[H3AgUiAgent] DeepAgents run failed', normalized.stack ?? normalized.message);
           subscriber.next({ type: EventType.RUN_ERROR, message: normalized.message, rawEvent: normalized } as never);
-          subscriber.complete();
         }
+      }).finally(() => {
+        if (this.abortController === controller) this.abortController = null;
+        subscriber.complete();
       });
       return () => controller.abort();
     });
@@ -123,7 +125,7 @@ export class H3AgUiAgent extends AbstractAgent {
     super.addMessage({ ...message, attachments } as never);
   }
 
-  private async runStream(input: RunAgentInput, signal: AbortSignal, subscriber: { next: (event: BaseEvent) => void; complete: () => void }) {
+  private async runStream(input: RunAgentInput, signal: AbortSignal, subscriber: { next: (event: BaseEvent) => void }) {
     subscriber.next({ type: EventType.RUN_STARTED, threadId: input.threadId, runId: input.runId });
     const stream = await this.graph.stream({ messages: messagesForDeepAgent(input.messages), files: getOfficialH3SkillFiles() }, { configurable: { thread_id: input.threadId }, signal, streamMode: 'messages' });
     const openTexts = new Set<string>();
@@ -175,6 +177,5 @@ export class H3AgUiAgent extends AbstractAgent {
     if (signal.aborted) return;
     for (const id of openTexts) subscriber.next({ type: EventType.TEXT_MESSAGE_END, messageId: id });
     subscriber.next({ type: EventType.RUN_FINISHED, threadId: input.threadId, runId: input.runId, outcome: { type: 'success' } });
-    subscriber.complete();
   }
 }

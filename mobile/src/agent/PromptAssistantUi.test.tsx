@@ -375,6 +375,7 @@ describe('Prompt assistant UI primitives', () => {
     });
     act(() => tree.root.findByProps({ accessibilityLabel: '停止生成' }).props.onPress());
     expect(abortRun).toHaveBeenCalledTimes(1);
+    expect(tree.root.findAllByType(Text).some((node) => node.props.children === '已停止生成')).toBe(true);
     act(() => tree.unmount());
   });
 });
