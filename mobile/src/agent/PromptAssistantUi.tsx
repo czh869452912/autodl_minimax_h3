@@ -709,7 +709,7 @@ export function Composer({
         onOpenPicker={onOpenPicker}
         onRemoveAttachment={onRemoveAttachment}
       />
-      <View style={styles.inputArea}>
+      <View testID="composer-input-area" style={styles.inputArea}>
         <MentionTokenLayer
           mentions={mentions ?? []}
           attachments={attachments}
@@ -1221,6 +1221,7 @@ const styles = StyleSheet.create({
   inputArea: {
     minHeight: 44,
     position: 'relative',
+    flexDirection: 'column',
   },
   mentionTokenLayer: {
     minHeight: 32,
@@ -1264,7 +1265,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   input: {
-    flex: 1,
     maxHeight: 120,
     minHeight: 36,
     paddingTop: 8,

@@ -152,13 +152,20 @@ describe('Prompt assistant UI primitives', () => {
     expect(tree.root.findAllByType(Image).some((node) => node.props.source?.uri === 'file://ready-1')).toBe(true);
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === '角色正面')).toBe(true);
     const mentionLayer = tree.root.findByProps({ testID: 'mention-token-layer' });
+    const inputArea = tree.root.findByProps({ testID: 'composer-input-area' });
     const richInput = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
     expect(mentionLayer.props.pointerEvents).toBe('none');
+    expect(inputArea.props.style).toEqual(
+      expect.objectContaining({ flexDirection: 'column' }),
+    );
     expect(mentionLayer.findAllByType(Text).map((node) => node.props.children)).toEqual([
       '角色正面',
     ]);
     expect(richInput.props.style).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ color: 'transparent' })]),
+    );
+    expect(richInput.props.style).not.toEqual(
+      expect.objectContaining({ flex: 1 }),
     );
     expect(mentionLayer.props.style).not.toEqual(
       expect.objectContaining({ position: 'absolute' }),
