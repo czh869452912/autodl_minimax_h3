@@ -7,7 +7,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Alert,
   FlatList,
-  Keyboard,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -73,26 +72,8 @@ export function PromptAssistantUi({
   const [galleryAttachments, setGalleryAttachments] = useState<AssistantImageAttachment[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
-  const [keyboardScreenY, setKeyboardScreenY] = useState<number | null>(null);
+  const { width } = useWindowDimensions();
   const wide = width >= 720;
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
-      setKeyboardScreenY(event.endCoordinates.screenY);
-    });
-    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
-      setKeyboardScreenY(null);
-    });
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, []);
-  const keyboardPadding =
-    Platform.OS === 'android' && keyboardScreenY != null
-      ? getKeyboardAvoidancePadding(height, keyboardScreenY)
-      : 0;
   // AbstractAgent mutates its messages array when addMessage() is called. Do
   // not memoize by array identity or the first user bubble waits for the next
   // streamed event before becoming visible.
@@ -183,15 +164,14 @@ export function PromptAssistantUi({
   );
   return (
     <KeyboardAvoidingView
-      // Android's adjustResize already reports the keyboard-safe window height.
-      // The event-driven padding below covers edge-to-edge devices where it does
-      // not. Keeping KAV disabled on Android avoids subtracting the keyboard twice.
+      // Android's adjustResize already reports the keyboard-safe window height;
+      // keeping KAV disabled there prevents applying the keyboard offset twice.
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
       style={[
         styles.root,
         {
-          paddingBottom: Math.max(insets.bottom, 8) + keyboardPadding,
+          paddingBottom: Math.max(insets.bottom, 8),
         },
       ]}
     >
@@ -286,13 +266,6 @@ export function PromptAssistantUi({
       ) : null}
     </KeyboardAvoidingView>
   );
-}
-
-export function getKeyboardAvoidancePadding(
-  viewportHeight: number,
-  keyboardScreenY: number,
-): number {
-  return Math.max(viewportHeight - keyboardScreenY, 0);
 }
 
 export function ConversationTimeline({

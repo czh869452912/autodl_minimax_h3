@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import * as Clipboard from 'expo-clipboard';
-import { Alert, FlatList, KeyboardAvoidingView, Platform, Text } from 'react-native';
+import { Alert, FlatList, Keyboard, KeyboardAvoidingView, Platform, Text } from 'react-native';
 import { pickAssistantImages } from './assistantImagePicker';
 
 let mockChatContext: Record<string, unknown>;
@@ -13,7 +13,7 @@ jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
 jest.mock('./assistantImagePicker', () => ({ pickAssistantImages: jest.fn(() => Promise.resolve([])) }));
 
-import { getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline } from './PromptAssistantUi';
+import { PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline } from './PromptAssistantUi';
 
 describe('Prompt assistant UI primitives', () => {
   beforeEach(() => {
@@ -93,15 +93,10 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
-  it('adds only the keyboard overlap that adjustResize did not consume', () => {
-    expect(getKeyboardAvoidancePadding(800, 500)).toBe(300);
-    expect(getKeyboardAvoidancePadding(500, 500)).toBe(0);
-    expect(getKeyboardAvoidancePadding(800, 900)).toBe(0);
-  });
-
-  it('keeps Android KAV disabled to avoid double-resizing', () => {
+  it('does not subscribe to Android keyboard events or add a second lift', () => {
     const originalPlatform = Platform.OS;
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+    const addListener = jest.spyOn(Keyboard, 'addListener');
     let tree!: ReturnType<typeof create>;
     try {
       act(() => {
@@ -118,6 +113,41 @@ describe('Prompt assistant UI primitives', () => {
         );
       });
       expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBeUndefined();
+      act(() => {
+        addListener.mock.calls
+          .filter(([eventName]) => eventName === 'keyboardDidShow')
+          .forEach(([, listener]) => listener({ endCoordinates: { screenY: -100 } } as never));
+      });
+      expect(tree.root.findByType(KeyboardAvoidingView).props.style).toEqual(
+        expect.arrayContaining([expect.objectContaining({ paddingBottom: 8 })]),
+      );
+    } finally {
+      act(() => tree?.unmount());
+      addListener.mockRestore();
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
+    }
+  });
+
+  it('keeps native padding behavior on iOS', () => {
+    const originalPlatform = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+    let tree!: ReturnType<typeof create>;
+    try {
+      act(() => {
+        tree = create(
+          <PromptAssistantUi
+            threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
+            activeThreadId="t1"
+            onSelect={() => undefined}
+            onNew={() => undefined}
+            onDelete={() => undefined}
+            onRename={() => undefined}
+            onExportPrompt={() => Promise.resolve()}
+          />,
+        );
+      });
+      expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBe('padding');
+      expect(tree.root.findByType(KeyboardAvoidingView).props.keyboardVerticalOffset).toBe(0);
     } finally {
       act(() => tree?.unmount());
       Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
