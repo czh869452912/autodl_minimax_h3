@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { AppHeader } from '../ui/AppHeader';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 jest.mock('expo-router', () => ({
   Tabs: () => null,
@@ -27,6 +28,16 @@ describe('tabs shell layout', () => {
     });
     const tabs = tree.root.findByType(require('expo-router').Tabs);
     expect(tabs.props.screenOptions.tabBarHideOnKeyboard).toBe(true);
+    act(() => tree.unmount());
+  });
+
+  it('keeps every tab below the Android status bar', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<TabsLayout />);
+    });
+    const safeArea = tree.root.findByType(SafeAreaView);
+    expect(safeArea.props.edges).toEqual(['top']);
     act(() => tree.unmount());
   });
 });
