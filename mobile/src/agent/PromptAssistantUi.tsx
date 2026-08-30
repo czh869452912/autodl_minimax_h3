@@ -993,37 +993,42 @@ function HistoryList({
         animationType="fade"
         onRequestClose={() => setRenameTarget(null)}
       >
-        <View style={styles.renameBackdrop}>
-          <View style={styles.renameCard}>
-            <Text style={styles.renameTitle}>重命名会话</Text>
-            <TextInput
-              autoFocus
-              value={renameValue}
-              onChangeText={setRenameValue}
-              style={styles.renameInput}
-              placeholder="输入会话名称"
-              placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder}
-            />
-            <View style={styles.renameActions}>
-              <Pressable
-                onPress={() => setRenameTarget(null)}
-                style={styles.renameCancel}
-              >
-                <Text style={styles.renameCancelText}>取消</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  if (renameTarget && renameValue.trim())
-                    onRename(renameTarget.threadId, renameValue.trim());
-                  setRenameTarget(null);
-                }}
-                style={styles.renameConfirm}
-              >
-                <Text style={styles.renameConfirmText}>保存</Text>
-              </Pressable>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.renameKeyboardSurface}
+        >
+          <View style={styles.renameBackdrop}>
+            <View style={styles.renameCard}>
+              <Text style={styles.renameTitle}>重命名会话</Text>
+              <TextInput
+                autoFocus
+                value={renameValue}
+                onChangeText={setRenameValue}
+                style={styles.renameInput}
+                placeholder="输入会话名称"
+                placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder}
+              />
+              <View style={styles.renameActions}>
+                <Pressable
+                  onPress={() => setRenameTarget(null)}
+                  style={styles.renameCancel}
+                >
+                  <Text style={styles.renameCancelText}>取消</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    if (renameTarget && renameValue.trim())
+                      onRename(renameTarget.threadId, renameValue.trim());
+                    setRenameTarget(null);
+                  }}
+                  style={styles.renameConfirm}
+                >
+                  <Text style={styles.renameConfirmText}>保存</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1549,6 +1554,7 @@ const styles = StyleSheet.create({
     padding: 24,
     backgroundColor: 'rgba(20,20,18,.28)',
   },
+  renameKeyboardSurface: { flex: 1 },
   renameCard: {
     width: '100%',
     maxWidth: 420,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Animated, Modal, Text } from 'react-native';
+import { Animated, KeyboardAvoidingView, Modal, Text } from 'react-native';
 import { DraggableBottomSheet } from './DraggableSheet';
 
 describe('DraggableBottomSheet', () => {
@@ -14,6 +14,7 @@ describe('DraggableBottomSheet', () => {
       );
     });
     expect(tree.root.findByType(Modal).props.visible).toBe(true);
+    expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBe('padding');
     expect(tree.root.findByProps({ accessibilityLabel: '拖动调整抽屉高度' }).props.style).toEqual(
       expect.objectContaining({ minHeight: 40 }),
     );
@@ -38,4 +39,5 @@ describe('DraggableBottomSheet', () => {
     );
     act(() => tree.unmount());
   });
+
 });

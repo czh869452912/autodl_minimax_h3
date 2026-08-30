@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import * as Clipboard from 'expo-clipboard';
-import { Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Platform, Text } from 'react-native';
+import { Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Text } from 'react-native';
 import { pickAssistantImages } from './assistantImagePicker';
 import { DraggableBottomSheet } from '../ui/DraggableSheet';
 
@@ -116,6 +116,28 @@ describe('Prompt assistant UI primitives', () => {
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === '引用图片附件')).toBe(true);
     expect(tree.root.findByProps({ accessibilityLabel: '引用图片附件 角色正面.png' })).toBeTruthy();
     expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件 上传中' })).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
+  it('keeps the rename dialog inside a keyboard-aware modal surface', async () => {
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <PromptAssistantUi
+          threads={[{ threadId: 't1', messages: [{ id: 'm1', role: 'user', content: '测试会话' }], state: {}, createdAt: 1, updatedAt: 1 }]}
+          activeThreadId="t1"
+          onSelect={() => undefined}
+          onNew={() => undefined}
+          onDelete={() => undefined}
+          onRename={() => undefined}
+          onExportPrompt={() => Promise.resolve()}
+        />,
+      );
+    });
+    act(() => tree.root.findByProps({ accessibilityLabel: '打开对话历史' }).props.onPress());
+    act(() => tree.root.findByProps({ accessibilityLabel: '管理会话 t1' }).props.onPress());
+    expect(tree.root.findAllByType(Modal).some((node) => node.props.visible)).toBe(true);
+    expect(tree.root.findAllByType(KeyboardAvoidingView).length).toBeGreaterThanOrEqual(2);
     act(() => tree.unmount());
   });
 
