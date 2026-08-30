@@ -3,16 +3,16 @@ import { act, create } from 'react-test-renderer';
 import { FlatList, Text } from 'react-native';
 
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
-jest.mock('../../src/tasks/sync', () => ({
+jest.mock('../tasks/sync', () => ({
   taskStore: { list: jest.fn(async () => [{ id: 'task-1', prompt: 'x', status: 'RUNNING', resolution: '768p竖', duration: 5, createdAt: 1_000, startedAt: 1_500, updatedAt: 2_000 }]) },
   syncTasks: jest.fn(async () => [{ id: 'task-1', prompt: 'x', status: 'RUNNING', resolution: '768p竖', duration: 5, createdAt: 1_000, startedAt: 1_500, updatedAt: 2_000 }]),
 }));
-jest.mock('../../src/tasks/download', () => ({ downloadTask: jest.fn() }));
-jest.mock('../../src/tasks/media', () => ({ exportTaskVideo: jest.fn(async (task) => ({ ...task, exportState: 'EXPORTED', galleryUri: 'content://media/video/7' })) }));
-jest.mock('../../src/ui/icons', () => ({ AppIcon: () => null }));
+jest.mock('../tasks/download', () => ({ downloadTask: jest.fn() }));
+jest.mock('../tasks/media', () => ({ exportTaskVideo: jest.fn(async (task) => ({ ...task, exportState: 'EXPORTED', galleryUri: 'content://media/video/7' })) }));
+jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
-import TasksScreen from './tasks';
-import { syncTasks, taskStore } from '../../src/tasks/sync';
+import TasksScreen from '../../app/(tabs)/tasks';
+import { syncTasks, taskStore } from '../tasks/sync';
 
 afterEach(() => {
   jest.useRealTimers();

@@ -9,7 +9,7 @@ jest.mock('expo-router', () => ({
   useFocusEffect: (effect: () => void) => { require('react').useEffect(effect, [effect]); },
 }));
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
-jest.mock('../../src/tasks/repository', () => ({
+jest.mock('../tasks/repository', () => ({
   createTaskRepository: jest.fn(() => ({
     list: jest.fn(async () => [{
       id: 'task-1', prompt: 'cinematic city', status: 'SUCCESS', resolution: '768p竖', duration: 5,
@@ -18,10 +18,10 @@ jest.mock('../../src/tasks/repository', () => ({
     upsert: jest.fn(),
   })),
 }));
-jest.mock('../../src/native/media', () => ({ extractPoster: jest.fn(async () => undefined) }));
-jest.mock('../../src/ui/icons', () => ({ AppIcon: () => null }));
+jest.mock('../native/media', () => ({ extractPoster: jest.fn(async () => undefined) }));
+jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
-import GalleryScreen from './gallery';
+import GalleryScreen from '../../app/(tabs)/gallery';
 
 describe('gallery navigation', () => {
   beforeAll(() => jest.useFakeTimers());
