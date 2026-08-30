@@ -17,16 +17,16 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ back: mockBack }),
 }));
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
-jest.mock('../../src/tasks/repository', () => ({
+jest.mock('../tasks/repository', () => ({
   createTaskRepository: jest.fn(() => ({ list: () => mockList() })),
 }));
-jest.mock('../../src/tasks/media', () => ({ exportTaskVideo: (...args: unknown[]) => mockExport(args[0] as typeof task) }));
+jest.mock('../tasks/media', () => ({ exportTaskVideo: (...args: unknown[]) => mockExport(args[0] as typeof task) }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: (value: string) => mockCopy(value) }));
-jest.mock('../../src/media/VideoPlayer', () => ({
+jest.mock('../media/VideoPlayer', () => ({
   VideoPlayer: (props: Record<string, unknown>) => require('react').createElement('View', { ...props, testID: 'video-player-mock' }),
 }));
 
-import VideoDetailScreen from './[id]';
+import VideoDetailScreen from '../../app/video/[id]';
 
 describe('video detail screen', () => {
   beforeEach(() => {

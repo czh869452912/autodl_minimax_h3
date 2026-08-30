@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { AppHeader } from '../../src/ui/AppHeader';
+import { AppHeader } from '../ui/AppHeader';
 
 jest.mock('expo-router', () => ({
   Tabs: () => null,
@@ -8,7 +8,7 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ navigate: jest.fn() }),
 }));
 
-import TabsLayout from './_layout';
+import TabsLayout from '../../app/(tabs)/_layout';
 
 describe('tabs shell layout', () => {
   it('does not render the legacy global AutoDL H3 header', () => {

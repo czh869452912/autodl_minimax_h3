@@ -6,7 +6,7 @@ jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(),
   setItemAsync: jest.fn(),
 }));
-jest.mock('../../src/settings/storage', () => ({
+jest.mock('../settings/storage', () => ({
   readSettings: jest.fn(async () => ({
     token: '',
     llmEndpoint: 'https://api.openai.com/v1',
@@ -19,12 +19,12 @@ jest.mock('../../src/settings/storage', () => ({
   })),
   saveSettings: jest.fn(async () => undefined),
 }));
-jest.mock('../../src/tasks/sync', () => ({ taskStore: { list: jest.fn(async () => [{ id: 'task-1', localUri: 'file:///old.mp4', exportState: 'NOT_REQUESTED' }]), upsert: jest.fn(async () => undefined) } }));
-jest.mock('../../src/tasks/media', () => ({ migrateDownloadedVideos: jest.fn(async () => ({ exported: 1, failed: 0 })) }));
-jest.mock('../../src/ui/icons', () => ({ AppIcon: () => null }));
+jest.mock('../tasks/sync', () => ({ taskStore: { list: jest.fn(async () => [{ id: 'task-1', localUri: 'file:///old.mp4', exportState: 'NOT_REQUESTED' }]), upsert: jest.fn(async () => undefined) } }));
+jest.mock('../tasks/media', () => ({ migrateDownloadedVideos: jest.fn(async () => ({ exported: 1, failed: 0 })) }));
+jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
-import SettingsScreen from './settings';
-import { migrateDownloadedVideos } from '../../src/tasks/media';
+import SettingsScreen from '../../app/(tabs)/settings';
+import { migrateDownloadedVideos } from '../tasks/media';
 
 describe('Prompt assistant advanced LLM settings', () => {
   it('keeps advanced network controls collapsed and reveals editable defaults on demand', async () => {
