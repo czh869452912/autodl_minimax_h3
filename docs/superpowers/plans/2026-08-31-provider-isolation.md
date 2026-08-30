@@ -31,11 +31,11 @@
 - Produces `HttpTransport`, `captureNativeHttpTransport()`, and `getNativeHttpTransport()`.
 - Bootstrap captures the current native fetch, then loads CopilotKit polyfills.
 
-- [ ] Write a failing test proving a captured transport remains the native function after the global fetch is replaced.
-- [ ] Run `npm test -- --runInBand src/providers/httpTransport.test.ts` and verify the new assertion fails.
-- [ ] Implement the capture module and CommonJS bootstrap ordering.
-- [ ] Run the focused test and typecheck.
-- [ ] Commit `feat: isolate provider HTTP transport`.
+- [x] Write a failing test proving a captured transport remains the native function after the global fetch is replaced.
+- [x] Run `npm test -- --runInBand src/providers/httpTransport.test.ts` and verify the new assertion fails.
+- [x] Implement the capture module and CommonJS bootstrap ordering.
+- [x] Run the focused test and typecheck.
+- [x] Commit `feat: isolate provider HTTP transport`.
 
 ### Task 2: Standalone AutoDL provider client
 
@@ -50,11 +50,11 @@
 - The client owns `https://autodl.art/api/v1/comfyui/comfyui_workflow/`, headers, response parsing, and categorized `ProviderError` values.
 - `createAutodlComfyUiAdapter({ token, transport? })` delegates to the client and does not reference global fetch or CopilotKit.
 
-- [ ] Write failing tests for exact submit/poll transport calls and provider error categories.
-- [ ] Run focused tests and verify failure before implementation.
-- [ ] Implement the client and refactor the adapter to delegate.
-- [ ] Run AutoDL tests and verify the adapter source has no global-fetch/shim dependency.
-- [ ] Commit `feat: add isolated AutoDL provider client`.
+- [x] Write failing tests for exact submit/poll transport calls and provider error categories.
+- [x] Run focused tests and verify failure before implementation.
+- [x] Implement the client and refactor the adapter to delegate.
+- [x] Run AutoDL tests and verify the adapter source has no global-fetch/shim dependency.
+- [x] Commit `feat: add isolated AutoDL provider client`.
 
 ### Task 3: Provider registration seam and integration wiring
 
@@ -68,18 +68,18 @@
 - `createBuiltinProviderAdapters({ token, transport? })` returns the installed adapter map consumed by runtime/sync.
 - Adding a future provider is an additive registry entry; runtime code remains unchanged.
 
-- [ ] Write failing tests proving the builtin registry exposes AutoDL and accepts an independent second adapter without coupling.
-- [ ] Run focused test and verify failure.
-- [ ] Implement registry and wire CreateForm/task sync through it with the captured provider transport.
-- [ ] Run integration tests and typecheck.
-- [ ] Commit `feat: add builtin provider adapter registry`.
+- [x] Write failing tests proving the builtin registry exposes AutoDL and accepts an independent second adapter without coupling.
+- [x] Run focused test and verify failure.
+- [x] Implement registry and wire CreateForm/task sync through it with the captured provider transport.
+- [x] Run integration tests and typecheck.
+- [x] Commit `feat: add builtin provider adapter registry`.
 
 ### Task 4: Full verification and documentation
 
 **Files:**
 - Modify: `docs/superpowers/specs/2026-08-31-provider-isolation-design.md` only if self-review finds a gap.
 
-- [ ] Run full Jest suite, typecheck, and Android Expo export.
-- [ ] Confirm no generated `dist` or log artifacts remain.
-- [ ] Review `git diff --check` and `git status`.
-- [ ] Commit any documentation-only correction.
+- [x] Run full Jest suite, typecheck, and Android Expo export.
+- [x] Confirm no generated `dist` or log artifacts remain.
+- [x] Review `git diff --check` and `git status`.
+- [x] Commit any documentation-only correction.
