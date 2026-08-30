@@ -114,7 +114,7 @@ export function CreateForm({
       const adapter = createAutodlComfyUiAdapter({ token: settings.token });
       const runtime = createWorkflowRuntime({ adapters: new Map([[adapter.manifest().id, adapter]]), jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `job-${Date.now()}-${Math.random().toString(16).slice(2)}` });
       const job = await runtime.submit(definition, { workflowId: definition.id, workflowVersion: definition.version, contentHash: await sha256Hex(canonicalizeDefinition(definition)), inputs: inputSnapshot, source: 'user', status: 'ready' });
-      const task = { ...jobRecordToTaskProjection(job, []), id: job.remote?.providerJobId ?? job.id, images, audios };
+      const task = { ...jobRecordToTaskProjection(job, []), images, audios };
       await taskStore.upsert(task);
       Alert.alert('提交成功', `任务 ${task.id} 已加入队列`, [
         { text: '查看任务', onPress: () => router.navigate('/(tabs)/tasks') },

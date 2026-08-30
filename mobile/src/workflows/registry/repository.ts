@@ -15,7 +15,8 @@ export function createWorkflowRegistry(db: SQLiteDatabase | undefined): Workflow
   const fromRow = (row: Row): RegistryRecord => ({ workflowId: row.workflow_id, version: row.version, contentHash: row.content_hash, source: row.source as RegistryRecord['source'], trust: row.trust as RegistryRecord['trust'], definitionJson: row.definition_json, installedAt: Number(row.installed_at) });
   const get = async (workflowId: string, version: string) => {
     if (!db) return memory.get(key(workflowId, version));
-    return (db.getFirstSync<Row>('SELECT * FROM workflow_registry WHERE workflow_id = ? AND version = ? LIMIT 1', workflowId, version) as Row | null | undefined) ? fromRow(db.getFirstSync<Row>('SELECT * FROM workflow_registry WHERE workflow_id = ? AND version = ? LIMIT 1', workflowId, version) as Row) : undefined;
+    const row = db.getFirstSync<Row>('SELECT * FROM workflow_registry WHERE workflow_id = ? AND version = ? LIMIT 1', workflowId, version) as Row | null | undefined;
+    return row ? fromRow(row) : undefined;
   };
   return {
     async upsert(record) {
@@ -39,7 +40,7 @@ export function createWorkflowRegistry(db: SQLiteDatabase | undefined): Workflow
       if (!db) active.set(workflowId, row); else db.runSync('INSERT OR REPLACE INTO workflow_registry_active (workflow_id,version,content_hash,previous_version,previous_hash) VALUES (?,?,?,?,?)', workflowId, version, contentHash, row.previous_version ?? null, row.previous_hash ?? null);
     },
     async getActive(workflowId) {
-      const row = db ? db.getFirstSync<ActiveRow>('SELECT * FROM workflow_registry_active WHERE workflow_id = ? LIMIT 1') as ActiveRow | null : active.get(workflowId);
+      const row = db ? db.getFirstSync<ActiveRow>('SELECT * FROM workflow_registry_active WHERE workflow_id = ? LIMIT 1', workflowId) as ActiveRow | null : active.get(workflowId);
       if (!row) return undefined;
       return get(workflowId, row.version);
     },

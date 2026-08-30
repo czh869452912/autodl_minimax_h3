@@ -57,6 +57,10 @@ export function createWorkflowRegistryService(deps: Dependencies) {
       const canonical = canonicalizeDefinition(definition);
       const hash = await sha256Hex(canonical);
       if (hash !== entry.contentHash) throw new RegistryError('REGISTRY_HASH_MISMATCH', 'workflow content hash does not match index');
+      const signatureResponse = await fetcher(`${baseUrl.replace(/\/$/, '')}/registry/workflows/${encodeURIComponent(workflowId)}/${encodeURIComponent(version)}.sig`);
+      const signature = (await signatureResponse.text()).trim();
+      const key = keyring.find((item) => item.registryId === index.registryId);
+      if (!key || !(await verifySignedPayload(canonical, signature, key, (deps.now ?? Date.now)()))) throw new RegistryError('REGISTRY_SIGNATURE_INVALID', 'workflow definition signature is invalid');
       const record: RegistryRecord = { workflowId, version, contentHash: hash, source: 'remote', trust: 'trusted', definitionJson: canonical, installedAt: (deps.now ?? Date.now)() };
       await deps.repository.upsert(record);
       return record;
