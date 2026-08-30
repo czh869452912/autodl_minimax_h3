@@ -2,7 +2,7 @@ import type { ArtifactRecord } from '../../jobs/types';
 import type { PlatformAdapterManifest } from '../schema/types';
 import { getNativeHttpTransport } from '../../providers/httpTransport';
 import type { HttpTransport } from '../../providers/httpTransport';
-import { createAutodlComfyUiAdapter } from '../adapters/autodlComfyUi/adapter';
+import { createAutodlComfyUiAdapter } from './autodl/adapter';
 
 export type ProviderAdapter = {
   manifest(): PlatformAdapterManifest;
