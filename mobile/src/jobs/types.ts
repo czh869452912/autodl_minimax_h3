@@ -1,0 +1,8 @@
+import type { TaskRecord } from '../tasks/types';
+export type JobStatus = 'DRAFT' | 'VALIDATING' | 'READY_TO_SUBMIT' | 'SUBMITTING' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'PARTIAL_SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'UNKNOWN';
+export type NormalizedError = { code: string; message: string; retryable?: boolean };
+export type ArtifactKind = 'image' | 'video' | 'audio' | 'text' | 'file' | 'json';
+export type ArtifactRecord = { id: string; jobId: string; kind: ArtifactKind; uri?: string; mime?: string; metadata?: Record<string, unknown> };
+export type JobRecord = { id: string; workflowId: string; workflowVersion: string; workflowContentHash: string; adapterId: string; adapterVersion: string; inputSnapshot: Record<string, unknown>; remote?: { providerJobId?: string; rawStatus?: string }; status: JobStatus; error?: NormalizedError; createdAt: number; updatedAt: number };
+export type JobRepository = { upsert(job: JobRecord): Promise<void>; get(id: string): Promise<JobRecord | undefined>; list(): Promise<JobRecord[]>; replaceArtifacts(jobId: string, artifacts: ArtifactRecord[]): Promise<void>; listArtifacts(jobId: string): Promise<ArtifactRecord[]> };
+export type LegacyTask = TaskRecord;

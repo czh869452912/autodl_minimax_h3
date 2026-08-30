@@ -4,6 +4,8 @@ export type ExportState = 'NOT_REQUESTED' | 'QUEUED' | 'EXPORTING' | 'EXPORTED' 
 export interface TaskMediaInput { dataUri: string; name?: string; mime?: string; }
 export interface TaskRecord {
   id: string; prompt: string; status: TaskStatus; resolution: string; duration: number;
+  workflowId?: string; workflowVersion?: string; workflowContentHash?: string; adapterId?: string; adapterVersion?: string;
+  inputSnapshot?: Record<string, unknown>;
   seed?: string; images?: TaskMediaInput[]; audios?: TaskMediaInput[];
   videoUrl?: string; localUri?: string; thumbnailUrl?: string; downloadState?: DownloadState; downloadError?: string; downloadProgress?: number;
   galleryUri?: string; exportState?: ExportState; exportError?: string; exportedAt?: number; createdAt: number; updatedAt: number;
