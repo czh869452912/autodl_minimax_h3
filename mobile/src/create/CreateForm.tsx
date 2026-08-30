@@ -25,7 +25,7 @@ import { WorkflowForm } from '../workflows/renderer/WorkflowForm';
 import type { WorkflowDefinition } from '../workflows/schema/types';
 import { createJobRepository, jobRecordToTaskProjection } from '../jobs/repository';
 import { createWorkflowRuntime } from '../workflows/runtime/runtime';
-import { createAutodlComfyUiAdapter } from '../workflows/adapters/autodlComfyUi/adapter';
+import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
 import { canonicalizeDefinition } from '../workflows/registry/canonicalize';
 import { sha256Hex } from '../workflows/registry/crypto';
 
@@ -111,8 +111,8 @@ export function CreateForm({
         images,
         audios,
       };
-      const adapter = createAutodlComfyUiAdapter({ token: settings.token });
-      const runtime = createWorkflowRuntime({ adapters: new Map([[adapter.manifest().id, adapter]]), jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `job-${Date.now()}-${Math.random().toString(16).slice(2)}` });
+      const adapters = createBuiltinProviderAdapters({ token: settings.token });
+      const runtime = createWorkflowRuntime({ adapters, jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `job-${Date.now()}-${Math.random().toString(16).slice(2)}` });
       const job = await runtime.submit(definition, { workflowId: definition.id, workflowVersion: definition.version, contentHash: await sha256Hex(canonicalizeDefinition(definition)), inputs: inputSnapshot, source: 'user', status: 'ready' });
       const task = { ...jobRecordToTaskProjection(job, []), images, audios };
       await taskStore.upsert(task);
