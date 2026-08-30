@@ -13,7 +13,7 @@ jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
 jest.mock('./assistantImagePicker', () => ({ pickAssistantImages: jest.fn(() => Promise.resolve([])) }));
 
-import { PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline } from './PromptAssistantUi';
+import { getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline } from './PromptAssistantUi';
 
 describe('Prompt assistant UI primitives', () => {
   beforeEach(() => {
@@ -93,7 +93,13 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
-  it('lets Android adjustResize provide the keyboard-safe height', () => {
+  it('adds only the keyboard overlap that adjustResize did not consume', () => {
+    expect(getKeyboardAvoidancePadding(800, 500)).toBe(300);
+    expect(getKeyboardAvoidancePadding(500, 500)).toBe(0);
+    expect(getKeyboardAvoidancePadding(800, 900)).toBe(0);
+  });
+
+  it('keeps Android KAV disabled to avoid double-resizing', () => {
     const originalPlatform = Platform.OS;
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
     let tree!: ReturnType<typeof create>;

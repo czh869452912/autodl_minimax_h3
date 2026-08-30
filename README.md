@@ -2,6 +2,10 @@
 
 当前版本唯一受支持的工程是 `mobile/`：React Native + Expo Router + CopilotKit React Native + DeepAgents JS + AndroidX Media3。应用不依赖本地服务端、Node runtime 或 WebView；任务索引、Agent 会话和媒体缓存均保存在应用私有目录，密钥由 Expo SecureStore（Android Keystore）保护。
 
+![AutoDL H3 应用图标](mobile/assets/icon.png)
+
+应用图标沿用界面中的 AutoDL H3 标记，源文件位于 [`mobile/assets/icon.svg`](mobile/assets/icon.svg)，PNG 版本供 Expo 与 Android launcher 使用。
+
 ## 功能
 
 - 原生创建：Prompt、时长、Seed，以及工作流实际接受的 `768p竖`、`480p竖`、`768p横`、`480p横` 分辨率，多达 9 张参考图和 3 段参考音频。
