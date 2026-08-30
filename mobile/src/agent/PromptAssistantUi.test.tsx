@@ -154,20 +154,27 @@ describe('Prompt assistant UI primitives', () => {
     const mentionLayer = tree.root.findByProps({ testID: 'mention-token-layer' });
     const richInput = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
     expect(mentionLayer.props.pointerEvents).toBe('none');
-    expect(mentionLayer.findAllByType(Text).map((node) => node.props.children)).toEqual(
-      expect.arrayContaining(['镜头', '@角色正面', ' 前后']),
-    );
+    expect(mentionLayer.findAllByType(Text).map((node) => node.props.children)).toEqual([
+      '镜头',
+      '@角色正面',
+      ' ',
+      '前后',
+    ]);
     expect(mentionLayer.props.style).toEqual(
       expect.objectContaining({ position: 'absolute' }),
     );
     expect(richInput.props.style).toEqual(
       expect.arrayContaining([expect.objectContaining({ color: 'transparent' })]),
     );
+    expect(richInput.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ opacity: 0 })]),
+    );
     expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件 角色正面.png' })).toHaveLength(0);
     act(() => richInput.props.onSelectionChange({ nativeEvent: { selection: { start: 5, end: 5 } } }));
     const editingMentionLayer = tree.root.findByProps({ testID: 'mention-token-layer' });
-    expect(editingMentionLayer.findAllByType(Text).some((node) => node.props.children === '@角色正面')).toBe(true);
+    expect(editingMentionLayer.findAllByType(Text).some((node) => typeof node.props.children === 'string' && node.props.children.includes('@角色'))).toBe(true);
     expect(editingMentionLayer.findAllByProps({ testID: 'mention-token' })).toHaveLength(0);
+    expect(editingMentionLayer.findAllByProps({ testID: 'mention-caret' }).length).toBeGreaterThan(0);
     act(() => tree.unmount());
   });
 

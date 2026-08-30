@@ -731,6 +731,8 @@ export function Composer({
           multiline
           maxLength={4000}
           style={[styles.input, hasRichMentions && styles.inputWithMentionMirror]}
+          caretHidden={hasRichMentions}
+          selectionColor={hasRichMentions ? 'transparent' : undefined}
           editable={!isRunning}
           selection={selection}
           onSelectionChange={onSelectionChange}
@@ -811,23 +813,47 @@ function MentionTokenLayer({
   if (!tokens.length) return null;
   const segments: React.ReactNode[] = [];
   let cursor = 0;
-  tokens.forEach(({ mention, attachment }) => {
-    if (mention.start > cursor) {
+  const caretPosition =
+    selection && selection.start === selection.end ? selection.start : null;
+  const appendTextWithCaret = (text: string, start: number, key: string) => {
+    if (caretPosition === null || caretPosition < start || caretPosition > start + text.length) {
       segments.push(
-        <Text key={`text-${cursor}`} style={styles.mentionMirrorText}>
-          {value.slice(cursor, mention.start)}
+        <Text key={key} style={styles.mentionMirrorText}>
+          {text}
         </Text>,
       );
+      return;
+    }
+    const offset = caretPosition - start;
+    if (offset > 0) {
+      segments.push(
+        <Text key={`${key}-before`} style={styles.mentionMirrorText}>
+          {text.slice(0, offset)}
+        </Text>,
+      );
+    }
+    segments.push(<View key={`${key}-caret`} testID="mention-caret" style={styles.mentionCaret} />);
+    if (offset < text.length) {
+      segments.push(
+        <Text key={`${key}-after`} style={styles.mentionMirrorText}>
+          {text.slice(offset)}
+        </Text>,
+      );
+    }
+  };
+  tokens.forEach(({ mention, attachment }) => {
+    if (mention.start > cursor) {
+      appendTextWithCaret(value.slice(cursor, mention.start), cursor, `text-${cursor}`);
     }
     const isEditing =
       selection !== undefined &&
       selection.start >= mention.start &&
       selection.start <= mention.end;
     if (isEditing) {
-      segments.push(
-        <Text key={`editing-${mention.attachmentId}-${mention.start}`} style={styles.mentionMirrorText}>
-          {value.slice(mention.start, mention.end)}
-        </Text>,
+      appendTextWithCaret(
+        value.slice(mention.start, mention.end),
+        mention.start,
+        `editing-${mention.attachmentId}-${mention.start}`,
       );
     } else {
       segments.push(
@@ -851,11 +877,7 @@ function MentionTokenLayer({
     cursor = mention.end;
   });
   if (cursor < value.length) {
-    segments.push(
-      <Text key={`text-${cursor}`} style={styles.mentionMirrorText}>
-        {value.slice(cursor)}
-      </Text>,
-    );
+    appendTextWithCaret(value.slice(cursor), cursor, `text-${cursor}`);
   }
   return (
     <View testID="mention-token-layer" pointerEvents="none" style={styles.mentionTokenLayer}>
@@ -1305,7 +1327,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  inputWithMentionMirror: { color: 'transparent', zIndex: 2 },
+  inputWithMentionMirror: { color: 'transparent', opacity: 0, zIndex: 2 },
+  mentionCaret: {
+    width: 2,
+    height: 21,
+    marginHorizontal: 1,
+    backgroundColor: LIGHT_PROMPT_COLORS.accent,
+  },
   toolbarSpacer: { flex: 1 },
   addButton: {
     width: 36,
