@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -18,9 +21,26 @@ export function DraggableBottomSheet({ visible, title, onClose, children }: {
   children: React.ReactNode;
 }) {
   const { height } = useWindowDimensions();
-  const collapsedOffset = height * 0.55;
-  const expandedOffset = height * 0.08;
-  const closeOffset = height * 0.22;
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const show = Keyboard.addListener('keyboardDidShow', (event) => {
+      const screenY = event.endCoordinates?.screenY;
+      const nextHeight = typeof screenY === 'number'
+        ? Math.max(0, height - screenY)
+        : event.endCoordinates?.height ?? 0;
+      setKeyboardHeight(nextHeight);
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, [height]);
+  const availableHeight = Math.max(1, height - keyboardHeight);
+  const collapsedOffset = availableHeight * 0.55;
+  const expandedOffset = availableHeight * 0.08;
+  const closeOffset = availableHeight * 0.22;
   const [snap, setSnap] = useState<Exclude<SheetSnap, 'closed'>>('collapsed');
   const position = useRef(new Animated.Value(collapsedOffset)).current;
   const dragStart = useRef(collapsedOffset);
@@ -29,7 +49,18 @@ export function DraggableBottomSheet({ visible, title, onClose, children }: {
     if (!visible) return;
     setSnap('collapsed');
     position.setValue(collapsedOffset);
-  }, [collapsedOffset, position, visible]);
+  }, [position, visible]);
+
+  useEffect(() => {
+    if (!visible) return;
+    const target = snap === 'expanded' ? expandedOffset : collapsedOffset;
+    Animated.spring(position, {
+      toValue: target,
+      useNativeDriver: true,
+      bounciness: 0,
+      speed: 18,
+    }).start();
+  }, [collapsedOffset, expandedOffset, position, snap, visible]);
 
   const animateTo = (next: Exclude<SheetSnap, 'closed'>) => {
     const target = next === 'expanded' ? expandedOffset : collapsedOffset;
@@ -64,28 +95,34 @@ export function DraggableBottomSheet({ visible, title, onClose, children }: {
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <Pressable accessibilityLabel="关闭底部抽屉" style={StyleSheet.absoluteFill} onPress={onClose} />
-        <Animated.View style={[styles.sheet, { height, transform: [{ translateY: position }] }]}>
-          <View style={styles.surface}>
-            <View accessibilityLabel="拖动调整抽屉高度" style={styles.handleHitArea} {...panResponder.panHandlers}>
-              <View style={styles.handle} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.modalSurface}
+      >
+        <View style={styles.backdrop}>
+          <Pressable accessibilityLabel="关闭底部抽屉" style={StyleSheet.absoluteFill} onPress={onClose} />
+          <Animated.View style={[styles.sheet, { height, transform: [{ translateY: position }] }]}>
+            <View style={styles.surface}>
+              <View accessibilityLabel="拖动调整抽屉高度" style={styles.handleHitArea} {...panResponder.panHandlers}>
+                <View style={styles.handle} />
+              </View>
+              <View style={styles.header}>
+                <Text style={styles.title}>{title}</Text>
+                <Pressable accessibilityLabel="关闭底部抽屉" onPress={onClose}>
+                  <Text style={styles.close}>×</Text>
+                </Pressable>
+              </View>
+              <View style={styles.content}>{children}</View>
             </View>
-            <View style={styles.header}>
-              <Text style={styles.title}>{title}</Text>
-              <Pressable accessibilityLabel="关闭底部抽屉" onPress={onClose}>
-                <Text style={styles.close}>×</Text>
-              </Pressable>
-            </View>
-            <View style={styles.content}>{children}</View>
-          </View>
-        </Animated.View>
-      </View>
+          </Animated.View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  modalSurface: { flex: 1 },
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(20,20,18,.3)' },
   sheet: { width: '100%' },
   surface: { flex: 1, padding: 16, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: '#FAF9F5' },
