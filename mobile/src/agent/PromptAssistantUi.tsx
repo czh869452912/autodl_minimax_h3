@@ -835,7 +835,7 @@ function MentionTokenLayer({
     );
   }
   return (
-    <View pointerEvents="none" style={styles.mentionTokenLayer}>
+    <View testID="mention-token-layer" pointerEvents="none" style={styles.mentionTokenLayer}>
       {segments}
     </View>
   );
@@ -1281,7 +1281,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  inputWithMentionMirror: { color: 'transparent' },
+  inputWithMentionMirror: { color: 'transparent', zIndex: 2 },
   toolbarSpacer: { flex: 1 },
   addButton: {
     width: 36,

@@ -151,6 +151,12 @@ describe('Prompt assistant UI primitives', () => {
     );
     expect(tree.root.findAllByType(Image).some((node) => node.props.source?.uri === 'file://ready-1')).toBe(true);
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === '角色正面')).toBe(true);
+    const mentionLayer = tree.root.findByProps({ testID: 'mention-token-layer' });
+    const richInput = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    expect(mentionLayer.props.pointerEvents).toBe('none');
+    expect(richInput.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ zIndex: 2 })]),
+    );
     expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件 角色正面.png' })).toHaveLength(0);
     act(() => tree.unmount());
   });
