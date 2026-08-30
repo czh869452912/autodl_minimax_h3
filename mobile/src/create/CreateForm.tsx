@@ -11,7 +11,6 @@ import {
 import { useRouter } from 'expo-router';
 import { openDatabaseSync } from 'expo-sqlite';
 import { readSettings } from '../settings/storage';
-import { submitTask } from '../tasks/api';
 import { createTaskRepository } from '../tasks/repository';
 import type { TaskMediaInput } from '../tasks/types';
 import { AppIcon } from '../ui/icons';
@@ -24,8 +23,14 @@ import { resolveDraftPrompt } from './draftPrompt';
 import h3Definition from '../workflows/definitions/autodl/minimax-h3-i2v-15s.json';
 import { WorkflowForm } from '../workflows/renderer/WorkflowForm';
 import type { WorkflowDefinition } from '../workflows/schema/types';
+import { createJobRepository, jobRecordToTaskProjection } from '../jobs/repository';
+import { createWorkflowRuntime } from '../workflows/runtime/runtime';
+import { createAutodlComfyUiAdapter } from '../workflows/adapters/autodlComfyUi/adapter';
+import { canonicalizeDefinition } from '../workflows/registry/canonicalize';
+import { sha256Hex } from '../workflows/registry/crypto';
 
 const taskStore = createTaskRepository(openDatabaseSync('autodl-h3.db'));
+const jobStore = createJobRepository(openDatabaseSync('autodl-h3.db'));
 
 const promptDraftStore = createPromptDraftStore(
   openDatabaseSync('autodl-h3.db'),
@@ -97,14 +102,19 @@ export function CreateForm({
     try {
       const settings = await readSettings();
       if (!settings.token) throw new Error('请先在设置中保存 AutoDL Token');
-      const task = await submitTask(settings.token, {
+      const definition = h3Definition as WorkflowDefinition;
+      const inputSnapshot = {
         prompt: String(workflowValues.prompt ?? prompt).trim(),
         resolution: String(workflowValues.resolution ?? resolution) as Resolution,
         duration: Math.max(1, Math.min(15, Number(workflowValues.duration ?? duration) || 5)),
         seed: String(workflowValues.seed ?? seed).trim() || undefined,
         images,
         audios,
-      });
+      };
+      const adapter = createAutodlComfyUiAdapter({ token: settings.token });
+      const runtime = createWorkflowRuntime({ adapters: new Map([[adapter.manifest().id, adapter]]), jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `job-${Date.now()}-${Math.random().toString(16).slice(2)}` });
+      const job = await runtime.submit(definition, { workflowId: definition.id, workflowVersion: definition.version, contentHash: await sha256Hex(canonicalizeDefinition(definition)), inputs: inputSnapshot, source: 'user', status: 'ready' });
+      const task = { ...jobRecordToTaskProjection(job, []), id: job.remote?.providerJobId ?? job.id, images, audios };
       await taskStore.upsert(task);
       Alert.alert('提交成功', `任务 ${task.id} 已加入队列`, [
         { text: '查看任务', onPress: () => router.navigate('/(tabs)/tasks') },
