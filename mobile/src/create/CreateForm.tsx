@@ -21,6 +21,9 @@ import { pickTaskMedia } from './MediaPicker';
 import { RESOLUTION_OPTIONS, type Resolution } from './resolutions';
 import { createPromptDraftStore } from '../agent/promptDraft';
 import { resolveDraftPrompt } from './draftPrompt';
+import h3Definition from '../workflows/definitions/autodl/minimax-h3-i2v-15s.json';
+import { WorkflowForm } from '../workflows/renderer/WorkflowForm';
+import type { WorkflowDefinition } from '../workflows/schema/types';
 
 const taskStore = createTaskRepository(openDatabaseSync('autodl-h3.db'));
 
@@ -45,14 +48,19 @@ export function CreateForm({
   const [images, setImages] = useState<TaskMediaInput[]>([]);
   const [audios, setAudios] = useState<TaskMediaInput[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [workflowValues, setWorkflowValues] = useState<Record<string, unknown>>({ prompt: initialPrompt, resolution: RESOLUTION_OPTIONS[0], duration: 5, seed: '' });
   useEffect(() => {
-    if (initialPrompt) setPrompt(initialPrompt);
+    if (initialPrompt) { setPrompt(initialPrompt); setWorkflowValues((current) => ({ ...current, prompt: initialPrompt })); }
   }, [initialPrompt]);
   useEffect(() => {
     if (!draftId) return;
     void promptDraftStore.consume(draftId).then((draft) => {
       if (draft)
-        setPrompt((current) => resolveDraftPrompt(current, draft.prompt));
+        setPrompt((current) => {
+          const next = resolveDraftPrompt(current, draft.prompt);
+          setWorkflowValues((values) => ({ ...values, prompt: next }));
+          return next;
+        });
     });
   }, [draftId]);
 
@@ -81,7 +89,7 @@ export function CreateForm({
     ]);
   };
   const submit = async () => {
-    if (!prompt.trim()) {
+    if (!String(workflowValues.prompt ?? prompt).trim()) {
       Alert.alert('提示', '请输入 Prompt 描述');
       return;
     }
@@ -90,10 +98,10 @@ export function CreateForm({
       const settings = await readSettings();
       if (!settings.token) throw new Error('请先在设置中保存 AutoDL Token');
       const task = await submitTask(settings.token, {
-        prompt: prompt.trim(),
-        resolution,
-        duration: Math.max(1, Math.min(15, Number(duration) || 5)),
-        seed: seed.trim() || undefined,
+        prompt: String(workflowValues.prompt ?? prompt).trim(),
+        resolution: String(workflowValues.resolution ?? resolution) as Resolution,
+        duration: Math.max(1, Math.min(15, Number(workflowValues.duration ?? duration) || 5)),
+        seed: String(workflowValues.seed ?? seed).trim() || undefined,
         images,
         audios,
       });
@@ -120,78 +128,17 @@ export function CreateForm({
       <Text style={styles.subtitle}>
         多图与多音频参考生视频 · minimax_h3_image_audio_to_video_v2_15s 工作流
       </Text>
-      <Text style={styles.label}>Prompt（视频描述）</Text>
-      <View style={styles.promptBox}>
-        <TextInput
-          multiline
-          value={prompt}
-          onChangeText={setPrompt}
-          placeholder="描述你想生成的视频：主体、动作、场景、镜头运动、光影与音效..."
-          placeholderTextColor={COLORS.textSubtle}
-          style={styles.promptInput}
-        />
-        <Text style={styles.counter}>{prompt.length} 字符</Text>
-      </View>
-      <View style={styles.card}>
-        <Text style={styles.label}>分辨率（Resolution）</Text>
-        <View style={styles.chips}>
-          {RESOLUTION_OPTIONS.map((item) => (
-            <Pressable
-              key={item}
-              onPress={() => setResolution(item)}
-              style={[styles.chip, resolution === item && styles.selectedChip]}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  resolution === item && styles.selectedText,
-                ]}
-              >
-                {item}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-      <View style={styles.card}>
-        <Text style={styles.label}>视频时长（Duration）</Text>
-        <View style={styles.durationRow}>
-          <Pressable
-            onPress={() =>
-              setDuration(String(Math.max(1, Number(duration || 5) - 1)))
-            }
-            style={styles.step}
-          >
-            <Text style={styles.stepText}>−</Text>
-          </Pressable>
-          <TextInput
-            value={duration}
-            onChangeText={setDuration}
-            keyboardType="number-pad"
-            style={styles.durationInput}
-          />
-          <Pressable
-            onPress={() =>
-              setDuration(String(Math.min(15, Number(duration || 5) + 1)))
-            }
-            style={styles.step}
-          >
-            <Text style={styles.stepText}>＋</Text>
-          </Pressable>
-        </View>
-        <Text style={styles.rangeHint}>1–15 秒</Text>
-        <Text style={[styles.label, { marginTop: SPACING.md }]}>
-          随机种子 Seed（可选）
-        </Text>
-        <TextInput
-          value={seed}
-          onChangeText={setSeed}
-          keyboardType="number-pad"
-          placeholder="如 123456（留空则随机）"
-          placeholderTextColor={COLORS.textSubtle}
-          style={styles.input}
-        />
-      </View>
+      <WorkflowForm
+        definition={{ ...(h3Definition as WorkflowDefinition), ui: { sections: (h3Definition as WorkflowDefinition).ui?.sections.slice(0, 2) ?? [] } }}
+        value={workflowValues}
+        onChange={(next) => {
+          setWorkflowValues(next);
+          setPrompt(String(next.prompt ?? ''));
+          setResolution(String(next.resolution ?? RESOLUTION_OPTIONS[0]) as Resolution);
+          setDuration(String(next.duration ?? 5));
+          setSeed(String(next.seed ?? ''));
+        }}
+      />
       <View style={styles.card}>
         <View style={styles.mediaHeader}>
           <View>

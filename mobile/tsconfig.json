@@ -4,6 +4,7 @@
     "strict": true,
     "noEmit": true,
     "moduleResolution": "bundler",
+    "resolveJsonModule": true,
     "jsx": "react-jsx",
     "types": ["jest", "node", "react"]
   },
