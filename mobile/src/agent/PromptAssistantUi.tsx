@@ -7,7 +7,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Alert,
   FlatList,
-  Keyboard,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -24,6 +23,12 @@ import { AppIcon } from '../ui/icons';
 import { LIGHT_PROMPT_COLORS } from '../ui/theme';
 import { pickAssistantImages, type AssistantImageAttachment } from './assistantImagePicker';
 import {
+  insertImageMention,
+  reconcileImageMentions,
+  getImageMentionDisplayName,
+  type ImageMention,
+} from './imageMentions';
+import {
   groupSessions,
   matchesSessionQuery,
   normalizeMessages,
@@ -33,6 +38,7 @@ import {
 } from './agentPresentation';
 import { type PromptParseResult } from './promptParser';
 import type { LocalThreadSnapshot } from './threadStore';
+import { DraggableBottomSheet } from '../ui/DraggableSheet';
 
 type AttachmentLike = {
   id: string;
@@ -71,28 +77,15 @@ export function PromptAssistantUi({
   } = useCopilotChatContext();
   const [draft, setDraft] = useState('');
   const [galleryAttachments, setGalleryAttachments] = useState<AssistantImageAttachment[]>([]);
+  const [mentions, setMentions] = useState<ImageMention[]>([]);
+  const [inputSelection, setInputSelection] = useState({ start: 0, end: 0 });
+  const [mentionSheetOpen, setMentionSheetOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [stopNotice, setStopNotice] = useState<string | null>(null);
+  const inputRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
-  const [keyboardScreenY, setKeyboardScreenY] = useState<number | null>(null);
+  const { width } = useWindowDimensions();
   const wide = width >= 720;
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
-      setKeyboardScreenY(event.endCoordinates.screenY);
-    });
-    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
-      setKeyboardScreenY(null);
-    });
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, []);
-  const keyboardPadding =
-    Platform.OS === 'android' && keyboardScreenY != null
-      ? getKeyboardAvoidancePadding(height, keyboardScreenY)
-      : 0;
   // AbstractAgent mutates its messages array when addMessage() is called. Do
   // not memoize by array identity or the first user bubble waits for the next
   // streamed event before becoming visible.
@@ -125,6 +118,7 @@ export function PromptAssistantUi({
     const ready = [...attachments.filter((item) => item.status === 'ready'), ...galleryAttachments];
     if (!value.trim() && !ready.length)
       return;
+    setStopNotice(null);
     const readyAttachments: Array<{ uri: string; filename?: string }> = ready
       .map((item) => {
         if (!item.source) return null;
@@ -141,6 +135,8 @@ export function PromptAssistantUi({
       attachments: readyAttachments,
     });
     setDraft('');
+    setMentions([]);
+    setInputSelection({ start: 0, end: 0 });
     if (galleryAttachments.length) {
       agent.setPendingAttachments?.(
         galleryAttachments,
@@ -165,6 +161,37 @@ export function PromptAssistantUi({
       { text: '取消', style: 'cancel' },
     ]);
   };
+  const composerAttachments = [
+    ...attachments,
+    ...galleryAttachments,
+  ] as AttachmentLike[];
+  const handleDraftChange = (value: string) => {
+    setDraft(value);
+    const attachmentIds = new Set(composerAttachments.map((item) => item.id));
+    setMentions((current) =>
+      reconcileImageMentions(value, current, attachmentIds),
+    );
+  };
+  const handleSelectMention = (attachment: AttachmentLike) => {
+    const available = composerAttachments.find(
+      (item) => item.id === attachment.id && item.status === 'ready',
+    );
+    if (!available) {
+      setMentionSheetOpen(false);
+      return;
+    }
+    const result = insertImageMention(
+      draft,
+      inputSelection,
+      available,
+      mentions,
+    );
+    setDraft(result.text);
+    setMentions(result.mentions);
+    setInputSelection(result.selection);
+    setMentionSheetOpen(false);
+    inputRef.current?.focus();
+  };
   const history = (
     <HistoryList
       threads={threads}
@@ -183,15 +210,14 @@ export function PromptAssistantUi({
   );
   return (
     <KeyboardAvoidingView
-      // Android's adjustResize already reports the keyboard-safe window height.
-      // The event-driven padding below covers edge-to-edge devices where it does
-      // not. Keeping KAV disabled on Android avoids subtracting the keyboard twice.
+      // Android's adjustResize already reports the keyboard-safe window height;
+      // keeping KAV disabled there prevents applying the keyboard offset twice.
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
       style={[
         styles.root,
         {
-          paddingBottom: Math.max(insets.bottom, 8) + keyboardPadding,
+          paddingBottom: Math.max(insets.bottom, 8),
         },
       ]}
     >
@@ -228,10 +254,10 @@ export function PromptAssistantUi({
       <View style={styles.body}>
         {wide ? <View style={styles.sidebar}>{history}</View> : null}
         <View style={styles.conversation}>
-          {notice ? (
+          {stopNotice ?? notice ? (
             <View style={styles.notice}>
               <AppIcon name="info" size={16} color={LIGHT_PROMPT_COLORS.accent} />
-              <Text style={styles.noticeText}>{notice}</Text>
+              <Text style={styles.noticeText}>{stopNotice ?? notice}</Text>
             </View>
           ) : null}
           <ConversationTimeline
@@ -242,13 +268,26 @@ export function PromptAssistantUi({
           <View style={styles.composerDock}>
             <Composer
               value={draft}
-              onChangeText={setDraft}
+              onChangeText={handleDraftChange}
               onSubmit={handleSubmit}
               onOpenPicker={handleOpenPicker}
-              onCancel={() => agent.abortRun?.()}
+              onOpenMentionPicker={() => setMentionSheetOpen(true)}
+              onCancel={() => {
+                agent.abortRun?.();
+                setStopNotice('已停止生成');
+              }}
               isRunning={isRunning}
-              attachments={[...attachments, ...galleryAttachments] as AttachmentLike[]}
+              attachments={composerAttachments}
+              inputRef={inputRef}
+              mentions={mentions}
+              selection={inputSelection}
+              onSelectionChange={(event) =>
+                setInputSelection(event.nativeEvent.selection)
+              }
               onRemoveAttachment={(id) => {
+                setMentions((current) =>
+                  current.filter((mention) => mention.attachmentId !== id),
+                );
                 if (galleryAttachments.some((item) => item.id === id)) setGalleryAttachments((current) => current.filter((item) => item.id !== id));
                 else removeAttachment(id);
               }}
@@ -257,42 +296,26 @@ export function PromptAssistantUi({
         </View>
       </View>
       {!wide ? (
-        <Modal
+        <DraggableBottomSheet
           visible={historyOpen}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setHistoryOpen(false)}
+          title="对话历史"
+          onClose={() => setHistoryOpen(false)}
         >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.sheet}>
-              <View style={styles.sheetHandle} />
-              <View style={styles.sheetHeader}>
-                <Text style={styles.sheetTitle}>对话历史</Text>
-                <Pressable
-                  accessibilityLabel="关闭对话历史"
-                  onPress={() => setHistoryOpen(false)}
-                >
-                  <AppIcon
-                    name="close"
-                    size={22}
-                    color={LIGHT_PROMPT_COLORS.muted}
-                  />
-                </Pressable>
-              </View>
-              {history}
-            </View>
-          </View>
-        </Modal>
+          {history}
+        </DraggableBottomSheet>
       ) : null}
+      <ImageMentionSheet
+        visible={mentionSheetOpen}
+        attachments={composerAttachments}
+        onClose={() => setMentionSheetOpen(false)}
+        onSelect={handleSelectMention}
+        onAdd={() => {
+          setMentionSheetOpen(false);
+          void handleOpenPicker();
+        }}
+      />
     </KeyboardAvoidingView>
   );
-}
-
-export function getKeyboardAvoidancePadding(
-  viewportHeight: number,
-  keyboardScreenY: number,
-): number {
-  return Math.max(viewportHeight - keyboardScreenY, 0);
 }
 
 export function ConversationTimeline({
@@ -520,6 +543,67 @@ export function PromptResultCard({
   );
 }
 
+function ImageMentionSheet({
+  visible,
+  attachments,
+  onClose,
+  onSelect,
+  onAdd,
+}: {
+  visible: boolean;
+  attachments: AttachmentLike[];
+  onClose: () => void;
+  onSelect: (attachment: AttachmentLike) => void;
+  onAdd: () => void;
+}) {
+  const ready = attachments.filter((attachment) => attachment.status === 'ready');
+  return (
+    <DraggableBottomSheet visible={visible} title="引用图片附件" onClose={onClose}>
+          {ready.length ? (
+            <ScrollView
+              style={styles.mentionList}
+              keyboardShouldPersistTaps="handled"
+            >
+              {ready.map((attachment) => (
+                <Pressable
+                  key={attachment.id}
+                  accessibilityLabel={`引用图片附件 ${attachment.filename || '图片'}`}
+                  onPress={() => onSelect(attachment)}
+                  style={styles.mentionRow}
+                >
+                  {attachment.source ? (
+                    <Image
+                      source={{ uri: getSourceUrl(attachment.source as never) }}
+                      style={styles.mentionImage}
+                    />
+                  ) : (
+                    <View style={styles.mentionImagePlaceholder}>
+                      <Text style={styles.loadingText}>图片</Text>
+                    </View>
+                  )}
+                  <Text style={styles.mentionName} numberOfLines={1}>
+                    {attachment.filename || '图片'}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={styles.mentionEmpty}>
+              <Text style={styles.mentionEmptyText}>先上传图片附件</Text>
+              <Pressable
+                accessibilityLabel="上传图片附件"
+                onPress={onAdd}
+                style={styles.mentionAddButton}
+              >
+                <AppIcon name="add_photo_alternate" size={18} color={LIGHT_PROMPT_COLORS.ink} />
+                <Text style={styles.mentionAddText}>上传图片</Text>
+              </Pressable>
+            </View>
+          )}
+    </DraggableBottomSheet>
+  );
+}
+
 export function AttachmentStrip({
   attachments,
   onOpenPicker,
@@ -595,24 +679,40 @@ export function Composer({
   onChangeText,
   onSubmit,
   onOpenPicker,
+  onOpenMentionPicker,
   onCancel,
   isRunning,
   attachments,
   onRemoveAttachment,
+  inputRef,
+  mentions,
+  selection,
+  onSelectionChange,
 }: {
   value: string;
   onChangeText: (value: string) => void;
   onSubmit: (value: string) => void;
   onOpenPicker: () => Promise<void>;
+  onOpenMentionPicker?: () => void;
   onCancel: () => void;
   isRunning: boolean;
   attachments: AttachmentLike[];
   onRemoveAttachment?: (id: string) => void;
+  inputRef?: React.RefObject<TextInput | null>;
+  mentions?: ImageMention[];
+  selection?: { start: number; end: number };
+  onSelectionChange?: (event: { nativeEvent: { selection: { start: number; end: number } } }) => void;
 }) {
   const uploading = attachments.some((item) => item.status === 'uploading');
   const disabled =
     uploading ||
     (!value.trim() && !attachments.some((item) => item.status === 'ready'));
+  const hasRichMentions = (mentions ?? []).some((mention) =>
+    attachments.some(
+      (attachment) =>
+        attachment.id === mention.attachmentId && attachment.status === 'ready',
+    ),
+  );
   return (
     <View style={styles.composer}>
       <AttachmentStrip
@@ -620,6 +720,32 @@ export function Composer({
         onOpenPicker={onOpenPicker}
         onRemoveAttachment={onRemoveAttachment}
       />
+      <View testID="composer-input-area" style={styles.inputArea}>
+        <MentionTokenLayer
+          value={value}
+          mentions={mentions ?? []}
+          attachments={attachments}
+          selection={selection}
+        />
+        <TextInput
+          ref={inputRef}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder="描述你想生成的画面…"
+          placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder}
+          multiline
+          maxLength={4000}
+          style={[styles.input, hasRichMentions && styles.inputWithMentionMirror]}
+          caretHidden={hasRichMentions}
+          selectionColor={hasRichMentions ? 'transparent' : undefined}
+          editable={!isRunning}
+          selection={selection}
+          onSelectionChange={onSelectionChange}
+          onSubmitEditing={() => {
+            if (!disabled) onSubmit(value);
+          }}
+        />
+      </View>
       <View style={styles.composerRow}>
         <Pressable
           accessibilityLabel="添加图片附件"
@@ -632,19 +758,18 @@ export function Composer({
             color={LIGHT_PROMPT_COLORS.ink}
           />
         </Pressable>
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder="描述你想生成的画面…"
-          placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder}
-          multiline
-          maxLength={4000}
-          style={styles.input}
-          editable={!isRunning}
-          onSubmitEditing={() => {
-            if (!disabled) onSubmit(value);
-          }}
-        />
+        <Pressable
+          accessibilityLabel="引用图片附件"
+          onPress={onOpenMentionPicker}
+          style={styles.addButton}
+        >
+          <AppIcon
+            name="alternate_email"
+            size={19}
+            color={LIGHT_PROMPT_COLORS.ink}
+          />
+        </Pressable>
+        <View testID="composer-toolbar-spacer" style={styles.toolbarSpacer} />
         <Pressable
           accessibilityLabel={isRunning ? '停止生成' : '发送消息'}
           accessibilityState={{ disabled: !isRunning && disabled }}
@@ -664,6 +789,104 @@ export function Composer({
           />
         </Pressable>
       </View>
+    </View>
+  );
+}
+
+function MentionTokenLayer({
+  value,
+  mentions,
+  attachments,
+  selection,
+}: {
+  value: string;
+  mentions: ImageMention[];
+  attachments: AttachmentLike[];
+  selection?: { start: number; end: number };
+}) {
+  const tokens = mentions
+    .slice()
+    .sort((left, right) => left.start - right.start)
+    .map((mention) => ({
+      mention,
+      attachment: attachments.find((item) => item.id === mention.attachmentId),
+    }))
+    .filter(
+      (item): item is { mention: ImageMention; attachment: AttachmentLike } =>
+        Boolean(item.attachment && item.attachment.status === 'ready'),
+    );
+  if (!tokens.length) return null;
+  const segments: React.ReactNode[] = [];
+  let cursor = 0;
+  const caretPosition =
+    selection && selection.start === selection.end ? selection.start : null;
+  const appendTextWithCaret = (text: string, start: number, key: string) => {
+    if (caretPosition === null || caretPosition < start || caretPosition > start + text.length) {
+      segments.push(
+        <Text key={key} style={styles.mentionMirrorText}>
+          {text}
+        </Text>,
+      );
+      return;
+    }
+    const offset = caretPosition - start;
+    if (offset > 0) {
+      segments.push(
+        <Text key={`${key}-before`} style={styles.mentionMirrorText}>
+          {text.slice(0, offset)}
+        </Text>,
+      );
+    }
+    segments.push(<View key={`${key}-caret`} testID="mention-caret" style={styles.mentionCaret} />);
+    if (offset < text.length) {
+      segments.push(
+        <Text key={`${key}-after`} style={styles.mentionMirrorText}>
+          {text.slice(offset)}
+        </Text>,
+      );
+    }
+  };
+  tokens.forEach(({ mention, attachment }) => {
+    if (mention.start > cursor) {
+      appendTextWithCaret(value.slice(cursor, mention.start), cursor, `text-${cursor}`);
+    }
+    const isEditing =
+      selection !== undefined &&
+      selection.start >= mention.start &&
+      selection.start <= mention.end;
+    if (isEditing) {
+      appendTextWithCaret(
+        value.slice(mention.start, mention.end),
+        mention.start,
+        `editing-${mention.attachmentId}-${mention.start}`,
+      );
+    } else {
+      segments.push(
+        <View
+          testID="mention-token"
+          key={`${mention.attachmentId}-${mention.start}-${mention.end}`}
+          style={styles.mentionToken}
+        >
+          {attachment.source ? (
+            <Image
+              source={{ uri: getSourceUrl(attachment.source as never) }}
+              style={styles.mentionTokenImage}
+            />
+          ) : null}
+          <Text style={styles.mentionTokenText} numberOfLines={1}>
+            {value.slice(mention.start, mention.end)}
+          </Text>
+        </View>,
+      );
+    }
+    cursor = mention.end;
+  });
+  if (cursor < value.length) {
+    appendTextWithCaret(value.slice(cursor), cursor, `text-${cursor}`);
+  }
+  return (
+    <View testID="mention-token-layer" pointerEvents="none" style={styles.mentionTokenLayer}>
+      {segments}
     </View>
   );
 }
@@ -1060,9 +1283,63 @@ const styles = StyleSheet.create({
   composerRow: {
     minHeight: 44,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     gap: 7,
   },
+  inputArea: {
+    minHeight: 44,
+    position: 'relative',
+    flexDirection: 'column',
+  },
+  mentionTokenLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1,
+    minHeight: 36,
+    paddingTop: 7,
+    paddingBottom: 6,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+  },
+  mentionMirrorText: {
+    color: LIGHT_PROMPT_COLORS.ink,
+    fontSize: 15,
+    lineHeight: 21,
+  },
+  mentionToken: {
+    minHeight: 28,
+    maxWidth: 190,
+    paddingHorizontal: 7,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#E9E7E1',
+  },
+  mentionTokenImage: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#D8D6CF',
+  },
+  mentionTokenText: {
+    flexShrink: 1,
+    color: LIGHT_PROMPT_COLORS.ink,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  inputWithMentionMirror: { color: 'transparent', opacity: 0, zIndex: 2 },
+  mentionCaret: {
+    width: 2,
+    height: 21,
+    marginHorizontal: 1,
+    backgroundColor: LIGHT_PROMPT_COLORS.accent,
+  },
+  toolbarSpacer: { flex: 1 },
   addButton: {
     width: 36,
     height: 36,
@@ -1072,7 +1349,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   input: {
-    flex: 1,
     maxHeight: 120,
     minHeight: 36,
     paddingTop: 8,
@@ -1191,6 +1467,54 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(20,20,18,.3)',
   },
+  mentionBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(20,20,18,.3)',
+  },
+  mentionSheet: {
+    maxHeight: '72%',
+    minHeight: '32%',
+    padding: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: LIGHT_PROMPT_COLORS.background,
+  },
+  mentionList: { marginTop: 4 },
+  mentionRow: {
+    minHeight: 64,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  mentionImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: '#ECEBE6',
+  },
+  mentionImagePlaceholder: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ECEBE6',
+  },
+  mentionName: { flex: 1, color: LIGHT_PROMPT_COLORS.ink, fontSize: 15 },
+  mentionEmpty: { alignItems: 'center', justifyContent: 'center', gap: 14, paddingVertical: 36 },
+  mentionEmptyText: { color: LIGHT_PROMPT_COLORS.muted, fontSize: 15 },
+  mentionAddButton: {
+    minHeight: 42,
+    paddingHorizontal: 16,
+    borderRadius: 21,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: '#ECEBE6',
+  },
+  mentionAddText: { color: LIGHT_PROMPT_COLORS.ink, fontSize: 14, fontWeight: '600' },
   sheet: {
     maxHeight: '80%',
     minHeight: '45%',

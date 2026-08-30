@@ -112,3 +112,22 @@ it('normalizes DeepAgents failures into an Error-backed RUN_ERROR event', async 
   const events = await collect(new H3AgUiAgent(graph as never), { threadId: 't1', runId: 'r1', state: {}, messages: [] } as never);
   expect(events.at(-1)).toMatchObject({ type: EventType.RUN_ERROR, message: 'provider failed', rawEvent: expect.any(Error) });
 });
+
+it('completes the AG-UI stream when an in-flight run is aborted', async () => {
+  let release!: () => void;
+  const graph = {
+    stream: async function* () {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    },
+  };
+  const agent = new H3AgUiAgent(graph as never);
+  const completion = collect(agent, { threadId: 't1', runId: 'r-abort', state: {}, messages: [] } as never);
+  await Promise.resolve();
+  agent.abortRun();
+  release();
+  await expect(completion).resolves.toEqual([
+    { type: EventType.RUN_STARTED, threadId: 't1', runId: 'r-abort' },
+  ]);
+});

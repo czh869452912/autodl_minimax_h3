@@ -1,8 +1,9 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import * as Clipboard from 'expo-clipboard';
-import { Alert, FlatList, KeyboardAvoidingView, Platform, Text } from 'react-native';
+import { Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Platform, Text } from 'react-native';
 import { pickAssistantImages } from './assistantImagePicker';
+import { DraggableBottomSheet } from '../ui/DraggableSheet';
 
 let mockChatContext: Record<string, unknown>;
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resolve()) }));
@@ -13,7 +14,7 @@ jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
 jest.mock('./assistantImagePicker', () => ({ pickAssistantImages: jest.fn(() => Promise.resolve([])) }));
 
-import { getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline } from './PromptAssistantUi';
+import { PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline } from './PromptAssistantUi';
 
 describe('Prompt assistant UI primitives', () => {
   beforeEach(() => {
@@ -58,6 +59,171 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
+  it('places attachment, mention, and send actions below the multiline input', () => {
+    const onMention = jest.fn();
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(
+        <Composer
+          value="draft"
+          onChangeText={() => undefined}
+          onSubmit={() => undefined}
+          onOpenPicker={() => Promise.resolve()}
+          onOpenMentionPicker={onMention}
+          onCancel={() => undefined}
+          isRunning={false}
+          attachments={[]}
+        />,
+      );
+    });
+    const input = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    const controls = tree.root.findAll((node) => typeof node.props.accessibilityLabel === 'string');
+    expect(input.props.multiline).toBe(true);
+    expect(tree.root.findByProps({ accessibilityLabel: '添加图片附件' })).toBeTruthy();
+    expect(tree.root.findByProps({ accessibilityLabel: '引用图片附件' })).toBeTruthy();
+    expect(tree.root.findByProps({ accessibilityLabel: '发送消息' })).toBeTruthy();
+    expect(controls.length).toBeGreaterThanOrEqual(3);
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
+    expect(onMention).toHaveBeenCalledTimes(1);
+    act(() => tree.unmount());
+  });
+
+  it('opens an image mention sheet with ready attachments only', async () => {
+    mockChatContext = {
+      ...mockChatContext,
+      attachments: [
+        { id: 'ready-1', status: 'ready', filename: '角色正面.png', source: { value: 'file://ready-1' } },
+        { id: 'uploading-1', status: 'uploading', filename: '上传中.png', source: { value: 'file://uploading-1' } },
+      ],
+    };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <PromptAssistantUi
+          threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
+          activeThreadId="t1"
+          onSelect={() => undefined}
+          onNew={() => undefined}
+          onDelete={() => undefined}
+          onRename={() => undefined}
+          onExportPrompt={() => Promise.resolve()}
+        />,
+      );
+    });
+    expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件' }).length).toBeGreaterThan(0);
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
+    expect(tree.root.findAllByType(DraggableBottomSheet).filter((node) => node.props.visible)).toHaveLength(1);
+    expect(tree.root.findAllByType(Text).some((node) => node.props.children === '引用图片附件')).toBe(true);
+    expect(tree.root.findByProps({ accessibilityLabel: '引用图片附件 角色正面.png' })).toBeTruthy();
+    expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件 上传中' })).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
+  it('inserts a selected image mention at the current cursor and closes the sheet', async () => {
+    mockChatContext = {
+      ...mockChatContext,
+      attachments: [
+        { id: 'ready-1', status: 'ready', filename: '角色正面.png', source: { value: 'file://ready-1' } },
+      ],
+    };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <PromptAssistantUi
+          threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
+          activeThreadId="t1"
+          onSelect={() => undefined}
+          onNew={() => undefined}
+          onDelete={() => undefined}
+          onRename={() => undefined}
+          onExportPrompt={() => Promise.resolve()}
+        />,
+      );
+    });
+    const input = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    act(() => input.props.onChangeText('镜头前后'));
+    act(() => input.props.onSelectionChange({ nativeEvent: { selection: { start: 2, end: 2 } } }));
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件 角色正面.png' }).props.onPress());
+    expect(tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.value).toBe('镜头@角色正面 前后');
+    expect(tree.root.findByProps({ testID: 'composer-toolbar-spacer' }).props.style).toEqual(
+      expect.objectContaining({ flex: 1 }),
+    );
+    expect(tree.root.findAllByType(Image).some((node) => node.props.source?.uri === 'file://ready-1')).toBe(true);
+    expect(tree.root.findAllByType(Text).some((node) => node.props.children === '@角色正面')).toBe(true);
+    const mentionLayer = tree.root.findByProps({ testID: 'mention-token-layer' });
+    const richInput = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    expect(mentionLayer.props.pointerEvents).toBe('none');
+    expect(mentionLayer.findAllByType(Text).map((node) => node.props.children)).toEqual([
+      '镜头',
+      '@角色正面',
+      ' ',
+      '前后',
+    ]);
+    expect(mentionLayer.props.style).toEqual(
+      expect.objectContaining({ position: 'absolute' }),
+    );
+    expect(richInput.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ color: 'transparent' })]),
+    );
+    expect(richInput.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ opacity: 0 })]),
+    );
+    expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件 角色正面.png' })).toHaveLength(0);
+    act(() => richInput.props.onSelectionChange({ nativeEvent: { selection: { start: 5, end: 5 } } }));
+    const editingMentionLayer = tree.root.findByProps({ testID: 'mention-token-layer' });
+    expect(editingMentionLayer.findAllByType(Text).some((node) => typeof node.props.children === 'string' && node.props.children.includes('@角色'))).toBe(true);
+    expect(editingMentionLayer.findAllByProps({ testID: 'mention-token' })).toHaveLength(0);
+    expect(editingMentionLayer.findAllByProps({ testID: 'mention-caret' }).length).toBeGreaterThan(0);
+    act(() => tree.unmount());
+  });
+
+  it('sends every ready provider and gallery attachment even when only one is mentioned', async () => {
+    const setPendingAttachments = jest.fn();
+    mockChatContext = {
+      ...mockChatContext,
+      submitMessage: jest.fn(() => Promise.resolve()),
+      attachments: [
+        { id: 'provider-1', status: 'ready', filename: '场景.png', source: { value: 'file://provider-1' } },
+      ],
+      agent: { setPendingAttachments },
+    };
+    (pickAssistantImages as jest.Mock).mockResolvedValueOnce([
+      { id: 'gallery-1', type: 'image', status: 'ready', filename: '角色.png', size: 10, source: { type: 'data', value: 'data:image/png;base64,abc', mimeType: 'image/png' } },
+    ]);
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <PromptAssistantUi
+          threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
+          activeThreadId="t1"
+          onSelect={() => undefined}
+          onNew={() => undefined}
+          onDelete={() => undefined}
+          onRename={() => undefined}
+          onExportPrompt={() => Promise.resolve()}
+        />,
+      );
+    });
+    act(() => tree.root.findByProps({ accessibilityLabel: '添加图片附件' }).props.onPress());
+    const pickerButtons = alert.mock.calls[0]?.[2] as Array<{ onPress?: () => void }>;
+    await act(async () => pickerButtons[0]?.onPress?.());
+    await act(async () => tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.onChangeText('使用角色'));
+    await act(async () => {
+      tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.onPress();
+    });
+    expect(setPendingAttachments).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ id: 'gallery-1' })]),
+      expect.any(Function),
+    );
+    expect(mockChatContext.submitMessage).toHaveBeenCalledWith('使用角色');
+    const imageUris = tree.root.findAllByType(Image).map((node) => node.props.source?.uri);
+    expect(imageUris).toEqual(expect.arrayContaining(['file://provider-1', 'data:image/png;base64,abc']));
+    alert.mockRestore();
+    act(() => tree.unmount());
+  });
+
   it('offers gallery and file sources for image attachments', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     let tree!: ReturnType<typeof create>;
@@ -93,15 +259,10 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
-  it('adds only the keyboard overlap that adjustResize did not consume', () => {
-    expect(getKeyboardAvoidancePadding(800, 500)).toBe(300);
-    expect(getKeyboardAvoidancePadding(500, 500)).toBe(0);
-    expect(getKeyboardAvoidancePadding(800, 900)).toBe(0);
-  });
-
-  it('keeps Android KAV disabled to avoid double-resizing', () => {
+  it('does not subscribe to Android keyboard events or add a second lift', () => {
     const originalPlatform = Platform.OS;
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+    const addListener = jest.spyOn(Keyboard, 'addListener');
     let tree!: ReturnType<typeof create>;
     try {
       act(() => {
@@ -118,6 +279,41 @@ describe('Prompt assistant UI primitives', () => {
         );
       });
       expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBeUndefined();
+      act(() => {
+        addListener.mock.calls
+          .filter(([eventName]) => eventName === 'keyboardDidShow')
+          .forEach(([, listener]) => listener({ endCoordinates: { screenY: -100 } } as never));
+      });
+      expect(tree.root.findByType(KeyboardAvoidingView).props.style).toEqual(
+        expect.arrayContaining([expect.objectContaining({ paddingBottom: 8 })]),
+      );
+    } finally {
+      act(() => tree?.unmount());
+      addListener.mockRestore();
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
+    }
+  });
+
+  it('keeps native padding behavior on iOS', () => {
+    const originalPlatform = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+    let tree!: ReturnType<typeof create>;
+    try {
+      act(() => {
+        tree = create(
+          <PromptAssistantUi
+            threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
+            activeThreadId="t1"
+            onSelect={() => undefined}
+            onNew={() => undefined}
+            onDelete={() => undefined}
+            onRename={() => undefined}
+            onExportPrompt={() => Promise.resolve()}
+          />,
+        );
+      });
+      expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBe('padding');
+      expect(tree.root.findByType(KeyboardAvoidingView).props.keyboardVerticalOffset).toBe(0);
     } finally {
       act(() => tree?.unmount());
       Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
@@ -179,6 +375,7 @@ describe('Prompt assistant UI primitives', () => {
     });
     act(() => tree.root.findByProps({ accessibilityLabel: '停止生成' }).props.onPress());
     expect(abortRun).toHaveBeenCalledTimes(1);
+    expect(tree.root.findAllByType(Text).some((node) => node.props.children === '已停止生成')).toBe(true);
     act(() => tree.unmount());
   });
 });
