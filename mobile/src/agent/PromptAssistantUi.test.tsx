@@ -58,6 +58,35 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
+  it('places attachment, mention, and send actions below the multiline input', () => {
+    const onMention = jest.fn();
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(
+        <Composer
+          value="draft"
+          onChangeText={() => undefined}
+          onSubmit={() => undefined}
+          onOpenPicker={() => Promise.resolve()}
+          onOpenMentionPicker={onMention}
+          onCancel={() => undefined}
+          isRunning={false}
+          attachments={[]}
+        />,
+      );
+    });
+    const input = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    const controls = tree.root.findAll((node) => typeof node.props.accessibilityLabel === 'string');
+    expect(input.props.multiline).toBe(true);
+    expect(tree.root.findByProps({ accessibilityLabel: '添加图片附件' })).toBeTruthy();
+    expect(tree.root.findByProps({ accessibilityLabel: '引用图片附件' })).toBeTruthy();
+    expect(tree.root.findByProps({ accessibilityLabel: '发送消息' })).toBeTruthy();
+    expect(controls.length).toBeGreaterThanOrEqual(3);
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
+    expect(onMention).toHaveBeenCalledTimes(1);
+    act(() => tree.unmount());
+  });
+
   it('offers gallery and file sources for image attachments', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     let tree!: ReturnType<typeof create>;

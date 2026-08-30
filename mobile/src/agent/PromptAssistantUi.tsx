@@ -568,19 +568,27 @@ export function Composer({
   onChangeText,
   onSubmit,
   onOpenPicker,
+  onOpenMentionPicker,
   onCancel,
   isRunning,
   attachments,
   onRemoveAttachment,
+  inputRef,
+  selection,
+  onSelectionChange,
 }: {
   value: string;
   onChangeText: (value: string) => void;
   onSubmit: (value: string) => void;
   onOpenPicker: () => Promise<void>;
+  onOpenMentionPicker?: () => void;
   onCancel: () => void;
   isRunning: boolean;
   attachments: AttachmentLike[];
   onRemoveAttachment?: (id: string) => void;
+  inputRef?: React.RefObject<TextInput | null>;
+  selection?: { start: number; end: number };
+  onSelectionChange?: (event: { nativeEvent: { selection: { start: number; end: number } } }) => void;
 }) {
   const uploading = attachments.some((item) => item.status === 'uploading');
   const disabled =
@@ -593,6 +601,24 @@ export function Composer({
         onOpenPicker={onOpenPicker}
         onRemoveAttachment={onRemoveAttachment}
       />
+      <View style={styles.inputArea}>
+        <TextInput
+          ref={inputRef}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder="描述你想生成的画面…"
+          placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder}
+          multiline
+          maxLength={4000}
+          style={styles.input}
+          editable={!isRunning}
+          selection={selection}
+          onSelectionChange={onSelectionChange}
+          onSubmitEditing={() => {
+            if (!disabled) onSubmit(value);
+          }}
+        />
+      </View>
       <View style={styles.composerRow}>
         <Pressable
           accessibilityLabel="添加图片附件"
@@ -605,19 +631,17 @@ export function Composer({
             color={LIGHT_PROMPT_COLORS.ink}
           />
         </Pressable>
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder="描述你想生成的画面…"
-          placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder}
-          multiline
-          maxLength={4000}
-          style={styles.input}
-          editable={!isRunning}
-          onSubmitEditing={() => {
-            if (!disabled) onSubmit(value);
-          }}
-        />
+        <Pressable
+          accessibilityLabel="引用图片附件"
+          onPress={onOpenMentionPicker}
+          style={styles.addButton}
+        >
+          <AppIcon
+            name="alternate_email"
+            size={19}
+            color={LIGHT_PROMPT_COLORS.ink}
+          />
+        </Pressable>
         <Pressable
           accessibilityLabel={isRunning ? '停止生成' : '发送消息'}
           accessibilityState={{ disabled: !isRunning && disabled }}
@@ -1033,8 +1057,11 @@ const styles = StyleSheet.create({
   composerRow: {
     minHeight: 44,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     gap: 7,
+  },
+  inputArea: {
+    minHeight: 44,
   },
   addButton: {
     width: 36,
