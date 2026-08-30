@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import * as Clipboard from 'expo-clipboard';
-import { Alert, FlatList, Keyboard, KeyboardAvoidingView, Platform, Text } from 'react-native';
+import { Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Platform, Text } from 'react-native';
 import { pickAssistantImages } from './assistantImagePicker';
 
 let mockChatContext: Record<string, unknown>;
@@ -84,6 +84,113 @@ describe('Prompt assistant UI primitives', () => {
     expect(controls.length).toBeGreaterThanOrEqual(3);
     act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
     expect(onMention).toHaveBeenCalledTimes(1);
+    act(() => tree.unmount());
+  });
+
+  it('opens an image mention sheet with ready attachments only', async () => {
+    mockChatContext = {
+      ...mockChatContext,
+      attachments: [
+        { id: 'ready-1', status: 'ready', filename: '角色正面.png', source: { value: 'file://ready-1' } },
+        { id: 'uploading-1', status: 'uploading', filename: '上传中.png', source: { value: 'file://uploading-1' } },
+      ],
+    };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <PromptAssistantUi
+          threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
+          activeThreadId="t1"
+          onSelect={() => undefined}
+          onNew={() => undefined}
+          onDelete={() => undefined}
+          onRename={() => undefined}
+          onExportPrompt={() => Promise.resolve()}
+        />,
+      );
+    });
+    expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件' }).length).toBeGreaterThan(0);
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
+    expect(tree.root.findAllByType(Text).some((node) => node.props.children === '引用图片附件')).toBe(true);
+    expect(tree.root.findByProps({ accessibilityLabel: '引用图片附件 角色正面.png' })).toBeTruthy();
+    expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件 上传中' })).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
+  it('inserts a selected image mention at the current cursor and closes the sheet', async () => {
+    mockChatContext = {
+      ...mockChatContext,
+      attachments: [
+        { id: 'ready-1', status: 'ready', filename: '角色正面.png', source: { value: 'file://ready-1' } },
+      ],
+    };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <PromptAssistantUi
+          threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
+          activeThreadId="t1"
+          onSelect={() => undefined}
+          onNew={() => undefined}
+          onDelete={() => undefined}
+          onRename={() => undefined}
+          onExportPrompt={() => Promise.resolve()}
+        />,
+      );
+    });
+    const input = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    act(() => input.props.onChangeText('镜头前后'));
+    act(() => input.props.onSelectionChange({ nativeEvent: { selection: { start: 2, end: 2 } } }));
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件 角色正面.png' }).props.onPress());
+    expect(tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.value).toBe('镜头@角色正面 前后');
+    expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件 角色正面.png' })).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
+  it('sends every ready provider and gallery attachment even when only one is mentioned', async () => {
+    const setPendingAttachments = jest.fn();
+    mockChatContext = {
+      ...mockChatContext,
+      submitMessage: jest.fn(() => Promise.resolve()),
+      attachments: [
+        { id: 'provider-1', status: 'ready', filename: '场景.png', source: { value: 'file://provider-1' } },
+      ],
+      agent: { setPendingAttachments },
+    };
+    (pickAssistantImages as jest.Mock).mockResolvedValueOnce([
+      { id: 'gallery-1', type: 'image', status: 'ready', filename: '角色.png', size: 10, source: { type: 'data', value: 'data:image/png;base64,abc', mimeType: 'image/png' } },
+    ]);
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <PromptAssistantUi
+          threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
+          activeThreadId="t1"
+          onSelect={() => undefined}
+          onNew={() => undefined}
+          onDelete={() => undefined}
+          onRename={() => undefined}
+          onExportPrompt={() => Promise.resolve()}
+        />,
+      );
+    });
+    act(() => tree.root.findByProps({ accessibilityLabel: '添加图片附件' }).props.onPress());
+    const pickerButtons = alert.mock.calls[0]?.[2] as Array<{ onPress?: () => void }>;
+    await act(async () => pickerButtons[0]?.onPress?.());
+    await act(async () => tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.onChangeText('使用角色'));
+    await act(async () => {
+      tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.onPress();
+    });
+    expect(setPendingAttachments).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ id: 'gallery-1' })]),
+      expect.any(Function),
+    );
+    expect(mockChatContext.submitMessage).toHaveBeenCalledWith('使用角色');
+    const imageUris = tree.root.findAllByType(Image).map((node) => node.props.source?.uri);
+    expect(imageUris).toEqual(expect.arrayContaining(['file://provider-1', 'data:image/png;base64,abc']));
+    alert.mockRestore();
     act(() => tree.unmount());
   });
 

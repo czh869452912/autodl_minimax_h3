@@ -23,6 +23,11 @@ import { AppIcon } from '../ui/icons';
 import { LIGHT_PROMPT_COLORS } from '../ui/theme';
 import { pickAssistantImages, type AssistantImageAttachment } from './assistantImagePicker';
 import {
+  insertImageMention,
+  reconcileImageMentions,
+  type ImageMention,
+} from './imageMentions';
+import {
   groupSessions,
   matchesSessionQuery,
   normalizeMessages,
@@ -70,7 +75,11 @@ export function PromptAssistantUi({
   } = useCopilotChatContext();
   const [draft, setDraft] = useState('');
   const [galleryAttachments, setGalleryAttachments] = useState<AssistantImageAttachment[]>([]);
+  const [mentions, setMentions] = useState<ImageMention[]>([]);
+  const [inputSelection, setInputSelection] = useState({ start: 0, end: 0 });
+  const [mentionSheetOpen, setMentionSheetOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const inputRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const wide = width >= 720;
@@ -122,6 +131,8 @@ export function PromptAssistantUi({
       attachments: readyAttachments,
     });
     setDraft('');
+    setMentions([]);
+    setInputSelection({ start: 0, end: 0 });
     if (galleryAttachments.length) {
       agent.setPendingAttachments?.(
         galleryAttachments,
@@ -145,6 +156,37 @@ export function PromptAssistantUi({
       { text: '从文件选择', onPress: () => void openPicker() },
       { text: '取消', style: 'cancel' },
     ]);
+  };
+  const composerAttachments = [
+    ...attachments,
+    ...galleryAttachments,
+  ] as AttachmentLike[];
+  const handleDraftChange = (value: string) => {
+    setDraft(value);
+    const attachmentIds = new Set(composerAttachments.map((item) => item.id));
+    setMentions((current) =>
+      reconcileImageMentions(value, current, attachmentIds),
+    );
+  };
+  const handleSelectMention = (attachment: AttachmentLike) => {
+    const available = composerAttachments.find(
+      (item) => item.id === attachment.id && item.status === 'ready',
+    );
+    if (!available) {
+      setMentionSheetOpen(false);
+      return;
+    }
+    const result = insertImageMention(
+      draft,
+      inputSelection,
+      available,
+      mentions,
+    );
+    setDraft(result.text);
+    setMentions(result.mentions);
+    setInputSelection(result.selection);
+    setMentionSheetOpen(false);
+    inputRef.current?.focus();
   };
   const history = (
     <HistoryList
@@ -222,13 +264,22 @@ export function PromptAssistantUi({
           <View style={styles.composerDock}>
             <Composer
               value={draft}
-              onChangeText={setDraft}
+              onChangeText={handleDraftChange}
               onSubmit={handleSubmit}
               onOpenPicker={handleOpenPicker}
+              onOpenMentionPicker={() => setMentionSheetOpen(true)}
               onCancel={() => agent.abortRun?.()}
               isRunning={isRunning}
-              attachments={[...attachments, ...galleryAttachments] as AttachmentLike[]}
+              attachments={composerAttachments}
+              inputRef={inputRef}
+              selection={inputSelection}
+              onSelectionChange={(event) =>
+                setInputSelection(event.nativeEvent.selection)
+              }
               onRemoveAttachment={(id) => {
+                setMentions((current) =>
+                  current.filter((mention) => mention.attachmentId !== id),
+                );
                 if (galleryAttachments.some((item) => item.id === id)) setGalleryAttachments((current) => current.filter((item) => item.id !== id));
                 else removeAttachment(id);
               }}
@@ -264,6 +315,16 @@ export function PromptAssistantUi({
           </View>
         </Modal>
       ) : null}
+      <ImageMentionSheet
+        visible={mentionSheetOpen}
+        attachments={composerAttachments}
+        onClose={() => setMentionSheetOpen(false)}
+        onSelect={handleSelectMention}
+        onAdd={() => {
+          setMentionSheetOpen(false);
+          void handleOpenPicker();
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -490,6 +551,87 @@ export function PromptResultCard({
         </Pressable>
       </View>
     </View>
+  );
+}
+
+function ImageMentionSheet({
+  visible,
+  attachments,
+  onClose,
+  onSelect,
+  onAdd,
+}: {
+  visible: boolean;
+  attachments: AttachmentLike[];
+  onClose: () => void;
+  onSelect: (attachment: AttachmentLike) => void;
+  onAdd: () => void;
+}) {
+  const ready = attachments.filter((attachment) => attachment.status === 'ready');
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <Pressable
+        accessibilityLabel="引用图片菜单背景"
+        style={styles.mentionBackdrop}
+        onPress={onClose}
+      >
+        <Pressable style={styles.mentionSheet} onPress={(event) => event.stopPropagation()}>
+          <View style={styles.sheetHandle} />
+          <View style={styles.sheetHeader}>
+            <Text style={styles.sheetTitle}>引用图片附件</Text>
+            <Pressable accessibilityLabel="关闭引用图片菜单" onPress={onClose}>
+              <AppIcon name="close" size={22} color={LIGHT_PROMPT_COLORS.muted} />
+            </Pressable>
+          </View>
+          {ready.length ? (
+            <ScrollView
+              style={styles.mentionList}
+              keyboardShouldPersistTaps="handled"
+            >
+              {ready.map((attachment) => (
+                <Pressable
+                  key={attachment.id}
+                  accessibilityLabel={`引用图片附件 ${attachment.filename || '图片'}`}
+                  onPress={() => onSelect(attachment)}
+                  style={styles.mentionRow}
+                >
+                  {attachment.source ? (
+                    <Image
+                      source={{ uri: getSourceUrl(attachment.source as never) }}
+                      style={styles.mentionImage}
+                    />
+                  ) : (
+                    <View style={styles.mentionImagePlaceholder}>
+                      <Text style={styles.loadingText}>图片</Text>
+                    </View>
+                  )}
+                  <Text style={styles.mentionName} numberOfLines={1}>
+                    {attachment.filename || '图片'}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={styles.mentionEmpty}>
+              <Text style={styles.mentionEmptyText}>先上传图片附件</Text>
+              <Pressable
+                accessibilityLabel="上传图片附件"
+                onPress={onAdd}
+                style={styles.mentionAddButton}
+              >
+                <AppIcon name="add_photo_alternate" size={18} color={LIGHT_PROMPT_COLORS.ink} />
+                <Text style={styles.mentionAddText}>上传图片</Text>
+              </Pressable>
+            </View>
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -1191,6 +1333,54 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(20,20,18,.3)',
   },
+  mentionBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(20,20,18,.3)',
+  },
+  mentionSheet: {
+    maxHeight: '72%',
+    minHeight: '32%',
+    padding: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: LIGHT_PROMPT_COLORS.background,
+  },
+  mentionList: { marginTop: 4 },
+  mentionRow: {
+    minHeight: 64,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  mentionImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: '#ECEBE6',
+  },
+  mentionImagePlaceholder: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ECEBE6',
+  },
+  mentionName: { flex: 1, color: LIGHT_PROMPT_COLORS.ink, fontSize: 15 },
+  mentionEmpty: { alignItems: 'center', justifyContent: 'center', gap: 14, paddingVertical: 36 },
+  mentionEmptyText: { color: LIGHT_PROMPT_COLORS.muted, fontSize: 15 },
+  mentionAddButton: {
+    minHeight: 42,
+    paddingHorizontal: 16,
+    borderRadius: 21,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: '#ECEBE6',
+  },
+  mentionAddText: { color: LIGHT_PROMPT_COLORS.ink, fontSize: 14, fontWeight: '600' },
   sheet: {
     maxHeight: '80%',
     minHeight: '45%',
