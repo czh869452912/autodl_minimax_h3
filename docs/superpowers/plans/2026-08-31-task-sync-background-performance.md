@@ -24,10 +24,11 @@
 - `mobile/src/media/repository.ts`, `mobile/app/(tabs)/gallery.tsx`: paged media query and bounded poster loading.
 - `mobile/android/app/src/main/java/com/example/autodlh3/TaskMonitorModule.kt`: JS bridge for monitor start/stop/status.
 - `mobile/android/app/src/main/java/com/example/autodlh3/TaskMonitorService.kt`: Android foreground service and two-minute scheduler.
+- `mobile/android/app/src/main/java/com/example/autodlh3/TaskMonitorHeadlessService.kt`: Headless JS bridge used after process recreation.
 - `mobile/android/app/src/main/java/com/example/autodlh3/MediaPackage.kt`: register the monitor native module.
 - `mobile/android/app/src/main/AndroidManifest.xml`, `mobile/app.json`: service declaration, permissions, and notification configuration.
 
-The Android service must not reimplement AutoDL HTTP. It invokes the JS coordinator through the native bridge or starts a headless JS task using the same persisted database and provider modules.
+The Android service must not reimplement AutoDL HTTP. It invokes the JS coordinator through a registered Headless JS task using the same persisted database and provider modules. The NativeModule is only the foreground UI control surface.
 
 ---
 
@@ -294,6 +295,7 @@ git commit -m "perf: page gallery data and bound poster work"
 **Files:**
 - Create: `mobile/android/app/src/main/java/com/example/autodlh3/TaskMonitorModule.kt`
 - Create: `mobile/android/app/src/main/java/com/example/autodlh3/TaskMonitorService.kt`
+- Create: `mobile/android/app/src/main/java/com/example/autodlh3/TaskMonitorHeadlessService.kt`
 - Modify: `mobile/android/app/src/main/java/com/example/autodlh3/MediaPackage.kt:1-16`
 - Modify: `mobile/android/app/src/main/AndroidManifest.xml:1-40`
 - Modify: `mobile/app.json:1-18`
@@ -321,11 +323,11 @@ Expected: the bridge and native module do not exist.
 4. Stop when the bridge requests stop or the coordinator reports zero selected active jobs.
 5. Update the notification with active/completed/failed counts.
 
-`TaskMonitorModule` exposes `start`, `stop`, and `status` and uses explicit intents. It must not duplicate AutoDL URLs, token handling, or polling logic.
+`TaskMonitorModule` exposes `start`, `stop`, and `status` and uses explicit intents. `TaskMonitorService` starts `TaskMonitorHeadlessService` every interval; the headless task calls the shared JS coordinator and returns a serialized summary. It must not duplicate AutoDL URLs, token handling, or polling logic.
 
-- [ ] **Step 4: Register permissions and service declaration**
+- [ ] **Step 4: Register Headless JS and permissions**
 
-Declare `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`, and `POST_NOTIFICATIONS` as required by the target SDK, add the non-exported service declaration, and keep the existing media playback permission only for the media feature. Update `MediaPackage` to register both modules. Document that Expo Go is unsupported and this requires a development/release native build.
+Register `AppRegistry.registerHeadlessTask('AutoDLTaskMonitor', ...)` from the app entrypoint, declare `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`, and `POST_NOTIFICATIONS` as required by the target SDK, add non-exported declarations for both service classes, and keep the existing media playback permission only for the media feature. Update `MediaPackage` to register the monitor module. Document that Expo Go is unsupported and this requires a development/release native build.
 
 - [ ] **Step 5: Verify native compilation and bridge tests**
 
