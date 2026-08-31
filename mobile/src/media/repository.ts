@@ -12,7 +12,7 @@ const schema = `CREATE TABLE IF NOT EXISTS media_assets (
   source_url TEXT NOT NULL, local_path TEXT, poster_path TEXT, mime_type TEXT NOT NULL,
   width INTEGER, height INTEGER, duration_ms INTEGER, status TEXT NOT NULL,
   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, artifact_id TEXT, job_id TEXT, workflow_id TEXT, kind TEXT NOT NULL DEFAULT 'video'
-); CREATE TABLE IF NOT EXISTS media_deliveries (id TEXT PRIMARY KEY NOT NULL, asset_id TEXT NOT NULL, target TEXT NOT NULL, uri TEXT, status TEXT NOT NULL, error TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS idx_media_assets_created_at ON media_assets(created_at DESC);`;
+); CREATE TABLE IF NOT EXISTS media_deliveries (id TEXT PRIMARY KEY NOT NULL, asset_id TEXT NOT NULL, target TEXT NOT NULL, uri TEXT, status TEXT NOT NULL, error TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS idx_media_assets_created_at ON media_assets(created_at DESC); CREATE INDEX IF NOT EXISTS idx_media_assets_task_kind ON media_assets(task_id, kind);`;
 type MediaPageOptions = { query?: string; status?: MediaStatus; kind?: MediaAsset['kind']; limit?: number; cursor?: { createdAt: number; id: string } };
 
 const toAsset = (row: Record<string, unknown>): MediaAsset => ({
@@ -29,6 +29,7 @@ export function createSqliteMediaStore(database: SqlDatabase): MediaStore {
   database.execSync?.(schema);
   for (const statement of ["ALTER TABLE media_assets ADD COLUMN artifact_id TEXT", "ALTER TABLE media_assets ADD COLUMN job_id TEXT", "ALTER TABLE media_assets ADD COLUMN workflow_id TEXT", "ALTER TABLE media_assets ADD COLUMN kind TEXT NOT NULL DEFAULT 'video'"]) { try { database.execSync?.(statement); } catch {} }
   database.execSync?.('CREATE INDEX IF NOT EXISTS idx_media_assets_status_created_id ON media_assets(status, created_at DESC, id DESC);');
+  database.execSync?.('CREATE INDEX IF NOT EXISTS idx_media_assets_task_kind ON media_assets(task_id, kind);');
   return {
     async upsert(asset) {
       database.runSync?.('INSERT OR REPLACE INTO media_assets (id, task_id, title, prompt, source_url, local_path, poster_path, mime_type, width, height, duration_ms, status, created_at, updated_at, artifact_id, job_id, workflow_id, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', asset.id, asset.taskId, asset.title, asset.prompt, asset.sourceUrl, asset.localPath ?? null, asset.posterPath ?? null, asset.mimeType, asset.width ?? null, asset.height ?? null, asset.durationMs ?? null, asset.status, asset.createdAt, asset.updatedAt, asset.artifactId ?? null, asset.jobId ?? null, asset.workflowId ?? null, asset.kind ?? 'video');
