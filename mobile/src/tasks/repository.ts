@@ -25,6 +25,7 @@ export function createTaskRepository(db: SQLiteDatabase) {
     },
     async listUpdatedSince(watermark: number, limit = 200) { return (db.getAllSync<any>('SELECT * FROM tasks WHERE updated_at > ? ORDER BY updated_at ASC, id ASC LIMIT ?', watermark, Math.max(1, Math.min(1000, limit))) ?? []).map(map); },
     async listActive() { return (db.getAllSync<any>("SELECT * FROM tasks WHERE status IN ('QUEUED','RUNNING','UNKNOWN') ORDER BY updated_at ASC, id ASC") ?? []).map(map); },
+    async listMediaPending() { return (db.getAllSync<any>("SELECT * FROM tasks WHERE status = 'SUCCESS' AND (video_url IS NOT NULL OR local_uri IS NOT NULL OR gallery_uri IS NOT NULL) AND (download_state <> 'DOWNLOADED' OR export_state IN ('QUEUED','EXPORTING')) ORDER BY updated_at ASC, id ASC") ?? []).map(map); },
     async remove(id: string) { const rows = db.getAllSync<any>('SELECT local_uri, thumbnail_url FROM tasks WHERE id = ? LIMIT 1', id); db.runSync('DELETE FROM tasks WHERE id = ?', id); for (const row of rows) { for (const uri of [row.local_uri, row.thumbnail_url]) { if (uri) { try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {} } } } },
   };
 }

@@ -3,7 +3,7 @@ import { jobRecordToTaskProjection, taskRecordToJobRecord } from '../jobs/reposi
 import type { TaskRecord } from './types';
 
 type Settings = { token: string; autoExportToGallery: boolean; keepPrivateCopy: boolean };
-type TaskStore = { list(): Promise<TaskRecord[]>; upsert(task: TaskRecord): Promise<void> };
+type TaskStore = { list(): Promise<TaskRecord[]>; listActive?(): Promise<TaskRecord[]>; listMediaPending?(): Promise<TaskRecord[]>; upsert(task: TaskRecord): Promise<void> };
 type Runtime = { sync(job: JobRecord): Promise<JobRecord> };
 type CoordinatorDeps = {
   readSettings(): Promise<Settings>;
@@ -25,7 +25,7 @@ export function createTaskSyncCoordinator(deps: CoordinatorDeps): TaskSyncCoordi
   const concurrency = Math.max(1, deps.concurrency ?? 4);
   const runOnce = async (): Promise<{ tasks: TaskRecord[]; summary: SyncSummary }> => {
     const settings = await deps.readSettings();
-    const tasks = await deps.taskStore.list();
+    const tasks = await (deps.taskStore.listActive ? deps.taskStore.listActive() : deps.taskStore.list());
     const active = tasks.filter((item) => item.status === 'QUEUED' || item.status === 'RUNNING' || item.status === 'UNKNOWN');
     const summary: SyncSummary = { updated: 0, failed: 0, skipped: 0, remaining: active.length };
     if (!settings.token) summary.skipped = active.length;
@@ -51,7 +51,9 @@ export function createTaskSyncCoordinator(deps: CoordinatorDeps): TaskSyncCoordi
           }
           await deps.taskStore.upsert(updatedTask);
           summary.updated += 1;
-          summary.remaining = Math.max(0, summary.remaining - 1);
+          if (updatedTask.status !== 'QUEUED' && updatedTask.status !== 'RUNNING' && updatedTask.status !== 'UNKNOWN') {
+            summary.remaining = Math.max(0, summary.remaining - 1);
+          }
         } catch (error) {
           summary.failed += 1;
           await deps.taskStore.upsert({ ...previous, syncError: error instanceof Error ? error.message : String(error), lastSyncAt: now(), updatedAt: now() });
@@ -60,7 +62,7 @@ export function createTaskSyncCoordinator(deps: CoordinatorDeps): TaskSyncCoordi
       };
       await Promise.all(Array.from({ length: Math.min(concurrency, active.length) }, () => worker()));
     }
-    const currentTasks = await deps.taskStore.list();
+    const currentTasks = await (deps.taskStore.listMediaPending ? deps.taskStore.listMediaPending() : deps.taskStore.list());
     for (const task of currentTasks.filter((item) => item.status === 'SUCCESS' && (item.videoUrl || item.localUri || item.galleryUri) && (item.downloadState !== 'DOWNLOADED' || item.exportState === 'QUEUED' || item.exportState === 'EXPORTING'))) {
       try { let current = task; await deps.ensureMedia(task, settings, async (patch) => { current = { ...current, ...patch }; await deps.taskStore.upsert(current); }); } catch { /* media delivery remains retryable via its persisted state */ }
     }

@@ -107,13 +107,16 @@ registry 当前接收 `{ token }`，runtime 的 credential provider 也只是返
 - 轮询路径 `/result/{task_id}` 正确
 - 当前 emulator 的失败发生在 DNS 解析阶段，不是 payload 或鉴权阶段
 
+## 修复状态
+
+上述 HIGH-1/HIGH-2、MEDIUM-1/MEDIUM-2/MEDIUM-3 已在 dev 分支完成：任务同步会读取并投影 artifacts，旧任务复用 native provider transport，AutoDL 错误支持 `error.message`/鉴权分类，workflow ID 与 request bindings 来自受信任定义，registry 使用通用 credential resolver 且 runtime 会执行 adapter credential validation。另补充了 Android 前台服务 + Headless JS 每 2 分钟后台同步、任务/画廊分页和媒体处理并发上限。
+
 ## 测试状态与缺口
 
-现有全量测试通过：60 个测试套件、171 个测试通过；类型检查和 Android 导出也通过。
+现有全量测试通过：62 个测试套件、186 个测试通过；类型检查和 Android `:app:assembleDebug` 也通过。
 
-现有测试尚未覆盖：
+后续仍建议在真实 Android 设备上补充：
 
-1. `SUCCEEDED` 任务的 artifact 到 `TaskRecord.videoUrl` 投影
-2. 旧任务同步是否使用 AutoDL provider transport
-3. 401 `error.message` 错误结构解析
-4. 多个 AutoDL workflow ID 由 schema 驱动提交
+1. 前台服务被系统回收后的重启与通知权限行为
+2. 弱网/断网恢复时的端到端任务进度和媒体下载
+3. 1000+ 任务数据下的真机滚动帧率与内存曲线

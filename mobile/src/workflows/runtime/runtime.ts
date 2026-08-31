@@ -28,7 +28,13 @@ export function createWorkflowRuntime(deps: RuntimeDeps) {
       const timestamp = now();
       let job: JobRecord = { id, workflowId: workflow.id, workflowVersion: workflow.version, workflowContentHash: draft.contentHash, adapterId: adapter.manifest().id, adapterVersion: adapter.manifest().adapterVersion, inputSnapshot: draft.inputs, status: 'SUBMITTING', createdAt: timestamp, updatedAt: timestamp };
       await deps.jobs.upsert(job);
-      try { const remote = await adapter.submit(draft.inputs, { operation: workflow.platform.operation, workflowId: workflow.platform.workflowId ?? workflow.id }); job = { ...job, status: 'QUEUED', remote: { providerJobId: remote.providerJobId }, updatedAt: now() }; await deps.jobs.upsert(job); return job; } catch (error) { job = { ...job, status: 'UNKNOWN', error: { code: 'SUBMIT_UNKNOWN', message: error instanceof Error ? error.message : String(error) }, updatedAt: now() }; await deps.jobs.upsert(job); throw error; } finally { locks.delete(id); }
+      try {
+        const requestInput = Object.fromEntries(Object.entries(workflow.request.bindings).map(([target, source]) => [target, valueAt(draft.inputs, source)]));
+        const remote = await adapter.submit(requestInput, { operation: workflow.platform.operation, workflowId: workflow.platform.workflowId ?? workflow.id });
+        job = { ...job, status: 'QUEUED', remote: { providerJobId: remote.providerJobId }, updatedAt: now() };
+        await deps.jobs.upsert(job);
+        return job;
+      } catch (error) { job = { ...job, status: 'UNKNOWN', error: { code: 'SUBMIT_UNKNOWN', message: error instanceof Error ? error.message : String(error) }, updatedAt: now() }; await deps.jobs.upsert(job); throw error; } finally { locks.delete(id); }
     },
     async sync(job: JobRecord): Promise<JobRecord> {
       const adapter = deps.adapters.get(job.adapterId); if (!adapter || !job.remote?.providerJobId) return job;

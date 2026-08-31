@@ -14,7 +14,7 @@ const coordinator = createTaskSyncCoordinator({
   readSettings,
   taskStore,
   jobStore,
-  createRuntime: (token) => createWorkflowRuntime({ adapters: createBuiltinProviderAdapters({ token }), jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `sync-${Date.now()}` }),
+  createRuntime: (token) => createWorkflowRuntime({ adapters: createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? token : undefined }), jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `sync-${Date.now()}` }),
   legacySync: getTask,
   ensureMedia: (task, settings, onUpdate) => ensureTaskMedia(task, { policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: settings.keepPrivateCopy }, onUpdate }),
 });

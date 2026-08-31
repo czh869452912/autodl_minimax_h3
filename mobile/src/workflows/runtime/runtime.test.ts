@@ -28,3 +28,11 @@ test('persists submitting state and returns a normalized job', async () => {
   expect(value.adapter.validateCredentials).toHaveBeenCalled();
   expect(value.adapter.submit).toHaveBeenCalledWith(draft.inputs, { operation: 'workflow.submit', workflowId: 'demo' });
 });
+
+test('applies workflow request bindings before invoking the adapter', async () => {
+  const value = deps();
+  const runtime = createWorkflowRuntime(value.deps);
+  const mapped = { ...workflow, request: { operation: 'workflow.submit', bindings: { text: 'prompt' } } } as WorkflowDefinition;
+  await runtime.submit(mapped, draft, {});
+  expect(value.adapter.submit).toHaveBeenCalledWith({ text: 'hello' }, { operation: 'workflow.submit', workflowId: 'demo' });
+});

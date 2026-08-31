@@ -11,7 +11,7 @@ export type ProviderAdapter = {
   getStatus(handle: { providerJobId: string }): Promise<{ status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'; artifacts: ArtifactRecord[]; rawStatus?: string }>;
 };
 
-export function createBuiltinProviderAdapters({ token, transport = getNativeHttpTransport(), additional = [] }: { token: string; transport?: HttpTransport; additional?: ProviderAdapter[] }): Map<string, ProviderAdapter> {
-  const builtins: ProviderAdapter[] = [createAutodlComfyUiAdapter({ token, transport }), ...additional];
+export function createBuiltinProviderAdapters({ resolveCredential, transport = getNativeHttpTransport(), additional = [] }: { resolveCredential: (kind: string) => string | undefined; transport?: HttpTransport; additional?: ProviderAdapter[] }): Map<string, ProviderAdapter> {
+  const builtins: ProviderAdapter[] = [createAutodlComfyUiAdapter({ token: resolveCredential('autodl-token') ?? '', transport }), ...additional];
   return new Map(builtins.map((adapter) => [adapter.manifest().id, adapter]));
 }
