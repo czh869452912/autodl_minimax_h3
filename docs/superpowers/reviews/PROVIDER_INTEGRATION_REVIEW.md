@@ -111,6 +111,8 @@ registry 当前接收 `{ token }`，runtime 的 credential provider 也只是返
 
 上述 HIGH-1/HIGH-2、MEDIUM-1/MEDIUM-2/MEDIUM-3 已在 dev 分支完成：任务同步会读取并投影 artifacts，旧任务复用 native provider transport，AutoDL 错误支持 `error.message`/鉴权分类，workflow ID 与 request bindings 来自受信任定义，registry 使用通用 credential resolver 且 runtime 会执行 adapter credential validation。另补充了 Android 前台服务 + Headless JS 每 2 分钟后台同步、任务/画廊分页和媒体处理并发上限。
 
+结果画廊现已从 TaskRecord 临时投影迁移到通用 `MediaAsset` 仓库。每个 workflow artifact 独立 materialize，并保留 `jobId/artifactId/workflowId/kind` 来源；系统相册写入作为 `MediaDelivery` 记录，不再作为应用画廊的媒体来源。现有任务的本地/远端产物会在同步入口进行幂等迁移。
+
 ## 测试状态与缺口
 
 现有全量测试通过：62 个测试套件、186 个测试通过；类型检查和 Android `:app:assembleDebug` 也通过。
