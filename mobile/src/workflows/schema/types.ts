@@ -9,7 +9,7 @@ export type Compatibility = { minAppVersion?: string; requiredAdapterVersion?: s
 export type PlatformAdapterManifest = { id: string; adapterVersion: string; platforms: string[]; capabilities: string[]; credentialKinds: string[]; operations: string[]; supportedArtifactKinds: ArtifactKind[] };
 export type WorkflowDefinition = {
   schemaVersion: '1.0'; id: string; version: string; kind: 'atomic' | 'composite';
-  platform: { adapter: string; operation: string };
+  platform: { adapter: string; operation: string; workflowId?: string };
   metadata: { title: string; category: 'image' | 'video' | 'audio' | 'text' | 'other'; description?: string; icon?: string; tags?: string[] };
   inputs: JsonSchemaSubset; ui?: WorkflowUiSchema; request: RequestMapping; outputs: OutputMapping;
   compatibility?: Compatibility; steps?: unknown[]; bindings?: unknown[];

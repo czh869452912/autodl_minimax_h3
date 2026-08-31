@@ -31,6 +31,7 @@ export function validateWorkflowDefinition(input: unknown, context: ValidatorCon
   if (value.kind === 'composite') errors.push({ path: 'kind', code: 'COMPOSITE_UNSUPPORTED', message: 'composite workflows are reserved for a later milestone' });
   const platform = value.platform as Record<string, unknown> | undefined;
   if (platform && (typeof platform.adapter !== 'string' || typeof platform.operation !== 'string')) errors.push({ path: 'platform', code: 'PLATFORM_INVALID', message: 'platform adapter and operation are required' });
+  if (platform?.workflowId !== undefined && (typeof platform.workflowId !== 'string' || !/^[A-Za-z0-9_.-]+$/.test(platform.workflowId))) errors.push({ path: 'platform.workflowId', code: 'WORKFLOW_ID_INVALID', message: 'platform workflowId must contain only letters, numbers, dots, underscores, or hyphens' });
   const adapter = context.adapters?.find((item) => item.id === platform?.adapter);
   if (platform && context.adapters && (!adapter || !adapter.operations.includes(String(platform.operation)))) errors.push({ path: 'platform.adapter', code: 'UNSUPPORTED_ADAPTER', message: 'adapter or operation is unavailable' });
   walkSchema(value.inputs, 'inputs', errors);

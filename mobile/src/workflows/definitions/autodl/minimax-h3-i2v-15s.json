@@ -3,7 +3,7 @@
   "id": "autodl.minimax-h3.i2v-15s",
   "version": "1.0.0",
   "kind": "atomic",
-  "platform": { "adapter": "autodl-comfyui", "operation": "workflow.submit" },
+  "platform": { "adapter": "autodl-comfyui", "operation": "workflow.submit", "workflowId": "minimax_h3_image_audio_to_video_v2_15s" },
   "metadata": { "title": "MiniMax H3 Image/Audio to Video", "category": "video", "description": "MiniMax H3 视频生成" },
   "inputs": {
     "type": "object",

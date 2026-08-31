@@ -3,7 +3,7 @@ import type { JobRecord, JobRepository, JobStatus, ArtifactRecord } from '../../
 import type { PlatformAdapterManifest } from '../schema/types';
 import { validateWorkflowDefinition } from '../schema/validator';
 
-type Adapter = { manifest(): Pick<PlatformAdapterManifest, 'id' | 'adapterVersion' | 'operations'>; validateCredentials(): Promise<{ ok: boolean }>; submit(input: Record<string, unknown>): Promise<{ providerJobId: string }>; getStatus(handle: { providerJobId: string }): Promise<{ status: JobStatus; artifacts: ArtifactRecord[]; rawStatus?: string }> };
+type Adapter = { manifest(): Pick<PlatformAdapterManifest, 'id' | 'adapterVersion' | 'operations'>; validateCredentials(): Promise<{ ok: boolean }>; submit(input: Record<string, unknown>, target?: { operation?: string; workflowId?: string }): Promise<{ providerJobId: string }>; getStatus(handle: { providerJobId: string }): Promise<{ status: JobStatus; artifacts: ArtifactRecord[]; rawStatus?: string }> };
 type RuntimeDeps = { adapters: Map<string, Adapter>; jobs: JobRepository; credentials: { get(adapterId: string): Promise<{ ok: boolean }> }; id: () => string; now?: () => number };
 function valueAt(inputs: Record<string, unknown>, path: string): unknown { return path.split('.').reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined, inputs); }
 
@@ -23,11 +23,12 @@ export function createWorkflowRuntime(deps: RuntimeDeps) {
       const validation = this.validateDraft(workflow, draft); if (!validation.ok) throw new Error(validation.errors.map((item) => item.message).join('; '));
       const adapter = deps.adapters.get(workflow.platform.adapter); if (!adapter) throw new Error('workflow adapter unavailable');
       const credential = await deps.credentials.get(workflow.platform.adapter); if (!credential.ok) throw new Error('workflow credentials unavailable');
+      const validated = await adapter.validateCredentials(); if (!validated.ok) throw new Error('workflow credentials unavailable');
       const id = deps.id(); if (locks.has(id)) throw new Error('workflow submission already in progress'); locks.add(id);
       const timestamp = now();
       let job: JobRecord = { id, workflowId: workflow.id, workflowVersion: workflow.version, workflowContentHash: draft.contentHash, adapterId: adapter.manifest().id, adapterVersion: adapter.manifest().adapterVersion, inputSnapshot: draft.inputs, status: 'SUBMITTING', createdAt: timestamp, updatedAt: timestamp };
       await deps.jobs.upsert(job);
-      try { const remote = await adapter.submit(draft.inputs); job = { ...job, status: 'QUEUED', remote: { providerJobId: remote.providerJobId }, updatedAt: now() }; await deps.jobs.upsert(job); return job; } catch (error) { job = { ...job, status: 'UNKNOWN', error: { code: 'SUBMIT_UNKNOWN', message: error instanceof Error ? error.message : String(error) }, updatedAt: now() }; await deps.jobs.upsert(job); throw error; } finally { locks.delete(id); }
+      try { const remote = await adapter.submit(draft.inputs, { operation: workflow.platform.operation, workflowId: workflow.platform.workflowId ?? workflow.id }); job = { ...job, status: 'QUEUED', remote: { providerJobId: remote.providerJobId }, updatedAt: now() }; await deps.jobs.upsert(job); return job; } catch (error) { job = { ...job, status: 'UNKNOWN', error: { code: 'SUBMIT_UNKNOWN', message: error instanceof Error ? error.message : String(error) }, updatedAt: now() }; await deps.jobs.upsert(job); throw error; } finally { locks.delete(id); }
     },
     async sync(job: JobRecord): Promise<JobRecord> {
       const adapter = deps.adapters.get(job.adapterId); if (!adapter || !job.remote?.providerJobId) return job;

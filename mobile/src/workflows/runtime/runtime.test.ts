@@ -25,4 +25,6 @@ test('persists submitting state and returns a normalized job', async () => {
   const result = await runtime.submit(workflow, draft, {});
   expect(result).toMatchObject({ id: 'local-1', status: 'QUEUED', remote: { providerJobId: 'remote-1' }, workflowContentHash: 'hash' });
   expect(value.deps.jobs.upsert).toHaveBeenCalledWith(expect.objectContaining({ status: 'SUBMITTING' }));
+  expect(value.adapter.validateCredentials).toHaveBeenCalled();
+  expect(value.adapter.submit).toHaveBeenCalledWith(draft.inputs, { operation: 'workflow.submit', workflowId: 'demo' });
 });

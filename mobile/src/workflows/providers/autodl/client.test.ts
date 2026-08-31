@@ -22,3 +22,16 @@ test('classifies network failures as AutoDL provider errors', async () => {
 
   await expect(client.submit({ prompt: 'p', resolution: '768p竖', duration: 5 })).rejects.toEqual(expect.objectContaining<Partial<ProviderError>>({ provider: 'autodl', operation: 'submit', kind: 'network' }));
 });
+
+test('uses a trusted workflow id when submitting a provider operation', async () => {
+  const transport = jest.fn().mockResolvedValue(new Response(JSON.stringify({ code: 'Success', data: { task_id: 'alternate-1' } }), { status: 200 }));
+  const client = createAutodlClient({ transport, token: 'token' });
+  await client.submit({ prompt: 'p', resolution: '768p竖', duration: 5 }, 'alternate-workflow');
+  expect(transport.mock.calls[0][0]).toBe('https://autodl.art/api/v1/comfyui/comfyui_workflow/alternate-workflow');
+});
+
+test('classifies AutoDL authentication response bodies as auth errors', async () => {
+  const transport = jest.fn().mockResolvedValue(new Response(JSON.stringify({ error: { message: 'Invalid authentication credentials', type: 'invalid_request_error' } }), { status: 401 }));
+  const client = createAutodlClient({ transport, token: 'expired' });
+  await expect(client.submit({ prompt: 'p', resolution: '768p竖', duration: 5 })).rejects.toEqual(expect.objectContaining({ kind: 'auth', status: 401, message: 'Invalid authentication credentials' }));
+});

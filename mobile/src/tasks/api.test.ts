@@ -1,5 +1,8 @@
 import { buildTaskPayload, getTask, submitTask } from './api';
 
+const providerFetch = jest.fn();
+beforeAll(() => { globalThis.fetch = providerFetch as unknown as typeof fetch; });
+
 test('buildTaskPayload preserves generation options and reference data URIs', () => {
   expect(buildTaskPayload({
     prompt: 'camera move', duration: 8, resolution: '1080p横', seed: '42',
@@ -12,13 +15,13 @@ test('buildTaskPayload preserves generation options and reference data URIs', ()
 });
 
 test('getTask accepts provider URLs without an mp4 suffix', async () => {
-  globalThis.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({ code: 'success', data: { status: 'SUCCESSFUL', results: [{ type: 'video', url: 'https://cdn.example.test/download?id=1' }] } }), { status: 200 })) as unknown as typeof fetch;
+  providerFetch.mockReset().mockResolvedValue(new Response(JSON.stringify({ code: 'success', data: { status: 'SUCCESSFUL', results: [{ type: 'video', url: 'https://cdn.example.test/download?id=1' }] } }), { status: 200 }));
   const task = await getTask('token', { id: '1', prompt: 'x', status: 'RUNNING', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 1 });
   expect(task.videoUrl).toBe('https://cdn.example.test/download?id=1');
 });
 
 test('getTask preserves RUNNING and maps provider timing fields', async () => {
-  globalThis.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({
+  providerFetch.mockReset().mockResolvedValue(new Response(JSON.stringify({
     code: 'Success',
     data: {
       task_id: '1',
@@ -28,7 +31,7 @@ test('getTask preserves RUNNING and maps provider timing fields', async () => {
       duration: 196,
       results: [],
     },
-  }), { status: 200 })) as unknown as typeof fetch;
+  }), { status: 200 }));
 
   const task = await getTask('token', {
     id: '1', prompt: 'x', status: 'QUEUED', resolution: '768p竖', duration: 5,
@@ -44,10 +47,10 @@ test('getTask preserves RUNNING and maps provider timing fields', async () => {
 });
 
 test('submitTask uses provider creation time when returned', async () => {
-  globalThis.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({
+  providerFetch.mockReset().mockResolvedValue(new Response(JSON.stringify({
     code: 'Success',
     data: { task_id: '1', status: 'QUEUED', created_at: '2026-08-18T11:33:02.456421825+08:00' },
-  }), { status: 200 })) as unknown as typeof fetch;
+  }), { status: 200 }));
   const task = await submitTask('token', { prompt: 'x', resolution: '768p竖', duration: 5 });
   expect(task.createdAt).toBe(Date.parse('2026-08-18T11:33:02.456421825+08:00'));
 });

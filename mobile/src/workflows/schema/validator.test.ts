@@ -14,6 +14,12 @@ test('accepts a valid atomic workflow definition', () => {
   expect(result.ok).toBe(true);
 });
 
+test('requires a safe provider workflow id when a platform declares one', () => {
+  const result = validateWorkflowDefinition({ ...base, platform: { ...base.platform, workflowId: 'bad/id' } }, { adapters: [{ id: 'demo', operations: ['workflow.submit'] }] });
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.errors.map((error) => error.code)).toContain('WORKFLOW_ID_INVALID');
+});
+
 test('rejects unknown widgets and remote references', () => {
   const result = validateWorkflowDefinition({ ...base, inputs: { type: 'object', properties: { prompt: { type: 'string', '$ref': 'https://evil.test/schema', 'x-workflow.widget': 'evil' } } } });
   expect(result.ok).toBe(false);

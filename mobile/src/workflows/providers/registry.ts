@@ -7,7 +7,7 @@ import { createAutodlComfyUiAdapter } from './autodl/adapter';
 export type ProviderAdapter = {
   manifest(): PlatformAdapterManifest;
   validateCredentials(): Promise<{ ok: boolean }>;
-  submit(input: Record<string, unknown>): Promise<{ providerJobId: string }>;
+  submit(input: Record<string, unknown>, target?: { operation?: string; workflowId?: string }): Promise<{ providerJobId: string }>;
   getStatus(handle: { providerJobId: string }): Promise<{ status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'; artifacts: ArtifactRecord[]; rawStatus?: string }>;
 };
 

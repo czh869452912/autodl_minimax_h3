@@ -4,7 +4,7 @@ import { buildAutodlSubmitRequest, type AutodlInput } from './mapping';
 const BASE_URL = 'https://autodl.art/api/v1/comfyui/comfyui_workflow/';
 const H3_WORKFLOW_ID = 'minimax_h3_image_audio_to_video_v2_15s';
 
-export type ProviderErrorKind = 'network' | 'http' | 'provider' | 'response';
+export type ProviderErrorKind = 'network' | 'timeout' | 'auth' | 'http' | 'provider' | 'response';
 export type AutodlResponseData = { task_id?: string; status?: unknown; results?: unknown; created_at?: unknown; started_at?: unknown; duration?: unknown };
 
 export class ProviderError extends Error {
@@ -29,29 +29,36 @@ function networkMessage(error: unknown): string {
   return `AutoDL 网络请求失败：${detail}`;
 }
 
-export function createAutodlClient({ transport, token, baseUrl = BASE_URL }: { transport: HttpTransport; token: string; baseUrl?: string }) {
+export function createAutodlClient({ transport, token, baseUrl = BASE_URL, timeoutMs = 30_000 }: { transport: HttpTransport; token: string; baseUrl?: string; timeoutMs?: number }) {
   const root = `${baseUrl.replace(/\/+$/, '')}/`;
   async function request(operation: 'submit' | 'status', url: string, init: RequestInit): Promise<AutodlResponseData> {
     let response: Response;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      response = await transport(url, init);
+      response = await transport(url, { ...init, signal: controller.signal });
     } catch (error) {
+      if (controller.signal.aborted) throw new ProviderError('autodl', operation, 'timeout', 'AutoDL 请求超时，请稍后重试。', undefined, { cause: error });
       throw new ProviderError('autodl', operation, 'network', networkMessage(error), undefined, { cause: error });
+    } finally {
+      clearTimeout(timer);
     }
-    let body: { code?: unknown; msg?: string; data?: AutodlResponseData };
+    let body: { code?: unknown; msg?: string; data?: AutodlResponseData; error?: { message?: unknown } };
     try {
       body = await response.json() as typeof body;
     } catch (error) {
       throw new ProviderError('autodl', operation, 'response', `AutoDL 返回了无法解析的响应（HTTP ${response.status}）`, response.status, { cause: error });
     }
-    if (!response.ok) throw new ProviderError('autodl', operation, 'http', body.msg || `AutoDL 请求失败（HTTP ${response.status}）`, response.status);
-    if (String(body.code).toLowerCase() !== 'success') throw new ProviderError('autodl', operation, 'provider', body.msg || 'AutoDL 拒绝了请求', response.status);
+    const message = typeof body.error?.message === 'string' ? body.error.message : body.msg;
+    if (!response.ok) throw new ProviderError('autodl', operation, response.status === 401 || response.status === 403 ? 'auth' : 'http', message || `AutoDL 请求失败（HTTP ${response.status}）`, response.status);
+    if (String(body.code).toLowerCase() !== 'success') throw new ProviderError('autodl', operation, 'provider', message || 'AutoDL 拒绝了请求', response.status);
     if (!body.data || typeof body.data !== 'object') throw new ProviderError('autodl', operation, 'response', 'AutoDL 响应缺少 data', response.status);
     return body.data;
   }
   return {
-    submit(input: AutodlInput) {
-      return request('submit', root + H3_WORKFLOW_ID, { method: 'POST', headers: { Authorization: token, 'Content-Type': 'application/json' }, body: JSON.stringify(buildAutodlSubmitRequest(input)) });
+    submit(input: AutodlInput, workflowId = H3_WORKFLOW_ID) {
+      if (!/^[A-Za-z0-9_.-]+$/.test(workflowId)) throw new ProviderError('autodl', 'submit', 'provider', 'AutoDL workflow ID 无效');
+      return request('submit', root + encodeURIComponent(workflowId), { method: 'POST', headers: { Authorization: token, 'Content-Type': 'application/json' }, body: JSON.stringify(buildAutodlSubmitRequest(input)) });
     },
     getStatus(providerJobId: string) {
       return request('status', root + 'result/' + encodeURIComponent(providerJobId), { headers: { Authorization: token } });
