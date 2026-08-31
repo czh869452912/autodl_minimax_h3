@@ -30,3 +30,10 @@ test('removes media assets', async () => {
   await store.remove('m1');
   expect(await store.get('m1')).toBeNull();
 });
+
+test('supports bounded media pages', async () => {
+  const store = createSqliteMediaStore(fakeDb());
+  await store.upsert(asset);
+  const page = await store.listPage?.({ limit: 1 });
+  expect(page).toMatchObject({ items: [expect.objectContaining({ id: 'm1' })] });
+});

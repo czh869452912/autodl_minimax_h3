@@ -69,3 +69,13 @@ test('round-trips workflow provenance and keeps it across partial updates', asyn
     workflowVersion: task.workflowVersion, inputSnapshot: task.inputSnapshot,
   })]);
 });
+
+test('exposes stable keyset pagination and watermark queries', async () => {
+  const store = createTaskRepository(fakeDb() as never);
+  expect(store.listPage).toBeDefined();
+  expect(store.listUpdatedSince).toBeDefined();
+  const page = await store.listPage?.({ limit: 20 });
+  expect(page).toMatchObject({ items: expect.any(Array) });
+  expect(page).toHaveProperty('nextCursor');
+  expect(await store.listUpdatedSince?.(1_500)).toEqual(expect.any(Array));
+});
