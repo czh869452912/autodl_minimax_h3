@@ -15,6 +15,20 @@ function fakeDb() {
   };
 }
 
+function strictQueryDb() {
+  const row = { id: 'm1', task_id: 't1', title: 'Demo', prompt: 'prompt', source_url: 'https://example/video.mp4', local_path: null, poster_path: null, mime_type: 'video/mp4', status: 'downloaded', created_at: 2, updated_at: 2, kind: 'video' };
+  return {
+    execSync: () => undefined,
+    getAllSync: <T>(sql: string, ...params: unknown[]) => {
+      // The listPage query must treat an empty search as no filter. If it
+      // binds an empty string, SQLite's LIKE predicates receive NULL and
+      // incorrectly exclude every row.
+      if (sql.includes('FROM media_assets') && params[4] === '') return [] as T[];
+      return [row as T];
+    },
+  };
+}
+
 const asset: MediaAsset = { id: 'm1', taskId: 't1', title: 'Demo', prompt: 'prompt', sourceUrl: 'https://example/video.mp4', mimeType: 'video/mp4', status: 'downloaded', createdAt: 2, updatedAt: 2 };
 
 test('upserts and lists media assets', async () => {
@@ -36,6 +50,12 @@ test('supports bounded media pages', async () => {
   await store.upsert(asset);
   const page = await store.listPage?.({ limit: 1 });
   expect(page).toMatchObject({ items: [expect.objectContaining({ id: 'm1' })] });
+});
+
+test('treats an empty search query as no filter', async () => {
+  const store = createSqliteMediaStore(strictQueryDb());
+  const page = await store.listPage?.({ limit: 40, query: '   ' });
+  expect(page?.items).toHaveLength(1);
 });
 
 test('round-trips workflow artifact provenance independently from task state', async () => {
