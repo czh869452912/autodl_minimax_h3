@@ -39,7 +39,9 @@ async function publishTask(current: TaskRecord, options: EnsureMediaOptions): Pr
     value = { ...value, ...patch };
     await options.onUpdate(patch);
   };
-  const source = value.localUri || value.galleryUri;
+  // The system gallery URI is delivery metadata, not a canonical media
+  // source. Re-export only from an app-private file.
+  const source = value.localUri;
   if (!source) return { ...value, exportState: 'EXPORT_FAILED', exportError: '视频源文件不可用' };
 
   await update({ exportState: 'QUEUED', exportError: undefined, updatedAt: Date.now() });
@@ -63,7 +65,7 @@ async function publishTask(current: TaskRecord, options: EnsureMediaOptions): Pr
 }
 
 async function downloadIfNeeded(task: TaskRecord, options: EnsureMediaOptions): Promise<{ task: TaskRecord; downloadedNow: boolean }> {
-  if (task.localUri || task.galleryUri || !task.videoUrl) return { task, downloadedNow: false };
+  if (task.localUri || !task.videoUrl) return { task, downloadedNow: false };
   let current = task;
   const downloaded = await (options.deps ?? defaultDeps).download(task, {
     onUpdate: async (patch) => {

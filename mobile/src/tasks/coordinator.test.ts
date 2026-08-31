@@ -11,12 +11,13 @@ function setup(tasks: TaskRecord[], jobs: JobRecord[]) {
   const mediaStore = { upsert: jest.fn(async () => undefined), list: jest.fn(async () => []), get: jest.fn(async () => null), remove: jest.fn(async () => undefined) };
   const runtime = { sync: jest.fn(async (value: JobRecord) => ({ ...value, status: 'SUCCEEDED' as const, updatedAt: 2 })) };
   const legacySync = jest.fn(async (_token: string, value: TaskRecord) => ({ ...value, status: 'SUCCESS' as const, videoUrl: 'https://legacy/video', updatedAt: 2 }));
+  const ensureMedia = jest.fn(async () => undefined);
   const coordinator = createTaskSyncCoordinator({
     readSettings: async () => ({ token: 'token', autoExportToGallery: false, keepPrivateCopy: true }),
-    taskStore, jobStore, mediaStore, createRuntime: () => runtime, createAdapters: () => new Map(), legacySync,
-    ensureMedia: jest.fn(async () => undefined), now: () => 2,
+    taskStore, jobStore, mediaStore, createRuntime: () => runtime, legacySync,
+    ensureMedia, now: () => 2,
   });
-  return { coordinator, taskStore, jobStore, mediaStore, runtime, legacySync };
+  return { coordinator, taskStore, jobStore, mediaStore, runtime, legacySync, ensureMedia };
 }
 
 test('uses remote provider id and projects persisted artifacts', async () => {
@@ -88,4 +89,13 @@ test('materializes the task result when a workflow succeeds before artifacts are
     kind: 'video',
     sourceUrl: 'https://cdn.test/fallback.mp4',
   }));
+});
+
+test('continues media processing for partially successful workflow tasks', async () => {
+  const partial = { ...task('partial-1', 'PARTIAL_SUCCESS'), videoUrl: 'https://cdn.test/partial.mp4' };
+  const value = setup([partial], []);
+
+  await value.coordinator.run();
+
+  expect(value.ensureMedia).toHaveBeenCalledWith(partial, expect.anything(), expect.any(Function));
 });

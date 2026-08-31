@@ -20,6 +20,13 @@ test('projects a legacy task into a generic job without inventing provenance', (
   expect(jobRecordToTaskProjection(job, [{ id: 'v1', jobId: job.id, kind: 'video', uri: 'https://example/video', mime: 'video/mp4' }])).toMatchObject({ id: 'local-1', prompt: 'x', videoUrl: 'https://example/video', status: 'QUEUED' });
 });
 
+test('preserves partial and unknown task states when creating a compatibility job', () => {
+  const partial = { id: 'partial', prompt: 'x', status: 'PARTIAL_SUCCESS' as const, resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 2 };
+  const unknown = { ...partial, id: 'unknown', status: 'UNKNOWN' as const };
+  expect(taskRecordToJobRecord(partial).status).toBe('PARTIAL_SUCCEEDED');
+  expect(taskRecordToJobRecord(unknown).status).toBe('UNKNOWN');
+});
+
 test('preserves prior task media projection when a sync has no new artifact', () => {
   const previous = { id: 'local-1', prompt: 'x', status: 'SUCCESS' as const, resolution: '768p竖', duration: 5, videoUrl: 'https://old/video', createdAt: 1, updatedAt: 2 };
   expect(jobRecordToTaskProjection({ ...job, status: 'SUCCEEDED' }, [], previous)).toMatchObject({ videoUrl: 'https://old/video' });

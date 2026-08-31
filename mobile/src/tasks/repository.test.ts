@@ -20,6 +20,14 @@ function fakeDb() {
   };
 }
 
+function queryDb() {
+  const row = { id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, created_at: 1, updated_at: 1 };
+  return {
+    execSync: () => undefined,
+    getAllSync: <T>(_sql: string, ...params: unknown[]) => params[2] === '' ? [] as T[] : [row as T],
+  };
+}
+
 test('persists provider start time and execution duration', async () => {
   const store = createTaskRepository(fakeDb() as never);
   const task: TaskRecord = {
@@ -80,11 +88,10 @@ test('exposes stable keyset pagination and watermark queries', async () => {
   expect(await store.listUpdatedSince?.(1_500)).toEqual(expect.any(Array));
 });
 
-test('exposes gallery pagination that filters playable completed results in SQL', async () => {
-  const db = fakeDb();
-  const store = createTaskRepository(db as never) as ReturnType<typeof createTaskRepository> & { listGalleryPage?: (options?: { limit?: number }) => Promise<{ items: TaskRecord[] }> };
-  expect(store.listGalleryPage).toBeDefined();
-  await store.listGalleryPage?.({ limit: 20 });
+test('treats an empty task query as no filter', async () => {
+  const store = createTaskRepository(queryDb() as never);
+  const page = await store.listPage({ limit: 20, query: '   ' });
+  expect(page.items).toHaveLength(1);
 });
 
 test('exposes synchronization candidates for one-time repair of incomplete completed tasks', () => {

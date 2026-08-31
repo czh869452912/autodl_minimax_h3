@@ -64,14 +64,23 @@ describe('task media delivery orchestration', () => {
   it('redownloads when a retained gallery reference no longer exists', async () => {
     const deps = {
       download: jest.fn().mockResolvedValue({ ...task, localUri: 'file:///restored.mp4', downloadState: 'DOWNLOADED' as const }),
-      publish: jest.fn()
-        .mockRejectedValueOnce(new Error('视频源文件不可用'))
-        .mockResolvedValueOnce({ uri: 'content://media/video/8', displayName: 'task-1.mp4', relativePath: 'Movies/AutoDL-H3/', alreadyExisted: false }),
+      publish: jest.fn().mockResolvedValue({ uri: 'content://media/video/8', displayName: 'task-1.mp4', relativePath: 'Movies/AutoDL-H3/', alreadyExisted: false }),
       removePrivate: jest.fn().mockResolvedValue(undefined),
     };
     const result = await exportTaskVideo({ ...task, galleryUri: 'content://media/video/deleted', exportState: 'EXPORTED', localUri: undefined }, { policy: { autoExportToGallery: true, keepPrivateCopy: true }, deps, onUpdate: jest.fn(async () => undefined) });
     expect(deps.download).toHaveBeenCalled();
-    expect(deps.publish).toHaveBeenLastCalledWith('file:///restored.mp4', { mediaId: task.id, displayName: 'task-1.mp4' });
+    expect(deps.publish).toHaveBeenCalledWith('file:///restored.mp4', { mediaId: task.id, displayName: 'task-1.mp4' });
     expect(result.galleryUri).toBe('content://media/video/8');
+  });
+
+  it('never uses a system-gallery URI as an export source', async () => {
+    const deps = {
+      download: jest.fn().mockResolvedValue({ ...task, localUri: 'file:///restored.mp4', downloadState: 'DOWNLOADED' as const }),
+      publish: jest.fn().mockResolvedValue({ uri: 'content://media/video/9', displayName: 'task-1.mp4', relativePath: 'Movies/AutoDL-H3/', alreadyExisted: false }),
+      removePrivate: jest.fn().mockResolvedValue(undefined),
+    };
+    await exportTaskVideo({ ...task, videoUrl: 'https://example/video.mp4', localUri: undefined, galleryUri: 'content://media/video/old', exportState: 'EXPORTED' }, { policy: { autoExportToGallery: true, keepPrivateCopy: true }, deps, onUpdate: jest.fn(async () => undefined) });
+    expect(deps.publish).not.toHaveBeenCalledWith('content://media/video/old', expect.anything());
+    expect(deps.publish).toHaveBeenCalledWith('file:///restored.mp4', { mediaId: task.id, displayName: 'task-1.mp4' });
   });
 });

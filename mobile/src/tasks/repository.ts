@@ -15,19 +15,9 @@ export function createTaskRepository(db: SQLiteDatabase) {
     async list() { return (db.getAllSync<any>('SELECT * FROM tasks ORDER BY created_at DESC') ?? []).map(map); },
     async listPage(options: TaskPageOptions = {}) {
       const limit = Math.max(1, Math.min(100, options.limit ?? 30));
-      const query = options.query?.trim().toLowerCase();
+      const query = options.query?.trim().toLowerCase() || undefined;
       const cursor = options.cursor;
       const rows = db.getAllSync<any>('SELECT * FROM tasks WHERE (? IS NULL OR status = ?) AND (? IS NULL OR lower(prompt) LIKE ? OR lower(id) LIKE ?) AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?)) ORDER BY created_at DESC, id DESC LIMIT ?', options.status ?? null, options.status ?? null, query ?? null, query ? `%${query}%` : null, query ? `%${query}%` : null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.id ?? null, limit + 1) ?? [];
-      const hasMore = rows.length > limit;
-      const items = rows.slice(0, limit).map(map);
-      const last = items[items.length - 1];
-      return { items, nextCursor: hasMore && last ? { createdAt: last.createdAt, id: last.id } : undefined };
-    },
-    async listGalleryPage(options: Omit<TaskPageOptions, 'status'> = {}) {
-      const limit = Math.max(1, Math.min(100, options.limit ?? 30));
-      const query = options.query?.trim().toLowerCase();
-      const cursor = options.cursor;
-      const rows = db.getAllSync<any>("SELECT * FROM tasks WHERE status IN ('SUCCESS','PARTIAL_SUCCESS') AND (video_url IS NOT NULL OR local_uri IS NOT NULL OR gallery_uri IS NOT NULL) AND (? IS NULL OR lower(prompt) LIKE ? OR lower(id) LIKE ?) AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?)) ORDER BY created_at DESC, id DESC LIMIT ?", query ?? null, query ? `%${query}%` : null, query ? `%${query}%` : null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.id ?? null, limit + 1) ?? [];
       const hasMore = rows.length > limit;
       const items = rows.slice(0, limit).map(map);
       const last = items[items.length - 1];
@@ -36,7 +26,7 @@ export function createTaskRepository(db: SQLiteDatabase) {
     async listUpdatedSince(watermark: number, limit = 200) { return (db.getAllSync<any>('SELECT * FROM tasks WHERE updated_at > ? ORDER BY updated_at ASC, id ASC LIMIT ?', watermark, Math.max(1, Math.min(1000, limit))) ?? []).map(map); },
     async listActive() { return (db.getAllSync<any>("SELECT * FROM tasks WHERE status IN ('QUEUED','RUNNING','UNKNOWN') ORDER BY updated_at ASC, id ASC") ?? []).map(map); },
     async listSyncCandidates() { return (db.getAllSync<any>("SELECT * FROM tasks WHERE status IN ('SUCCESS','PARTIAL_SUCCESS') AND workflow_id IS NOT NULL AND last_sync_at IS NULL AND (started_at IS NULL OR (video_url IS NULL AND local_uri IS NULL AND gallery_uri IS NULL)) ORDER BY updated_at ASC, id ASC LIMIT 200") ?? []).map(map); },
-    async listMediaPending() { return (db.getAllSync<any>("SELECT * FROM tasks WHERE status = 'SUCCESS' AND (video_url IS NOT NULL OR local_uri IS NOT NULL OR gallery_uri IS NOT NULL) AND (download_state <> 'DOWNLOADED' OR export_state IN ('QUEUED','EXPORTING')) ORDER BY updated_at ASC, id ASC") ?? []).map(map); },
+    async listMediaPending() { return (db.getAllSync<any>("SELECT * FROM tasks WHERE status IN ('SUCCESS','PARTIAL_SUCCESS') AND (video_url IS NOT NULL OR local_uri IS NOT NULL OR gallery_uri IS NOT NULL) AND (download_state <> 'DOWNLOADED' OR export_state IN ('QUEUED','EXPORTING')) ORDER BY updated_at ASC, id ASC") ?? []).map(map); },
     async listMediaProjectionCandidates(limit = 200) { return (db.getAllSync<any>("SELECT t.* FROM tasks t WHERE t.status IN ('SUCCESS','PARTIAL_SUCCESS') AND (t.video_url IS NOT NULL OR t.local_uri IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM media_assets m WHERE m.task_id = t.id AND m.kind = 'video') ORDER BY t.updated_at ASC, t.id ASC LIMIT ?", Math.max(1, Math.min(1000, limit))) ?? []).map(map); },
     async remove(id: string) { const rows = db.getAllSync<any>('SELECT local_uri, thumbnail_url FROM tasks WHERE id = ? LIMIT 1', id); db.runSync('DELETE FROM tasks WHERE id = ?', id); for (const row of rows) { for (const uri of [row.local_uri, row.thumbnail_url]) { if (uri) { try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {} } } } },
   };

@@ -12,7 +12,6 @@ type CoordinatorDeps = {
   taskStore: TaskStore;
   jobStore: Pick<JobRepository, 'get' | 'listArtifacts' | 'upsert'>;
   createRuntime(token: string): Runtime;
-  createAdapters?(token: string): unknown;
   legacySync(token: string, task: TaskRecord): Promise<TaskRecord>;
   ensureMedia(task: TaskRecord, settings: Settings, onUpdate: (patch: Partial<TaskRecord>) => Promise<void>): Promise<unknown>;
   mediaStore?: Pick<MediaStore, 'upsert'> & Partial<Pick<MediaStore, 'upsertDelivery'>>;
@@ -77,7 +76,7 @@ export function createTaskSyncCoordinator(deps: CoordinatorDeps): TaskSyncCoordi
       await Promise.all(Array.from({ length: Math.min(concurrency, targets.length) }, () => worker()));
     }
     const currentTasks = await (deps.taskStore.listMediaPending ? deps.taskStore.listMediaPending() : deps.taskStore.list());
-    for (const task of currentTasks.filter((item) => item.status === 'SUCCESS' && (item.videoUrl || item.localUri || item.galleryUri) && (item.downloadState !== 'DOWNLOADED' || item.exportState === 'QUEUED' || item.exportState === 'EXPORTING'))) {
+    for (const task of currentTasks.filter((item) => (item.status === 'SUCCESS' || item.status === 'PARTIAL_SUCCESS') && (item.videoUrl || item.localUri || item.galleryUri) && (item.downloadState !== 'DOWNLOADED' || item.exportState === 'QUEUED' || item.exportState === 'EXPORTING'))) {
       try { let current = task; await deps.ensureMedia(task, settings, async (patch) => { current = { ...current, ...patch }; await deps.taskStore.upsert(current); }); if (deps.mediaStore) { const job = await deps.jobStore.get(current.id); const artifacts = job ? await deps.jobStore.listArtifacts(job.id) : []; if (job && artifacts.length) await materializeJobArtifacts(job, artifacts, deps.mediaStore, current); else await materializeTaskMedia(current, deps.mediaStore); const primary = artifacts.find((artifact) => artifact.kind === 'video') ?? artifacts[0]; const assetId = job && primary ? `${job.id}:${primary.id}` : current.id; if (current.exportState === 'EXPORTED' && current.galleryUri) await deps.mediaStore.upsertDelivery?.({ id: `${assetId}:system-gallery`, assetId, target: 'system-gallery', uri: current.galleryUri, status: 'EXPORTED', createdAt: current.exportedAt ?? now(), updatedAt: now() }); } } catch { /* media delivery remains retryable via its persisted state */ }
     }
     summary.lastSyncAt = now();
