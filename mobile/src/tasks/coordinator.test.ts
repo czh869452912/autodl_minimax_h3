@@ -99,3 +99,12 @@ test('continues media processing for partially successful workflow tasks', async
 
   expect(value.ensureMedia).toHaveBeenCalledWith(partial, expect.anything(), expect.any(Function));
 });
+
+test('does not reprocess a task that only retains a system gallery delivery', async () => {
+  const delivered = { ...task('gallery-only-1', 'SUCCESS'), galleryUri: 'content://media/existing', exportState: 'EXPORTED' as const };
+  const value = setup([delivered], []);
+
+  await value.coordinator.run();
+
+  expect(value.ensureMedia).not.toHaveBeenCalled();
+});
