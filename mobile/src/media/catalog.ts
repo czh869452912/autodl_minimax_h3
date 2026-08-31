@@ -1,6 +1,6 @@
 import type { ArtifactRecord, JobRecord } from '../jobs/types';
 import type { TaskRecord } from '../tasks/types';
-import { materializeJobArtifacts, materializeTaskMedia } from './materializer';
+import { materializeJobArtifacts } from './materializer';
 import type { MediaStore } from './types';
 
 type CatalogTaskStore = {
@@ -30,8 +30,6 @@ export async function reconcileMediaCatalog({
     const artifacts = job ? await jobStore.listArtifacts(job.id) : [];
     if (job && artifacts.length) {
       materialized += (await materializeJobArtifacts(job, artifacts, mediaStore, task)).length;
-    } else if (await materializeTaskMedia(task, mediaStore)) {
-      materialized += 1;
     }
   }
   return { scanned: tasks.length, materialized };

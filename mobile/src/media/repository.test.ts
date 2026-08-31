@@ -63,3 +63,12 @@ test('round-trips workflow artifact provenance independently from task state', a
   await store.upsert({ ...asset, id: 'job-1:artifact-1', artifactId: 'artifact-1', jobId: 'job-1', workflowId: 'workflow-1', kind: 'audio', mimeType: 'audio/mpeg' });
   expect(await store.get('job-1:artifact-1')).toMatchObject({ artifactId: 'artifact-1', jobId: 'job-1', workflowId: 'workflow-1', kind: 'audio' });
 });
+
+test('persists delivery presentation status on the media asset', async () => {
+  const store = createSqliteMediaStore({
+    execSync: () => undefined,
+    runSync: jest.fn(),
+    getAllSync: <T>(sql: string) => sql.includes('media_assets') ? [{ id: 'm1', task_id: 'job-1', title: 'Demo', prompt: 'p', source_url: 'https://cdn/video', mime_type: 'video/mp4', status: 'downloaded', created_at: 1, updated_at: 2, kind: 'video', export_status: '已保存到相册' } as T] : [],
+  });
+  expect(await store.get('m1')).toMatchObject({ exportStatus: '已保存到相册' });
+});

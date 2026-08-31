@@ -1,8 +1,8 @@
 import type { JobRecord, JobRepository } from '../jobs/types';
-import { jobRecordToTaskProjection, taskRecordToJobRecord } from '../jobs/repository';
 import type { TaskRecord } from './types';
+import { jobToTaskProjection } from './projection';
 import type { MediaStore } from '../media/types';
-import { materializeJobArtifacts, materializeTaskMedia } from '../media/materializer';
+import { materializeJobArtifacts } from '../media/materializer';
 
 type Settings = { token: string; autoExportToGallery: boolean; keepPrivateCopy: boolean };
 type TaskStore = { list(): Promise<TaskRecord[]>; listActive?(): Promise<TaskRecord[]>; listSyncCandidates?(): Promise<TaskRecord[]>; listMediaPending?(): Promise<TaskRecord[]>; upsert(task: TaskRecord): Promise<void> };
@@ -10,9 +10,8 @@ type Runtime = { sync(job: JobRecord): Promise<JobRecord> };
 type CoordinatorDeps = {
   readSettings(): Promise<Settings>;
   taskStore: TaskStore;
-  jobStore: Pick<JobRepository, 'get' | 'listArtifacts' | 'upsert'>;
+  jobStore: Pick<JobRepository, 'get' | 'list' | 'listArtifacts' | 'upsert'>;
   createRuntime(token: string): Runtime;
-  legacySync(token: string, task: TaskRecord): Promise<TaskRecord>;
   ensureMedia(task: TaskRecord, settings: Settings, onUpdate: (patch: Partial<TaskRecord>) => Promise<void>): Promise<unknown>;
   mediaStore?: Pick<MediaStore, 'upsert'> & Partial<Pick<MediaStore, 'upsertDelivery'>>;
   now?: () => number;
@@ -27,6 +26,13 @@ export function createTaskSyncCoordinator(deps: CoordinatorDeps): TaskSyncCoordi
   const concurrency = Math.max(1, deps.concurrency ?? 4);
   const runOnce = async (): Promise<{ tasks: TaskRecord[]; summary: SyncSummary }> => {
     const settings = await deps.readSettings();
+    const existingTasks = await deps.taskStore.list();
+    for (const job of await deps.jobStore.list()) {
+      if (!existingTasks.some((task) => task.id === job.id)) {
+        const artifacts = await deps.jobStore.listArtifacts(job.id);
+        await deps.taskStore.upsert(jobToTaskProjection(job, artifacts));
+      }
+    }
     const tasks = await (deps.taskStore.listActive ? deps.taskStore.listActive() : deps.taskStore.list());
     const active = tasks.filter((item) => item.status === 'QUEUED' || item.status === 'RUNNING' || item.status === 'UNKNOWN');
     const repair = deps.taskStore.listSyncCandidates ? await deps.taskStore.listSyncCandidates() : [];
@@ -46,23 +52,12 @@ export function createTaskSyncCoordinator(deps: CoordinatorDeps): TaskSyncCoordi
           if (persistedJob?.remote?.providerJobId) {
             const updatedJob = await runtime.sync(persistedJob);
             const artifacts = await deps.jobStore.listArtifacts(updatedJob.id);
-            updatedTask = { ...jobRecordToTaskProjection(updatedJob, artifacts, previous), syncError: undefined, lastSyncAt: now() };
+            updatedTask = { ...jobToTaskProjection(updatedJob, artifacts, previous), syncError: undefined, lastSyncAt: now() };
             if (deps.mediaStore) {
-              const materialized = await materializeJobArtifacts(updatedJob, artifacts, deps.mediaStore, updatedTask);
-              // A provider can report a terminal result before its artifact list is
-              // available (or an older job may not have persisted artifacts). Keep
-              // the task-level result visible in the app gallery until projection
-              // catches up on a later sync.
-              if (!materialized.length) await materializeTaskMedia(updatedTask, deps.mediaStore);
+              await materializeJobArtifacts(updatedJob, artifacts, deps.mediaStore, updatedTask);
             }
-          } else {
-            const legacy = await deps.legacySync(settings.token, previous);
-            const legacyJob = taskRecordToJobRecord(legacy);
-            updatedTask = { ...legacy, syncError: undefined, lastSyncAt: now() };
-            if (!persistedJob) await deps.jobStore.upsert(legacyJob);
-          }
+          } else throw new Error('Workflow job missing for task');
           await deps.taskStore.upsert(updatedTask);
-          if (deps.mediaStore && !persistedJob?.remote?.providerJobId) await materializeTaskMedia(updatedTask, deps.mediaStore);
           summary.updated += 1;
           if (updatedTask.status !== 'QUEUED' && updatedTask.status !== 'RUNNING' && updatedTask.status !== 'UNKNOWN') {
             summary.remaining = Math.max(0, summary.remaining - 1);
@@ -77,7 +72,7 @@ export function createTaskSyncCoordinator(deps: CoordinatorDeps): TaskSyncCoordi
     }
     const currentTasks = await (deps.taskStore.listMediaPending ? deps.taskStore.listMediaPending() : deps.taskStore.list());
     for (const task of currentTasks.filter((item) => (item.status === 'SUCCESS' || item.status === 'PARTIAL_SUCCESS') && (item.videoUrl || item.localUri) && (item.downloadState !== 'DOWNLOADED' || item.exportState === 'QUEUED' || item.exportState === 'EXPORTING'))) {
-      try { let current = task; await deps.ensureMedia(task, settings, async (patch) => { current = { ...current, ...patch }; await deps.taskStore.upsert(current); }); if (deps.mediaStore) { const job = await deps.jobStore.get(current.id); const artifacts = job ? await deps.jobStore.listArtifacts(job.id) : []; if (job && artifacts.length) await materializeJobArtifacts(job, artifacts, deps.mediaStore, current); else await materializeTaskMedia(current, deps.mediaStore); const primary = artifacts.find((artifact) => artifact.kind === 'video') ?? artifacts[0]; const assetId = job && primary ? `${job.id}:${primary.id}` : current.id; if (current.exportState === 'EXPORTED' && current.galleryUri) await deps.mediaStore.upsertDelivery?.({ id: `${assetId}:system-gallery`, assetId, target: 'system-gallery', uri: current.galleryUri, status: 'EXPORTED', createdAt: current.exportedAt ?? now(), updatedAt: now() }); } } catch { /* media delivery remains retryable via its persisted state */ }
+      try { let current = task; await deps.ensureMedia(task, settings, async (patch) => { current = { ...current, ...patch }; await deps.taskStore.upsert(current); }); if (deps.mediaStore) { const job = await deps.jobStore.get(current.id); const artifacts = job ? await deps.jobStore.listArtifacts(job.id) : []; if (job && artifacts.length) await materializeJobArtifacts(job, artifacts, deps.mediaStore, current); const primary = artifacts.find((artifact) => artifact.kind === 'video') ?? artifacts[0]; const assetId = job && primary ? `${job.id}:${primary.id}` : current.id; if (current.exportState === 'EXPORTED' && current.galleryUri) await deps.mediaStore.upsertDelivery?.({ id: `${assetId}:system-gallery`, assetId, target: 'system-gallery', uri: current.galleryUri, status: 'EXPORTED', createdAt: current.exportedAt ?? now(), updatedAt: now() }); } } catch { /* media delivery remains retryable via its persisted state */ }
     }
     summary.lastSyncAt = now();
     return { tasks: await deps.taskStore.list(), summary };

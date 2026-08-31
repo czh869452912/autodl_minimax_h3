@@ -23,7 +23,7 @@ test('persists submitting state and returns a normalized job', async () => {
   const value = deps();
   const runtime = createWorkflowRuntime(value.deps);
   const result = await runtime.submit(workflow, draft, {});
-  expect(result).toMatchObject({ id: 'local-1', status: 'QUEUED', remote: { providerJobId: 'remote-1' }, workflowContentHash: 'hash' });
+  expect(result).toMatchObject({ id: 'local-1', status: 'QUEUED', remote: { providerJobId: 'remote-1' }, workflowContentHash: 'hash', outputMapping: workflow.outputs });
   expect(value.deps.jobs.upsert).toHaveBeenCalledWith(expect.objectContaining({ status: 'SUBMITTING' }));
   expect(value.adapter.validateCredentials).toHaveBeenCalled();
   expect(value.adapter.submit).toHaveBeenCalledWith(draft.inputs, { operation: 'workflow.submit', workflowId: 'demo' });
@@ -54,4 +54,13 @@ test('records fallback timing when provider omits timing fields on a terminal re
   const synced = await runtime.sync(submitted);
   expect(synced.startedAt).toBe(1000);
   expect(synced.executionDuration).toBe(0);
+});
+
+test('applies persisted workflow output mapping to provider artifacts', async () => {
+  const value = deps();
+  value.adapter.getStatus.mockResolvedValueOnce({ status: 'SUCCEEDED', artifacts: [{ id: 'result-1', jobId: '', kind: 'file', uri: 'https://cdn/video', metadata: { path: 'result.video' } }] } as never);
+  const runtime = createWorkflowRuntime(value.deps);
+  const submitted = await runtime.submit(workflow, draft, {});
+  await runtime.sync(submitted);
+  expect(value.deps.jobs.replaceArtifacts).toHaveBeenCalledWith('local-1', [expect.objectContaining({ id: 'result-1', kind: 'video' })]);
 });

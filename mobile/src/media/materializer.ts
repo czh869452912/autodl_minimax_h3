@@ -32,12 +32,3 @@ export async function materializeJobArtifacts(job: JobRecord, artifacts: Artifac
   }
   return assets;
 }
-
-export async function materializeTaskMedia(task: TaskRecord, store: AssetStore): Promise<MediaAsset | undefined> {
-  const sourceUrl = task.videoUrl?.trim();
-  const localPath = task.localUri?.trim();
-  if (!sourceUrl && !localPath) return undefined;
-  const asset: MediaAsset = { id: task.id, taskId: task.id, artifactId: task.id, jobId: task.id, workflowId: task.workflowId, title: task.prompt.slice(0, 48) || task.id, prompt: task.prompt, sourceUrl: sourceUrl || localPath || '', localPath, posterPath: task.thumbnailUrl, mimeType: 'video/mp4', kind: 'video', status: localPath ? 'downloaded' : task.downloadState === 'DOWNLOAD_FAILED' ? 'failed' : 'downloading', durationMs: task.duration * 1000, createdAt: task.createdAt, updatedAt: task.updatedAt };
-  await store.upsert(asset);
-  return asset;
-}

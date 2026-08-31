@@ -1,4 +1,4 @@
-import { createJobRepository, jobRecordToTaskProjection, taskRecordToJobRecord } from './repository';
+import { createJobRepository } from './repository';
 import type { JobRecord } from './types';
 
 const job: JobRecord = {
@@ -14,24 +14,13 @@ test('round-trips generic job provenance and artifacts', async () => {
   expect(await store.listArtifacts('local-1')).toMatchObject([{ kind: 'image', uri: 'https://example.test/a.png' }]);
 });
 
-test('projects a legacy task into a generic job without inventing provenance', () => {
-  const task = { id: 'old', prompt: 'x', status: 'SUCCESS' as const, resolution: '768p竖', duration: 5, videoUrl: 'https://example/video', createdAt: 1, updatedAt: 2 };
-  expect(taskRecordToJobRecord(task)).toMatchObject({ id: 'old', workflowId: 'legacy-h3', status: 'SUCCEEDED', inputSnapshot: { prompt: 'x', resolution: '768p竖', duration: 5 } });
-  expect(jobRecordToTaskProjection(job, [{ id: 'v1', jobId: job.id, kind: 'video', uri: 'https://example/video', mime: 'video/mp4' }])).toMatchObject({ id: 'local-1', prompt: 'x', videoUrl: 'https://example/video', status: 'QUEUED' });
-});
-
-test('preserves partial and unknown task states when creating a compatibility job', () => {
-  const partial = { id: 'partial', prompt: 'x', status: 'PARTIAL_SUCCESS' as const, resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 2 };
-  const unknown = { ...partial, id: 'unknown', status: 'UNKNOWN' as const };
-  expect(taskRecordToJobRecord(partial).status).toBe('PARTIAL_SUCCEEDED');
-  expect(taskRecordToJobRecord(unknown).status).toBe('UNKNOWN');
-});
-
-test('preserves prior task media projection when a sync has no new artifact', () => {
-  const previous = { id: 'local-1', prompt: 'x', status: 'SUCCESS' as const, resolution: '768p竖', duration: 5, videoUrl: 'https://old/video', createdAt: 1, updatedAt: 2 };
-  expect(jobRecordToTaskProjection({ ...job, status: 'SUCCEEDED' }, [], previous)).toMatchObject({ videoUrl: 'https://old/video' });
-});
-
-test('projects job timing into task timing', () => {
-  expect(jobRecordToTaskProjection({ ...job, status: 'SUCCEEDED', startedAt: 1_500, executionDuration: 42 } as never)).toMatchObject({ startedAt: 1_500, executionDuration: 42 });
+test('ignores malformed persisted job JSON instead of crashing', async () => {
+  const db = {
+    execSync: jest.fn(),
+    getFirstSync: jest.fn((sql: string) => sql.includes('PRAGMA') ? { user_version: 3 } : { id: 'bad', workflow_id: 'w', workflow_version: '1', workflow_hash: 'h', adapter_id: 'a', adapter_version: '1', input_json: '{', remote_json: '{', status: 'SUCCEEDED', error_json: '{', created_at: 1, updated_at: 2 }),
+    getAllSync: jest.fn(() => []),
+    runSync: jest.fn(),
+  };
+  const store = createJobRepository(db as never);
+  await expect(store.get('bad')).resolves.toMatchObject({ inputSnapshot: {}, remote: undefined, error: undefined });
 });

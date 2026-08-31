@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { RegistryRecord, WorkflowRegistry } from './types';
+import { ensureAppDatabase } from '../../storage/database';
 
 type Row = { workflow_id: string; version: string; content_hash: string; source: string; trust: string; definition_json: string; installed_at: number };
 type ActiveRow = { workflow_id: string; version: string; content_hash: string; previous_version?: string; previous_hash?: string };
@@ -9,6 +10,7 @@ export function createWorkflowRegistry(db: SQLiteDatabase | undefined): Workflow
   const active = new Map<string, ActiveRow>();
   const key = (id: string, version: string) => `${id}\u0000${version}`;
   if (db) {
+    ensureAppDatabase(db);
     db.execSync('CREATE TABLE IF NOT EXISTS workflow_registry (workflow_id TEXT NOT NULL, version TEXT NOT NULL, content_hash TEXT NOT NULL, source TEXT NOT NULL, trust TEXT NOT NULL, definition_json TEXT NOT NULL, installed_at INTEGER NOT NULL, PRIMARY KEY (workflow_id, version));');
     db.execSync('CREATE TABLE IF NOT EXISTS workflow_registry_active (workflow_id TEXT PRIMARY KEY NOT NULL, version TEXT NOT NULL, content_hash TEXT NOT NULL, previous_version TEXT, previous_hash TEXT);');
   }

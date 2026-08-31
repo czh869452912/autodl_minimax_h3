@@ -23,7 +23,8 @@ import { resolveDraftPrompt } from './draftPrompt';
 import h3Definition from '../workflows/definitions/autodl/minimax-h3-i2v-15s.json';
 import { WorkflowForm } from '../workflows/renderer/WorkflowForm';
 import type { WorkflowDefinition } from '../workflows/schema/types';
-import { createJobRepository, jobRecordToTaskProjection } from '../jobs/repository';
+import { createJobRepository } from '../jobs/repository';
+import { jobToTaskProjection } from '../tasks/projection';
 import { createWorkflowRuntime } from '../workflows/runtime/runtime';
 import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
 import { canonicalizeDefinition } from '../workflows/registry/canonicalize';
@@ -114,7 +115,7 @@ export function CreateForm({
       const adapters = createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? settings.token : undefined });
       const runtime = createWorkflowRuntime({ adapters, jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `job-${Date.now()}-${Math.random().toString(16).slice(2)}` });
       const job = await runtime.submit(definition, { workflowId: definition.id, workflowVersion: definition.version, contentHash: await sha256Hex(canonicalizeDefinition(definition)), inputs: inputSnapshot, source: 'user', status: 'ready' });
-      const task = { ...jobRecordToTaskProjection(job, []), images, audios };
+      const task = { ...jobToTaskProjection(job, []), images, audios };
       await taskStore.upsert(task);
       Alert.alert('提交成功', `任务 ${task.id} 已加入队列`, [
         { text: '查看任务', onPress: () => router.navigate('/(tabs)/tasks') },

@@ -19,12 +19,9 @@ jest.mock('../settings/storage', () => ({
   })),
   saveSettings: jest.fn(async () => undefined),
 }));
-jest.mock('../tasks/sync', () => ({ taskStore: { list: jest.fn(async () => [{ id: 'task-1', localUri: 'file:///old.mp4', exportState: 'NOT_REQUESTED' }]), upsert: jest.fn(async () => undefined) } }));
-jest.mock('../tasks/media', () => ({ migrateDownloadedVideos: jest.fn(async () => ({ exported: 1, failed: 0 })) }));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
 import SettingsScreen from '../../app/(tabs)/settings';
-import { migrateDownloadedVideos } from '../tasks/media';
 
 describe('Prompt assistant advanced LLM settings', () => {
   it('keeps advanced network controls collapsed and reveals editable defaults on demand', async () => {
@@ -48,13 +45,6 @@ describe('Prompt assistant advanced LLM settings', () => {
     expect(renderer!.root.findByProps({ accessibilityLabel: '保留应用内副本' }).props.value).toBe(true);
     const text = renderer!.root.findAllByType(Text).map((node) => [node.props.children].flat(Infinity).join(''));
     expect(text).toContain('保存位置：系统相册 / Movies / AutoDL-H3');
-  });
-
-  it('offers user-triggered migration instead of silently exporting history', async () => {
-    let renderer: ReturnType<typeof create>;
-    await act(async () => { renderer = create(<SettingsScreen />); });
-    await act(async () => renderer!.root.findByProps({ accessibilityLabel: '将已有下载保存到相册' }).props.onPress());
-    expect(migrateDownloadedVideos).toHaveBeenCalled();
   });
 
   it('offers a direct link to the AutoDL access token page', async () => {

@@ -73,7 +73,7 @@ describe('local agent thread store', () => {
       updatedAt: 20,
       customTitle: '自定义标题',
     });
-    expect(db.execSync).toHaveBeenCalledTimes(2);
+    expect(db.execSync).toHaveBeenCalledTimes(1);
     expect(db.runAsync).toHaveBeenCalled();
     expect(db.runSync).not.toHaveBeenCalled();
   });

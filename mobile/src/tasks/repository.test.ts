@@ -114,3 +114,14 @@ test('finds bounded completed tasks missing from the app media catalog', async (
   expect(calls.at(-1)?.sql).toContain('NOT EXISTS (SELECT 1 FROM media_assets');
   expect(calls.at(-1)?.params).toEqual([50]);
 });
+
+test('ignores malformed persisted task JSON instead of crashing', async () => {
+  const db = {
+    execSync: jest.fn(),
+    getFirstSync: jest.fn((sql: string) => sql.includes('PRAGMA') ? { user_version: 3 } : null),
+    getAllSync: jest.fn((sql: string) => sql.includes('PRAGMA') ? [] : [{ id: 'bad', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, input_json: '{', images_json: '{', audios_json: '{', created_at: 1, updated_at: 1 }]),
+    runSync: jest.fn(),
+  };
+  const store = createTaskRepository(db as never);
+  await expect(store.list()).resolves.toMatchObject([{ id: 'bad', inputSnapshot: undefined, images: undefined, audios: undefined }]);
+});

@@ -8,7 +8,7 @@ export type ProviderAdapter = {
   manifest(): PlatformAdapterManifest;
   validateCredentials(): Promise<{ ok: boolean }>;
   submit(input: Record<string, unknown>, target?: { operation?: string; workflowId?: string }): Promise<{ providerJobId: string }>;
-  getStatus(handle: { providerJobId: string }): Promise<{ status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'; artifacts: ArtifactRecord[]; rawStatus?: string; startedAt?: number; executionDuration?: number }>;
+  getStatus(handle: { providerJobId: string }): Promise<{ status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'PARTIAL_SUCCEEDED' | 'FAILED' | 'CANCELLED'; artifacts: ArtifactRecord[]; rawStatus?: string; startedAt?: number; executionDuration?: number }>;
 };
 
 export function createBuiltinProviderAdapters({ resolveCredential, transport = getNativeHttpTransport(), additional = [] }: { resolveCredential: (kind: string) => string | undefined; transport?: HttpTransport; additional?: ProviderAdapter[] }): Map<string, ProviderAdapter> {

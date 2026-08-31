@@ -6,6 +6,14 @@ import { validateWorkflowDefinition } from '../schema/validator';
 type Adapter = { manifest(): Pick<PlatformAdapterManifest, 'id' | 'adapterVersion' | 'operations'>; validateCredentials(): Promise<{ ok: boolean }>; submit(input: Record<string, unknown>, target?: { operation?: string; workflowId?: string }): Promise<{ providerJobId: string }>; getStatus(handle: { providerJobId: string }): Promise<{ status: JobStatus; artifacts: ArtifactRecord[]; rawStatus?: string; startedAt?: number; executionDuration?: number }> };
 type RuntimeDeps = { adapters: Map<string, Adapter>; jobs: JobRepository; credentials: { get(adapterId: string): Promise<{ ok: boolean }> }; id: () => string; now?: () => number };
 function valueAt(inputs: Record<string, unknown>, path: string): unknown { return path.split('.').reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined, inputs); }
+function applyOutputMapping(job: JobRecord, artifacts: ArtifactRecord[]): ArtifactRecord[] {
+  const mappings = job.outputMapping?.artifacts ?? [];
+  return artifacts.map((artifact, index) => {
+    const sourcePath = typeof artifact.metadata?.path === 'string' ? artifact.metadata.path : undefined;
+    const mapping = (sourcePath && mappings.find((item) => item.from === sourcePath)) ?? (mappings.length === artifacts.length ? mappings[index] : undefined);
+    return mapping ? { ...artifact, kind: mapping.kind, metadata: { ...artifact.metadata, path: mapping.from } } : artifact;
+  });
+}
 
 export function createWorkflowRuntime(deps: RuntimeDeps) {
   const locks = new Set<string>();
@@ -26,7 +34,7 @@ export function createWorkflowRuntime(deps: RuntimeDeps) {
       const validated = await adapter.validateCredentials(); if (!validated.ok) throw new Error('workflow credentials unavailable');
       const id = deps.id(); if (locks.has(id)) throw new Error('workflow submission already in progress'); locks.add(id);
       const timestamp = now();
-      let job: JobRecord = { id, workflowId: workflow.id, workflowVersion: workflow.version, workflowContentHash: draft.contentHash, adapterId: adapter.manifest().id, adapterVersion: adapter.manifest().adapterVersion, inputSnapshot: draft.inputs, status: 'SUBMITTING', createdAt: timestamp, updatedAt: timestamp };
+      let job: JobRecord = { id, workflowId: workflow.id, workflowVersion: workflow.version, workflowContentHash: draft.contentHash, adapterId: adapter.manifest().id, adapterVersion: adapter.manifest().adapterVersion, inputSnapshot: draft.inputs, outputMapping: workflow.outputs, status: 'SUBMITTING', createdAt: timestamp, updatedAt: timestamp };
       await deps.jobs.upsert(job);
       try {
         const requestInput = Object.fromEntries(Object.entries(workflow.request.bindings).map(([target, source]) => [target, valueAt(draft.inputs, source)]));
@@ -38,7 +46,7 @@ export function createWorkflowRuntime(deps: RuntimeDeps) {
     },
     async sync(job: JobRecord): Promise<JobRecord> {
       const adapter = deps.adapters.get(job.adapterId); if (!adapter || !job.remote?.providerJobId) return job;
-      const update = await adapter.getStatus({ providerJobId: job.remote.providerJobId }); const timestamp = now(); const terminal = update.status !== 'QUEUED' && update.status !== 'RUNNING'; const startedAt = update.startedAt ?? job.startedAt ?? (update.status === 'RUNNING' ? timestamp : terminal ? job.createdAt : undefined); const executionDuration = update.executionDuration ?? job.executionDuration ?? (startedAt != null && terminal && timestamp >= startedAt ? (timestamp - startedAt) / 1000 : undefined); const current = { ...job, status: update.status, remote: { ...job.remote, rawStatus: update.rawStatus }, startedAt, executionDuration, updatedAt: timestamp }; await deps.jobs.upsert(current); await deps.jobs.replaceArtifacts(job.id, update.artifacts.map((item) => ({ ...item, jobId: job.id }))); return current;
+      const update = await adapter.getStatus({ providerJobId: job.remote.providerJobId }); const timestamp = now(); const terminal = update.status !== 'QUEUED' && update.status !== 'RUNNING'; const startedAt = update.startedAt ?? job.startedAt ?? (update.status === 'RUNNING' ? timestamp : terminal ? job.createdAt : undefined); const executionDuration = update.executionDuration ?? job.executionDuration ?? (startedAt != null && terminal && timestamp >= startedAt ? (timestamp - startedAt) / 1000 : undefined); const current = { ...job, status: update.status, remote: { ...job.remote, rawStatus: update.rawStatus }, startedAt, executionDuration, updatedAt: timestamp }; await deps.jobs.upsert(current); await deps.jobs.replaceArtifacts(job.id, applyOutputMapping(current, update.artifacts.map((item) => ({ ...item, jobId: job.id })))); return current;
     },
   };
 }

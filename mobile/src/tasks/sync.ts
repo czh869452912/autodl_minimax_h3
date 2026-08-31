@@ -1,5 +1,4 @@
 import { readSettings } from '../settings/storage';
-import { getTask } from './api';
 import { createTaskRepository } from './repository';
 import { openDatabaseSync } from 'expo-sqlite';
 import { ensureTaskMedia } from './media';
@@ -20,7 +19,6 @@ const coordinator = createTaskSyncCoordinator({
   jobStore,
   mediaStore,
   createRuntime: (token) => createWorkflowRuntime({ adapters: createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? token : undefined }), jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `sync-${Date.now()}` }),
-  legacySync: getTask,
   ensureMedia: (task, settings, onUpdate) => ensureTaskMedia(task, { policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: settings.keepPrivateCopy }, onUpdate }),
 });
 

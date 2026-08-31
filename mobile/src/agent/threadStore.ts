@@ -1,5 +1,6 @@
 import type { Message, State } from '@ag-ui/client';
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { ensureAppDatabase } from '../storage/database';
 
 const schema = `CREATE TABLE IF NOT EXISTS agent_threads (
   thread_id TEXT PRIMARY KEY NOT NULL,
@@ -83,12 +84,8 @@ function mapRow(row: ThreadRow | null): LocalThreadSnapshot | null {
 }
 
 export function createLocalThreadStore(db: SQLiteDatabase) {
+  ensureAppDatabase(db);
   db.execSync(schema);
-  try {
-    db.execSync('ALTER TABLE agent_threads ADD COLUMN custom_title TEXT');
-  } catch {
-    /* already exists */
-  }
   return {
     async load(threadId: string): Promise<LocalThreadSnapshot | null> {
       return mapRow(
