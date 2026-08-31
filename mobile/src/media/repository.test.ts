@@ -6,7 +6,7 @@ function fakeDb() {
   return {
     execSync: () => undefined,
     runSync: (sql: string, ...params: unknown[]) => {
-      if (sql.startsWith('INSERT')) rows.set(String(params[0]), { id: params[0], task_id: params[1], title: params[2], prompt: params[3], source_url: params[4], local_path: params[5], poster_path: params[6], mime_type: params[7], width: params[8], height: params[9], duration_ms: params[10], status: params[11], created_at: params[12], updated_at: params[13] });
+      if (sql.startsWith('INSERT') && sql.includes('media_assets')) rows.set(String(params[0]), { id: params[0], task_id: params[1], title: params[2], prompt: params[3], source_url: params[4], local_path: params[5], poster_path: params[6], mime_type: params[7], width: params[8], height: params[9], duration_ms: params[10], status: params[11], created_at: params[12], updated_at: params[13], artifact_id: params[14], job_id: params[15], workflow_id: params[16], kind: params[17] });
       if (sql.startsWith('DELETE')) rows.delete(String(params[0]));
     },
     getAllSync: <T>(sql: string, ...params: unknown[]) => (sql.includes('WHERE id')
@@ -36,4 +36,10 @@ test('supports bounded media pages', async () => {
   await store.upsert(asset);
   const page = await store.listPage?.({ limit: 1 });
   expect(page).toMatchObject({ items: [expect.objectContaining({ id: 'm1' })] });
+});
+
+test('round-trips workflow artifact provenance independently from task state', async () => {
+  const store = createSqliteMediaStore(fakeDb());
+  await store.upsert({ ...asset, id: 'job-1:artifact-1', artifactId: 'artifact-1', jobId: 'job-1', workflowId: 'workflow-1', kind: 'audio', mimeType: 'audio/mpeg' });
+  expect(await store.get('job-1:artifact-1')).toMatchObject({ artifactId: 'artifact-1', jobId: 'job-1', workflowId: 'workflow-1', kind: 'audio' });
 });

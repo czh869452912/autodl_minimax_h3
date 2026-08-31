@@ -48,6 +48,10 @@ describe('gallery projection', () => {
     expect(projectGallery([{ ...task, galleryUri: 'content://media/video/1', exportState: 'EXPORTED' }])[0]).toMatchObject({ exportStatus: '已保存到相册' });
   });
 
+  it('does not create a gallery item from a system-gallery URI alone', () => {
+    expect(projectGallery([{ ...task, localUri: undefined, videoUrl: undefined, galleryUri: 'content://media/video/1' }])).toEqual([]);
+  });
+
   it('shows partial-success tasks when they contain a playable result', () => {
     expect(projectGallery([{ ...task, status: 'PARTIAL_SUCCESS' }])).toHaveLength(1);
   });
