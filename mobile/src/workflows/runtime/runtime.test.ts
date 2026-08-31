@@ -36,3 +36,22 @@ test('applies workflow request bindings before invoking the adapter', async () =
   await runtime.submit(mapped, draft, {});
   expect(value.adapter.submit).toHaveBeenCalledWith({ text: 'hello' }, { operation: 'workflow.submit', workflowId: 'demo' });
 });
+
+test('persists normalized provider timing during status synchronization', async () => {
+  const value = deps();
+  value.adapter.getStatus.mockResolvedValueOnce({ status: 'SUCCEEDED', artifacts: [], startedAt: 1_500, executionDuration: 42 } as never);
+  const runtime = createWorkflowRuntime(value.deps);
+  const submitted = await runtime.submit(workflow, draft, {});
+  const synced = await runtime.sync({ ...submitted, startedAt: undefined, executionDuration: undefined } as never);
+  expect(synced).toMatchObject({ startedAt: 1_500, executionDuration: 42 });
+});
+
+test('records fallback timing when provider omits timing fields on a terminal result', async () => {
+  const value = deps();
+  value.adapter.getStatus.mockResolvedValueOnce({ status: 'SUCCEEDED', artifacts: [] } as never);
+  const runtime = createWorkflowRuntime(value.deps);
+  const submitted = await runtime.submit(workflow, draft, {});
+  const synced = await runtime.sync(submitted);
+  expect(synced.startedAt).toBe(1000);
+  expect(synced.executionDuration).toBe(0);
+});

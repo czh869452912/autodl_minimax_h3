@@ -79,3 +79,15 @@ test('exposes stable keyset pagination and watermark queries', async () => {
   expect(page).toHaveProperty('nextCursor');
   expect(await store.listUpdatedSince?.(1_500)).toEqual(expect.any(Array));
 });
+
+test('exposes gallery pagination that filters playable completed results in SQL', async () => {
+  const db = fakeDb();
+  const store = createTaskRepository(db as never) as ReturnType<typeof createTaskRepository> & { listGalleryPage?: (options?: { limit?: number }) => Promise<{ items: TaskRecord[] }> };
+  expect(store.listGalleryPage).toBeDefined();
+  await store.listGalleryPage?.({ limit: 20 });
+});
+
+test('exposes synchronization candidates for one-time repair of incomplete completed tasks', () => {
+  const store = createTaskRepository(fakeDb() as never) as ReturnType<typeof createTaskRepository> & { listSyncCandidates?: () => Promise<TaskRecord[]> };
+  expect(store.listSyncCandidates).toBeDefined();
+});

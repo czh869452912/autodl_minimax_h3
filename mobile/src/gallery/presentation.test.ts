@@ -47,4 +47,8 @@ describe('gallery projection', () => {
   it('projects the gallery publication label onto video cards', () => {
     expect(projectGallery([{ ...task, galleryUri: 'content://media/video/1', exportState: 'EXPORTED' }])[0]).toMatchObject({ exportStatus: '已保存到相册' });
   });
+
+  it('shows partial-success tasks when they contain a playable result', () => {
+    expect(projectGallery([{ ...task, status: 'PARTIAL_SUCCESS' }])).toHaveLength(1);
+  });
 });

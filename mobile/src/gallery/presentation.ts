@@ -17,7 +17,7 @@ export function exportStatusLabel(task: Pick<TaskRecord, 'downloadState' | 'expo
 
 export function taskToMediaAsset(task: TaskRecord): MediaAsset | null {
   const source = mediaSource(task);
-  if (task.status !== 'SUCCESS' || !source) return null;
+  if ((task.status !== 'SUCCESS' && task.status !== 'PARTIAL_SUCCESS') || !source) return null;
   const localPath = task.localUri || task.galleryUri;
   const status: MediaStatus = localPath ? 'downloaded' : task.downloadState === 'DOWNLOAD_FAILED' ? 'failed' : 'downloading';
   return { id: task.id, taskId: task.id, title: task.prompt.slice(0, 48) || task.id, prompt: task.prompt, sourceUrl: task.videoUrl || '', localPath, posterPath: task.thumbnailUrl, mimeType: 'video/mp4', durationMs: task.duration * 1000, status, exportStatus: exportStatusLabel(task) || undefined, createdAt: task.createdAt, updatedAt: task.updatedAt };

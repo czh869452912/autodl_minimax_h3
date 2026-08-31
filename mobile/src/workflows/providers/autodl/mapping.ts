@@ -10,5 +10,14 @@ export function buildAutodlSubmitRequest(input: AutodlInput): Record<string, unk
   return payload;
 }
 export function normalizeAutodlStatus(value: unknown): 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' { const s = String(value || 'QUEUED').toUpperCase(); if (s === 'SUCCESSFUL' || s === 'SUCCESS') return 'SUCCEEDED'; if (s === 'EXECUTING' || s === 'PROCESSING' || s === 'RUNNING') return 'RUNNING'; if (s === 'FAILED') return 'FAILED'; if (s === 'CANCELLED') return 'CANCELLED'; return 'QUEUED'; }
+export function parseAutodlTimestamp(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value < 1_000_000_000_000 ? value * 1000 : value;
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  const zoned = /(?:Z|[+-]\d{2}:\d{2})$/i.test(trimmed);
+  const parsed = zoned ? Date.parse(trimmed) : Date.parse(trimmed.replace(' ', 'T') + '+08:00');
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+export function parseAutodlDuration(value: unknown): number | undefined { const duration = Number(value); return Number.isFinite(duration) && duration >= 0 ? duration : undefined; }
 function findUrl(value: unknown): string { if (typeof value === 'string' && /^https?:\/\//.test(value)) return value; if (Array.isArray(value)) for (const item of value) { const result = findUrl(item); if (result) return result; } else if (value && typeof value === 'object') for (const item of Object.values(value)) { const result = findUrl(item); if (result) return result; } return ''; }
 export function parseAutodlResult(data: unknown): ArtifactRecord[] { const uri = findUrl(data); return uri ? [{ id: `artifact:${uri}`, jobId: '', kind: 'video', uri, mime: 'video/mp4' }] : []; }

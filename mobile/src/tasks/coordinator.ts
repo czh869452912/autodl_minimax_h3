@@ -3,7 +3,7 @@ import { jobRecordToTaskProjection, taskRecordToJobRecord } from '../jobs/reposi
 import type { TaskRecord } from './types';
 
 type Settings = { token: string; autoExportToGallery: boolean; keepPrivateCopy: boolean };
-type TaskStore = { list(): Promise<TaskRecord[]>; listActive?(): Promise<TaskRecord[]>; listMediaPending?(): Promise<TaskRecord[]>; upsert(task: TaskRecord): Promise<void> };
+type TaskStore = { list(): Promise<TaskRecord[]>; listActive?(): Promise<TaskRecord[]>; listSyncCandidates?(): Promise<TaskRecord[]>; listMediaPending?(): Promise<TaskRecord[]>; upsert(task: TaskRecord): Promise<void> };
 type Runtime = { sync(job: JobRecord): Promise<JobRecord> };
 type CoordinatorDeps = {
   readSettings(): Promise<Settings>;
@@ -27,22 +27,24 @@ export function createTaskSyncCoordinator(deps: CoordinatorDeps): TaskSyncCoordi
     const settings = await deps.readSettings();
     const tasks = await (deps.taskStore.listActive ? deps.taskStore.listActive() : deps.taskStore.list());
     const active = tasks.filter((item) => item.status === 'QUEUED' || item.status === 'RUNNING' || item.status === 'UNKNOWN');
+    const repair = deps.taskStore.listSyncCandidates ? await deps.taskStore.listSyncCandidates() : [];
+    const targets = [...active, ...repair.filter((item) => !active.some((current) => current.id === item.id))];
     const summary: SyncSummary = { updated: 0, failed: 0, skipped: 0, remaining: active.length };
     if (!settings.token) summary.skipped = active.length;
     if (settings.token) {
       const runtime = deps.createRuntime(settings.token);
       let cursor = 0;
       const worker = async () => {
-      while (cursor < active.length) {
+      while (cursor < targets.length) {
         const index = cursor++;
-        const previous = active[index];
+        const previous = targets[index];
         try {
           const persistedJob = await deps.jobStore.get(previous.id);
           let updatedTask: TaskRecord;
           if (persistedJob?.remote?.providerJobId) {
             const updatedJob = await runtime.sync(persistedJob);
             const artifacts = await deps.jobStore.listArtifacts(updatedJob.id);
-            updatedTask = jobRecordToTaskProjection(updatedJob, artifacts, previous);
+            updatedTask = { ...jobRecordToTaskProjection(updatedJob, artifacts, previous), syncError: undefined, lastSyncAt: now() };
           } else {
             const legacy = await deps.legacySync(settings.token, previous);
             const legacyJob = taskRecordToJobRecord(legacy);
@@ -60,7 +62,7 @@ export function createTaskSyncCoordinator(deps: CoordinatorDeps): TaskSyncCoordi
         }
       }
       };
-      await Promise.all(Array.from({ length: Math.min(concurrency, active.length) }, () => worker()));
+      await Promise.all(Array.from({ length: Math.min(concurrency, targets.length) }, () => worker()));
     }
     const currentTasks = await (deps.taskStore.listMediaPending ? deps.taskStore.listMediaPending() : deps.taskStore.list());
     for (const task of currentTasks.filter((item) => item.status === 'SUCCESS' && (item.videoUrl || item.localUri || item.galleryUri) && (item.downloadState !== 'DOWNLOADED' || item.exportState === 'QUEUED' || item.exportState === 'EXPORTING'))) {

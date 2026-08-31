@@ -24,3 +24,7 @@ test('preserves prior task media projection when a sync has no new artifact', ()
   const previous = { id: 'local-1', prompt: 'x', status: 'SUCCESS' as const, resolution: '768p竖', duration: 5, videoUrl: 'https://old/video', createdAt: 1, updatedAt: 2 };
   expect(jobRecordToTaskProjection({ ...job, status: 'SUCCEEDED' }, [], previous)).toMatchObject({ videoUrl: 'https://old/video' });
 });
+
+test('projects job timing into task timing', () => {
+  expect(jobRecordToTaskProjection({ ...job, status: 'SUCCEEDED', startedAt: 1_500, executionDuration: 42 } as never)).toMatchObject({ startedAt: 1_500, executionDuration: 42 });
+});

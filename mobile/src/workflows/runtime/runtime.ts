@@ -3,7 +3,7 @@ import type { JobRecord, JobRepository, JobStatus, ArtifactRecord } from '../../
 import type { PlatformAdapterManifest } from '../schema/types';
 import { validateWorkflowDefinition } from '../schema/validator';
 
-type Adapter = { manifest(): Pick<PlatformAdapterManifest, 'id' | 'adapterVersion' | 'operations'>; validateCredentials(): Promise<{ ok: boolean }>; submit(input: Record<string, unknown>, target?: { operation?: string; workflowId?: string }): Promise<{ providerJobId: string }>; getStatus(handle: { providerJobId: string }): Promise<{ status: JobStatus; artifacts: ArtifactRecord[]; rawStatus?: string }> };
+type Adapter = { manifest(): Pick<PlatformAdapterManifest, 'id' | 'adapterVersion' | 'operations'>; validateCredentials(): Promise<{ ok: boolean }>; submit(input: Record<string, unknown>, target?: { operation?: string; workflowId?: string }): Promise<{ providerJobId: string }>; getStatus(handle: { providerJobId: string }): Promise<{ status: JobStatus; artifacts: ArtifactRecord[]; rawStatus?: string; startedAt?: number; executionDuration?: number }> };
 type RuntimeDeps = { adapters: Map<string, Adapter>; jobs: JobRepository; credentials: { get(adapterId: string): Promise<{ ok: boolean }> }; id: () => string; now?: () => number };
 function valueAt(inputs: Record<string, unknown>, path: string): unknown { return path.split('.').reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined, inputs); }
 
@@ -38,7 +38,7 @@ export function createWorkflowRuntime(deps: RuntimeDeps) {
     },
     async sync(job: JobRecord): Promise<JobRecord> {
       const adapter = deps.adapters.get(job.adapterId); if (!adapter || !job.remote?.providerJobId) return job;
-      const update = await adapter.getStatus({ providerJobId: job.remote.providerJobId }); const current = { ...job, status: update.status, remote: { ...job.remote, rawStatus: update.rawStatus }, updatedAt: now() }; await deps.jobs.upsert(current); await deps.jobs.replaceArtifacts(job.id, update.artifacts.map((item) => ({ ...item, jobId: job.id }))); return current;
+      const update = await adapter.getStatus({ providerJobId: job.remote.providerJobId }); const timestamp = now(); const terminal = update.status !== 'QUEUED' && update.status !== 'RUNNING'; const startedAt = update.startedAt ?? job.startedAt ?? (update.status === 'RUNNING' ? timestamp : terminal ? job.createdAt : undefined); const executionDuration = update.executionDuration ?? job.executionDuration ?? (startedAt != null && terminal && timestamp >= startedAt ? (timestamp - startedAt) / 1000 : undefined); const current = { ...job, status: update.status, remote: { ...job.remote, rawStatus: update.rawStatus }, startedAt, executionDuration, updatedAt: timestamp }; await deps.jobs.upsert(current); await deps.jobs.replaceArtifacts(job.id, update.artifacts.map((item) => ({ ...item, jobId: job.id }))); return current;
     },
   };
 }
