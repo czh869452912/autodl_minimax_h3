@@ -91,3 +91,19 @@ test('exposes synchronization candidates for one-time repair of incomplete compl
   const store = createTaskRepository(fakeDb() as never) as ReturnType<typeof createTaskRepository> & { listSyncCandidates?: () => Promise<TaskRecord[]> };
   expect(store.listSyncCandidates).toBeDefined();
 });
+
+test('finds bounded completed tasks missing from the app media catalog', async () => {
+  const calls: Array<{ sql: string; params: unknown[] }> = [];
+  const db = fakeDb();
+  const original = db.getAllSync;
+  db.getAllSync = (<T>(sql: string, ...params: unknown[]) => {
+    calls.push({ sql, params });
+    return original<T>();
+  }) as typeof db.getAllSync;
+  const store = createTaskRepository(db as never) as ReturnType<typeof createTaskRepository> & { listMediaProjectionCandidates?: (limit?: number) => Promise<TaskRecord[]> };
+
+  await store.listMediaProjectionCandidates?.(50);
+
+  expect(calls.at(-1)?.sql).toContain('NOT EXISTS (SELECT 1 FROM media_assets');
+  expect(calls.at(-1)?.params).toEqual([50]);
+});

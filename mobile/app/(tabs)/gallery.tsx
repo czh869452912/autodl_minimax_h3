@@ -8,15 +8,21 @@ import { createSqliteMediaStore } from '../../src/media/repository';
 import { extractPoster } from '../../src/native/media';
 import { AppIcon } from '../../src/ui/icons';
 import { COLORS, SPACING } from '../../src/ui/theme';
+import { createTaskRepository } from '../../src/tasks/repository';
+import { createJobRepository } from '../../src/jobs/repository';
+import { reconcileMediaCatalog } from '../../src/media/catalog';
 
-const mediaStore = createSqliteMediaStore(openDatabaseSync('autodl-h3.db'));
+const database = openDatabaseSync('autodl-h3.db');
+const mediaStore = createSqliteMediaStore(database);
+const taskStore = createTaskRepository(database);
+const jobStore = createJobRepository(database);
 const filters: Array<{ id: 'all' | MediaStatus; label: string }> = [{ id: 'all', label: '全部' }, { id: 'downloaded', label: '已下载' }, { id: 'downloading', label: '准备中' }, { id: 'failed', label: '失败' }];
 
 export default function GalleryScreen() {
   const router = useRouter();
   const [query, setQuery] = useState(''); const [filter, setFilter] = useState<'all' | MediaStatus>('all'); const [assets, setAssets] = useState<MediaAsset[]>([]); const [loading, setLoading] = useState(true); const [loadingMore, setLoadingMore] = useState(false); const [cursor, setCursor] = useState<{ createdAt: number; id: string }>(); const [selected, setSelected] = useState<string[]>([]);
   const enrich = useCallback(async (items: MediaAsset[]) => { const result = [...items]; let cursorIndex = 0; const worker = async () => { while (cursorIndex < result.length) { const index = cursorIndex++; const asset = result[index]; if (asset.posterPath) continue; try { const poster = await extractPoster(asset.localPath || asset.sourceUrl, asset.id); if (poster) { result[index] = { ...asset, posterPath: poster }; await mediaStore.upsert(result[index]); } } catch {} } }; await Promise.all(Array.from({ length: Math.min(4, result.length) }, () => worker())); return result; }, []);
-  const load = useCallback(async () => { setLoading(true); try { const paged = await mediaStore.listPage?.({ limit: 40, query, kind: 'video', status: filter === 'all' ? undefined : filter }); const page = paged ?? { items: await mediaStore.list({ query, kind: 'video', status: filter === 'all' ? undefined : filter }), nextCursor: undefined }; setAssets(await enrich(page.items)); setCursor(page.nextCursor); } finally { setLoading(false); } }, [enrich, filter, query]);
+  const load = useCallback(async () => { setLoading(true); try { await reconcileMediaCatalog({ taskStore, jobStore, mediaStore, limit: 200 }); const paged = await mediaStore.listPage?.({ limit: 40, query, kind: 'video', status: filter === 'all' ? undefined : filter }); const page = paged ?? { items: await mediaStore.list({ query, kind: 'video', status: filter === 'all' ? undefined : filter }), nextCursor: undefined }; setAssets(await enrich(page.items)); setCursor(page.nextCursor); } finally { setLoading(false); } }, [enrich, filter, query]);
   const loadMore = useCallback(async () => { if (!cursor || loadingMore || !mediaStore.listPage) return; setLoadingMore(true); try { const page = await mediaStore.listPage({ limit: 40, cursor, query, kind: 'video', status: filter === 'all' ? undefined : filter }); const enriched = await enrich(page.items); setAssets((items) => [...items, ...enriched.filter((item) => !items.some((current) => current.id === item.id))]); setCursor(page.nextCursor); } finally { setLoadingMore(false); } }, [cursor, enrich, filter, loadingMore, query]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   const toggle = (id: string) => setSelected((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]);

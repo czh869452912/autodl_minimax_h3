@@ -8,14 +8,15 @@ const job = (id: string, remote: string): JobRecord => ({ id, workflowId: 'demo'
 function setup(tasks: TaskRecord[], jobs: JobRecord[]) {
   const taskStore = { list: jest.fn(async () => tasks), listActive: jest.fn(async () => tasks.filter((item) => ['QUEUED', 'RUNNING', 'UNKNOWN'].includes(item.status))), listSyncCandidates: jest.fn(async () => [] as TaskRecord[]), upsert: jest.fn(async (value: TaskRecord) => { const index = tasks.findIndex((item) => item.id === value.id); if (index >= 0) tasks[index] = value; }), };
   const jobStore = { get: jest.fn(async (id: string) => jobs.find((item) => item.id === id)), listArtifacts: jest.fn(async () => [{ id: 'video-1', jobId: 'local-1', kind: 'video' as const, uri: 'https://cdn.test/video' }]), upsert: jest.fn(), replaceArtifacts: jest.fn(), list: jest.fn() };
+  const mediaStore = { upsert: jest.fn(async () => undefined), list: jest.fn(async () => []), get: jest.fn(async () => null), remove: jest.fn(async () => undefined) };
   const runtime = { sync: jest.fn(async (value: JobRecord) => ({ ...value, status: 'SUCCEEDED' as const, updatedAt: 2 })) };
   const legacySync = jest.fn(async (_token: string, value: TaskRecord) => ({ ...value, status: 'SUCCESS' as const, videoUrl: 'https://legacy/video', updatedAt: 2 }));
   const coordinator = createTaskSyncCoordinator({
     readSettings: async () => ({ token: 'token', autoExportToGallery: false, keepPrivateCopy: true }),
-    taskStore, jobStore, createRuntime: () => runtime, createAdapters: () => new Map(), legacySync,
+    taskStore, jobStore, mediaStore, createRuntime: () => runtime, createAdapters: () => new Map(), legacySync,
     ensureMedia: jest.fn(async () => undefined), now: () => 2,
   });
-  return { coordinator, taskStore, jobStore, runtime, legacySync };
+  return { coordinator, taskStore, jobStore, mediaStore, runtime, legacySync };
 }
 
 test('uses remote provider id and projects persisted artifacts', async () => {
@@ -71,4 +72,20 @@ test('repairs a completed workflow task that is missing timing or result project
   await value.coordinator.run();
   expect(value.runtime.sync).toHaveBeenCalled();
   expect(value.taskStore.upsert).toHaveBeenCalledWith(expect.objectContaining({ lastSyncAt: 2, syncError: undefined }));
+});
+
+test('materializes the task result when a workflow succeeds before artifacts are projected', async () => {
+  const completed = { ...task('local-1', 'SUCCESS'), videoUrl: 'https://cdn.test/fallback.mp4', downloadState: 'DOWNLOADED' as const };
+  const value = setup([completed], [{ ...job('local-1', 'remote-1'), status: 'SUCCEEDED' }]);
+  value.taskStore.listSyncCandidates.mockResolvedValueOnce([completed]);
+  value.jobStore.listArtifacts.mockResolvedValue([]);
+
+  await value.coordinator.run();
+
+  expect(value.mediaStore.upsert).toHaveBeenCalledWith(expect.objectContaining({
+    id: 'local-1',
+    jobId: 'local-1',
+    kind: 'video',
+    sourceUrl: 'https://cdn.test/fallback.mp4',
+  }));
 });

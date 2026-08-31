@@ -48,7 +48,14 @@ export function createTaskSyncCoordinator(deps: CoordinatorDeps): TaskSyncCoordi
             const updatedJob = await runtime.sync(persistedJob);
             const artifacts = await deps.jobStore.listArtifacts(updatedJob.id);
             updatedTask = { ...jobRecordToTaskProjection(updatedJob, artifacts, previous), syncError: undefined, lastSyncAt: now() };
-            if (deps.mediaStore) await materializeJobArtifacts(updatedJob, artifacts, deps.mediaStore, updatedTask);
+            if (deps.mediaStore) {
+              const materialized = await materializeJobArtifacts(updatedJob, artifacts, deps.mediaStore, updatedTask);
+              // A provider can report a terminal result before its artifact list is
+              // available (or an older job may not have persisted artifacts). Keep
+              // the task-level result visible in the app gallery until projection
+              // catches up on a later sync.
+              if (!materialized.length) await materializeTaskMedia(updatedTask, deps.mediaStore);
+            }
           } else {
             const legacy = await deps.legacySync(settings.token, previous);
             const legacyJob = taskRecordToJobRecord(legacy);

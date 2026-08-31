@@ -8,7 +8,7 @@ import { createWorkflowRuntime } from '../workflows/runtime/runtime';
 import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
 import { createTaskSyncCoordinator } from './coordinator';
 import { createSqliteMediaStore } from '../media/repository';
-import { materializeJobArtifacts, materializeTaskMedia } from '../media/materializer';
+import { reconcileMediaCatalog } from '../media/catalog';
 
 const database = openDatabaseSync('autodl-h3.db');
 export const taskStore = createTaskRepository(database);
@@ -24,11 +24,10 @@ const coordinator = createTaskSyncCoordinator({
   ensureMedia: (task, settings, onUpdate) => ensureTaskMedia(task, { policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: settings.keepPrivateCopy }, onUpdate }),
 });
 
-let mediaMigration: Promise<void> | undefined;
-function ensureLegacyMediaMigration() {
-  if (!mediaMigration) mediaMigration = taskStore.list().then(async (tasks) => { for (const task of tasks) if ((task.status === 'SUCCESS' || task.status === 'PARTIAL_SUCCESS') && (task.localUri || task.videoUrl)) { const job = await jobStore.get(task.id); const artifacts = job ? await jobStore.listArtifacts(job.id) : []; if (job && artifacts.length) await materializeJobArtifacts(job, artifacts, mediaStore, task); else await materializeTaskMedia(task, mediaStore); } });
-  return mediaMigration;
+export async function syncTaskRun(reason: 'foreground' | 'background' | 'service' = 'foreground') {
+  await reconcileMediaCatalog({ taskStore, jobStore, mediaStore, limit: 200 });
+  const result = await coordinator.run({ reason });
+  await reconcileMediaCatalog({ taskStore, jobStore, mediaStore, limit: 200 });
+  return result;
 }
-
-export async function syncTaskRun(reason: 'foreground' | 'background' | 'service' = 'foreground') { await ensureLegacyMediaMigration(); return coordinator.run({ reason }); }
 export async function syncTasks() { return (await syncTaskRun()).tasks; }

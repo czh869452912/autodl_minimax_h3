@@ -21,6 +21,7 @@ jest.mock('../media/repository', () => ({
     upsert: jest.fn(),
   })),
 }));
+jest.mock('../media/catalog', () => ({ reconcileMediaCatalog: jest.fn(async () => ({ scanned: 0, materialized: 0 })) }));
 jest.mock('../native/media', () => ({ extractPoster: jest.fn(async () => undefined) }));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
