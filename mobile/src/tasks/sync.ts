@@ -25,9 +25,9 @@ const coordinator = createTaskSyncCoordinator({
 });
 
 export async function syncTaskRun(reason: 'foreground' | 'background' | 'service' = 'foreground') {
-  await reconcileMediaCatalog({ taskStore, jobStore, mediaStore, limit: 200 });
+  try { await reconcileMediaCatalog({ taskStore, jobStore, mediaStore, limit: 200 }); } catch { /* catalog repair is best-effort and must not make task refresh fail */ }
   const result = await coordinator.run({ reason });
-  await reconcileMediaCatalog({ taskStore, jobStore, mediaStore, limit: 200 });
+  try { await reconcileMediaCatalog({ taskStore, jobStore, mediaStore, limit: 200 }); } catch { /* catalog repair is best-effort and must not make task refresh fail */ }
   return result;
 }
 export async function syncTasks() { return (await syncTaskRun()).tasks; }
