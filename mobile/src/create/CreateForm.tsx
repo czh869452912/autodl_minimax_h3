@@ -152,7 +152,7 @@ export function CreateForm({
       />
       <View style={styles.card}>
         <View style={styles.mediaHeader}>
-          <View>
+          <View style={styles.mediaHeaderCopy}>
             <Text style={styles.sectionTitle}>参考素材</Text>
             <Text style={styles.help}>
               支持最多 9 张图片及 3 段音频（单个 50MB）
@@ -327,9 +327,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: SPACING.md,
   },
+  mediaHeaderCopy: { flex: 1, minWidth: 0 },
   sectionTitle: { color: COLORS.text, fontWeight: '800', fontSize: 16 },
   help: { color: COLORS.textMuted, fontSize: 11, marginTop: 4 },
-  count: { color: COLORS.primaryActive, fontSize: 11, fontFamily: 'monospace' },
+  count: { flexShrink: 0, color: COLORS.primaryActive, fontSize: 11, fontFamily: 'monospace', textAlign: 'right' },
   mediaButtons: { flexDirection: 'row', gap: SPACING.sm },
   mediaButton: {
     flex: 1,

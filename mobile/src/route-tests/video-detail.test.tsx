@@ -4,6 +4,7 @@ import { act, create } from 'react-test-renderer';
 
 const mockBack = jest.fn();
 const mockCopy = jest.fn(async (_value: string) => undefined);
+const mockReadClipboard = jest.fn(async () => task.prompt);
 const mockList = jest.fn();
 const mockExport = jest.fn(async (value: typeof task) => ({ ...value, exportState: 'EXPORTED' as const, galleryUri: 'content://media/video/7' }));
 const task = {
@@ -21,7 +22,7 @@ jest.mock('../tasks/repository', () => ({
   createTaskRepository: jest.fn(() => ({ list: () => mockList() })),
 }));
 jest.mock('../tasks/media', () => ({ exportTaskVideo: (...args: unknown[]) => mockExport(args[0] as typeof task) }));
-jest.mock('expo-clipboard', () => ({ setStringAsync: (value: string) => mockCopy(value) }));
+jest.mock('expo-clipboard', () => ({ setStringAsync: (value: string) => mockCopy(value), getStringAsync: () => mockReadClipboard() }));
 jest.mock('../media/VideoPlayer', () => ({
   VideoPlayer: (props: Record<string, unknown>) => require('react').createElement('View', { ...props, testID: 'video-player-mock' }),
 }));
@@ -32,6 +33,8 @@ describe('video detail screen', () => {
   beforeEach(() => {
     mockBack.mockClear();
     mockCopy.mockClear();
+    mockReadClipboard.mockReset();
+    mockReadClipboard.mockResolvedValue(task.prompt);
     mockList.mockResolvedValue([task]);
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   });
@@ -53,6 +56,15 @@ describe('video detail screen', () => {
     await act(async () => tree!.root.findByProps({ accessibilityLabel: '复制 Prompt' }).props.onPress());
     expect(mockCopy).toHaveBeenCalledWith(task.prompt);
     expect(Alert.alert).toHaveBeenCalledWith('已复制', 'Prompt 已复制到剪贴板');
+  });
+
+  it('warns when the native clipboard does not retain the complete prompt', async () => {
+    mockReadClipboard.mockResolvedValue(`${task.prompt.slice(0, -1)}…`);
+    let tree: ReturnType<typeof create>;
+    await act(async () => { tree = create(<VideoDetailScreen />); });
+    await act(async () => tree!.root.findByProps({ accessibilityLabel: '复制 Prompt' }).props.onPress());
+    expect(mockReadClipboard).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).toHaveBeenCalledWith('复制不完整', '系统剪贴板未保留完整 Prompt，可能是键盘剪贴板或目标应用的长度限制。');
   });
 
   it('manually saves a downloaded private video to the gallery', async () => {

@@ -39,6 +39,11 @@ export default function VideoDetailScreen() {
     if (!task.prompt.trim()) { Alert.alert('无法复制', '当前作品没有 Prompt'); return; }
     try {
       await Clipboard.setStringAsync(task.prompt);
+      const copied = await Clipboard.getStringAsync();
+      if (copied !== task.prompt) {
+        Alert.alert('复制不完整', '系统剪贴板未保留完整 Prompt，可能是键盘剪贴板或目标应用的长度限制。');
+        return;
+      }
       Alert.alert('已复制', 'Prompt 已复制到剪贴板');
     } catch {
       Alert.alert('复制失败', '无法写入剪贴板，请稍后重试');
