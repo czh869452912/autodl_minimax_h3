@@ -18,7 +18,7 @@ describe('agent presentation helpers', () => {
   });
 
   it('keeps sent image attachments visible in the user row', () => {
-    expect(normalizeMessages([{ id: 'u1', role: 'user', content: '看这张图', attachments: [{ type: 'image', filename: 'ref.png', source: { value: 'data:image/png;base64,a' } }] }])[0]).toMatchObject({ attachments: [{ filename: 'ref.png' }] });
+    expect(normalizeMessages([{ id: 'u1', role: 'user', content: '看这张图', attachments: [{ type: 'image', filename: 'ref.png', source: { value: 'data:image/png;base64,a' } }] }])[0]).toMatchObject({ attachments: [{ filename: 'ref.png', displayName: '图片1' }] });
   });
 
   it('rebuilds a displayable data URI for persisted image content', () => {

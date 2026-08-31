@@ -1,6 +1,7 @@
 import {
   insertImageMention,
   assignImageDisplayNames,
+  rebuildImageMentions,
   removeImageMentionOnBackspace,
   reconcileImageMentions,
   type ImageMention,
@@ -57,6 +58,27 @@ describe('image mention text helpers', () => {
       mentions: [],
       selection: { start: 1, end: 1 },
     });
+  });
+
+  it('rebuilds mention ranges after plain text before a token changes', () => {
+    expect(
+      rebuildImageMentions('ab@图片1 后', [
+        { id: 'image-1', filename: '100000003.png', displayName: '图片1' },
+      ]),
+    ).toEqual([
+      { attachmentId: 'image-1', label: '@图片1', start: 2, end: 6 },
+    ]);
+  });
+
+  it('prefers the longest stable token when image numbers share a prefix', () => {
+    expect(
+      rebuildImageMentions('@图片10', [
+        { id: 'image-1', displayName: '图片1' },
+        { id: 'image-10', displayName: '图片10' },
+      ]),
+    ).toEqual([
+      { attachmentId: 'image-10', label: '@图片10', start: 0, end: 5 },
+    ]);
   });
 
   it('uses explicit stable display names instead of source filenames', () => {

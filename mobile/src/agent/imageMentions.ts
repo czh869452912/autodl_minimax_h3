@@ -38,6 +38,33 @@ export function assignImageDisplayNames<T extends MentionAttachment>(
   return { attachments: named, nextNumber: next };
 }
 
+/** Rebuild token ranges from the plain-text editor value after an arbitrary edit. */
+export function rebuildImageMentions(
+  text: string,
+  attachments: MentionAttachment[],
+): ImageMention[] {
+  const candidates: ImageMention[] = [];
+  attachments.forEach((attachment) => {
+    const label = mentionLabel(attachment.filename, attachment.displayName);
+    if (!label) return;
+    let cursor = 0;
+    while (cursor < text.length) {
+      const start = text.indexOf(label, cursor);
+      if (start < 0) break;
+      candidates.push({ attachmentId: attachment.id, label, start, end: start + label.length });
+      cursor = start + label.length;
+    }
+  });
+  const mentions: ImageMention[] = [];
+  for (const candidate of candidates.sort(
+    (left, right) => left.start - right.start || right.label.length - left.label.length,
+  )) {
+    if (mentions.some((mention) => candidate.start < mention.end && candidate.end > mention.start)) continue;
+    mentions.push(candidate);
+  }
+  return mentions;
+}
+
 function mentionLabel(filename?: string, displayName?: string): string {
   return `@${getImageMentionDisplayName(filename, displayName)}`;
 }

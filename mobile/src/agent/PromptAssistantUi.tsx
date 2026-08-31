@@ -27,8 +27,7 @@ import {
   insertImageMention,
   removeImageMentionOnBackspace,
   assignImageDisplayNames,
-  reconcileImageMentions,
-  type ImageMention,
+  rebuildImageMentions,
 } from './imageMentions';
 import {
   groupSessions,
@@ -80,7 +79,6 @@ export function PromptAssistantUi({
   } = useCopilotChatContext();
   const [draft, setDraft] = useState('');
   const [galleryAttachments, setGalleryAttachments] = useState<AssistantImageAttachment[]>([]);
-  const [mentions, setMentions] = useState<ImageMention[]>([]);
   const [inputSelection, setInputSelection] = useState({ start: 0, end: 0 });
   const [mentionSheetOpen, setMentionSheetOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -155,15 +153,17 @@ export function PromptAssistantUi({
     if (!value.trim() && !ready.length)
       return;
     setStopNotice(null);
-    const readyAttachments: Array<{ uri: string; filename?: string }> = ready
+    const readyAttachments: Array<{ uri: string; filename?: string; displayName?: string }> = ready
       .map((item) => {
         if (!item.source) return null;
+        const named = composerAttachments.find((attachment) => attachment.id === item.id);
         return {
           uri: getSourceUrl(item.source as never),
           ...(item.filename ? { filename: item.filename } : {}),
+          ...(named?.displayName ? { displayName: named.displayName } : {}),
         };
       })
-      .filter((item): item is { uri: string; filename?: string } => Boolean(item && item.uri));
+      .filter((item): item is { uri: string; filename?: string; displayName?: string } => Boolean(item && item.uri));
     setPendingRow({
       id: `pending-${Date.now()}`,
       kind: 'user',
@@ -171,7 +171,6 @@ export function PromptAssistantUi({
       attachments: readyAttachments,
     });
     setDraft('');
-    setMentions([]);
     setInputSelection({ start: 0, end: 0 });
     if (galleryAttachments.length) {
       agent.setPendingAttachments?.(
@@ -216,19 +215,14 @@ export function PromptAssistantUi({
       draft,
       value,
       inputSelection,
-      mentions,
+      rebuildImageMentions(draft, composerAttachments),
     );
     if (atomicRemoval) {
       setDraft(atomicRemoval.text);
-      setMentions(atomicRemoval.mentions);
       setInputSelection(atomicRemoval.selection);
       return;
     }
     setDraft(value);
-    const attachmentIds = new Set(composerAttachments.map((item) => item.id));
-    setMentions((current) =>
-      reconcileImageMentions(value, current, attachmentIds),
-    );
   };
   const handleSelectMention = (attachment: AttachmentLike) => {
     const available = composerAttachments.find(
@@ -242,10 +236,9 @@ export function PromptAssistantUi({
       draft,
       inputSelection,
       available,
-      mentions,
+      rebuildImageMentions(draft, composerAttachments),
     );
     setDraft(result.text);
-    setMentions(result.mentions);
     setInputSelection(result.selection);
     setMentionSheetOpen(false);
     inputRef.current?.focus();
@@ -338,15 +331,11 @@ export function PromptAssistantUi({
               isRunning={isRunning}
               attachments={composerAttachments}
               inputRef={inputRef}
-              mentions={mentions}
               selection={inputSelection}
               onSelectionChange={(event) =>
                 setInputSelection(event.nativeEvent.selection)
               }
               onRemoveAttachment={(id) => {
-                setMentions((current) =>
-                  current.filter((mention) => mention.attachmentId !== id),
-                );
                 if (galleryAttachments.some((item) => item.id === id)) setGalleryAttachments((current) => current.filter((item) => item.id !== id));
                 else removeAttachment(id);
               }}
@@ -442,9 +431,10 @@ export function ConversationTimeline({
               </ScrollView>
             ) : null}
             <View style={styles.userBubble}>
-              <Text selectable style={styles.userText}>
-                {item.text || '（已添加参考图）'}
-              </Text>
+              <UserMessageText
+                text={item.text || '（已添加参考图）'}
+                attachments={item.attachments}
+              />
             </View>
           </View>
         ) : (
@@ -754,7 +744,6 @@ export function Composer({
   attachments,
   onRemoveAttachment,
   inputRef,
-  mentions,
   selection,
   onSelectionChange,
 }: {
@@ -768,21 +757,13 @@ export function Composer({
   attachments: AttachmentLike[];
   onRemoveAttachment?: (id: string) => void;
   inputRef?: React.RefObject<TextInput | null>;
-  mentions?: ImageMention[];
   selection?: { start: number; end: number };
   onSelectionChange?: (event: { nativeEvent: { selection: { start: number; end: number } } }) => void;
 }) {
-  const [inputScrollY, setInputScrollY] = useState(0);
   const uploading = attachments.some((item) => item.status === 'uploading');
   const disabled =
     uploading ||
     (!value.trim() && !attachments.some((item) => item.status === 'ready'));
-  const hasRichMentions = (mentions ?? []).some((mention) =>
-    attachments.some(
-      (attachment) =>
-        attachment.id === mention.attachmentId && attachment.status === 'ready',
-    ),
-  );
   return (
     <View style={styles.composer}>
       <AttachmentStrip
@@ -791,13 +772,6 @@ export function Composer({
         onRemoveAttachment={onRemoveAttachment}
       />
       <View testID="composer-input-area" style={styles.inputArea}>
-        <MentionTokenLayer
-          value={value}
-          mentions={mentions ?? []}
-          attachments={attachments}
-          selection={selection}
-          scrollOffset={inputScrollY}
-        />
         <TextInput
           ref={inputRef}
           value={value}
@@ -806,14 +780,11 @@ export function Composer({
           placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder}
           multiline
           maxLength={4000}
-          style={[styles.input, hasRichMentions && styles.inputWithMentionMirror]}
-          caretHidden={hasRichMentions}
-          selectionColor={hasRichMentions ? 'transparent' : undefined}
+          style={styles.input}
           editable={!isRunning}
           scrollEnabled
           textAlignVertical="top"
           selection={selection}
-          onScroll={(event) => setInputScrollY(event.nativeEvent.contentOffset.y)}
           onSelectionChange={onSelectionChange}
           onSubmitEditing={() => {
             if (!disabled) onSubmit(value);
@@ -867,108 +838,41 @@ export function Composer({
   );
 }
 
-function MentionTokenLayer({
-  value,
-  mentions,
+function UserMessageText({
+  text,
   attachments,
-  selection,
-  scrollOffset,
 }: {
-  value: string;
-  mentions: ImageMention[];
-  attachments: AttachmentLike[];
-  selection?: { start: number; end: number };
-  scrollOffset: number;
+  text: string;
+  attachments: Array<{ uri: string; filename?: string; displayName?: string }>;
 }) {
-  const tokens = mentions
-    .slice()
-    .sort((left, right) => left.start - right.start)
-    .map((mention) => ({
-      mention,
-      attachment: attachments.find((item) => item.id === mention.attachmentId),
-    }))
-    .filter(
-      (item): item is { mention: ImageMention; attachment: AttachmentLike } =>
-        Boolean(item.attachment && item.attachment.status === 'ready'),
-    );
-  if (!tokens.length) return null;
-  const segments: React.ReactNode[] = [];
-  let cursor = 0;
-  const caretPosition =
-    selection && selection.start === selection.end ? selection.start : null;
-  const appendTextWithCaret = (text: string, start: number, key: string) => {
-    if (caretPosition === null || caretPosition < start || caretPosition > start + text.length) {
-      segments.push(
-        <Text key={key} style={styles.mentionMirrorText}>
-          {text}
-        </Text>,
-      );
-      return;
-    }
-    const offset = caretPosition - start;
-    if (offset > 0) {
-      segments.push(
-        <Text key={`${key}-before`} style={styles.mentionMirrorText}>
-          {text.slice(0, offset)}
-        </Text>,
-      );
-    }
-    segments.push(<View key={`${key}-caret`} testID="mention-caret" style={styles.mentionCaret} />);
-    if (offset < text.length) {
-      segments.push(
-        <Text key={`${key}-after`} style={styles.mentionMirrorText}>
-          {text.slice(offset)}
-        </Text>,
-      );
-    }
-  };
-  tokens.forEach(({ mention, attachment }) => {
-    if (mention.start > cursor) {
-      appendTextWithCaret(value.slice(cursor, mention.start), cursor, `text-${cursor}`);
-    }
-    const isEditing =
-      selection !== undefined &&
-      selection.start >= mention.start &&
-      selection.start <= mention.end;
-    if (isEditing) {
-      appendTextWithCaret(
-        value.slice(mention.start, mention.end),
-        mention.start,
-        `editing-${mention.attachmentId}-${mention.start}`,
-      );
-    } else {
-      segments.push(
-        <View
-          testID="mention-token"
-          key={`${mention.attachmentId}-${mention.start}-${mention.end}`}
-          style={styles.mentionToken}
-        >
-          {attachment.source ? (
-            <Image
-              source={{ uri: getSourceUrl(attachment.source as never) }}
-              style={styles.mentionTokenImage}
-            />
-          ) : null}
-          <Text style={styles.mentionTokenText} numberOfLines={1}>
-            {value.slice(mention.start, mention.end)}
-          </Text>
-        </View>,
-      );
-    }
-    cursor = mention.end;
-  });
-  if (cursor < value.length) {
-    appendTextWithCaret(value.slice(cursor), cursor, `text-${cursor}`);
+  if (!attachments.length) {
+    return <Text testID="user-message-text" selectable style={styles.userText}>{text}</Text>;
   }
-  return (
-    <View
-      testID="mention-token-layer"
-      pointerEvents="none"
-      style={[styles.mentionTokenLayer, { top: -scrollOffset }]}
-    >
-      {segments}
-    </View>
-  );
+  const parts: React.ReactNode[] = [];
+  const labels = attachments.map((attachment, index) => ({
+    label: `@${attachment.displayName ?? `图片${index + 1}`}`,
+    attachment,
+  }));
+  let cursor = 0;
+  while (cursor < text.length) {
+    const match = labels
+      .map((item) => ({ ...item, start: text.indexOf(item.label, cursor) }))
+      .filter((item) => item.start >= 0)
+      .sort((left, right) => left.start - right.start || right.label.length - left.label.length)[0];
+    if (!match) {
+      parts.push(<Text key={`text-${cursor}`}>{text.slice(cursor)}</Text>);
+      break;
+    }
+    if (match.start > cursor) parts.push(<Text key={`text-${cursor}`}>{text.slice(cursor, match.start)}</Text>);
+    parts.push(
+      <Text key={`mention-${match.start}`} testID="user-image-mention" style={styles.userMention}>
+        <Image testID="user-image-mention-thumbnail" source={{ uri: match.attachment.uri }} style={styles.userMentionImage} />
+        {match.label}
+      </Text>,
+    );
+    cursor = match.start + match.label.length;
+  }
+  return <Text testID="user-message-text" selectable style={styles.userText}>{parts}</Text>;
 }
 
 function HistoryList({
@@ -1254,6 +1158,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#ECEBE6',
   },
   userText: { color: LIGHT_PROMPT_COLORS.ink, fontSize: 15, lineHeight: 22 },
+  userMention: {
+    paddingHorizontal: 3,
+    borderRadius: 6,
+    backgroundColor: '#E9E7E1',
+    color: LIGHT_PROMPT_COLORS.ink,
+    fontWeight: '600',
+  },
+  userMentionImage: { width: 18, height: 18, borderRadius: 4 },
   assistantRow: { flexDirection: 'row', gap: 9, marginVertical: 10 },
   assistantMark: {
     width: 27,
@@ -1377,54 +1289,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     flexDirection: 'column',
     overflow: 'hidden',
-  },
-  mentionTokenLayer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1,
-    minHeight: 36,
-    paddingTop: 7,
-    paddingBottom: 6,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 6,
-  },
-  mentionMirrorText: {
-    color: LIGHT_PROMPT_COLORS.ink,
-    fontSize: 15,
-    lineHeight: 21,
-  },
-  mentionToken: {
-    minHeight: 28,
-    maxWidth: 190,
-    paddingHorizontal: 7,
-    borderRadius: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#E9E7E1',
-  },
-  mentionTokenImage: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#D8D6CF',
-  },
-  mentionTokenText: {
-    flexShrink: 1,
-    color: LIGHT_PROMPT_COLORS.ink,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  inputWithMentionMirror: { color: 'transparent', opacity: 0, zIndex: 2 },
-  mentionCaret: {
-    width: 2,
-    height: 21,
-    marginHorizontal: 1,
-    backgroundColor: LIGHT_PROMPT_COLORS.accent,
   },
   toolbarSpacer: { flex: 1 },
   addButton: {

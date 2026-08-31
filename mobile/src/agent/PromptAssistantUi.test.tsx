@@ -173,35 +173,13 @@ describe('Prompt assistant UI primitives', () => {
       expect.objectContaining({ flex: 1 }),
     );
     expect(tree.root.findAllByType(Image).some((node) => node.props.source?.uri === 'file://ready-1')).toBe(true);
-    expect(tree.root.findAllByType(Text).some((node) => node.props.children === '@图片1')).toBe(true);
-    const mentionLayer = tree.root.findByProps({ testID: 'mention-token-layer' });
+    expect(tree.root.findAllByProps({ testID: 'mention-token-layer' })).toHaveLength(0);
     const richInput = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
-    expect(mentionLayer.props.pointerEvents).toBe('none');
-    expect(mentionLayer.findAllByType(Text).map((node) => node.props.children)).toEqual([
-      '镜头',
-      '@图片1',
-      ' ',
-      '前后',
-    ]);
-    expect(mentionLayer.props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ position: 'absolute' })]),
-    );
-    expect(richInput.props.style).toEqual(
+    expect(richInput.props.caretHidden).not.toBe(true);
+    expect(richInput.props.style).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ color: 'transparent' })]),
     );
-    expect(richInput.props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ opacity: 0 })]),
-    );
-    act(() => richInput.props.onScroll({ nativeEvent: { contentOffset: { y: 42 } } }));
-    expect(tree.root.findByProps({ testID: 'mention-token-layer' }).props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ top: -42 })]),
-    );
     expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件 图片1' })).toHaveLength(0);
-    act(() => richInput.props.onSelectionChange({ nativeEvent: { selection: { start: 5, end: 5 } } }));
-    const editingMentionLayer = tree.root.findByProps({ testID: 'mention-token-layer' });
-    expect(editingMentionLayer.findAllByType(Text).some((node) => typeof node.props.children === 'string' && node.props.children.includes('@图片'))).toBe(true);
-    expect(editingMentionLayer.findAllByProps({ testID: 'mention-token' })).toHaveLength(0);
-    expect(editingMentionLayer.findAllByProps({ testID: 'mention-caret' }).length).toBeGreaterThan(0);
     act(() => tree.unmount());
   });
 
@@ -406,8 +384,19 @@ describe('Prompt assistant UI primitives', () => {
     const rows = normalizeMessages([{ id: 'm1', role: 'user', content: '只复制这段文字', attachments: [{ type: 'image', filename: 'secret.png', source: { value: 'file://secret' } }] }]);
     let tree!: ReturnType<typeof create>;
     act(() => { tree = create(<ConversationTimeline rows={rows} isRunning={false} onExportPrompt={() => Promise.resolve()} />); });
-    const userText = tree.root.findAllByType(Text).find((node) => node.props.children === '只复制这段文字');
-    expect(userText?.props.selectable).toBe(true);
+    const userText = tree.root.findByProps({ testID: 'user-message-text' });
+    expect(userText.props.selectable).toBe(true);
+    act(() => tree.unmount());
+  });
+
+  it('renders sent image tokens inline while keeping the whole user text selectable', () => {
+    const rows = normalizeMessages([{ id: 'm1', role: 'user', content: '参考 @图片1 完成画面', attachments: [{ type: 'image', filename: 'ref.png', source: { value: 'file://secret' } }] }]);
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<ConversationTimeline rows={rows} isRunning={false} onExportPrompt={() => Promise.resolve()} />); });
+    const userText = tree.root.findByProps({ testID: 'user-message-text' });
+    expect(userText.props.selectable).toBe(true);
+    expect(userText.findAllByProps({ testID: 'user-image-mention' }).length).toBeGreaterThan(0);
+    expect(userText.findByProps({ testID: 'user-image-mention-thumbnail' }).props.source.uri).toBe('file://secret');
     act(() => tree.unmount());
   });
 
@@ -439,6 +428,36 @@ describe('Prompt assistant UI primitives', () => {
     act(() => editedInput.props.onChangeText('镜头@图片 '));
     expect(tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.value).toBe('镜头 ');
     expect(tree.root.findAllByProps({ testID: 'mention-token-layer' })).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
+  it('keeps an image token atomic after deleting plain text before it', async () => {
+    mockChatContext = {
+      ...mockChatContext,
+      attachments: [{ id: 'ready-1', status: 'ready', filename: '100000003.png', source: { value: 'file://ready-1' } }],
+    };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <PromptAssistantUi
+          threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
+          activeThreadId="t1"
+          onSelect={() => undefined}
+          onNew={() => undefined}
+          onDelete={() => undefined}
+          onRename={() => undefined}
+          onExportPrompt={() => Promise.resolve()}
+        />,
+      );
+    });
+    const input = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    act(() => input.props.onChangeText('abc'));
+    act(() => input.props.onSelectionChange({ nativeEvent: { selection: { start: 3, end: 3 } } }));
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件 图片1' }).props.onPress());
+    act(() => tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.onChangeText('ab@图片1 '));
+    act(() => tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.onChangeText('ab@图片 '));
+    expect(tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.value).toBe('ab ');
     act(() => tree.unmount());
   });
 
