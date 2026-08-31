@@ -82,5 +82,9 @@ export function ensureAppDatabase(db: SQLiteDatabase | undefined): void {
   const version = readAppSchemaVersion(db);
   if (version === 0 && !isLegacyAppDatabase(db)) {
     db.execSync(`PRAGMA user_version = ${APP_SCHEMA_VERSION}`);
-  } else if (isLegacyAppDatabase(db)) resetAppDatabase(db);
+  } else if (isLegacyAppDatabase(db)) {
+    // Legacy data is reset only after the first-launch confirmation gate.
+    // This keeps the old database intact while the user decides whether to continue.
+    return;
+  }
 }

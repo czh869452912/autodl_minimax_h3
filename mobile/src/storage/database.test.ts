@@ -1,16 +1,13 @@
 import { APP_SCHEMA_VERSION, ensureAppDatabase, isLegacyAppDatabase, resetAppDatabase } from './database';
 
-test('resets only app-owned tables when schema epoch changes', () => {
+test('does not reset an old schema before user confirmation', () => {
   const calls: string[] = [];
   const db = {
     execSync: (sql: string) => calls.push(sql),
     getFirstSync: () => ({ user_version: APP_SCHEMA_VERSION - 1 }),
   };
   ensureAppDatabase(db as never);
-  expect(calls).toContain('DROP TABLE IF EXISTS tasks');
-  expect(calls).toContain('DROP TABLE IF EXISTS media_assets');
-  expect(calls).not.toContain(expect.stringContaining('media_store'));
-  expect(calls).toContain(`PRAGMA user_version = ${APP_SCHEMA_VERSION}`);
+  expect(calls).toHaveLength(0);
 });
 
 test('does not reset a current schema epoch', () => {
