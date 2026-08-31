@@ -25,8 +25,9 @@ import { LIGHT_PROMPT_COLORS } from '../ui/theme';
 import { pickAssistantImages, type AssistantImageAttachment } from './assistantImagePicker';
 import {
   insertImageMention,
+  removeImageMentionOnBackspace,
+  assignImageDisplayNames,
   reconcileImageMentions,
-  getImageMentionDisplayName,
   type ImageMention,
 } from './imageMentions';
 import {
@@ -46,6 +47,7 @@ type AttachmentLike = {
   status: 'uploading' | 'ready';
   source?: { type?: string; value?: string; url?: string };
   filename?: string;
+  displayName?: string;
   size?: number;
 };
 type HistoryProps = {
@@ -84,6 +86,8 @@ export function PromptAssistantUi({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [stopNotice, setStopNotice] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
+  const attachmentNames = useRef(new Map<string, string>());
+  const nextAttachmentNumber = useRef(1);
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const [keyboardHeight, setKeyboardHeight] = useState<number | null>(null);
@@ -193,11 +197,33 @@ export function PromptAssistantUi({
       { text: '取消', style: 'cancel' },
     ]);
   };
-  const composerAttachments = [
-    ...attachments,
-    ...galleryAttachments,
-  ] as AttachmentLike[];
+  const composerAttachments = (() => {
+    const current = [...attachments, ...galleryAttachments] as AttachmentLike[];
+    if (!current.length) {
+      attachmentNames.current.clear();
+      nextAttachmentNumber.current = 1;
+    }
+    const named = assignImageDisplayNames(
+      current,
+      attachmentNames.current,
+      nextAttachmentNumber.current,
+    );
+    nextAttachmentNumber.current = named.nextNumber;
+    return named.attachments;
+  })();
   const handleDraftChange = (value: string) => {
+    const atomicRemoval = removeImageMentionOnBackspace(
+      draft,
+      value,
+      inputSelection,
+      mentions,
+    );
+    if (atomicRemoval) {
+      setDraft(atomicRemoval.text);
+      setMentions(atomicRemoval.mentions);
+      setInputSelection(atomicRemoval.selection);
+      return;
+    }
     setDraft(value);
     const attachmentIds = new Set(composerAttachments.map((item) => item.id));
     setMentions((current) =>
@@ -416,7 +442,7 @@ export function ConversationTimeline({
               </ScrollView>
             ) : null}
             <View style={styles.userBubble}>
-              <Text style={styles.userText}>
+              <Text selectable style={styles.userText}>
                 {item.text || '（已添加参考图）'}
               </Text>
             </View>
@@ -610,7 +636,7 @@ function ImageMentionSheet({
               {ready.map((attachment) => (
                 <Pressable
                   key={attachment.id}
-                  accessibilityLabel={`引用图片附件 ${attachment.filename || '图片'}`}
+                  accessibilityLabel={`引用图片附件 ${attachment.displayName || '图片'}`}
                   onPress={() => onSelect(attachment)}
                   style={styles.mentionRow}
                 >
@@ -625,7 +651,7 @@ function ImageMentionSheet({
                     </View>
                   )}
                   <Text style={styles.mentionName} numberOfLines={1}>
-                    {attachment.filename || '图片'}
+                    {attachment.displayName || '图片'}
                   </Text>
                 </Pressable>
               ))}
@@ -686,7 +712,7 @@ export function AttachmentStrip({
               )}
             </Pressable>
             <Pressable
-              accessibilityLabel={`移除附件 ${attachment.filename || '图片'}`}
+              accessibilityLabel={`移除附件 ${attachment.displayName || '图片'}`}
               onPress={() => onRemoveAttachment?.(attachment.id)}
               style={styles.removeAttachment}
             >
@@ -746,6 +772,7 @@ export function Composer({
   selection?: { start: number; end: number };
   onSelectionChange?: (event: { nativeEvent: { selection: { start: number; end: number } } }) => void;
 }) {
+  const [inputScrollY, setInputScrollY] = useState(0);
   const uploading = attachments.some((item) => item.status === 'uploading');
   const disabled =
     uploading ||
@@ -769,6 +796,7 @@ export function Composer({
           mentions={mentions ?? []}
           attachments={attachments}
           selection={selection}
+          scrollOffset={inputScrollY}
         />
         <TextInput
           ref={inputRef}
@@ -782,7 +810,10 @@ export function Composer({
           caretHidden={hasRichMentions}
           selectionColor={hasRichMentions ? 'transparent' : undefined}
           editable={!isRunning}
+          scrollEnabled
+          textAlignVertical="top"
           selection={selection}
+          onScroll={(event) => setInputScrollY(event.nativeEvent.contentOffset.y)}
           onSelectionChange={onSelectionChange}
           onSubmitEditing={() => {
             if (!disabled) onSubmit(value);
@@ -841,11 +872,13 @@ function MentionTokenLayer({
   mentions,
   attachments,
   selection,
+  scrollOffset,
 }: {
   value: string;
   mentions: ImageMention[];
   attachments: AttachmentLike[];
   selection?: { start: number; end: number };
+  scrollOffset: number;
 }) {
   const tokens = mentions
     .slice()
@@ -928,7 +961,11 @@ function MentionTokenLayer({
     appendTextWithCaret(value.slice(cursor), cursor, `text-${cursor}`);
   }
   return (
-    <View testID="mention-token-layer" pointerEvents="none" style={styles.mentionTokenLayer}>
+    <View
+      testID="mention-token-layer"
+      pointerEvents="none"
+      style={[styles.mentionTokenLayer, { top: -scrollOffset }]}
+    >
       {segments}
     </View>
   );
@@ -1336,8 +1373,10 @@ const styles = StyleSheet.create({
   },
   inputArea: {
     minHeight: 44,
+    maxHeight: 120,
     position: 'relative',
     flexDirection: 'column',
+    overflow: 'hidden',
   },
   mentionTokenLayer: {
     position: 'absolute',

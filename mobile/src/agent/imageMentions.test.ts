@@ -1,5 +1,7 @@
 import {
   insertImageMention,
+  assignImageDisplayNames,
+  removeImageMentionOnBackspace,
   reconcileImageMentions,
   type ImageMention,
 } from './imageMentions';
@@ -46,5 +48,33 @@ describe('image mention text helpers', () => {
       mentions[0],
     ]);
     expect(reconcileImageMentions('@破损 已编辑', mentions, new Set(['image-1']))).toEqual([]);
+  });
+
+  it('deletes the whole mention when backspace edits inside its token', () => {
+    const mention: ImageMention = { attachmentId: 'image-1', label: '@图片1', start: 1, end: 5 };
+    expect(removeImageMentionOnBackspace('前@图片1 后', '前@图片 后', { start: 4, end: 4 }, [mention])).toEqual({
+      text: '前 后',
+      mentions: [],
+      selection: { start: 1, end: 1 },
+    });
+  });
+
+  it('uses explicit stable display names instead of source filenames', () => {
+    expect(insertImageMention('请看 ', { start: 3, end: 3 }, { id: 'image-1', filename: '100000003.png', displayName: '图片1' }, [])).toMatchObject({
+      text: '请看 @图片1 ',
+      mention: { label: '@图片1' },
+    });
+  });
+
+  it('assigns names in attachment order and keeps later names after removal', () => {
+    const names = new Map<string, string>();
+    const first = assignImageDisplayNames(
+      [{ id: 'a', filename: '100000003.png' }, { id: 'b', filename: '100000004.png' }],
+      names,
+      1,
+    );
+    expect(first.attachments.map((item) => item.displayName)).toEqual(['图片1', '图片2']);
+    const second = assignImageDisplayNames([{ id: 'b', filename: '100000004.png' }], names, first.nextNumber);
+    expect(second.attachments[0].displayName).toBe('图片2');
   });
 });
