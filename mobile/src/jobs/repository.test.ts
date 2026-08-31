@@ -24,3 +24,18 @@ test('ignores malformed persisted job JSON instead of crashing', async () => {
   const store = createJobRepository(db as never);
   await expect(store.get('bad')).resolves.toMatchObject({ inputSnapshot: {}, remote: undefined, error: undefined });
 });
+
+test('binds SQLite transaction methods to the database instance', async () => {
+  const db = {
+    execSync: jest.fn(),
+    getFirstSync: jest.fn((sql: string) => sql.includes('PRAGMA') ? { user_version: 4 } : null),
+    getAllSync: jest.fn(() => []),
+    runSync: jest.fn(),
+    withTransactionSync(this: unknown, callback: () => void) {
+      if (!this || this !== db) throw new TypeError('database context missing');
+      callback();
+    },
+  };
+  const store = createJobRepository(db as never);
+  await expect(store.replaceArtifacts('job-1', [])).resolves.toBeUndefined();
+});

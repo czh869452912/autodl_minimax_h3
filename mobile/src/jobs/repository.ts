@@ -42,7 +42,7 @@ export function createJobRepository(db: SQLiteDatabase | undefined): JobReposito
         database.runSync('DELETE FROM workflow_artifacts WHERE job_id = ?', jobId);
         for (const value of values) database.runSync('INSERT INTO workflow_artifacts (id,job_id,kind,uri,mime,metadata_json) VALUES (?,?,?,?,?,?)', value.id, jobId, value.kind, value.uri ?? null, value.mime ?? null, value.metadata ? JSON.stringify(value.metadata) : null);
       };
-      if (transaction) transaction(replace);
+      if (transaction) transaction.call(database, replace);
       else {
         database.execSync('BEGIN');
         try { replace(); database.execSync('COMMIT'); } catch (error) { try { database.execSync('ROLLBACK'); } catch {} throw error; }
