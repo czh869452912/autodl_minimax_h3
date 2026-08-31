@@ -1,14 +1,21 @@
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
-import { syncTasks } from './sync';
 
-export { syncTasks } from './sync';
+export async function syncTaskRun(...args: Parameters<typeof import('./sync')['syncTaskRun']>) {
+  const { syncTaskRun: run } = await import('./sync');
+  return run(...args);
+}
+
+export async function syncTasks() {
+  const { syncTasks: run } = await import('./sync');
+  return run();
+}
 
 export const H3_BACKGROUND_TASK = 'autodl-h3-sync';
 
 TaskManager.defineTask(H3_BACKGROUND_TASK, async () => {
   try {
-    await syncTasks();
+    await syncTaskRun('background');
     return BackgroundTask.BackgroundTaskResult.Success;
   } catch { return BackgroundTask.BackgroundTaskResult.Failed; }
 });

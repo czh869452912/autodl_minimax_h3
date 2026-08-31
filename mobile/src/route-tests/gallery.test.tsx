@@ -11,13 +11,17 @@ jest.mock('expo-router', () => ({
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
 jest.mock('../tasks/repository', () => ({
   createTaskRepository: jest.fn(() => ({
-    list: jest.fn(async () => [{
-      id: 'task-1', prompt: 'cinematic city', status: 'SUCCESS', resolution: '768p竖', duration: 5,
-      videoUrl: 'https://example/video.mp4', downloadState: 'DOWNLOADING', createdAt: 1, updatedAt: 2,
-    }]),
+    list: jest.fn(async () => []),
     upsert: jest.fn(),
   })),
 }));
+jest.mock('../media/repository', () => ({
+  createSqliteMediaStore: jest.fn(() => ({
+    listPage: jest.fn(async () => ({ items: [{ id: 'job-1:video-1', taskId: 'task-1', title: 'cinematic city', prompt: 'cinematic city', sourceUrl: 'https://example/video.mp4', localPath: 'file:///video.mp4', mimeType: 'video/mp4', kind: 'video', status: 'downloaded', createdAt: 1, updatedAt: 2 }] })),
+    upsert: jest.fn(),
+  })),
+}));
+jest.mock('../media/catalog', () => ({ reconcileMediaCatalog: jest.fn(async () => ({ scanned: 0, materialized: 0 })) }));
 jest.mock('../native/media', () => ({ extractPoster: jest.fn(async () => undefined) }));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
@@ -32,7 +36,7 @@ describe('gallery navigation', () => {
     let renderer: ReturnType<typeof create>;
     await act(async () => { renderer = create(<GalleryScreen />); });
     await act(async () => renderer!.root.findByProps({ accessibilityLabel: '打开视频 cinematic city' }).props.onPress());
-    expect(mockPush).toHaveBeenCalledWith({ pathname: '/video/[id]', params: { id: 'task-1' } });
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/video/[id]', params: { id: 'job-1:video-1' } });
     expect(renderer!.root.findAllByType(Modal)).toHaveLength(0);
     act(() => { renderer!.unmount(); jest.runOnlyPendingTimers(); });
   });

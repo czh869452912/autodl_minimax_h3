@@ -12,7 +12,7 @@ export type PresentationMessage =
       id: string;
       kind: 'user';
       text: string;
-      attachments: Array<{ uri: string; filename?: string }>;
+      attachments: Array<{ uri: string; filename?: string; displayName?: string }>;
     }
   | {
       id: string;
@@ -41,7 +41,7 @@ function textContent(content: unknown): string {
 function attachmentsContent(
   content: unknown,
   attached?: unknown,
-): Array<{ uri: string; filename?: string }> {
+): Array<{ uri: string; filename?: string; displayName?: string }> {
   const parts = [
     ...(Array.isArray(content) ? content : []),
     ...(Array.isArray(attached) ? attached : []),
@@ -68,9 +68,9 @@ function attachmentsContent(
       return { uri, filename };
     },
   );
-  return items.filter((item): item is { uri: string; filename?: string } =>
-    Boolean(item),
-  );
+  return items
+    .filter((item): item is { uri: string; filename?: string } => Boolean(item))
+    .map((item, index) => ({ ...item, displayName: `图片${index + 1}` }));
 }
 
 function safeSummary(value: unknown): string | undefined {

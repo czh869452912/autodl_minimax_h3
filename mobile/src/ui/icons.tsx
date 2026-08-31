@@ -4,7 +4,7 @@ import type { ComponentProps } from 'react';
 export const ICON_NAMES = [
   'movie_filter', 'list_alt', 'grid_view', 'settings',
   'add_photo_alternate', 'alternate_email', 'library_music', 'close', 'delete', 'play_arrow',
-  'pause', 'search', 'filter_list', 'download', 'refresh', 'info', 'bolt', 'add', 'send', 'auto_awesome', 'key', 'smart_toy', 'save', 'content_copy', 'expand_more', 'expand_less',
+  'pause', 'search', 'filter_list', 'download', 'refresh', 'info', 'bolt', 'add', 'send', 'auto_awesome', 'key', 'smart_toy', 'save', 'content_copy', 'expand_more', 'expand_less', 'notifications', 'notifications_active',
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
@@ -35,6 +35,8 @@ const ICON_MAP: Record<IconName, ComponentProps<typeof MaterialCommunityIcons>['
   content_copy: 'content-copy',
   expand_more: 'chevron-down',
   expand_less: 'chevron-up',
+  notifications: 'bell-outline',
+  notifications_active: 'bell-ring-outline',
 };
 
 export function AppIcon({ name, size = 24, color = '#94a3b8' }: { name: IconName; size?: number; color?: string }) {

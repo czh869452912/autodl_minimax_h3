@@ -1,31 +1,31 @@
 import { readSettings } from '../settings/storage';
-import { getTask } from './api';
 import { createTaskRepository } from './repository';
 import { openDatabaseSync } from 'expo-sqlite';
 import { ensureTaskMedia } from './media';
+import { createJobRepository } from '../jobs/repository';
+import { createWorkflowRuntime } from '../workflows/runtime/runtime';
+import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
+import { createTaskSyncCoordinator } from './coordinator';
+import { createSqliteMediaStore } from '../media/repository';
+import { reconcileMediaCatalog } from '../media/catalog';
 
-export const taskStore = createTaskRepository(openDatabaseSync('autodl-h3.db'));
+const database = openDatabaseSync('autodl-h3.db');
+export const taskStore = createTaskRepository(database);
+export const mediaStore = createSqliteMediaStore(database);
+const jobStore = createJobRepository(database);
+const coordinator = createTaskSyncCoordinator({
+  readSettings,
+  taskStore,
+  jobStore,
+  mediaStore,
+  createRuntime: (token) => createWorkflowRuntime({ adapters: createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? token : undefined }), jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `sync-${Date.now()}` }),
+  ensureMedia: (task, settings, onUpdate) => ensureTaskMedia(task, { policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: settings.keepPrivateCopy }, onUpdate }),
+});
 
-export async function syncTasks() {
-  const settings = await readSettings();
-  const tasks = await taskStore.list();
-  if (settings.token) {
-    for (const task of tasks.filter((item) => item.status === 'QUEUED' || item.status === 'RUNNING')) {
-      await taskStore.upsert(await getTask(settings.token, task));
-    }
-  }
-  const successful = await taskStore.list();
-  for (const task of successful.filter((item) => item.status === 'SUCCESS' && (item.videoUrl || item.localUri || item.galleryUri) && (item.downloadState !== 'DOWNLOADED' || item.exportState === 'QUEUED' || item.exportState === 'EXPORTING'))) {
-    try {
-      let current = task;
-      await ensureTaskMedia(task, {
-        policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: settings.keepPrivateCopy },
-        onUpdate: async (patch) => {
-          current = { ...current, ...patch };
-          await taskStore.upsert(current);
-        },
-      });
-    } catch {}
-  }
-  return taskStore.list();
+export async function syncTaskRun(reason: 'foreground' | 'background' | 'service' = 'foreground') {
+  try { await reconcileMediaCatalog({ taskStore, jobStore, mediaStore, limit: 200 }); } catch { /* catalog repair is best-effort and must not make task refresh fail */ }
+  const result = await coordinator.run({ reason });
+  try { await reconcileMediaCatalog({ taskStore, jobStore, mediaStore, limit: 200 }); } catch { /* catalog repair is best-effort and must not make task refresh fail */ }
+  return result;
 }
+export async function syncTasks() { return (await syncTaskRun()).tasks; }

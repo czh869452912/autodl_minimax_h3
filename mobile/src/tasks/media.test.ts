@@ -1,5 +1,5 @@
 import type { TaskRecord } from './types';
-import { ensureTaskMedia, exportTaskVideo, migrateDownloadedVideos } from './media';
+import { ensureTaskMedia, exportTaskVideo } from './media';
 
 const task: TaskRecord = {
   id: 'task-1', prompt: 'cinematic city', status: 'SUCCESS', resolution: '768p竖', duration: 5,
@@ -46,32 +46,26 @@ describe('task media delivery orchestration', () => {
     expect(result).toMatchObject({ exportState: 'EXPORTED', localUri: undefined });
   });
 
-  it('migrates eligible historical videos sequentially', async () => {
-    const publish = jest.fn()
-      .mockResolvedValueOnce({ uri: 'content://media/video/1', displayName: 'task-1.mp4', relativePath: 'Movies/AutoDL-H3/', alreadyExisted: false })
-      .mockRejectedValueOnce(new Error('空间不足'));
-    const deps = { download: jest.fn(), publish, removePrivate: jest.fn().mockResolvedValue(undefined) };
-    const result = await migrateDownloadedVideos([
-      { ...task, localUri: 'file:///one.mp4', downloadState: 'DOWNLOADED', exportState: 'NOT_REQUESTED' },
-      { ...task, id: 'task-2', localUri: 'file:///two.mp4', downloadState: 'DOWNLOADED', exportState: 'EXPORT_FAILED' },
-      { ...task, id: 'task-3', localUri: 'file:///three.mp4', downloadState: 'DOWNLOADED', exportState: 'EXPORTED', galleryUri: 'content://media/video/3' },
-    ], { policy: { autoExportToGallery: true, keepPrivateCopy: true }, deps, onUpdate: jest.fn(async () => undefined) });
-    expect(result).toEqual({ exported: 1, failed: 1 });
-    expect(publish.mock.invocationCallOrder[0]).toBeLessThan(publish.mock.invocationCallOrder[1]);
-    expect(publish).toHaveBeenCalledTimes(2);
-  });
-
   it('redownloads when a retained gallery reference no longer exists', async () => {
     const deps = {
       download: jest.fn().mockResolvedValue({ ...task, localUri: 'file:///restored.mp4', downloadState: 'DOWNLOADED' as const }),
-      publish: jest.fn()
-        .mockRejectedValueOnce(new Error('视频源文件不可用'))
-        .mockResolvedValueOnce({ uri: 'content://media/video/8', displayName: 'task-1.mp4', relativePath: 'Movies/AutoDL-H3/', alreadyExisted: false }),
+      publish: jest.fn().mockResolvedValue({ uri: 'content://media/video/8', displayName: 'task-1.mp4', relativePath: 'Movies/AutoDL-H3/', alreadyExisted: false }),
       removePrivate: jest.fn().mockResolvedValue(undefined),
     };
     const result = await exportTaskVideo({ ...task, galleryUri: 'content://media/video/deleted', exportState: 'EXPORTED', localUri: undefined }, { policy: { autoExportToGallery: true, keepPrivateCopy: true }, deps, onUpdate: jest.fn(async () => undefined) });
     expect(deps.download).toHaveBeenCalled();
-    expect(deps.publish).toHaveBeenLastCalledWith('file:///restored.mp4', { mediaId: task.id, displayName: 'task-1.mp4' });
+    expect(deps.publish).toHaveBeenCalledWith('file:///restored.mp4', { mediaId: task.id, displayName: 'task-1.mp4' });
     expect(result.galleryUri).toBe('content://media/video/8');
+  });
+
+  it('never uses a system-gallery URI as an export source', async () => {
+    const deps = {
+      download: jest.fn().mockResolvedValue({ ...task, localUri: 'file:///restored.mp4', downloadState: 'DOWNLOADED' as const }),
+      publish: jest.fn().mockResolvedValue({ uri: 'content://media/video/9', displayName: 'task-1.mp4', relativePath: 'Movies/AutoDL-H3/', alreadyExisted: false }),
+      removePrivate: jest.fn().mockResolvedValue(undefined),
+    };
+    await exportTaskVideo({ ...task, videoUrl: 'https://example/video.mp4', localUri: undefined, galleryUri: 'content://media/video/old', exportState: 'EXPORTED' }, { policy: { autoExportToGallery: true, keepPrivateCopy: true }, deps, onUpdate: jest.fn(async () => undefined) });
+    expect(deps.publish).not.toHaveBeenCalledWith('content://media/video/old', expect.anything());
+    expect(deps.publish).toHaveBeenCalledWith('file:///restored.mp4', { mediaId: task.id, displayName: 'task-1.mp4' });
   });
 });

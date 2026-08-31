@@ -15,7 +15,6 @@ jest.mock('../settings/storage', () => ({ readSettings: jest.fn(async () => ({
   token: '', llmEndpoint: '', llmModel: '', llmApiKey: '', llmTimeoutSeconds: '600', llmMaxRetries: '2',
   autoExportToGallery: true, keepPrivateCopy: true,
 })) }));
-jest.mock('./api', () => ({ getTask: jest.fn() }));
 jest.mock('./download', () => ({ downloadTask: jest.fn(async () => task) }));
 jest.mock('./media', () => ({ ensureTaskMedia: jest.fn(async (value, options) => {
   mockUpdate = options.onUpdate;

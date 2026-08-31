@@ -18,10 +18,6 @@ export type EnsureMediaOptions = {
   deps?: MediaDeps;
 };
 
-type MigrationOptions = Omit<EnsureMediaOptions, 'onUpdate'> & {
-  onUpdate(task: TaskRecord, patch: Partial<TaskRecord>): Promise<void>;
-};
-
 const defaultDeps: MediaDeps = {
   download: downloadTask,
   publish: exportVideo,
@@ -31,7 +27,6 @@ const defaultDeps: MediaDeps = {
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '保存到系统相册失败';
 }
-
 async function publishTask(current: TaskRecord, options: EnsureMediaOptions): Promise<TaskRecord> {
   const deps = options.deps ?? defaultDeps;
   let value = current;
@@ -39,7 +34,9 @@ async function publishTask(current: TaskRecord, options: EnsureMediaOptions): Pr
     value = { ...value, ...patch };
     await options.onUpdate(patch);
   };
-  const source = value.localUri || value.galleryUri;
+  // The system gallery URI is delivery metadata, not a canonical media
+  // source. Re-export only from an app-private file.
+  const source = value.localUri;
   if (!source) return { ...value, exportState: 'EXPORT_FAILED', exportError: '视频源文件不可用' };
 
   await update({ exportState: 'QUEUED', exportError: undefined, updatedAt: Date.now() });
@@ -61,9 +58,8 @@ async function publishTask(current: TaskRecord, options: EnsureMediaOptions): Pr
   }
   return value;
 }
-
 async function downloadIfNeeded(task: TaskRecord, options: EnsureMediaOptions): Promise<{ task: TaskRecord; downloadedNow: boolean }> {
-  if (task.localUri || task.galleryUri || !task.videoUrl) return { task, downloadedNow: false };
+  if (task.localUri || !task.videoUrl) return { task, downloadedNow: false };
   let current = task;
   const downloaded = await (options.deps ?? defaultDeps).download(task, {
     onUpdate: async (patch) => {
@@ -89,24 +85,4 @@ export async function exportTaskVideo(task: TaskRecord, options: EnsureMediaOpti
     if (redownloaded.downloadedNow) return publishTask(redownloaded.task, options);
   }
   return published;
-}
-
-export async function migrateDownloadedVideos(tasks: TaskRecord[], options: MigrationOptions): Promise<{ exported: number; failed: number }> {
-  let exported = 0;
-  let failed = 0;
-  const eligible = tasks.filter((task) => task.localUri && task.exportState !== 'EXPORTED');
-  for (const task of eligible) {
-    let current = task;
-    const result = await exportTaskVideo(task, {
-      policy: options.policy,
-      deps: options.deps,
-      onUpdate: async (patch) => {
-        current = { ...current, ...patch };
-        await options.onUpdate(current, patch);
-      },
-    });
-    if (result.exportState === 'EXPORTED') exported += 1;
-    else failed += 1;
-  }
-  return { exported, failed };
 }

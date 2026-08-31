@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { ensureAppDatabase } from '../storage/database';
 
 const MAX_AGE = 60 * 60 * 1000;
 const schema = `CREATE TABLE IF NOT EXISTS prompt_drafts (
@@ -46,6 +47,7 @@ export function createPromptDraftStore(
   db: SQLiteDatabase,
   now = () => Date.now(),
 ) {
+  ensureAppDatabase(db);
   db.execSync(schema);
   const purge = () =>
     db.runSync(

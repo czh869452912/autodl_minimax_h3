@@ -4,8 +4,10 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   QUEUED: '排队中',
   RUNNING: '执行中',
   SUCCESS: '成功',
+  PARTIAL_SUCCESS: '部分成功',
   FAILED: '失败',
   CANCELLED: '已取消',
+  UNKNOWN: '待确认',
 };
 
 export function formatTaskStatus(status: TaskStatus): string {

@@ -15,6 +15,7 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('./assistantImagePicker', () => ({ pickAssistantImages: jest.fn(() => Promise.resolve([])) }));
 
 import { getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline } from './PromptAssistantUi';
+import { normalizeMessages } from './agentPresentation';
 
 describe('Prompt assistant UI primitives', () => {
   beforeEach(() => {
@@ -114,7 +115,7 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
     expect(tree.root.findAllByType(DraggableBottomSheet).filter((node) => node.props.visible)).toHaveLength(1);
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === '引用图片附件')).toBe(true);
-    expect(tree.root.findByProps({ accessibilityLabel: '引用图片附件 角色正面.png' })).toBeTruthy();
+    expect(tree.root.findByProps({ accessibilityLabel: '引用图片附件 图片1' })).toBeTruthy();
     expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件 上传中' })).toHaveLength(0);
     act(() => tree.unmount());
   });
@@ -166,37 +167,19 @@ describe('Prompt assistant UI primitives', () => {
     act(() => input.props.onChangeText('镜头前后'));
     act(() => input.props.onSelectionChange({ nativeEvent: { selection: { start: 2, end: 2 } } }));
     act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
-    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件 角色正面.png' }).props.onPress());
-    expect(tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.value).toBe('镜头@角色正面 前后');
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件 图片1' }).props.onPress());
+    expect(tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.value).toBe('镜头@图片1 前后');
     expect(tree.root.findByProps({ testID: 'composer-toolbar-spacer' }).props.style).toEqual(
       expect.objectContaining({ flex: 1 }),
     );
     expect(tree.root.findAllByType(Image).some((node) => node.props.source?.uri === 'file://ready-1')).toBe(true);
-    expect(tree.root.findAllByType(Text).some((node) => node.props.children === '@角色正面')).toBe(true);
-    const mentionLayer = tree.root.findByProps({ testID: 'mention-token-layer' });
+    expect(tree.root.findAllByProps({ testID: 'mention-token-layer' })).toHaveLength(0);
     const richInput = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
-    expect(mentionLayer.props.pointerEvents).toBe('none');
-    expect(mentionLayer.findAllByType(Text).map((node) => node.props.children)).toEqual([
-      '镜头',
-      '@角色正面',
-      ' ',
-      '前后',
-    ]);
-    expect(mentionLayer.props.style).toEqual(
-      expect.objectContaining({ position: 'absolute' }),
-    );
-    expect(richInput.props.style).toEqual(
+    expect(richInput.props.caretHidden).not.toBe(true);
+    expect(richInput.props.style).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ color: 'transparent' })]),
     );
-    expect(richInput.props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ opacity: 0 })]),
-    );
-    expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件 角色正面.png' })).toHaveLength(0);
-    act(() => richInput.props.onSelectionChange({ nativeEvent: { selection: { start: 5, end: 5 } } }));
-    const editingMentionLayer = tree.root.findByProps({ testID: 'mention-token-layer' });
-    expect(editingMentionLayer.findAllByType(Text).some((node) => typeof node.props.children === 'string' && node.props.children.includes('@角色'))).toBe(true);
-    expect(editingMentionLayer.findAllByProps({ testID: 'mention-token' })).toHaveLength(0);
-    expect(editingMentionLayer.findAllByProps({ testID: 'mention-caret' }).length).toBeGreaterThan(0);
+    expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件 图片1' })).toHaveLength(0);
     act(() => tree.unmount());
   });
 
@@ -394,6 +377,87 @@ describe('Prompt assistant UI primitives', () => {
       tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.onPress();
     });
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === '雨中的城市夜跑')).toBe(true);
+    act(() => tree.unmount());
+  });
+
+  it('keeps user message text selectable for copying without attachments', () => {
+    const rows = normalizeMessages([{ id: 'm1', role: 'user', content: '只复制这段文字', attachments: [{ type: 'image', filename: 'secret.png', source: { value: 'file://secret' } }] }]);
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<ConversationTimeline rows={rows} isRunning={false} onExportPrompt={() => Promise.resolve()} />); });
+    const userText = tree.root.findByProps({ testID: 'user-message-text' });
+    expect(userText.props.selectable).toBe(true);
+    act(() => tree.unmount());
+  });
+
+  it('renders sent image tokens inline while keeping the whole user text selectable', () => {
+    const rows = normalizeMessages([{ id: 'm1', role: 'user', content: '参考 @图片1 完成画面', attachments: [{ type: 'image', filename: 'ref.png', source: { value: 'file://secret' } }] }]);
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<ConversationTimeline rows={rows} isRunning={false} onExportPrompt={() => Promise.resolve()} />); });
+    const userText = tree.root.findByProps({ testID: 'user-message-text' });
+    expect(userText.props.selectable).toBe(true);
+    expect(userText.findAllByProps({ testID: 'user-image-mention' }).length).toBeGreaterThan(0);
+    expect(userText.findByProps({ testID: 'user-image-mention-thumbnail' }).props.source.uri).toBe('file://secret');
+    act(() => tree.unmount());
+  });
+
+  it('removes an image mention atomically when the controlled input reports a backspace edit', async () => {
+    mockChatContext = {
+      ...mockChatContext,
+      attachments: [{ id: 'ready-1', status: 'ready', filename: '100000003.png', source: { value: 'file://ready-1' } }],
+    };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <PromptAssistantUi
+          threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
+          activeThreadId="t1"
+          onSelect={() => undefined}
+          onNew={() => undefined}
+          onDelete={() => undefined}
+          onRename={() => undefined}
+          onExportPrompt={() => Promise.resolve()}
+        />,
+      );
+    });
+    const input = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    act(() => input.props.onChangeText('镜头'));
+    act(() => input.props.onSelectionChange({ nativeEvent: { selection: { start: 2, end: 2 } } }));
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件 图片1' }).props.onPress());
+    const editedInput = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    act(() => editedInput.props.onChangeText('镜头@图片 '));
+    expect(tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.value).toBe('镜头 ');
+    expect(tree.root.findAllByProps({ testID: 'mention-token-layer' })).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
+  it('keeps an image token atomic after deleting plain text before it', async () => {
+    mockChatContext = {
+      ...mockChatContext,
+      attachments: [{ id: 'ready-1', status: 'ready', filename: '100000003.png', source: { value: 'file://ready-1' } }],
+    };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <PromptAssistantUi
+          threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
+          activeThreadId="t1"
+          onSelect={() => undefined}
+          onNew={() => undefined}
+          onDelete={() => undefined}
+          onRename={() => undefined}
+          onExportPrompt={() => Promise.resolve()}
+        />,
+      );
+    });
+    const input = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    act(() => input.props.onChangeText('abc'));
+    act(() => input.props.onSelectionChange({ nativeEvent: { selection: { start: 3, end: 3 } } }));
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件 图片1' }).props.onPress());
+    act(() => tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.onChangeText('ab@图片1 '));
+    act(() => tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.onChangeText('ab@图片 '));
+    expect(tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.value).toBe('ab ');
     act(() => tree.unmount());
   });
 
