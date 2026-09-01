@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { openDatabaseSync } from 'expo-sqlite';
+import { getDatabase } from '../storage/databaseClient';
 import { readSettings } from '../settings/storage';
 import { createTaskRepository } from '../tasks/repository';
 import type { TaskMediaInput } from '../tasks/types';
@@ -29,12 +29,15 @@ import { createWorkflowRuntime } from '../workflows/runtime/runtime';
 import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
 import { canonicalizeDefinition } from '../workflows/registry/canonicalize';
 import { sha256Hex } from '../workflows/registry/crypto';
+import { createSubmissionGate } from './submissionGate';
 
-const taskStore = createTaskRepository(openDatabaseSync('autodl-h3.db'));
-const jobStore = createJobRepository(openDatabaseSync('autodl-h3.db'));
+const database = getDatabase();
+const taskStore = createTaskRepository(database);
+const jobStore = createJobRepository(database);
+const submissionGate = createSubmissionGate();
 
 const promptDraftStore = createPromptDraftStore(
-  openDatabaseSync('autodl-h3.db'),
+  database,
 );
 
 export function CreateForm({
@@ -99,6 +102,7 @@ export function CreateForm({
       Alert.alert('提示', '请输入 Prompt 描述');
       return;
     }
+    if (!submissionGate.tryAcquire()) return;
     setSubmitting(true);
     try {
       const settings = await readSettings();
@@ -126,6 +130,7 @@ export function CreateForm({
         error instanceof Error ? error.message : '未知错误',
       );
     } finally {
+      submissionGate.release();
       setSubmitting(false);
     }
   };

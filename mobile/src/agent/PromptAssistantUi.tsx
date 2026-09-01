@@ -14,6 +14,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   TextInput,
@@ -83,6 +84,8 @@ export function PromptAssistantUi({
   const [mentionSheetOpen, setMentionSheetOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [stopNotice, setStopNotice] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
   const inputRef = useRef<TextInput>(null);
   const attachmentNames = useRef(new Map<string, string>());
   const nextAttachmentNumber = useRef(1);
@@ -149,9 +152,12 @@ export function PromptAssistantUi({
     }
   }, [pendingRow, persistedRows]);
   const handleSubmit = async (value: string) => {
+    if (submitLock.current || isRunning) return;
     const ready = [...attachments.filter((item) => item.status === 'ready'), ...galleryAttachments];
     if (!value.trim() && !ready.length)
       return;
+    submitLock.current = true;
+    setSubmitting(true);
     setStopNotice(null);
     const readyAttachments: Array<{ uri: string; filename?: string; displayName?: string }> = ready
       .map((item) => {
@@ -178,7 +184,14 @@ export function PromptAssistantUi({
         () => setGalleryAttachments([]),
       );
     }
-    await submitMessage(value);
+    try {
+      await submitMessage(value);
+    } catch (error) {
+      setStopNotice(error instanceof Error ? error.message : '发送失败');
+    } finally {
+      submitLock.current = false;
+      setSubmitting(false);
+    }
   };
   const addGalleryImages = async () => {
     try {
@@ -314,7 +327,7 @@ export function PromptAssistantUi({
           ) : null}
           <ConversationTimeline
             rows={rows}
-            isRunning={isRunning}
+            isRunning={isRunning || submitting}
             onExportPrompt={onExportPrompt}
           />
           <View style={styles.composerDock}>
@@ -328,7 +341,7 @@ export function PromptAssistantUi({
                 agent.abortRun?.();
                 setStopNotice('已停止生成');
               }}
-              isRunning={isRunning}
+              isRunning={isRunning || submitting}
               attachments={composerAttachments}
               inputRef={inputRef}
               selection={inputSelection}
@@ -892,6 +905,7 @@ function HistoryList({
     threads.filter((thread) => matchesSessionQuery(thread, query)),
     Date.now(),
   );
+  const sections = groups.map((group) => ({ title: group.label, data: group.snapshots }));
   return (
     <View style={styles.history}>
       <View style={styles.historySearch}>
@@ -912,65 +926,29 @@ function HistoryList({
         <AppIcon name="add" size={18} color={LIGHT_PROMPT_COLORS.ink} />
         <Text style={styles.newHistoryText}>新对话</Text>
       </Pressable>
-      <ScrollView style={styles.historyList}>
-        {groups.map((group) => (
-          <View key={group.label}>
-            <Text style={styles.groupLabel}>{group.label}</Text>
-            {group.snapshots.map((thread) => (
-              <Pressable
-                key={thread.threadId}
-                onPress={() => onSelect(thread.threadId)}
-                style={[
-                  styles.historyItem,
-                  thread.threadId === activeThreadId &&
-                    styles.historyItemActive,
-                ]}
-              >
-                <View style={styles.historyItemMain}>
-                  <Text numberOfLines={1} style={styles.historyTitle}>
-                    {sessionTitle(thread)}
-                  </Text>
-                  <Text style={styles.historyMeta}>
-                    {thread.messages.length} 条消息 ·{' '}
-                    {new Date(thread.updatedAt).toLocaleTimeString('zh-CN', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </Text>
-                </View>
-                <Pressable
-                  accessibilityLabel={`管理会话 ${thread.threadId}`}
-                  onPress={() => {
-                    setRenameTarget(thread);
-                    setRenameValue(sessionTitle(thread));
-                  }}
-                >
-                  <Text style={styles.more}>•••</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityLabel={`删除会话 ${thread.threadId}`}
-                  onPress={() =>
-                    Alert.alert('删除会话', '删除后无法恢复本机会话记录。', [
-                      { text: '取消' },
-                      {
-                        text: '删除',
-                        style: 'destructive',
-                        onPress: () => onDelete(thread.threadId),
-                      },
-                    ])
-                  }
-                >
-                  <AppIcon
-                    name="delete"
-                    size={17}
-                    color={LIGHT_PROMPT_COLORS.muted}
-                  />
-                </Pressable>
-              </Pressable>
-            ))}
-          </View>
-        ))}
-      </ScrollView>
+      <SectionList
+        sections={sections}
+        style={styles.historyList}
+        keyExtractor={(thread) => thread.threadId}
+        renderSectionHeader={({ section }) => <Text style={styles.groupLabel}>{section.title}</Text>}
+        renderItem={({ item: thread }) => (
+          <Pressable
+            onPress={() => onSelect(thread.threadId)}
+            style={[styles.historyItem, thread.threadId === activeThreadId && styles.historyItemActive]}
+          >
+            <View style={styles.historyItemMain}>
+              <Text numberOfLines={1} style={styles.historyTitle}>{sessionTitle(thread)}</Text>
+              <Text style={styles.historyMeta}>{thread.messages.length} 条消息 · {new Date(thread.updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</Text>
+            </View>
+            <Pressable accessibilityLabel={`管理会话 ${thread.threadId}`} onPress={() => { setRenameTarget(thread); setRenameValue(sessionTitle(thread)); }}>
+              <Text style={styles.more}>•••</Text>
+            </Pressable>
+            <Pressable accessibilityLabel={`删除会话 ${thread.threadId}`} onPress={() => Alert.alert('删除会话', '删除后无法恢复本机会话记录。', [{ text: '取消' }, { text: '删除', style: 'destructive', onPress: () => onDelete(thread.threadId) }])}>
+              <AppIcon name="delete" size={17} color={LIGHT_PROMPT_COLORS.muted} />
+            </Pressable>
+          </Pressable>
+        )}
+      />
       <Modal
         visible={Boolean(renameTarget)}
         transparent

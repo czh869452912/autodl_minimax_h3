@@ -6,6 +6,7 @@ const mockBack = jest.fn();
 const mockCopy = jest.fn(async (_value: string) => undefined);
 const mockReadClipboard = jest.fn(async () => task.prompt);
 const mockList = jest.fn();
+const mockGet = jest.fn();
 const mockExport = jest.fn(async (value: typeof task) => ({ ...value, exportState: 'EXPORTED' as const, galleryUri: 'content://media/video/7' }));
 const task = {
   id: 'task-1', prompt: 'A very long prompt. '.repeat(300), status: 'SUCCESS' as const,
@@ -19,7 +20,7 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
 jest.mock('../tasks/repository', () => ({
-  createTaskRepository: jest.fn(() => ({ list: () => mockList() })),
+  createTaskRepository: jest.fn(() => ({ list: () => mockList(), get: (id: string) => mockGet(id) })),
 }));
 jest.mock('../tasks/media', () => ({ exportTaskVideo: (...args: unknown[]) => mockExport(args[0] as typeof task) }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: (value: string) => mockCopy(value), getStringAsync: () => mockReadClipboard() }));
@@ -35,7 +36,8 @@ describe('video detail screen', () => {
     mockCopy.mockClear();
     mockReadClipboard.mockReset();
     mockReadClipboard.mockResolvedValue(task.prompt);
-    mockList.mockResolvedValue([task]);
+    mockGet.mockReset();
+    mockGet.mockResolvedValue(task);
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   });
 
@@ -47,6 +49,8 @@ describe('video detail screen', () => {
     expect(tree!.root.findByProps({ accessibilityLabel: '滚动 Prompt' })).toBeTruthy();
     expect(tree!.root.findByProps({ accessibilityLabel: '复制 Prompt' })).toBeTruthy();
     expect(tree!.root.findByProps({ accessibilityLabel: '返回画廊' })).toBeTruthy();
+    expect(mockList).not.toHaveBeenCalled();
+    expect(mockGet).toHaveBeenCalledWith('task-1');
   });
 
   it('uses the inline player and copies only after clipboard success', async () => {
@@ -76,7 +80,7 @@ describe('video detail screen', () => {
   });
 
   it('shows a recoverable state when a successful task has no media source', async () => {
-    mockList.mockResolvedValue([{ ...task, videoUrl: undefined, localUri: undefined }]);
+    mockGet.mockResolvedValue({ ...task, videoUrl: undefined, localUri: undefined });
     let tree: ReturnType<typeof create>;
     await act(async () => { tree = create(<VideoDetailScreen />); });
     expect(tree!.root.findByProps({ accessibilityLabel: '视频源不可用' })).toBeTruthy();

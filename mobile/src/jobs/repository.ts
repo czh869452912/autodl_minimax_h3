@@ -18,30 +18,46 @@ export function createJobRepository(db: SQLiteDatabase | undefined): JobReposito
     ensureAppDatabase(database);
     database.execSync('CREATE TABLE IF NOT EXISTS workflow_jobs (id TEXT PRIMARY KEY NOT NULL, workflow_id TEXT NOT NULL, workflow_version TEXT NOT NULL, workflow_hash TEXT NOT NULL, adapter_id TEXT NOT NULL, adapter_version TEXT NOT NULL, input_json TEXT NOT NULL, output_mapping_json TEXT, remote_json TEXT, status TEXT NOT NULL, error_json TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, started_at INTEGER, execution_duration REAL);');
     database.execSync('CREATE TABLE IF NOT EXISTS workflow_artifacts (id TEXT NOT NULL, job_id TEXT NOT NULL, kind TEXT NOT NULL, uri TEXT, mime TEXT, metadata_json TEXT, PRIMARY KEY (job_id, id));');
+    database.execSync('CREATE INDEX IF NOT EXISTS idx_workflow_jobs_status_updated_id ON workflow_jobs(status, updated_at ASC, id ASC);');
   }
   const fromJob = (row: JobRow): JobRecord => ({ id: row.id, workflowId: row.workflow_id, workflowVersion: row.workflow_version, workflowContentHash: row.workflow_hash, adapterId: row.adapter_id, adapterVersion: row.adapter_version, inputSnapshot: parseJson(row.input_json, {}), outputMapping: parseJson(row.output_mapping_json, undefined), remote: parseJson(row.remote_json, undefined), status: row.status as JobStatus, error: parseJson(row.error_json, undefined), createdAt: Number(row.created_at), updatedAt: Number(row.updated_at), startedAt: row.started_at == null ? undefined : Number(row.started_at), executionDuration: row.execution_duration == null ? undefined : Number(row.execution_duration) });
   const fromArtifact = (row: ArtifactRow): ArtifactRecord => ({ id: row.id, jobId: row.job_id, kind: row.kind as ArtifactRecord['kind'], uri: row.uri || undefined, mime: row.mime || undefined, metadata: parseJson(row.metadata_json, undefined) });
+  const run = async (sql: string, ...params: any[]) => typeof (database as any)?.runAsync === 'function' ? (database as any).runAsync(sql, ...params) : database?.runSync(sql, ...params);
+  const all = async <T>(sql: string, ...params: any[]): Promise<T[]> => typeof (database as any)?.getAllAsync === 'function' ? ((await (database as any).getAllAsync(sql, ...params)) ?? []) : ((database?.getAllSync<T>(sql, ...params) ?? []) as T[]);
+  const first = async <T>(sql: string, ...params: any[]): Promise<T | null> => typeof (database as any)?.getFirstAsync === 'function' ? ((await (database as any).getFirstAsync(sql, ...params)) ?? null) : database ? ((database.getFirstSync<JobRow>(sql, ...params) as unknown as T | null) ?? null) : null;
   return {
     async upsert(job) {
       if (!database) jobs.set(job.id, job);
-      else database.runSync('INSERT OR REPLACE INTO workflow_jobs (id,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,output_mapping_json,remote_json,status,error_json,created_at,updated_at,started_at,execution_duration) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', job.id, job.workflowId, job.workflowVersion, job.workflowContentHash, job.adapterId, job.adapterVersion, JSON.stringify(job.inputSnapshot), job.outputMapping ? JSON.stringify(job.outputMapping) : null, job.remote ? JSON.stringify(job.remote) : null, job.status, job.error ? JSON.stringify(job.error) : null, job.createdAt, job.updatedAt, job.startedAt ?? null, job.executionDuration ?? null);
+      else await run('INSERT OR REPLACE INTO workflow_jobs (id,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,output_mapping_json,remote_json,status,error_json,created_at,updated_at,started_at,execution_duration) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', job.id, job.workflowId, job.workflowVersion, job.workflowContentHash, job.adapterId, job.adapterVersion, JSON.stringify(job.inputSnapshot), job.outputMapping ? JSON.stringify(job.outputMapping) : null, job.remote ? JSON.stringify(job.remote) : null, job.status, job.error ? JSON.stringify(job.error) : null, job.createdAt, job.updatedAt, job.startedAt ?? null, job.executionDuration ?? null);
     },
     async get(id) {
       if (!database) return jobs.get(id);
-      const row = database.getFirstSync<JobRow>('SELECT * FROM workflow_jobs WHERE id = ? LIMIT 1', id) as JobRow | null;
+      const row = await first<JobRow>('SELECT * FROM workflow_jobs WHERE id = ? LIMIT 1', id);
       return row ? fromJob(row) : undefined;
     },
     async list() {
       if (!database) return Array.from(jobs.values()).sort((a, b) => b.createdAt - a.createdAt);
-      return (database.getAllSync<JobRow>('SELECT * FROM workflow_jobs ORDER BY created_at DESC') as JobRow[]).map(fromJob);
+      return (await all<JobRow>('SELECT * FROM workflow_jobs ORDER BY created_at DESC')).map(fromJob);
+    },
+    async listActive() {
+      if (!database) return Array.from(jobs.values()).filter((job) => ['QUEUED', 'RUNNING', 'UNKNOWN'].includes(job.status)).sort((a, b) => a.updatedAt - b.updatedAt);
+      return (await all<JobRow>("SELECT * FROM workflow_jobs WHERE status IN ('QUEUED','RUNNING','UNKNOWN') ORDER BY updated_at ASC, id ASC")).map(fromJob);
     },
     async replaceArtifacts(jobId, values) {
       if (!database) { artifacts.set(jobId, values); return; }
       const transaction = (database as unknown as { withTransactionSync?: (fn: () => void) => void }).withTransactionSync;
+      const asyncTransaction = (database as unknown as { withTransactionAsync?: (fn: () => Promise<void>) => Promise<void> }).withTransactionAsync;
       const replace = () => {
         database.runSync('DELETE FROM workflow_artifacts WHERE job_id = ?', jobId);
         for (const value of values) database.runSync('INSERT INTO workflow_artifacts (id,job_id,kind,uri,mime,metadata_json) VALUES (?,?,?,?,?,?)', value.id, jobId, value.kind, value.uri ?? null, value.mime ?? null, value.metadata ? JSON.stringify(value.metadata) : null);
       };
+      if (asyncTransaction) {
+        await asyncTransaction.call(database, async () => {
+          await run('DELETE FROM workflow_artifacts WHERE job_id = ?', jobId);
+          for (const value of values) await run('INSERT INTO workflow_artifacts (id,job_id,kind,uri,mime,metadata_json) VALUES (?,?,?,?,?,?)', value.id, jobId, value.kind, value.uri ?? null, value.mime ?? null, value.metadata ? JSON.stringify(value.metadata) : null);
+        });
+        return;
+      }
       if (transaction) transaction.call(database, replace);
       else {
         database.execSync('BEGIN');
@@ -50,7 +66,7 @@ export function createJobRepository(db: SQLiteDatabase | undefined): JobReposito
     },
     async listArtifacts(jobId) {
       if (!database) return artifacts.get(jobId) ?? [];
-      return (database.getAllSync<ArtifactRow>('SELECT * FROM workflow_artifacts WHERE job_id = ?', jobId) as ArtifactRow[]).map(fromArtifact);
+      return (await all<ArtifactRow>('SELECT * FROM workflow_artifacts WHERE job_id = ?', jobId)).map(fromArtifact);
     },
   };
 }

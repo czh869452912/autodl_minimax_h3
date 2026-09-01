@@ -1,7 +1,7 @@
 import { CopilotChat } from '@copilotkit/react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { openDatabaseSync } from 'expo-sqlite';
+import { getDatabase } from '../storage/databaseClient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { readSettings } from '../settings/storage';
 import { COLORS } from '../ui/theme';
@@ -86,11 +86,11 @@ function ReadyAgent({
 }) {
   const router = useRouter();
   const threadStore = useMemo<LocalThreadStore>(
-    () => createLocalThreadStore(openDatabaseSync('autodl-h3.db')),
+    () => createLocalThreadStore(getDatabase()),
     [],
   );
   const draftStore = useMemo(
-    () => createPromptDraftStore(openDatabaseSync('autodl-h3.db')),
+    () => createPromptDraftStore(getDatabase()),
     [],
   );
   const [threads, setThreads] = useState<LocalThreadSnapshot[]>([]);

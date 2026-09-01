@@ -12,6 +12,7 @@ export type PromptRuntime = {
   agent: H3AgUiAgent;
   getSnapshot: () => LocalThreadSnapshot;
   updateMetadata: (snapshot: LocalThreadSnapshot) => void;
+  flush: () => Promise<void>;
   subscribe: (listener: (event: RuntimeEvent) => void) => () => void;
 };
 
@@ -54,7 +55,9 @@ export function createPromptRuntimeRegistry(
       agent.setMessages(initial.messages);
       agent.setState(initial.state);
       let snapshot = initial;
-      let saveQueue = Promise.resolve();
+      let pendingSave: LocalThreadSnapshot | undefined;
+      let saveTimer: ReturnType<typeof setTimeout> | undefined;
+      let saveInFlight: Promise<void> | undefined;
       const listeners = new Set<(event: RuntimeEvent) => void>();
       const emit = (event: RuntimeEvent) => {
         for (const listener of listeners) listener(event);
@@ -67,17 +70,20 @@ export function createPromptRuntimeRegistry(
           updatedAt: Date.now(),
         };
         emit({ type: 'snapshot', snapshot });
-        saveQueue = saveQueue
-          .then(() => threadStore.save(snapshot))
-          .catch((reason) =>
-            emit({
-              type: 'error',
-              message:
-                reason instanceof Error
-                  ? `本地会话保存失败：${reason.message}`
-                  : '本地会话保存失败',
-            }),
-          );
+        pendingSave = snapshot;
+        if (saveTimer) clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => { void flush(); }, 300);
+      };
+      const flush = async () => {
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = undefined; }
+        const next = pendingSave;
+        pendingSave = undefined;
+        if (!next) return saveInFlight;
+        saveInFlight = (saveInFlight ?? Promise.resolve())
+          .then(() => threadStore.save(next))
+          .catch((reason) => emit({ type: 'error', message: reason instanceof Error ? `本地会话保存失败：${reason.message}` : '本地会话保存失败' }));
+        await saveInFlight;
+        if (pendingSave) await flush();
       };
       agent.subscribe({
         onMessagesChanged: ({ messages, state }) => persist(messages, state),
@@ -94,6 +100,7 @@ export function createPromptRuntimeRegistry(
             createdAt: next.createdAt,
           };
         },
+        flush,
         subscribe: (listener) => {
           listeners.add(listener);
           return () => listeners.delete(listener);

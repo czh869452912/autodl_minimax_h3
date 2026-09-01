@@ -380,6 +380,33 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
+  it('ignores repeated sends while the first assistant run is pending', async () => {
+    let resolve!: () => void;
+    const submitMessage = jest.fn(() => new Promise<void>((done) => { resolve = done; }));
+    mockChatContext = { ...mockChatContext, submitMessage, isRunning: false };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <PromptAssistantUi
+          threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
+          activeThreadId="t1"
+          onSelect={() => undefined}
+          onNew={() => undefined}
+          onDelete={() => undefined}
+          onRename={() => undefined}
+          onExportPrompt={() => Promise.resolve()}
+        />,
+      );
+    });
+    await act(async () => tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.onChangeText('只发送一次'));
+    const send = tree.root.findByProps({ accessibilityLabel: '发送消息' });
+    act(() => { send.props.onPress(); send.props.onPress(); });
+    expect(submitMessage).toHaveBeenCalledTimes(1);
+    expect(tree.root.findByProps({ accessibilityLabel: '停止生成' })).toBeTruthy();
+    await act(async () => { resolve(); });
+    act(() => tree.unmount());
+  });
+
   it('keeps user message text selectable for copying without attachments', () => {
     const rows = normalizeMessages([{ id: 'm1', role: 'user', content: '只复制这段文字', attachments: [{ type: 'image', filename: 'secret.png', source: { value: 'file://secret' } }] }]);
     let tree!: ReturnType<typeof create>;

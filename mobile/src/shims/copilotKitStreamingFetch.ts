@@ -86,7 +86,13 @@ export function installStreamingFetch(): void {
         lastIndex = xhr.responseText.length;
         controller.enqueue(encoder.encode(chunk));
       };
-      xhr.onprogress = () => setTimeout(() => { try { flush(); } catch (error) { fail(error); xhr.abort(); } }, 0);
+      let flushScheduled = false;
+      const scheduleFlush = () => {
+        if (flushScheduled || closed) return;
+        flushScheduled = true;
+        setTimeout(() => { flushScheduled = false; try { flush(); } catch (error) { fail(error); xhr.abort(); } }, 0);
+      };
+      xhr.onprogress = scheduleFlush;
       xhr.onload = () => setTimeout(() => {
         try { flush(); } catch (error) { fail(error); return; }
         close(); cleanup(); resolveText(xhr.responseText);

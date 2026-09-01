@@ -15,6 +15,16 @@ function applyOutputMapping(job: JobRecord, artifacts: ArtifactRecord[]): Artifa
   });
 }
 
+function stable(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
+  if (value && typeof value === 'object') return `{${Object.keys(value as Record<string, unknown>).sort().map((key) => `${JSON.stringify(key)}:${stable((value as Record<string, unknown>)[key])}`).join(',')}}`;
+  return JSON.stringify(value);
+}
+
+function sameArtifacts(left: ArtifactRecord[], right: ArtifactRecord[]): boolean {
+  return stable(left.map(({ jobId: _jobId, ...item }) => item)) === stable(right.map(({ jobId: _jobId, ...item }) => item));
+}
+
 export function createWorkflowRuntime(deps: RuntimeDeps) {
   const locks = new Set<string>();
   const now = deps.now ?? Date.now;
@@ -46,7 +56,7 @@ export function createWorkflowRuntime(deps: RuntimeDeps) {
     },
     async sync(job: JobRecord): Promise<JobRecord> {
       const adapter = deps.adapters.get(job.adapterId); if (!adapter || !job.remote?.providerJobId) return job;
-      const update = await adapter.getStatus({ providerJobId: job.remote.providerJobId }); const timestamp = now(); const terminal = update.status !== 'QUEUED' && update.status !== 'RUNNING'; const startedAt = update.startedAt ?? job.startedAt ?? (update.status === 'RUNNING' ? timestamp : terminal ? job.createdAt : undefined); const executionDuration = update.executionDuration ?? job.executionDuration ?? (startedAt != null && terminal && timestamp >= startedAt ? (timestamp - startedAt) / 1000 : undefined); const current = { ...job, status: update.status, remote: { ...job.remote, rawStatus: update.rawStatus }, startedAt, executionDuration, updatedAt: timestamp }; await deps.jobs.upsert(current); await deps.jobs.replaceArtifacts(job.id, applyOutputMapping(current, update.artifacts.map((item) => ({ ...item, jobId: job.id })))); return current;
+      const update = await adapter.getStatus({ providerJobId: job.remote.providerJobId }); const timestamp = now(); const terminal = update.status !== 'QUEUED' && update.status !== 'RUNNING'; const startedAt = update.startedAt ?? job.startedAt ?? (update.status === 'RUNNING' ? timestamp : terminal ? job.createdAt : undefined); const executionDuration = update.executionDuration ?? job.executionDuration ?? (startedAt != null && terminal && timestamp >= startedAt ? (timestamp - startedAt) / 1000 : undefined); const current = { ...job, status: update.status, remote: { ...job.remote, rawStatus: update.rawStatus }, startedAt, executionDuration, updatedAt: timestamp }; const mapped = applyOutputMapping(current, update.artifacts.map((item) => ({ ...item, jobId: job.id }))); const previousArtifacts = await deps.jobs.listArtifacts(job.id); const metadataChanged = job.status !== current.status || job.remote?.rawStatus !== current.remote?.rawStatus || job.startedAt !== current.startedAt || job.executionDuration !== current.executionDuration; if (!metadataChanged && sameArtifacts(previousArtifacts, mapped)) return job; await deps.jobs.upsert(current); if (!sameArtifacts(previousArtifacts, mapped)) await deps.jobs.replaceArtifacts(job.id, mapped); return current;
     },
   };
 }

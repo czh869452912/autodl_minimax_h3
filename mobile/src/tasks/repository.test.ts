@@ -88,6 +88,20 @@ test('exposes stable keyset pagination and watermark queries', async () => {
   expect(await store.listUpdatedSince?.(1_500)).toEqual(expect.any(Array));
 });
 
+test('loads one task by id without scanning the full task table', async () => {
+  const calls: string[] = [];
+  const row = { id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, created_at: 1, updated_at: 1 };
+  const db = {
+    execSync: () => undefined,
+    getFirstSync: <T>(sql: string) => { calls.push(sql); return row as T; },
+    getAllSync: <T>() => [] as T[],
+  };
+  const store = createTaskRepository(db as never) as ReturnType<typeof createTaskRepository> & { get?: (id: string) => Promise<TaskRecord | undefined> };
+  expect(store.get).toBeDefined();
+  await expect(store.get?.('task-1')).resolves.toMatchObject({ id: 'task-1' });
+  expect(calls.some((sql) => sql.includes('WHERE id = ?'))).toBe(true);
+});
+
 test('treats an empty task query as no filter', async () => {
   const store = createTaskRepository(queryDb() as never);
   const page = await store.listPage({ limit: 20, query: '   ' });

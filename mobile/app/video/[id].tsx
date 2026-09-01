@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
-import { openDatabaseSync } from 'expo-sqlite';
+import { getDatabase } from '../../src/storage/databaseClient';
 import { createTaskRepository } from '../../src/tasks/repository';
 import type { TaskRecord } from '../../src/tasks/types';
 import { exportStatusLabel, mediaSource, mediaStatusLabel } from '../../src/gallery/presentation';
@@ -15,8 +15,9 @@ import { readSettings } from '../../src/settings/storage';
 import { createSqliteMediaStore } from '../../src/media/repository';
 import type { MediaAsset } from '../../src/media/types';
 
-const store = createTaskRepository(openDatabaseSync('autodl-h3.db'));
-const mediaStore = createSqliteMediaStore(openDatabaseSync('autodl-h3.db'));
+const database = getDatabase();
+const store = createTaskRepository(database);
+const mediaStore = createSqliteMediaStore(database);
 
 export default function VideoDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,7 +29,7 @@ export default function VideoDetailScreen() {
 
   useEffect(() => {
     if (!id) { setLoaded(true); return; }
-    void mediaStore.get(id).then(async (media) => { setAsset(media); const taskId = media?.taskId || id; const items = await store.list(); setTask(items.find((item) => item.id === taskId) || null); }).finally(() => setLoaded(true));
+    void mediaStore.get(id).then(async (media) => { setAsset(media); const taskId = media?.taskId || id; const value = await store.get(taskId); setTask(value || null); }).finally(() => setLoaded(true));
   }, [id]);
 
   if (!loaded) return <View style={styles.center}><ActivityIndicator color={COLORS.primaryActive} /><Text style={styles.muted}>正在加载作品…</Text></View>;

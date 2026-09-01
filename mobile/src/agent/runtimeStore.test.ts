@@ -20,10 +20,13 @@ function fakeAgent() {
     subscribe(subscriber: typeof subscribers[number]) { subscribers.push(subscriber); return { unsubscribe: () => undefined }; },
     setMessages(messages: unknown[]) { this.messages = messages; },
     setState(state: Record<string, unknown>) { this.state = state; },
+    emitMessages(messages: unknown[], state: Record<string, unknown>) { for (const subscriber of subscribers) subscriber.onMessagesChanged?.({ messages, state }); },
+    emitState(messages: unknown[], state: Record<string, unknown>) { for (const subscriber of subscribers) subscriber.onStateChanged?.({ messages, state }); },
   };
 }
 
 const store = { save: jest.fn(async () => undefined) } as unknown as LocalThreadStore;
+const saveMock = store.save as jest.Mock;
 
 describe('prompt runtime registry', () => {
   it('reuses a hydrated agent for the same config and thread', () => {
@@ -43,5 +46,24 @@ describe('prompt runtime registry', () => {
     const changed = registry.ensure({ ...config, timeoutMs: 120000 }, snapshot('thread-1'), store);
 
     expect(changed.agent).not.toBe(first.agent);
+  });
+
+  it('coalesces rapid stream events into one latest snapshot save', async () => {
+    jest.useFakeTimers();
+    try {
+      saveMock.mockClear();
+      const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
+      const runtime = registry.ensure(config, snapshot('thread-1'), store);
+      const agent = runtime.agent as never as ReturnType<typeof fakeAgent>;
+      for (let index = 0; index < 20; index += 1) {
+        agent.emitMessages([{ id: 'message', role: 'assistant', content: String(index) }], { phase: 'running', index });
+      }
+      expect(saveMock).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(350);
+      expect(saveMock).toHaveBeenCalledTimes(1);
+      expect(saveMock.mock.calls[0][0]).toMatchObject({ messages: [{ content: '19' }], state: { index: 19 } });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
