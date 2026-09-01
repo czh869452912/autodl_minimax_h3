@@ -17,11 +17,11 @@
 - Modify: `mobile/src/create/CreateForm.tsx:121-126`
 - Test: `mobile/src/workflows/runtime/runtime.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add a test that calls `runtime.validateDraft(workflow, draft)` and expects `{ ok: false }` with `PROVENANCE_REQUIRED`, and a test that calls `runtime.submit(workflow, draft, {})` and verifies credentials, adapter, and job storage are untouched.
 
-- [ ] **Step 2: Run the focused tests to verify they fail**
+- [x] **Step 2: Run the focused tests to verify they fail**
 
 Run from `mobile/`:
 
@@ -31,11 +31,11 @@ npm test -- --runInBand src/workflows/runtime/runtime.test.ts
 
 Expected: the two new tests fail because the current implementation synthesizes provenance from the draft.
 
-- [ ] **Step 3: Implement the minimal fail-closed API**
+- [x] **Step 3: Implement the minimal fail-closed API**
 
 Change `validateDraft` to accept `expected: WorkflowProvenance` without a default and return a `PROVENANCE_REQUIRED` validation result when it is absent. Change `submit` to read a typed provenance option and reject when absent before credential lookup. Keep the existing CreateForm active-record comparison and provenance argument unchanged.
 
-- [ ] **Step 4: Run focused and regression tests**
+- [x] **Step 4: Run focused and regression tests**
 
 ```powershell
 npm test -- --runInBand src/workflows/runtime/runtime.test.ts src/create/createForm.test.ts
@@ -43,7 +43,7 @@ npm test -- --runInBand src/workflows/runtime/runtime.test.ts src/create/createF
 
 Expected: all tests pass, and the new rejection proves no side-effect dependency is called.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add mobile/src/workflows/runtime/runtime.ts mobile/src/workflows/runtime/runtime.test.ts mobile/src/create/CreateForm.tsx
@@ -60,11 +60,11 @@ git commit -m "fix: require active workflow provenance for submission"
 - Test: `mobile/src/tasks/downloadPolicy.test.ts`
 - Test: `mobile/src/tasks/media.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add a test that `validateArtifactUrl('https://public.example/video.mp4', [])` rejects and a media test that an artifact policy without a non-empty `allowedHosts` never calls the downloader. Add an AutoDL manifest assertion requiring its declared CDN host list to be non-empty.
 
-- [ ] **Step 2: Run focused tests to verify they fail**
+- [x] **Step 2: Run focused tests to verify they fail**
 
 ```powershell
 npm test -- --runInBand src/tasks/downloadPolicy.test.ts src/tasks/media.test.ts src/workflows/providers/registry.test.ts
@@ -72,11 +72,11 @@ npm test -- --runInBand src/tasks/downloadPolicy.test.ts src/tasks/media.test.ts
 
 Expected: the new tests fail because an omitted/empty allowlist currently permits public HTTPS hosts.
 
-- [ ] **Step 3: Implement the policy boundary**
+- [x] **Step 3: Implement the policy boundary**
 
 Add a provider-policy validation helper that requires at least one normalized host for remote downloads. Configure the AutoDL manifest with `allowedHosts: ['autodl.art']`, which also covers `cdn.autodl.art` through the existing suffix match. Keep local-file reuse before policy validation. Pass the complete policy, including `timeoutMs`, through sync, coordinator, queue, and media layers.
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 ```powershell
 npm test -- --runInBand src/tasks/downloadPolicy.test.ts src/tasks/media.test.ts src/tasks/coordinator.test.ts src/tasks/sync.test.ts
@@ -84,7 +84,7 @@ npm test -- --runInBand src/tasks/downloadPolicy.test.ts src/tasks/media.test.ts
 
 Expected: all focused tests pass and unallowlisted public hosts are rejected.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add mobile/src/workflows/providers/autodl/manifest.ts mobile/src/security/urlPolicy.ts mobile/src/tasks/media.ts mobile/src/tasks/sync.ts mobile/src/tasks/downloadPolicy.test.ts mobile/src/tasks/media.test.ts
@@ -100,11 +100,11 @@ git commit -m "fix: fail closed on provider artifact host policy"
 - Test: `mobile/src/tasks/downloadPolicy.test.ts`
 - Test: `mobile/src/tasks/download.test.ts`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Add tests for: a second redirect returned by the actual body request to an unallowlisted host; a streamed response that crosses `maxBytes`; a body read that exceeds `timeoutMs`; and cleanup of `.part` after each failure. Use an injected fetcher and a small file-writer abstraction so tests exercise real policy code rather than the native downloader mock.
 
-- [ ] **Step 2: Run focused tests to verify the failures**
+- [x] **Step 2: Run focused tests to verify the failures**
 
 ```powershell
 npm test -- --runInBand src/tasks/downloadPolicy.test.ts src/tasks/download.test.ts
@@ -112,11 +112,11 @@ npm test -- --runInBand src/tasks/downloadPolicy.test.ts src/tasks/download.test
 
 Expected: the new tests fail because the current preflight and native `downloadAsync` are separate request chains and timeout is ignored.
 
-- [ ] **Step 3: Implement the bounded downloader**
+- [x] **Step 3: Implement the bounded downloader**
 
 Implement a `downloadArtifact` helper that owns an `AbortController` and deadline, performs manual redirects (maximum three), validates every target, checks status and MIME, reads chunks through the response reader, aborts over `maxBytes`, and writes bytes to the `.part` destination. Ensure the timer is cleared only after the body is fully read. `downloadTask` must call this helper once and move the same `.part` path only after successful validation; all failure paths delete the partial file.
 
-- [ ] **Step 4: Run focused tests and typecheck**
+- [x] **Step 4: Run focused tests and typecheck**
 
 ```powershell
 npm test -- --runInBand src/tasks/downloadPolicy.test.ts src/tasks/download.test.ts src/tasks/media.test.ts
@@ -125,7 +125,7 @@ npm run typecheck
 
 Expected: focused tests and typecheck pass; no call to `FileSystem.downloadAsync` remains in the production artifact path.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add mobile/src/tasks/downloadPolicy.ts mobile/src/tasks/download.ts mobile/src/tasks/media.ts mobile/src/tasks/downloadPolicy.test.ts mobile/src/tasks/download.test.ts
@@ -138,11 +138,11 @@ git commit -m "fix: stream provider artifacts through one bounded request"
 - Modify: `mobile/src/workflows/registry/service.ts:40-77`
 - Test: `mobile/src/workflows/registry/service.test.ts`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Add a test where an allowlisted Registry URL returns a redirect to an unallowlisted domain and expect `REGISTRY_DOMAIN_REJECTED`. Add a body-reader test with a deferred `ReadableStream` and fake timers that expects an abort/timeout while consuming the body.
 
-- [ ] **Step 2: Run focused tests to verify they fail**
+- [x] **Step 2: Run focused tests to verify they fail**
 
 ```powershell
 npm test -- --runInBand src/workflows/registry/service.test.ts
@@ -150,11 +150,11 @@ npm test -- --runInBand src/workflows/registry/service.test.ts
 
 Expected: current `fetchSafe` follows redirects automatically and clears its timer before `readLimited` completes.
 
-- [ ] **Step 3: Implement shared safe fetch behavior**
+- [x] **Step 3: Implement shared safe fetch behavior**
 
 Make `fetchSafe` validate the initial and every redirect target against `allowDomains`, use a three-hop cap, pass `redirect: 'manual'`, and expose a response reader that keeps the same AbortController alive through `readLimited`. Apply it to index, package, and signature requests.
 
-- [ ] **Step 4: Run Registry tests and typecheck**
+- [x] **Step 4: Run Registry tests and typecheck**
 
 ```powershell
 npm test -- --runInBand src/workflows/registry/service.test.ts src/workflows/registry/packageBoundary.test.ts
@@ -163,7 +163,7 @@ npm run typecheck
 
 Expected: all Registry tests pass and package/signature verification remains unchanged.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add mobile/src/workflows/registry/service.ts mobile/src/workflows/registry/service.test.ts
@@ -179,11 +179,11 @@ git commit -m "fix: bound Registry redirects and response reads"
 - Test: `mobile/src/storage/database.test.ts`
 - Test: `mobile/src/workflows/registry/repository.test.ts`
 
-- [ ] **Step 1: Write failing migration tests**
+- [x] **Step 1: Write failing migration tests**
 
 Add tests proving version 4 migrates to version 5 without dropping legacy tables, rerunning migration is a no-op, and an injected DDL failure rolls back and records a read-only recovery diagnostic. Add a repository test proving construction no longer executes standalone Registry `CREATE/ALTER` statements.
 
-- [ ] **Step 2: Run focused tests to verify they fail**
+- [x] **Step 2: Run focused tests to verify they fail**
 
 ```powershell
 npm test -- --runInBand src/storage/database.test.ts src/workflows/registry/repository.test.ts
@@ -191,11 +191,11 @@ npm test -- --runInBand src/storage/database.test.ts src/workflows/registry/repo
 
 Expected: current code either leaves version unchanged or executes repository-local DDL and has no recovery state.
 
-- [ ] **Step 3: Implement migration runner**
+- [x] **Step 3: Implement migration runner**
 
 Raise `APP_SCHEMA_VERSION` to 5. Add `runAppMigrations(db, { backup })`, where `backup()` runs before any DDL, and add `getAppRecoveryState(db)` plus `markAppRecovery(db, diagnostic)` to persist a read-only recovery record in a dedicated app-owned metadata table. Wrap each migration in the existing transaction helper; on failure, rollback and mark the database read-only without dropping legacy tables. Put all Registry table/column changes in the migration and remove repository constructor DDL. Keep migrations repeatable by checking schema state/version before applying each step.
 
-- [ ] **Step 4: Run migration and Registry tests**
+- [x] **Step 4: Run migration and Registry tests**
 
 ```powershell
 npm test -- --runInBand src/storage/database.test.ts src/workflows/registry/repository.test.ts src/tasks/repository.test.ts src/jobs/repository.test.ts
@@ -204,7 +204,7 @@ npm run typecheck
 
 Expected: migration tests pass, legacy tables remain present, and failed migration exposes recovery state without deleting data.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add mobile/src/storage/database.ts mobile/src/storage/databaseClient.ts mobile/src/workflows/registry/repository.ts mobile/src/storage/database.test.ts mobile/src/workflows/registry/repository.test.ts
@@ -218,7 +218,7 @@ git commit -m "fix: migrate registry schema transactionally with recovery"
 - Review: `docs/superpowers/plans/2026-09-01-b1-closure.md`
 - Review: `docs/superpowers/handoffs/2026-09-01-c-d-stages-handoff.md`
 
-- [ ] **Step 1: Run the full TypeScript and Jest gates**
+- [x] **Step 1: Run the full TypeScript and Jest gates**
 
 ```powershell
 cd mobile
@@ -228,13 +228,13 @@ npm test -- --runInBand
 
 Expected: typecheck exits 0; all Jest suites pass with no new skips.
 
-- [ ] **Step 2: Run the real Android build gate**
+- [x] **Step 2: Run the real Android build gate**
 
 Use the established main-workspace Gradle command with Temurin 21 and Android SDK, then install to `emulator-5554`.
 
 Expected: `BUILD SUCCESSFUL`, APK installs, `MainActivity` cold-starts, and logcat contains no fatal/native loader/SQLite crash signatures.
 
-- [ ] **Step 3: Inspect the final diff and commit**
+- [x] **Step 3: Inspect the final diff and commit**
 
 ```powershell
 git diff --check HEAD~6..HEAD
@@ -244,9 +244,17 @@ git log --oneline -8
 
 Expected: clean worktree, all six findings mapped to tests and implementation, and no unrelated C/D changes.
 
-- [ ] **Step 4: Commit verification evidence**
+- [x] **Step 4: Commit verification evidence**
 
 ```powershell
 git add docs/superpowers/plans/2026-09-01-b1-security-reliability-closure.md
 git commit -m "docs: record B.1 closure verification"
 ```
+
+## Verification evidence
+
+- Main workspace `npm run typecheck`: passed.
+- Main workspace `npm test -- --runInBand`: 82 suites passed; 318 tests passed; 1 skipped.
+- Main workspace Android: `:app:assembleDebug -PreactNativeArchitectures=x86_64` passed with `BUILD SUCCESSFUL` using Temurin 21.
+- `emulator-5554`: APK streamed-installed successfully; `MainActivity` resumed; crash gate clean for fatal/native-loader/SQLite signatures.
+- Isolated worktree Android build was attempted and failed only on the known CMake/Ninja absolute-path generated-state issue; final Android evidence was therefore collected from the main workspace after cherry-picking the verified commits.
