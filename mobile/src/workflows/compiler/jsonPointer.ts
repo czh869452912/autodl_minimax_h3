@@ -22,7 +22,8 @@ export function getByJsonPointer(value: unknown, pointer: string): unknown {
 export function setByJsonPointer<T>(value: T, pointer: string, nextValue: unknown): T {
   const parts = parseJsonPointer(pointer);
   if (!parts.length) return nextValue as T;
-  const clone = structuredClone(value);
+  const cloneValue = (input: any): any => Array.isArray(input) ? input.map(cloneValue) : input && typeof input === 'object' ? Object.fromEntries(Object.entries(input).map(([key, child]) => [key, cloneValue(child)])) : input;
+  const clone = cloneValue(value);
   let current: any = clone;
   parts.forEach((segment, index) => {
     const last = index === parts.length - 1;

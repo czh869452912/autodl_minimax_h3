@@ -21,6 +21,7 @@
 - **原生视频播放**：在详情页预览视频，通过 AndroidX Media3 进入稳定的全屏播放模式。
 - **作品导出**：将视频保存到系统相册，也可按设置自动导出并保留应用内副本。
 - **本地安全存储**：AutoDL Token 和 LLM API Key 由 Expo SecureStore（Android Keystore）保存。
+- **工作流内核 B 阶段**：声明式 WorkflowPackage、受限 JSON Schema/JSON Pointer compiler、本地 Registry active/previous 指针、兼容性校验、固定 Git commit-attestation 校验，以及 Registry 驱动的创建页已经接入。远程工作流仍只能是签名声明式 JSON，不执行远程代码。
 
 ## 典型使用流程
 
@@ -169,7 +170,7 @@ Prompt 助手不是一个简单的文本输入框。它在 APK 内运行 DeepAge
 
 ### 规划中
 
-- **多工作流适配（M1/M2 已完成）**：已建立受限声明式 workflow Schema、builtin/local/remote Registry、签名与版本校验，并将 MiniMax H3 创建页和 AutoDL 任务运行迁移到 schema-driven renderer + adapter/runtime；后续仍需补充完整 Draft/附件绑定、第二平台和 Agent 直提交。
+- **多工作流适配（M1/M2/B 内核已完成）**：已建立 WorkflowPackage → compiler → adapter/runtime 的本地链路，支持 builtin/local/remote Registry、活动/回滚指针、签名与版本兼容校验、固定 Git commit-attestation 和 Registry 驱动创建页。后续仍需补充完整 Draft/附件 JSON Pointer 绑定、第二平台和 Agent 直提交。
 - **智能体直接创建任务**：让智能体根据对话选择工作流、补齐参数、展示提交预览，并在用户确认后直接创建任务。
 - **创作项目管理**：以项目为单位管理创作 Brief、分镜、Prompt、素材、生成任务和最终交付物。
 - **创作资产管理**：统一管理角色、场景、参考图、音频、视频和风格资产，支持标签、搜索、版本和跨项目复用。

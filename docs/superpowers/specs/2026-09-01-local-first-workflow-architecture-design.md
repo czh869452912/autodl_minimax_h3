@@ -292,3 +292,9 @@ The work is intentionally split into four independently testable plans:
 4. **Domain expansion** — projects, revisions, assets, batch/agent, local backup and future outbox.
 
 Each plan follows test-first development and preserves the no-server constraint.
+
+### B 阶段落地说明
+
+当前 B 阶段采用 `WorkflowPackage -> compiler -> WorkflowDefinition/Runtime -> adapter` 的单向边界。设备端 Registry 只持久化不可变 `(workflowId, version, contentHash)`，并以 `active/previous` 指针切换和回滚；CreateForm 不再直接依赖 provider workflow 常量。
+
+Git 订阅使用固定 HTTPS GitHub 仓库、固定 ref 和不可变 commit SHA。发布清单以 Ed25519 `commit-attestation` 签名，签名载荷绑定 repository、ref、commit、tree hash 与 package entries；客户端在安装前验证签名、package hash、schema 与兼容性，再进行 staged upsert/active 切换。B 阶段不执行远程脚本，也不依赖 GitHub API 或自建服务；原生 GPG/SSH Git commit 格式验证保留为未来可替换的 `CommitVerifier` 实现。
