@@ -53,8 +53,10 @@ export function createWorkflowRegistry(db: SQLiteDatabase | undefined): Workflow
     },
     async removeUnreferenced(keepHashes) {
       const records = await this.list();
-      const current = new Set((await Promise.all(records.map(async (item) => (await this.getActive(item.workflowId))?.contentHash))).filter(Boolean));
-      for (const item of records) if (!keepHashes.has(item.contentHash) && !current.has(item.contentHash)) {
+      const activeRows = new Map<string, ActiveRow>();
+      for (const item of records) { const row = db ? db.getFirstSync<ActiveRow>('SELECT * FROM workflow_registry_active WHERE workflow_id = ? LIMIT 1', item.workflowId) as ActiveRow | null : active.get(item.workflowId); if (row) activeRows.set(item.workflowId, row); }
+      const referenced = new Set<string>([...activeRows.values()].flatMap((row) => [row.content_hash, row.previous_hash].filter((hash): hash is string => Boolean(hash))));
+      for (const item of records) if (!keepHashes.has(item.contentHash) && !referenced.has(item.contentHash)) {
         if (!db) memory.delete(key(item.workflowId, item.version)); else db.runSync('DELETE FROM workflow_registry WHERE workflow_id = ? AND version = ?', item.workflowId, item.version);
       }
     },

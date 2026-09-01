@@ -25,3 +25,14 @@ test('removes only unreferenced inactive definitions', async () => {
   await store.removeUnreferenced(new Set(['aaa']));
   expect((await store.list()).map((item) => item.contentHash).sort()).toEqual(['aaa', 'bbb']);
 });
+
+test('retains the previous pointer so rollback remains possible after cleanup', async () => {
+  const store = createWorkflowRegistry(undefined);
+  await store.upsert(record('1.0.0', 'aaa'));
+  await store.upsert(record('2.0.0', 'bbb'));
+  await store.setActive('demo', '1.0.0', 'aaa');
+  await store.setActive('demo', '2.0.0', 'bbb');
+  await store.removeUnreferenced(new Set());
+  await store.rollback('demo');
+  expect(await store.getActive('demo')).toMatchObject({ version: '1.0.0' });
+});
