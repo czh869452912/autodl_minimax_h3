@@ -15,6 +15,13 @@ test('migrates the previous schema additively inside a transaction', () => {
   expect(calls).toContain(`PRAGMA user_version = ${APP_SCHEMA_VERSION}`);
 });
 
+test('does not mutate an older legacy schema before confirmation', () => {
+  const execSync = jest.fn();
+  const db = { execSync, getFirstSync: () => ({ user_version: APP_SCHEMA_VERSION - 2 }) };
+  ensureAppDatabase(db as never);
+  expect(execSync).not.toHaveBeenCalled();
+});
+
 test('does not reset a current schema epoch', () => {
   const execSync = jest.fn();
   ensureAppDatabase({ execSync, getFirstSync: () => ({ user_version: APP_SCHEMA_VERSION }) } as never);

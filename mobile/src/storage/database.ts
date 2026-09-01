@@ -119,6 +119,7 @@ export function ensureAppDatabase(db: SQLiteDatabase | undefined, options: AppDa
   if (version === undefined) return;
   if (version === APP_SCHEMA_VERSION) return;
   if (version != null && version > APP_SCHEMA_VERSION) return;
+  if (version !== APP_SCHEMA_VERSION - 1) return;
   try {
     options.backup?.();
     withTransaction(db, () => {
