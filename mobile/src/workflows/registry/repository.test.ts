@@ -36,3 +36,14 @@ test('retains the previous pointer so rollback remains possible after cleanup', 
   await store.rollback('demo');
   expect(await store.getActive('demo')).toMatchObject({ version: '1.0.0' });
 });
+
+test('initializes registry schema without using reserved SQLite keyword commit', () => {
+  const db = {
+    execSync: jest.fn((sql: string) => {
+      if (/\bcommit\s+TEXT\b/i.test(sql)) throw new Error('near "commit": syntax error');
+    }),
+    getFirstSync: jest.fn((sql: string) => sql.includes('PRAGMA') ? { user_version: 4 } : null),
+  };
+  expect(() => createWorkflowRegistry(db as never)).not.toThrow();
+  expect(db.execSync.mock.calls.flat()).not.toEqual(expect.arrayContaining([expect.stringMatching(/\bcommit\s+TEXT\b/i)]));
+});
