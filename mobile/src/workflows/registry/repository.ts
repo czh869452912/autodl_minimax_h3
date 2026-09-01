@@ -29,6 +29,26 @@ export function createWorkflowRegistry(db: SQLiteDatabase | undefined): Workflow
       if (!db) memory.set(key(record.workflowId, record.version), record);
       else db.runSync('INSERT INTO workflow_registry (workflow_id,version,content_hash,source,trust,definition_json,installed_at,repository,ref,commit_sha) VALUES (?,?,?,?,?,?,?,?,?,?)', record.workflowId, record.version, record.contentHash, record.source, record.trust, record.definitionJson, record.installedAt, record.repository ?? null, record.ref ?? null, record.commit ?? null);
     },
+    async installAndActivate(record) {
+      if (!db) {
+        const existing = memory.get(key(record.workflowId, record.version));
+        if (existing && existing.contentHash !== record.contentHash) throw new Error('workflow definition is immutable');
+        if (!existing) memory.set(key(record.workflowId, record.version), record);
+        const previous = active.get(record.workflowId);
+        active.set(record.workflowId, { workflow_id: record.workflowId, version: record.version, content_hash: record.contentHash, previous_version: previous?.version, previous_hash: previous?.content_hash });
+        return;
+      }
+      const transaction = (db as unknown as { withTransactionSync?: (fn: () => void) => void }).withTransactionSync;
+      const install = () => {
+        const existing = db.getFirstSync<Row>('SELECT * FROM workflow_registry WHERE workflow_id = ? AND version = ? LIMIT 1', record.workflowId, record.version) as Row | null | undefined;
+        if (existing && existing.content_hash !== record.contentHash) throw new Error('workflow definition is immutable');
+        if (!existing) db.runSync('INSERT INTO workflow_registry (workflow_id,version,content_hash,source,trust,definition_json,installed_at,repository,ref,commit_sha) VALUES (?,?,?,?,?,?,?,?,?,?)', record.workflowId, record.version, record.contentHash, record.source, record.trust, record.definitionJson, record.installedAt, record.repository ?? null, record.ref ?? null, record.commit ?? null);
+        const previous = db.getFirstSync<ActiveRow>('SELECT * FROM workflow_registry_active WHERE workflow_id = ? LIMIT 1', record.workflowId) as ActiveRow | null;
+        db.runSync('INSERT OR REPLACE INTO workflow_registry_active (workflow_id,version,content_hash,previous_version,previous_hash) VALUES (?,?,?,?,?)', record.workflowId, record.version, record.contentHash, previous?.version ?? null, previous?.content_hash ?? null);
+      };
+      if (transaction) transaction.call(db, install);
+      else { db.execSync('BEGIN'); try { install(); db.execSync('COMMIT'); } catch (error) { try { db.execSync('ROLLBACK'); } catch { /* best effort */ } throw error; } }
+    },
     get,
     async list(options = {}) {
       if (!db) return Array.from(memory.values()).filter((item) => (!options.workflowId || item.workflowId === options.workflowId) && (!options.source || item.source === options.source));

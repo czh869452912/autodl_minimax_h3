@@ -1,5 +1,9 @@
 import { createWorkflowRegistryService } from './service';
 import type { RegistryRecord } from './types';
+import { canonicalizeDefinition } from './canonicalize';
+import { sha256Hex } from './crypto';
+
+jest.mock('./trust', () => ({ verifySignedPayload: jest.fn(async () => true) }));
 
 const definition = { schemaVersion: '1.0', id: 'demo', version: '1.0.0', kind: 'atomic', platform: { adapter: 'demo', operation: 'workflow.submit' }, metadata: { title: 'Demo', category: 'video' }, inputs: { type: 'object', properties: {} }, request: { operation: 'workflow.submit', bindings: {} }, outputs: { artifacts: [] } };
 const record = (source: RegistryRecord['source']): RegistryRecord => ({ workflowId: 'demo', version: '1.0.0', contentHash: 'hash', source, trust: source === 'builtin' ? 'builtin' : 'trusted', definitionJson: JSON.stringify(definition), installedAt: 1 });
@@ -39,4 +43,32 @@ test('stages a Git package only after commit attestation validation', async () =
   const service = createWorkflowRegistryService({ repository: repository as never, adapters: [{ id: 'demo', operations: ['workflow.submit'] }], appVersion: '1.0.0' });
   await expect(service.installGitPackage({ repository: 'https://github.com/acme/workflows.git', allowedRef: 'refs/heads/main', registryId: 'acme', key: { registryId: 'acme', publicKey: '00', status: 'active' } }, { repository: 'https://evil.test/repo.git', ref: 'refs/heads/main', commit: 'a'.repeat(40), treeHash: 'b'.repeat(32), entries: [] }, '00', definition)).rejects.toMatchObject({ code: 'REGISTRY_GIT_ATTESTATION_INVALID' });
   expect(repository.upsert).not.toHaveBeenCalled();
+});
+
+test('activates a verified remote package after installation', async () => {
+  const payload = {
+    apiVersion: 'workflow.autodl/v1' as const,
+    kind: 'Workflow' as const,
+    metadata: { id: 'remote-demo', version: '1.0.0', title: 'Remote Demo', category: 'video' as const },
+    spec: {
+      adapter: { id: 'demo', version: '1.0.0', operation: 'workflow.submit' },
+      inputSchema: { type: 'object' as const, properties: {} },
+      bindings: {},
+      outputs: { artifacts: [] },
+    },
+  };
+  const contentHash = await sha256Hex(canonicalizeDefinition(payload));
+  const responses = [
+    new Response(JSON.stringify({ registryId: 'acme', entries: [{ workflowId: 'remote-demo', version: '1.0.0', contentHash, adapter: 'demo', operation: 'workflow.submit', signature: 'index-signature' }], signature: 'index-signature' })),
+    new Response(JSON.stringify(payload)),
+    new Response('package-signature'),
+  ];
+  const repository = { upsert: jest.fn(), get: jest.fn(), list: jest.fn(async () => []), setActive: jest.fn(), getActive: jest.fn(), rollback: jest.fn(), removeUnreferenced: jest.fn() };
+  const service = createWorkflowRegistryService({ repository: repository as never, adapters: [{ id: 'demo', operations: ['workflow.submit'] }], appVersion: '1.0.0', allowDomains: ['example.test'], keyring: [{ registryId: 'acme', publicKey: '00', status: 'active' }], fetch: jest.fn(async () => responses.shift()!) });
+
+  const record = await service.fetchAndActivate('remote-demo', '1.0.0', 'https://registry.example.test');
+
+  expect(record.contentHash).toBe(contentHash);
+  expect(repository.upsert).toHaveBeenCalledWith(record);
+  expect(repository.setActive).toHaveBeenCalledWith('remote-demo', '1.0.0', contentHash);
 });
