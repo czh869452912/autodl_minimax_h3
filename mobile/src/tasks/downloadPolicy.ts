@@ -21,5 +21,9 @@ export function validateDownloadResult(
   if (result.status < 200 || result.status >= 300) throw new Error(`下载失败（HTTP ${result.status}）`);
   if (!Number.isFinite(result.size) || result.size < 0 || result.size > maxBytes) throw new Error('下载文件大小超过限制');
   const mime = header(result.headers, 'content-type')?.split(';', 1)[0].trim().toLowerCase();
-  if (mime && !accepted.includes(mime)) throw new Error(`下载媒体类型不受支持：${mime}`);
+  if (!mime || !accepted.includes(mime)) throw new Error(`下载媒体类型不受支持：${mime ?? 'unknown'}`);
+}
+
+export function validateRedirectUrl(url: string, allowedHosts?: string[]): string {
+  return validateArtifactUrl(url, allowedHosts);
 }

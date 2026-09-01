@@ -62,4 +62,20 @@ describe('secure artifact download', () => {
     expect(fs.moveAsync).not.toHaveBeenCalled();
     expect(fs.deleteAsync).toHaveBeenCalledWith('file:///documents/media/task-1.mp4.part', { idempotent: true });
   });
+
+  it('cancels a resumable download when streamed bytes exceed the cap', async () => {
+    const cancelAsync = jest.fn(async () => undefined);
+    (fs as any).createDownloadResumable = jest.fn((_url: string, _target: string, _options: unknown, callback: (value: { totalBytesWritten: number }) => void) => ({
+      cancelAsync,
+      downloadAsync: jest.fn(async () => {
+        callback({ totalBytesWritten: 101 });
+        return { uri: 'file:///documents/media/task-1.mp4.part', status: 200, headers: { 'content-type': 'video/mp4' } };
+      }),
+    }));
+    fs.getInfoAsync.mockResolvedValue({ exists: true, uri: 'file:///documents/media/task-1.mp4.part', size: 101, isDirectory: false, modificationTime: 1 });
+    await expect(downloadTask(task, { maxBytes: 100 })).rejects.toThrow('大小');
+    expect(cancelAsync).toHaveBeenCalled();
+    (fs as any).createDownloadResumable = undefined;
+  });
+
 });

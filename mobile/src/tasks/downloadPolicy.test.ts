@@ -1,4 +1,4 @@
-import { validateArtifactUrl, validateDownloadResult } from './downloadPolicy';
+import { validateArtifactUrl, validateDownloadResult, validateRedirectUrl } from './downloadPolicy';
 
 test.each([
   'http://cdn.example.test/video.mp4',
@@ -19,4 +19,11 @@ test('rejects non-success, non-video, and oversized downloads', () => {
   expect(() => validateDownloadResult({ status: 500, headers: {}, size: 10 }, { maxBytes: 100 })).toThrow('HTTP 500');
   expect(() => validateDownloadResult({ status: 200, headers: { 'content-type': 'text/html' }, size: 10 }, { maxBytes: 100 })).toThrow('媒体类型');
   expect(() => validateDownloadResult({ status: 200, headers: { 'content-type': 'video/mp4' }, size: 101 }, { maxBytes: 100 })).toThrow('大小');
+});
+
+test('rejects missing MIME and revalidates every redirect target', () => {
+  expect(() => validateDownloadResult({ status: 200, headers: {}, size: 10 })).toThrow('媒体类型');
+  expect(validateRedirectUrl('https://cdn.example.test/next', ['example.test'])).toBe('https://cdn.example.test/next');
+  expect(() => validateRedirectUrl('http://cdn.example.test/next', ['example.test'])).toThrow('HTTPS');
+  expect(() => validateRedirectUrl('https://evil.test/next', ['example.test'])).toThrow('允许列表');
 });

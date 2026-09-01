@@ -11,7 +11,7 @@ export function nextDownloadState(task: Pick<TaskRecord, 'videoUrl' | 'localUri'
   return task.downloadState || (task.videoUrl ? 'IDLE' : 'DOWNLOAD_FAILED');
 }
 
-export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; maxBytes?: number } = {}): Promise<TaskRecord> {
+export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; maxBytes?: number; acceptedMimes?: string[] } = {}): Promise<TaskRecord> {
   if (!task.videoUrl) throw new Error('任务没有可下载的视频地址');
   if (task.localUri) {
     const info = await FileSystem.getInfoAsync(task.localUri);
@@ -26,10 +26,19 @@ export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patc
   try {
     await FileSystem.deleteAsync(partial, { idempotent: true });
     await options.onUpdate?.({ downloadState: 'DOWNLOADING', downloadProgress: 0, updatedAt: Date.now() });
-    const result = await FileSystem.downloadAsync(remoteUrl, partial);
+    const resumableFactory = (FileSystem as typeof FileSystem & { createDownloadResumable?: Function }).createDownloadResumable;
+    let oversized = false;
+    let resumable: { downloadAsync: () => Promise<any>; cancelAsync?: () => Promise<void> } | undefined;
+    const result = resumableFactory
+      ? await (resumable = resumableFactory(remoteUrl, partial, {}, (progress: { totalBytesWritten: number }) => {
+        if (progress.totalBytesWritten > (options.maxBytes ?? DEFAULT_VIDEO_DOWNLOAD_BYTES)) { oversized = true; void resumable?.cancelAsync?.(); }
+      })).downloadAsync()
+      : await FileSystem.downloadAsync(remoteUrl, partial);
+    if (oversized) throw new Error('下载文件大小超过限制');
+    if (!result) throw new Error('下载未返回文件');
     const info = await FileSystem.getInfoAsync(result.uri);
     const downloadedSize = info.exists && 'size' in info && typeof info.size === 'number' ? info.size : 0;
-    validateDownloadResult({ status: result.status ?? 200, headers: result.headers, size: downloadedSize }, { maxBytes: options.maxBytes ?? DEFAULT_VIDEO_DOWNLOAD_BYTES });
+    validateDownloadResult({ status: result?.status ?? 200, headers: result?.headers, size: downloadedSize }, { maxBytes: options.maxBytes ?? DEFAULT_VIDEO_DOWNLOAD_BYTES, acceptedMimes: options.acceptedMimes });
     await FileSystem.moveAsync({ from: result.uri, to: target });
     let thumbnailUrl = task.thumbnailUrl;
     try { thumbnailUrl = await extractPoster(target, task.id); } catch {}

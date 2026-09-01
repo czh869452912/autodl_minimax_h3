@@ -15,6 +15,9 @@ export type MediaDeps = {
 export type EnsureMediaOptions = {
   policy: MediaPolicy;
   onUpdate(patch: Partial<TaskRecord>): Promise<void>;
+  allowedHosts?: string[];
+  maxBytes?: number;
+  acceptedMimes?: string[];
   deps?: MediaDeps;
 };
 
@@ -66,6 +69,9 @@ async function downloadIfNeeded(task: TaskRecord, options: EnsureMediaOptions): 
       current = { ...current, ...patch };
       await options.onUpdate(patch);
     },
+    allowedHosts: options.allowedHosts,
+    maxBytes: options.maxBytes,
+    acceptedMimes: options.acceptedMimes,
   });
   return { task: { ...current, ...downloaded }, downloadedNow: true };
 }
