@@ -25,10 +25,13 @@ export function createMediaDeliveryQueue(deps: QueueDeps) {
 
   const processTask = async (entry: { task: TaskRecord; settings: Settings }) => {
     let current = entry.task;
-    await deps.ensureMedia(current, entry.settings, async (patch) => {
+    const onUpdate = async (patch: Partial<TaskRecord>) => {
       current = { ...current, ...patch };
       await deps.taskStore.upsert(current);
-    }, deps.getArtifactPolicy?.(current.adapterId));
+    };
+    const artifactPolicy = deps.getArtifactPolicy?.(current.adapterId);
+    if (artifactPolicy) await deps.ensureMedia(current, entry.settings, onUpdate, artifactPolicy);
+    else await deps.ensureMedia(current, entry.settings, onUpdate);
     if (!deps.mediaStore) return;
     const job = await deps.jobStore.get(current.id);
     const artifacts = job ? await deps.jobStore.listArtifacts(job.id) : [];
