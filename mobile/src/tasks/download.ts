@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import type { TaskRecord, DownloadState } from './types';
 import { extractPoster } from '../native/media';
-import { resolveArtifactRedirects, validateArtifactUrl, validateDownloadResult, DEFAULT_VIDEO_DOWNLOAD_BYTES } from './downloadPolicy';
+import { downloadArtifact, DEFAULT_VIDEO_DOWNLOAD_BYTES } from './downloadPolicy';
 
 export function nextDownloadState(task: Pick<TaskRecord, 'videoUrl' | 'localUri' | 'downloadState'>, event: 'enqueue' | 'start' | 'progress' | 'success' | 'failure'): DownloadState {
   if (event === 'success' || task.localUri) return 'DOWNLOADED';
@@ -11,13 +11,27 @@ export function nextDownloadState(task: Pick<TaskRecord, 'videoUrl' | 'localUri'
   return task.downloadState || (task.videoUrl ? 'IDLE' : 'DOWNLOAD_FAILED');
 }
 
-export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; maxBytes?: number; acceptedMimes?: string[]; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
+function bytesToBase64(bytes: Uint8Array): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  let output = '';
+  for (let index = 0; index < bytes.length; index += 3) {
+    const a = bytes[index];
+    const b = bytes[index + 1];
+    const c = bytes[index + 2];
+    output += chars[a >> 2];
+    output += chars[((a & 3) << 4) | (b == null ? 0 : b >> 4)];
+    output += b == null ? '=' : chars[((b & 15) << 2) | (c == null ? 0 : c >> 6)];
+    output += c == null ? '=' : chars[c & 63];
+  }
+  return output;
+}
+
+export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; maxBytes?: number; acceptedMimes?: string[]; timeoutMs?: number; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
   if (!task.videoUrl) throw new Error('任务没有可下载的视频地址');
   if (task.localUri) {
     const info = await FileSystem.getInfoAsync(task.localUri);
     if (info.exists) return { ...task, downloadState: 'DOWNLOADED' };
   }
-  const remoteUrl = await resolveArtifactRedirects(task.videoUrl, { allowedHosts: options.allowedHosts, fetcher: options.fetcher });
   const dir = `${FileSystem.documentDirectory || ''}media`;
   await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
   const target = `${dir}/${task.id}.mp4`;
@@ -26,20 +40,15 @@ export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patc
   try {
     await FileSystem.deleteAsync(partial, { idempotent: true });
     await options.onUpdate?.({ downloadState: 'DOWNLOADING', downloadProgress: 0, updatedAt: Date.now() });
-    const resumableFactory = (FileSystem as typeof FileSystem & { createDownloadResumable?: Function }).createDownloadResumable;
-    let oversized = false;
-    let resumable: { downloadAsync: () => Promise<any>; cancelAsync?: () => Promise<void> } | undefined;
-    const result = resumableFactory
-      ? await (resumable = resumableFactory(remoteUrl, partial, {}, (progress: { totalBytesWritten: number }) => {
-        if (progress.totalBytesWritten > (options.maxBytes ?? DEFAULT_VIDEO_DOWNLOAD_BYTES)) { oversized = true; void resumable?.cancelAsync?.(); }
-      })).downloadAsync()
-      : await FileSystem.downloadAsync(remoteUrl, partial);
-    if (oversized) throw new Error('下载文件大小超过限制');
-    if (!result) throw new Error('下载未返回文件');
-    const info = await FileSystem.getInfoAsync(result.uri);
-    const downloadedSize = info.exists && 'size' in info && typeof info.size === 'number' ? info.size : 0;
-    validateDownloadResult({ status: result?.status ?? 200, headers: result?.headers, size: downloadedSize }, { maxBytes: options.maxBytes ?? DEFAULT_VIDEO_DOWNLOAD_BYTES, acceptedMimes: options.acceptedMimes });
-    await FileSystem.moveAsync({ from: result.uri, to: target });
+    await downloadArtifact(task.videoUrl, {
+      allowedHosts: options.allowedHosts ?? [],
+      maxBytes: options.maxBytes ?? DEFAULT_VIDEO_DOWNLOAD_BYTES,
+      acceptedMimes: options.acceptedMimes,
+      timeoutMs: options.timeoutMs,
+      fetcher: options.fetcher,
+      writer: (chunk, append) => FileSystem.writeAsStringAsync(partial, bytesToBase64(chunk), { encoding: 'base64', append }),
+    });
+    await FileSystem.moveAsync({ from: partial, to: target });
     let thumbnailUrl = task.thumbnailUrl;
     try { thumbnailUrl = await extractPoster(target, task.id); } catch {}
     const complete = { ...task, localUri: target, thumbnailUrl, downloadState: 'DOWNLOADED' as const, downloadProgress: 1, downloadError: undefined, updatedAt: Date.now() };
