@@ -2,6 +2,20 @@ import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { FlatList, Text } from 'react-native';
 
+const mockFocusCallbacks: Array<() => void> = [];
+jest.mock('expo-router', () => ({
+  useFocusEffect: (effect: () => void) => {
+    const ReactModule = require('react');
+    ReactModule.useEffect(() => {
+      effect();
+      mockFocusCallbacks.push(effect);
+      return () => {
+        const index = mockFocusCallbacks.indexOf(effect);
+        if (index >= 0) mockFocusCallbacks.splice(index, 1);
+      };
+    }, [effect]);
+  },
+}));
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
 jest.mock('../tasks/sync', () => ({
   taskStore: { list: jest.fn(async () => [{ id: 'task-1', prompt: 'x', status: 'RUNNING', resolution: '768p竖', duration: 5, createdAt: 1_000, startedAt: 1_500, updatedAt: 2_000 }]) },
@@ -16,7 +30,9 @@ import { syncTasks, taskStore } from '../tasks/sync';
 
 afterEach(() => {
   jest.useRealTimers();
+  jest.clearAllMocks();
   jest.restoreAllMocks();
+  mockFocusCallbacks.splice(0, mockFocusCallbacks.length);
 });
 
 test('refreshes visible running duration every second while task is in progress', async () => {
@@ -70,4 +86,19 @@ test('does not poll again when the visible task set is terminal', async () => {
   const callsAfterLoad = jest.mocked(syncTasks).mock.calls.length;
   await act(async () => { jest.advanceTimersByTime(30_000); });
   expect(jest.mocked(syncTasks).mock.calls.length).toBe(callsAfterLoad);
+});
+
+test('refreshes when the task page receives focus after a new task is created', async () => {
+  jest.useFakeTimers();
+  jest.mocked(syncTasks).mockClear();
+  jest.mocked(syncTasks).mockResolvedValueOnce([]);
+  let renderer: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<TasksScreen />); });
+  expect(jest.mocked(syncTasks)).toHaveBeenCalledTimes(1);
+  const created = { id: 'new-task', prompt: 'new', status: 'QUEUED' as const, resolution: '768p竖', duration: 5, createdAt: 3_000, updatedAt: 3_000 };
+  jest.mocked(syncTasks).mockResolvedValueOnce([created]);
+  await act(async () => { mockFocusCallbacks[0]?.(); });
+  expect(jest.mocked(syncTasks)).toHaveBeenCalledTimes(2);
+  expect(renderer!.root.findAllByType(Text).some((node) => node.props.children === 'new')).toBe(true);
+  act(() => renderer!.unmount());
 });
