@@ -1,7 +1,7 @@
 # A/B 闭环与 C/D 阶段交接
 
 > 更新时间：2026-09-02
-> 交接基线：`main` 与 `dev` 均为 `e69c7fd274b1c8d6c6251bff820f020083ffad0b`，标签 `v1.4.5` 已发布。
+> 交接基线：`main` 与 `dev` 同步于本文所在提交；固定发布基线 `v1.4.5` 指向 `e69c7fd274b1c8d6c6251bff820f020083ffad0b`。
 
 ## 1. 接手后先看什么
 
@@ -14,7 +14,7 @@
 
 ## 2. 当前发布与分支状态
 
-- `main`、`dev`、`origin/main`、`origin/dev` 均指向 `e69c7fd2`。
+- `main`、`dev`、`origin/main`、`origin/dev` 均指向包含本文的同一交接提交。
 - `v1.4.5` 标签已推送，GitHub Release 已创建：<https://github.com/czh869452912/autodl_minimax_h3/releases/tag/v1.4.5>。
 - Release 资产：`AutoDL-H3-v1.4.5-apk-universal.apk`。
 - 正式发布 Actions 运行 `33523226885` 成功：类型检查、单元测试、签名 universal APK、四 ABI、`apksigner` 和 Release 创建均通过。
@@ -124,7 +124,7 @@ D-Core 之后再规划 Batch/Variant、项目包导出/导入、备份/同步/�
 
 ## 8. 下一次接手的执行清单
 
-1. `git status --short --branch`，确认 `main`/`dev` 仍为 `e69c7fd2`，不要改动 `local.properties`。
+1. `git status --short --branch`，确认 `main`/`dev` 仍指向同一提交且都包含本文，不要改动 `local.properties`。
 2. 从 `dev` 创建 `codex/c-core-schema` 隔离 worktree。
 3. 阅读 `docs/superpowers/plans/2026-09-01-c-core.md` Task 1 和现有 `mobile/src/storage/database*` 实现。
 4. 先写真实 SQLite migration RED 测试：repeatable migration、legacy table 保留、注入 DDL 失败后 rollback + recovery state。
