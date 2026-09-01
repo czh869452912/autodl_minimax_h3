@@ -1,8 +1,10 @@
 import type { HttpTransport } from '../../../providers/httpTransport';
 import { buildAutodlSubmitRequest, type AutodlInput } from './mapping';
+import { H3_WORKFLOW_ID } from './metadata';
+
+export { H3_WORKFLOW_ID } from './metadata';
 
 const BASE_URL = 'https://autodl.art/api/v1/comfyui/comfyui_workflow/';
-const H3_WORKFLOW_ID = 'minimax_h3_image_audio_to_video_v2_15s';
 
 export type ProviderErrorKind = 'network' | 'timeout' | 'auth' | 'http' | 'provider' | 'response';
 export type AutodlResponseData = { task_id?: string; status?: unknown; results?: unknown; created_at?: unknown; started_at?: unknown; duration?: unknown };
