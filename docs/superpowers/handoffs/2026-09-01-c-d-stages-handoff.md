@@ -1,6 +1,6 @@
 # C / D 阶段开发交接（Handoff）
 
-> 交接基线：`dev`，当前 HEAD：`99d6427e835739a64ca45a3f705a97606169be02`（2026-09-01）。
+> 交接基线：`dev`，当前发布准备基线：`30895e06787c84b7fdb519868ef0641cb7692bd8`（2026-09-01）。
 >
 > B 阶段 hotfix 已包含在当前基线：`1595999b fix: prevent SQLite registry initialization crash`。
 
@@ -39,7 +39,7 @@ Git 内容只能是数据，不能下载或执行 JavaScript、脚本、插件�
 - 当前 Git 订阅实现验证 Ed25519 `commit-attestation`，并非原生 GPG/SSH `git verify-commit`；后者应通过抽象 verifier 在后续单独实现。
 - AutoDL adapter 仍是 POST 提交 + GET 结果轮询；不能假设 AutoDL wrapper 提供原生 ComfyUI WebSocket、上传、队列或取消能力。
 - `workflow_jobs` 目前是 job snapshot，不是完整 Operation/Event durable executor。
-- Android 构建：emulator/adb 可用，但本机 Gradle 构建目前在解析 `com.facebook.react.settings` 时失败并报告 `25.0.2`；需要先修复构建依赖/缓存，再做 APK 冷启动验证。
+- Android 构建：主工作区已使用 JDK 21 和 x86_64 ABI 完成 `:app:assembleDebug`，并通过 emulator 安装、冷启动及 crash log 检查；隔离 worktree 的 CMake/Ninja 路径问题不代表源码失败。
 - 主工作区 `local.properties` 是用户本地文件，必须保持未提交、未修改。
 
 ## 3. C 阶段：M3 Durable Local Executor
@@ -197,17 +197,16 @@ Project
 - `adb` 位于 `C:\Users\fai_l\AppData\Local\Android\Sdk\platform-tools\adb.exe`；
 - `emulator-5554` 可用；
 - Android Studio JBR 位于 `C:\Program Files\Android\Android Studio\jbr`；
-- 设置 `JAVA_HOME` 后 Gradle 仍在 `settings.gradle:21` 解析 `com.facebook.react.settings` 时失败，错误为 `25.0.2`。
+- 主工作区设置 `JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.7.6-hotspot` 后，`:app:assembleDebug -PreactNativeArchitectures=x86_64` 构建成功。
+- Debug APK 已安装至 `emulator-5554`，`MainActivity` 冷启动成功，`adb logcat -b crash` 未发现 NativeDatabase/SQLite/SoLoader 崩溃。
 
-进入 C 前优先修复构建链：
+后续发布前仍需执行：
 
-1. 检查 `mobile/node_modules/@react-native/gradle-plugin` 和 Expo/RN 版本是否与 lockfile 一致；
-2. 检查 Gradle includeBuild 和 plugin resolution cache；
-3. 用 `./gradlew :app:dependencies --stacktrace --info` 获取完整解析原因；
-4. 不要通过降低 RN/Expo 版本或删除 lockfile 来规避；
-5. 构建成功后安装 debug APK，冷启动并进入 Create 页；
-6. 使用 `adb logcat -b crash` 确认无 `NativeDatabase.execSync`/SQLite DDL 崩溃；
-7. 验证 registry bootstrap、任务创建、后台恢复和媒体下载。
+1. 在 `main` 上创建新版本 tag 后由 release workflow 使用 JDK 17 重建 signed APK；
+2. 校验 APK 的 version、四种 ABI 和 `apksigner verify`；
+3. 下载正式 APK，在 `emulator-5554` 上安装并冷启动；
+4. 使用 `adb logcat -b crash` 确认无 `NativeDatabase.execSync`/SQLite DDL 崩溃；
+5. 验证 registry bootstrap、任务创建、后台恢复和媒体下载。
 
 ## 7. 工作方式与提交要求
 
