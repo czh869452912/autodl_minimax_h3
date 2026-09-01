@@ -68,4 +68,21 @@ describe('task media delivery orchestration', () => {
     expect(deps.publish).not.toHaveBeenCalledWith('content://media/video/old', expect.anything());
     expect(deps.publish).toHaveBeenCalledWith('file:///restored.mp4', { mediaId: task.id, displayName: 'task-1.mp4' });
   });
+
+  it('forwards adapter artifact policy to the downloader', async () => {
+    const deps = {
+      download: jest.fn().mockResolvedValue({ ...task, localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED' as const }),
+      publish: jest.fn(),
+      removePrivate: jest.fn(),
+    };
+    await ensureTaskMedia(task, {
+      policy: { autoExportToGallery: false, keepPrivateCopy: true },
+      allowedHosts: ['cdn.example.test'],
+      acceptedMimes: ['video/mp4'],
+      maxBytes: 100,
+      onUpdate: jest.fn(async () => undefined),
+      deps,
+    });
+    expect(deps.download).toHaveBeenCalledWith(task, expect.objectContaining({ allowedHosts: ['cdn.example.test'], acceptedMimes: ['video/mp4'], maxBytes: 100 }));
+  });
 });

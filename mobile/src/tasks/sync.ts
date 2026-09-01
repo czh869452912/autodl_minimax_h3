@@ -13,13 +13,15 @@ const database = getDatabase();
 export const taskStore = createTaskRepository(database);
 export const mediaStore = createSqliteMediaStore(database);
 const jobStore = createJobRepository(database);
+const providerAdapters = createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? undefined : undefined });
 const coordinator = createTaskSyncCoordinator({
   readSettings,
   taskStore,
   jobStore,
   mediaStore,
   createRuntime: (token) => createWorkflowRuntime({ adapters: createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? token : undefined }), jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `sync-${Date.now()}` }),
-  ensureMedia: (task, settings, onUpdate) => ensureTaskMedia(task, { policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: settings.keepPrivateCopy }, onUpdate }),
+  getArtifactPolicy: (adapterId) => adapterId ? providerAdapters.get(adapterId)?.manifest().artifactDownloadPolicy : undefined,
+  ensureMedia: (task, settings, onUpdate, artifactPolicy) => ensureTaskMedia(task, { policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: settings.keepPrivateCopy }, onUpdate, ...artifactPolicy }),
 });
 
 export async function syncTaskRun(reason: 'foreground' | 'background' | 'service' = 'foreground', taskIds?: string[]) {

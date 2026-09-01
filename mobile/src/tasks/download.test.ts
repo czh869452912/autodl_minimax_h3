@@ -32,6 +32,7 @@ describe('download state machine', () => {
 describe('secure artifact download', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    global.fetch = jest.fn(async () => new Response(null, { status: 200 }));
     fs.makeDirectoryAsync.mockResolvedValue(undefined);
     fs.deleteAsync.mockResolvedValue(undefined);
     fs.moveAsync.mockResolvedValue(undefined);

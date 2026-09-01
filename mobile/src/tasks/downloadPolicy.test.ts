@@ -1,4 +1,4 @@
-import { validateArtifactUrl, validateDownloadResult, validateRedirectUrl } from './downloadPolicy';
+import { resolveArtifactRedirects, validateArtifactUrl, validateDownloadResult, validateRedirectUrl } from './downloadPolicy';
 
 test.each([
   'http://cdn.example.test/video.mp4',
@@ -26,4 +26,13 @@ test('rejects missing MIME and revalidates every redirect target', () => {
   expect(validateRedirectUrl('https://cdn.example.test/next', ['example.test'])).toBe('https://cdn.example.test/next');
   expect(() => validateRedirectUrl('http://cdn.example.test/next', ['example.test'])).toThrow('HTTPS');
   expect(() => validateRedirectUrl('https://evil.test/next', ['example.test'])).toThrow('允许列表');
+});
+
+test('follows only allowlisted HTTPS redirects and caps hops', async () => {
+  const fetcher = jest.fn()
+    .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: 'https://cdn.example.test/next' } }))
+    .mockResolvedValueOnce(new Response(null, { status: 200 }));
+  await expect(resolveArtifactRedirects('https://cdn.example.test/start', { allowedHosts: ['example.test'], fetcher })).resolves.toBe('https://cdn.example.test/next');
+  const unsafe = jest.fn().mockResolvedValue(new Response(null, { status: 302, headers: { location: 'http://evil.test/file' } }));
+  await expect(resolveArtifactRedirects('https://cdn.example.test/start', { allowedHosts: ['example.test'], fetcher: unsafe })).rejects.toThrow('HTTPS');
 });

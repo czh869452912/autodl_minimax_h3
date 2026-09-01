@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import type { TaskRecord, DownloadState } from './types';
 import { extractPoster } from '../native/media';
-import { validateArtifactUrl, validateDownloadResult, DEFAULT_VIDEO_DOWNLOAD_BYTES } from './downloadPolicy';
+import { resolveArtifactRedirects, validateArtifactUrl, validateDownloadResult, DEFAULT_VIDEO_DOWNLOAD_BYTES } from './downloadPolicy';
 
 export function nextDownloadState(task: Pick<TaskRecord, 'videoUrl' | 'localUri' | 'downloadState'>, event: 'enqueue' | 'start' | 'progress' | 'success' | 'failure'): DownloadState {
   if (event === 'success' || task.localUri) return 'DOWNLOADED';
@@ -11,13 +11,13 @@ export function nextDownloadState(task: Pick<TaskRecord, 'videoUrl' | 'localUri'
   return task.downloadState || (task.videoUrl ? 'IDLE' : 'DOWNLOAD_FAILED');
 }
 
-export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; maxBytes?: number; acceptedMimes?: string[] } = {}): Promise<TaskRecord> {
+export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; maxBytes?: number; acceptedMimes?: string[]; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
   if (!task.videoUrl) throw new Error('任务没有可下载的视频地址');
   if (task.localUri) {
     const info = await FileSystem.getInfoAsync(task.localUri);
     if (info.exists) return { ...task, downloadState: 'DOWNLOADED' };
   }
-  const remoteUrl = validateArtifactUrl(task.videoUrl, options.allowedHosts);
+  const remoteUrl = await resolveArtifactRedirects(task.videoUrl, { allowedHosts: options.allowedHosts, fetcher: options.fetcher });
   const dir = `${FileSystem.documentDirectory || ''}media`;
   await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
   const target = `${dir}/${task.id}.mp4`;

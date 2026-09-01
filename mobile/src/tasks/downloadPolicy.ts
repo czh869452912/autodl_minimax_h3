@@ -27,3 +27,24 @@ export function validateDownloadResult(
 export function validateRedirectUrl(url: string, allowedHosts?: string[]): string {
   return validateArtifactUrl(url, allowedHosts);
 }
+
+export async function resolveArtifactRedirects(
+  initialUrl: string,
+  options: { allowedHosts?: string[]; fetcher?: typeof fetch; maxHops?: number } = {},
+): Promise<string> {
+  let current = validateRedirectUrl(initialUrl, options.allowedHosts);
+  const fetcher = options.fetcher ?? fetch;
+  const maxHops = options.maxHops ?? 3;
+  for (let hop = 0; hop <= maxHops; hop += 1) {
+    const response = await fetcher(current, { method: 'HEAD', redirect: 'manual' });
+    if (response.status < 300 || response.status >= 400) {
+      if (!response.ok && response.status !== 405) throw new Error(`下载失败（HTTP ${response.status}）`);
+      return current;
+    }
+    if (hop === maxHops) throw new Error('下载重定向次数超过限制');
+    const location = response.headers.get('location');
+    if (!location) throw new Error('下载重定向缺少目标地址');
+    current = validateRedirectUrl(new URL(location, current).toString(), options.allowedHosts);
+  }
+  throw new Error('下载重定向次数超过限制');
+}
