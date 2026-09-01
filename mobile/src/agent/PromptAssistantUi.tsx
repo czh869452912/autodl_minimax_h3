@@ -83,6 +83,8 @@ export function PromptAssistantUi({
   const [mentionSheetOpen, setMentionSheetOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [stopNotice, setStopNotice] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
   const inputRef = useRef<TextInput>(null);
   const attachmentNames = useRef(new Map<string, string>());
   const nextAttachmentNumber = useRef(1);
@@ -149,9 +151,12 @@ export function PromptAssistantUi({
     }
   }, [pendingRow, persistedRows]);
   const handleSubmit = async (value: string) => {
+    if (submitLock.current || isRunning) return;
     const ready = [...attachments.filter((item) => item.status === 'ready'), ...galleryAttachments];
     if (!value.trim() && !ready.length)
       return;
+    submitLock.current = true;
+    setSubmitting(true);
     setStopNotice(null);
     const readyAttachments: Array<{ uri: string; filename?: string; displayName?: string }> = ready
       .map((item) => {
@@ -178,7 +183,14 @@ export function PromptAssistantUi({
         () => setGalleryAttachments([]),
       );
     }
-    await submitMessage(value);
+    try {
+      await submitMessage(value);
+    } catch (error) {
+      setStopNotice(error instanceof Error ? error.message : '发送失败');
+    } finally {
+      submitLock.current = false;
+      setSubmitting(false);
+    }
   };
   const addGalleryImages = async () => {
     try {
@@ -314,7 +326,7 @@ export function PromptAssistantUi({
           ) : null}
           <ConversationTimeline
             rows={rows}
-            isRunning={isRunning}
+            isRunning={isRunning || submitting}
             onExportPrompt={onExportPrompt}
           />
           <View style={styles.composerDock}>
@@ -328,7 +340,7 @@ export function PromptAssistantUi({
                 agent.abortRun?.();
                 setStopNotice('已停止生成');
               }}
-              isRunning={isRunning}
+              isRunning={isRunning || submitting}
               attachments={composerAttachments}
               inputRef={inputRef}
               selection={inputSelection}

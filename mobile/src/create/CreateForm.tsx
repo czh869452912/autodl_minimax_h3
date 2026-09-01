@@ -29,9 +29,11 @@ import { createWorkflowRuntime } from '../workflows/runtime/runtime';
 import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
 import { canonicalizeDefinition } from '../workflows/registry/canonicalize';
 import { sha256Hex } from '../workflows/registry/crypto';
+import { createSubmissionGate } from './submissionGate';
 
 const taskStore = createTaskRepository(openDatabaseSync('autodl-h3.db'));
 const jobStore = createJobRepository(openDatabaseSync('autodl-h3.db'));
+const submissionGate = createSubmissionGate();
 
 const promptDraftStore = createPromptDraftStore(
   openDatabaseSync('autodl-h3.db'),
@@ -99,6 +101,7 @@ export function CreateForm({
       Alert.alert('提示', '请输入 Prompt 描述');
       return;
     }
+    if (!submissionGate.tryAcquire()) return;
     setSubmitting(true);
     try {
       const settings = await readSettings();
@@ -126,6 +129,7 @@ export function CreateForm({
         error instanceof Error ? error.message : '未知错误',
       );
     } finally {
+      submissionGate.release();
       setSubmitting(false);
     }
   };

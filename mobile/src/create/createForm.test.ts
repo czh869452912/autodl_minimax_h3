@@ -2,6 +2,7 @@ import { buildAutodlSubmitRequest } from '../workflows/providers/autodl/mapping'
 import { resolveDraftPrompt } from './draftPrompt';
 import { RESOLUTION_OPTIONS } from './resolutions';
 import type { TaskMediaInput } from '../tasks/types';
+import { createSubmissionGate } from './submissionGate';
 
 const image: TaskMediaInput = { dataUri: 'data:image/png;base64,a', name: 'ref.png', mime: 'image/png' };
 
@@ -23,5 +24,13 @@ describe('create form contracts', () => {
     const payload = buildAutodlSubmitRequest({ prompt: 'p', duration: 5, resolution: RESOLUTION_OPTIONS[0], images, audios });
     expect(Object.keys(payload).filter((key) => key.startsWith('ref_image_'))).toHaveLength(9);
     expect(Object.keys(payload).filter((key) => key.startsWith('ref_audio_'))).toHaveLength(3);
+  });
+
+  it('allows only one in-flight generation submission', async () => {
+    const gate = createSubmissionGate();
+    expect(gate.tryAcquire()).toBe(true);
+    expect(gate.tryAcquire()).toBe(false);
+    gate.release();
+    expect(gate.tryAcquire()).toBe(true);
   });
 });

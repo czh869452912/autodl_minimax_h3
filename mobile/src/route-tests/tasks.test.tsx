@@ -62,3 +62,12 @@ test('offers gallery retry without calling a successful download failed', async 
   expect(texts).not.toContain('下载失败');
   act(() => { renderer!.unmount(); });
 });
+
+test('does not poll again when the visible task set is terminal', async () => {
+  jest.useFakeTimers();
+  jest.mocked(syncTasks).mockResolvedValue([{ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, createdAt: 1_000, updatedAt: 2_000 }]);
+  await act(async () => { create(<TasksScreen />); });
+  const callsAfterLoad = jest.mocked(syncTasks).mock.calls.length;
+  await act(async () => { jest.advanceTimersByTime(30_000); });
+  expect(jest.mocked(syncTasks).mock.calls.length).toBe(callsAfterLoad);
+});

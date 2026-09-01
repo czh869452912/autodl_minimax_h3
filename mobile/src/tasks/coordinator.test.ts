@@ -99,3 +99,24 @@ test('recovers a task projection when a persisted workflow job has no task row',
 
   expect(value.taskStore.upsert).toHaveBeenCalledWith(expect.objectContaining({ id: 'orphan-job', status: 'RUNNING', videoUrl: 'https://cdn.test/video' }));
 });
+
+test('does not enumerate completed jobs when an active-job query is available', async () => {
+  const value = setup([task('local-1', 'RUNNING'), task('done-1', 'SUCCESS')], [job('local-1', 'remote-1')]);
+  const activeJob = jest.fn(async () => [job('local-1', 'remote-1')]);
+  (value.jobStore as typeof value.jobStore & { listActive?: typeof activeJob }).listActive = activeJob;
+  await value.coordinator.run();
+  expect(activeJob).toHaveBeenCalledTimes(1);
+  expect(value.jobStore.list).not.toHaveBeenCalled();
+});
+
+test('does not run media delivery for already delivered completed tasks', async () => {
+  const value = setup([{ ...task('done-1', 'SUCCESS'), videoUrl: 'https://cdn.test/video', downloadState: 'DOWNLOADED', exportState: 'EXPORTED' }], []);
+  await value.coordinator.run();
+  expect(value.ensureMedia).not.toHaveBeenCalled();
+});
+
+test('does not automatically retry a failed historical download', async () => {
+  const value = setup([{ ...task('failed-download-1', 'SUCCESS'), videoUrl: 'https://cdn.test/video', downloadState: 'DOWNLOAD_FAILED', downloadError: '空间不足' }], []);
+  await value.coordinator.run();
+  expect(value.ensureMedia).not.toHaveBeenCalled();
+});

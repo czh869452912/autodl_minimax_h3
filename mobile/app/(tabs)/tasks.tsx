@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppIcon } from '../../src/ui/icons';
 import { COLORS, SPACING } from '../../src/ui/theme';
@@ -19,9 +19,12 @@ export default function TasksScreen() {
   const [cursor, setCursor] = useState<{ createdAt: number; id: string }>();
   const [loadingMore, setLoadingMore] = useState(false);
   const [monitoring, setMonitoring] = useState(false);
-  const load = useCallback(async (manual = false) => { setSyncing(true); try { const synced = await syncTasks(); const page = await (taskStore as typeof taskStore & { listPage?: (options?: { limit?: number }) => Promise<{ items: TaskRecord[]; nextCursor?: { createdAt: number; id: string } }> }).listPage?.({ limit: 40 }); if (page) { setTasks(page.items); setCursor(page.nextCursor); } else setTasks(synced); setLastUpdatedAt(Date.now()); } catch (error) { if (manual) Alert.alert('刷新失败', error instanceof Error ? error.message : '任务状态同步失败'); } finally { setSyncing(false); } }, []);
+  const loadInFlight = useRef(false);
+  const load = useCallback(async (manual = false) => { if (loadInFlight.current) return; loadInFlight.current = true; setSyncing(true); try { const synced = await syncTasks(); const page = await (taskStore as typeof taskStore & { listPage?: (options?: { limit?: number }) => Promise<{ items: TaskRecord[]; nextCursor?: { createdAt: number; id: string } }> }).listPage?.({ limit: 40 }); if (page) { setTasks(page.items); setCursor(page.nextCursor); } else setTasks(synced); setLastUpdatedAt(Date.now()); } catch (error) { if (manual) Alert.alert('刷新失败', error instanceof Error ? error.message : '任务状态同步失败'); } finally { loadInFlight.current = false; setSyncing(false); } }, []);
   const loadMore = useCallback(async () => { if (!cursor || loadingMore || !(taskStore as typeof taskStore & { listPage?: unknown }).listPage) return; setLoadingMore(true); try { const page = await (taskStore as typeof taskStore & { listPage: (options: { limit: number; cursor: { createdAt: number; id: string } }) => Promise<{ items: TaskRecord[]; nextCursor?: { createdAt: number; id: string } }> }).listPage({ limit: 40, cursor }); setTasks((items) => [...items, ...page.items.filter((item) => !items.some((current) => current.id === item.id))]); setCursor(page.nextCursor); } finally { setLoadingMore(false); } }, [cursor, loadingMore]);
-  useEffect(() => { void load(); const timer = setInterval(() => void load(), 10000); const clock = setInterval(() => setNow(Date.now()), 1000); return () => { clearInterval(timer); clearInterval(clock); }; }, [load]);
+  useEffect(() => { void load(); const clock = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(clock); }, [load]);
+  const hasActiveTasks = tasks.some((item) => item.status === 'QUEUED' || item.status === 'RUNNING' || item.status === 'UNKNOWN');
+  useEffect(() => { if (!hasActiveTasks) return; const timer = setInterval(() => void load(), 10000); return () => clearInterval(timer); }, [hasActiveTasks, load]);
   useEffect(() => { void getTaskMonitorStatus().then((value) => setMonitoring(value.running)); }, []);
   const toggleMonitoring = async () => { if (monitoring) { await stopTaskMonitor(); setMonitoring(false); return; } const activeIds = tasks.filter((item) => item.status === 'QUEUED' || item.status === 'RUNNING' || item.status === 'UNKNOWN').map((item) => item.id); if (await startTaskMonitor(activeIds)) setMonitoring(true); };
   const remove = async (id: string) => { await taskStore.remove(id); setTasks((items) => items.filter((item) => item.id !== id)); };
