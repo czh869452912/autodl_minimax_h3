@@ -15,6 +15,11 @@ test('enforces an adapter-provided artifact host list', () => {
   expect(() => validateArtifactUrl('https://cdn.other.test/video.mp4', ['example.test'])).toThrow('域名不在允许列表');
 });
 
+test('rejects artifact URLs when the provider host allowlist is empty', () => {
+  expect(() => validateArtifactUrl('https://public.example/video.mp4', [])).toThrow('允许列表');
+  expect(() => validateArtifactUrl('https://public.example/video.mp4')).toThrow('允许列表');
+});
+
 test('rejects non-success, non-video, and oversized downloads', () => {
   expect(() => validateDownloadResult({ status: 500, headers: {}, size: 10 }, { maxBytes: 100 })).toThrow('HTTP 500');
   expect(() => validateDownloadResult({ status: 200, headers: { 'content-type': 'text/html' }, size: 10 }, { maxBytes: 100 })).toThrow('媒体类型');

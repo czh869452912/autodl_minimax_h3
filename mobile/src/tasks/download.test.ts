@@ -52,14 +52,14 @@ describe('secure artifact download', () => {
   it('publishes a valid video only after response and file validation', async () => {
     fs.downloadAsync.mockResolvedValue({ uri: 'file:///documents/media/task-1.mp4.part', status: 200, headers: { 'content-type': 'video/mp4' }, mimeType: 'video/mp4' });
     fs.getInfoAsync.mockResolvedValue({ exists: true, uri: 'file:///documents/media/task-1.mp4.part', size: 100, isDirectory: false, modificationTime: 1 });
-    await expect(downloadTask(task)).resolves.toMatchObject({ downloadState: 'DOWNLOADED', localUri: 'file:///documents/media/task-1.mp4' });
+    await expect(downloadTask(task, { allowedHosts: ['example.test'] })).resolves.toMatchObject({ downloadState: 'DOWNLOADED', localUri: 'file:///documents/media/task-1.mp4' });
     expect(fs.moveAsync).toHaveBeenCalledWith({ from: 'file:///documents/media/task-1.mp4.part', to: 'file:///documents/media/task-1.mp4' });
   });
 
   it('deletes the partial file instead of publishing a non-video response', async () => {
     fs.downloadAsync.mockResolvedValue({ uri: 'file:///documents/media/task-1.mp4.part', status: 200, headers: { 'content-type': 'text/html' }, mimeType: 'text/html' });
     fs.getInfoAsync.mockResolvedValue({ exists: true, uri: 'file:///documents/media/task-1.mp4.part', size: 100, isDirectory: false, modificationTime: 1 });
-    await expect(downloadTask(task)).rejects.toThrow('媒体类型');
+    await expect(downloadTask(task, { allowedHosts: ['example.test'] })).rejects.toThrow('媒体类型');
     expect(fs.moveAsync).not.toHaveBeenCalled();
     expect(fs.deleteAsync).toHaveBeenCalledWith('file:///documents/media/task-1.mp4.part', { idempotent: true });
   });
@@ -74,7 +74,7 @@ describe('secure artifact download', () => {
       }),
     }));
     fs.getInfoAsync.mockResolvedValue({ exists: true, uri: 'file:///documents/media/task-1.mp4.part', size: 101, isDirectory: false, modificationTime: 1 });
-    await expect(downloadTask(task, { maxBytes: 100 })).rejects.toThrow('大小');
+    await expect(downloadTask(task, { maxBytes: 100, allowedHosts: ['example.test'] })).rejects.toThrow('大小');
     expect(cancelAsync).toHaveBeenCalled();
     (fs as any).createDownloadResumable = undefined;
   });

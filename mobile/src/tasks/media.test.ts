@@ -14,7 +14,7 @@ describe('task media delivery orchestration', () => {
       publish: jest.fn().mockResolvedValue({ uri: 'content://media/video/7', displayName: 'task-1.mp4', relativePath: 'Movies/AutoDL-H3/', alreadyExisted: false }),
       removePrivate: jest.fn().mockResolvedValue(undefined),
     };
-    const result = await ensureTaskMedia(task, { policy: { autoExportToGallery: true, keepPrivateCopy: true }, deps, onUpdate: jest.fn(async () => undefined) });
+    const result = await ensureTaskMedia(task, { policy: { autoExportToGallery: true, keepPrivateCopy: true }, allowedHosts: ['example'], deps, onUpdate: jest.fn(async () => undefined) });
     expect(deps.publish).toHaveBeenCalledWith('file:///private.mp4', { mediaId: task.id, displayName: 'task-1.mp4' });
     expect(result).toMatchObject({ downloadState: 'DOWNLOADED', exportState: 'EXPORTED', galleryUri: 'content://media/video/7' });
   });
@@ -25,7 +25,7 @@ describe('task media delivery orchestration', () => {
       publish: jest.fn().mockRejectedValue(new Error('空间不足')),
       removePrivate: jest.fn().mockResolvedValue(undefined),
     };
-    const result = await ensureTaskMedia(task, { policy: { autoExportToGallery: true, keepPrivateCopy: true }, deps, onUpdate: jest.fn(async () => undefined) });
+    const result = await ensureTaskMedia(task, { policy: { autoExportToGallery: true, keepPrivateCopy: true }, allowedHosts: ['example'], deps, onUpdate: jest.fn(async () => undefined) });
     expect(result).toMatchObject({ downloadState: 'DOWNLOADED', exportState: 'EXPORT_FAILED', exportError: '空间不足' });
   });
 
@@ -52,7 +52,7 @@ describe('task media delivery orchestration', () => {
       publish: jest.fn().mockResolvedValue({ uri: 'content://media/video/8', displayName: 'task-1.mp4', relativePath: 'Movies/AutoDL-H3/', alreadyExisted: false }),
       removePrivate: jest.fn().mockResolvedValue(undefined),
     };
-    const result = await exportTaskVideo({ ...task, galleryUri: 'content://media/video/deleted', exportState: 'EXPORTED', localUri: undefined }, { policy: { autoExportToGallery: true, keepPrivateCopy: true }, deps, onUpdate: jest.fn(async () => undefined) });
+    const result = await exportTaskVideo({ ...task, galleryUri: 'content://media/video/deleted', exportState: 'EXPORTED', localUri: undefined }, { policy: { autoExportToGallery: true, keepPrivateCopy: true }, allowedHosts: ['example'], deps, onUpdate: jest.fn(async () => undefined) });
     expect(deps.download).toHaveBeenCalled();
     expect(deps.publish).toHaveBeenCalledWith('file:///restored.mp4', { mediaId: task.id, displayName: 'task-1.mp4' });
     expect(result.galleryUri).toBe('content://media/video/8');
@@ -64,7 +64,7 @@ describe('task media delivery orchestration', () => {
       publish: jest.fn().mockResolvedValue({ uri: 'content://media/video/9', displayName: 'task-1.mp4', relativePath: 'Movies/AutoDL-H3/', alreadyExisted: false }),
       removePrivate: jest.fn().mockResolvedValue(undefined),
     };
-    await exportTaskVideo({ ...task, videoUrl: 'https://example/video.mp4', localUri: undefined, galleryUri: 'content://media/video/old', exportState: 'EXPORTED' }, { policy: { autoExportToGallery: true, keepPrivateCopy: true }, deps, onUpdate: jest.fn(async () => undefined) });
+    await exportTaskVideo({ ...task, videoUrl: 'https://example/video.mp4', localUri: undefined, galleryUri: 'content://media/video/old', exportState: 'EXPORTED' }, { policy: { autoExportToGallery: true, keepPrivateCopy: true }, allowedHosts: ['example'], deps, onUpdate: jest.fn(async () => undefined) });
     expect(deps.publish).not.toHaveBeenCalledWith('content://media/video/old', expect.anything());
     expect(deps.publish).toHaveBeenCalledWith('file:///restored.mp4', { mediaId: task.id, displayName: 'task-1.mp4' });
   });
@@ -84,5 +84,11 @@ describe('task media delivery orchestration', () => {
       deps,
     });
     expect(deps.download).toHaveBeenCalledWith(task, expect.objectContaining({ allowedHosts: ['cdn.example.test'], acceptedMimes: ['video/mp4'], maxBytes: 100 }));
+  });
+
+  it('rejects a remote artifact without an explicit host allowlist', async () => {
+    const deps = { download: jest.fn(), publish: jest.fn(), removePrivate: jest.fn() };
+    await expect(ensureTaskMedia(task, { policy: { autoExportToGallery: false, keepPrivateCopy: true }, deps, onUpdate: jest.fn(async () => undefined) })).rejects.toThrow('允许列表');
+    expect(deps.download).not.toHaveBeenCalled();
   });
 });
