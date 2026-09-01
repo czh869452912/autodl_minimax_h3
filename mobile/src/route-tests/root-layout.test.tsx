@@ -12,7 +12,7 @@ const mockDatabase = {
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => mockDatabase) }));
 jest.mock('expo-router', () => ({ Stack: (props: { children?: React.ReactNode }) => <>{props.children}</> }));
 jest.mock('../tasks/background', () => ({ registerBackgroundSync: jest.fn(async () => undefined) }));
-jest.mock('../storage/database', () => ({ isLegacyAppDatabase: jest.fn(() => true), resetAppDatabase: jest.fn() }));
+jest.mock('../storage/database', () => ({ ensureAppDatabase: jest.fn(), isLegacyAppDatabase: jest.fn(() => true), resetAppDatabase: jest.fn() }));
 
 import RootLayout from '../../app/_layout';
 

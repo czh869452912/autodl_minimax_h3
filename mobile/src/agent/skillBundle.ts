@@ -5,6 +5,7 @@ export const officialH3SkillRoot = '/skills/' as const;
 export { officialH3SkillManifest };
 
 export const officialH3Skills: Record<string, FileData> = generatedSkills as Record<string, FileData>;
+let normalizedSkillFiles: Record<string, FileData> | undefined;
 
 // yaml 2.9's Hermes build rejects a few otherwise-valid Unicode flow arrays
 // in the official frontmatter. Preserve every trigger verbatim, but express
@@ -21,12 +22,20 @@ function normalizeSkillFrontmatter(content: string): string {
 }
 
 export function getOfficialH3SkillFiles(): Record<string, FileData> {
+  if (!normalizedSkillFiles) {
+    normalizedSkillFiles = Object.fromEntries(
+      Object.entries(officialH3Skills).map(([path, file]) => [
+        path,
+        { ...file, content: file.content instanceof Uint8Array ? file.content : normalizeSkillFrontmatter(String(file.content)) },
+      ]),
+    ) as Record<string, FileData>;
+  }
   return Object.fromEntries(
-    Object.entries(officialH3Skills).map(([path, file]) => [
+    Object.entries(normalizedSkillFiles).map(([path, file]) => [
       path,
       {
         ...file,
-        content: file.content instanceof Uint8Array ? new Uint8Array(file.content) : normalizeSkillFrontmatter(String(file.content)),
+        content: file.content instanceof Uint8Array ? new Uint8Array(file.content) : file.content,
       },
     ]),
   ) as Record<string, FileData>;

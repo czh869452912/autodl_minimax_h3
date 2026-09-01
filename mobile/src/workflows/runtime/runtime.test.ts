@@ -64,3 +64,17 @@ test('applies persisted workflow output mapping to provider artifacts', async ()
   await runtime.sync(submitted);
   expect(value.deps.jobs.replaceArtifacts).toHaveBeenCalledWith('local-1', [expect.objectContaining({ id: 'result-1', kind: 'video' })]);
 });
+
+test('does not rewrite an unchanged provider snapshot', async () => {
+  const value = deps();
+  value.adapter.getStatus.mockResolvedValue({ status: 'SUCCEEDED', artifacts: [{ id: 'a', jobId: '', kind: 'video', uri: 'https://cdn.test/video' }] } as never);
+  const runtime = createWorkflowRuntime(value.deps);
+  const submitted = await runtime.submit(workflow, draft, {});
+  value.deps.jobs.listArtifacts.mockResolvedValue([{ id: 'a', jobId: 'local-1', kind: 'video', uri: 'https://cdn.test/video', metadata: { path: 'result.video' } }] as never);
+  const first = await runtime.sync(submitted);
+  value.deps.jobs.upsert.mockClear();
+  value.deps.jobs.replaceArtifacts.mockClear();
+  await runtime.sync(first);
+  expect(value.deps.jobs.upsert).not.toHaveBeenCalled();
+  expect(value.deps.jobs.replaceArtifacts).not.toHaveBeenCalled();
+});

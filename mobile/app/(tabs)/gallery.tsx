@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { openDatabaseSync } from 'expo-sqlite';
+import { getDatabase } from '../../src/storage/databaseClient';
 import { GalleryCard } from '../../src/media/GalleryCard';
 import type { MediaAsset, MediaStatus } from '../../src/media/types';
 import { createSqliteMediaStore } from '../../src/media/repository';
@@ -9,7 +9,7 @@ import { extractPoster } from '../../src/native/media';
 import { AppIcon } from '../../src/ui/icons';
 import { COLORS, SPACING } from '../../src/ui/theme';
 
-const database = openDatabaseSync('autodl-h3.db');
+const database = getDatabase();
 const mediaStore = createSqliteMediaStore(database);
 const filters: Array<{ id: 'all' | MediaStatus; label: string }> = [{ id: 'all', label: '全部' }, { id: 'downloaded', label: '已下载' }, { id: 'downloading', label: '准备中' }, { id: 'failed', label: '失败' }];
 

@@ -120,3 +120,31 @@ test('does not automatically retry a failed historical download', async () => {
   await value.coordinator.run();
   expect(value.ensureMedia).not.toHaveBeenCalled();
 });
+
+test('backs off a failed provider sync on the next polling pass', async () => {
+  const value = setup([task('local-1')], [job('local-1', 'remote-1')]);
+  value.runtime.sync.mockRejectedValueOnce(new Error('offline'));
+  await value.coordinator.run();
+  value.runtime.sync.mockClear();
+  await value.coordinator.run();
+  expect(value.runtime.sync).not.toHaveBeenCalled();
+});
+
+test('returns status results without waiting for delayed media delivery', async () => {
+  const value = setup([{ ...task('done-1', 'SUCCESS'), videoUrl: 'https://cdn.test/video' }], []);
+  let release!: () => void;
+  value.ensureMedia.mockReturnValueOnce(new Promise<void>((resolve) => { release = resolve; }) as never);
+  const result = await Promise.race([
+    value.coordinator.run(),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('status sync blocked on media')), 50)),
+  ]);
+  expect(result.summary).toBeDefined();
+  release();
+});
+
+test('filters service sync to requested task ids', async () => {
+  const value = setup([task('local-1'), task('local-2')], [job('local-1', 'remote-1'), job('local-2', 'remote-2')]);
+  await value.coordinator.run({ reason: 'service', taskIds: ['local-2'] });
+  expect(value.runtime.sync).toHaveBeenCalledTimes(1);
+  expect(value.runtime.sync).toHaveBeenCalledWith(expect.objectContaining({ id: 'local-2' }));
+});

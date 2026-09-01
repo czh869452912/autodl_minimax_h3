@@ -2,11 +2,11 @@ import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Alert, BackHandler } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
-import { openDatabaseSync } from 'expo-sqlite';
+import { getDatabase } from '../src/storage/databaseClient';
 import { isLegacyAppDatabase, resetAppDatabase } from '../src/storage/database';
 import { registerBackgroundSync } from '../src/tasks/background';
 
-const startupDatabase = openDatabaseSync('autodl-h3.db');
+const startupDatabase = getDatabase();
 
 export default function RootLayout() {
   const [legacyDatabase, setLegacyDatabase] = useState(() => isLegacyAppDatabase(startupDatabase));

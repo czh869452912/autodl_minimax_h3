@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { openDatabaseSync } from 'expo-sqlite';
+import { getDatabase } from '../storage/databaseClient';
 import { readSettings } from '../settings/storage';
 import { createTaskRepository } from '../tasks/repository';
 import type { TaskMediaInput } from '../tasks/types';
@@ -31,12 +31,13 @@ import { canonicalizeDefinition } from '../workflows/registry/canonicalize';
 import { sha256Hex } from '../workflows/registry/crypto';
 import { createSubmissionGate } from './submissionGate';
 
-const taskStore = createTaskRepository(openDatabaseSync('autodl-h3.db'));
-const jobStore = createJobRepository(openDatabaseSync('autodl-h3.db'));
+const database = getDatabase();
+const taskStore = createTaskRepository(database);
+const jobStore = createJobRepository(database);
 const submissionGate = createSubmissionGate();
 
 const promptDraftStore = createPromptDraftStore(
-  openDatabaseSync('autodl-h3.db'),
+  database,
 );
 
 export function CreateForm({
