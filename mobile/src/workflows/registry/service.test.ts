@@ -22,6 +22,25 @@ test('preserves active state when remote verification fails', async () => {
   expect(repository.setActive).not.toHaveBeenCalled();
 });
 
+test('rejects a Registry redirect that leaves the configured domain allowlist', async () => {
+  const fetch = jest.fn(async () => new Response(null, { status: 302, headers: { location: 'https://evil.test/registry/index.json' } }));
+  const service = createWorkflowRegistryService({ repository: { upsert: jest.fn(), get: jest.fn(), list: jest.fn(async () => []), setActive: jest.fn(), getActive: jest.fn(), rollback: jest.fn(), removeUnreferenced: jest.fn() } as never, adapters: [], appVersion: '1.0.0', allowDomains: ['example.test'], fetch });
+  await expect(service.syncRemoteIndex('https://registry.example.test/registry/index.json')).rejects.toMatchObject({ code: 'REGISTRY_DOMAIN_REJECTED' });
+});
+
+test('times out while reading a stalled Registry response body', async () => {
+  jest.useFakeTimers();
+  try {
+    const reader = { read: jest.fn(() => new Promise<never>(() => undefined)), cancel: jest.fn(async () => undefined) };
+    const fetch = jest.fn(async () => ({ ok: true, status: 200, headers: new Headers(), body: { getReader: () => reader } })) as unknown as typeof global.fetch;
+    const service = createWorkflowRegistryService({ repository: { upsert: jest.fn(), get: jest.fn(), list: jest.fn(async () => []), setActive: jest.fn(), getActive: jest.fn(), rollback: jest.fn(), removeUnreferenced: jest.fn() } as never, adapters: [], appVersion: '1.0.0', allowDomains: ['example.test'], fetch, fetchTimeoutMs: 10 });
+    const pending = service.syncRemoteIndex('https://registry.example.test/registry/index.json');
+    await Promise.resolve();
+    jest.advanceTimersByTime(10);
+    await expect(pending).rejects.toMatchObject({ code: 'REGISTRY_TIMEOUT' });
+  } finally { jest.useRealTimers(); }
+});
+
 test('discovers only active versions and activates a builtin during bootstrap', async () => {
   const built = record('builtin');
   const newer = { ...record('remote'), version: '2.0.0', contentHash: 'new' };
