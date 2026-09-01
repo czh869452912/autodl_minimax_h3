@@ -9,7 +9,7 @@
     "plugins": ["expo-router", "expo-sqlite", "expo-video"],
     "android": {
       "package": "com.example.autodlh3",
-      "usesCleartextTraffic": true,
+      "usesCleartextTraffic": false,
       "permissions": ["INTERNET", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_DATA_SYNC", "FOREGROUND_SERVICE_MEDIA_PLAYBACK", "POST_NOTIFICATIONS"]
     }
   }
