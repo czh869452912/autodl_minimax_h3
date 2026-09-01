@@ -64,6 +64,15 @@ cd android
 ./gradlew.bat :app:assembleDebug -PreactNativeArchitectures=arm64-v8a
 ```
 
+构建链支持 Temurin JDK 17 或 21。Android Studio JBR 25（例如 `25.0.2`）与当前 Kotlin/React Native Gradle 解析器不兼容，不应作为本项目构建 JDK。模拟器必须使用与 APK 相同的 ABI：x86_64 模拟器请执行：
+
+```powershell
+$env:JAVA_HOME='C:\Program Files\Eclipse Adoptium\jdk-21.0.7.6-hotspot'
+./gradlew.bat :app:assembleDebug -PreactNativeArchitectures=x86_64
+```
+
+arm64-v8a APK 只能安装到 arm64 设备/模拟器；在 x86_64 模拟器上会因缺少 `libreactnative.so` 崩溃。
+
 调试 APK 将生成在：
 
 ```text
