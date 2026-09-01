@@ -14,6 +14,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   TextInput,
@@ -904,6 +905,7 @@ function HistoryList({
     threads.filter((thread) => matchesSessionQuery(thread, query)),
     Date.now(),
   );
+  const sections = groups.map((group) => ({ title: group.label, data: group.snapshots }));
   return (
     <View style={styles.history}>
       <View style={styles.historySearch}>
@@ -924,65 +926,29 @@ function HistoryList({
         <AppIcon name="add" size={18} color={LIGHT_PROMPT_COLORS.ink} />
         <Text style={styles.newHistoryText}>新对话</Text>
       </Pressable>
-      <ScrollView style={styles.historyList}>
-        {groups.map((group) => (
-          <View key={group.label}>
-            <Text style={styles.groupLabel}>{group.label}</Text>
-            {group.snapshots.map((thread) => (
-              <Pressable
-                key={thread.threadId}
-                onPress={() => onSelect(thread.threadId)}
-                style={[
-                  styles.historyItem,
-                  thread.threadId === activeThreadId &&
-                    styles.historyItemActive,
-                ]}
-              >
-                <View style={styles.historyItemMain}>
-                  <Text numberOfLines={1} style={styles.historyTitle}>
-                    {sessionTitle(thread)}
-                  </Text>
-                  <Text style={styles.historyMeta}>
-                    {thread.messages.length} 条消息 ·{' '}
-                    {new Date(thread.updatedAt).toLocaleTimeString('zh-CN', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </Text>
-                </View>
-                <Pressable
-                  accessibilityLabel={`管理会话 ${thread.threadId}`}
-                  onPress={() => {
-                    setRenameTarget(thread);
-                    setRenameValue(sessionTitle(thread));
-                  }}
-                >
-                  <Text style={styles.more}>•••</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityLabel={`删除会话 ${thread.threadId}`}
-                  onPress={() =>
-                    Alert.alert('删除会话', '删除后无法恢复本机会话记录。', [
-                      { text: '取消' },
-                      {
-                        text: '删除',
-                        style: 'destructive',
-                        onPress: () => onDelete(thread.threadId),
-                      },
-                    ])
-                  }
-                >
-                  <AppIcon
-                    name="delete"
-                    size={17}
-                    color={LIGHT_PROMPT_COLORS.muted}
-                  />
-                </Pressable>
-              </Pressable>
-            ))}
-          </View>
-        ))}
-      </ScrollView>
+      <SectionList
+        sections={sections}
+        style={styles.historyList}
+        keyExtractor={(thread) => thread.threadId}
+        renderSectionHeader={({ section }) => <Text style={styles.groupLabel}>{section.title}</Text>}
+        renderItem={({ item: thread }) => (
+          <Pressable
+            onPress={() => onSelect(thread.threadId)}
+            style={[styles.historyItem, thread.threadId === activeThreadId && styles.historyItemActive]}
+          >
+            <View style={styles.historyItemMain}>
+              <Text numberOfLines={1} style={styles.historyTitle}>{sessionTitle(thread)}</Text>
+              <Text style={styles.historyMeta}>{thread.messages.length} 条消息 · {new Date(thread.updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</Text>
+            </View>
+            <Pressable accessibilityLabel={`管理会话 ${thread.threadId}`} onPress={() => { setRenameTarget(thread); setRenameValue(sessionTitle(thread)); }}>
+              <Text style={styles.more}>•••</Text>
+            </Pressable>
+            <Pressable accessibilityLabel={`删除会话 ${thread.threadId}`} onPress={() => Alert.alert('删除会话', '删除后无法恢复本机会话记录。', [{ text: '取消' }, { text: '删除', style: 'destructive', onPress: () => onDelete(thread.threadId) }])}>
+              <AppIcon name="delete" size={17} color={LIGHT_PROMPT_COLORS.muted} />
+            </Pressable>
+          </Pressable>
+        )}
+      />
       <Modal
         visible={Boolean(renameTarget)}
         transparent
