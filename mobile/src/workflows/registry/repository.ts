@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { RegistryRecord, WorkflowRegistry } from './types';
-import { ensureAppDatabase } from '../../storage/database';
+import { assertAppDatabaseWritable, ensureAppDatabase } from '../../storage/database';
 
 type Row = { workflow_id: string; version: string; content_hash: string; source: string; trust: string; definition_json: string; installed_at: number; repository?: string; ref?: string; commit_sha?: string };
 type ActiveRow = { workflow_id: string; version: string; content_hash: string; previous_version?: string; previous_hash?: string };
@@ -11,9 +11,6 @@ export function createWorkflowRegistry(db: SQLiteDatabase | undefined): Workflow
   const key = (id: string, version: string) => `${id}\u0000${version}`;
   if (db) {
     ensureAppDatabase(db);
-    db.execSync('CREATE TABLE IF NOT EXISTS workflow_registry (workflow_id TEXT NOT NULL, version TEXT NOT NULL, content_hash TEXT NOT NULL, source TEXT NOT NULL, trust TEXT NOT NULL, definition_json TEXT NOT NULL, installed_at INTEGER NOT NULL, repository TEXT, ref TEXT, commit_sha TEXT, PRIMARY KEY (workflow_id, version));');
-    for (const column of ['repository', 'ref', 'commit_sha']) { try { db.execSync(`ALTER TABLE workflow_registry ADD COLUMN ${column} TEXT`); } catch { /* already present */ } }
-    db.execSync('CREATE TABLE IF NOT EXISTS workflow_registry_active (workflow_id TEXT PRIMARY KEY NOT NULL, version TEXT NOT NULL, content_hash TEXT NOT NULL, previous_version TEXT, previous_hash TEXT);');
   }
   const fromRow = (row: Row): RegistryRecord => ({ workflowId: row.workflow_id, version: row.version, contentHash: row.content_hash, source: row.source as RegistryRecord['source'], trust: row.trust as RegistryRecord['trust'], definitionJson: row.definition_json, installedAt: Number(row.installed_at), repository: row.repository, ref: row.ref, commit: row.commit_sha });
   const get = async (workflowId: string, version: string) => {
@@ -23,6 +20,7 @@ export function createWorkflowRegistry(db: SQLiteDatabase | undefined): Workflow
   };
   return {
     async upsert(record) {
+      assertAppDatabaseWritable(db);
       const existing = await get(record.workflowId, record.version);
       if (existing && existing.contentHash !== record.contentHash) throw new Error('workflow definition is immutable');
       if (existing) return;
@@ -30,6 +28,7 @@ export function createWorkflowRegistry(db: SQLiteDatabase | undefined): Workflow
       else db.runSync('INSERT INTO workflow_registry (workflow_id,version,content_hash,source,trust,definition_json,installed_at,repository,ref,commit_sha) VALUES (?,?,?,?,?,?,?,?,?,?)', record.workflowId, record.version, record.contentHash, record.source, record.trust, record.definitionJson, record.installedAt, record.repository ?? null, record.ref ?? null, record.commit ?? null);
     },
     async installAndActivate(record) {
+      assertAppDatabaseWritable(db);
       if (!db) {
         const existing = memory.get(key(record.workflowId, record.version));
         if (existing && existing.contentHash !== record.contentHash) throw new Error('workflow definition is immutable');
@@ -56,6 +55,7 @@ export function createWorkflowRegistry(db: SQLiteDatabase | undefined): Workflow
       return rows.map(fromRow).filter((item) => (!options.workflowId || item.workflowId === options.workflowId) && (!options.source || item.source === options.source));
     },
     async setActive(workflowId, version, contentHash) {
+      assertAppDatabaseWritable(db);
       const definition = await get(workflowId, version);
       if (!definition || definition.contentHash !== contentHash) throw new Error('workflow definition not found');
       const previous = db ? db.getFirstSync<ActiveRow>('SELECT * FROM workflow_registry_active WHERE workflow_id = ? LIMIT 1', workflowId) as ActiveRow | null : active.get(workflowId);
@@ -74,11 +74,13 @@ export function createWorkflowRegistry(db: SQLiteDatabase | undefined): Workflow
       return undefined;
     },
     async rollback(workflowId) {
+      assertAppDatabaseWritable(db);
       const row = db ? db.getFirstSync<ActiveRow>('SELECT * FROM workflow_registry_active WHERE workflow_id = ? LIMIT 1', workflowId) as ActiveRow | null : active.get(workflowId);
       if (!row?.previous_version || !row.previous_hash) throw new Error('no previous workflow definition');
       await this.setActive(workflowId, row.previous_version, row.previous_hash);
     },
     async removeUnreferenced(keepHashes) {
+      assertAppDatabaseWritable(db);
       const records = await this.list();
       const activeRows = new Map<string, ActiveRow>();
       for (const item of records) { const row = db ? db.getFirstSync<ActiveRow>('SELECT * FROM workflow_registry_active WHERE workflow_id = ? LIMIT 1', item.workflowId) as ActiveRow | null : active.get(item.workflowId); if (row) activeRows.set(item.workflowId, row); }
