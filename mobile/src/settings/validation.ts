@@ -1,6 +1,7 @@
 import type { AppSettings } from './storage';
+import { assertSafeHttpsUrl } from '../security/urlPolicy';
 
-export function prepareSettingsForSave(values: AppSettings): AppSettings {
+export function prepareSettingsForSave(values: AppSettings, options: { allowInsecureLocalhost?: boolean } = {}): AppSettings {
   const normalized = {
     token: values.token.trim(),
     llmEndpoint: values.llmEndpoint.trim().replace(/\/$/, ''),
@@ -11,8 +12,12 @@ export function prepareSettingsForSave(values: AppSettings): AppSettings {
     autoExportToGallery: values.autoExportToGallery,
     keepPrivateCopy: values.keepPrivateCopy,
   };
-  if (normalized.llmEndpoint && !/^https?:\/\//i.test(normalized.llmEndpoint)) {
-    throw new Error('LLM API 地址必须是以 http:// 或 https:// 开头的完整地址');
+  if (normalized.llmEndpoint) {
+    try {
+      normalized.llmEndpoint = assertSafeHttpsUrl(normalized.llmEndpoint, options).replace(/\/$/, '');
+    } catch {
+      throw new Error(options.allowInsecureLocalhost ? 'LLM API 地址必须使用安全的公网 HTTPS 地址或 debug localhost' : 'LLM API 地址必须使用安全的公网 HTTPS 地址');
+    }
   }
   const timeout = Number(normalized.llmTimeoutSeconds);
   if (!Number.isInteger(timeout) || timeout < 30 || timeout > 3600)

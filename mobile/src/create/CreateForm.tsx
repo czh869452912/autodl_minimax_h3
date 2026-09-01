@@ -20,16 +20,15 @@ import { pickTaskMedia } from './MediaPicker';
 import { RESOLUTION_OPTIONS, type Resolution } from './resolutions';
 import { createPromptDraftStore } from '../agent/promptDraft';
 import { resolveDraftPrompt } from './draftPrompt';
-import h3Definition from '../workflows/definitions/autodl/minimax-h3-i2v-15s.json';
 import { WorkflowForm } from '../workflows/renderer/WorkflowForm';
 import type { WorkflowDefinition } from '../workflows/schema/types';
 import { createJobRepository } from '../jobs/repository';
 import { jobToTaskProjection } from '../tasks/projection';
 import { createWorkflowRuntime } from '../workflows/runtime/runtime';
 import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
-import { canonicalizeDefinition } from '../workflows/registry/canonicalize';
-import { sha256Hex } from '../workflows/registry/crypto';
 import { createSubmissionGate } from './submissionGate';
+import { createAppWorkflowCatalog } from '../workflows/registry/builtin';
+import type { RegistryRecord } from '../workflows/registry/types';
 
 const database = getDatabase();
 const taskStore = createTaskRepository(database);
@@ -39,6 +38,7 @@ const submissionGate = createSubmissionGate();
 const promptDraftStore = createPromptDraftStore(
   database,
 );
+const workflowCatalog = createAppWorkflowCatalog();
 
 export function CreateForm({
   initialPrompt = '',
@@ -57,7 +57,11 @@ export function CreateForm({
   const [images, setImages] = useState<TaskMediaInput[]>([]);
   const [audios, setAudios] = useState<TaskMediaInput[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [definition, setDefinition] = useState<WorkflowDefinition | null>(null);
+  const [activeRecord, setActiveRecord] = useState<RegistryRecord | null>(null);
   const [workflowValues, setWorkflowValues] = useState<Record<string, unknown>>({ prompt: initialPrompt, resolution: RESOLUTION_OPTIONS[0], duration: 5, seed: '' });
+  const [loadError, setLoadError] = useState<string | null>(null);
+  useEffect(() => { let cancelled = false; void workflowCatalog.bootstrap().then(() => workflowCatalog.listActive()).then((records) => { const record = records[0]; if (!record) throw new Error('没有可用工作流'); const next = JSON.parse(record.definitionJson) as WorkflowDefinition; if (!cancelled) { setActiveRecord(record); setDefinition(next); const properties = (next.inputs.properties ?? {}) as Record<string, { default?: unknown }>; setWorkflowValues((current) => Object.fromEntries(Object.entries(properties).map(([key, schema]) => [key, current[key] ?? schema.default]))); } }).catch((error) => { if (!cancelled) setLoadError(error instanceof Error ? error.message : '工作流加载失败'); }); return () => { cancelled = true; }; }, []);
   useEffect(() => {
     if (initialPrompt) { setPrompt(initialPrompt); setWorkflowValues((current) => ({ ...current, prompt: initialPrompt })); }
   }, [initialPrompt]);
@@ -105,20 +109,19 @@ export function CreateForm({
     if (!submissionGate.tryAcquire()) return;
     setSubmitting(true);
     try {
+      if (!definition || !activeRecord) throw new Error('工作流尚未加载完成');
       const settings = await readSettings();
       if (!settings.token) throw new Error('请先在设置中保存 AutoDL Token');
-      const definition = h3Definition as WorkflowDefinition;
-      const inputSnapshot = {
-        prompt: String(workflowValues.prompt ?? prompt).trim(),
-        resolution: String(workflowValues.resolution ?? resolution) as Resolution,
-        duration: Math.max(1, Math.min(15, Number(workflowValues.duration ?? duration) || 5)),
-        seed: String(workflowValues.seed ?? seed).trim() || undefined,
-        images,
-        audios,
-      };
+      const inputSnapshot: Record<string, unknown> = { ...workflowValues, images, audios };
+      if ('prompt' in workflowValues) inputSnapshot.prompt = String(workflowValues.prompt ?? prompt).trim();
+      if ('resolution' in workflowValues) inputSnapshot.resolution = String(workflowValues.resolution ?? resolution) as Resolution;
+      if ('duration' in workflowValues) inputSnapshot.duration = Number(workflowValues.duration ?? duration) || 0;
+      if ('seed' in workflowValues) inputSnapshot.seed = String(workflowValues.seed ?? seed).trim() || undefined;
       const adapters = createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? settings.token : undefined });
       const runtime = createWorkflowRuntime({ adapters, jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `job-${Date.now()}-${Math.random().toString(16).slice(2)}` });
-      const job = await runtime.submit(definition, { workflowId: definition.id, workflowVersion: definition.version, contentHash: await sha256Hex(canonicalizeDefinition(definition)), inputs: inputSnapshot, source: 'user', status: 'ready' });
+      const currentActive = await workflowCatalog.getActive(definition.id);
+      if (!currentActive || currentActive.contentHash !== activeRecord.contentHash) throw new Error('工作流已更新，请重新打开创建页');
+      const job = await runtime.submit(definition, { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord.contentHash, inputs: inputSnapshot, source: 'user', status: 'ready' });
       const task = { ...jobToTaskProjection(job, []), images, audios };
       await taskStore.upsert(task);
       Alert.alert('提交成功', `任务 ${task.id} 已加入队列`, [
@@ -140,12 +143,12 @@ export function CreateForm({
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={styles.title}>AutoDL H3 视频生成</Text>
+      <Text style={styles.title}>{definition?.metadata.title ?? '工作流创建'}</Text>
       <Text style={styles.subtitle}>
-        多图与多音频参考生视频 · minimax_h3_image_audio_to_video_v2_15s 工作流
+        {loadError ?? definition?.metadata.description ?? '正在加载本地活动工作流…'}
       </Text>
-      <WorkflowForm
-        definition={{ ...(h3Definition as WorkflowDefinition), ui: { sections: (h3Definition as WorkflowDefinition).ui?.sections.slice(0, 2) ?? [] } }}
+      {definition ? <WorkflowForm
+        definition={{ ...definition, ui: { sections: (definition.ui?.sections ?? []).slice(0, 2) } }}
         value={workflowValues}
         onChange={(next) => {
           setWorkflowValues(next);
@@ -154,13 +157,13 @@ export function CreateForm({
           setDuration(String(next.duration ?? 5));
           setSeed(String(next.seed ?? ''));
         }}
-      />
+      /> : null}
       <View style={styles.card}>
         <View style={styles.mediaHeader}>
           <View style={styles.mediaHeaderCopy}>
             <Text style={styles.sectionTitle}>参考素材</Text>
             <Text style={styles.help}>
-              支持最多 9 张图片及 3 段音频（单个 50MB）
+              支持最多 9 张图片及 3 段音频（单个及全部素材总计均不超过 50MB）
             </Text>
           </View>
           <Text style={styles.count}>

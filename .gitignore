@@ -4,6 +4,7 @@ mobile/node_modules/
 server/node_modules/
 server/.env
 mobile/android/local.properties
+mobile/android/app/debug.keystore
 *.iml
 *.log
 .idea/

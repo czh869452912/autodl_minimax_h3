@@ -1,0 +1,16 @@
+{
+  "code": "Success",
+  "data": {
+    "uuid": "minimax_h3_image_audio_to_video_v2_15s",
+    "input_rules": {
+      "duration": { "type": "integer", "min": 1, "max": 15 },
+      "prompt": { "type": "prompt", "min_length": 1, "max_length": 10000 },
+      "seed": { "type": "integer", "min": 1, "max": 999999999999999 },
+      "ref_image_0": { "type": "image", "accept_types": ["image/jpeg", "image/png", "image/webp"] },
+      "ref_image_8": { "type": "image", "accept_types": ["image/jpeg", "image/png", "image/webp"] },
+      "ref_audio_0": { "type": "audio", "accept_types": ["audio/mpeg", "audio/wav", "audio/mp4", "audio/flac"] },
+      "ref_audio_2": { "type": "audio", "accept_types": ["audio/mpeg", "audio/wav", "audio/mp4", "audio/flac"] }
+    },
+    "output_example": "{\"data\":{\"status\":\"completed\",\"results\":[{\"url\":\"https://cdn.example.test/result.mp4\",\"type\":\"video\",\"file_type\":\"mp4\"}]}}"
+  }
+}

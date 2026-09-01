@@ -2,10 +2,10 @@ import type { WorkflowDefinition, WorkflowDraft, ValidationResult } from '../sch
 import type { JobRecord, JobRepository, JobStatus, ArtifactRecord } from '../../jobs/types';
 import type { PlatformAdapterManifest } from '../schema/types';
 import { validateWorkflowDefinition } from '../schema/validator';
+import { compileWorkflow } from '../compiler/compiler';
 
 type Adapter = { manifest(): Pick<PlatformAdapterManifest, 'id' | 'adapterVersion' | 'operations'>; validateCredentials(): Promise<{ ok: boolean }>; submit(input: Record<string, unknown>, target?: { operation?: string; workflowId?: string }): Promise<{ providerJobId: string }>; getStatus(handle: { providerJobId: string }): Promise<{ status: JobStatus; artifacts: ArtifactRecord[]; rawStatus?: string; startedAt?: number; executionDuration?: number }> };
 type RuntimeDeps = { adapters: Map<string, Adapter>; jobs: JobRepository; credentials: { get(adapterId: string): Promise<{ ok: boolean }> }; id: () => string; now?: () => number };
-function valueAt(inputs: Record<string, unknown>, path: string): unknown { return path.split('.').reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined, inputs); }
 function applyOutputMapping(job: JobRecord, artifacts: ArtifactRecord[]): ArtifactRecord[] {
   const mappings = job.outputMapping?.artifacts ?? [];
   return artifacts.map((artifact, index) => {
@@ -32,9 +32,7 @@ export function createWorkflowRuntime(deps: RuntimeDeps) {
     validateDraft(workflow: WorkflowDefinition, draft: WorkflowDraft): ValidationResult {
       const definition = validateWorkflowDefinition(workflow, { adapters: Array.from(deps.adapters.values()).map((item) => ({ id: item.manifest().id, operations: item.manifest().operations })) });
       if (!definition.ok) return definition;
-      const errors: Array<{ path: string; code: string; message: string }> = [];
-      for (const required of Array.isArray(workflow.inputs.required) ? workflow.inputs.required : []) if (valueAt(draft.inputs, String(required)) == null || valueAt(draft.inputs, String(required)) === '') errors.push({ path: String(required), code: 'REQUIRED', message: `${required} is required` });
-      return errors.length ? { ok: false, errors } : { ok: true, value: workflow };
+      return compileWorkflow(workflow, draft.contentHash).validateDraft(draft.inputs);
     },
     preview(workflow: WorkflowDefinition, draft: WorkflowDraft) { return { workflowId: workflow.id, version: workflow.version, contentHash: draft.contentHash, inputs: draft.inputs, sideEffect: 'external-job' as const }; },
     async submit(workflow: WorkflowDefinition, draft: WorkflowDraft, _options: Record<string, unknown> = {}): Promise<JobRecord> {
@@ -47,7 +45,7 @@ export function createWorkflowRuntime(deps: RuntimeDeps) {
       let job: JobRecord = { id, workflowId: workflow.id, workflowVersion: workflow.version, workflowContentHash: draft.contentHash, adapterId: adapter.manifest().id, adapterVersion: adapter.manifest().adapterVersion, inputSnapshot: draft.inputs, outputMapping: workflow.outputs, status: 'SUBMITTING', createdAt: timestamp, updatedAt: timestamp };
       await deps.jobs.upsert(job);
       try {
-        const requestInput = Object.fromEntries(Object.entries(workflow.request.bindings).map(([target, source]) => [target, valueAt(draft.inputs, source)]));
+        const requestInput = compileWorkflow(workflow, draft.contentHash).buildRequest(draft.inputs);
         const remote = await adapter.submit(requestInput, { operation: workflow.platform.operation, workflowId: workflow.platform.workflowId ?? workflow.id });
         job = { ...job, status: 'QUEUED', remote: { providerJobId: remote.providerJobId }, updatedAt: now() };
         await deps.jobs.upsert(job);

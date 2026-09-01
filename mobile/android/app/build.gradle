@@ -84,6 +84,15 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+def signingValue = { String propertyName, String environmentName ->
+    findProperty(propertyName) ?: System.getenv(environmentName)
+}
+def releaseStoreFile = signingValue('autodlUploadStoreFile', 'AUTODL_UPLOAD_STORE_FILE')
+def releaseStorePassword = signingValue('autodlUploadStorePassword', 'AUTODL_UPLOAD_STORE_PASSWORD')
+def releaseKeyAlias = signingValue('autodlUploadKeyAlias', 'AUTODL_UPLOAD_KEY_ALIAS')
+def releaseKeyPassword = signingValue('autodlUploadKeyPassword', 'AUTODL_UPLOAD_KEY_PASSWORD')
+def releaseSigningConfigured = [releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword].every { it }
+
 android {
     ndkVersion rootProject.ext.ndkVersion
 
@@ -95,27 +104,25 @@ android {
         applicationId 'com.example.autodlh3'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10
-        versionName "1.4.0"
+        versionCode 11
+        versionName "1.4.1"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
     signingConfigs {
-        debug {
-            storeFile file('debug.keystore')
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
+        release {
+            if (releaseSigningConfigured) {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
         }
     }
     buildTypes {
-        debug {
-            signingConfig signingConfigs.debug
-        }
+        debug {}
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
@@ -132,6 +139,13 @@ android {
     }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    def releaseRequested = graph.allTasks.any { it.name.toLowerCase().contains('release') }
+    if (releaseRequested && !releaseSigningConfigured) {
+        throw new GradleException('Release signing requires AUTODL_UPLOAD_STORE_FILE, AUTODL_UPLOAD_STORE_PASSWORD, AUTODL_UPLOAD_KEY_ALIAS, and AUTODL_UPLOAD_KEY_PASSWORD')
     }
 }
 

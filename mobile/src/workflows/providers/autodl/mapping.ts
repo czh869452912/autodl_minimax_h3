@@ -5,13 +5,13 @@ export type AutodlInput = { prompt: string; resolution: string; duration: number
 export function buildAutodlSubmitRequest(input: AutodlInput): Record<string, unknown> {
   const payload: Record<string, unknown> = { prompt: input.prompt, duration: input.duration, resolution: input.resolution };
   if (input.seed?.trim()) payload.seed = Number(input.seed) || input.seed.trim();
-  input.images?.slice(0, 9).forEach((item, index) => { if (item.dataUri) payload[`ref_image_${index + 1}`] = item.dataUri; });
-  input.audios?.slice(0, 3).forEach((item, index) => { if (item.dataUri) payload[`ref_audio_${index + 1}`] = item.dataUri; });
+  input.images?.slice(0, 9).forEach((item, index) => { if (item.dataUri) payload[`ref_image_${index}`] = item.dataUri; });
+  input.audios?.slice(0, 3).forEach((item, index) => { if (item.dataUri) payload[`ref_audio_${index}`] = item.dataUri; });
   return payload;
 }
 export function normalizeAutodlStatus(value: unknown): 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'PARTIAL_SUCCEEDED' | 'FAILED' | 'CANCELLED' {
   const status = String(value || 'QUEUED').trim().toUpperCase();
-  if (status === 'SUCCESSFUL' || status === 'SUCCESS' || status === 'SUCCEEDED') return 'SUCCEEDED';
+  if (status === 'SUCCESSFUL' || status === 'SUCCESS' || status === 'SUCCEEDED' || status === 'COMPLETED' || status === 'COMPLETE') return 'SUCCEEDED';
   if (status === 'PARTIAL' || status === 'PARTIAL_SUCCESS' || status === 'PARTIAL_SUCCESSFUL' || status === 'PARTIAL_SUCCEEDED' || status === 'PARTIALLY_SUCCEEDED' || status === 'PARTIALLY_COMPLETE' || status === 'COMPLETED_WITH_ERRORS') return 'PARTIAL_SUCCEEDED';
   if (status === 'EXECUTING' || status === 'PROCESSING' || status === 'RUNNING') return 'RUNNING';
   if (status === 'FAILED') return 'FAILED';
@@ -49,7 +49,11 @@ const extensionInfo: Record<string, { kind: ArtifactRecord['kind']; mime: string
 
 function collectUrls(value: unknown, contexts: ObjectValue[] = [], key?: string, result: UrlCandidate[] = []): UrlCandidate[] {
   if (typeof value === 'string') {
-    if (/^https?:\/\//i.test(value.trim())) result.push({ uri: value.trim(), key, contexts });
+    const uri = value.trim();
+    try {
+      const parsed = new URL(uri);
+      if (parsed.protocol === 'https:' && parsed.hostname && parsed.pathname !== '') result.push({ uri, key, contexts });
+    } catch {}
     return result;
   }
   if (Array.isArray(value)) {
@@ -128,7 +132,10 @@ function describe(candidate: UrlCandidate): { kind: ArtifactRecord['kind']; mime
 }
 
 export function parseAutodlResult(data: unknown): ArtifactRecord[] {
-  const candidates = collectUrls(data);
+  const resultPayload = data && typeof data === 'object' && !Array.isArray(data) && 'results' in data
+    ? (data as ObjectValue).results
+    : data;
+  const candidates = collectUrls(resultPayload);
   const providerIds = candidates.map(providerIdFor);
   const providerIdCounts = new Map<string, number>();
   providerIds.forEach((id) => { if (id) providerIdCounts.set(id, (providerIdCounts.get(id) ?? 0) + 1); });

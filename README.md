@@ -21,6 +21,7 @@
 - **原生视频播放**：在详情页预览视频，通过 AndroidX Media3 进入稳定的全屏播放模式。
 - **作品导出**：将视频保存到系统相册，也可按设置自动导出并保留应用内副本。
 - **本地安全存储**：AutoDL Token 和 LLM API Key 由 Expo SecureStore（Android Keystore）保存。
+- **工作流内核 B 阶段**：声明式 WorkflowPackage、受限 JSON Schema/JSON Pointer compiler、本地 Registry active/previous 指针、兼容性校验、固定 Git commit-attestation 校验，以及 Registry 驱动的创建页已经接入。远程工作流仍只能是签名声明式 JSON，不执行远程代码。
 
 ## 典型使用流程
 
@@ -68,6 +69,17 @@ cd android
 ```text
 mobile/android/app/build/outputs/apk/debug/app-debug.apk
 ```
+
+Release 包必须通过环境变量提供独立的上传签名密钥；签名文件和密码不会写入仓库：
+
+```text
+AUTODL_UPLOAD_STORE_FILE
+AUTODL_UPLOAD_STORE_PASSWORD
+AUTODL_UPLOAD_KEY_ALIAS
+AUTODL_UPLOAD_KEY_PASSWORD
+```
+
+缺少这些变量时，Release 构建会主动失败。Debug 构建仍使用 Android Debug 签名。生产网络配置仅允许 HTTPS；本地 HTTP endpoint 只应在 debug 工具场景中显式启用。
 
 ### 首次配置
 
@@ -158,7 +170,7 @@ Prompt 助手不是一个简单的文本输入框。它在 APK 内运行 DeepAge
 
 ### 规划中
 
-- **多工作流适配（M1/M2 已完成）**：已建立受限声明式 workflow Schema、builtin/local/remote Registry、签名与版本校验，并将 MiniMax H3 创建页和 AutoDL 任务运行迁移到 schema-driven renderer + adapter/runtime；后续仍需补充完整 Draft/附件绑定、第二平台和 Agent 直提交。
+- **多工作流适配（M1/M2/B 内核已完成）**：已建立 WorkflowPackage → compiler → adapter/runtime 的本地链路，支持 builtin/local/remote Registry、活动/回滚指针、签名与版本兼容校验、固定 Git commit-attestation 和 Registry 驱动创建页。后续仍需补充完整 Draft/附件 JSON Pointer 绑定、第二平台和 Agent 直提交。
 - **智能体直接创建任务**：让智能体根据对话选择工作流、补齐参数、展示提交预览，并在用户确认后直接创建任务。
 - **创作项目管理**：以项目为单位管理创作 Brief、分镜、Prompt、素材、生成任务和最终交付物。
 - **创作资产管理**：统一管理角色、场景、参考图、音频、视频和风格资产，支持标签、搜索、版本和跨项目复用。
@@ -180,6 +192,8 @@ Roadmap 表示产品方向，不代表已经交付；具体优先级会根据实
 - 参考素材仅在创建任务需要时随请求提交。
 - AutoDL Token 和 LLM API Key 使用 Expo SecureStore 保存，并由 Android Keystore 提供系统级保护。
 - 应用需要网络权限以访问 AutoDL 和 LLM API；媒体权限仅用于选择素材和导出作品。
+- 应用不依赖业务后端、云端任务管理或对象存储。工作流订阅（如启用）只接受固定仓库中的签名、声明式 workflow package，并在本地验证 commit 签名和内容 hash 后安装。
+- AutoDL H3 的工作流 metadata 以 `ref_image_0..8` 和 `ref_audio_0..2` 为准；客户端在提交前才准备 data URI，具体 MIME、数量和请求体限制以 provider contract 为准，不把单文件大小写成 API 永久承诺。
 
 卸载应用可能会清除尚未导出或备份的应用私有数据。重要作品请及时保存到系统相册或其他存储位置。
 
@@ -191,6 +205,14 @@ Roadmap 表示产品方向，不代表已经交付；具体优先级会根据实
 cd mobile
 npm run typecheck
 npm test -- --runInBand
+```
+
+可选地运行只读 AutoDL metadata contract test（不会提交生成任务）：
+
+```powershell
+$env:AUTODL_CONTRACT_LIVE='1'
+npm test -- --runInBand src/workflows/providers/autodl/metadata.test.ts
+Remove-Item Env:AUTODL_CONTRACT_LIVE
 ```
 
 涉及 Android 原生能力、键盘/安全区、媒体播放、后台任务或权限的改动，还应构建 APK 并在 Android 实机或模拟器上验证。

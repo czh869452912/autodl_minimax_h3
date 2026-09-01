@@ -11,7 +11,7 @@ describe('settings validation before secure persistence', () => {
       llmMaxRetries: '2',
       autoExportToGallery: true,
       keepPrivateCopy: true,
-    })).toThrow('LLM API 地址必须是以 http:// 或 https:// 开头的完整地址');
+    })).toThrow('LLM API 地址必须使用安全的公网 HTTPS 地址');
   });
 
   it('normalizes a valid OpenAI-compatible configuration', () => {
@@ -34,6 +34,24 @@ describe('settings validation before secure persistence', () => {
       autoExportToGallery: false,
       keepPrivateCopy: true,
     });
+  });
+
+  it('rejects cleartext and local-network LLM endpoints in production', () => {
+    const validSettings = {
+      token: '', llmModel: 'model', llmApiKey: 'key', llmTimeoutSeconds: '600', llmMaxRetries: '2',
+      autoExportToGallery: true, keepPrivateCopy: true,
+    };
+    for (const llmEndpoint of ['http://api.example.test/v1', 'https://localhost/v1', 'https://192.168.1.2/v1']) {
+      expect(() => prepareSettingsForSave({ ...validSettings, llmEndpoint })).toThrow('LLM API 地址必须使用安全的公网 HTTPS 地址');
+    }
+  });
+
+  it('allows a localhost exception only for debug tooling', () => {
+    const value = prepareSettingsForSave({
+      token: '', llmEndpoint: 'http://localhost:11434/v1', llmModel: 'model', llmApiKey: 'key',
+      llmTimeoutSeconds: '600', llmMaxRetries: '2', autoExportToGallery: true, keepPrivateCopy: true,
+    }, { allowInsecureLocalhost: true });
+    expect(value.llmEndpoint).toBe('http://localhost:11434/v1');
   });
 
   it.each([
