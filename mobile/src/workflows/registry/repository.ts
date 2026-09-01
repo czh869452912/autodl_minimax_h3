@@ -11,7 +11,8 @@ export function createWorkflowRegistry(db: SQLiteDatabase | undefined): Workflow
   const key = (id: string, version: string) => `${id}\u0000${version}`;
   if (db) {
     ensureAppDatabase(db);
-    db.execSync('CREATE TABLE IF NOT EXISTS workflow_registry (workflow_id TEXT NOT NULL, version TEXT NOT NULL, content_hash TEXT NOT NULL, source TEXT NOT NULL, trust TEXT NOT NULL, definition_json TEXT NOT NULL, installed_at INTEGER NOT NULL, PRIMARY KEY (workflow_id, version));');
+    db.execSync('CREATE TABLE IF NOT EXISTS workflow_registry (workflow_id TEXT NOT NULL, version TEXT NOT NULL, content_hash TEXT NOT NULL, source TEXT NOT NULL, trust TEXT NOT NULL, definition_json TEXT NOT NULL, installed_at INTEGER NOT NULL, repository TEXT, ref TEXT, commit TEXT, PRIMARY KEY (workflow_id, version));');
+    for (const column of ['repository', 'ref', 'commit']) { try { db.execSync(`ALTER TABLE workflow_registry ADD COLUMN ${column} TEXT`); } catch { /* already present */ } }
     db.execSync('CREATE TABLE IF NOT EXISTS workflow_registry_active (workflow_id TEXT PRIMARY KEY NOT NULL, version TEXT NOT NULL, content_hash TEXT NOT NULL, previous_version TEXT, previous_hash TEXT);');
   }
   const fromRow = (row: Row): RegistryRecord => ({ workflowId: row.workflow_id, version: row.version, contentHash: row.content_hash, source: row.source as RegistryRecord['source'], trust: row.trust as RegistryRecord['trust'], definitionJson: row.definition_json, installedAt: Number(row.installed_at), repository: row.repository, ref: row.ref, commit: row.commit });
@@ -26,7 +27,7 @@ export function createWorkflowRegistry(db: SQLiteDatabase | undefined): Workflow
       if (existing && existing.contentHash !== record.contentHash) throw new Error('workflow definition is immutable');
       if (existing) return;
       if (!db) memory.set(key(record.workflowId, record.version), record);
-      else db.runSync('INSERT INTO workflow_registry (workflow_id,version,content_hash,source,trust,definition_json,installed_at) VALUES (?,?,?,?,?,?,?)', record.workflowId, record.version, record.contentHash, record.source, record.trust, record.definitionJson, record.installedAt);
+      else db.runSync('INSERT INTO workflow_registry (workflow_id,version,content_hash,source,trust,definition_json,installed_at,repository,ref,commit) VALUES (?,?,?,?,?,?,?,?,?,?)', record.workflowId, record.version, record.contentHash, record.source, record.trust, record.definitionJson, record.installedAt, record.repository ?? null, record.ref ?? null, record.commit ?? null);
     },
     get,
     async list(options = {}) {

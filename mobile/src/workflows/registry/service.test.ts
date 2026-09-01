@@ -33,3 +33,10 @@ test('rejects incompatible app and adapter versions before installation', async 
   const service = createWorkflowRegistryService({ repository: { upsert: jest.fn(), get: jest.fn(), list: jest.fn(async () => []), setActive: jest.fn(), getActive: jest.fn(), rollback: jest.fn(), removeUnreferenced: jest.fn() } as never, adapters: [{ id: 'demo', operations: ['workflow.submit'] }], appVersion: '1.0.0', adapterVersions: { demo: '1.0.0' } });
   await expect(service.activateBuiltin(incompatible as never)).rejects.toMatchObject({ code: 'REGISTRY_INCOMPATIBLE' });
 });
+
+test('stages a Git package only after commit attestation validation', async () => {
+  const repository = { upsert: jest.fn(), get: jest.fn(), list: jest.fn(async () => []), setActive: jest.fn(), getActive: jest.fn(), rollback: jest.fn(), removeUnreferenced: jest.fn() };
+  const service = createWorkflowRegistryService({ repository: repository as never, adapters: [{ id: 'demo', operations: ['workflow.submit'] }], appVersion: '1.0.0' });
+  await expect(service.installGitPackage({ repository: 'https://github.com/acme/workflows.git', allowedRef: 'refs/heads/main', registryId: 'acme', key: { registryId: 'acme', publicKey: '00', status: 'active' } }, { repository: 'https://evil.test/repo.git', ref: 'refs/heads/main', commit: 'a'.repeat(40), treeHash: 'b'.repeat(32), entries: [] }, '00', definition)).rejects.toMatchObject({ code: 'REGISTRY_GIT_ATTESTATION_INVALID' });
+  expect(repository.upsert).not.toHaveBeenCalled();
+});
