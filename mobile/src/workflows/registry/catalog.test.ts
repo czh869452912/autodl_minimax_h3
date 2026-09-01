@@ -1,4 +1,4 @@
-import { createWorkflowCatalog } from './catalog';
+import { createWorkflowCatalog, registryRecordToDefinition } from './catalog';
 import type { WorkflowRegistry } from './types';
 import type { WorkflowDefinition } from '../schema/types';
 
@@ -11,4 +11,21 @@ test('bootstraps builtin definitions and exposes active catalog records', async 
   await catalog.bootstrap();
   expect((await catalog.listActive())[0]).toMatchObject({ workflowId: 'demo', source: 'builtin' });
   expect((await catalog.getActive('demo'))?.definitionJson).toContain('"id":"demo"');
+});
+
+test('converts package-backed registry records for form consumers', () => {
+  const pkg = {
+    apiVersion: 'workflow.autodl/v1' as const,
+    kind: 'Workflow' as const,
+    metadata: { id: 'demo', version: '1.0.0', title: 'Demo', category: 'video' as const },
+    spec: {
+      adapter: { id: 'demo', version: '1.0.0', operation: 'workflow.submit' },
+      inputSchema: { type: 'object' as const, properties: { prompt: { type: 'string' as const } } },
+      bindings: { prompt: '/prompt' },
+      outputs: { artifacts: [] },
+    },
+  };
+  const record = { workflowId: 'demo', version: '1.0.0', contentHash: 'hash', source: 'builtin' as const, trust: 'builtin' as const, definitionJson: JSON.stringify(pkg), installedAt: 1 };
+  expect(registryRecordToDefinition(record).id).toBe('demo');
+  expect((registryRecordToDefinition(record).inputs.properties as Record<string, unknown>)?.prompt).toEqual({ type: 'string' });
 });

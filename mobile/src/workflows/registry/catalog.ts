@@ -1,6 +1,15 @@
 import type { WorkflowDefinition } from '../schema/types';
+import { packageToDefinition, parseWorkflowPackage } from '../schema/package';
 import { createWorkflowRegistryService } from './service';
 import type { WorkflowRegistry, RegistryRecord } from './types';
+
+export function registryRecordToDefinition(record: RegistryRecord): WorkflowDefinition {
+  const raw: unknown = JSON.parse(record.definitionJson);
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && (raw as { apiVersion?: unknown }).apiVersion === 'workflow.autodl/v1') {
+    return packageToDefinition(parseWorkflowPackage(raw));
+  }
+  return raw as WorkflowDefinition;
+}
 
 export function createWorkflowCatalog(deps: { registry: WorkflowRegistry; builtins: WorkflowDefinition[]; adapters: Array<{ id: string; operations: string[] }>; appVersion: string; adapterVersions?: Record<string, string> }) {
   const service = createWorkflowRegistryService({ repository: deps.registry, adapters: deps.adapters, appVersion: deps.appVersion, adapterVersions: deps.adapterVersions });
