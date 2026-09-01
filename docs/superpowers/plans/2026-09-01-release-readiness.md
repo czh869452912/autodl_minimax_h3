@@ -10,11 +10,11 @@
 
 ---
 
-### Task 1: Isolate the Jest process-lifecycle leak
+### Task 1: Classify the Jest process-lifecycle warning
 
 **Files:**
 - Inspect: `mobile/src/**/*.test.ts`, `mobile/src/**/*.test.tsx`, `mobile/src/**`
-- Modify: the source/test file that owns the leaked timer, listener, or client
+- Modify: none unless diagnostics identify a real application-owned handle
 
 - [ ] **Step 1: Reproduce the exact CI command**
 
@@ -22,19 +22,19 @@ Run `npm test -- --runInBand` from `mobile` and record the final suite counts an
 
 - [ ] **Step 2: Identify the open handle**
 
-Run `npm test -- --runInBand --detectOpenHandles --openHandlesTimeout=1000` and inspect changed tests for timers, subscriptions, fetch servers, or background tasks lacking cleanup.
+Run `npm test -- --runInBand --detectOpenHandles --openHandlesTimeout=1000` and inspect changed tests for timers, subscriptions, fetch servers, or background tasks lacking cleanup. If diagnostics show only inherited stdio pipes and no application-owned resource, record this as a desktop-runner artifact and do not change production code.
 
-- [ ] **Step 3: Add a focused regression test or cleanup assertion**
+- [ ] **Step 3: Add a focused regression test or cleanup assertion when needed**
 
-The test must fail before the lifecycle fix and pass after it; do not use `--forceExit` as the production fix.
+If a real application-owned handle is found, the test must fail before the lifecycle fix and pass after it; do not use `--forceExit` as the production fix.
 
-- [ ] **Step 4: Implement the minimal cleanup**
+- [ ] **Step 4: Implement the minimal cleanup when needed**
 
-Close or unsubscribe the owning resource in the corresponding `afterEach`/`afterAll` or production teardown path.
+Close or unsubscribe the owning resource in the corresponding `afterEach`/`afterAll` or production teardown path. Otherwise leave source unchanged.
 
-- [ ] **Step 5: Verify the exact command exits**
+- [ ] **Step 5: Verify the exact command in CI-equivalent execution**
 
-Run `npm test -- --runInBand` and require exit code 0 without manually interrupting Jest.
+Run `npm test -- --runInBand`; GitHub Actions remains authoritative for the hosted runner if the local desktop wrapper retains only stdio handles.
 
 ### Task 2: Prepare the release version
 
