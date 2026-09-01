@@ -160,7 +160,7 @@ export function CreateForm({
           <View style={styles.mediaHeaderCopy}>
             <Text style={styles.sectionTitle}>参考素材</Text>
             <Text style={styles.help}>
-              支持最多 9 张图片及 3 段音频（单个 50MB）
+              支持最多 9 张图片及 3 段音频（单个及全部素材总计均不超过 50MB）
             </Text>
           </View>
           <Text style={styles.count}>
