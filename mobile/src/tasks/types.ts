@@ -1,7 +1,7 @@
 export type TaskStatus = 'QUEUED' | 'RUNNING' | 'SUCCESS' | 'PARTIAL_SUCCESS' | 'FAILED' | 'CANCELLED' | 'UNKNOWN';
 export type DownloadState = 'IDLE' | 'ENQUEUED' | 'DOWNLOADING' | 'DOWNLOADED' | 'DOWNLOAD_FAILED';
 export type ExportState = 'NOT_REQUESTED' | 'QUEUED' | 'EXPORTING' | 'EXPORTED' | 'EXPORT_FAILED';
-export interface TaskMediaInput { dataUri: string; name?: string; mime?: string; }
+export interface TaskMediaInput { uri?: string; dataUri?: string; name?: string; mime?: string; size?: number; sha256?: string; }
 export interface TaskRecord {
   id: string; prompt: string; status: TaskStatus; resolution: string; duration: number;
   workflowId?: string; workflowVersion?: string; workflowContentHash?: string; adapterId?: string; adapterVersion?: string;
