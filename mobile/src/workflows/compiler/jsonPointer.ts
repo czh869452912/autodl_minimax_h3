@@ -27,7 +27,7 @@ export function setByJsonPointer<T>(value: T, pointer: string, nextValue: unknow
   let current: any = clone;
   parts.forEach((segment, index) => {
     const last = index === parts.length - 1;
-    if (last) { if (Array.isArray(current)) current[Number(segment)] = nextValue; else current[segment] = nextValue; return; }
+    if (last) { if (Array.isArray(current)) { if (!/^0$|^[1-9]\d*$/.test(segment) || Number(segment) > current.length) throw new Error('invalid JSON Pointer array index'); current[Number(segment)] = nextValue; } else current[segment] = nextValue; return; }
     const child = Array.isArray(current) ? current[Number(segment)] : current[segment];
     if (!child || typeof child !== 'object') throw new Error(`cannot set through JSON Pointer segment ${segment}`);
     current = child;

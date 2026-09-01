@@ -18,3 +18,8 @@ test('sets a value without mutating the input snapshot', () => {
   expect(next).toEqual({ nested: { value: 2 } });
   expect(source.nested.value).toBe(1);
 });
+
+test('rejects invalid array indexes when setting values', () => {
+  expect(() => setByJsonPointer({ items: ['a'] }, '/items/foo', 'b')).toThrow('array index');
+  expect(() => setByJsonPointer({ items: ['a'] }, '/items/3', 'b')).toThrow('array index');
+});

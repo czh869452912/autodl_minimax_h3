@@ -45,7 +45,13 @@ export function createWorkflowRegistry(db: SQLiteDatabase | undefined): Workflow
     async getActive(workflowId) {
       const row = db ? db.getFirstSync<ActiveRow>('SELECT * FROM workflow_registry_active WHERE workflow_id = ? LIMIT 1', workflowId) as ActiveRow | null : active.get(workflowId);
       if (!row) return undefined;
-      return get(workflowId, row.version);
+      const current = await get(workflowId, row.version);
+      if (current && current.contentHash === row.content_hash) return current;
+      if (row.previous_version && row.previous_hash) {
+        const previous = await get(workflowId, row.previous_version);
+        if (previous && previous.contentHash === row.previous_hash) return previous;
+      }
+      return undefined;
     },
     async rollback(workflowId) {
       const row = db ? db.getFirstSync<ActiveRow>('SELECT * FROM workflow_registry_active WHERE workflow_id = ? LIMIT 1', workflowId) as ActiveRow | null : active.get(workflowId);

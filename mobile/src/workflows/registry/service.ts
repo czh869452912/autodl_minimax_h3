@@ -40,13 +40,22 @@ export function createWorkflowRegistryService(deps: Dependencies) {
       return response;
     } finally { clearTimeout(timer); }
   };
+  const readLimited = async (response: Response): Promise<string> => {
+    const limit = deps.maxResponseBytes ?? 1024 * 1024; const reader = response.body?.getReader();
+    if (!reader) { const text = await response.text(); if (new TextEncoder().encode(text).byteLength > limit) throw new RegistryError('REGISTRY_RESPONSE_TOO_LARGE', 'registry response exceeds size limit'); return text; }
+    const chunks: Uint8Array[] = []; let total = 0;
+    while (true) { const part = await reader.read(); if (part.done) break; total += part.value.byteLength; if (total > limit) { await reader.cancel(); throw new RegistryError('REGISTRY_RESPONSE_TOO_LARGE', 'registry response exceeds size limit'); } chunks.push(part.value); }
+    const merged = new Uint8Array(total); let offset = 0; for (const chunk of chunks) { merged.set(chunk, offset); offset += chunk.byteLength; }
+    return new TextDecoder().decode(merged);
+  };
+  const readJsonLimited = async (response: Response): Promise<unknown> => JSON.parse(await readLimited(response));
   return {
     async discoverWorkflows(): Promise<RegistryRecord[]> {
       const records = await deps.repository.list();
       const selected = new Map<string, RegistryRecord>();
       for (const record of records) {
         const active = await deps.repository.getActive(record.workflowId);
-        const chosen = active ?? (records.filter((item) => item.workflowId === record.workflowId).sort((a, b) => rank[b.source] - rank[a.source])[0]);
+        const chosen = active ?? records.find((item) => item.workflowId === record.workflowId && item.source === 'builtin');
         if (chosen && !selected.has(record.workflowId)) selected.set(record.workflowId, chosen);
       }
       return Array.from(selected.values()).sort((a, b) => a.workflowId.localeCompare(b.workflowId));
@@ -73,7 +82,7 @@ export function createWorkflowRegistryService(deps: Dependencies) {
     async syncRemoteIndex(url: string): Promise<RegistryIndex> {
       if (!allowedUrl(url, deps.allowDomains ?? [])) throw new RegistryError('REGISTRY_DOMAIN_REJECTED', 'registry URL is not allowlisted HTTPS');
       const response = await fetchSafe(url);
-      const body = await response.json() as RegistryIndex;
+      const body = await readJsonLimited(response) as RegistryIndex;
       const key = keyring.find((item) => item.registryId === body.registryId);
       if (!key || !(await verifySignedPayload(canonicalizeDefinition({ registryId: body.registryId, entries: body.entries }), body.signature, key, (deps.now ?? Date.now)()))) throw new RegistryError('REGISTRY_SIGNATURE_INVALID', 'registry index signature is invalid');
       return body;
@@ -83,7 +92,7 @@ export function createWorkflowRegistryService(deps: Dependencies) {
       const entry = index.entries.find((item) => item.workflowId === workflowId && item.version === version);
       if (!entry) throw new RegistryError('REGISTRY_NOT_FOUND', 'workflow version is not listed');
       const response = await fetchSafe(`${baseUrl.replace(/\/$/, '')}/registry/workflows/${encodeURIComponent(workflowId)}/${encodeURIComponent(version)}.json`);
-      const definition = parsePayload(await response.json());
+      const definition = parsePayload(await readJsonLimited(response));
       const result = validateWorkflowDefinition(definition, adapterContext);
       if (!result.ok) throw new RegistryError('REGISTRY_SCHEMA_INVALID', 'remote workflow definition is invalid');
       checkCompatibility(result.value);
@@ -91,7 +100,7 @@ export function createWorkflowRegistryService(deps: Dependencies) {
       const hash = await sha256Hex(canonical);
       if (hash !== entry.contentHash) throw new RegistryError('REGISTRY_HASH_MISMATCH', 'workflow content hash does not match index');
       const signatureResponse = await fetchSafe(`${baseUrl.replace(/\/$/, '')}/registry/workflows/${encodeURIComponent(workflowId)}/${encodeURIComponent(version)}.sig`);
-      const signature = (await signatureResponse.text()).trim();
+      const signature = (await readLimited(signatureResponse)).trim();
       const key = keyring.find((item) => item.registryId === index.registryId);
       if (!key || !(await verifySignedPayload(canonical, signature, key, (deps.now ?? Date.now)()))) throw new RegistryError('REGISTRY_SIGNATURE_INVALID', 'workflow definition signature is invalid');
       const record: RegistryRecord = { workflowId, version, contentHash: hash, source: 'remote', trust: 'trusted', definitionJson: canonical, installedAt: (deps.now ?? Date.now)() };

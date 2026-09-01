@@ -33,13 +33,16 @@ const semver = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const pointer = (value: string): boolean => value === '' || (value.startsWith('/') && !value.split('/').some((part) => part === '__proto__' || part === 'constructor' || part === 'prototype'));
 const decodePointer = (value: string): string[] => value === '' ? [] : value.slice(1).split('/').map((part) => part.replace(/~1/g, '/').replace(/~0/g, '~'));
 
-function scan(value: unknown, path: string): void {
+function scan(value: unknown, path: string, depth = 0, state = { nodes: 0 }): void {
+  if (++state.nodes > 5000) throw new Error('package exceeds node limit');
+  if (depth > 20) throw new Error('package exceeds depth limit');
   if (!value || typeof value !== 'object') return;
-  if (Array.isArray(value)) { value.forEach((item, index) => scan(item, `${path}[${index}]`)); return; }
+  if (Array.isArray(value)) { if (value.length > 1000) throw new Error('package array exceeds limit'); value.forEach((item, index) => scan(item, `${path}[${index}]`, depth + 1, state)); return; }
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
     if (forbiddenKeys.has(key.toLowerCase()) || key.startsWith('__')) throw new Error(`forbidden field at ${path}.${key}`);
-    if (typeof child === 'string' && (child.startsWith('http://') || child.startsWith('https://')) && (key === '$ref' || key === 'url' || key === 'remote')) throw new Error(`remote references are forbidden at ${path}.${key}`);
-    scan(child, `${path}.${key}`);
+    if (typeof child === 'string' && child.length > 10000) throw new Error(`package string exceeds limit at ${path}.${key}`);
+    if (typeof child === 'string' && (child.startsWith('http://') || child.startsWith('https://'))) throw new Error(`remote references are forbidden at ${path}.${key}`);
+    scan(child, `${path}.${key}`, depth + 1, state);
   }
 }
 
@@ -49,10 +52,13 @@ export function parseWorkflowPackage(input: unknown): WorkflowPackage {
   scan(input, 'package');
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('workflow package must be an object');
   const value = input as Record<string, any>;
+  const allowedEnvelope = new Set(['apiVersion', 'kind', 'metadata', 'spec', 'signature']);
+  for (const key of Object.keys(value)) if (!allowedEnvelope.has(key)) throw new Error(`forbidden field at package.${key}`);
   if (value.apiVersion !== 'workflow.autodl/v1') throw new Error('apiVersion must be workflow.autodl/v1');
   if (value.kind !== 'Workflow') throw new Error('kind must be Workflow');
   const metadata = value.metadata;
   if (!metadata || typeof metadata !== 'object') throw new Error('metadata is required');
+  for (const key of Object.keys(metadata)) if (!new Set(['id', 'version', 'title', 'category', 'description', 'icon', 'tags', 'channel', 'deprecated', 'contentHash']).has(key)) throw new Error(`forbidden field at metadata.${key}`);
   assertString(metadata.id, 'metadata.id');
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(metadata.id)) throw new Error('metadata.id is invalid');
   assertString(metadata.version, 'metadata.version');
@@ -60,6 +66,7 @@ export function parseWorkflowPackage(input: unknown): WorkflowPackage {
   assertString(metadata.title, 'metadata.title');
   const spec = value.spec;
   if (!spec || typeof spec !== 'object') throw new Error('spec is required');
+  for (const key of Object.keys(spec)) if (!new Set(['adapter', 'inputSchema', 'uiSchema', 'bindings', 'outputs', 'capabilities', 'limits', 'compatibility']).has(key)) throw new Error(`forbidden field at spec.${key}`);
   const adapter = spec.adapter;
   if (!adapter || typeof adapter !== 'object') throw new Error('spec.adapter is required');
   assertString(adapter.id, 'spec.adapter.id'); assertString(adapter.version, 'spec.adapter.version'); assertString(adapter.operation, 'spec.adapter.operation');

@@ -11,6 +11,6 @@ export function satisfiesVersion(version: string, range: string): boolean {
   const base = op[2]; const relation = op[1] ?? '='; const cmp = compareVersions(version, base);
   if (relation === '=') return cmp === 0;
   if (relation === '>') return cmp > 0; if (relation === '>=') return cmp >= 0; if (relation === '<') return cmp < 0; if (relation === '<=') return cmp <= 0;
-  if (relation === '^') return cmp >= 0 && v[0] === parse(base)[0];
+  if (relation === '^') { const b = parse(base); return cmp >= 0 && (b[0] > 0 ? v[0] === b[0] : b[1] > 0 ? v[0] === 0 && v[1] === b[1] : v[0] === 0 && v[1] === 0 && v[2] === b[2]); }
   return cmp >= 0 && v[0] === parse(base)[0] && v[1] === parse(base)[1];
 }

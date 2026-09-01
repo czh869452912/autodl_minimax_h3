@@ -112,14 +112,11 @@ export function CreateForm({
       if (!definition || !activeRecord) throw new Error('工作流尚未加载完成');
       const settings = await readSettings();
       if (!settings.token) throw new Error('请先在设置中保存 AutoDL Token');
-      const inputSnapshot = {
-        prompt: String(workflowValues.prompt ?? prompt).trim(),
-        resolution: String(workflowValues.resolution ?? resolution) as Resolution,
-        duration: Math.max(1, Math.min(15, Number(workflowValues.duration ?? duration) || 5)),
-        seed: String(workflowValues.seed ?? seed).trim() || undefined,
-        images,
-        audios,
-      };
+      const inputSnapshot: Record<string, unknown> = { ...workflowValues, images, audios };
+      if ('prompt' in workflowValues) inputSnapshot.prompt = String(workflowValues.prompt ?? prompt).trim();
+      if ('resolution' in workflowValues) inputSnapshot.resolution = String(workflowValues.resolution ?? resolution) as Resolution;
+      if ('duration' in workflowValues) inputSnapshot.duration = Number(workflowValues.duration ?? duration) || 0;
+      if ('seed' in workflowValues) inputSnapshot.seed = String(workflowValues.seed ?? seed).trim() || undefined;
       const adapters = createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? settings.token : undefined });
       const runtime = createWorkflowRuntime({ adapters, jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `job-${Date.now()}-${Math.random().toString(16).slice(2)}` });
       const currentActive = await workflowCatalog.getActive(definition.id);
