@@ -2,7 +2,12 @@ import { assertSafeHttpsUrl } from '../security/urlPolicy';
 
 export const DEFAULT_VIDEO_DOWNLOAD_BYTES = 2 * 1024 * 1024 * 1024;
 
+export function assertArtifactDownloadPolicy(allowedHosts?: string[]): void {
+  if (!allowedHosts?.some((host) => host.trim().length > 0)) throw new Error('域名不在允许列表');
+}
+
 export function validateArtifactUrl(url: string, allowedHosts?: string[]): string {
+  assertArtifactDownloadPolicy(allowedHosts);
   return assertSafeHttpsUrl(url, { allowedHosts });
 }
 
