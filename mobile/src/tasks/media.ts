@@ -19,6 +19,7 @@ export type EnsureMediaOptions = {
   allowedHosts?: string[];
   maxBytes?: number;
   acceptedMimes?: string[];
+  timeoutMs?: number;
   deps?: MediaDeps;
 };
 
@@ -74,6 +75,7 @@ async function downloadIfNeeded(task: TaskRecord, options: EnsureMediaOptions): 
     allowedHosts: options.allowedHosts,
     maxBytes: options.maxBytes,
     acceptedMimes: options.acceptedMimes,
+    timeoutMs: options.timeoutMs,
   });
   return { task: { ...current, ...downloaded }, downloadedNow: true };
 }
