@@ -86,6 +86,14 @@ jobs:
         working-directory: mobile
         run: npm ci --legacy-peer-deps
 
+      - name: Run TypeScript checks
+        working-directory: mobile
+        run: npm run typecheck
+
+      - name: Run unit tests
+        working-directory: mobile
+        run: npm test -- --runInBand
+
       - name: Build signed universal APK
         working-directory: mobile/android
         env:
