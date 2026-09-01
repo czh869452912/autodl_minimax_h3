@@ -6,7 +6,8 @@ import { compileWorkflow } from '../compiler/compiler';
 
 type Adapter = { manifest(): Pick<PlatformAdapterManifest, 'id' | 'adapterVersion' | 'operations'>; validateCredentials(): Promise<{ ok: boolean }>; submit(input: Record<string, unknown>, target?: { operation?: string; workflowId?: string }): Promise<{ providerJobId: string }>; getStatus(handle: { providerJobId: string }): Promise<{ status: JobStatus; artifacts: ArtifactRecord[]; rawStatus?: string; startedAt?: number; executionDuration?: number }> };
 type RuntimeDeps = { adapters: Map<string, Adapter>; jobs: JobRepository; credentials: { get(adapterId: string): Promise<{ ok: boolean }> }; id: () => string; now?: () => number };
-type WorkflowProvenance = { workflowId: string; workflowVersion: string; contentHash: string };
+export type WorkflowProvenance = { workflowId: string; workflowVersion: string; contentHash: string };
+type SubmitOptions = { provenance: WorkflowProvenance };
 function applyOutputMapping(job: JobRecord, artifacts: ArtifactRecord[]): ArtifactRecord[] {
   const mappings = job.outputMapping?.artifacts ?? [];
   return artifacts.map((artifact, index) => {
@@ -31,7 +32,8 @@ export function createWorkflowRuntime(deps: RuntimeDeps) {
   const now = deps.now ?? Date.now;
   return {
     validateDraft(workflow: WorkflowDefinition, draft: WorkflowDraft, expected?: WorkflowProvenance): ValidationResult {
-      const provenance = expected ?? { workflowId: workflow.id, workflowVersion: workflow.version, contentHash: draft.contentHash };
+      if (!expected) return { ok: false, errors: [{ path: 'provenance', code: 'PROVENANCE_REQUIRED', message: 'workflow provenance is required' }] };
+      const provenance = expected;
       const mismatches = [
         draft.workflowId !== provenance.workflowId ? 'workflow id does not match active record' : undefined,
         draft.workflowVersion !== provenance.workflowVersion ? 'workflow version does not match active record' : undefined,
@@ -43,8 +45,8 @@ export function createWorkflowRuntime(deps: RuntimeDeps) {
       return compileWorkflow(workflow, draft.contentHash).validateDraft(draft.inputs);
     },
     preview(workflow: WorkflowDefinition, draft: WorkflowDraft) { return { workflowId: workflow.id, version: workflow.version, contentHash: draft.contentHash, inputs: draft.inputs, sideEffect: 'external-job' as const }; },
-    async submit(workflow: WorkflowDefinition, draft: WorkflowDraft, options: Record<string, unknown> = {}): Promise<JobRecord> {
-      const provenance = options.provenance as WorkflowProvenance | undefined;
+    async submit(workflow: WorkflowDefinition, draft: WorkflowDraft, options: SubmitOptions): Promise<JobRecord> {
+      const provenance = options?.provenance;
       const validation = this.validateDraft(workflow, draft, provenance); if (!validation.ok) throw new Error(validation.errors.map((item) => item.message).join('; '));
       const adapter = deps.adapters.get(workflow.platform.adapter); if (!adapter) throw new Error('workflow adapter unavailable');
       const credential = await deps.credentials.get(workflow.platform.adapter); if (!credential.ok) throw new Error('workflow credentials unavailable');
