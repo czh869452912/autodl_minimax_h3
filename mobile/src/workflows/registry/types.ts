@@ -1,6 +1,6 @@
 export type RegistrySource = 'builtin' | 'local-import' | 'remote';
 export type RegistryTrust = 'builtin' | 'trusted' | 'untrusted-local';
-export type RegistryRecord = { workflowId: string; version: string; contentHash: string; source: RegistrySource; trust: RegistryTrust; definitionJson: string; installedAt: number };
+export type RegistryRecord = { workflowId: string; version: string; contentHash: string; source: RegistrySource; trust: RegistryTrust; definitionJson: string; installedAt: number; repository?: string; ref?: string; commit?: string };
 export type RegistryKey = { registryId: string; publicKey: string; status: 'active' | 'revoked'; validFrom?: number; validUntil?: number };
 export type RegistryIndexEntry = { workflowId: string; version: string; contentHash: string; adapter: string; operation: string; signature: string; minAppVersion?: string; deprecated?: boolean; changelog?: string };
 export type RegistryIndex = { registryId: string; entries: RegistryIndexEntry[]; signature: string };

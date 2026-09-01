@@ -32,7 +32,7 @@ test('converts legacy dotted bindings to JSON Pointers at the boundary', () => {
     platform: { adapter: 'demo', operation: 'workflow.submit' }, metadata: { title: 'Legacy', category: 'video' },
     inputs: { type: 'object', properties: { nested: { type: 'object', properties: { prompt: { type: 'string' } } } } },
     request: { operation: 'workflow.submit', bindings: { prompt: 'nested.prompt' } }, outputs: { artifacts: [] },
-  } as const;
+  } as unknown as import('./types').WorkflowDefinition;
   expect(legacyDefinitionToPackage(legacy).spec.bindings.prompt).toBe('/nested/prompt');
 });
 
