@@ -2,10 +2,12 @@ import type { JobRepository } from '../jobs/types';
 import type { MediaStore } from '../media/types';
 import { materializeJobArtifacts } from '../media/materializer';
 import type { TaskRecord } from './types';
+import type { ArtifactDownloadPolicy } from '../workflows/schema/types';
 
 type Settings = { token: string; autoExportToGallery: boolean; keepPrivateCopy: boolean };
 type QueueDeps = {
-  ensureMedia(task: TaskRecord, settings: Settings, onUpdate: (patch: Partial<TaskRecord>) => Promise<void>): Promise<unknown>;
+  ensureMedia(task: TaskRecord, settings: Settings, onUpdate: (patch: Partial<TaskRecord>) => Promise<void>, artifactPolicy?: ArtifactDownloadPolicy): Promise<unknown>;
+  getArtifactPolicy?(adapterId?: string): ArtifactDownloadPolicy | undefined;
   taskStore: { upsert(task: TaskRecord): Promise<void> };
   jobStore: Pick<JobRepository, 'get' | 'listArtifacts'>;
   mediaStore?: Pick<MediaStore, 'upsert'> & Partial<Pick<MediaStore, 'upsertDelivery'>>;
@@ -23,10 +25,13 @@ export function createMediaDeliveryQueue(deps: QueueDeps) {
 
   const processTask = async (entry: { task: TaskRecord; settings: Settings }) => {
     let current = entry.task;
-    await deps.ensureMedia(current, entry.settings, async (patch) => {
+    const onUpdate = async (patch: Partial<TaskRecord>) => {
       current = { ...current, ...patch };
       await deps.taskStore.upsert(current);
-    });
+    };
+    const artifactPolicy = deps.getArtifactPolicy?.(current.adapterId);
+    if (artifactPolicy) await deps.ensureMedia(current, entry.settings, onUpdate, artifactPolicy);
+    else await deps.ensureMedia(current, entry.settings, onUpdate);
     if (!deps.mediaStore) return;
     const job = await deps.jobStore.get(current.id);
     const artifacts = job ? await deps.jobStore.listArtifacts(job.id) : [];

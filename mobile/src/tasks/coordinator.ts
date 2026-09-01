@@ -2,6 +2,7 @@ import type { JobRecord, JobRepository } from '../jobs/types';
 import type { TaskRecord } from './types';
 import { jobToTaskProjection } from './projection';
 import type { MediaStore } from '../media/types';
+import type { ArtifactDownloadPolicy } from '../workflows/schema/types';
 import { materializeJobArtifacts } from '../media/materializer';
 import { createMediaDeliveryQueue } from './mediaQueue';
 
@@ -13,7 +14,8 @@ type CoordinatorDeps = {
   taskStore: TaskStore;
   jobStore: Pick<JobRepository, 'get' | 'list' | 'listArtifacts' | 'upsert'> & { listActive?: () => Promise<JobRecord[]> };
   createRuntime(token: string): Runtime;
-  ensureMedia(task: TaskRecord, settings: Settings, onUpdate: (patch: Partial<TaskRecord>) => Promise<void>): Promise<unknown>;
+  ensureMedia(task: TaskRecord, settings: Settings, onUpdate: (patch: Partial<TaskRecord>) => Promise<void>, artifactPolicy?: ArtifactDownloadPolicy): Promise<unknown>;
+  getArtifactPolicy?(adapterId?: string): ArtifactDownloadPolicy | undefined;
   mediaStore?: Pick<MediaStore, 'upsert'> & Partial<Pick<MediaStore, 'upsertDelivery'>>;
   now?: () => number;
   concurrency?: number;
@@ -26,7 +28,7 @@ export function createTaskSyncCoordinator(deps: CoordinatorDeps): TaskSyncCoordi
   const now = deps.now ?? Date.now;
   const concurrency = Math.max(1, deps.concurrency ?? 4);
   const retryDelayMs = (task: TaskRecord) => task.syncError && task.lastSyncAt != null ? 30_000 : 0;
-  const mediaQueue = createMediaDeliveryQueue({ ensureMedia: deps.ensureMedia, taskStore: deps.taskStore, jobStore: deps.jobStore, mediaStore: deps.mediaStore, now, concurrency: 1, batchSize: 4 });
+  const mediaQueue = createMediaDeliveryQueue({ ensureMedia: deps.ensureMedia, getArtifactPolicy: deps.getArtifactPolicy, taskStore: deps.taskStore, jobStore: deps.jobStore, mediaStore: deps.mediaStore, now, concurrency: 1, batchSize: 4 });
   const runOnce = async (optionsTaskIds?: Set<string>): Promise<{ tasks: TaskRecord[]; summary: SyncSummary }> => {
     const settings = await deps.readSettings();
     const persistedJobs = deps.jobStore.listActive ? await deps.jobStore.listActive() : await deps.jobStore.list();

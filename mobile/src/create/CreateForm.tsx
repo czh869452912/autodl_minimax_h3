@@ -29,6 +29,7 @@ import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
 import { createSubmissionGate } from './submissionGate';
 import { createAppWorkflowCatalog } from '../workflows/registry/builtin';
 import type { RegistryRecord } from '../workflows/registry/types';
+import { registryRecordToDefinition } from '../workflows/registry/catalog';
 
 const database = getDatabase();
 const taskStore = createTaskRepository(database);
@@ -61,7 +62,7 @@ export function CreateForm({
   const [activeRecord, setActiveRecord] = useState<RegistryRecord | null>(null);
   const [workflowValues, setWorkflowValues] = useState<Record<string, unknown>>({ prompt: initialPrompt, resolution: RESOLUTION_OPTIONS[0], duration: 5, seed: '' });
   const [loadError, setLoadError] = useState<string | null>(null);
-  useEffect(() => { let cancelled = false; void workflowCatalog.bootstrap().then(() => workflowCatalog.listActive()).then((records) => { const record = records[0]; if (!record) throw new Error('没有可用工作流'); const next = JSON.parse(record.definitionJson) as WorkflowDefinition; if (!cancelled) { setActiveRecord(record); setDefinition(next); const properties = (next.inputs.properties ?? {}) as Record<string, { default?: unknown }>; setWorkflowValues((current) => Object.fromEntries(Object.entries(properties).map(([key, schema]) => [key, current[key] ?? schema.default]))); } }).catch((error) => { if (!cancelled) setLoadError(error instanceof Error ? error.message : '工作流加载失败'); }); return () => { cancelled = true; }; }, []);
+  useEffect(() => { let cancelled = false; void workflowCatalog.bootstrap().then(() => workflowCatalog.listActive()).then((records) => { const record = records[0]; if (!record) throw new Error('没有可用工作流'); const next = registryRecordToDefinition(record); if (!cancelled) { setActiveRecord(record); setDefinition(next); const properties = (next.inputs.properties ?? {}) as Record<string, { default?: unknown }>; setWorkflowValues((current) => Object.fromEntries(Object.entries(properties).map(([key, schema]) => [key, current[key] ?? schema.default]))); } }).catch((error) => { if (!cancelled) setLoadError(error instanceof Error ? error.message : '工作流加载失败'); }); return () => { cancelled = true; }; }, []);
   useEffect(() => {
     if (initialPrompt) { setPrompt(initialPrompt); setWorkflowValues((current) => ({ ...current, prompt: initialPrompt })); }
   }, [initialPrompt]);
@@ -121,7 +122,7 @@ export function CreateForm({
       const runtime = createWorkflowRuntime({ adapters, jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `job-${Date.now()}-${Math.random().toString(16).slice(2)}` });
       const currentActive = await workflowCatalog.getActive(definition.id);
       if (!currentActive || currentActive.contentHash !== activeRecord.contentHash) throw new Error('工作流已更新，请重新打开创建页');
-      const job = await runtime.submit(definition, { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord.contentHash, inputs: inputSnapshot, source: 'user', status: 'ready' });
+      const job = await runtime.submit(definition, { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord.contentHash, inputs: inputSnapshot, source: 'user', status: 'ready' }, { provenance: { workflowId: activeRecord.workflowId, workflowVersion: activeRecord.version, contentHash: activeRecord.contentHash } });
       const task = { ...jobToTaskProjection(job, []), images, audios };
       await taskStore.upsert(task);
       Alert.alert('提交成功', `任务 ${task.id} 已加入队列`, [

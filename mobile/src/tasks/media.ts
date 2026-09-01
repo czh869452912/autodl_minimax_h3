@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { exportVideo } from '../native/media';
 import type { AppSettings } from '../settings/storage';
 import { downloadTask } from './download';
+import { assertArtifactDownloadPolicy } from './downloadPolicy';
 import type { TaskRecord } from './types';
 
 export type MediaPolicy = Pick<AppSettings, 'autoExportToGallery' | 'keepPrivateCopy'>;
@@ -15,6 +16,10 @@ export type MediaDeps = {
 export type EnsureMediaOptions = {
   policy: MediaPolicy;
   onUpdate(patch: Partial<TaskRecord>): Promise<void>;
+  allowedHosts?: string[];
+  maxBytes?: number;
+  acceptedMimes?: string[];
+  timeoutMs?: number;
   deps?: MediaDeps;
 };
 
@@ -60,12 +65,17 @@ async function publishTask(current: TaskRecord, options: EnsureMediaOptions): Pr
 }
 async function downloadIfNeeded(task: TaskRecord, options: EnsureMediaOptions): Promise<{ task: TaskRecord; downloadedNow: boolean }> {
   if (task.localUri || !task.videoUrl) return { task, downloadedNow: false };
+  assertArtifactDownloadPolicy(options.allowedHosts);
   let current = task;
   const downloaded = await (options.deps ?? defaultDeps).download(task, {
     onUpdate: async (patch) => {
       current = { ...current, ...patch };
       await options.onUpdate(patch);
     },
+    allowedHosts: options.allowedHosts,
+    maxBytes: options.maxBytes,
+    acceptedMimes: options.acceptedMimes,
+    timeoutMs: options.timeoutMs,
   });
   return { task: { ...current, ...downloaded }, downloadedNow: true };
 }

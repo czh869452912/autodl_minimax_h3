@@ -6,7 +6,10 @@ import type { SQLiteDatabase } from 'expo-sqlite';
  * The reset removes App-owned metadata only. External system-gallery content
  * is never touched; private cache files remain eligible for OS reclamation.
  */
-export const APP_SCHEMA_VERSION = 4;
+export const APP_SCHEMA_VERSION = 5;
+const RECOVERY_TABLE = 'app_database_recovery';
+export type AppRecoveryState = { readonly: true; diagnostic: string; createdAt: number };
+export type AppDatabaseOptions = { backup?: () => void };
 
 const APP_TABLES = [
   'workflow_artifacts',
@@ -78,15 +81,54 @@ export function resetAppDatabase(db: SQLiteDatabase | undefined): void {
   }
 }
 
-export function ensureAppDatabase(db: SQLiteDatabase | undefined): void {
+function withTransaction(db: SQLiteDatabase, callback: () => void): void {
+  const transaction = (db as unknown as { withTransactionSync?: (fn: () => void) => void }).withTransactionSync;
+  if (transaction) transaction.call(db, callback);
+  else {
+    db.execSync('BEGIN');
+    try { callback(); db.execSync('COMMIT'); }
+    catch (error) { try { db.execSync('ROLLBACK'); } catch { /* best effort */ } throw error; }
+  }
+}
+
+function markRecovery(db: SQLiteDatabase, diagnostic: string): void {
+  try {
+    db.execSync(`CREATE TABLE IF NOT EXISTS ${RECOVERY_TABLE} (id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1), diagnostic TEXT NOT NULL, created_at INTEGER NOT NULL)`);
+    db.runSync(`INSERT OR REPLACE INTO ${RECOVERY_TABLE} (id, diagnostic, created_at) VALUES (1, ?, ?)`, diagnostic, Date.now());
+  } catch { /* preserve the original migration failure */ }
+}
+
+export function getAppRecoveryState(db: SQLiteDatabase | undefined): AppRecoveryState | undefined {
+  if (!db || typeof (db as unknown as { getFirstSync?: unknown }).getFirstSync !== 'function') return undefined;
+  try {
+    const row = db.getFirstSync<{ readonly?: number; diagnostic?: string; created_at?: number }>(`SELECT 1 AS readonly, diagnostic, created_at FROM ${RECOVERY_TABLE} WHERE id = 1 LIMIT 1`) as { readonly?: number; diagnostic?: string; created_at?: number } | null | undefined;
+    if (!row || row.readonly !== 1 || typeof row.diagnostic !== 'string') return undefined;
+    return { readonly: true, diagnostic: row.diagnostic, createdAt: Number(row.created_at ?? 0) };
+  } catch { return undefined; }
+}
+
+export function assertAppDatabaseWritable(db: SQLiteDatabase | undefined): void {
+  const recovery = getAppRecoveryState(db);
+  if (recovery) throw new Error(`APP_DATABASE_READ_ONLY: ${recovery.diagnostic}`);
+}
+
+export function ensureAppDatabase(db: SQLiteDatabase | undefined, options: AppDatabaseOptions = {}): void {
   if (!db) return;
   if (typeof (db as unknown as { execSync?: unknown }).execSync !== 'function') return;
   const version = readAppSchemaVersion(db);
-  if (version === 0 && !isLegacyAppDatabase(db)) {
-    db.execSync(`PRAGMA user_version = ${APP_SCHEMA_VERSION}`);
-  } else if (isLegacyAppDatabase(db)) {
-    // Legacy data is reset only after the first-launch confirmation gate.
-    // This keeps the old database intact while the user decides whether to continue.
-    return;
+  if (version === undefined) return;
+  if (version === APP_SCHEMA_VERSION) return;
+  if (version != null && version > APP_SCHEMA_VERSION) return;
+  if (version !== APP_SCHEMA_VERSION - 1) return;
+  try {
+    options.backup?.();
+    withTransaction(db, () => {
+      for (const statement of APP_CREATE_STATEMENTS) db.execSync(statement);
+      db.execSync(`CREATE TABLE IF NOT EXISTS ${RECOVERY_TABLE} (id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1), diagnostic TEXT NOT NULL, created_at INTEGER NOT NULL)`);
+      db.execSync(`PRAGMA user_version = ${APP_SCHEMA_VERSION}`);
+    });
+  } catch (error) {
+    markRecovery(db, error instanceof Error ? error.message : String(error));
+    throw error;
   }
 }

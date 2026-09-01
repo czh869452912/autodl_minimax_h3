@@ -9,3 +9,4 @@ mobile/android/app/debug.keystore
 *.log
 .idea/
 .superpowers/
+.worktrees/

@@ -47,3 +47,12 @@ test('initializes registry schema without using reserved SQLite keyword commit',
   expect(() => createWorkflowRegistry(db as never)).not.toThrow();
   expect(db.execSync.mock.calls.flat()).not.toEqual(expect.arrayContaining([expect.stringMatching(/\bcommit\s+TEXT\b/i)]));
 });
+
+test('does not execute registry DDL from the repository constructor', () => {
+  const db = {
+    execSync: jest.fn(),
+    getFirstSync: jest.fn(() => ({ user_version: 5 })),
+  };
+  createWorkflowRegistry(db as never);
+  expect(db.execSync).not.toHaveBeenCalledWith(expect.stringContaining('CREATE TABLE IF NOT EXISTS workflow_registry'));
+});

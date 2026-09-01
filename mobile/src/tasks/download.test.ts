@@ -3,6 +3,7 @@ jest.mock('expo-file-system/legacy', () => ({
   getInfoAsync: jest.fn(),
   makeDirectoryAsync: jest.fn(),
   deleteAsync: jest.fn(),
+  writeAsStringAsync: jest.fn(),
   downloadAsync: jest.fn(),
   moveAsync: jest.fn(),
 }));
@@ -32,6 +33,7 @@ describe('download state machine', () => {
 describe('secure artifact download', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    global.fetch = jest.fn(async () => new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'video/mp4' } }));
     fs.makeDirectoryAsync.mockResolvedValue(undefined);
     fs.deleteAsync.mockResolvedValue(undefined);
     fs.moveAsync.mockResolvedValue(undefined);
@@ -49,17 +51,22 @@ describe('secure artifact download', () => {
   });
 
   it('publishes a valid video only after response and file validation', async () => {
-    fs.downloadAsync.mockResolvedValue({ uri: 'file:///documents/media/task-1.mp4.part', status: 200, headers: { 'content-type': 'video/mp4' }, mimeType: 'video/mp4' });
-    fs.getInfoAsync.mockResolvedValue({ exists: true, uri: 'file:///documents/media/task-1.mp4.part', size: 100, isDirectory: false, modificationTime: 1 });
-    await expect(downloadTask(task)).resolves.toMatchObject({ downloadState: 'DOWNLOADED', localUri: 'file:///documents/media/task-1.mp4' });
+    fs.writeAsStringAsync.mockResolvedValue(undefined);
+    await expect(downloadTask(task, { allowedHosts: ['example.test'] })).resolves.toMatchObject({ downloadState: 'DOWNLOADED', localUri: 'file:///documents/media/task-1.mp4' });
     expect(fs.moveAsync).toHaveBeenCalledWith({ from: 'file:///documents/media/task-1.mp4.part', to: 'file:///documents/media/task-1.mp4' });
   });
 
   it('deletes the partial file instead of publishing a non-video response', async () => {
-    fs.downloadAsync.mockResolvedValue({ uri: 'file:///documents/media/task-1.mp4.part', status: 200, headers: { 'content-type': 'text/html' }, mimeType: 'text/html' });
-    fs.getInfoAsync.mockResolvedValue({ exists: true, uri: 'file:///documents/media/task-1.mp4.part', size: 100, isDirectory: false, modificationTime: 1 });
-    await expect(downloadTask(task)).rejects.toThrow('媒体类型');
+    global.fetch = jest.fn(async () => new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'text/html' } }));
+    await expect(downloadTask(task, { allowedHosts: ['example.test'] })).rejects.toThrow('媒体类型');
     expect(fs.moveAsync).not.toHaveBeenCalled();
     expect(fs.deleteAsync).toHaveBeenCalledWith('file:///documents/media/task-1.mp4.part', { idempotent: true });
   });
+
+  it('cancels a resumable download when streamed bytes exceed the cap', async () => {
+    global.fetch = jest.fn(async () => new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-type': 'video/mp4' } }));
+    await expect(downloadTask(task, { maxBytes: 2, allowedHosts: ['example.test'] })).rejects.toThrow('大小');
+    expect(fs.moveAsync).not.toHaveBeenCalled();
+  });
+
 });
