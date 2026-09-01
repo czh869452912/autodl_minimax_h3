@@ -62,7 +62,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
+          sdkmanager_path="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$sdkmanager_path" ]]; then
+            sdkmanager_path="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f -print -quit)"
+          fi
+          test -x "$sdkmanager_path"
+          yes | "$sdkmanager_path" --licenses >/dev/null || true
+          "$sdkmanager_path" "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
 
       - name: Decode release keystore
         shell: bash
