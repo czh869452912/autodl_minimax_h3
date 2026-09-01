@@ -57,24 +57,56 @@ export function createWorkflowRegistryService(deps: Dependencies) {
     await deps.repository.setActive(record.workflowId, record.version, record.contentHash);
   };
   const parsePayload = async (payload: unknown, source: WorkflowPackageSource): Promise<VerifiedWorkflowPackage> => parseVerifiedWorkflowPackage(payload, source);
-  const fetchSafe = async (url: string): Promise<Response> => {
-    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), deps.fetchTimeoutMs ?? 15000);
+  const fetchSafe = async (url: string): Promise<string> => {
+    const controller = new AbortController();
+    const timeoutMs = deps.fetchTimeoutMs ?? 15000;
+    const limit = deps.maxResponseBytes ?? 1024 * 1024;
+    let current = url;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let rejectTimeout: ((error: Error) => void) | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => { rejectTimeout = reject; });
+    const timeout = () => { controller.abort(); rejectTimeout?.(new RegistryError('REGISTRY_TIMEOUT', 'registry request timed out')); };
+    timeoutId = setTimeout(timeout, timeoutMs);
     try {
-      const response = await fetcher(url, { signal: controller.signal });
-      if (!response.ok) throw new RegistryError('REGISTRY_FETCH_FAILED', `registry request failed with status ${response.status}`);
-      const length = Number(response.headers.get('content-length') ?? 0); if (length > (deps.maxResponseBytes ?? 1024 * 1024)) throw new RegistryError('REGISTRY_RESPONSE_TOO_LARGE', 'registry response exceeds size limit');
-      return response;
-    } finally { clearTimeout(timer); }
+      let response: Response | undefined;
+      for (let hop = 0; hop <= 3; hop += 1) {
+        if (!allowedUrl(current, deps.allowDomains ?? [])) throw new RegistryError('REGISTRY_DOMAIN_REJECTED', 'registry URL is not allowlisted HTTPS');
+        response = await Promise.race([fetcher(current, { signal: controller.signal, redirect: 'manual' }), timeoutPromise]);
+        if (response.status >= 300 && response.status < 400) {
+          if (hop === 3) throw new RegistryError('REGISTRY_FETCH_FAILED', 'registry redirect limit exceeded');
+          const location = response.headers.get('location');
+          if (!location) throw new RegistryError('REGISTRY_FETCH_FAILED', 'registry redirect is missing a target');
+          current = new URL(location, current).toString();
+          continue;
+        }
+        if (!response.ok) throw new RegistryError('REGISTRY_FETCH_FAILED', `registry request failed with status ${response.status}`);
+        const length = Number(response.headers.get('content-length') ?? 0);
+        if (length > limit) throw new RegistryError('REGISTRY_RESPONSE_TOO_LARGE', 'registry response exceeds size limit');
+        const reader = response.body?.getReader();
+        if (!reader) {
+          const text = await Promise.race([response.text(), timeoutPromise]);
+          if (new TextEncoder().encode(text).byteLength > limit) throw new RegistryError('REGISTRY_RESPONSE_TOO_LARGE', 'registry response exceeds size limit');
+          return text;
+        }
+        const chunks: Uint8Array[] = []; let total = 0;
+        while (true) {
+          const part = await Promise.race([reader.read(), timeoutPromise]);
+          if (part.done) break;
+          total += part.value.byteLength;
+          if (total > limit) { await reader.cancel(); throw new RegistryError('REGISTRY_RESPONSE_TOO_LARGE', 'registry response exceeds size limit'); }
+          chunks.push(part.value);
+        }
+        const merged = new Uint8Array(total); let offset = 0;
+        for (const chunk of chunks) { merged.set(chunk, offset); offset += chunk.byteLength; }
+        return new TextDecoder().decode(merged);
+      }
+      throw new RegistryError('REGISTRY_FETCH_FAILED', 'registry redirect limit exceeded');
+    } catch (error) {
+      if (error instanceof RegistryError) throw error;
+      if (controller.signal.aborted) throw new RegistryError('REGISTRY_TIMEOUT', 'registry request timed out');
+      throw error;
+    } finally { if (timeoutId) clearTimeout(timeoutId); }
   };
-  const readLimited = async (response: Response): Promise<string> => {
-    const limit = deps.maxResponseBytes ?? 1024 * 1024; const reader = response.body?.getReader();
-    if (!reader) { const text = await response.text(); if (new TextEncoder().encode(text).byteLength > limit) throw new RegistryError('REGISTRY_RESPONSE_TOO_LARGE', 'registry response exceeds size limit'); return text; }
-    const chunks: Uint8Array[] = []; let total = 0;
-    while (true) { const part = await reader.read(); if (part.done) break; total += part.value.byteLength; if (total > limit) { await reader.cancel(); throw new RegistryError('REGISTRY_RESPONSE_TOO_LARGE', 'registry response exceeds size limit'); } chunks.push(part.value); }
-    const merged = new Uint8Array(total); let offset = 0; for (const chunk of chunks) { merged.set(chunk, offset); offset += chunk.byteLength; }
-    return new TextDecoder().decode(merged);
-  };
-  const readJsonLimited = async (response: Response): Promise<unknown> => JSON.parse(await readLimited(response));
   return {
     async discoverWorkflows(): Promise<RegistryRecord[]> {
       const records = await deps.repository.list();
@@ -105,8 +137,7 @@ export function createWorkflowRegistryService(deps: Dependencies) {
     },
     async syncRemoteIndex(url: string): Promise<RegistryIndex> {
       if (!allowedUrl(url, deps.allowDomains ?? [])) throw new RegistryError('REGISTRY_DOMAIN_REJECTED', 'registry URL is not allowlisted HTTPS');
-      const response = await fetchSafe(url);
-      const body = await readJsonLimited(response) as RegistryIndex;
+      const body = JSON.parse(await fetchSafe(url)) as RegistryIndex;
       const key = keyring.find((item) => item.registryId === body.registryId);
       if (!key || !(await verifySignedPayload(canonicalizeDefinition({ registryId: body.registryId, entries: body.entries }), body.signature, key, (deps.now ?? Date.now)()))) throw new RegistryError('REGISTRY_SIGNATURE_INVALID', 'registry index signature is invalid');
       return body;
@@ -115,16 +146,14 @@ export function createWorkflowRegistryService(deps: Dependencies) {
       const index = await this.syncRemoteIndex(`${baseUrl.replace(/\/$/, '')}/registry/index.json`);
       const entry = index.entries.find((item) => item.workflowId === workflowId && item.version === version);
       if (!entry) throw new RegistryError('REGISTRY_NOT_FOUND', 'workflow version is not listed');
-      const response = await fetchSafe(`${baseUrl.replace(/\/$/, '')}/registry/workflows/${encodeURIComponent(workflowId)}/${encodeURIComponent(version)}.json`);
-       const verified = await parsePayload(await readJsonLimited(response), 'remote');
+       const verified = await parsePayload(JSON.parse(await fetchSafe(`${baseUrl.replace(/\/$/, '')}/registry/workflows/${encodeURIComponent(workflowId)}/${encodeURIComponent(version)}.json`)), 'remote');
        const result = validateWorkflowDefinition(verified.definition, adapterContext);
       if (!result.ok) throw new RegistryError('REGISTRY_SCHEMA_INVALID', 'remote workflow definition is invalid');
       checkCompatibility(result.value);
        const canonical = canonicalizePackage(verified.pkg);
        const hash = verified.packageHash;
       if (hash !== entry.contentHash) throw new RegistryError('REGISTRY_HASH_MISMATCH', 'workflow content hash does not match index');
-      const signatureResponse = await fetchSafe(`${baseUrl.replace(/\/$/, '')}/registry/workflows/${encodeURIComponent(workflowId)}/${encodeURIComponent(version)}.sig`);
-      const signature = (await readLimited(signatureResponse)).trim();
+      const signature = (await fetchSafe(`${baseUrl.replace(/\/$/, '')}/registry/workflows/${encodeURIComponent(workflowId)}/${encodeURIComponent(version)}.sig`)).trim();
       const key = keyring.find((item) => item.registryId === index.registryId);
        if (!key || !(await verifySignedPayload(canonical, signature, key, (deps.now ?? Date.now)()))) throw new RegistryError('REGISTRY_SIGNATURE_INVALID', 'workflow package signature is invalid');
       const record: RegistryRecord = { workflowId, version, contentHash: hash, source: 'remote', trust: 'trusted', definitionJson: canonical, installedAt: (deps.now ?? Date.now)() };
