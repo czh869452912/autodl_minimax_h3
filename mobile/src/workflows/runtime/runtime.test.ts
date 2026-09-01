@@ -19,6 +19,33 @@ test('validates drafts before network calls and previews provenance', async () =
   expect(value.adapter.submit).not.toHaveBeenCalled();
 });
 
+test.each([
+  ['id', { workflowId: 'other' }],
+  ['version', { workflowVersion: '2.0.0' }],
+] as const)('rejects draft provenance mismatch for %s before side effects', (_field, change) => {
+  const value = deps();
+  const runtime = createWorkflowRuntime(value.deps);
+  const result = runtime.validateDraft(workflow, { ...draft, ...change });
+  expect(result.ok).toBe(false);
+  expect(value.adapter.validateCredentials).not.toHaveBeenCalled();
+});
+
+test('rejects content hash mismatch against the selected active record', () => {
+  const value = deps();
+  const runtime = createWorkflowRuntime(value.deps);
+  const result = runtime.validateDraft(workflow, draft, { workflowId: 'demo', workflowVersion: '1.0.0', contentHash: 'active-hash' });
+  expect(result.ok).toBe(false);
+});
+
+test('submit does not call credentials or jobs when provenance is stale', async () => {
+  const value = deps();
+  const runtime = createWorkflowRuntime(value.deps);
+  await expect(runtime.submit(workflow, draft, { provenance: { workflowId: 'demo', workflowVersion: '1.0.0', contentHash: 'active-hash' } })).rejects.toThrow();
+  expect(value.deps.credentials.get).not.toHaveBeenCalled();
+  expect(value.deps.jobs.upsert).not.toHaveBeenCalled();
+  expect(value.adapter.submit).not.toHaveBeenCalled();
+});
+
 test('persists submitting state and returns a normalized job', async () => {
   const value = deps();
   const runtime = createWorkflowRuntime(value.deps);
