@@ -69,6 +69,17 @@ cd android
 mobile/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
+Release 包必须通过环境变量提供独立的上传签名密钥；签名文件和密码不会写入仓库：
+
+```text
+AUTODL_UPLOAD_STORE_FILE
+AUTODL_UPLOAD_STORE_PASSWORD
+AUTODL_UPLOAD_KEY_ALIAS
+AUTODL_UPLOAD_KEY_PASSWORD
+```
+
+缺少这些变量时，Release 构建会主动失败。Debug 构建仍使用 Android Debug 签名。生产网络配置仅允许 HTTPS；本地 HTTP endpoint 只应在 debug 工具场景中显式启用。
+
 ### 首次配置
 
 安装后打开应用，进入“设置”，完成以下两项配置。
@@ -180,6 +191,8 @@ Roadmap 表示产品方向，不代表已经交付；具体优先级会根据实
 - 参考素材仅在创建任务需要时随请求提交。
 - AutoDL Token 和 LLM API Key 使用 Expo SecureStore 保存，并由 Android Keystore 提供系统级保护。
 - 应用需要网络权限以访问 AutoDL 和 LLM API；媒体权限仅用于选择素材和导出作品。
+- 应用不依赖业务后端、云端任务管理或对象存储。工作流订阅（如启用）只接受固定仓库中的签名、声明式 workflow package，并在本地验证 commit 签名和内容 hash 后安装。
+- AutoDL H3 的工作流 metadata 以 `ref_image_0..8` 和 `ref_audio_0..2` 为准；客户端在提交前才准备 data URI，具体 MIME、数量和请求体限制以 provider contract 为准，不把单文件大小写成 API 永久承诺。
 
 卸载应用可能会清除尚未导出或备份的应用私有数据。重要作品请及时保存到系统相册或其他存储位置。
 
@@ -191,6 +204,14 @@ Roadmap 表示产品方向，不代表已经交付；具体优先级会根据实
 cd mobile
 npm run typecheck
 npm test -- --runInBand
+```
+
+可选地运行只读 AutoDL metadata contract test（不会提交生成任务）：
+
+```powershell
+$env:AUTODL_CONTRACT_LIVE='1'
+npm test -- --runInBand src/workflows/providers/autodl/metadata.test.ts
+Remove-Item Env:AUTODL_CONTRACT_LIVE
 ```
 
 涉及 Android 原生能力、键盘/安全区、媒体播放、后台任务或权限的改动，还应构建 APK 并在 Android 实机或模拟器上验证。

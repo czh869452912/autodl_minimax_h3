@@ -13,11 +13,11 @@ export function nextDownloadState(task: Pick<TaskRecord, 'videoUrl' | 'localUri'
 
 export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; maxBytes?: number } = {}): Promise<TaskRecord> {
   if (!task.videoUrl) throw new Error('任务没有可下载的视频地址');
-  const remoteUrl = validateArtifactUrl(task.videoUrl, options.allowedHosts);
   if (task.localUri) {
     const info = await FileSystem.getInfoAsync(task.localUri);
     if (info.exists) return { ...task, downloadState: 'DOWNLOADED' };
   }
+  const remoteUrl = validateArtifactUrl(task.videoUrl, options.allowedHosts);
   const dir = `${FileSystem.documentDirectory || ''}media`;
   await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
   const target = `${dir}/${task.id}.mp4`;

@@ -42,6 +42,12 @@ describe('secure artifact download', () => {
     expect(fs.downloadAsync).not.toHaveBeenCalled();
   });
 
+  it('uses an existing local file without consulting an expired remote URL', async () => {
+    fs.getInfoAsync.mockResolvedValue({ exists: true, uri: 'file:///documents/media/task-1.mp4', size: 100, isDirectory: false, modificationTime: 1 });
+    await expect(downloadTask({ ...task, videoUrl: 'http://expired.invalid/video.mp4', localUri: 'file:///documents/media/task-1.mp4' })).resolves.toMatchObject({ downloadState: 'DOWNLOADED' });
+    expect(fs.downloadAsync).not.toHaveBeenCalled();
+  });
+
   it('publishes a valid video only after response and file validation', async () => {
     fs.downloadAsync.mockResolvedValue({ uri: 'file:///documents/media/task-1.mp4.part', status: 200, headers: { 'content-type': 'video/mp4' }, mimeType: 'video/mp4' });
     fs.getInfoAsync.mockResolvedValue({ exists: true, uri: 'file:///documents/media/task-1.mp4.part', size: 100, isDirectory: false, modificationTime: 1 });
