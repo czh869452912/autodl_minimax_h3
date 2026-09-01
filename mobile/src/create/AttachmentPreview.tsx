@@ -5,14 +5,14 @@ import { COLORS, SPACING } from '../ui/theme';
 import type { TaskMediaInput } from '../tasks/types';
 
 function AudioRow({ item, index, onRemove }: { item: TaskMediaInput; index: number; onRemove: () => void }) {
-  const player = useAudioPlayer(item.dataUri);
+  const player = useAudioPlayer(item.uri ?? item.dataUri);
   const status = useAudioPlayerStatus(player);
   return <View style={styles.audioRow}><View style={styles.audioTag}><Text style={styles.tagText}>@audio{index}</Text></View><View style={styles.audioCopy}><Text numberOfLines={1} style={styles.name}>{item.name || `参考音频 ${index + 1}`}</Text><Text style={styles.meta}>{status.duration ? `${Math.round(status.duration)} 秒` : '音频参考'}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={status.playing ? '暂停音频' : '播放音频'} onPress={() => status.playing ? player.pause() : player.play()} style={styles.iconButton}><AppIcon name={status.playing ? 'pause' : 'play_arrow'} size={20} color={COLORS.primaryActive} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel="删除音频" onPress={onRemove} style={styles.iconButton}><AppIcon name="delete" size={20} color={COLORS.danger} /></Pressable></View>;
 }
 
 export function ImagePreviewGrid({ items, onRemove }: { items: TaskMediaInput[]; onRemove: (index: number) => void }) {
   if (!items.length) return null;
-  return <View style={styles.section}><Text style={styles.sectionLabel}>参考图片列表 (@image0 - @image{items.length - 1})</Text><View style={styles.imageGrid}>{items.map((item, index) => <View key={`${item.name || 'image'}-${index}`} style={styles.imageCard}><Image source={{ uri: item.dataUri }} style={styles.image} /><Text style={styles.imageTag}>@{index}</Text><Pressable accessibilityRole="button" accessibilityLabel={`删除参考图 ${index + 1}`} onPress={() => onRemove(index)} style={styles.remove}><AppIcon name="close" size={15} color={COLORS.text} /></Pressable></View>)}</View></View>;
+  return <View style={styles.section}><Text style={styles.sectionLabel}>参考图片列表 (@image0 - @image{items.length - 1})</Text><View style={styles.imageGrid}>{items.map((item, index) => <View key={`${item.name || 'image'}-${index}`} style={styles.imageCard}><Image source={{ uri: item.uri ?? item.dataUri }} style={styles.image} /><Text style={styles.imageTag}>@{index}</Text><Pressable accessibilityRole="button" accessibilityLabel={`删除参考图 ${index + 1}`} onPress={() => onRemove(index)} style={styles.remove}><AppIcon name="close" size={15} color={COLORS.text} /></Pressable></View>)}</View></View>;
 }
 
 export function AudioPreviewList({ items, onRemove }: { items: TaskMediaInput[]; onRemove: (index: number) => void }) {
