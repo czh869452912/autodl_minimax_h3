@@ -36,9 +36,10 @@ export async function resolveArtifactRedirects(
   const fetcher = options.fetcher ?? fetch;
   const maxHops = options.maxHops ?? 3;
   for (let hop = 0; hop <= maxHops; hop += 1) {
-    const response = await fetcher(current, { method: 'HEAD', redirect: 'manual' });
+    const response = await fetcher(current, { method: 'GET', redirect: 'manual' });
     if (response.status < 300 || response.status >= 400) {
-      if (!response.ok && response.status !== 405) throw new Error(`下载失败（HTTP ${response.status}）`);
+      if (!response.ok) throw new Error(`下载失败（HTTP ${response.status}）`);
+      if (response.body) await response.body.cancel().catch(() => undefined);
       return current;
     }
     if (hop === maxHops) throw new Error('下载重定向次数超过限制');
