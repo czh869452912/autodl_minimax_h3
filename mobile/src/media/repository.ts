@@ -37,27 +37,29 @@ export function createSqliteMediaStore(database: SqlDatabase): MediaStore {
   database.execSync?.(schema);
   database.execSync?.('CREATE INDEX IF NOT EXISTS idx_media_assets_status_created_id ON media_assets(status, created_at DESC, id DESC);');
   database.execSync?.('CREATE INDEX IF NOT EXISTS idx_media_assets_task_kind ON media_assets(task_id, kind);');
+  const run = async (sql: string, ...params: any[]) => typeof (database as any).runAsync === 'function' ? (database as any).runAsync(sql, ...params) : database.runSync?.(sql, ...params);
+  const all = async <T>(sql: string, ...params: any[]): Promise<T[]> => typeof (database as any).getAllAsync === 'function' ? ((await (database as any).getAllAsync(sql, ...params)) ?? []) : (database.getAllSync?.<T>(sql, ...params) ?? []);
   return {
     async upsert(asset) {
-      database.runSync?.('INSERT OR REPLACE INTO media_assets (id, task_id, title, prompt, source_url, local_path, poster_path, mime_type, width, height, duration_ms, status, created_at, updated_at, artifact_id, job_id, workflow_id, kind, export_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', asset.id, asset.taskId, asset.title, asset.prompt, asset.sourceUrl, asset.localPath ?? null, asset.posterPath ?? null, asset.mimeType, asset.width ?? null, asset.height ?? null, asset.durationMs ?? null, asset.status, asset.createdAt, asset.updatedAt, asset.artifactId ?? null, asset.jobId ?? null, asset.workflowId ?? null, asset.kind ?? 'video', asset.exportStatus ?? null);
+      await run('INSERT OR REPLACE INTO media_assets (id, task_id, title, prompt, source_url, local_path, poster_path, mime_type, width, height, duration_ms, status, created_at, updated_at, artifact_id, job_id, workflow_id, kind, export_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', asset.id, asset.taskId, asset.title, asset.prompt, asset.sourceUrl, asset.localPath ?? null, asset.posterPath ?? null, asset.mimeType, asset.width ?? null, asset.height ?? null, asset.durationMs ?? null, asset.status, asset.createdAt, asset.updatedAt, asset.artifactId ?? null, asset.jobId ?? null, asset.workflowId ?? null, asset.kind ?? 'video', asset.exportStatus ?? null);
     },
     async list(options: { query?: string; status?: MediaStatus; kind?: MediaAsset['kind'] } = {}) {
       const query = options.query?.trim().toLowerCase() || undefined;
-      const rows = database.getAllSync?.<Record<string, unknown>>('SELECT * FROM media_assets WHERE (? IS NULL OR status = ?) AND (? IS NULL OR kind = ?) AND (? IS NULL OR lower(title) LIKE ? OR lower(prompt) LIKE ? OR lower(task_id) LIKE ?) ORDER BY created_at DESC', options.status ?? null, options.status ?? null, options.kind ?? null, options.kind ?? null, query ?? null, query ? `%${query}%` : null, query ? `%${query}%` : null, query ? `%${query}%` : null) ?? [];
+      const rows = await all<Record<string, unknown>>('SELECT * FROM media_assets WHERE (? IS NULL OR status = ?) AND (? IS NULL OR kind = ?) AND (? IS NULL OR lower(title) LIKE ? OR lower(prompt) LIKE ? OR lower(task_id) LIKE ?) ORDER BY created_at DESC', options.status ?? null, options.status ?? null, options.kind ?? null, options.kind ?? null, query ?? null, query ? `%${query}%` : null, query ? `%${query}%` : null, query ? `%${query}%` : null);
       return rows.map(toAsset);
     },
     async listPage(options: MediaPageOptions = {}) {
       const limit = Math.max(1, Math.min(100, options.limit ?? 40));
       const query = options.query?.trim().toLowerCase() || undefined;
       const cursor = options.cursor;
-      const rows = database.getAllSync?.<Record<string, unknown>>('SELECT id, task_id, title, prompt, source_url, local_path, poster_path, mime_type, width, height, duration_ms, status, created_at, updated_at, artifact_id, job_id, workflow_id, kind, export_status FROM media_assets WHERE (? IS NULL OR status = ?) AND (? IS NULL OR kind = ?) AND (? IS NULL OR lower(title) LIKE ? OR lower(prompt) LIKE ? OR lower(task_id) LIKE ?) AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?)) ORDER BY created_at DESC, id DESC LIMIT ?', options.status ?? null, options.status ?? null, options.kind ?? null, options.kind ?? null, query ?? null, query ? `%${query}%` : null, query ? `%${query}%` : null, query ? `%${query}%` : null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.id ?? null, limit + 1) ?? [];
+      const rows = await all<Record<string, unknown>>('SELECT id, task_id, title, prompt, source_url, local_path, poster_path, mime_type, width, height, duration_ms, status, created_at, updated_at, artifact_id, job_id, workflow_id, kind, export_status FROM media_assets WHERE (? IS NULL OR status = ?) AND (? IS NULL OR kind = ?) AND (? IS NULL OR lower(title) LIKE ? OR lower(prompt) LIKE ? OR lower(task_id) LIKE ?) AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?)) ORDER BY created_at DESC, id DESC LIMIT ?', options.status ?? null, options.status ?? null, options.kind ?? null, options.kind ?? null, query ?? null, query ? `%${query}%` : null, query ? `%${query}%` : null, query ? `%${query}%` : null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.id ?? null, limit + 1);
       const hasMore = rows.length > limit;
       const items = rows.slice(0, limit).map(toAsset);
       const last = items[items.length - 1];
       return { items, nextCursor: hasMore && last ? { createdAt: last.createdAt, id: last.id } : undefined };
     },
     async get(id) {
-      const rows = database.getAllSync?.<Record<string, unknown>>('SELECT * FROM media_assets WHERE id = ? LIMIT 1', id) ?? [];
+      const rows = await all<Record<string, unknown>>('SELECT * FROM media_assets WHERE id = ? LIMIT 1', id);
       return rows[0] ? toAsset(rows[0]) : null;
     },
     async remove(id) { const rows = database.getAllSync?.<Record<string, unknown>>('SELECT local_path, poster_path FROM media_assets WHERE id = ? LIMIT 1', id) ?? []; database.runSync?.('DELETE FROM media_deliveries WHERE asset_id = ?', id); database.runSync?.('DELETE FROM media_assets WHERE id = ?', id); for (const row of rows) for (const uri of [row.local_path, row.poster_path]) await removePrivateFile(uri); },

@@ -7,6 +7,7 @@ import { createWorkflowRuntime } from '../workflows/runtime/runtime';
 import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
 import { createTaskSyncCoordinator } from './coordinator';
 import { createSqliteMediaStore } from '../media/repository';
+import { withSchedulerLease } from './scheduler';
 
 const database = getDatabase();
 export const taskStore = createTaskRepository(database);
@@ -22,6 +23,9 @@ const coordinator = createTaskSyncCoordinator({
 });
 
 export async function syncTaskRun(reason: 'foreground' | 'background' | 'service' = 'foreground', taskIds?: string[]) {
-  return coordinator.run({ reason, taskIds });
+  const result = await withSchedulerLease('status-sync', () => coordinator.run({ reason, taskIds }), { db: database as never });
+  if (result) return result;
+  const tasks = await taskStore.listActive();
+  return { tasks, summary: { updated: 0, failed: 0, skipped: 0, remaining: tasks.length } };
 }
 export async function syncTasks() { return (await syncTaskRun()).tasks; }

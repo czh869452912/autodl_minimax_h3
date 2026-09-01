@@ -72,3 +72,20 @@ test('persists delivery presentation status on the media asset', async () => {
   });
   expect(await store.get('m1')).toMatchObject({ exportStatus: '已保存到相册' });
 });
+
+test('prefers async SQLite operations when available', async () => {
+  const db = {
+    execSync: jest.fn(),
+    runSync: jest.fn(() => { throw new Error('sync path used'); }),
+    getAllSync: jest.fn(() => { throw new Error('sync path used'); }),
+    runAsync: jest.fn(async () => undefined),
+    getAllAsync: jest.fn(async () => []),
+    getFirstAsync: jest.fn(async () => null),
+  };
+  const store = createSqliteMediaStore(db as never);
+  await store.upsert(asset);
+  await store.list();
+  await store.get('m1');
+  expect(db.runAsync).toHaveBeenCalled();
+  expect(db.getAllAsync).toHaveBeenCalled();
+});

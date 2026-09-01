@@ -42,7 +42,7 @@ test('refreshes visible running duration every second while task is in progress'
   await act(async () => { renderer = create(<TasksScreen />); });
   const texts = () => renderer!.root.findAllByType(Text).map((node) => [node.props.children].flat(Infinity).join(''));
   expect(texts()).toContain('执行 0分00秒');
-  expect(renderer!.root.findByType(FlatList).props.extraData).toBe(2_000);
+  expect(renderer!.root.findByType(FlatList).props.extraData).toBeUndefined();
   jest.spyOn(Date, 'now').mockReturnValue(62_000);
   await act(async () => { jest.advanceTimersByTime(1_000); });
   expect(texts()).toContain('执行 1分00秒');

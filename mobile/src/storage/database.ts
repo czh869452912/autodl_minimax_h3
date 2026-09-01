@@ -18,6 +18,7 @@ const APP_TABLES = [
   'workflow_registry',
   'prompt_drafts',
   'agent_threads',
+  'app_scheduler_leases',
 ];
 
 const APP_CREATE_STATEMENTS = [
@@ -30,6 +31,7 @@ const APP_CREATE_STATEMENTS = [
   'CREATE TABLE IF NOT EXISTS workflow_registry_active (workflow_id TEXT PRIMARY KEY NOT NULL, version TEXT NOT NULL, content_hash TEXT NOT NULL, previous_version TEXT, previous_hash TEXT)',
   'CREATE TABLE IF NOT EXISTS prompt_drafts (id TEXT PRIMARY KEY NOT NULL, prompt TEXT NOT NULL, attachment_ids_json TEXT NOT NULL, created_at INTEGER NOT NULL)',
   'CREATE TABLE IF NOT EXISTS agent_threads (thread_id TEXT PRIMARY KEY NOT NULL, messages_json TEXT NOT NULL, state_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, custom_title TEXT)',
+  'CREATE TABLE IF NOT EXISTS app_scheduler_leases (lease_key TEXT PRIMARY KEY NOT NULL, owner TEXT NOT NULL, expires_at INTEGER NOT NULL)',
 ];
 
 export function readAppSchemaVersion(db: SQLiteDatabase | undefined): number | undefined {
