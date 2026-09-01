@@ -91,6 +91,7 @@ export function parseWorkflowPackage(input: unknown): WorkflowPackage {
 }
 
 export function packageToDefinition(pkg: WorkflowPackage): WorkflowDefinition {
+  const outputPath = (value: string) => decodePointer(value).join('.');
   return {
     schemaVersion: '1.0', id: pkg.metadata.id, version: pkg.metadata.version, kind: 'atomic',
     platform: { adapter: pkg.spec.adapter.id, operation: pkg.spec.adapter.operation, workflowId: pkg.spec.adapter.workflowId },
@@ -98,7 +99,7 @@ export function packageToDefinition(pkg: WorkflowPackage): WorkflowDefinition {
     inputs: pkg.spec.inputSchema,
     ui: pkg.spec.uiSchema ? { sections: pkg.spec.uiSchema.sections.map((section) => ({ ...section, fields: section.fields.map((field) => decodePointer(field)[0]) })) } : undefined,
     request: { operation: pkg.spec.adapter.operation, bindings: pkg.spec.bindings },
-    outputs: pkg.spec.outputs,
+    outputs: { artifacts: pkg.spec.outputs.artifacts.map((item) => ({ ...item, from: outputPath(item.from) })) },
     compatibility: pkg.spec.compatibility,
   };
 }
