@@ -18,7 +18,7 @@
 - `v1.4.5` 标签已推送，GitHub Release 已创建：<https://github.com/czh869452912/autodl_minimax_h3/releases/tag/v1.4.5>。
 - Release 资产：`AutoDL-H3-v1.4.5-apk-universal.apk`。
 - 正式发布 Actions 运行 `33523226885` 成功：类型检查、单元测试、签名 universal APK、四 ABI、`apksigner` 和 Release 创建均通过。
-- 主工作区当前在 `main`，工作区应保持干净；用户本地 `local.properties` 必须继续保持未提交、未修改。
+- 主工作区当前在用户指定的开发分支 `dev`；用户本地 `local.properties` 与 `mobile/.expo/` 必须继续保持未提交、未修改。
 - 已保留的 `.worktrees/codex-b1-closure` 是既有工作目录，不要擅自删除。
 
 ## 3. 阶段 A：架构与边界闭环
@@ -79,12 +79,21 @@
 - **私有文件解析与修复**：新增 `resolveLocalVideoSource`，按 asset `localPath` → task `localUri` → 确定性私有路径 `documentDirectory/media/<taskId>.mp4` 顺序验证文件存在性，远程 URL 永不作为本地导出源（`c40c5ef3`）。
 - **详情/导出收敛**：详情页加载时解析并修复本地媒体投影，`已下载` 标签基于验证后的有效本地源；有私有文件时直接导出到相册、不再走远程校验；失败时展示 `保存失败` 与真实错误；手动重试下载/导出通过 `getBuiltinArtifactDownloadPolicy` 获得与自动投递一致的 fail-closed 策略（`e6cec99d`）。
 
-热修复验收证据（2026-09-02，主工作区）：
+随后按修正设计 `docs/superpowers/specs/2026-09-02-b-release-media-hotfix-correction-design.md` 和修正计划 `docs/superpowers/plans/2026-09-02-b-release-media-hotfix-correction.md` 对崩溃 agent 留下的半成品进行了逐项复核和修复：
+
+- task 媒体写入收敛为字段级、只更新既有记录的 `updateMediaProjection`；删除中的任务不会被迟到的下载回调重新插入，下载与导出字段也不会因旧的完整快照互相覆盖。私有源解析会逐个验证 asset、task 和确定性路径候选，并拒绝目录与零字节文件；任务列表、详情和结果列表都会修复失效的“已下载”投影。
+- 下载重试会先清除未经验证的旧 `localUri`；Android 下载改用 Expo 原生 fetch 暴露真实响应头和 body，逐跳重定向继续执行安全校验，响应 MIME、大小、超时、`Content-Length` 和最终临时文件大小都在正式发布前验证。
+- AutoDL adapter 明确允许 provider 返回的动态公开 HTTPS 产物节点，不再把近期 COS 节点写死进 allowlist；每次重定向都重新校验，HTTP、带凭据 URL、localhost、文本形式的私有/保留 IPv4 与 IPv6、危险重定向以及未明确声明为 `video/mp4` 的响应仍 fail closed。该动态能力只由内置 AutoDL adapter opt-in，其他 provider 仍要求固定 allowlist。
+- 同一任务的自动投递、手动下载和手动导出共享串行锁，同一任务的重复下载还会合并为一个 in-flight operation，避免固定 `.part` 路径竞争和状态覆盖。
+- Android 临时文件发布先尝试 rename，失败后使用 copy，并在发布目标处复核准确字节数；所有失败路径清理 `.part`，不会把不完整文件标为 `DOWNLOADED`。
+
+修正后验收证据（2026-09-02，主工作区）：
 
 - `cd mobile; npm run typecheck`：通过。
-- `cd mobile; npm test -- --runInBand`：83 suites 通过，332 tests 通过，1 skipped，0 failed（基线为 82 suites / 318 tests，新增 14 个热修复回归测试全部转绿）。
-- `git diff --check` 通过；`local.properties` 保持未跟踪、无 diff。
-- Android：JDK 21（`jbr-21.0.11`）+ `x86_64` 执行 `:app:assembleDebug -PreactNativeArchitectures=x86_64`，`BUILD SUCCESSFUL`；`emulator-5554` 安装成功、`MainActivity` 冷启动并进入前台（pid 存在、`topResumedActivity`）；`adb logcat -b crash` 中仅有模拟器预存的 `com.google.android.bluetooth` 系统崩溃，无 `com.example.autodlh3` 应用崩溃。
+- `cd mobile; npm test -- --runInBand`：84 suites 通过，364 tests 通过，1 skipped，0 failed；包括真实 node:sqlite 投影所有权、删除竞态、同任务媒体串行化、独占事务重叠、失效私有源修复、动态节点下载、IPv4/IPv6 地址边界、重定向、MIME、大小、超时和写盘完整性回归。
+- `git diff --check` 通过；`local.properties` 与 `mobile/.expo/` 保持用户自有未跟踪状态、无修改。
+- Android：Temurin JDK 17 + `x86_64` 执行 `:app:assembleDebug -PreactNativeArchitectures=x86_64`，`BUILD SUCCESSFUL`；`emulator-5554` 覆盖安装成功。实际截图和 UI 树确认任务队列可见、可交互，不是仅凭 pid 推断启动成功；WindowManager 对 `MainActivity` 报告 `isOnScreen=true`、`isVisible=true`；ReactNativeJS/AndroidRuntime error 过滤无本应用崩溃。（本机 Android Studio JBR 已升级为 25.0.2，当前 Gradle/Kotlin 不能解析该版本，因此验收固定使用受支持的 JDK 17。）
+- 在保留真实任务数据的模拟器上，原先显示 `域名不在允许列表` 的 AutoDL COS 任务点击“重试”后变为 `已下载到应用`，并出现“保存到相册”；服务器 `Content-Length=1395282`，应用私有文件实际大小同为 `1395282` 字节，设备端 MD5 `7a3efcd47b9e824bccb14ae1657ce2fc` 与 COS ETag 一致。最终 APK 还先识别出另一个任务已丢失的私有文件，将虚假的“已下载”纠正为可下载状态；实际点击下载后文件为 `1378774` 字节，设备端 MD5 `a119b57cfc329064a338f55275fe47ba` 与 COS ETag 一致。用户提供的同类动态节点 URL 返回 `video/mp4` 和 `Content-Length=6661972`，策略无需增加固定节点域名即可接受。
 - **待用户执行的设备验收**：双任务同一轮询窗口并发完成且无 NativeDatabase 事务错误、两个私有下载完成、详情页显示 `已下载`、手动导出到 `Movies/AutoDL-H3`、自动导出投递、存在私有文件时两类导出均不报告 `域名不在允许列表`。该项完成前 **C-Core/D-Core 保持阻塞**。
 
 ## 5. C 阶段：C-Core Durable Local Executor
