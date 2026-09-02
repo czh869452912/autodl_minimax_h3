@@ -8,11 +8,12 @@ const mockReadClipboard = jest.fn(async () => task.prompt);
 const mockList = jest.fn();
 const mockGet = jest.fn();
 const mockTaskUpsert = jest.fn(async (_value: unknown) => undefined);
+const mockTaskMediaUpsert = jest.fn(async (_value: unknown) => undefined);
 const mockMediaGet = jest.fn();
 const mockMediaUpsert = jest.fn(async (_value: unknown) => undefined);
 const mockDeliveryUpsert = jest.fn(async (_value: unknown) => undefined);
 const mockResolveLocal = jest.fn(async (..._args: unknown[]): Promise<string | undefined> => undefined);
-const mockExport = jest.fn(async (value: typeof task) => ({ ...value, exportState: 'EXPORTED' as const, galleryUri: 'content://media/video/7' }));
+const mockExport = jest.fn(async (value: typeof task, _options?: unknown) => ({ ...value, exportState: 'EXPORTED' as const, galleryUri: 'content://media/video/7' }));
 const task = {
   id: 'task-1', prompt: 'A very long prompt. '.repeat(300), status: 'SUCCESS' as const,
   resolution: '768p竖', duration: 5, videoUrl: 'https://example/video.mp4',
@@ -25,7 +26,7 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
 jest.mock('../tasks/repository', () => ({
-  createTaskRepository: jest.fn(() => ({ list: () => mockList(), get: (id: string) => mockGet(id), upsert: (value: unknown) => mockTaskUpsert(value) })),
+  createTaskRepository: jest.fn(() => ({ list: () => mockList(), get: (id: string) => mockGet(id), upsert: (value: unknown) => mockTaskUpsert(value), upsertMediaProjection: (value: unknown) => mockTaskMediaUpsert(value) })),
 }));
 jest.mock('../media/repository', () => ({
   createSqliteMediaStore: jest.fn(() => ({
@@ -35,7 +36,7 @@ jest.mock('../media/repository', () => ({
   })),
 }));
 jest.mock('../tasks/localMedia', () => ({ resolveLocalVideoSource: (...args: unknown[]) => mockResolveLocal(...args) }));
-jest.mock('../tasks/media', () => ({ exportTaskVideo: (...args: unknown[]) => mockExport(args[0] as typeof task) }));
+jest.mock('../tasks/media', () => ({ exportTaskVideo: (...args: unknown[]) => mockExport(args[0] as typeof task, args[1]) }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: (value: string) => mockCopy(value), getStringAsync: () => mockReadClipboard() }));
 jest.mock('../media/VideoPlayer', () => ({
   VideoPlayer: (props: Record<string, unknown>) => require('react').createElement('View', { ...props, testID: 'video-player-mock' }),
@@ -52,6 +53,7 @@ describe('video detail screen', () => {
     mockGet.mockReset();
     mockGet.mockResolvedValue(task);
     mockTaskUpsert.mockClear();
+    mockTaskMediaUpsert.mockClear();
     mockMediaGet.mockReset();
     mockMediaGet.mockResolvedValue(null);
     mockMediaUpsert.mockClear();
@@ -118,11 +120,12 @@ describe('video detail screen', () => {
     const texts = tree!.root.findAllByType(Text).map((node) => [node.props.children].flat(Infinity).join(''));
     expect(texts.some((text) => text.includes('已下载'))).toBe(true);
     expect(tree!.root.findByProps({ testID: 'video-player-mock' }).props.source).toBe('file:///documents/media/task-1.mp4');
-    expect(mockTaskUpsert).toHaveBeenCalledWith(expect.objectContaining({ localUri: 'file:///documents/media/task-1.mp4', downloadState: 'DOWNLOADED', downloadError: undefined }));
+    expect(mockTaskMediaUpsert).toHaveBeenCalledWith(expect.objectContaining({ localUri: 'file:///documents/media/task-1.mp4', downloadState: 'DOWNLOADED', downloadError: undefined }));
+    expect(mockTaskUpsert).not.toHaveBeenCalled();
     expect(mockMediaUpsert).toHaveBeenCalledWith(expect.objectContaining({ localPath: 'file:///documents/media/task-1.mp4', status: 'downloaded' }));
 
     await act(async () => tree!.root.findByProps({ accessibilityLabel: '保存到系统相册' }).props.onPress());
-    expect(mockExport).toHaveBeenCalledWith(expect.objectContaining({ localUri: 'file:///documents/media/task-1.mp4', downloadState: 'DOWNLOADED' }));
+    expect(mockExport).toHaveBeenCalledWith(expect.objectContaining({ localUri: 'file:///documents/media/task-1.mp4', downloadState: 'DOWNLOADED' }), expect.objectContaining({ asset: expect.objectContaining({ localPath: 'file:///documents/media/task-1.mp4' }) }));
   });
 
   it('does not present a missing private path as downloaded', async () => {

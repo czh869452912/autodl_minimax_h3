@@ -41,7 +41,7 @@ export default function VideoDetailScreen() {
       if (!verifiedLocalSource) { setAsset(media); setTask(value); return; }
       const repairedTask: TaskRecord = { ...value, localUri: verifiedLocalSource, downloadState: 'DOWNLOADED', downloadError: undefined };
       const repairedAsset = media ? { ...media, localPath: verifiedLocalSource, status: 'downloaded' as const, updatedAt: Math.max(media.updatedAt, Date.now()) } : null;
-      await store.upsert(repairedTask);
+      await store.upsertMediaProjection(repairedTask);
       if (repairedAsset) await mediaStore.upsert(repairedAsset);
       setAsset(repairedAsset);
       setTask(repairedTask);
@@ -73,8 +73,8 @@ export default function VideoDetailScreen() {
       const settings = await readSettings();
       const artifactPolicy = getBuiltinArtifactDownloadPolicy(task.adapterId);
       let current = task;
-      const updated = await exportTaskVideo({ ...task, videoUrl: asset?.sourceUrl || task.videoUrl, localUri: localSource }, { policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: true }, ...artifactPolicy, onUpdate: async (patch) => { current = { ...current, ...patch }; await store.upsert(current); setTask(current); } });
-      await store.upsert(updated);
+      const updated = await exportTaskVideo({ ...task, videoUrl: asset?.sourceUrl || task.videoUrl, localUri: localSource }, { policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: true }, asset, ...artifactPolicy, onUpdate: async (patch) => { current = { ...current, ...patch }; await store.upsertMediaProjection(current); setTask(current); } });
+      await store.upsertMediaProjection(updated);
       setTask(updated);
       setLocalSource(updated.localUri);
       if (asset) { const nextAsset = { ...asset, localPath: updated.localUri || asset.localPath, status: (updated.localUri || asset.localPath ? 'downloaded' : asset.status) as MediaAsset['status'], updatedAt: Date.now() }; await mediaStore.upsert(nextAsset); setAsset(nextAsset); await mediaStore.upsertDelivery?.({ id: `${asset.id}:system-gallery`, assetId: asset.id, target: 'system-gallery', uri: updated.galleryUri, status: updated.exportState === 'EXPORTED' ? 'EXPORTED' : 'FAILED', error: updated.exportError, createdAt: Date.now(), updatedAt: Date.now() }); }
