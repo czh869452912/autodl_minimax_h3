@@ -56,6 +56,35 @@ test('persists gallery publication independently from private download', async (
   });
 });
 
+test('workflow projection upsert preserves media-owned columns on conflict', async () => {
+  const runAsync = jest.fn(async (_sql: string, ..._params: unknown[]) => undefined);
+  const db = {
+    execSync: jest.fn(),
+    getFirstSync: jest.fn((sql: string) => sql.includes('PRAGMA') ? { user_version: 5 } : null),
+    getAllSync: jest.fn(() => []),
+    runSync: jest.fn(),
+    runAsync,
+  };
+  const store = createTaskRepository(db as never);
+
+  await store.upsertWorkflowProjection({
+    id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5,
+    videoUrl: 'https://provider/result.mp4', localUri: undefined, downloadState: 'IDLE',
+    workflowId: 'h3', adapterId: 'autodl-comfyui', lastSyncAt: 4_000,
+    createdAt: 1_000, updatedAt: 4_000,
+  });
+
+  const sql = runAsync.mock.calls[0][0] as string;
+  const conflictUpdate = sql.split('ON CONFLICT(id) DO UPDATE SET')[1];
+  expect(conflictUpdate).toContain('video_url=excluded.video_url');
+  expect(conflictUpdate).toContain('status=excluded.status');
+  expect(conflictUpdate).toContain('last_sync_at=excluded.last_sync_at');
+  expect(conflictUpdate).not.toContain('local_uri=excluded.local_uri');
+  expect(conflictUpdate).not.toContain('download_state=excluded.download_state');
+  expect(conflictUpdate).not.toContain('gallery_uri=excluded.gallery_uri');
+  expect(conflictUpdate).not.toContain('export_state=excluded.export_state');
+});
+
 test('round-trips workflow provenance and keeps it across partial updates', async () => {
   const store = createTaskRepository(fakeDb() as never);
   const task: TaskRecord = {

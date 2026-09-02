@@ -7,7 +7,7 @@ import { materializeJobArtifacts } from '../media/materializer';
 import { createMediaDeliveryQueue } from './mediaQueue';
 
 type Settings = { token: string; autoExportToGallery: boolean; keepPrivateCopy: boolean };
-type TaskStore = { list(): Promise<TaskRecord[]>; listActive?(): Promise<TaskRecord[]>; listSyncCandidates?(): Promise<TaskRecord[]>; listMediaPending?(): Promise<TaskRecord[]>; upsert(task: TaskRecord): Promise<void> };
+type TaskStore = { list(): Promise<TaskRecord[]>; listActive?(): Promise<TaskRecord[]>; listSyncCandidates?(): Promise<TaskRecord[]>; listMediaPending?(): Promise<TaskRecord[]>; upsert(task: TaskRecord): Promise<void>; upsertWorkflowProjection?(task: TaskRecord): Promise<void> };
 type Runtime = { sync(job: JobRecord): Promise<JobRecord> };
 type CoordinatorDeps = {
   readSettings(): Promise<Settings>;
@@ -28,6 +28,7 @@ export function createTaskSyncCoordinator(deps: CoordinatorDeps): TaskSyncCoordi
   const now = deps.now ?? Date.now;
   const concurrency = Math.max(1, deps.concurrency ?? 4);
   const retryDelayMs = (task: TaskRecord) => task.syncError && task.lastSyncAt != null ? 30_000 : 0;
+  const persistWorkflowProjection = (task: TaskRecord) => deps.taskStore.upsertWorkflowProjection?.(task) ?? deps.taskStore.upsert(task);
   const mediaQueue = createMediaDeliveryQueue({ ensureMedia: deps.ensureMedia, getArtifactPolicy: deps.getArtifactPolicy, taskStore: deps.taskStore, jobStore: deps.jobStore, mediaStore: deps.mediaStore, now, concurrency: 1, batchSize: 4 });
   const runOnce = async (optionsTaskIds?: Set<string>): Promise<{ tasks: TaskRecord[]; summary: SyncSummary }> => {
     const settings = await deps.readSettings();
@@ -65,14 +66,14 @@ export function createTaskSyncCoordinator(deps: CoordinatorDeps): TaskSyncCoordi
               await materializeJobArtifacts(updatedJob, artifacts, deps.mediaStore, updatedTask);
             }
           } else throw new Error('Workflow job missing for task');
-          await deps.taskStore.upsert(updatedTask);
+          await persistWorkflowProjection(updatedTask);
           summary.updated += 1;
           if (updatedTask.status !== 'QUEUED' && updatedTask.status !== 'RUNNING' && updatedTask.status !== 'UNKNOWN') {
             summary.remaining = Math.max(0, summary.remaining - 1);
           }
         } catch (error) {
           summary.failed += 1;
-          await deps.taskStore.upsert({ ...previous, syncError: error instanceof Error ? error.message : String(error), lastSyncAt: now(), updatedAt: now() });
+          await persistWorkflowProjection({ ...previous, syncError: error instanceof Error ? error.message : String(error), lastSyncAt: now(), updatedAt: now() });
         }
       }
       };
