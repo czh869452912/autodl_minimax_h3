@@ -1,7 +1,7 @@
 # A/B 闭环与 C/D 阶段交接
 
 > 更新时间：2026-09-02
-> 交接基线：`main` 与 `dev` 同步于本文所在提交；固定发布基线 `v1.4.5` 指向 `e69c7fd274b1c8d6c6251bff820f020083ffad0b`。
+> B 发布基线：`main`、`origin/main` 与 `v1.4.6^{}` 指向 `536934fc6e2ad0914aa2feb4922d2919d206d764`；本交接文档在该发布基线之后写入 `dev`。
 
 ## 1. 接手后先看什么
 
@@ -10,14 +10,15 @@
 3. `docs/superpowers/plans/2026-09-01-d-core.md`：C-Core 验收通过后的 D-Core 计划。
 4. `docs/superpowers/specs/2026-09-01-local-first-workflow-architecture-design.md`：不可突破的架构约束。
 
-下一项具体动作：先在 Android 设备上完成 B 热修复的带凭据验收（见第 4 节「B 发布热修复」待执行项）；验收通过后，再从 `dev` 创建隔离 worktree，为 C-Core Task 1（版本化 durable schema migration）写真实 SQLite RED 测试。
+下一项具体动作：B 热修复的自动化、模拟器和用户手动带凭据验收均已完成。现在从 `dev` 创建隔离 worktree，按 `docs/superpowers/plans/2026-09-01-c-core.md` 从 Task 1（版本化 durable schema migration）开始，先写真实 SQLite RED 测试；C-Core 验收完成前不得开始 D-Core。
 
 ## 2. 当前发布与分支状态
 
-- v1.4.5 发布时 `main`、`dev`、`origin/main`、`origin/dev` 均指向同一交接提交；此后 B 发布热修复（见第 4 节）提交在本地 `dev`，尚未合并回 `main` 或推送。
-- `v1.4.5` 标签已推送，GitHub Release 已创建：<https://github.com/czh869452912/autodl_minimax_h3/releases/tag/v1.4.5>。
-- Release 资产：`AutoDL-H3-v1.4.5-apk-universal.apk`。
-- 正式发布 Actions 运行 `33523226885` 成功：类型检查、单元测试、签名 universal APK、四 ABI、`apksigner` 和 Release 创建均通过。
+- B 发布热修复通过 PR #20 合并回 `main`：<https://github.com/czh869452912/autodl_minimax_h3/pull/20>。
+- `v1.4.6` 标签已推送，GitHub Release 已发布：<https://github.com/czh869452912/autodl_minimax_h3/releases/tag/v1.4.6>。
+- Release 资产：`AutoDL-H3-v1.4.6-apk-universal.apk`，SHA-256 `b2ccc5bb510ae6955699c0f63a5f3ff41dc95d8721af5af63c9253c987981434`。
+- 正式发布 Actions 运行 `33600021016` 成功：版本归属、类型检查、单元测试、签名 universal APK、四 ABI、`apksigner` 和 Release 创建均通过：<https://github.com/czh869452912/autodl_minimax_h3/actions/runs/33600021016>。
+- v1.4.6 发布完成时，`HEAD`、本地 `main`/`dev`、`origin/main`/`origin/dev` 与 `v1.4.6^{}` 均为 `536934fc6e2ad0914aa2feb4922d2919d206d764`；此后的 handoff 文档提交只增加说明，不改变已发布代码基线。
 - 主工作区当前在用户指定的开发分支 `dev`；用户本地 `local.properties` 与 `mobile/.expo/` 必须继续保持未提交、未修改。
 - 已保留的 `.worktrees/codex-b1-closure` 是既有工作目录，不要擅自删除。
 
@@ -87,6 +88,8 @@
 - 同一任务的自动投递、手动下载和手动导出共享串行锁，同一任务的重复下载还会合并为一个 in-flight operation，避免固定 `.part` 路径竞争和状态覆盖。
 - Android 临时文件发布先尝试 rename，失败后使用 copy，并在发布目标处复核准确字节数；所有失败路径清理 `.part`，不会把不完整文件标为 `DOWNLOADED`。
 
+最终收口提交为 `17e42a7e`（动态节点安全校验）、`35fcd240`（同任务媒体串行化与失效状态修复）、`a2dc207c`（验收记录）和 `1acfba9d`（版本提升至 1.4.6），通过 PR #20 的 merge commit `536934fc` 进入 `main`。
+
 修正后验收证据（2026-09-02，主工作区）：
 
 - `cd mobile; npm run typecheck`：通过。
@@ -94,9 +97,12 @@
 - `git diff --check` 通过；`local.properties` 与 `mobile/.expo/` 保持用户自有未跟踪状态、无修改。
 - Android：Temurin JDK 17 + `x86_64` 执行 `:app:assembleDebug -PreactNativeArchitectures=x86_64`，`BUILD SUCCESSFUL`；`emulator-5554` 覆盖安装成功。实际截图和 UI 树确认任务队列可见、可交互，不是仅凭 pid 推断启动成功；WindowManager 对 `MainActivity` 报告 `isOnScreen=true`、`isVisible=true`；ReactNativeJS/AndroidRuntime error 过滤无本应用崩溃。（本机 Android Studio JBR 已升级为 25.0.2，当前 Gradle/Kotlin 不能解析该版本，因此验收固定使用受支持的 JDK 17。）
 - 在保留真实任务数据的模拟器上，原先显示 `域名不在允许列表` 的 AutoDL COS 任务点击“重试”后变为 `已下载到应用`，并出现“保存到相册”；服务器 `Content-Length=1395282`，应用私有文件实际大小同为 `1395282` 字节，设备端 MD5 `7a3efcd47b9e824bccb14ae1657ce2fc` 与 COS ETag 一致。最终 APK 还先识别出另一个任务已丢失的私有文件，将虚假的“已下载”纠正为可下载状态；实际点击下载后文件为 `1378774` 字节，设备端 MD5 `a119b57cfc329064a338f55275fe47ba` 与 COS ETag 一致。用户提供的同类动态节点 URL 返回 `video/mp4` 和 `Content-Length=6661972`，策略无需增加固定节点域名即可接受。
-- **待用户执行的设备验收**：双任务同一轮询窗口并发完成且无 NativeDatabase 事务错误、两个私有下载完成、详情页显示 `已下载`、手动导出到 `Movies/AutoDL-H3`、自动导出投递、存在私有文件时两类导出均不报告 `域名不在允许列表`。该项完成前 **C-Core/D-Core 保持阻塞**。
+- 用户已在带真实凭据的设备上完成剩余手动验收：双任务同一轮询窗口并发完成且无 NativeDatabase 事务错误、两个私有下载完成、详情页正确显示 `已下载`、手动导出到 `Movies/AutoDL-H3`、自动导出投递均成功；存在已验证私有文件时，两类导出均不再报告 `域名不在允许列表`。
+- **B 阶段结论**：实现、自动化、模拟器、用户手动验收和 v1.4.6 正式发布均已完成，B 对 C/D 的阻塞已解除。B 的有意保留项仍按上文边界进入 C-Extended、D-Core 或更晚阶段，不在 C-Core Task 1 前追加新范围。
 
 ## 5. C 阶段：C-Core Durable Local Executor
+
+C-Core 尚未开始；B 已解除阻塞，当前可立即进入 Task 1。
 
 C 的目标是：submit、status sync、artifact download 变成可跨进程恢复的数据库 operation，在网络超时或进程被杀时不重复产生可能计费的 provider 任务。
 
@@ -114,6 +120,8 @@ C-Core 通过前不得开始 D 的 Project UI 或产品域迁移。每个 task �
 C-Core 明确不做：完整 foreground service、MediaStore delivery/delete、Batch/Variant、成本策略、原生 ComfyUI 语义和复杂 workflow UI；这些属于 C-Extended 或 D。
 
 ## 6. D 阶段：D-Core Product Domain
+
+D-Core 尚未开始，并继续受 C-Core 完整验收门禁约束。
 
 D 只在 C-Core 的 job/artifact snapshot 稳定后开始，目标是建立离线可用、版本不可变且可追溯的创作项目模型：
 
@@ -151,12 +159,12 @@ D-Core 之后再规划 Batch/Variant、项目包导出/导入、备份/同步/�
 
 ## 8. 下一次接手的执行清单
 
-1. `git status --short --branch`，确认 `main`/`dev` 状态，不要改动 `local.properties`。
-2. 确认 B 热修复（第 4 节）的设备验收已由用户在带凭据设备上完成并补记证据；未完成前不得开始 C-Core。
-3. 验收通过后，从 `dev` 创建 `codex/c-core-schema` 隔离 worktree。
-4. 阅读 `docs/superpowers/plans/2026-09-01-c-core.md` Task 1 和现有 `mobile/src/storage/database*` 实现。
-5. 先写真实 SQLite migration RED 测试：repeatable migration、legacy table 保留、注入 DDL 失败后 rollback + recovery state。
-6. 运行 focused Jest 看到预期失败，再实现 `runner.ts`/`v6DurableExecutor.ts`，随后运行 typecheck、全量 Jest 和 Android 门禁。
-7. 完成并记录 C-Core Task 1 后，才继续 Task 2；C-Core 全部验收通过后再切换到 D-Core Task 1。
+1. `git status --short --branch`，确认当前为 `dev`，并用 `git merge-base --is-ancestor v1.4.6 dev` 确认开发基线包含 v1.4.6；不要改动 `local.properties` 与 `mobile/.expo/`。
+2. 从 `dev` 创建 `codex/c-core-schema` 隔离 worktree，不在发布基线工作区直接开发 C-Core。
+3. 阅读 `docs/superpowers/plans/2026-09-01-c-core.md` Task 1、架构设计的 durable executor 章节和现有 `mobile/src/storage/database*` 实现。
+4. 先写真实 SQLite migration RED 测试：repeatable migration、legacy table 保留、注入 DDL 失败后 rollback + recovery state。
+5. 运行 focused Jest 看到预期失败，再实现 `runner.ts`/`v6DurableExecutor.ts`，随后运行 typecheck、全量 Jest 和 Android 门禁。
+6. 完成并记录 C-Core Task 1 后，才继续 Task 2；C-Core 六项全部验收通过后再切换到 D-Core Task 1。
+7. D-Core 必须从 C-Core 已稳定的 job/artifact/CAS snapshot 向上构建；不得绕过 v6 durable executor，或提前把 Project UI、Batch/Variant、同步协作并入 C-Core。
 
-交接结论：A/B 已闭环并以 v1.4.5 发布；B 发布热修复（媒体并发与导出）已完成实现与自动化验收并提交在 `dev`，剩余带凭据双任务并发与手动/自动相册导出的设备验收待用户执行，验收通过并补记证据前 C-Core/D-Core 保持阻塞。
+交接结论：A/B 已闭环，B 新增的媒体并发、投影所有权、动态 AutoDL 产物节点、下载完整性和相册导出修复已通过自动化、模拟器及用户手动带凭据验收，并以 v1.4.6 正式发布。当前唯一正确的后续顺序是 C-Core Durable Local Executor → C-Core 验收 → D-Core Local Product Domain → D-Core 验收；下一项工作从 C-Core Task 1 的 v6 migration 开始。
