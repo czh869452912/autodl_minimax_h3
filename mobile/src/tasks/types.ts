@@ -11,3 +11,8 @@ export interface TaskRecord {
   galleryUri?: string; exportState?: ExportState; exportError?: string; exportedAt?: number; createdAt: number; updatedAt: number;
   startedAt?: number; executionDuration?: number; syncError?: string; lastSyncAt?: number;
 }
+
+export type TaskMediaPatch = Partial<Pick<TaskRecord,
+  'localUri' | 'thumbnailUrl' | 'downloadState' | 'downloadError' | 'downloadProgress' |
+  'galleryUri' | 'exportState' | 'exportError' | 'exportedAt' | 'updatedAt'
+>>;

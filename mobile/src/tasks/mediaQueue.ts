@@ -1,14 +1,14 @@
 import type { JobRepository } from '../jobs/types';
 import type { MediaAsset, MediaStore } from '../media/types';
 import { materializeJobArtifacts } from '../media/materializer';
-import type { TaskRecord } from './types';
+import type { TaskMediaPatch, TaskRecord } from './types';
 import type { ArtifactDownloadPolicy } from '../workflows/schema/types';
 
 type Settings = { token: string; autoExportToGallery: boolean; keepPrivateCopy: boolean };
 type QueueDeps = {
   ensureMedia(task: TaskRecord, settings: Settings, onUpdate: (patch: Partial<TaskRecord>) => Promise<void>, artifactPolicy?: ArtifactDownloadPolicy, asset?: MediaAsset | null): Promise<unknown>;
   getArtifactPolicy?(adapterId?: string): ArtifactDownloadPolicy | undefined;
-  taskStore: { upsert(task: TaskRecord): Promise<void>; upsertMediaProjection?(task: TaskRecord): Promise<void> };
+  taskStore: { upsert(task: TaskRecord): Promise<void>; upsertMediaProjection?(task: TaskRecord): Promise<void>; updateMediaProjection?(id: string, patch: TaskMediaPatch): Promise<boolean> };
   jobStore: Pick<JobRepository, 'get' | 'listArtifacts'>;
   mediaStore?: Pick<MediaStore, 'upsert'> & Partial<Pick<MediaStore, 'upsertArtifactProjection' | 'upsertDelivery' | 'getPrimaryVideoByTaskId'>>;
   now?: () => number;
@@ -27,7 +27,11 @@ export function createMediaDeliveryQueue(deps: QueueDeps) {
     let current = entry.task;
     const onUpdate = async (patch: Partial<TaskRecord>) => {
       current = { ...current, ...patch };
-      await (deps.taskStore.upsertMediaProjection?.(current) ?? deps.taskStore.upsert(current));
+      if (deps.taskStore.updateMediaProjection) {
+        if (!(await deps.taskStore.updateMediaProjection(current.id, patch))) throw new Error('任务已删除');
+      } else {
+        await (deps.taskStore.upsertMediaProjection?.(current) ?? deps.taskStore.upsert(current));
+      }
     };
     const artifactPolicy = deps.getArtifactPolicy?.(current.adapterId);
     const asset = await deps.mediaStore?.getPrimaryVideoByTaskId?.(current.id);

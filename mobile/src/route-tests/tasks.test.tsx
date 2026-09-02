@@ -6,6 +6,7 @@ import type { MediaAsset } from '../media/types';
 const mockFocusCallbacks: Array<() => void> = [];
 const mockTaskUpsert = jest.fn(async (_value: unknown) => undefined);
 const mockTaskMediaUpsert = jest.fn(async (_value: unknown) => undefined);
+const mockTaskMediaPatch = jest.fn(async (_id: string, _value: unknown) => true);
 const mockPrimaryVideo = jest.fn(async (_taskId: string): Promise<MediaAsset | null> => null);
 const mockResolveLocal = jest.fn(async (..._args: unknown[]) => undefined as string | undefined);
 jest.mock('expo-router', () => ({
@@ -23,12 +24,14 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
 jest.mock('../tasks/sync', () => ({
-  taskStore: { list: jest.fn(async () => [{ id: 'task-1', prompt: 'x', status: 'RUNNING', resolution: '768p竖', duration: 5, createdAt: 1_000, startedAt: 1_500, updatedAt: 2_000 }]), upsert: (value: unknown) => mockTaskUpsert(value), upsertMediaProjection: (value: unknown) => mockTaskMediaUpsert(value) },
+  taskStore: { list: jest.fn(async () => [{ id: 'task-1', prompt: 'x', status: 'RUNNING', resolution: '768p竖', duration: 5, createdAt: 1_000, startedAt: 1_500, updatedAt: 2_000 }]), upsert: (value: unknown) => mockTaskUpsert(value), upsertMediaProjection: (value: unknown) => mockTaskMediaUpsert(value), updateMediaProjection: (id: string, value: unknown) => mockTaskMediaPatch(id, value) },
   mediaStore: { getPrimaryVideoByTaskId: (taskId: string) => mockPrimaryVideo(taskId) },
   syncTasks: jest.fn(async () => [{ id: 'task-1', prompt: 'x', status: 'RUNNING', resolution: '768p竖', duration: 5, createdAt: 1_000, startedAt: 1_500, updatedAt: 2_000 }]),
 }));
-jest.mock('../tasks/download', () => ({ downloadTask: jest.fn() }));
-jest.mock('../tasks/media', () => ({ exportTaskVideo: jest.fn(async (task) => ({ ...task, exportState: 'EXPORTED', galleryUri: 'content://media/video/7' })) }));
+jest.mock('../tasks/media', () => ({
+  ensureTaskDownloaded: jest.fn(),
+  exportTaskVideo: jest.fn(async (task) => ({ ...task, exportState: 'EXPORTED', galleryUri: 'content://media/video/7' })),
+}));
 jest.mock('../tasks/localMedia', () => ({ resolveLocalVideoSource: (...args: unknown[]) => mockResolveLocal(...args) }));
 jest.mock('../workflows/providers/registry', () => ({
   getBuiltinArtifactDownloadPolicy: jest.fn(() => ({
@@ -40,8 +43,7 @@ jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
 import TasksScreen from '../../app/(tabs)/tasks';
 import { mediaStore, syncTasks, taskStore } from '../tasks/sync';
-import { downloadTask } from '../tasks/download';
-import { exportTaskVideo } from '../tasks/media';
+import { ensureTaskDownloaded, exportTaskVideo } from '../tasks/media';
 
 afterEach(() => {
   jest.useRealTimers();
@@ -85,6 +87,7 @@ test('offers gallery retry without calling a successful download failed', async 
   const failedExport = { id: 'task-1', prompt: 'x', status: 'SUCCESS' as const, resolution: '768p竖', duration: 5, localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED' as const, exportState: 'EXPORT_FAILED' as const, exportError: '空间不足', createdAt: 1_000, updatedAt: 2_000 };
   jest.mocked(taskStore.list).mockResolvedValueOnce([failedExport]);
   jest.mocked(syncTasks).mockResolvedValueOnce([failedExport]);
+  mockResolveLocal.mockResolvedValueOnce('file:///private.mp4');
   let renderer: ReturnType<typeof create>;
   await act(async () => { renderer = create(<TasksScreen />); });
   expect(renderer!.root.findByProps({ accessibilityLabel: '重试保存到系统相册' })).toBeTruthy();
@@ -94,17 +97,31 @@ test('offers gallery retry without calling a successful download failed', async 
   act(() => { renderer!.unmount(); });
 });
 
+test('downgrades a downloaded task whose private file is missing', async () => {
+  const stale = { id: 'task-1', prompt: 'x', status: 'SUCCESS' as const, resolution: '768p竖', duration: 5, videoUrl: 'https://autodl.art/result.mp4', localUri: 'file:///missing.mp4', downloadState: 'DOWNLOADED' as const, createdAt: 1_000, updatedAt: 2_000 };
+  jest.mocked(taskStore.list).mockResolvedValueOnce([stale]);
+  jest.mocked(syncTasks).mockResolvedValueOnce([stale]);
+  mockResolveLocal.mockResolvedValueOnce(undefined);
+  let renderer: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<TasksScreen />); });
+
+  const texts = renderer!.root.findAllByType(Text).map((node) => [node.props.children].flat(Infinity).join(''));
+  expect(texts).not.toContain('已下载到应用');
+  expect(mockTaskMediaPatch).toHaveBeenCalledWith(stale.id, expect.objectContaining({ localUri: undefined, downloadState: 'IDLE' }));
+  act(() => renderer!.unmount());
+});
+
 test('passes the adapter artifact policy to an explicit download retry', async () => {
   const failedDownload = { id: 'task-1', prompt: 'x', status: 'SUCCESS' as const, resolution: '768p竖', duration: 5, adapterId: 'autodl-comfyui', videoUrl: 'https://autodl.art/result.mp4', downloadState: 'DOWNLOAD_FAILED' as const, downloadError: 'network', createdAt: 1_000, updatedAt: 2_000 };
   jest.mocked(taskStore.list).mockResolvedValueOnce([failedDownload]);
   jest.mocked(syncTasks).mockResolvedValueOnce([failedDownload]);
-  jest.mocked(downloadTask).mockResolvedValueOnce({ ...failedDownload, localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED' });
+  jest.mocked(ensureTaskDownloaded).mockResolvedValueOnce({ ...failedDownload, localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED' });
   let renderer: ReturnType<typeof create>;
   await act(async () => { renderer = create(<TasksScreen />); });
 
   await act(async () => renderer!.root.findByProps({ accessibilityLabel: '重试下载' }).props.onPress());
 
-  expect(downloadTask).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }), expect.objectContaining({
+  expect(ensureTaskDownloaded).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }), expect.objectContaining({
     allowedHosts: ['autodl.art'], acceptedMimes: ['video/mp4'],
     maxBytes: 2 * 1024 * 1024 * 1024, timeoutMs: 30_000,
   }));
@@ -115,15 +132,14 @@ test('clears an unverified private path before an explicit download retry', asyn
   const failedDownload = { id: 'task-1', prompt: 'x', status: 'SUCCESS' as const, resolution: '768p竖', duration: 5, adapterId: 'autodl-comfyui', videoUrl: 'https://autodl.art/result.mp4', localUri: 'file:///unreadable.mp4', downloadState: 'DOWNLOAD_FAILED' as const, downloadError: '文件不可读', createdAt: 1_000, updatedAt: 2_000 };
   jest.mocked(taskStore.list).mockResolvedValueOnce([failedDownload]);
   jest.mocked(syncTasks).mockResolvedValueOnce([failedDownload]);
-  jest.mocked(downloadTask).mockResolvedValueOnce({ ...failedDownload, localUri: 'file:///restored.mp4', downloadState: 'DOWNLOADED' });
+  jest.mocked(ensureTaskDownloaded).mockResolvedValueOnce({ ...failedDownload, localUri: 'file:///restored.mp4', downloadState: 'DOWNLOADED' });
   mockResolveLocal.mockResolvedValueOnce(undefined);
   let renderer: ReturnType<typeof create>;
   await act(async () => { renderer = create(<TasksScreen />); });
 
   await act(async () => renderer!.root.findByProps({ accessibilityLabel: '重试下载' }).props.onPress());
 
-  expect(downloadTask).toHaveBeenCalledWith(expect.objectContaining({ id: failedDownload.id, localUri: undefined }), expect.anything());
-  expect(mockTaskMediaUpsert).toHaveBeenCalledWith(expect.objectContaining({ id: failedDownload.id, localUri: 'file:///restored.mp4' }));
+  expect(ensureTaskDownloaded).toHaveBeenCalledWith(expect.objectContaining({ id: failedDownload.id, localUri: undefined }), expect.anything());
   expect(mockTaskUpsert).not.toHaveBeenCalled();
   act(() => renderer!.unmount());
 });
@@ -132,6 +148,7 @@ test('passes the adapter artifact policy to an explicit gallery retry', async ()
   const failedExport = { id: 'task-1', prompt: 'x', status: 'SUCCESS' as const, resolution: '768p竖', duration: 5, adapterId: 'autodl-comfyui', videoUrl: 'https://autodl.art/result.mp4', downloadState: 'DOWNLOADED' as const, exportState: 'EXPORT_FAILED' as const, exportError: '空间不足', createdAt: 1_000, updatedAt: 2_000 };
   jest.mocked(taskStore.list).mockResolvedValueOnce([failedExport]);
   jest.mocked(syncTasks).mockResolvedValueOnce([failedExport]);
+  mockResolveLocal.mockResolvedValueOnce('file:///private.mp4');
   let renderer: ReturnType<typeof create>;
   await act(async () => { renderer = create(<TasksScreen />); });
 
@@ -149,7 +166,10 @@ test('manual gallery retry supplies the private asset and writes only the media 
   const asset = { id: 'asset-1', taskId: 'task-1', title: 'x', prompt: 'x', sourceUrl: failedExport.videoUrl, localPath: 'file:///asset.mp4', mimeType: 'video/mp4', kind: 'video' as const, status: 'downloaded' as const, createdAt: 1, updatedAt: 2 };
   jest.mocked(taskStore.list).mockResolvedValueOnce([failedExport]);
   jest.mocked(syncTasks).mockResolvedValueOnce([failedExport]);
-  mockPrimaryVideo.mockImplementationOnce(async () => asset);
+  mockPrimaryVideo
+    .mockImplementationOnce(async () => asset)
+    .mockImplementationOnce(async () => asset);
+  mockResolveLocal.mockResolvedValueOnce(asset.localPath);
   jest.mocked(exportTaskVideo).mockImplementationOnce(async (value, options) => {
     await options.onUpdate({ localUri: asset.localPath, downloadState: 'DOWNLOADED' });
     return { ...value, localUri: asset.localPath, downloadState: 'DOWNLOADED', exportState: 'EXPORTED', galleryUri: 'content://media/video/8' };
@@ -160,8 +180,11 @@ test('manual gallery retry supplies the private asset and writes only the media 
   await act(async () => renderer!.root.findByProps({ accessibilityLabel: '重试保存到系统相册' }).props.onPress());
 
   expect(mockPrimaryVideo).toHaveBeenCalledWith(failedExport.id);
-  expect(exportTaskVideo).toHaveBeenCalledWith(failedExport, expect.objectContaining({ asset }));
-  expect(mockTaskMediaUpsert).toHaveBeenCalledWith(expect.objectContaining({ id: failedExport.id, localUri: asset.localPath }));
+  expect(exportTaskVideo).toHaveBeenCalledWith(
+    expect.objectContaining({ id: failedExport.id, localUri: asset.localPath, downloadState: 'DOWNLOADED' }),
+    expect.objectContaining({ asset }),
+  );
+  expect(mockTaskMediaPatch).toHaveBeenCalledWith(failedExport.id, expect.objectContaining({ localUri: asset.localPath }));
   expect(mockTaskUpsert).not.toHaveBeenCalled();
   act(() => renderer!.unmount());
 });

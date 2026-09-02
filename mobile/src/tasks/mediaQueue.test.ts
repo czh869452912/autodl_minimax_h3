@@ -15,6 +15,7 @@ test('passes the task video asset to media recovery and persists only the media 
   const taskStore = {
     upsert: jest.fn(async () => undefined),
     upsertMediaProjection: jest.fn(async () => undefined),
+    updateMediaProjection: jest.fn(async () => true),
   };
   let resolveProcessed!: () => void;
   const processed = new Promise<void>((resolve) => { resolveProcessed = resolve; });
@@ -39,6 +40,7 @@ test('passes the task video asset to media recovery and persists only the media 
 
   expect(mediaStore.getPrimaryVideoByTaskId).toHaveBeenCalledWith(task.id);
   expect(ensureMedia).toHaveBeenCalledWith(task, expect.anything(), expect.any(Function), artifactPolicy, asset);
-  expect(taskStore.upsertMediaProjection).toHaveBeenCalledWith(expect.objectContaining({ id: task.id, localUri: asset.localPath }));
+  expect(taskStore.updateMediaProjection).toHaveBeenCalledWith(task.id, expect.objectContaining({ localUri: asset.localPath }));
+  expect(taskStore.upsertMediaProjection).not.toHaveBeenCalled();
   expect(taskStore.upsert).not.toHaveBeenCalled();
 });

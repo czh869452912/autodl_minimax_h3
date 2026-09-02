@@ -38,10 +38,19 @@ export default function VideoDetailScreen() {
       if (!value) { setAsset(media); setTask(null); return; }
       const verifiedLocalSource = await resolveLocalVideoSource({ task: value, asset: media });
       setLocalSource(verifiedLocalSource);
-      if (!verifiedLocalSource) { setAsset(media); setTask(value); return; }
+      if (!verifiedLocalSource) {
+        const downloadState = value.downloadState === 'DOWNLOAD_FAILED' ? 'DOWNLOAD_FAILED' : value.videoUrl ? 'IDLE' : 'DOWNLOAD_FAILED';
+        const repairedTask: TaskRecord = { ...value, localUri: undefined, downloadState, downloadError: downloadState === 'DOWNLOAD_FAILED' ? value.downloadError || '视频源文件不可用' : undefined, downloadProgress: undefined, updatedAt: Date.now() };
+        const repairedAsset = media ? { ...media, localPath: undefined, status: (media.sourceUrl ? 'queued' : 'failed') as MediaAsset['status'], updatedAt: Date.now() } : null;
+        await store.updateMediaProjection(value.id, { localUri: undefined, downloadState: repairedTask.downloadState, downloadError: repairedTask.downloadError, downloadProgress: undefined, updatedAt: repairedTask.updatedAt });
+        if (media && repairedAsset && (media.localPath || media.status === 'downloaded')) await mediaStore.upsert(repairedAsset);
+        setAsset(repairedAsset);
+        setTask(repairedTask);
+        return;
+      }
       const repairedTask: TaskRecord = { ...value, localUri: verifiedLocalSource, downloadState: 'DOWNLOADED', downloadError: undefined };
       const repairedAsset = media ? { ...media, localPath: verifiedLocalSource, status: 'downloaded' as const, updatedAt: Math.max(media.updatedAt, Date.now()) } : null;
-      await store.upsertMediaProjection(repairedTask);
+      await store.updateMediaProjection(value.id, { localUri: verifiedLocalSource, downloadState: 'DOWNLOADED', downloadError: undefined, downloadProgress: 1, updatedAt: Date.now() });
       if (repairedAsset) await mediaStore.upsert(repairedAsset);
       setAsset(repairedAsset);
       setTask(repairedTask);
@@ -73,8 +82,7 @@ export default function VideoDetailScreen() {
       const settings = await readSettings();
       const artifactPolicy = getBuiltinArtifactDownloadPolicy(task.adapterId);
       let current = task;
-      const updated = await exportTaskVideo({ ...task, videoUrl: asset?.sourceUrl || task.videoUrl, localUri: localSource }, { policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: true }, asset, ...artifactPolicy, onUpdate: async (patch) => { current = { ...current, ...patch }; await store.upsertMediaProjection(current); setTask(current); } });
-      await store.upsertMediaProjection(updated);
+      const updated = await exportTaskVideo({ ...task, videoUrl: asset?.sourceUrl || task.videoUrl, localUri: localSource }, { policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: true }, asset, ...artifactPolicy, onUpdate: async (patch) => { current = { ...current, ...patch }; if (!(await store.updateMediaProjection(task.id, patch))) throw new Error('任务已删除'); setTask(current); } });
       setTask(updated);
       setLocalSource(updated.localUri);
       if (asset) { const nextAsset = { ...asset, localPath: updated.localUri || asset.localPath, status: (updated.localUri || asset.localPath ? 'downloaded' : asset.status) as MediaAsset['status'], updatedAt: Date.now() }; await mediaStore.upsert(nextAsset); setAsset(nextAsset); await mediaStore.upsertDelivery?.({ id: `${asset.id}:system-gallery`, assetId: asset.id, target: 'system-gallery', uri: updated.galleryUri, status: updated.exportState === 'EXPORTED' ? 'EXPORTED' : 'FAILED', error: updated.exportError, createdAt: Date.now(), updatedAt: Date.now() }); }

@@ -4,6 +4,8 @@ import type { TaskRecord, DownloadState } from './types';
 import { extractPoster } from '../native/media';
 import { downloadArtifact, DEFAULT_VIDEO_DOWNLOAD_BYTES } from './downloadPolicy';
 
+const downloadsInFlight = new Map<string, Promise<TaskRecord>>();
+
 export function nextDownloadState(task: Pick<TaskRecord, 'videoUrl' | 'localUri' | 'downloadState'>, event: 'enqueue' | 'start' | 'progress' | 'success' | 'failure'): DownloadState {
   if (event === 'success' || task.localUri) return 'DOWNLOADED';
   if (event === 'failure') return 'DOWNLOAD_FAILED';
@@ -36,7 +38,7 @@ async function publishCompletedDownload(partial: string, target: string, expecte
   }
 }
 
-export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; allowProviderSuppliedPublicHosts?: boolean; maxBytes?: number; acceptedMimes?: string[]; timeoutMs?: number; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
+async function performDownloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; allowProviderSuppliedPublicHosts?: boolean; maxBytes?: number; acceptedMimes?: string[]; timeoutMs?: number; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
   if (!task.videoUrl) throw new Error('任务没有可下载的视频地址');
   if (task.localUri) {
     const info = await FileSystem.getInfoAsync(task.localUri);
@@ -74,4 +76,15 @@ export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patc
     await options.onUpdate?.(failed);
     throw Object.assign(new Error(failed.downloadError), { cause: error });
   }
+}
+
+export function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; allowProviderSuppliedPublicHosts?: boolean; maxBytes?: number; acceptedMimes?: string[]; timeoutMs?: number; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
+  const existing = downloadsInFlight.get(task.id);
+  if (existing) return existing;
+  const operation = performDownloadTask(task, options);
+  downloadsInFlight.set(task.id, operation);
+  void operation.finally(() => {
+    if (downloadsInFlight.get(task.id) === operation) downloadsInFlight.delete(task.id);
+  }).catch(() => undefined);
+  return operation;
 }

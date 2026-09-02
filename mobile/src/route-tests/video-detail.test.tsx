@@ -9,6 +9,7 @@ const mockList = jest.fn();
 const mockGet = jest.fn();
 const mockTaskUpsert = jest.fn(async (_value: unknown) => undefined);
 const mockTaskMediaUpsert = jest.fn(async (_value: unknown) => undefined);
+const mockTaskMediaPatch = jest.fn(async (_id: string, _value: unknown) => true);
 const mockMediaGet = jest.fn();
 const mockMediaUpsert = jest.fn(async (_value: unknown) => undefined);
 const mockDeliveryUpsert = jest.fn(async (_value: unknown) => undefined);
@@ -26,7 +27,7 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
 jest.mock('../tasks/repository', () => ({
-  createTaskRepository: jest.fn(() => ({ list: () => mockList(), get: (id: string) => mockGet(id), upsert: (value: unknown) => mockTaskUpsert(value), upsertMediaProjection: (value: unknown) => mockTaskMediaUpsert(value) })),
+  createTaskRepository: jest.fn(() => ({ list: () => mockList(), get: (id: string) => mockGet(id), upsert: (value: unknown) => mockTaskUpsert(value), upsertMediaProjection: (value: unknown) => mockTaskMediaUpsert(value), updateMediaProjection: (id: string, value: unknown) => mockTaskMediaPatch(id, value) })),
 }));
 jest.mock('../media/repository', () => ({
   createSqliteMediaStore: jest.fn(() => ({
@@ -54,6 +55,7 @@ describe('video detail screen', () => {
     mockGet.mockResolvedValue(task);
     mockTaskUpsert.mockClear();
     mockTaskMediaUpsert.mockClear();
+    mockTaskMediaPatch.mockClear();
     mockMediaGet.mockReset();
     mockMediaGet.mockResolvedValue(null);
     mockMediaUpsert.mockClear();
@@ -120,7 +122,7 @@ describe('video detail screen', () => {
     const texts = tree!.root.findAllByType(Text).map((node) => [node.props.children].flat(Infinity).join(''));
     expect(texts.some((text) => text.includes('已下载'))).toBe(true);
     expect(tree!.root.findByProps({ testID: 'video-player-mock' }).props.source).toBe('file:///documents/media/task-1.mp4');
-    expect(mockTaskMediaUpsert).toHaveBeenCalledWith(expect.objectContaining({ localUri: 'file:///documents/media/task-1.mp4', downloadState: 'DOWNLOADED', downloadError: undefined }));
+    expect(mockTaskMediaPatch).toHaveBeenCalledWith('task-1', expect.objectContaining({ localUri: 'file:///documents/media/task-1.mp4', downloadState: 'DOWNLOADED', downloadError: undefined }));
     expect(mockTaskUpsert).not.toHaveBeenCalled();
     expect(mockMediaUpsert).toHaveBeenCalledWith(expect.objectContaining({ localPath: 'file:///documents/media/task-1.mp4', status: 'downloaded' }));
 

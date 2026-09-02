@@ -1,5 +1,5 @@
 import type { JobRecord, JobRepository } from '../jobs/types';
-import type { TaskRecord } from './types';
+import type { TaskMediaPatch, TaskRecord } from './types';
 import { jobToTaskProjection } from './projection';
 import type { MediaAsset, MediaStore } from '../media/types';
 import type { ArtifactDownloadPolicy } from '../workflows/schema/types';
@@ -7,7 +7,7 @@ import { materializeJobArtifacts } from '../media/materializer';
 import { createMediaDeliveryQueue } from './mediaQueue';
 
 type Settings = { token: string; autoExportToGallery: boolean; keepPrivateCopy: boolean };
-type TaskStore = { list(): Promise<TaskRecord[]>; listActive?(): Promise<TaskRecord[]>; listSyncCandidates?(): Promise<TaskRecord[]>; listMediaPending?(): Promise<TaskRecord[]>; upsert(task: TaskRecord): Promise<void>; upsertWorkflowProjection?(task: TaskRecord): Promise<void>; upsertMediaProjection?(task: TaskRecord): Promise<void> };
+type TaskStore = { list(): Promise<TaskRecord[]>; listActive?(): Promise<TaskRecord[]>; listSyncCandidates?(): Promise<TaskRecord[]>; listMediaPending?(): Promise<TaskRecord[]>; upsert(task: TaskRecord): Promise<void>; upsertWorkflowProjection?(task: TaskRecord): Promise<void>; upsertMediaProjection?(task: TaskRecord): Promise<void>; updateMediaProjection?(id: string, patch: TaskMediaPatch): Promise<boolean> };
 type Runtime = { sync(job: JobRecord): Promise<JobRecord> };
 type CoordinatorDeps = {
   readSettings(): Promise<Settings>;

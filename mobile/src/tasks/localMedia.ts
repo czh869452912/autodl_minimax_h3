@@ -4,7 +4,7 @@ import type { TaskRecord } from './types';
 
 type LocalMediaDeps = {
   documentDirectory?: string | null;
-  getInfo(uri: string): Promise<{ exists: boolean }>;
+  getInfo(uri: string): Promise<{ exists: boolean; isDirectory?: boolean; size?: number }>;
 };
 
 const defaultDeps: LocalMediaDeps = {
@@ -25,7 +25,8 @@ export async function resolveLocalVideoSource(
     .filter((value): value is string => Boolean(value?.startsWith('file://')));
   for (const candidate of [...new Set(candidates)]) {
     try {
-      if ((await deps.getInfo(candidate)).exists) return candidate;
+      const info = await deps.getInfo(candidate);
+      if (info.exists && info.isDirectory !== true && (info.size == null || info.size > 0)) return candidate;
     } catch {
       // A single stale or inaccessible projection must not hide later valid copies.
     }

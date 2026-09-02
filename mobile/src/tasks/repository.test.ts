@@ -111,6 +111,36 @@ test('media projection update preserves newer workflow-owned fields', async () =
   }
 });
 
+test('media projection updates never recreate a removed task', async () => {
+  const db = createRealSqliteTestDb();
+  try {
+    const store = createTaskRepository(db as never);
+    await store.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 1 });
+    db.runSync('DELETE FROM tasks WHERE id = ?', 'task-1');
+
+    await expect(store.updateMediaProjection('task-1', { localUri: 'file:///orphan.mp4', downloadState: 'DOWNLOADED', updatedAt: 2 })).resolves.toBe(false);
+    await store.upsertMediaProjection({ id: 'task-1', prompt: 'stale', status: 'SUCCESS', resolution: '768p竖', duration: 5, localUri: 'file:///orphan.mp4', downloadState: 'DOWNLOADED', createdAt: 1, updatedAt: 2 });
+
+    await expect(store.get('task-1')).resolves.toBeUndefined();
+  } finally {
+    db.close();
+  }
+});
+
+test('field-level download patches preserve a completed gallery export', async () => {
+  const db = createRealSqliteTestDb();
+  try {
+    const store = createTaskRepository(db as never);
+    await store.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, galleryUri: 'content://gallery/1', exportState: 'EXPORTED', exportedAt: 2, createdAt: 1, updatedAt: 2 });
+
+    await expect(store.updateMediaProjection('task-1', { localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED', downloadError: undefined, updatedAt: 3 })).resolves.toBe(true);
+
+    await expect(store.get('task-1')).resolves.toMatchObject({ localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED', galleryUri: 'content://gallery/1', exportState: 'EXPORTED', exportedAt: 2 });
+  } finally {
+    db.close();
+  }
+});
+
 test('round-trips workflow provenance and keeps it across partial updates', async () => {
   const store = createTaskRepository(fakeDb() as never);
   const task: TaskRecord = {

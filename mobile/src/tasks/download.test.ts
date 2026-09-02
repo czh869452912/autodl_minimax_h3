@@ -93,6 +93,15 @@ describe('secure artifact download', () => {
     expect(binaryWrite).toHaveBeenNthCalledWith(2, new Uint8Array([3, 4, 5]), { append: true });
   });
 
+  it('coalesces concurrent downloads for the same task id', async () => {
+    const first = downloadTask(task, { allowedHosts: ['example.test'] });
+    const second = downloadTask(task, { allowedHosts: ['example.test'] });
+
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    expect(expoFetch).toHaveBeenCalledTimes(1);
+    expect(fs.moveAsync).toHaveBeenCalledTimes(1);
+  });
+
   it('never publishes a partial file whose on-disk size is truncated', async () => {
     jest.mocked(expoFetch).mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-type': 'video/mp4' } }) as never);
     fs.getInfoAsync.mockResolvedValueOnce({ exists: true, uri: 'file:///documents/media/task-1.mp4.part', size: 1, isDirectory: false, modificationTime: 1 });

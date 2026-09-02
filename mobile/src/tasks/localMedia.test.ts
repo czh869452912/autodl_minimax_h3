@@ -41,3 +41,13 @@ test('continues to later private candidates when one stat call fails', async () 
 
   await expect(resolveLocalVideoSource({ task, asset }, { documentDirectory: 'file:///docs/', getInfo })).resolves.toBe('file:///tasks-copy.mp4');
 });
+
+test('rejects directories and empty files as private video sources', async () => {
+  const getInfo = jest.fn(async (uri: string) => {
+    if (uri === 'file:///asset-copy.mp4') return { exists: true, isDirectory: true, size: 4096 };
+    if (uri === 'file:///tasks-copy.mp4') return { exists: true, isDirectory: false, size: 0 };
+    return { exists: true, isDirectory: false, size: 42 };
+  });
+
+  await expect(resolveLocalVideoSource({ task, asset }, { documentDirectory: 'file:///docs/', getInfo })).resolves.toBe('file:///docs/media/task-1.mp4');
+});

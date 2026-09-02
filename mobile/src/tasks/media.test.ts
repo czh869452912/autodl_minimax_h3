@@ -8,6 +8,33 @@ const task: TaskRecord = {
 };
 
 describe('task media delivery orchestration', () => {
+  it('serializes automatic download and manual export for the same task', async () => {
+    let finishDownload!: (value: TaskRecord) => void;
+    let markDownloadStarted!: () => void;
+    const pendingDownload = new Promise<TaskRecord>((resolve) => { finishDownload = resolve; });
+    const downloadStarted = new Promise<void>((resolve) => { markDownloadStarted = resolve; });
+    const deps = {
+      download: jest.fn(() => { markDownloadStarted(); return pendingDownload; }),
+      publish: jest.fn().mockResolvedValue({ uri: 'content://media/video/lock', displayName: 'task-1.mp4', relativePath: 'Movies/AutoDL-H3/', alreadyExisted: false }),
+      removePrivate: jest.fn().mockResolvedValue(undefined),
+      resolveLocal: jest.fn()
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValue('file:///private.mp4'),
+    };
+    const onUpdate = jest.fn(async () => undefined);
+    const automatic = ensureTaskMedia(task, { policy: { autoExportToGallery: false, keepPrivateCopy: true }, allowedHosts: ['example'], deps, onUpdate });
+    const manual = exportTaskVideo(task, { policy: { autoExportToGallery: false, keepPrivateCopy: true }, allowedHosts: ['example'], deps, onUpdate });
+
+    await downloadStarted;
+    expect(deps.download).toHaveBeenCalledTimes(1);
+    expect(deps.publish).not.toHaveBeenCalled();
+    finishDownload({ ...task, localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED' });
+    await automatic;
+    await expect(manual).resolves.toMatchObject({ downloadState: 'DOWNLOADED', exportState: 'EXPORTED', galleryUri: 'content://media/video/lock' });
+    expect(deps.download).toHaveBeenCalledTimes(1);
+    expect(deps.publish).toHaveBeenCalledTimes(1);
+  });
+
   it('downloads a new result and automatically exports it', async () => {
     const downloaded = { ...task, localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED' as const };
     const deps = {
