@@ -50,6 +50,14 @@ function responseHeader(response: Response, name: string): string | undefined {
   return response.headers.get(name) ?? undefined;
 }
 
+function inferVideoMimeFromUrl(url: string): string | undefined {
+  const pathname = new URL(url).pathname.toLowerCase();
+  if (pathname.endsWith('.mp4')) return 'video/mp4';
+  if (pathname.endsWith('.webm')) return 'video/webm';
+  if (pathname.endsWith('.mov') || pathname.endsWith('.qt')) return 'video/quicktime';
+  return undefined;
+}
+
 async function readWithTimeout<T>(read: Promise<T>, timeoutMs: number, onTimeout: () => void): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -81,7 +89,8 @@ export async function downloadArtifact(initialUrl: string, options: ArtifactDown
         continue;
       }
       if (!response.ok) throw new Error(`下载失败（HTTP ${response.status}）`);
-      const mime = responseHeader(response, 'content-type')?.split(';', 1)[0].trim().toLowerCase();
+      const responseMime = responseHeader(response, 'content-type')?.split(';', 1)[0].trim().toLowerCase();
+      const mime = responseMime || (options.allowProviderSuppliedPublicHosts ? inferVideoMimeFromUrl(current) : undefined);
       if (!mime || !acceptedMimes.includes(mime)) throw new Error(`下载媒体类型不受支持：${mime ?? 'unknown'}`);
       const reader = response.body?.getReader();
       let size = 0;

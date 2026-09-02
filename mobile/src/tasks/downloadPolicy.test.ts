@@ -79,6 +79,27 @@ test('streams the final response through the same bounded redirect chain', async
   expect(writes).toHaveLength(1);
 });
 
+test('uses a video extension only as a missing-MIME fallback for trusted provider nodes', async () => {
+  const writer = jest.fn(async () => undefined);
+  const missingMime = jest.fn().mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
+  await expect(downloadArtifact('https://dynamic.public.example/result.mp4', {
+    allowedHosts: ['autodl.art'], allowProviderSuppliedPublicHosts: true,
+    acceptedMimes: ['video/mp4'], fetcher: missingMime, writer,
+  })).resolves.toMatchObject({ mime: 'video/mp4', size: 3 });
+
+  const unknownFile = jest.fn().mockResolvedValue(new Response(new Uint8Array([1]), { status: 200 }));
+  await expect(downloadArtifact('https://dynamic.public.example/result.bin', {
+    allowedHosts: ['autodl.art'], allowProviderSuppliedPublicHosts: true,
+    acceptedMimes: ['video/mp4'], fetcher: unknownFile, writer,
+  })).rejects.toThrow('媒体类型');
+
+  const explicitHtml = jest.fn().mockResolvedValue(new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'text/html' } }));
+  await expect(downloadArtifact('https://dynamic.public.example/result.mp4', {
+    allowedHosts: ['autodl.art'], allowProviderSuppliedPublicHosts: true,
+    acceptedMimes: ['video/mp4'], fetcher: explicitHtml, writer,
+  })).rejects.toThrow('text/html');
+});
+
 test('aborts a streamed artifact when the byte limit is exceeded', async () => {
   const fetcher = jest.fn().mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-type': 'video/mp4' } }));
   const writer = jest.fn(async () => undefined);
