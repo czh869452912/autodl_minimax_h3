@@ -10,11 +10,11 @@
 3. `docs/superpowers/plans/2026-09-01-d-core.md`：C-Core 验收通过后的 D-Core 计划。
 4. `docs/superpowers/specs/2026-09-01-local-first-workflow-architecture-design.md`：不可突破的架构约束。
 
-下一项具体动作：从 `dev` 创建隔离 worktree，先为 C-Core Task 1（版本化 durable schema migration）写真实 SQLite RED 测试；测试失败后再实现 migration runner。
+下一项具体动作：先在 Android 设备上完成 B 热修复的带凭据验收（见第 4 节「B 发布热修复」待执行项）；验收通过后，再从 `dev` 创建隔离 worktree，为 C-Core Task 1（版本化 durable schema migration）写真实 SQLite RED 测试。
 
 ## 2. 当前发布与分支状态
 
-- `main`、`dev`、`origin/main`、`origin/dev` 均指向包含本文的同一交接提交。
+- v1.4.5 发布时 `main`、`dev`、`origin/main`、`origin/dev` 均指向同一交接提交；此后 B 发布热修复（见第 4 节）提交在本地 `dev`，尚未合并回 `main` 或推送。
 - `v1.4.5` 标签已推送，GitHub Release 已创建：<https://github.com/czh869452912/autodl_minimax_h3/releases/tag/v1.4.5>。
 - Release 资产：`AutoDL-H3-v1.4.5-apk-universal.apk`。
 - 正式发布 Actions 运行 `33523226885` 成功：类型检查、单元测试、签名 universal APK、四 ABI、`apksigner` 和 Release 创建均通过。
@@ -68,6 +68,24 @@
 - 当前 Git 验证是设备端 Ed25519 `commit-attestation`，不是原生 GPG/SSH `git verify-commit`；原生 verifier 作为未来可替换实现。
 - AutoDL 仍是 POST 提交 + GET 轮询；不能假设其 wrapper 具备 ComfyUI WebSocket、上传、队列或取消语义。
 - 当前 `workflow_jobs` 仍是 snapshot，不是完整 durable Operation/Event executor；这正是 C-Core 的起点。
+
+### B 发布热修复：媒体并发与导出（2026-09-02）
+
+针对 v1.4.5 发布后发现的三个回归（并发事务干扰、同步快照覆盖本地媒体状态、导出误报 `域名不在允许列表`），按 `docs/superpowers/plans/2026-09-02-b-release-media-concurrency-hotfix.md` 执行完毕，设计与边界见同名 spec。修复内容：
+
+- **独占事务**：`replaceArtifacts` 改用 Expo SQLite `withExclusiveTransactionAsync`，所有语句经由事务对象执行，消除并发 `cannot rollback - no transaction is active`；Jest/非原生环境保留同步事务 fallback（`bdb1c1bf`）。
+- **Workflow 投影所有权**：新增 `upsertWorkflowProjection`，同步仍持久化完整 Workflow 字段（状态、artifact URL、计时、provenance、sync 元数据），但冲突更新只写 Workflow 拥有的列，`local_uri`/下载/导出等媒体列不被旧快照覆盖（`af3cc8f4`）。
+- **物化非破坏性合并**：`upsertArtifactProjection` 用 `COALESCE`/`CASE` 合并 artifact 元数据，已下载资产的 `local_path`、poster、`downloaded` 状态和导出状态不会被远程刷新降级（`259f2b47`）。
+- **私有文件解析与修复**：新增 `resolveLocalVideoSource`，按 asset `localPath` → task `localUri` → 确定性私有路径 `documentDirectory/media/<taskId>.mp4` 顺序验证文件存在性，远程 URL 永不作为本地导出源（`c40c5ef3`）。
+- **详情/导出收敛**：详情页加载时解析并修复本地媒体投影，`已下载` 标签基于验证后的有效本地源；有私有文件时直接导出到相册、不再走远程校验；失败时展示 `保存失败` 与真实错误；手动重试下载/导出通过 `getBuiltinArtifactDownloadPolicy` 获得与自动投递一致的 fail-closed 策略（`e6cec99d`）。
+
+热修复验收证据（2026-09-02，主工作区）：
+
+- `cd mobile; npm run typecheck`：通过。
+- `cd mobile; npm test -- --runInBand`：83 suites 通过，332 tests 通过，1 skipped，0 failed（基线为 82 suites / 318 tests，新增 14 个热修复回归测试全部转绿）。
+- `git diff --check` 通过；`local.properties` 保持未跟踪、无 diff。
+- Android：JDK 21（`jbr-21.0.11`）+ `x86_64` 执行 `:app:assembleDebug -PreactNativeArchitectures=x86_64`，`BUILD SUCCESSFUL`；`emulator-5554` 安装成功、`MainActivity` 冷启动并进入前台（pid 存在、`topResumedActivity`）；`adb logcat -b crash` 中仅有模拟器预存的 `com.google.android.bluetooth` 系统崩溃，无 `com.example.autodlh3` 应用崩溃。
+- **待用户执行的设备验收**：双任务同一轮询窗口并发完成且无 NativeDatabase 事务错误、两个私有下载完成、详情页显示 `已下载`、手动导出到 `Movies/AutoDL-H3`、自动导出投递、存在私有文件时两类导出均不报告 `域名不在允许列表`。该项完成前 **C-Core/D-Core 保持阻塞**。
 
 ## 5. C 阶段：C-Core Durable Local Executor
 
@@ -124,11 +142,12 @@ D-Core 之后再规划 Batch/Variant、项目包导出/导入、备份/同步/�
 
 ## 8. 下一次接手的执行清单
 
-1. `git status --short --branch`，确认 `main`/`dev` 仍指向同一提交且都包含本文，不要改动 `local.properties`。
-2. 从 `dev` 创建 `codex/c-core-schema` 隔离 worktree。
-3. 阅读 `docs/superpowers/plans/2026-09-01-c-core.md` Task 1 和现有 `mobile/src/storage/database*` 实现。
-4. 先写真实 SQLite migration RED 测试：repeatable migration、legacy table 保留、注入 DDL 失败后 rollback + recovery state。
-5. 运行 focused Jest 看到预期失败，再实现 `runner.ts`/`v6DurableExecutor.ts`，随后运行 typecheck、全量 Jest 和 Android 门禁。
-6. 完成并记录 C-Core Task 1 后，才继续 Task 2；C-Core 全部验收通过后再切换到 D-Core Task 1。
+1. `git status --short --branch`，确认 `main`/`dev` 状态，不要改动 `local.properties`。
+2. 确认 B 热修复（第 4 节）的设备验收已由用户在带凭据设备上完成并补记证据；未完成前不得开始 C-Core。
+3. 验收通过后，从 `dev` 创建 `codex/c-core-schema` 隔离 worktree。
+4. 阅读 `docs/superpowers/plans/2026-09-01-c-core.md` Task 1 和现有 `mobile/src/storage/database*` 实现。
+5. 先写真实 SQLite migration RED 测试：repeatable migration、legacy table 保留、注入 DDL 失败后 rollback + recovery state。
+6. 运行 focused Jest 看到预期失败，再实现 `runner.ts`/`v6DurableExecutor.ts`，随后运行 typecheck、全量 Jest 和 Android 门禁。
+7. 完成并记录 C-Core Task 1 后，才继续 Task 2；C-Core 全部验收通过后再切换到 D-Core Task 1。
 
-交接结论：A/B 已闭环并以 v1.4.5 发布；当前唯一合理的下一步是 C-Core schema/migration，不需要回退版本或重新打开已通过的 B.1 问题。
+交接结论：A/B 已闭环并以 v1.4.5 发布；B 发布热修复（媒体并发与导出）已完成实现与自动化验收并提交在 `dev`，剩余带凭据双任务并发与手动/自动相册导出的设备验收待用户执行，验收通过并补记证据前 C-Core/D-Core 保持阻塞。
