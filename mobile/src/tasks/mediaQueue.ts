@@ -10,7 +10,7 @@ type QueueDeps = {
   getArtifactPolicy?(adapterId?: string): ArtifactDownloadPolicy | undefined;
   taskStore: { upsert(task: TaskRecord): Promise<void> };
   jobStore: Pick<JobRepository, 'get' | 'listArtifacts'>;
-  mediaStore?: Pick<MediaStore, 'upsert'> & Partial<Pick<MediaStore, 'upsertDelivery'>>;
+  mediaStore?: Pick<MediaStore, 'upsert'> & Partial<Pick<MediaStore, 'upsertArtifactProjection' | 'upsertDelivery'>>;
   now?: () => number;
   concurrency?: number;
   batchSize?: number;

@@ -16,7 +16,7 @@ type CoordinatorDeps = {
   createRuntime(token: string): Runtime;
   ensureMedia(task: TaskRecord, settings: Settings, onUpdate: (patch: Partial<TaskRecord>) => Promise<void>, artifactPolicy?: ArtifactDownloadPolicy): Promise<unknown>;
   getArtifactPolicy?(adapterId?: string): ArtifactDownloadPolicy | undefined;
-  mediaStore?: Pick<MediaStore, 'upsert'> & Partial<Pick<MediaStore, 'upsertDelivery'>>;
+  mediaStore?: Pick<MediaStore, 'upsert'> & Partial<Pick<MediaStore, 'upsertArtifactProjection' | 'upsertDelivery'>>;
   now?: () => number;
   concurrency?: number;
 };

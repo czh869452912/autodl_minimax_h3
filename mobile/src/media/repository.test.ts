@@ -89,3 +89,27 @@ test('prefers async SQLite operations when available', async () => {
   expect(db.runAsync).toHaveBeenCalled();
   expect(db.getAllAsync).toHaveBeenCalled();
 });
+
+test('artifact projection merge cannot clear an existing private download', async () => {
+  const runAsync = jest.fn(async (_sql: string, ..._params: unknown[]) => undefined);
+  const db = {
+    execSync: jest.fn(),
+    runSync: jest.fn(),
+    getAllSync: jest.fn(() => []),
+    runAsync,
+  };
+  const store = createSqliteMediaStore(db as never);
+
+  await store.upsertArtifactProjection?.({
+    ...asset,
+    localPath: undefined,
+    posterPath: undefined,
+    status: 'downloading',
+    sourceUrl: 'https://provider/new-result.mp4',
+  });
+
+  const sql = runAsync.mock.calls[0][0] as string;
+  expect(sql).toContain('local_path=COALESCE(media_assets.local_path, excluded.local_path)');
+  expect(sql).toContain("WHEN media_assets.local_path IS NOT NULL OR media_assets.status = 'downloaded' THEN 'downloaded'");
+  expect(sql).toContain('export_status=COALESCE(media_assets.export_status, excluded.export_status)');
+});
