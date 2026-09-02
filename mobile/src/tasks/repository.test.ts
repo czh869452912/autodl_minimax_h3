@@ -1,5 +1,6 @@
 import { createTaskRepository } from './repository';
 import type { TaskRecord } from './types';
+import { createRealSqliteTestDb } from '../test/realSqlite';
 
 function fakeDb() {
   let row: Record<string, unknown> | undefined;
@@ -83,6 +84,34 @@ test('workflow projection upsert preserves media-owned columns on conflict', asy
   expect(conflictUpdate).not.toContain('download_state=excluded.download_state');
   expect(conflictUpdate).not.toContain('gallery_uri=excluded.gallery_uri');
   expect(conflictUpdate).not.toContain('export_state=excluded.export_state');
+});
+
+test('media projection update preserves newer workflow-owned fields', async () => {
+  const db = createRealSqliteTestDb();
+  try {
+    const store = createTaskRepository(db as never);
+    await store.upsert({
+      id: 'task-1', prompt: 'new prompt', status: 'SUCCESS', resolution: '768p竖', duration: 5,
+      videoUrl: 'https://provider/new.mp4', workflowId: 'h3', workflowVersion: '2',
+      adapterId: 'autodl-comfyui', executionDuration: 27, lastSyncAt: 8_000,
+      downloadState: 'IDLE', exportState: 'NOT_REQUESTED', createdAt: 1_000, updatedAt: 8_000,
+    });
+
+    await store.upsertMediaProjection({
+      id: 'task-1', prompt: 'stale prompt', status: 'RUNNING', resolution: '480p竖', duration: 5,
+      videoUrl: 'https://provider/stale.mp4', localUri: 'file:///private.mp4',
+      downloadState: 'DOWNLOADED', exportState: 'NOT_REQUESTED',
+      createdAt: 1_000, updatedAt: 9_000,
+    });
+
+    await expect(store.get('task-1')).resolves.toMatchObject({
+      prompt: 'new prompt', status: 'SUCCESS', videoUrl: 'https://provider/new.mp4',
+      workflowVersion: '2', executionDuration: 27, lastSyncAt: 8_000,
+      localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED', updatedAt: 9_000,
+    });
+  } finally {
+    db.close();
+  }
 });
 
 test('round-trips workflow provenance and keeps it across partial updates', async () => {
