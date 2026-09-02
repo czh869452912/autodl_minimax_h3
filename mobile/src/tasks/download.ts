@@ -12,14 +12,26 @@ export function nextDownloadState(task: Pick<TaskRecord, 'videoUrl' | 'localUri'
   return task.downloadState || (task.videoUrl ? 'IDLE' : 'DOWNLOAD_FAILED');
 }
 
-async function publishCompletedDownload(partial: string, target: string): Promise<void> {
+async function publishCompletedDownload(partial: string, target: string, expectedSize: number): Promise<void> {
   await FileSystem.deleteAsync(target, { idempotent: true });
+  let copied = false;
   try {
     await FileSystem.moveAsync({ from: partial, to: target });
-  } catch (moveError) {
-    await FileSystem.copyAsync({ from: partial, to: target });
-    const copied = await FileSystem.getInfoAsync(target);
-    if (!copied.exists) throw moveError;
+  } catch {
+    try {
+      await FileSystem.copyAsync({ from: partial, to: target });
+      copied = true;
+    } catch (copyError) {
+      await FileSystem.deleteAsync(target, { idempotent: true }).catch(() => undefined);
+      throw copyError;
+    }
+  }
+  const published = await FileSystem.getInfoAsync(target).catch(() => undefined);
+  if (!published?.exists || published.isDirectory || published.size !== expectedSize) {
+    await FileSystem.deleteAsync(target, { idempotent: true }).catch(() => undefined);
+    throw new Error('下载文件不完整');
+  }
+  if (copied) {
     await FileSystem.deleteAsync(partial, { idempotent: true });
   }
 }
@@ -50,7 +62,7 @@ export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patc
     });
     const partialInfo = await FileSystem.getInfoAsync(partial);
     if (!partialInfo.exists || partialInfo.isDirectory || partialInfo.size !== downloaded.size) throw new Error('下载文件不完整');
-    await publishCompletedDownload(partial, target);
+    await publishCompletedDownload(partial, target, downloaded.size);
     let thumbnailUrl = task.thumbnailUrl;
     try { thumbnailUrl = await extractPoster(target, task.id); } catch {}
     const complete = { ...task, localUri: target, thumbnailUrl, downloadState: 'DOWNLOADED' as const, downloadProgress: 1, downloadError: undefined, updatedAt: Date.now() };

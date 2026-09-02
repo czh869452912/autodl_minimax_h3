@@ -84,7 +84,9 @@ describe('secure artifact download', () => {
       headers: new Headers({ 'content-type': 'video/mp4', 'content-length': '5' }),
       body: { getReader: () => reader },
     } as never);
-    fs.getInfoAsync.mockResolvedValueOnce({ exists: true, uri: 'file:///documents/media/task-1.mp4.part', size: 5, isDirectory: false, modificationTime: 1 });
+    fs.getInfoAsync
+      .mockResolvedValueOnce({ exists: true, uri: 'file:///documents/media/task-1.mp4.part', size: 5, isDirectory: false, modificationTime: 1 })
+      .mockResolvedValueOnce({ exists: true, uri: 'file:///documents/media/task-1.mp4', size: 5, isDirectory: false, modificationTime: 1 });
 
     await expect(downloadTask(task, { allowedHosts: ['example.test'] })).resolves.toMatchObject({ downloadState: 'DOWNLOADED' });
     expect(binaryWrite).toHaveBeenNthCalledWith(1, new Uint8Array([1, 2]), { append: false });
@@ -111,6 +113,18 @@ describe('secure artifact download', () => {
     });
     expect(fs.copyAsync).toHaveBeenCalledWith({ from: 'file:///documents/media/task-1.mp4.part', to: 'file:///documents/media/task-1.mp4' });
     expect(fs.deleteAsync).toHaveBeenCalledWith('file:///documents/media/task-1.mp4.part', { idempotent: true });
+  });
+
+  it('rejects and removes a truncated fallback copy', async () => {
+    jest.mocked(expoFetch).mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-type': 'video/mp4' } }) as never);
+    fs.moveAsync.mockRejectedValueOnce(new Error('rename failed'));
+    fs.copyAsync.mockResolvedValueOnce(undefined);
+    fs.getInfoAsync
+      .mockResolvedValueOnce({ exists: true, uri: 'file:///documents/media/task-1.mp4.part', size: 3, isDirectory: false, modificationTime: 1 })
+      .mockResolvedValueOnce({ exists: true, uri: 'file:///documents/media/task-1.mp4', size: 1, isDirectory: false, modificationTime: 1 });
+
+    await expect(downloadTask(task, { allowedHosts: ['example.test'] })).rejects.toThrow('下载文件不完整');
+    expect(fs.deleteAsync).toHaveBeenCalledWith('file:///documents/media/task-1.mp4', { idempotent: true });
   });
 
   it('deletes the partial file instead of publishing a non-video response', async () => {
