@@ -3,7 +3,7 @@
     "name": "AutoDL H3",
     "slug": "autodl-h3",
     "scheme": "autodlh3",
-    "version": "1.4.5",
+    "version": "1.4.6",
     "icon": "./assets/icon.png",
     "orientation": "default",
     "plugins": ["expo-router", "expo-sqlite", "expo-video"],
