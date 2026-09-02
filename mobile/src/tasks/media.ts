@@ -5,6 +5,7 @@ import { downloadTask } from './download';
 import { assertArtifactDownloadPolicy } from './downloadPolicy';
 import type { TaskRecord } from './types';
 import { resolveLocalVideoSource } from './localMedia';
+import type { MediaAsset } from '../media/types';
 
 export type MediaPolicy = Pick<AppSettings, 'autoExportToGallery' | 'keepPrivateCopy'>;
 
@@ -12,7 +13,7 @@ export type MediaDeps = {
   download: typeof downloadTask;
   publish: typeof exportVideo;
   removePrivate(uri: string): Promise<void>;
-  resolveLocal?(task: TaskRecord): Promise<string | undefined>;
+  resolveLocal(task: TaskRecord, asset?: Pick<MediaAsset, 'localPath'> | null): Promise<string | undefined>;
 };
 
 export type EnsureMediaOptions = {
@@ -22,6 +23,7 @@ export type EnsureMediaOptions = {
   maxBytes?: number;
   acceptedMimes?: string[];
   timeoutMs?: number;
+  asset?: Pick<MediaAsset, 'localPath'> | null;
   deps?: MediaDeps;
 };
 
@@ -29,7 +31,7 @@ const defaultDeps: MediaDeps = {
   download: downloadTask,
   publish: exportVideo,
   removePrivate: (uri) => FileSystem.deleteAsync(uri, { idempotent: true }),
-  resolveLocal: (task) => resolveLocalVideoSource({ task }),
+  resolveLocal: (task, asset) => resolveLocalVideoSource({ task, asset }),
 };
 
 function errorMessage(error: unknown): string {
@@ -67,16 +69,22 @@ async function publishTask(current: TaskRecord, options: EnsureMediaOptions): Pr
   return value;
 }
 async function downloadIfNeeded(task: TaskRecord, options: EnsureMediaOptions): Promise<{ task: TaskRecord; downloadedNow: boolean }> {
-  if (task.localUri || !task.videoUrl) return { task, downloadedNow: false };
-  const recovered = await (options.deps ?? defaultDeps).resolveLocal?.(task);
+  const deps = options.deps ?? defaultDeps;
+  const recovered = await deps.resolveLocal(task, options.asset);
   if (recovered) {
     const patch = { localUri: recovered, downloadState: 'DOWNLOADED' as const, downloadError: undefined, downloadProgress: 1, updatedAt: Date.now() };
     await options.onUpdate(patch);
     return { task: { ...task, ...patch }, downloadedNow: false };
   }
-  assertArtifactDownloadPolicy(options.allowedHosts);
   let current = task;
-  const downloaded = await (options.deps ?? defaultDeps).download(task, {
+  if (current.localUri) {
+    const patch = { localUri: undefined, downloadState: 'IDLE' as const, downloadError: undefined, downloadProgress: undefined, updatedAt: Date.now() };
+    current = { ...current, ...patch };
+    await options.onUpdate(patch);
+  }
+  if (!current.videoUrl) return { task: current, downloadedNow: false };
+  assertArtifactDownloadPolicy(options.allowedHosts);
+  const downloaded = await deps.download(current, {
     onUpdate: async (patch) => {
       current = { ...current, ...patch };
       await options.onUpdate(patch);

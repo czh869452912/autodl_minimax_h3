@@ -32,3 +32,12 @@ test('returns no local source when all private candidates are missing', async ()
   const getInfo = jest.fn(async () => ({ exists: false }));
   await expect(resolveLocalVideoSource({ task: { ...task, localUri: undefined }, asset: null }, { documentDirectory: 'file:///docs/', getInfo })).resolves.toBeUndefined();
 });
+
+test('continues to later private candidates when one stat call fails', async () => {
+  const getInfo = jest.fn(async (uri: string) => {
+    if (uri === 'file:///asset-copy.mp4') throw new Error('permission denied');
+    return { exists: uri === 'file:///tasks-copy.mp4' };
+  });
+
+  await expect(resolveLocalVideoSource({ task, asset }, { documentDirectory: 'file:///docs/', getInfo })).resolves.toBe('file:///tasks-copy.mp4');
+});

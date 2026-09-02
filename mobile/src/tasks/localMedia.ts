@@ -24,7 +24,11 @@ export async function resolveLocalVideoSource(
   const candidates = [asset?.localPath, task.localUri, deterministic]
     .filter((value): value is string => Boolean(value?.startsWith('file://')));
   for (const candidate of [...new Set(candidates)]) {
-    if ((await deps.getInfo(candidate)).exists) return candidate;
+    try {
+      if ((await deps.getInfo(candidate)).exists) return candidate;
+    } catch {
+      // A single stale or inaccessible projection must not hide later valid copies.
+    }
   }
   return undefined;
 }
