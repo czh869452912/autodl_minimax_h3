@@ -20,3 +20,18 @@ test('does not create an asset from a system-gallery-only task projection', asyn
   await materializeJobArtifacts({ ...job, id: 'job-2' }, [], store, { prompt: 'p', createdAt: 1 });
   expect(store.upsert).not.toHaveBeenCalled();
 });
+
+test('uses the non-destructive artifact projection writer when available', async () => {
+  const store = {
+    upsert: jest.fn(async () => undefined),
+    upsertArtifactProjection: jest.fn(async () => undefined),
+  };
+
+  await materializeJobArtifacts(job, artifacts, store);
+
+  expect(store.upsertArtifactProjection).toHaveBeenCalledWith(expect.objectContaining({
+    id: 'job-1:video-1',
+    sourceUrl: 'https://cdn/video',
+  }));
+  expect(store.upsert).not.toHaveBeenCalled();
+});

@@ -1,7 +1,10 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { File } from 'expo-file-system';
 import type { TaskRecord, DownloadState } from './types';
 import { extractPoster } from '../native/media';
 import { downloadArtifact, DEFAULT_VIDEO_DOWNLOAD_BYTES } from './downloadPolicy';
+
+const downloadsInFlight = new Map<string, Promise<TaskRecord>>();
 
 export function nextDownloadState(task: Pick<TaskRecord, 'videoUrl' | 'localUri' | 'downloadState'>, event: 'enqueue' | 'start' | 'progress' | 'success' | 'failure'): DownloadState {
   if (event === 'success' || task.localUri) return 'DOWNLOADED';
@@ -11,22 +14,31 @@ export function nextDownloadState(task: Pick<TaskRecord, 'videoUrl' | 'localUri'
   return task.downloadState || (task.videoUrl ? 'IDLE' : 'DOWNLOAD_FAILED');
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-  let output = '';
-  for (let index = 0; index < bytes.length; index += 3) {
-    const a = bytes[index];
-    const b = bytes[index + 1];
-    const c = bytes[index + 2];
-    output += chars[a >> 2];
-    output += chars[((a & 3) << 4) | (b == null ? 0 : b >> 4)];
-    output += b == null ? '=' : chars[((b & 15) << 2) | (c == null ? 0 : c >> 6)];
-    output += c == null ? '=' : chars[c & 63];
+async function publishCompletedDownload(partial: string, target: string, expectedSize: number): Promise<void> {
+  await FileSystem.deleteAsync(target, { idempotent: true });
+  let copied = false;
+  try {
+    await FileSystem.moveAsync({ from: partial, to: target });
+  } catch {
+    try {
+      await FileSystem.copyAsync({ from: partial, to: target });
+      copied = true;
+    } catch (copyError) {
+      await FileSystem.deleteAsync(target, { idempotent: true }).catch(() => undefined);
+      throw copyError;
+    }
   }
-  return output;
+  const published = await FileSystem.getInfoAsync(target).catch(() => undefined);
+  if (!published?.exists || published.isDirectory || published.size !== expectedSize) {
+    await FileSystem.deleteAsync(target, { idempotent: true }).catch(() => undefined);
+    throw new Error('下载文件不完整');
+  }
+  if (copied) {
+    await FileSystem.deleteAsync(partial, { idempotent: true });
+  }
 }
 
-export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; maxBytes?: number; acceptedMimes?: string[]; timeoutMs?: number; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
+async function performDownloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; allowProviderSuppliedPublicHosts?: boolean; maxBytes?: number; acceptedMimes?: string[]; timeoutMs?: number; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
   if (!task.videoUrl) throw new Error('任务没有可下载的视频地址');
   if (task.localUri) {
     const info = await FileSystem.getInfoAsync(task.localUri);
@@ -36,19 +48,23 @@ export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patc
   await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
   const target = `${dir}/${task.id}.mp4`;
   const partial = `${target}.part`;
+  const partialFile = new File(partial);
   await options.onUpdate?.({ downloadState: 'ENQUEUED', downloadProgress: 0, updatedAt: Date.now() });
   try {
     await FileSystem.deleteAsync(partial, { idempotent: true });
     await options.onUpdate?.({ downloadState: 'DOWNLOADING', downloadProgress: 0, updatedAt: Date.now() });
-    await downloadArtifact(task.videoUrl, {
+    const downloaded = await downloadArtifact(task.videoUrl, {
       allowedHosts: options.allowedHosts ?? [],
+      allowProviderSuppliedPublicHosts: options.allowProviderSuppliedPublicHosts,
       maxBytes: options.maxBytes ?? DEFAULT_VIDEO_DOWNLOAD_BYTES,
       acceptedMimes: options.acceptedMimes,
       timeoutMs: options.timeoutMs,
       fetcher: options.fetcher,
-      writer: (chunk, append) => FileSystem.writeAsStringAsync(partial, bytesToBase64(chunk), { encoding: 'base64', append }),
+      writer: async (chunk, append) => { partialFile.write(chunk, { append }); },
     });
-    await FileSystem.moveAsync({ from: partial, to: target });
+    const partialInfo = await FileSystem.getInfoAsync(partial);
+    if (!partialInfo.exists || partialInfo.isDirectory || partialInfo.size !== downloaded.size) throw new Error('下载文件不完整');
+    await publishCompletedDownload(partial, target, downloaded.size);
     let thumbnailUrl = task.thumbnailUrl;
     try { thumbnailUrl = await extractPoster(target, task.id); } catch {}
     const complete = { ...task, localUri: target, thumbnailUrl, downloadState: 'DOWNLOADED' as const, downloadProgress: 1, downloadError: undefined, updatedAt: Date.now() };
@@ -60,4 +76,15 @@ export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patc
     await options.onUpdate?.(failed);
     throw Object.assign(new Error(failed.downloadError), { cause: error });
   }
+}
+
+export function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; allowProviderSuppliedPublicHosts?: boolean; maxBytes?: number; acceptedMimes?: string[]; timeoutMs?: number; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
+  const existing = downloadsInFlight.get(task.id);
+  if (existing) return existing;
+  const operation = performDownloadTask(task, options);
+  downloadsInFlight.set(task.id, operation);
+  void operation.finally(() => {
+    if (downloadsInFlight.get(task.id) === operation) downloadsInFlight.delete(task.id);
+  }).catch(() => undefined);
+  return operation;
 }

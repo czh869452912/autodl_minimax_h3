@@ -1,5 +1,6 @@
 import { createSqliteMediaStore } from './repository';
 import type { MediaAsset } from './types';
+import { createRealSqliteTestDb } from '../test/realSqlite';
 
 function fakeDb() {
   const rows = new Map<string, Record<string, unknown>>();
@@ -88,4 +89,40 @@ test('prefers async SQLite operations when available', async () => {
   await store.get('m1');
   expect(db.runAsync).toHaveBeenCalled();
   expect(db.getAllAsync).toHaveBeenCalled();
+});
+
+test('artifact projection merge cannot clear an existing private download', async () => {
+  const db = createRealSqliteTestDb();
+  try {
+    const store = createSqliteMediaStore(db);
+    await store.upsert({
+      ...asset, localPath: 'file:///private.mp4', posterPath: 'file:///poster.jpg',
+      status: 'downloaded', exportStatus: '已保存到相册', updatedAt: 10,
+    });
+    await store.upsertArtifactProjection?.({
+      ...asset, localPath: undefined, posterPath: undefined, status: 'downloading',
+      sourceUrl: 'https://provider/new-result.mp4', updatedAt: 20,
+    });
+
+    await expect(store.get(asset.id)).resolves.toMatchObject({
+      sourceUrl: 'https://provider/new-result.mp4', localPath: 'file:///private.mp4',
+      posterPath: 'file:///poster.jpg', status: 'downloaded', exportStatus: '已保存到相册', updatedAt: 20,
+    });
+  } finally {
+    db.close();
+  }
+});
+
+test('loads the newest primary video asset for a task', async () => {
+  const db = createRealSqliteTestDb();
+  try {
+    const store = createSqliteMediaStore(db);
+    await store.upsert({ ...asset, id: 'older-video', taskId: 'task-1', kind: 'video', localPath: 'file:///older.mp4', updatedAt: 10 });
+    await store.upsert({ ...asset, id: 'audio', taskId: 'task-1', kind: 'audio', localPath: 'file:///audio.mp3', updatedAt: 30 });
+    await store.upsert({ ...asset, id: 'newer-video', taskId: 'task-1', kind: 'video', localPath: 'file:///newer.mp4', updatedAt: 20 });
+
+    await expect(store.getPrimaryVideoByTaskId?.('task-1')).resolves.toMatchObject({ id: 'newer-video', localPath: 'file:///newer.mp4' });
+  } finally {
+    db.close();
+  }
 });

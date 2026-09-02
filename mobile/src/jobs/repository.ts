@@ -46,15 +46,19 @@ export function createJobRepository(db: SQLiteDatabase | undefined): JobReposito
     async replaceArtifacts(jobId, values) {
       if (!database) { artifacts.set(jobId, values); return; }
       const transaction = (database as unknown as { withTransactionSync?: (fn: () => void) => void }).withTransactionSync;
-      const asyncTransaction = (database as unknown as { withTransactionAsync?: (fn: () => Promise<void>) => Promise<void> }).withTransactionAsync;
+      const exclusiveTransaction = (database as unknown as {
+        withExclusiveTransactionAsync?: (
+          fn: (transaction: { runAsync(sql: string, ...params: any[]): Promise<unknown> }) => Promise<void>,
+        ) => Promise<void>;
+      }).withExclusiveTransactionAsync;
       const replace = () => {
         database.runSync('DELETE FROM workflow_artifacts WHERE job_id = ?', jobId);
         for (const value of values) database.runSync('INSERT INTO workflow_artifacts (id,job_id,kind,uri,mime,metadata_json) VALUES (?,?,?,?,?,?)', value.id, jobId, value.kind, value.uri ?? null, value.mime ?? null, value.metadata ? JSON.stringify(value.metadata) : null);
       };
-      if (asyncTransaction) {
-        await asyncTransaction.call(database, async () => {
-          await run('DELETE FROM workflow_artifacts WHERE job_id = ?', jobId);
-          for (const value of values) await run('INSERT INTO workflow_artifacts (id,job_id,kind,uri,mime,metadata_json) VALUES (?,?,?,?,?,?)', value.id, jobId, value.kind, value.uri ?? null, value.mime ?? null, value.metadata ? JSON.stringify(value.metadata) : null);
+      if (exclusiveTransaction) {
+        await exclusiveTransaction.call(database, async (exclusive) => {
+          await exclusive.runAsync('DELETE FROM workflow_artifacts WHERE job_id = ?', jobId);
+          for (const value of values) await exclusive.runAsync('INSERT INTO workflow_artifacts (id,job_id,kind,uri,mime,metadata_json) VALUES (?,?,?,?,?,?)', value.id, jobId, value.kind, value.uri ?? null, value.mime ?? null, value.metadata ? JSON.stringify(value.metadata) : null);
         });
         return;
       }

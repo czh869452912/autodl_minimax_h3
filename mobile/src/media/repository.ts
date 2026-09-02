@@ -43,6 +43,9 @@ export function createSqliteMediaStore(database: SqlDatabase): MediaStore {
     async upsert(asset) {
       await run('INSERT OR REPLACE INTO media_assets (id, task_id, title, prompt, source_url, local_path, poster_path, mime_type, width, height, duration_ms, status, created_at, updated_at, artifact_id, job_id, workflow_id, kind, export_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', asset.id, asset.taskId, asset.title, asset.prompt, asset.sourceUrl, asset.localPath ?? null, asset.posterPath ?? null, asset.mimeType, asset.width ?? null, asset.height ?? null, asset.durationMs ?? null, asset.status, asset.createdAt, asset.updatedAt, asset.artifactId ?? null, asset.jobId ?? null, asset.workflowId ?? null, asset.kind ?? 'video', asset.exportStatus ?? null);
     },
+    async upsertArtifactProjection(asset) {
+      await run("INSERT INTO media_assets (id, task_id, title, prompt, source_url, local_path, poster_path, mime_type, width, height, duration_ms, status, created_at, updated_at, artifact_id, job_id, workflow_id, kind, export_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET task_id=excluded.task_id,title=excluded.title,prompt=excluded.prompt,source_url=excluded.source_url,local_path=COALESCE(media_assets.local_path, excluded.local_path),poster_path=COALESCE(media_assets.poster_path, excluded.poster_path),mime_type=excluded.mime_type,width=COALESCE(excluded.width, media_assets.width),height=COALESCE(excluded.height, media_assets.height),duration_ms=COALESCE(excluded.duration_ms, media_assets.duration_ms),status=CASE WHEN media_assets.local_path IS NOT NULL OR media_assets.status = 'downloaded' THEN 'downloaded' ELSE excluded.status END,updated_at=MAX(media_assets.updated_at, excluded.updated_at),artifact_id=excluded.artifact_id,job_id=excluded.job_id,workflow_id=excluded.workflow_id,kind=excluded.kind,export_status=COALESCE(media_assets.export_status, excluded.export_status)", asset.id, asset.taskId, asset.title, asset.prompt, asset.sourceUrl, asset.localPath ?? null, asset.posterPath ?? null, asset.mimeType, asset.width ?? null, asset.height ?? null, asset.durationMs ?? null, asset.status, asset.createdAt, asset.updatedAt, asset.artifactId ?? null, asset.jobId ?? null, asset.workflowId ?? null, asset.kind ?? 'video', asset.exportStatus ?? null);
+    },
     async list(options: { query?: string; status?: MediaStatus; kind?: MediaAsset['kind'] } = {}) {
       const query = options.query?.trim().toLowerCase() || undefined;
       const rows = await all<Record<string, unknown>>('SELECT * FROM media_assets WHERE (? IS NULL OR status = ?) AND (? IS NULL OR kind = ?) AND (? IS NULL OR lower(title) LIKE ? OR lower(prompt) LIKE ? OR lower(task_id) LIKE ?) ORDER BY created_at DESC', options.status ?? null, options.status ?? null, options.kind ?? null, options.kind ?? null, query ?? null, query ? `%${query}%` : null, query ? `%${query}%` : null, query ? `%${query}%` : null);
@@ -60,6 +63,10 @@ export function createSqliteMediaStore(database: SqlDatabase): MediaStore {
     },
     async get(id) {
       const rows = await all<Record<string, unknown>>('SELECT * FROM media_assets WHERE id = ? LIMIT 1', id);
+      return rows[0] ? toAsset(rows[0]) : null;
+    },
+    async getPrimaryVideoByTaskId(taskId) {
+      const rows = await all<Record<string, unknown>>("SELECT * FROM media_assets WHERE task_id = ? AND kind = 'video' ORDER BY updated_at DESC, id ASC LIMIT 1", taskId);
       return rows[0] ? toAsset(rows[0]) : null;
     },
     async remove(id) { const rows = database.getAllSync?.<Record<string, unknown>>('SELECT local_path, poster_path FROM media_assets WHERE id = ? LIMIT 1', id) ?? []; database.runSync?.('DELETE FROM media_deliveries WHERE asset_id = ?', id); database.runSync?.('DELETE FROM media_assets WHERE id = ?', id); for (const row of rows) for (const uri of [row.local_path, row.poster_path]) await removePrivateFile(uri); },

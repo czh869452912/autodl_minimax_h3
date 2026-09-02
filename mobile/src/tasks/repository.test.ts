@@ -1,5 +1,6 @@
 import { createTaskRepository } from './repository';
 import type { TaskRecord } from './types';
+import { createRealSqliteTestDb } from '../test/realSqlite';
 
 function fakeDb() {
   let row: Record<string, unknown> | undefined;
@@ -54,6 +55,90 @@ test('persists gallery publication independently from private download', async (
     exportState: 'EXPORTED',
     exportedAt: 3_000,
   });
+});
+
+test('workflow projection upsert preserves media-owned columns on conflict', async () => {
+  const db = createRealSqliteTestDb();
+  try {
+    const store = createTaskRepository(db as never);
+    await store.upsert({
+      id: 'task-1', prompt: 'old', status: 'RUNNING', resolution: '480p竖', duration: 5,
+      videoUrl: 'https://provider/old.mp4', localUri: 'file:///private.mp4', thumbnailUrl: 'file:///poster.jpg',
+      downloadState: 'DOWNLOADED', galleryUri: 'content://gallery/1', exportState: 'EXPORTED', exportedAt: 3_000,
+      createdAt: 1_000, updatedAt: 3_000,
+    });
+    await store.upsertWorkflowProjection({
+      id: 'task-1', prompt: 'new', status: 'SUCCESS', resolution: '768p竖', duration: 5,
+      videoUrl: 'https://provider/result.mp4', workflowId: 'h3', adapterId: 'autodl-comfyui', lastSyncAt: 4_000,
+      createdAt: 1_000, updatedAt: 4_000,
+    });
+
+    await expect(store.get('task-1')).resolves.toMatchObject({
+      prompt: 'new', status: 'SUCCESS', videoUrl: 'https://provider/result.mp4', lastSyncAt: 4_000,
+      localUri: 'file:///private.mp4', thumbnailUrl: 'file:///poster.jpg', downloadState: 'DOWNLOADED',
+      galleryUri: 'content://gallery/1', exportState: 'EXPORTED', exportedAt: 3_000,
+    });
+  } finally {
+    db.close();
+  }
+});
+
+test('media projection update preserves newer workflow-owned fields', async () => {
+  const db = createRealSqliteTestDb();
+  try {
+    const store = createTaskRepository(db as never);
+    await store.upsert({
+      id: 'task-1', prompt: 'new prompt', status: 'SUCCESS', resolution: '768p竖', duration: 5,
+      videoUrl: 'https://provider/new.mp4', workflowId: 'h3', workflowVersion: '2',
+      adapterId: 'autodl-comfyui', executionDuration: 27, lastSyncAt: 8_000,
+      downloadState: 'IDLE', exportState: 'NOT_REQUESTED', createdAt: 1_000, updatedAt: 8_000,
+    });
+
+    await store.upsertMediaProjection({
+      id: 'task-1', prompt: 'stale prompt', status: 'RUNNING', resolution: '480p竖', duration: 5,
+      videoUrl: 'https://provider/stale.mp4', localUri: 'file:///private.mp4',
+      downloadState: 'DOWNLOADED', exportState: 'NOT_REQUESTED',
+      createdAt: 1_000, updatedAt: 9_000,
+    });
+
+    await expect(store.get('task-1')).resolves.toMatchObject({
+      prompt: 'new prompt', status: 'SUCCESS', videoUrl: 'https://provider/new.mp4',
+      workflowVersion: '2', executionDuration: 27, lastSyncAt: 8_000,
+      localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED', updatedAt: 9_000,
+    });
+  } finally {
+    db.close();
+  }
+});
+
+test('media projection updates never recreate a removed task', async () => {
+  const db = createRealSqliteTestDb();
+  try {
+    const store = createTaskRepository(db as never);
+    await store.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 1 });
+    db.runSync('DELETE FROM tasks WHERE id = ?', 'task-1');
+
+    await expect(store.updateMediaProjection('task-1', { localUri: 'file:///orphan.mp4', downloadState: 'DOWNLOADED', updatedAt: 2 })).resolves.toBe(false);
+    await store.upsertMediaProjection({ id: 'task-1', prompt: 'stale', status: 'SUCCESS', resolution: '768p竖', duration: 5, localUri: 'file:///orphan.mp4', downloadState: 'DOWNLOADED', createdAt: 1, updatedAt: 2 });
+
+    await expect(store.get('task-1')).resolves.toBeUndefined();
+  } finally {
+    db.close();
+  }
+});
+
+test('field-level download patches preserve a completed gallery export', async () => {
+  const db = createRealSqliteTestDb();
+  try {
+    const store = createTaskRepository(db as never);
+    await store.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, galleryUri: 'content://gallery/1', exportState: 'EXPORTED', exportedAt: 2, createdAt: 1, updatedAt: 2 });
+
+    await expect(store.updateMediaProjection('task-1', { localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED', downloadError: undefined, updatedAt: 3 })).resolves.toBe(true);
+
+    await expect(store.get('task-1')).resolves.toMatchObject({ localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED', galleryUri: 'content://gallery/1', exportState: 'EXPORTED', exportedAt: 2 });
+  } finally {
+    db.close();
+  }
 });
 
 test('round-trips workflow provenance and keeps it across partial updates', async () => {

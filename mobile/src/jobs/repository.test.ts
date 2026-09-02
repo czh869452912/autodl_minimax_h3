@@ -59,16 +59,47 @@ test('prefers async SQLite operations when available', async () => {
   expect(db.getAllAsync).toHaveBeenCalled();
 });
 
-test('uses async transaction for artifact replacement when available', async () => {
+test('uses the exclusive transaction connection for artifact replacement', async () => {
+  const transaction = { runAsync: jest.fn(async () => undefined) };
   const db = {
     execSync: jest.fn(),
-    runAsync: jest.fn(async () => undefined),
+    runAsync: jest.fn(async () => { throw new Error('shared connection used inside transaction'); }),
     getFirstAsync: jest.fn(async () => null),
     getAllAsync: jest.fn(async () => []),
-    withTransactionAsync: jest.fn(async (callback: () => Promise<void>) => callback()),
+    withTransactionAsync: jest.fn(async () => { throw new Error('non-exclusive transaction used'); }),
+    withExclusiveTransactionAsync: jest.fn(async (callback: (tx: typeof transaction) => Promise<void>) => callback(transaction)),
   };
   const store = createJobRepository(db as never);
   await store.replaceArtifacts('local-1', [{ id: 'a', jobId: 'local-1', kind: 'video', uri: 'https://cdn/video' }]);
-  expect(db.withTransactionAsync).toHaveBeenCalled();
-  expect(db.runAsync).toHaveBeenCalled();
+  expect(db.withExclusiveTransactionAsync).toHaveBeenCalledTimes(1);
+  expect(db.withTransactionAsync).not.toHaveBeenCalled();
+  expect(transaction.runAsync).toHaveBeenNthCalledWith(1, 'DELETE FROM workflow_artifacts WHERE job_id = ?', 'local-1');
+  expect(transaction.runAsync).toHaveBeenNthCalledWith(2, expect.stringContaining('INSERT INTO workflow_artifacts'), 'a', 'local-1', 'video', 'https://cdn/video', null, null);
+});
+
+test('keeps overlapping artifact replacements on their own exclusive connections', async () => {
+  const transactions: Array<{ runAsync: jest.Mock }> = [];
+  const db = {
+    execSync: jest.fn(),
+    getFirstAsync: jest.fn(async () => null),
+    getAllAsync: jest.fn(async () => []),
+    withExclusiveTransactionAsync: jest.fn(async (callback: (tx: { runAsync: jest.Mock }) => Promise<void>) => {
+      const tx = { runAsync: jest.fn(async () => undefined) };
+      transactions.push(tx);
+      await Promise.resolve();
+      await callback(tx);
+    }),
+  };
+  const store = createJobRepository(db as never);
+
+  await Promise.all([
+    store.replaceArtifacts('job-1', [{ id: 'a', jobId: 'job-1', kind: 'video', uri: 'https://cdn/a' }]),
+    store.replaceArtifacts('job-2', [{ id: 'b', jobId: 'job-2', kind: 'video', uri: 'https://cdn/b' }]),
+  ]);
+
+  expect(transactions).toHaveLength(2);
+  expect(transactions[0].runAsync.mock.calls.flat()).toContain('job-1');
+  expect(transactions[0].runAsync.mock.calls.flat()).not.toContain('job-2');
+  expect(transactions[1].runAsync.mock.calls.flat()).toContain('job-2');
+  expect(transactions[1].runAsync.mock.calls.flat()).not.toContain('job-1');
 });

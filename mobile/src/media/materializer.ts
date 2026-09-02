@@ -2,7 +2,7 @@ import type { ArtifactRecord, JobRecord } from '../jobs/types';
 import type { TaskRecord } from '../tasks/types';
 import type { MediaAsset, MediaStore } from './types';
 
-type AssetStore = Pick<MediaStore, 'upsert'>;
+type AssetStore = Pick<MediaStore, 'upsert'> & Partial<Pick<MediaStore, 'upsertArtifactProjection'>>;
 
 export async function materializeJobArtifacts(job: JobRecord, artifacts: ArtifactRecord[], store: AssetStore, task?: Pick<TaskRecord, 'prompt' | 'thumbnailUrl' | 'createdAt' | 'localUri'>): Promise<MediaAsset[]> {
   const assets: MediaAsset[] = [];
@@ -27,7 +27,8 @@ export async function materializeJobArtifacts(job: JobRecord, artifacts: Artifac
       updatedAt: job.updatedAt,
     };
     if (task?.localUri && artifact.kind === 'video') { asset.localPath = task.localUri; asset.status = 'downloaded'; }
-    await store.upsert(asset);
+    const persist = store.upsertArtifactProjection?.bind(store) ?? store.upsert.bind(store);
+    await persist(asset);
     assets.push(asset);
   }
   return assets;

@@ -9,6 +9,11 @@ test.each([
   'https://192.168.1.8/v1',
   'https://169.254.1.1/v1',
   'https://[::1]/v1',
+  'https://[::]/v1',
+  'https://[::ffff:127.0.0.1]/v1',
+  'https://[::ffff:7f00:1]/v1',
+  'https://[fe90::1]/v1',
+  'https://[ff02::1]/v1',
   'https://user:password@example.test/v1',
 ])('rejects unsafe production URL %s', (value) => {
   expect(() => assertSafeHttpsUrl(value)).toThrow();
@@ -18,6 +23,7 @@ test('accepts a public HTTPS endpoint and enforces an optional host allowlist', 
   expect(assertSafeHttpsUrl('https://api.example.test/v1')).toBe('https://api.example.test/v1');
   expect(() => assertSafeHttpsUrl('https://cdn.other.test/file', { allowedHosts: ['example.test'] })).toThrow('域名不在允许列表');
   expect(assertSafeHttpsUrl('https://cdn.example.test/file', { allowedHosts: ['example.test'] })).toBe('https://cdn.example.test/file');
+  expect(assertSafeHttpsUrl('https://[2606:4700:4700::1111]/v1')).toBe('https://[2606:4700:4700::1111]/v1');
 });
 
 test('allows loopback HTTP only when explicitly enabled for debug tooling', () => {

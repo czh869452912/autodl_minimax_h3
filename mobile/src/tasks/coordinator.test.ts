@@ -6,7 +6,8 @@ const task = (id: string, status: TaskRecord['status'] = 'RUNNING'): TaskRecord 
 const job = (id: string, remote: string): JobRecord => ({ id, workflowId: 'demo', workflowVersion: '1.0.0', workflowContentHash: 'hash', adapterId: 'demo', adapterVersion: '1.0.0', inputSnapshot: { prompt: id, resolution: '768p竖', duration: 5 }, remote: { providerJobId: remote }, status: 'RUNNING', createdAt: 1, updatedAt: 1 });
 
 function setup(tasks: TaskRecord[], jobs: JobRecord[]) {
-  const taskStore = { list: jest.fn(async () => tasks), listActive: jest.fn(async () => tasks.filter((item) => ['QUEUED', 'RUNNING', 'UNKNOWN'].includes(item.status))), listSyncCandidates: jest.fn(async () => [] as TaskRecord[]), upsert: jest.fn(async (value: TaskRecord) => { const index = tasks.findIndex((item) => item.id === value.id); if (index >= 0) tasks[index] = value; }), };
+  const persist = async (value: TaskRecord) => { const index = tasks.findIndex((item) => item.id === value.id); if (index >= 0) tasks[index] = value; else tasks.push(value); };
+  const taskStore = { list: jest.fn(async () => tasks), listActive: jest.fn(async () => tasks.filter((item) => ['QUEUED', 'RUNNING', 'UNKNOWN'].includes(item.status))), listSyncCandidates: jest.fn(async () => [] as TaskRecord[]), upsert: jest.fn(persist), upsertWorkflowProjection: jest.fn(persist), };
   const jobStore = { get: jest.fn(async (id: string) => jobs.find((item) => item.id === id)), list: jest.fn(async () => jobs), listArtifacts: jest.fn(async () => [{ id: 'video-1', jobId: 'local-1', kind: 'video' as const, uri: 'https://cdn.test/video' }]), upsert: jest.fn(), replaceArtifacts: jest.fn() };
   const mediaStore = { upsert: jest.fn(async () => undefined), list: jest.fn(async () => []), get: jest.fn(async () => null), remove: jest.fn(async () => undefined) };
   const runtime = { sync: jest.fn(async (value: JobRecord) => ({ ...value, status: 'SUCCEEDED' as const, updatedAt: 2 })) };
@@ -19,11 +20,26 @@ function setup(tasks: TaskRecord[], jobs: JobRecord[]) {
   return { coordinator, taskStore, jobStore, mediaStore, runtime, ensureMedia };
 }
 
+test('persists the complete workflow projection through the media-safe write', async () => {
+  const value = setup([task('local-1')], [job('local-1', 'remote-1')]);
+  value.runtime.sync.mockResolvedValueOnce({
+    ...job('local-1', 'remote-1'), status: 'SUCCEEDED', startedAt: 1_500,
+    executionDuration: 27, updatedAt: 2,
+  } as never);
+
+  await value.coordinator.run();
+
+  expect(value.taskStore.upsertWorkflowProjection).toHaveBeenCalledWith(expect.objectContaining({
+    id: 'local-1', status: 'SUCCESS', videoUrl: 'https://cdn.test/video', workflowId: 'demo',
+    adapterId: 'demo', startedAt: 1_500, executionDuration: 27, lastSyncAt: 2,
+  }));
+});
+
 test('uses remote provider id and projects persisted artifacts', async () => {
   const value = setup([task('local-1')], [job('local-1', 'remote-1')]);
   const result = await value.coordinator.run();
   expect(value.runtime.sync).toHaveBeenCalledWith(expect.objectContaining({ remote: { providerJobId: 'remote-1' } }));
-  expect(value.taskStore.upsert).toHaveBeenCalledWith(expect.objectContaining({ status: 'SUCCESS', videoUrl: 'https://cdn.test/video' }));
+  expect(value.taskStore.upsertWorkflowProjection).toHaveBeenCalledWith(expect.objectContaining({ status: 'SUCCESS', videoUrl: 'https://cdn.test/video' }));
   expect(result.summary).toMatchObject({ updated: 1, failed: 0 });
   expect(value.taskStore.listActive).toHaveBeenCalled();
 });
@@ -33,8 +49,8 @@ test('one provider failure does not abort other jobs', async () => {
   value.runtime.sync.mockRejectedValueOnce(new Error('DNS unavailable')).mockResolvedValueOnce({ ...job('local-2', 'remote-2'), status: 'RUNNING', updatedAt: 2 } as never);
   const result = await value.coordinator.run();
   expect(result.summary).toMatchObject({ updated: 1, failed: 1 });
-  expect(value.taskStore.upsert).toHaveBeenCalledWith(expect.objectContaining({ id: 'local-1', syncError: 'DNS unavailable' }));
-  expect(value.taskStore.upsert).toHaveBeenCalledWith(expect.objectContaining({ id: 'local-2', status: 'RUNNING' }));
+  expect(value.taskStore.upsertWorkflowProjection).toHaveBeenCalledWith(expect.objectContaining({ id: 'local-1', syncError: 'DNS unavailable' }));
+  expect(value.taskStore.upsertWorkflowProjection).toHaveBeenCalledWith(expect.objectContaining({ id: 'local-2', status: 'RUNNING' }));
 });
 
 test('keeps active work remaining so background monitoring is not stopped early', async () => {
@@ -71,7 +87,7 @@ test('repairs a completed workflow task that is missing timing or result project
   value.taskStore.listSyncCandidates.mockResolvedValueOnce([completed]);
   await value.coordinator.run();
   expect(value.runtime.sync).toHaveBeenCalled();
-  expect(value.taskStore.upsert).toHaveBeenCalledWith(expect.objectContaining({ lastSyncAt: 2, syncError: undefined }));
+  expect(value.taskStore.upsertWorkflowProjection).toHaveBeenCalledWith(expect.objectContaining({ lastSyncAt: 2, syncError: undefined }));
 });
 
 test('continues media processing for partially successful workflow tasks', async () => {
@@ -80,7 +96,7 @@ test('continues media processing for partially successful workflow tasks', async
 
   await value.coordinator.run();
 
-  expect(value.ensureMedia).toHaveBeenCalledWith(partial, expect.anything(), expect.any(Function));
+  expect(value.ensureMedia).toHaveBeenCalledWith(partial, expect.anything(), expect.any(Function), undefined, undefined);
 });
 
 test('does not reprocess a task that only retains a system gallery delivery', async () => {

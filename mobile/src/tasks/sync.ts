@@ -21,7 +21,7 @@ const coordinator = createTaskSyncCoordinator({
   mediaStore,
   createRuntime: (token) => createWorkflowRuntime({ adapters: createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? token : undefined }), jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `sync-${Date.now()}` }),
   getArtifactPolicy: (adapterId) => adapterId ? providerAdapters.get(adapterId)?.manifest().artifactDownloadPolicy : undefined,
-  ensureMedia: (task, settings, onUpdate, artifactPolicy) => ensureTaskMedia(task, { policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: settings.keepPrivateCopy }, onUpdate, ...artifactPolicy }),
+  ensureMedia: (task, settings, onUpdate, artifactPolicy, asset) => ensureTaskMedia(task, { policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: settings.keepPrivateCopy }, onUpdate, asset, ...artifactPolicy }),
 });
 
 export async function syncTaskRun(reason: 'foreground' | 'background' | 'service' = 'foreground', taskIds?: string[]) {

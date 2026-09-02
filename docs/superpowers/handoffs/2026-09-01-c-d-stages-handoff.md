@@ -10,15 +10,15 @@
 3. `docs/superpowers/plans/2026-09-01-d-core.md`：C-Core 验收通过后的 D-Core 计划。
 4. `docs/superpowers/specs/2026-09-01-local-first-workflow-architecture-design.md`：不可突破的架构约束。
 
-下一项具体动作：从 `dev` 创建隔离 worktree，先为 C-Core Task 1（版本化 durable schema migration）写真实 SQLite RED 测试；测试失败后再实现 migration runner。
+下一项具体动作：先在 Android 设备上完成 B 热修复的带凭据验收（见第 4 节「B 发布热修复」待执行项）；验收通过后，再从 `dev` 创建隔离 worktree，为 C-Core Task 1（版本化 durable schema migration）写真实 SQLite RED 测试。
 
 ## 2. 当前发布与分支状态
 
-- `main`、`dev`、`origin/main`、`origin/dev` 均指向包含本文的同一交接提交。
+- v1.4.5 发布时 `main`、`dev`、`origin/main`、`origin/dev` 均指向同一交接提交；此后 B 发布热修复（见第 4 节）提交在本地 `dev`，尚未合并回 `main` 或推送。
 - `v1.4.5` 标签已推送，GitHub Release 已创建：<https://github.com/czh869452912/autodl_minimax_h3/releases/tag/v1.4.5>。
 - Release 资产：`AutoDL-H3-v1.4.5-apk-universal.apk`。
 - 正式发布 Actions 运行 `33523226885` 成功：类型检查、单元测试、签名 universal APK、四 ABI、`apksigner` 和 Release 创建均通过。
-- 主工作区当前在 `main`，工作区应保持干净；用户本地 `local.properties` 必须继续保持未提交、未修改。
+- 主工作区当前在用户指定的开发分支 `dev`；用户本地 `local.properties` 与 `mobile/.expo/` 必须继续保持未提交、未修改。
 - 已保留的 `.worktrees/codex-b1-closure` 是既有工作目录，不要擅自删除。
 
 ## 3. 阶段 A：架构与边界闭环
@@ -68,6 +68,33 @@
 - 当前 Git 验证是设备端 Ed25519 `commit-attestation`，不是原生 GPG/SSH `git verify-commit`；原生 verifier 作为未来可替换实现。
 - AutoDL 仍是 POST 提交 + GET 轮询；不能假设其 wrapper 具备 ComfyUI WebSocket、上传、队列或取消语义。
 - 当前 `workflow_jobs` 仍是 snapshot，不是完整 durable Operation/Event executor；这正是 C-Core 的起点。
+
+### B 发布热修复：媒体并发与导出（2026-09-02）
+
+针对 v1.4.5 发布后发现的三个回归（并发事务干扰、同步快照覆盖本地媒体状态、导出误报 `域名不在允许列表`），按 `docs/superpowers/plans/2026-09-02-b-release-media-concurrency-hotfix.md` 执行完毕，设计与边界见同名 spec。修复内容：
+
+- **独占事务**：`replaceArtifacts` 改用 Expo SQLite `withExclusiveTransactionAsync`，所有语句经由事务对象执行，消除并发 `cannot rollback - no transaction is active`；Jest/非原生环境保留同步事务 fallback（`bdb1c1bf`）。
+- **Workflow 投影所有权**：新增 `upsertWorkflowProjection`，同步仍持久化完整 Workflow 字段（状态、artifact URL、计时、provenance、sync 元数据），但冲突更新只写 Workflow 拥有的列，`local_uri`/下载/导出等媒体列不被旧快照覆盖（`af3cc8f4`）。
+- **物化非破坏性合并**：`upsertArtifactProjection` 用 `COALESCE`/`CASE` 合并 artifact 元数据，已下载资产的 `local_path`、poster、`downloaded` 状态和导出状态不会被远程刷新降级（`259f2b47`）。
+- **私有文件解析与修复**：新增 `resolveLocalVideoSource`，按 asset `localPath` → task `localUri` → 确定性私有路径 `documentDirectory/media/<taskId>.mp4` 顺序验证文件存在性，远程 URL 永不作为本地导出源（`c40c5ef3`）。
+- **详情/导出收敛**：详情页加载时解析并修复本地媒体投影，`已下载` 标签基于验证后的有效本地源；有私有文件时直接导出到相册、不再走远程校验；失败时展示 `保存失败` 与真实错误；手动重试下载/导出通过 `getBuiltinArtifactDownloadPolicy` 获得与自动投递一致的 fail-closed 策略（`e6cec99d`）。
+
+随后按修正设计 `docs/superpowers/specs/2026-09-02-b-release-media-hotfix-correction-design.md` 和修正计划 `docs/superpowers/plans/2026-09-02-b-release-media-hotfix-correction.md` 对崩溃 agent 留下的半成品进行了逐项复核和修复：
+
+- task 媒体写入收敛为字段级、只更新既有记录的 `updateMediaProjection`；删除中的任务不会被迟到的下载回调重新插入，下载与导出字段也不会因旧的完整快照互相覆盖。私有源解析会逐个验证 asset、task 和确定性路径候选，并拒绝目录与零字节文件；任务列表、详情和结果列表都会修复失效的“已下载”投影。
+- 下载重试会先清除未经验证的旧 `localUri`；Android 下载改用 Expo 原生 fetch 暴露真实响应头和 body，逐跳重定向继续执行安全校验，响应 MIME、大小、超时、`Content-Length` 和最终临时文件大小都在正式发布前验证。
+- AutoDL adapter 明确允许 provider 返回的动态公开 HTTPS 产物节点，不再把近期 COS 节点写死进 allowlist；每次重定向都重新校验，HTTP、带凭据 URL、localhost、文本形式的私有/保留 IPv4 与 IPv6、危险重定向以及未明确声明为 `video/mp4` 的响应仍 fail closed。该动态能力只由内置 AutoDL adapter opt-in，其他 provider 仍要求固定 allowlist。
+- 同一任务的自动投递、手动下载和手动导出共享串行锁，同一任务的重复下载还会合并为一个 in-flight operation，避免固定 `.part` 路径竞争和状态覆盖。
+- Android 临时文件发布先尝试 rename，失败后使用 copy，并在发布目标处复核准确字节数；所有失败路径清理 `.part`，不会把不完整文件标为 `DOWNLOADED`。
+
+修正后验收证据（2026-09-02，主工作区）：
+
+- `cd mobile; npm run typecheck`：通过。
+- `cd mobile; npm test -- --runInBand`：84 suites 通过，364 tests 通过，1 skipped，0 failed；包括真实 node:sqlite 投影所有权、删除竞态、同任务媒体串行化、独占事务重叠、失效私有源修复、动态节点下载、IPv4/IPv6 地址边界、重定向、MIME、大小、超时和写盘完整性回归。
+- `git diff --check` 通过；`local.properties` 与 `mobile/.expo/` 保持用户自有未跟踪状态、无修改。
+- Android：Temurin JDK 17 + `x86_64` 执行 `:app:assembleDebug -PreactNativeArchitectures=x86_64`，`BUILD SUCCESSFUL`；`emulator-5554` 覆盖安装成功。实际截图和 UI 树确认任务队列可见、可交互，不是仅凭 pid 推断启动成功；WindowManager 对 `MainActivity` 报告 `isOnScreen=true`、`isVisible=true`；ReactNativeJS/AndroidRuntime error 过滤无本应用崩溃。（本机 Android Studio JBR 已升级为 25.0.2，当前 Gradle/Kotlin 不能解析该版本，因此验收固定使用受支持的 JDK 17。）
+- 在保留真实任务数据的模拟器上，原先显示 `域名不在允许列表` 的 AutoDL COS 任务点击“重试”后变为 `已下载到应用`，并出现“保存到相册”；服务器 `Content-Length=1395282`，应用私有文件实际大小同为 `1395282` 字节，设备端 MD5 `7a3efcd47b9e824bccb14ae1657ce2fc` 与 COS ETag 一致。最终 APK 还先识别出另一个任务已丢失的私有文件，将虚假的“已下载”纠正为可下载状态；实际点击下载后文件为 `1378774` 字节，设备端 MD5 `a119b57cfc329064a338f55275fe47ba` 与 COS ETag 一致。用户提供的同类动态节点 URL 返回 `video/mp4` 和 `Content-Length=6661972`，策略无需增加固定节点域名即可接受。
+- **待用户执行的设备验收**：双任务同一轮询窗口并发完成且无 NativeDatabase 事务错误、两个私有下载完成、详情页显示 `已下载`、手动导出到 `Movies/AutoDL-H3`、自动导出投递、存在私有文件时两类导出均不报告 `域名不在允许列表`。该项完成前 **C-Core/D-Core 保持阻塞**。
 
 ## 5. C 阶段：C-Core Durable Local Executor
 
@@ -124,11 +151,12 @@ D-Core 之后再规划 Batch/Variant、项目包导出/导入、备份/同步/�
 
 ## 8. 下一次接手的执行清单
 
-1. `git status --short --branch`，确认 `main`/`dev` 仍指向同一提交且都包含本文，不要改动 `local.properties`。
-2. 从 `dev` 创建 `codex/c-core-schema` 隔离 worktree。
-3. 阅读 `docs/superpowers/plans/2026-09-01-c-core.md` Task 1 和现有 `mobile/src/storage/database*` 实现。
-4. 先写真实 SQLite migration RED 测试：repeatable migration、legacy table 保留、注入 DDL 失败后 rollback + recovery state。
-5. 运行 focused Jest 看到预期失败，再实现 `runner.ts`/`v6DurableExecutor.ts`，随后运行 typecheck、全量 Jest 和 Android 门禁。
-6. 完成并记录 C-Core Task 1 后，才继续 Task 2；C-Core 全部验收通过后再切换到 D-Core Task 1。
+1. `git status --short --branch`，确认 `main`/`dev` 状态，不要改动 `local.properties`。
+2. 确认 B 热修复（第 4 节）的设备验收已由用户在带凭据设备上完成并补记证据；未完成前不得开始 C-Core。
+3. 验收通过后，从 `dev` 创建 `codex/c-core-schema` 隔离 worktree。
+4. 阅读 `docs/superpowers/plans/2026-09-01-c-core.md` Task 1 和现有 `mobile/src/storage/database*` 实现。
+5. 先写真实 SQLite migration RED 测试：repeatable migration、legacy table 保留、注入 DDL 失败后 rollback + recovery state。
+6. 运行 focused Jest 看到预期失败，再实现 `runner.ts`/`v6DurableExecutor.ts`，随后运行 typecheck、全量 Jest 和 Android 门禁。
+7. 完成并记录 C-Core Task 1 后，才继续 Task 2；C-Core 全部验收通过后再切换到 D-Core Task 1。
 
-交接结论：A/B 已闭环并以 v1.4.5 发布；当前唯一合理的下一步是 C-Core schema/migration，不需要回退版本或重新打开已通过的 B.1 问题。
+交接结论：A/B 已闭环并以 v1.4.5 发布；B 发布热修复（媒体并发与导出）已完成实现与自动化验收并提交在 `dev`，剩余带凭据双任务并发与手动/自动相册导出的设备验收待用户执行，验收通过并补记证据前 C-Core/D-Core 保持阻塞。
