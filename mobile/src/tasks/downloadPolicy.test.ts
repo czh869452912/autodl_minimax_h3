@@ -53,6 +53,36 @@ test('follows only allowlisted HTTPS redirects and caps hops', async () => {
   await expect(resolveArtifactRedirects('https://cdn.example.test/start', { allowedHosts: ['example.test'], fetcher: unsafe })).rejects.toThrow('HTTPS');
 });
 
+test('cancels discarded redirect and rejected response bodies', async () => {
+  const redirectCancel = jest.fn(async () => undefined);
+  const finalResponse = new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'video/mp4' } });
+  const redirected = jest.fn()
+    .mockResolvedValueOnce({ status: 302, ok: false, headers: new Headers({ location: 'https://cdn.example.test/video.mp4' }), body: { cancel: redirectCancel } })
+    .mockResolvedValueOnce(finalResponse);
+  await downloadArtifact('https://cdn.example.test/start', {
+    allowedHosts: ['example.test'], fetcher: redirected, writer: jest.fn(async () => undefined),
+  });
+  expect(redirectCancel).toHaveBeenCalledTimes(1);
+
+  const rejectedCancel = jest.fn(async () => undefined);
+  const rejected = jest.fn().mockResolvedValue({
+    status: 200, ok: true, headers: new Headers({ 'content-type': 'text/html' }), body: { cancel: rejectedCancel },
+  });
+  await expect(downloadArtifact('https://cdn.example.test/not-video', {
+    allowedHosts: ['example.test'], fetcher: rejected, writer: jest.fn(async () => undefined),
+  })).rejects.toThrow('媒体类型');
+  expect(rejectedCancel).toHaveBeenCalledTimes(1);
+
+  const probeCancel = jest.fn(async () => undefined);
+  const rejectedProbe = jest.fn().mockResolvedValue({
+    status: 503, ok: false, headers: new Headers(), body: { cancel: probeCancel },
+  });
+  await expect(resolveArtifactRedirects('https://cdn.example.test/unavailable', {
+    allowedHosts: ['example.test'], fetcher: rejectedProbe,
+  })).rejects.toThrow('HTTP 503');
+  expect(probeCancel).toHaveBeenCalledTimes(1);
+});
+
 test('dynamic provider redirects may change public nodes but never enter a private network', async () => {
   const first = 'https://node-a.public.example/start';
   const next = 'https://node-b.cdn.example/video.mp4';
@@ -92,13 +122,13 @@ test('rejects a response stream that ends before its declared content length', a
   })).rejects.toThrow('下载文件不完整');
 });
 
-test('uses a video extension only as a missing-MIME fallback for trusted provider nodes', async () => {
+test('requires an explicit supported MIME even for trusted provider nodes', async () => {
   const writer = jest.fn(async () => undefined);
   const missingMime = jest.fn().mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
   await expect(downloadArtifact('https://dynamic.public.example/result.mp4', {
     allowedHosts: ['autodl.art'], allowProviderSuppliedPublicHosts: true,
     acceptedMimes: ['video/mp4'], fetcher: missingMime, writer,
-  })).resolves.toMatchObject({ mime: 'video/mp4', size: 3 });
+  })).rejects.toThrow('媒体类型');
 
   const unknownFile = jest.fn().mockResolvedValue(new Response(new Uint8Array([1]), { status: 200 }));
   await expect(downloadArtifact('https://dynamic.public.example/result.bin', {

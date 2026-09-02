@@ -23,7 +23,7 @@ export function validateDownloadResult(
   options: { maxBytes?: number; acceptedMimes?: string[] } = {},
 ): void {
   const maxBytes = options.maxBytes ?? DEFAULT_VIDEO_DOWNLOAD_BYTES;
-  const accepted = options.acceptedMimes ?? ['video/mp4', 'video/webm', 'video/quicktime'];
+  const accepted = options.acceptedMimes ?? ['video/mp4'];
   if (result.status < 200 || result.status >= 300) throw new Error(`下载失败（HTTP ${result.status}）`);
   if (!Number.isFinite(result.size) || result.size < 0 || result.size > maxBytes) throw new Error('下载文件大小超过限制');
   const mime = header(result.headers, 'content-type')?.split(';', 1)[0].trim().toLowerCase();
@@ -51,6 +51,10 @@ function responseHeader(response: Response, name: string): string | undefined {
   return response.headers.get(name) ?? undefined;
 }
 
+async function discardResponseBody(response: Response): Promise<void> {
+  await response.body?.cancel().catch(() => undefined);
+}
+
 function declaredBodyLength(response: Response): number | undefined {
   const encoding = responseHeader(response, 'content-encoding')?.trim().toLowerCase();
   if (encoding && encoding !== 'identity') return undefined;
@@ -58,14 +62,6 @@ function declaredBodyLength(response: Response): number | undefined {
   if (!raw || !/^\d+$/.test(raw.trim())) return undefined;
   const length = Number(raw);
   return Number.isSafeInteger(length) ? length : undefined;
-}
-
-function inferVideoMimeFromUrl(url: string): string | undefined {
-  const pathname = new URL(url).pathname.toLowerCase();
-  if (pathname.endsWith('.mp4')) return 'video/mp4';
-  if (pathname.endsWith('.webm')) return 'video/webm';
-  if (pathname.endsWith('.mov') || pathname.endsWith('.qt')) return 'video/quicktime';
-  return undefined;
 }
 
 async function readWithTimeout<T>(read: Promise<T>, timeoutMs: number, onTimeout: () => void): Promise<T> {
@@ -80,7 +76,7 @@ async function readWithTimeout<T>(read: Promise<T>, timeoutMs: number, onTimeout
 
 export async function downloadArtifact(initialUrl: string, options: ArtifactDownloadOptions): Promise<ArtifactDownloadResult> {
   const maxBytes = options.maxBytes ?? DEFAULT_VIDEO_DOWNLOAD_BYTES;
-  const acceptedMimes = options.acceptedMimes ?? ['video/mp4', 'video/webm', 'video/quicktime'];
+  const acceptedMimes = options.acceptedMimes ?? ['video/mp4'];
   const timeoutMs = options.timeoutMs ?? 30_000;
   const fetcher = options.fetcher ?? (expoFetch as typeof fetch);
   const maxHops = options.maxHops ?? 3;
@@ -92,18 +88,19 @@ export async function downloadArtifact(initialUrl: string, options: ArtifactDown
     for (let hop = 0; hop <= maxHops; hop += 1) {
       response = await fetcher(current, { method: 'GET', redirect: 'manual', signal: controller.signal });
       if (response.status >= 300 && response.status < 400) {
-        if (hop === maxHops) throw new Error('下载重定向次数超过限制');
         const location = responseHeader(response, 'location');
+        await discardResponseBody(response);
+        if (hop === maxHops) throw new Error('下载重定向次数超过限制');
         if (!location) throw new Error('下载重定向缺少目标地址');
         current = validateRedirectUrl(new URL(location, current).toString(), options.allowedHosts, options.allowProviderSuppliedPublicHosts);
         continue;
       }
-      if (!response.ok) throw new Error(`下载失败（HTTP ${response.status}）`);
+      if (!response.ok) { await discardResponseBody(response); throw new Error(`下载失败（HTTP ${response.status}）`); }
       const responseMime = responseHeader(response, 'content-type')?.split(';', 1)[0].trim().toLowerCase();
-      const mime = responseMime || (options.allowProviderSuppliedPublicHosts ? inferVideoMimeFromUrl(current) : undefined);
-      if (!mime || !acceptedMimes.includes(mime)) throw new Error(`下载媒体类型不受支持：${mime ?? 'unknown'}`);
+      const mime = responseMime;
+      if (!mime || !acceptedMimes.includes(mime)) { await discardResponseBody(response); throw new Error(`下载媒体类型不受支持：${mime ?? 'unknown'}`); }
       const expectedLength = declaredBodyLength(response);
-      if (expectedLength != null && expectedLength > maxBytes) throw new Error('下载文件大小超过限制');
+      if (expectedLength != null && expectedLength > maxBytes) { await discardResponseBody(response); throw new Error('下载文件大小超过限制'); }
       const reader = response.body?.getReader();
       let size = 0;
       if (reader) {
@@ -142,12 +139,13 @@ export async function resolveArtifactRedirects(
   for (let hop = 0; hop <= maxHops; hop += 1) {
     const response = await fetcher(current, { method: 'GET', redirect: 'manual' });
     if (response.status < 300 || response.status >= 400) {
+      await discardResponseBody(response);
       if (!response.ok) throw new Error(`下载失败（HTTP ${response.status}）`);
-      if (response.body) await response.body.cancel().catch(() => undefined);
       return current;
     }
-    if (hop === maxHops) throw new Error('下载重定向次数超过限制');
     const location = response.headers.get('location');
+    await discardResponseBody(response);
+    if (hop === maxHops) throw new Error('下载重定向次数超过限制');
     if (!location) throw new Error('下载重定向缺少目标地址');
     current = validateRedirectUrl(new URL(location, current).toString(), options.allowedHosts, options.allowProviderSuppliedPublicHosts);
   }
