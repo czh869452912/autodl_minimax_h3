@@ -4,8 +4,8 @@ import { FlatList, Text } from 'react-native';
 import type { MediaAsset } from '../media/types';
 
 const mockFocusCallbacks: Array<() => void> = [];
-const mockTaskUpsert = jest.fn(async () => undefined);
-const mockTaskMediaUpsert = jest.fn(async () => undefined);
+const mockTaskUpsert = jest.fn(async (_value: unknown) => undefined);
+const mockTaskMediaUpsert = jest.fn(async (_value: unknown) => undefined);
 const mockPrimaryVideo = jest.fn(async (_taskId: string): Promise<MediaAsset | null> => null);
 const mockResolveLocal = jest.fn(async (..._args: unknown[]) => undefined as string | undefined);
 jest.mock('expo-router', () => ({
@@ -108,6 +108,23 @@ test('passes the adapter artifact policy to an explicit download retry', async (
     allowedHosts: ['autodl.art'], acceptedMimes: ['video/mp4'],
     maxBytes: 2 * 1024 * 1024 * 1024, timeoutMs: 30_000,
   }));
+  act(() => renderer!.unmount());
+});
+
+test('clears an unverified private path before an explicit download retry', async () => {
+  const failedDownload = { id: 'task-1', prompt: 'x', status: 'SUCCESS' as const, resolution: '768p竖', duration: 5, adapterId: 'autodl-comfyui', videoUrl: 'https://autodl.art/result.mp4', localUri: 'file:///unreadable.mp4', downloadState: 'DOWNLOAD_FAILED' as const, downloadError: '文件不可读', createdAt: 1_000, updatedAt: 2_000 };
+  jest.mocked(taskStore.list).mockResolvedValueOnce([failedDownload]);
+  jest.mocked(syncTasks).mockResolvedValueOnce([failedDownload]);
+  jest.mocked(downloadTask).mockResolvedValueOnce({ ...failedDownload, localUri: 'file:///restored.mp4', downloadState: 'DOWNLOADED' });
+  mockResolveLocal.mockResolvedValueOnce(undefined);
+  let renderer: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<TasksScreen />); });
+
+  await act(async () => renderer!.root.findByProps({ accessibilityLabel: '重试下载' }).props.onPress());
+
+  expect(downloadTask).toHaveBeenCalledWith(expect.objectContaining({ id: failedDownload.id, localUri: undefined }), expect.anything());
+  expect(mockTaskMediaUpsert).toHaveBeenCalledWith(expect.objectContaining({ id: failedDownload.id, localUri: 'file:///restored.mp4' }));
+  expect(mockTaskUpsert).not.toHaveBeenCalled();
   act(() => renderer!.unmount());
 });
 
