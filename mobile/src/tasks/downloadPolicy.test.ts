@@ -1,3 +1,6 @@
+jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
+
+import { fetch as expoFetch } from 'expo/fetch';
 import { downloadArtifact, resolveArtifactRedirects, validateArtifactUrl, validateDownloadResult, validateRedirectUrl } from './downloadPolicy';
 
 test.each([
@@ -98,6 +101,21 @@ test('uses a video extension only as a missing-MIME fallback for trusted provide
     allowedHosts: ['autodl.art'], allowProviderSuppliedPublicHosts: true,
     acceptedMimes: ['video/mp4'], fetcher: explicitHtml, writer,
   })).rejects.toThrow('text/html');
+});
+
+test('uses Expo native fetch by default so Android exposes response headers and body chunks', async () => {
+  const response = new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-type': 'video/mp4' } });
+  jest.mocked(expoFetch).mockResolvedValueOnce(response as never);
+  const globalFetcher = jest.spyOn(global, 'fetch').mockResolvedValueOnce(response);
+  try {
+    await expect(downloadArtifact('https://cdn.example.test/video.mp4', {
+      allowedHosts: ['example.test'], writer: jest.fn(async () => undefined),
+    })).resolves.toMatchObject({ mime: 'video/mp4', size: 3 });
+    expect(expoFetch).toHaveBeenCalled();
+    expect(globalFetcher).not.toHaveBeenCalled();
+  } finally {
+    globalFetcher.mockRestore();
+  }
 });
 
 test('aborts a streamed artifact when the byte limit is exceeded', async () => {

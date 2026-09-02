@@ -1,4 +1,5 @@
 import { assertSafeHttpsUrl } from '../security/urlPolicy';
+import { fetch as expoFetch } from 'expo/fetch';
 
 export const DEFAULT_VIDEO_DOWNLOAD_BYTES = 2 * 1024 * 1024 * 1024;
 
@@ -72,7 +73,7 @@ export async function downloadArtifact(initialUrl: string, options: ArtifactDown
   const maxBytes = options.maxBytes ?? DEFAULT_VIDEO_DOWNLOAD_BYTES;
   const acceptedMimes = options.acceptedMimes ?? ['video/mp4', 'video/webm', 'video/quicktime'];
   const timeoutMs = options.timeoutMs ?? 30_000;
-  const fetcher = options.fetcher ?? fetch;
+  const fetcher = options.fetcher ?? (expoFetch as typeof fetch);
   const maxHops = options.maxHops ?? 3;
   const controller = new AbortController();
   const deadline = setTimeout(() => controller.abort(), timeoutMs);

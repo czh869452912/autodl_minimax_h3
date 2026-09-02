@@ -8,9 +8,11 @@ jest.mock('expo-file-system/legacy', () => ({
   moveAsync: jest.fn(),
   copyAsync: jest.fn(),
 }));
+jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 jest.mock('../native/media', () => ({ extractPoster: jest.fn(async () => 'file:///poster.jpg') }));
 
 import * as FileSystem from 'expo-file-system/legacy';
+import { fetch as expoFetch } from 'expo/fetch';
 import { downloadTask, nextDownloadState } from './download';
 import type { TaskRecord } from './types';
 
@@ -34,7 +36,7 @@ describe('download state machine', () => {
 describe('secure artifact download', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch = jest.fn(async () => new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'video/mp4' } }));
+    jest.mocked(expoFetch).mockResolvedValue(new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'video/mp4' } }) as never);
     fs.makeDirectoryAsync.mockResolvedValue(undefined);
     fs.deleteAsync.mockResolvedValue(undefined);
     fs.moveAsync.mockResolvedValue(undefined);
@@ -71,14 +73,14 @@ describe('secure artifact download', () => {
   });
 
   it('deletes the partial file instead of publishing a non-video response', async () => {
-    global.fetch = jest.fn(async () => new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'text/html' } }));
+    jest.mocked(expoFetch).mockResolvedValueOnce(new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'text/html' } }) as never);
     await expect(downloadTask(task, { allowedHosts: ['example.test'] })).rejects.toThrow('媒体类型');
     expect(fs.moveAsync).not.toHaveBeenCalled();
     expect(fs.deleteAsync).toHaveBeenCalledWith('file:///documents/media/task-1.mp4.part', { idempotent: true });
   });
 
   it('cancels a resumable download when streamed bytes exceed the cap', async () => {
-    global.fetch = jest.fn(async () => new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-type': 'video/mp4' } }));
+    jest.mocked(expoFetch).mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-type': 'video/mp4' } }) as never);
     await expect(downloadTask(task, { maxBytes: 2, allowedHosts: ['example.test'] })).rejects.toThrow('大小');
     expect(fs.moveAsync).not.toHaveBeenCalled();
   });
