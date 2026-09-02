@@ -2,13 +2,13 @@ import { assertSafeHttpsUrl } from '../security/urlPolicy';
 
 export const DEFAULT_VIDEO_DOWNLOAD_BYTES = 2 * 1024 * 1024 * 1024;
 
-export function assertArtifactDownloadPolicy(allowedHosts?: string[]): void {
-  if (!allowedHosts?.some((host) => host.trim().length > 0)) throw new Error('域名不在允许列表');
+export function assertArtifactDownloadPolicy(allowedHosts?: string[], allowProviderSuppliedPublicHosts = false): void {
+  if (!allowProviderSuppliedPublicHosts && !allowedHosts?.some((host) => host.trim().length > 0)) throw new Error('域名不在允许列表');
 }
 
-export function validateArtifactUrl(url: string, allowedHosts?: string[]): string {
-  assertArtifactDownloadPolicy(allowedHosts);
-  return assertSafeHttpsUrl(url, { allowedHosts });
+export function validateArtifactUrl(url: string, allowedHosts?: string[], allowProviderSuppliedPublicHosts = false): string {
+  assertArtifactDownloadPolicy(allowedHosts, allowProviderSuppliedPublicHosts);
+  return assertSafeHttpsUrl(url, allowProviderSuppliedPublicHosts ? {} : { allowedHosts });
 }
 
 function header(headers: Record<string, string> | undefined, name: string): string | undefined {
@@ -29,12 +29,13 @@ export function validateDownloadResult(
   if (!mime || !accepted.includes(mime)) throw new Error(`下载媒体类型不受支持：${mime ?? 'unknown'}`);
 }
 
-export function validateRedirectUrl(url: string, allowedHosts?: string[]): string {
-  return validateArtifactUrl(url, allowedHosts);
+export function validateRedirectUrl(url: string, allowedHosts?: string[], allowProviderSuppliedPublicHosts = false): string {
+  return validateArtifactUrl(url, allowedHosts, allowProviderSuppliedPublicHosts);
 }
 
 export type ArtifactDownloadOptions = {
   allowedHosts: string[];
+  allowProviderSuppliedPublicHosts?: boolean;
   maxBytes?: number;
   acceptedMimes?: string[];
   timeoutMs?: number;
@@ -67,7 +68,7 @@ export async function downloadArtifact(initialUrl: string, options: ArtifactDown
   const maxHops = options.maxHops ?? 3;
   const controller = new AbortController();
   const deadline = setTimeout(() => controller.abort(), timeoutMs);
-  let current = validateRedirectUrl(initialUrl, options.allowedHosts);
+  let current = validateRedirectUrl(initialUrl, options.allowedHosts, options.allowProviderSuppliedPublicHosts);
   let response: Response | undefined;
   try {
     for (let hop = 0; hop <= maxHops; hop += 1) {
@@ -76,7 +77,7 @@ export async function downloadArtifact(initialUrl: string, options: ArtifactDown
         if (hop === maxHops) throw new Error('下载重定向次数超过限制');
         const location = responseHeader(response, 'location');
         if (!location) throw new Error('下载重定向缺少目标地址');
-        current = validateRedirectUrl(new URL(location, current).toString(), options.allowedHosts);
+        current = validateRedirectUrl(new URL(location, current).toString(), options.allowedHosts, options.allowProviderSuppliedPublicHosts);
         continue;
       }
       if (!response.ok) throw new Error(`下载失败（HTTP ${response.status}）`);
@@ -111,9 +112,9 @@ export async function downloadArtifact(initialUrl: string, options: ArtifactDown
 
 export async function resolveArtifactRedirects(
   initialUrl: string,
-  options: { allowedHosts?: string[]; fetcher?: typeof fetch; maxHops?: number } = {},
+  options: { allowedHosts?: string[]; allowProviderSuppliedPublicHosts?: boolean; fetcher?: typeof fetch; maxHops?: number } = {},
 ): Promise<string> {
-  let current = validateRedirectUrl(initialUrl, options.allowedHosts);
+  let current = validateRedirectUrl(initialUrl, options.allowedHosts, options.allowProviderSuppliedPublicHosts);
   const fetcher = options.fetcher ?? fetch;
   const maxHops = options.maxHops ?? 3;
   for (let hop = 0; hop <= maxHops; hop += 1) {
@@ -126,7 +127,7 @@ export async function resolveArtifactRedirects(
     if (hop === maxHops) throw new Error('下载重定向次数超过限制');
     const location = response.headers.get('location');
     if (!location) throw new Error('下载重定向缺少目标地址');
-    current = validateRedirectUrl(new URL(location, current).toString(), options.allowedHosts);
+    current = validateRedirectUrl(new URL(location, current).toString(), options.allowedHosts, options.allowProviderSuppliedPublicHosts);
   }
   throw new Error('下载重定向次数超过限制');
 }

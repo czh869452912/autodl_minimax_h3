@@ -26,7 +26,7 @@ function bytesToBase64(bytes: Uint8Array): string {
   return output;
 }
 
-export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; maxBytes?: number; acceptedMimes?: string[]; timeoutMs?: number; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
+export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; allowProviderSuppliedPublicHosts?: boolean; maxBytes?: number; acceptedMimes?: string[]; timeoutMs?: number; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
   if (!task.videoUrl) throw new Error('任务没有可下载的视频地址');
   if (task.localUri) {
     const info = await FileSystem.getInfoAsync(task.localUri);
@@ -42,6 +42,7 @@ export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patc
     await options.onUpdate?.({ downloadState: 'DOWNLOADING', downloadProgress: 0, updatedAt: Date.now() });
     await downloadArtifact(task.videoUrl, {
       allowedHosts: options.allowedHosts ?? [],
+      allowProviderSuppliedPublicHosts: options.allowProviderSuppliedPublicHosts,
       maxBytes: options.maxBytes ?? DEFAULT_VIDEO_DOWNLOAD_BYTES,
       acceptedMimes: options.acceptedMimes,
       timeoutMs: options.timeoutMs,

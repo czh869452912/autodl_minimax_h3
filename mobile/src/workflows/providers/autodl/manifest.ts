@@ -8,5 +8,5 @@ export const autodlComfyUiManifest: PlatformAdapterManifest = {
   credentialKinds: ['autodl-token'],
   operations: ['workflow.submit'],
   supportedArtifactKinds: ['video'],
-  artifactDownloadPolicy: { allowedHosts: ['autodl.art'], acceptedMimes: ['video/mp4', 'video/webm', 'video/quicktime'], maxBytes: 2 * 1024 * 1024 * 1024, timeoutMs: 30_000 },
+  artifactDownloadPolicy: { allowedHosts: ['autodl.art'], allowProviderSuppliedPublicHosts: true, acceptedMimes: ['video/mp4', 'video/webm', 'video/quicktime'], maxBytes: 2 * 1024 * 1024 * 1024, timeoutMs: 30_000 },
 };

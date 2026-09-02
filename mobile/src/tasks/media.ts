@@ -20,6 +20,7 @@ export type EnsureMediaOptions = {
   policy: MediaPolicy;
   onUpdate(patch: Partial<TaskRecord>): Promise<void>;
   allowedHosts?: string[];
+  allowProviderSuppliedPublicHosts?: boolean;
   maxBytes?: number;
   acceptedMimes?: string[];
   timeoutMs?: number;
@@ -83,13 +84,14 @@ async function downloadIfNeeded(task: TaskRecord, options: EnsureMediaOptions): 
     await options.onUpdate(patch);
   }
   if (!current.videoUrl) return { task: current, downloadedNow: false };
-  assertArtifactDownloadPolicy(options.allowedHosts);
+  assertArtifactDownloadPolicy(options.allowedHosts, options.allowProviderSuppliedPublicHosts);
   const downloaded = await deps.download(current, {
     onUpdate: async (patch) => {
       current = { ...current, ...patch };
       await options.onUpdate(patch);
     },
     allowedHosts: options.allowedHosts,
+    allowProviderSuppliedPublicHosts: options.allowProviderSuppliedPublicHosts,
     maxBytes: options.maxBytes,
     acceptedMimes: options.acceptedMimes,
     timeoutMs: options.timeoutMs,

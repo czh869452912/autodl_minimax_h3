@@ -15,6 +15,14 @@ test('enforces an adapter-provided artifact host list', () => {
   expect(() => validateArtifactUrl('https://cdn.other.test/video.mp4', ['example.test'])).toThrow('域名不在允许列表');
 });
 
+test('allows provider-supplied public HTTPS nodes only when the adapter opts in', () => {
+  const dynamicUrl = 'https://codewithgpu-image-1310972338.cos.ap-beijing.myqcloud.com/comfyui/outputs/video.mp4';
+  expect(validateArtifactUrl(dynamicUrl, ['autodl.art'], true)).toBe(dynamicUrl);
+  expect(() => validateArtifactUrl(dynamicUrl, ['autodl.art'])).toThrow('域名不在允许列表');
+  expect(() => validateArtifactUrl('http://public.example/video.mp4', ['autodl.art'], true)).toThrow('HTTPS');
+  expect(() => validateArtifactUrl('https://192.168.1.2/video.mp4', ['autodl.art'], true)).toThrow('私有网络');
+});
+
 test('rejects artifact URLs when the provider host allowlist is empty', () => {
   expect(() => validateArtifactUrl('https://public.example/video.mp4', [])).toThrow('允许列表');
   expect(() => validateArtifactUrl('https://public.example/video.mp4')).toThrow('允许列表');
@@ -40,6 +48,18 @@ test('follows only allowlisted HTTPS redirects and caps hops', async () => {
   await expect(resolveArtifactRedirects('https://cdn.example.test/start', { allowedHosts: ['example.test'], fetcher })).resolves.toBe('https://cdn.example.test/next');
   const unsafe = jest.fn().mockResolvedValue(new Response(null, { status: 302, headers: { location: 'http://evil.test/file' } }));
   await expect(resolveArtifactRedirects('https://cdn.example.test/start', { allowedHosts: ['example.test'], fetcher: unsafe })).rejects.toThrow('HTTPS');
+});
+
+test('dynamic provider redirects may change public nodes but never enter a private network', async () => {
+  const first = 'https://node-a.public.example/start';
+  const next = 'https://node-b.cdn.example/video.mp4';
+  const publicRedirect = jest.fn()
+    .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: next } }))
+    .mockResolvedValueOnce(new Response(null, { status: 200 }));
+  await expect(resolveArtifactRedirects(first, { allowedHosts: ['autodl.art'], allowProviderSuppliedPublicHosts: true, fetcher: publicRedirect })).resolves.toBe(next);
+
+  const privateRedirect = jest.fn().mockResolvedValue(new Response(null, { status: 302, headers: { location: 'https://10.0.0.2/video.mp4' } }));
+  await expect(resolveArtifactRedirects(first, { allowedHosts: ['autodl.art'], allowProviderSuppliedPublicHosts: true, fetcher: privateRedirect })).rejects.toThrow('私有网络');
 });
 
 test('streams the final response through the same bounded redirect chain', async () => {
