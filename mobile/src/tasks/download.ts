@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { File } from 'expo-file-system';
 import type { TaskRecord, DownloadState } from './types';
 import { extractPoster } from '../native/media';
 import { downloadArtifact, DEFAULT_VIDEO_DOWNLOAD_BYTES } from './downloadPolicy';
@@ -9,21 +10,6 @@ export function nextDownloadState(task: Pick<TaskRecord, 'videoUrl' | 'localUri'
   if (event === 'start' || event === 'progress') return 'DOWNLOADING';
   if (event === 'enqueue') return 'ENQUEUED';
   return task.downloadState || (task.videoUrl ? 'IDLE' : 'DOWNLOAD_FAILED');
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-  let output = '';
-  for (let index = 0; index < bytes.length; index += 3) {
-    const a = bytes[index];
-    const b = bytes[index + 1];
-    const c = bytes[index + 2];
-    output += chars[a >> 2];
-    output += chars[((a & 3) << 4) | (b == null ? 0 : b >> 4)];
-    output += b == null ? '=' : chars[((b & 15) << 2) | (c == null ? 0 : c >> 6)];
-    output += c == null ? '=' : chars[c & 63];
-  }
-  return output;
 }
 
 async function publishCompletedDownload(partial: string, target: string): Promise<void> {
@@ -48,19 +34,22 @@ export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patc
   await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
   const target = `${dir}/${task.id}.mp4`;
   const partial = `${target}.part`;
+  const partialFile = new File(partial);
   await options.onUpdate?.({ downloadState: 'ENQUEUED', downloadProgress: 0, updatedAt: Date.now() });
   try {
     await FileSystem.deleteAsync(partial, { idempotent: true });
     await options.onUpdate?.({ downloadState: 'DOWNLOADING', downloadProgress: 0, updatedAt: Date.now() });
-    await downloadArtifact(task.videoUrl, {
+    const downloaded = await downloadArtifact(task.videoUrl, {
       allowedHosts: options.allowedHosts ?? [],
       allowProviderSuppliedPublicHosts: options.allowProviderSuppliedPublicHosts,
       maxBytes: options.maxBytes ?? DEFAULT_VIDEO_DOWNLOAD_BYTES,
       acceptedMimes: options.acceptedMimes,
       timeoutMs: options.timeoutMs,
       fetcher: options.fetcher,
-      writer: (chunk, append) => FileSystem.writeAsStringAsync(partial, bytesToBase64(chunk), { encoding: 'base64', append }),
+      writer: async (chunk, append) => { partialFile.write(chunk, { append }); },
     });
+    const partialInfo = await FileSystem.getInfoAsync(partial);
+    if (!partialInfo.exists || partialInfo.isDirectory || partialInfo.size !== downloaded.size) throw new Error('下载文件不完整');
     await publishCompletedDownload(partial, target);
     let thumbnailUrl = task.thumbnailUrl;
     try { thumbnailUrl = await extractPoster(target, task.id); } catch {}

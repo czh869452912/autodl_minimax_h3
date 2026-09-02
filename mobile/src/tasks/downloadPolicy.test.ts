@@ -82,6 +82,16 @@ test('streams the final response through the same bounded redirect chain', async
   expect(writes).toHaveLength(1);
 });
 
+test('rejects a response stream that ends before its declared content length', async () => {
+  const fetcher = jest.fn().mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), {
+    status: 200,
+    headers: { 'content-type': 'video/mp4', 'content-length': '5' },
+  }));
+  await expect(downloadArtifact('https://cdn.example.test/video.mp4', {
+    allowedHosts: ['example.test'], fetcher, writer: jest.fn(async () => undefined),
+  })).rejects.toThrow('下载文件不完整');
+});
+
 test('uses a video extension only as a missing-MIME fallback for trusted provider nodes', async () => {
   const writer = jest.fn(async () => undefined);
   const missingMime = jest.fn().mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));

@@ -51,6 +51,15 @@ function responseHeader(response: Response, name: string): string | undefined {
   return response.headers.get(name) ?? undefined;
 }
 
+function declaredBodyLength(response: Response): number | undefined {
+  const encoding = responseHeader(response, 'content-encoding')?.trim().toLowerCase();
+  if (encoding && encoding !== 'identity') return undefined;
+  const raw = responseHeader(response, 'content-length');
+  if (!raw || !/^\d+$/.test(raw.trim())) return undefined;
+  const length = Number(raw);
+  return Number.isSafeInteger(length) ? length : undefined;
+}
+
 function inferVideoMimeFromUrl(url: string): string | undefined {
   const pathname = new URL(url).pathname.toLowerCase();
   if (pathname.endsWith('.mp4')) return 'video/mp4';
@@ -93,6 +102,8 @@ export async function downloadArtifact(initialUrl: string, options: ArtifactDown
       const responseMime = responseHeader(response, 'content-type')?.split(';', 1)[0].trim().toLowerCase();
       const mime = responseMime || (options.allowProviderSuppliedPublicHosts ? inferVideoMimeFromUrl(current) : undefined);
       if (!mime || !acceptedMimes.includes(mime)) throw new Error(`下载媒体类型不受支持：${mime ?? 'unknown'}`);
+      const expectedLength = declaredBodyLength(response);
+      if (expectedLength != null && expectedLength > maxBytes) throw new Error('下载文件大小超过限制');
       const reader = response.body?.getReader();
       let size = 0;
       if (reader) {
@@ -109,6 +120,7 @@ export async function downloadArtifact(initialUrl: string, options: ArtifactDown
         if (size > maxBytes) throw new Error('下载文件大小超过限制');
         await options.writer(bytes, false);
       }
+      if (size <= 0 || (expectedLength != null && size !== expectedLength)) throw new Error('下载文件不完整');
       return { finalUrl: current, status: response.status, mime, size };
     }
     throw new Error('下载重定向次数超过限制');
