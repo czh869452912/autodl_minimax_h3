@@ -26,6 +26,18 @@ function bytesToBase64(bytes: Uint8Array): string {
   return output;
 }
 
+async function publishCompletedDownload(partial: string, target: string): Promise<void> {
+  await FileSystem.deleteAsync(target, { idempotent: true });
+  try {
+    await FileSystem.moveAsync({ from: partial, to: target });
+  } catch (moveError) {
+    await FileSystem.copyAsync({ from: partial, to: target });
+    const copied = await FileSystem.getInfoAsync(target);
+    if (!copied.exists) throw moveError;
+    await FileSystem.deleteAsync(partial, { idempotent: true });
+  }
+}
+
 export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; allowProviderSuppliedPublicHosts?: boolean; maxBytes?: number; acceptedMimes?: string[]; timeoutMs?: number; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
   if (!task.videoUrl) throw new Error('任务没有可下载的视频地址');
   if (task.localUri) {
@@ -49,7 +61,7 @@ export async function downloadTask(task: TaskRecord, options: { onUpdate?: (patc
       fetcher: options.fetcher,
       writer: (chunk, append) => FileSystem.writeAsStringAsync(partial, bytesToBase64(chunk), { encoding: 'base64', append }),
     });
-    await FileSystem.moveAsync({ from: partial, to: target });
+    await publishCompletedDownload(partial, target);
     let thumbnailUrl = task.thumbnailUrl;
     try { thumbnailUrl = await extractPoster(target, task.id); } catch {}
     const complete = { ...task, localUri: target, thumbnailUrl, downloadState: 'DOWNLOADED' as const, downloadProgress: 1, downloadError: undefined, updatedAt: Date.now() };

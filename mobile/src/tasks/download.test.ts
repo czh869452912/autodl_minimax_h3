@@ -6,6 +6,7 @@ jest.mock('expo-file-system/legacy', () => ({
   writeAsStringAsync: jest.fn(),
   downloadAsync: jest.fn(),
   moveAsync: jest.fn(),
+  copyAsync: jest.fn(),
 }));
 jest.mock('../native/media', () => ({ extractPoster: jest.fn(async () => 'file:///poster.jpg') }));
 
@@ -54,6 +55,19 @@ describe('secure artifact download', () => {
     fs.writeAsStringAsync.mockResolvedValue(undefined);
     await expect(downloadTask(task, { allowedHosts: ['example.test'] })).resolves.toMatchObject({ downloadState: 'DOWNLOADED', localUri: 'file:///documents/media/task-1.mp4' });
     expect(fs.moveAsync).toHaveBeenCalledWith({ from: 'file:///documents/media/task-1.mp4.part', to: 'file:///documents/media/task-1.mp4' });
+  });
+
+  it('falls back to a verified copy when Android cannot rename the completed partial file', async () => {
+    fs.writeAsStringAsync.mockResolvedValue(undefined);
+    fs.moveAsync.mockRejectedValueOnce(new Error('rename failed'));
+    fs.copyAsync.mockResolvedValueOnce(undefined);
+    fs.getInfoAsync.mockResolvedValueOnce({ exists: true, uri: 'file:///documents/media/task-1.mp4', size: 3, isDirectory: false, modificationTime: 1 });
+
+    await expect(downloadTask(task, { allowedHosts: ['example.test'] })).resolves.toMatchObject({
+      downloadState: 'DOWNLOADED', localUri: 'file:///documents/media/task-1.mp4',
+    });
+    expect(fs.copyAsync).toHaveBeenCalledWith({ from: 'file:///documents/media/task-1.mp4.part', to: 'file:///documents/media/task-1.mp4' });
+    expect(fs.deleteAsync).toHaveBeenCalledWith('file:///documents/media/task-1.mp4.part', { idempotent: true });
   });
 
   it('deletes the partial file instead of publishing a non-video response', async () => {
