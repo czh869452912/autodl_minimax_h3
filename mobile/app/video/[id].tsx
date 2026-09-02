@@ -6,7 +6,7 @@ import * as Clipboard from 'expo-clipboard';
 import { getDatabase } from '../../src/storage/databaseClient';
 import { createTaskRepository } from '../../src/tasks/repository';
 import type { TaskRecord } from '../../src/tasks/types';
-import { exportStatusLabel, mediaSource, mediaStatusLabel } from '../../src/gallery/presentation';
+import { exportStatusLabel, mediaStatusLabel } from '../../src/gallery/presentation';
 import { exportTaskVideo } from '../../src/tasks/media';
 import { VideoPlayer } from '../../src/media/VideoPlayer';
 import { AppIcon } from '../../src/ui/icons';
@@ -14,6 +14,8 @@ import { COLORS, SPACING } from '../../src/ui/theme';
 import { readSettings } from '../../src/settings/storage';
 import { createSqliteMediaStore } from '../../src/media/repository';
 import type { MediaAsset } from '../../src/media/types';
+import { resolveLocalVideoSource } from '../../src/tasks/localMedia';
+import { getBuiltinArtifactDownloadPolicy } from '../../src/workflows/providers/registry';
 
 const database = getDatabase();
 const store = createTaskRepository(database);
@@ -26,16 +28,30 @@ export default function VideoDetailScreen() {
   const [asset, setAsset] = useState<MediaAsset | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [localSource, setLocalSource] = useState<string>();
 
   useEffect(() => {
     if (!id) { setLoaded(true); return; }
-    void mediaStore.get(id).then(async (media) => { setAsset(media); const taskId = media?.taskId || id; const value = await store.get(taskId); setTask(value || null); }).finally(() => setLoaded(true));
+    void mediaStore.get(id).then(async (media) => {
+      const taskId = media?.taskId || id;
+      const value = await store.get(taskId);
+      if (!value) { setAsset(media); setTask(null); return; }
+      const verifiedLocalSource = await resolveLocalVideoSource({ task: value, asset: media });
+      setLocalSource(verifiedLocalSource);
+      if (!verifiedLocalSource) { setAsset(media); setTask(value); return; }
+      const repairedTask: TaskRecord = { ...value, localUri: verifiedLocalSource, downloadState: 'DOWNLOADED', downloadError: undefined };
+      const repairedAsset = media ? { ...media, localPath: verifiedLocalSource, status: 'downloaded' as const, updatedAt: Math.max(media.updatedAt, Date.now()) } : null;
+      await store.upsert(repairedTask);
+      if (repairedAsset) await mediaStore.upsert(repairedAsset);
+      setAsset(repairedAsset);
+      setTask(repairedTask);
+    }).finally(() => setLoaded(true));
   }, [id]);
 
   if (!loaded) return <View style={styles.center}><ActivityIndicator color={COLORS.primaryActive} /><Text style={styles.muted}>正在加载作品…</Text></View>;
   if (!task) return <View style={styles.center}><Text style={styles.title}>作品不存在或已删除</Text><Pressable accessibilityRole="button" accessibilityLabel="返回画廊" onPress={() => router.back()} style={styles.backAction}><Text style={styles.backGlyph}>‹</Text><Text style={styles.backActionText}>返回画廊</Text></Pressable></View>;
 
-  const source = asset?.localPath || asset?.sourceUrl || mediaSource(task);
+  const source = localSource || asset?.sourceUrl || task.videoUrl || '';
   const copyPrompt = async () => {
     if (!task.prompt.trim()) { Alert.alert('无法复制', '当前作品没有 Prompt'); return; }
     try {
@@ -55,12 +71,15 @@ export default function VideoDetailScreen() {
     setExporting(true);
     try {
       const settings = await readSettings();
+      const artifactPolicy = getBuiltinArtifactDownloadPolicy(task.adapterId);
       let current = task;
-      const updated = await exportTaskVideo({ ...task, videoUrl: asset?.sourceUrl || task.videoUrl, localUri: asset?.localPath || task.localUri }, { policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: true }, onUpdate: async (patch) => { current = { ...current, ...patch }; await store.upsert(current); setTask(current); } });
+      const updated = await exportTaskVideo({ ...task, videoUrl: asset?.sourceUrl || task.videoUrl, localUri: localSource }, { policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: true }, ...artifactPolicy, onUpdate: async (patch) => { current = { ...current, ...patch }; await store.upsert(current); setTask(current); } });
       await store.upsert(updated);
       setTask(updated);
+      setLocalSource(updated.localUri);
       if (asset) { const nextAsset = { ...asset, localPath: updated.localUri || asset.localPath, status: (updated.localUri || asset.localPath ? 'downloaded' : asset.status) as MediaAsset['status'], updatedAt: Date.now() }; await mediaStore.upsert(nextAsset); setAsset(nextAsset); await mediaStore.upsertDelivery?.({ id: `${asset.id}:system-gallery`, assetId: asset.id, target: 'system-gallery', uri: updated.galleryUri, status: updated.exportState === 'EXPORTED' ? 'EXPORTED' : 'FAILED', error: updated.exportError, createdAt: Date.now(), updatedAt: Date.now() }); }
-      Alert.alert('已保存', '视频已保存到系统相册 / Movies / AutoDL-H3');
+      if (updated.exportState === 'EXPORTED') Alert.alert('已保存', '视频已保存到系统相册 / Movies / AutoDL-H3');
+      else Alert.alert('保存失败', updated.exportError || '保存到系统相册失败');
     } catch (error) {
       Alert.alert('保存失败', error instanceof Error ? error.message : '保存到系统相册失败');
     } finally { setExporting(false); }
@@ -69,7 +88,7 @@ export default function VideoDetailScreen() {
   return <SafeAreaView style={styles.safe} edges={['top', 'bottom']}><ScrollView testID="detail-content" style={styles.container} contentContainerStyle={styles.content}>
     <View style={styles.header}><Pressable accessibilityRole="button" accessibilityLabel="返回画廊" onPress={() => router.back()} hitSlop={10} style={styles.back}><Text style={styles.backGlyph}>‹</Text><Text style={styles.backText}>返回画廊</Text></Pressable><Text style={styles.title}>视频详情</Text></View>
     <View testID="adaptive-media-region" style={styles.mediaRegion}><View testID="video-frame" style={styles.player}>{source ? <VideoPlayer source={source} poster={asset?.posterPath || task.thumbnailUrl} /> : <View accessibilityLabel="视频源不可用" style={styles.sourceEmpty}><AppIcon name="movie_filter" size={30} color={COLORS.textSubtle} /><Text style={styles.sourceEmptyText}>视频源不可用</Text></View>}</View></View>
-    <Text style={styles.meta}>{task.resolution} · {task.duration}s · {task.status} · {task.downloadState === 'DOWNLOADED' ? '已下载' : mediaStatusLabel(task.localUri ? 'downloaded' : task.downloadState === 'DOWNLOAD_FAILED' ? 'failed' : 'downloading')}</Text>
+    <Text style={styles.meta}>{task.resolution} · {task.duration}s · {task.status} · {localSource ? '已下载' : mediaStatusLabel(task.downloadState === 'DOWNLOAD_FAILED' ? 'failed' : 'downloading')}</Text>
     {source ? <View style={styles.exportRow}><Text style={styles.exportStatus}>{exporting ? '正在保存到相册' : exportStatusLabel(task) || '尚未保存到相册'}</Text>{task.exportState !== 'EXPORTED' && <Pressable accessibilityRole="button" accessibilityLabel={task.exportState === 'EXPORT_FAILED' ? '重试保存到系统相册' : '保存到系统相册'} disabled={exporting} onPress={() => void saveToGallery()} style={[styles.exportButton, exporting && styles.disabled]}><Text style={styles.exportButtonText}>{exporting ? '保存中…' : task.exportState === 'EXPORT_FAILED' ? '重试保存到系统相册' : '保存到系统相册'}</Text></Pressable>}</View> : null}
     <View testID="bottom-prompt-card" style={styles.promptCard}><View style={styles.promptHeader}><Text style={styles.sectionTitle}>Prompt</Text><Text style={styles.promptCount}>{task.prompt.length.toLocaleString()} 字符</Text></View><ScrollView accessibilityLabel="滚动 Prompt" nestedScrollEnabled style={styles.promptScroll}><Text selectable style={styles.prompt}>{task.prompt || '暂无 Prompt'}</Text></ScrollView><Pressable accessibilityRole="button" accessibilityLabel="复制 Prompt" onPress={() => void copyPrompt()} style={styles.copy}><AppIcon name="content_copy" size={18} color={COLORS.text} /><Text style={styles.copyText}>复制 Prompt</Text></Pressable></View>
   </ScrollView></SafeAreaView>;

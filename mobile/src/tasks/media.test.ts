@@ -69,6 +69,23 @@ describe('task media delivery orchestration', () => {
     expect(deps.publish).toHaveBeenCalledWith('file:///restored.mp4', { mediaId: task.id, displayName: 'task-1.mp4' });
   });
 
+  it('recovers an existing deterministic private file before manual export', async () => {
+    const deps = {
+      download: jest.fn(),
+      publish: jest.fn().mockResolvedValue({ uri: 'content://media/video/10', displayName: 'task-1.mp4', relativePath: 'Movies/AutoDL-H3/', alreadyExisted: false }),
+      removePrivate: jest.fn().mockResolvedValue(undefined),
+      resolveLocal: jest.fn().mockResolvedValue('file:///documents/media/task-1.mp4'),
+    };
+    const onUpdate = jest.fn(async () => undefined);
+
+    const result = await exportTaskVideo({ ...task, downloadState: 'DOWNLOAD_FAILED', downloadError: '域名不在允许列表' }, { policy: { autoExportToGallery: true, keepPrivateCopy: true }, deps, onUpdate });
+
+    expect(deps.download).not.toHaveBeenCalled();
+    expect(deps.publish).toHaveBeenCalledWith('file:///documents/media/task-1.mp4', { mediaId: task.id, displayName: 'task-1.mp4' });
+    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ localUri: 'file:///documents/media/task-1.mp4', downloadState: 'DOWNLOADED', downloadError: undefined }));
+    expect(result).toMatchObject({ localUri: 'file:///documents/media/task-1.mp4', downloadState: 'DOWNLOADED', exportState: 'EXPORTED' });
+  });
+
   it('forwards adapter artifact policy to the downloader', async () => {
     const deps = {
       download: jest.fn().mockResolvedValue({ ...task, localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED' as const }),

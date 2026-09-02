@@ -4,6 +4,7 @@ import type { AppSettings } from '../settings/storage';
 import { downloadTask } from './download';
 import { assertArtifactDownloadPolicy } from './downloadPolicy';
 import type { TaskRecord } from './types';
+import { resolveLocalVideoSource } from './localMedia';
 
 export type MediaPolicy = Pick<AppSettings, 'autoExportToGallery' | 'keepPrivateCopy'>;
 
@@ -11,6 +12,7 @@ export type MediaDeps = {
   download: typeof downloadTask;
   publish: typeof exportVideo;
   removePrivate(uri: string): Promise<void>;
+  resolveLocal?(task: TaskRecord): Promise<string | undefined>;
 };
 
 export type EnsureMediaOptions = {
@@ -27,6 +29,7 @@ const defaultDeps: MediaDeps = {
   download: downloadTask,
   publish: exportVideo,
   removePrivate: (uri) => FileSystem.deleteAsync(uri, { idempotent: true }),
+  resolveLocal: (task) => resolveLocalVideoSource({ task }),
 };
 
 function errorMessage(error: unknown): string {
@@ -65,6 +68,12 @@ async function publishTask(current: TaskRecord, options: EnsureMediaOptions): Pr
 }
 async function downloadIfNeeded(task: TaskRecord, options: EnsureMediaOptions): Promise<{ task: TaskRecord; downloadedNow: boolean }> {
   if (task.localUri || !task.videoUrl) return { task, downloadedNow: false };
+  const recovered = await (options.deps ?? defaultDeps).resolveLocal?.(task);
+  if (recovered) {
+    const patch = { localUri: recovered, downloadState: 'DOWNLOADED' as const, downloadError: undefined, downloadProgress: 1, updatedAt: Date.now() };
+    await options.onUpdate(patch);
+    return { task: { ...task, ...patch }, downloadedNow: false };
+  }
   assertArtifactDownloadPolicy(options.allowedHosts);
   let current = task;
   const downloaded = await (options.deps ?? defaultDeps).download(task, {

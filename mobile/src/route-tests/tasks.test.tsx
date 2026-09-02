@@ -23,10 +23,18 @@ jest.mock('../tasks/sync', () => ({
 }));
 jest.mock('../tasks/download', () => ({ downloadTask: jest.fn() }));
 jest.mock('../tasks/media', () => ({ exportTaskVideo: jest.fn(async (task) => ({ ...task, exportState: 'EXPORTED', galleryUri: 'content://media/video/7' })) }));
+jest.mock('../workflows/providers/registry', () => ({
+  getBuiltinArtifactDownloadPolicy: jest.fn(() => ({
+    allowedHosts: ['autodl.art'], acceptedMimes: ['video/mp4'],
+    maxBytes: 2 * 1024 * 1024 * 1024, timeoutMs: 30_000,
+  })),
+}));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
 import TasksScreen from '../../app/(tabs)/tasks';
 import { syncTasks, taskStore } from '../tasks/sync';
+import { downloadTask } from '../tasks/download';
+import { exportTaskVideo } from '../tasks/media';
 
 afterEach(() => {
   jest.useRealTimers();
@@ -77,6 +85,39 @@ test('offers gallery retry without calling a successful download failed', async 
   expect(texts).toContain('保存到相册失败');
   expect(texts).not.toContain('下载失败');
   act(() => { renderer!.unmount(); });
+});
+
+test('passes the adapter artifact policy to an explicit download retry', async () => {
+  const failedDownload = { id: 'task-1', prompt: 'x', status: 'SUCCESS' as const, resolution: '768p竖', duration: 5, adapterId: 'autodl-comfyui', videoUrl: 'https://autodl.art/result.mp4', downloadState: 'DOWNLOAD_FAILED' as const, downloadError: 'network', createdAt: 1_000, updatedAt: 2_000 };
+  jest.mocked(taskStore.list).mockResolvedValueOnce([failedDownload]);
+  jest.mocked(syncTasks).mockResolvedValueOnce([failedDownload]);
+  jest.mocked(downloadTask).mockResolvedValueOnce({ ...failedDownload, localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED' });
+  let renderer: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<TasksScreen />); });
+
+  await act(async () => renderer!.root.findByProps({ accessibilityLabel: '重试下载' }).props.onPress());
+
+  expect(downloadTask).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }), expect.objectContaining({
+    allowedHosts: ['autodl.art'], acceptedMimes: ['video/mp4'],
+    maxBytes: 2 * 1024 * 1024 * 1024, timeoutMs: 30_000,
+  }));
+  act(() => renderer!.unmount());
+});
+
+test('passes the adapter artifact policy to an explicit gallery retry', async () => {
+  const failedExport = { id: 'task-1', prompt: 'x', status: 'SUCCESS' as const, resolution: '768p竖', duration: 5, adapterId: 'autodl-comfyui', videoUrl: 'https://autodl.art/result.mp4', downloadState: 'DOWNLOADED' as const, exportState: 'EXPORT_FAILED' as const, exportError: '空间不足', createdAt: 1_000, updatedAt: 2_000 };
+  jest.mocked(taskStore.list).mockResolvedValueOnce([failedExport]);
+  jest.mocked(syncTasks).mockResolvedValueOnce([failedExport]);
+  let renderer: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<TasksScreen />); });
+
+  await act(async () => renderer!.root.findByProps({ accessibilityLabel: '重试保存到系统相册' }).props.onPress());
+
+  expect(exportTaskVideo).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }), expect.objectContaining({
+    allowedHosts: ['autodl.art'], acceptedMimes: ['video/mp4'],
+    maxBytes: 2 * 1024 * 1024 * 1024, timeoutMs: 30_000,
+  }));
+  act(() => renderer!.unmount());
 });
 
 test('does not poll again when the visible task set is terminal', async () => {
