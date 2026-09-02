@@ -96,7 +96,7 @@ test('continues media processing for partially successful workflow tasks', async
 
   await value.coordinator.run();
 
-  expect(value.ensureMedia).toHaveBeenCalledWith(partial, expect.anything(), expect.any(Function));
+  expect(value.ensureMedia).toHaveBeenCalledWith(partial, expect.anything(), expect.any(Function), undefined, undefined);
 });
 
 test('does not reprocess a task that only retains a system gallery delivery', async () => {

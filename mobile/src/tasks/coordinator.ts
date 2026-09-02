@@ -1,22 +1,22 @@
 import type { JobRecord, JobRepository } from '../jobs/types';
 import type { TaskRecord } from './types';
 import { jobToTaskProjection } from './projection';
-import type { MediaStore } from '../media/types';
+import type { MediaAsset, MediaStore } from '../media/types';
 import type { ArtifactDownloadPolicy } from '../workflows/schema/types';
 import { materializeJobArtifacts } from '../media/materializer';
 import { createMediaDeliveryQueue } from './mediaQueue';
 
 type Settings = { token: string; autoExportToGallery: boolean; keepPrivateCopy: boolean };
-type TaskStore = { list(): Promise<TaskRecord[]>; listActive?(): Promise<TaskRecord[]>; listSyncCandidates?(): Promise<TaskRecord[]>; listMediaPending?(): Promise<TaskRecord[]>; upsert(task: TaskRecord): Promise<void>; upsertWorkflowProjection?(task: TaskRecord): Promise<void> };
+type TaskStore = { list(): Promise<TaskRecord[]>; listActive?(): Promise<TaskRecord[]>; listSyncCandidates?(): Promise<TaskRecord[]>; listMediaPending?(): Promise<TaskRecord[]>; upsert(task: TaskRecord): Promise<void>; upsertWorkflowProjection?(task: TaskRecord): Promise<void>; upsertMediaProjection?(task: TaskRecord): Promise<void> };
 type Runtime = { sync(job: JobRecord): Promise<JobRecord> };
 type CoordinatorDeps = {
   readSettings(): Promise<Settings>;
   taskStore: TaskStore;
   jobStore: Pick<JobRepository, 'get' | 'list' | 'listArtifacts' | 'upsert'> & { listActive?: () => Promise<JobRecord[]> };
   createRuntime(token: string): Runtime;
-  ensureMedia(task: TaskRecord, settings: Settings, onUpdate: (patch: Partial<TaskRecord>) => Promise<void>, artifactPolicy?: ArtifactDownloadPolicy): Promise<unknown>;
+  ensureMedia(task: TaskRecord, settings: Settings, onUpdate: (patch: Partial<TaskRecord>) => Promise<void>, artifactPolicy?: ArtifactDownloadPolicy, asset?: MediaAsset | null): Promise<unknown>;
   getArtifactPolicy?(adapterId?: string): ArtifactDownloadPolicy | undefined;
-  mediaStore?: Pick<MediaStore, 'upsert'> & Partial<Pick<MediaStore, 'upsertArtifactProjection' | 'upsertDelivery'>>;
+  mediaStore?: Pick<MediaStore, 'upsert'> & Partial<Pick<MediaStore, 'upsertArtifactProjection' | 'upsertDelivery' | 'getPrimaryVideoByTaskId'>>;
   now?: () => number;
   concurrency?: number;
 };

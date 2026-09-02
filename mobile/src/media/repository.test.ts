@@ -1,5 +1,6 @@
 import { createSqliteMediaStore } from './repository';
 import type { MediaAsset } from './types';
+import { createRealSqliteTestDb } from '../test/realSqlite';
 
 function fakeDb() {
   const rows = new Map<string, Record<string, unknown>>();
@@ -112,4 +113,18 @@ test('artifact projection merge cannot clear an existing private download', asyn
   expect(sql).toContain('local_path=COALESCE(media_assets.local_path, excluded.local_path)');
   expect(sql).toContain("WHEN media_assets.local_path IS NOT NULL OR media_assets.status = 'downloaded' THEN 'downloaded'");
   expect(sql).toContain('export_status=COALESCE(media_assets.export_status, excluded.export_status)');
+});
+
+test('loads the newest primary video asset for a task', async () => {
+  const db = createRealSqliteTestDb();
+  try {
+    const store = createSqliteMediaStore(db);
+    await store.upsert({ ...asset, id: 'older-video', taskId: 'task-1', kind: 'video', localPath: 'file:///older.mp4', updatedAt: 10 });
+    await store.upsert({ ...asset, id: 'audio', taskId: 'task-1', kind: 'audio', localPath: 'file:///audio.mp3', updatedAt: 30 });
+    await store.upsert({ ...asset, id: 'newer-video', taskId: 'task-1', kind: 'video', localPath: 'file:///newer.mp4', updatedAt: 20 });
+
+    await expect(store.getPrimaryVideoByTaskId?.('task-1')).resolves.toMatchObject({ id: 'newer-video', localPath: 'file:///newer.mp4' });
+  } finally {
+    db.close();
+  }
 });

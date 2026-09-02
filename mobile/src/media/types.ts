@@ -32,6 +32,7 @@ export interface MediaStore {
   list(options?: { query?: string; status?: MediaStatus; kind?: MediaKind }): Promise<MediaAsset[]>;
   listPage?(options?: { query?: string; status?: MediaStatus; kind?: MediaKind; limit?: number; cursor?: { createdAt: number; id: string } }): Promise<{ items: MediaAsset[]; nextCursor?: { createdAt: number; id: string } }>;
   get(id: string): Promise<MediaAsset | null>;
+  getPrimaryVideoByTaskId?(taskId: string): Promise<MediaAsset | null>;
   remove(id: string): Promise<void>;
   upsertDelivery?(delivery: MediaDelivery): Promise<void>;
   listDeliveries?(assetId: string): Promise<MediaDelivery[]>;

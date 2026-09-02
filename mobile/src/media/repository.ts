@@ -65,6 +65,10 @@ export function createSqliteMediaStore(database: SqlDatabase): MediaStore {
       const rows = await all<Record<string, unknown>>('SELECT * FROM media_assets WHERE id = ? LIMIT 1', id);
       return rows[0] ? toAsset(rows[0]) : null;
     },
+    async getPrimaryVideoByTaskId(taskId) {
+      const rows = await all<Record<string, unknown>>("SELECT * FROM media_assets WHERE task_id = ? AND kind = 'video' ORDER BY updated_at DESC, id ASC LIMIT 1", taskId);
+      return rows[0] ? toAsset(rows[0]) : null;
+    },
     async remove(id) { const rows = database.getAllSync?.<Record<string, unknown>>('SELECT local_path, poster_path FROM media_assets WHERE id = ? LIMIT 1', id) ?? []; database.runSync?.('DELETE FROM media_deliveries WHERE asset_id = ?', id); database.runSync?.('DELETE FROM media_assets WHERE id = ?', id); for (const row of rows) for (const uri of [row.local_path, row.poster_path]) await removePrivateFile(uri); },
     async upsertDelivery(delivery) { database.runSync?.('INSERT OR REPLACE INTO media_deliveries (id, asset_id, target, uri, status, error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', delivery.id, delivery.assetId, delivery.target, delivery.uri ?? null, delivery.status, delivery.error ?? null, delivery.createdAt, delivery.updatedAt); database.runSync?.('UPDATE media_assets SET export_status = ?, updated_at = ? WHERE id = ?', delivery.status === 'EXPORTED' ? '已保存到相册' : delivery.status === 'FAILED' ? '保存到相册失败' : '正在保存到相册', delivery.updatedAt, delivery.assetId); },
     async listDeliveries(assetId) { const rows = database.getAllSync?.<Record<string, unknown>>('SELECT * FROM media_deliveries WHERE asset_id = ? ORDER BY created_at DESC', assetId) ?? []; return rows.map((row) => ({ id: String(row.id), assetId: String(row.asset_id), target: row.target as 'system-gallery' | 'share' | 'cloud', uri: row.uri ? String(row.uri) : undefined, status: row.status as 'QUEUED' | 'EXPORTING' | 'EXPORTED' | 'FAILED', error: row.error ? String(row.error) : undefined, createdAt: Number(row.created_at), updatedAt: Number(row.updated_at) })); },
