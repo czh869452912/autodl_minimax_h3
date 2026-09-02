@@ -92,27 +92,25 @@ test('prefers async SQLite operations when available', async () => {
 });
 
 test('artifact projection merge cannot clear an existing private download', async () => {
-  const runAsync = jest.fn(async (_sql: string, ..._params: unknown[]) => undefined);
-  const db = {
-    execSync: jest.fn(),
-    runSync: jest.fn(),
-    getAllSync: jest.fn(() => []),
-    runAsync,
-  };
-  const store = createSqliteMediaStore(db as never);
+  const db = createRealSqliteTestDb();
+  try {
+    const store = createSqliteMediaStore(db);
+    await store.upsert({
+      ...asset, localPath: 'file:///private.mp4', posterPath: 'file:///poster.jpg',
+      status: 'downloaded', exportStatus: '已保存到相册', updatedAt: 10,
+    });
+    await store.upsertArtifactProjection?.({
+      ...asset, localPath: undefined, posterPath: undefined, status: 'downloading',
+      sourceUrl: 'https://provider/new-result.mp4', updatedAt: 20,
+    });
 
-  await store.upsertArtifactProjection?.({
-    ...asset,
-    localPath: undefined,
-    posterPath: undefined,
-    status: 'downloading',
-    sourceUrl: 'https://provider/new-result.mp4',
-  });
-
-  const sql = runAsync.mock.calls[0][0] as string;
-  expect(sql).toContain('local_path=COALESCE(media_assets.local_path, excluded.local_path)');
-  expect(sql).toContain("WHEN media_assets.local_path IS NOT NULL OR media_assets.status = 'downloaded' THEN 'downloaded'");
-  expect(sql).toContain('export_status=COALESCE(media_assets.export_status, excluded.export_status)');
+    await expect(store.get(asset.id)).resolves.toMatchObject({
+      sourceUrl: 'https://provider/new-result.mp4', localPath: 'file:///private.mp4',
+      posterPath: 'file:///poster.jpg', status: 'downloaded', exportStatus: '已保存到相册', updatedAt: 20,
+    });
+  } finally {
+    db.close();
+  }
 });
 
 test('loads the newest primary video asset for a task', async () => {
