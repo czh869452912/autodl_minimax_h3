@@ -1,14 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { ensureAppDatabase } from '../storage/database';
+import { assertAppDatabaseWritable, getAppRecoveryState } from '../storage/database';
 
 const MAX_AGE = 60 * 60 * 1000;
-const schema = `CREATE TABLE IF NOT EXISTS prompt_drafts (
-  id TEXT PRIMARY KEY NOT NULL,
-  prompt TEXT NOT NULL,
-  attachment_ids_json TEXT NOT NULL,
-  created_at INTEGER NOT NULL
-);`;
-
 export type PromptDraft = {
   id: string;
   prompt: string;
@@ -47,17 +40,18 @@ export function createPromptDraftStore(
   db: SQLiteDatabase,
   now = () => Date.now(),
 ) {
-  ensureAppDatabase(db);
-  db.execSync(schema);
-  const purge = () =>
+  const purge = () => {
+    if (getAppRecoveryState(db)) return;
     db.runSync(
       'DELETE FROM prompt_drafts WHERE created_at < ?',
       now() - MAX_AGE,
     );
+  };
   return {
     async save(
       input: Pick<PromptDraft, 'prompt' | 'attachmentIds'>,
     ): Promise<PromptDraft> {
+      assertAppDatabaseWritable(db);
       const draft: PromptDraft = {
         id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         prompt: input.prompt,
@@ -86,7 +80,10 @@ export function createPromptDraftStore(
     },
     async consume(id: string): Promise<PromptDraft | null> {
       const draft = await this.read(id);
-      if (draft) db.runSync('DELETE FROM prompt_drafts WHERE id = ?', id);
+      if (draft) {
+        assertAppDatabaseWritable(db);
+        db.runSync('DELETE FROM prompt_drafts WHERE id = ?', id);
+      }
       return draft;
     },
   };

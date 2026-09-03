@@ -1,15 +1,6 @@
 import type { Message, State } from '@ag-ui/client';
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { ensureAppDatabase } from '../storage/database';
-
-const schema = `CREATE TABLE IF NOT EXISTS agent_threads (
-  thread_id TEXT PRIMARY KEY NOT NULL,
-  messages_json TEXT NOT NULL,
-  state_json TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  custom_title TEXT
-);`;
+import { assertAppDatabaseWritable } from '../storage/database';
 
 const privateKeys = new Set([
   'apikey',
@@ -84,8 +75,6 @@ function mapRow(row: ThreadRow | null): LocalThreadSnapshot | null {
 }
 
 export function createLocalThreadStore(db: SQLiteDatabase) {
-  ensureAppDatabase(db);
-  db.execSync(schema);
   return {
     async load(threadId: string): Promise<LocalThreadSnapshot | null> {
       return mapRow(
@@ -110,6 +99,7 @@ export function createLocalThreadStore(db: SQLiteDatabase) {
       ).map((row) => mapRow(row)!);
     },
     async save(snapshot: LocalThreadSnapshot): Promise<void> {
+      assertAppDatabaseWritable(db);
       await db.runAsync(
         'INSERT OR REPLACE INTO agent_threads (thread_id,messages_json,state_json,created_at,updated_at,custom_title) VALUES (?,?,?,?,?,?)',
         snapshot.threadId,
@@ -121,6 +111,7 @@ export function createLocalThreadStore(db: SQLiteDatabase) {
       );
     },
     async remove(threadId: string): Promise<void> {
+      assertAppDatabaseWritable(db);
       await db.runAsync('DELETE FROM agent_threads WHERE thread_id = ?', threadId);
     },
   };

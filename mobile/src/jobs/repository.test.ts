@@ -1,8 +1,9 @@
 import { createJobRepository } from './repository';
 import type { JobRecord } from './types';
+import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 
 const job: JobRecord = {
-  id: 'local-1', workflowId: 'demo', workflowVersion: '1.0.0', workflowContentHash: 'hash',
+  id: 'local-1', revision: 0, workflowId: 'demo', workflowVersion: '1.0.0', workflowContentHash: 'hash',
   adapterId: 'demo', adapterVersion: '1.0.0', inputSnapshot: { prompt: 'x' }, status: 'QUEUED', createdAt: 1, updatedAt: 2,
 };
 
@@ -12,6 +13,28 @@ test('round-trips generic job provenance and artifacts', async () => {
   await store.replaceArtifacts('local-1', [{ id: 'a1', jobId: 'local-1', kind: 'image', uri: 'https://example.test/a.png', mime: 'image/png' }]);
   expect(await store.get('local-1')).toMatchObject({ workflowId: 'demo', workflowContentHash: 'hash', inputSnapshot: { prompt: 'x' } });
   expect(await store.listArtifacts('local-1')).toMatchObject([{ kind: 'image', uri: 'https://example.test/a.png' }]);
+});
+
+test('round-trips revision, opaque provider handle, durable error, and next sync time', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const store = createJobRepository(db as never);
+    await store.upsert({
+      ...job,
+      revision: 3,
+      providerHandle: { providerJobId: 'remote-1', region: 'opaque-region' },
+      lastError: { code: 'HTTP_503', message: 'retry later', retryable: true },
+      nextSyncAt: 900,
+    });
+    expect(await store.get(job.id)).toMatchObject({
+      revision: 3,
+      providerHandle: { providerJobId: 'remote-1', region: 'opaque-region' },
+      remote: { providerJobId: 'remote-1', region: 'opaque-region' },
+      lastError: { code: 'HTTP_503' },
+      error: { code: 'HTTP_503' },
+      nextSyncAt: 900,
+    });
+  } finally { db.close(); }
 });
 
 test('ignores malformed persisted job JSON instead of crashing', async () => {
