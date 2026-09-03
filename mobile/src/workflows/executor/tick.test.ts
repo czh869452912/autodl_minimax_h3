@@ -67,7 +67,15 @@ test('readonly mode skips recovery, claims, and handlers', async () => {
   try {
     enqueue(value.operations, 'SUBMIT', 0);
     const tick = createExecutorTick({ operations: value.operations, executor: value.executor, owner: () => 'worker', isReadonly: () => true });
-    expect(await tick.run({ reason: 'foreground', now: 100 })).toEqual({ claimed: 0, succeeded: 0, retried: 0, failed: 0, blocked: 0, remainingDue: 1 });
+    expect(await tick.run({ reason: 'foreground', now: 100 })).toEqual({
+      claimed: 0,
+      succeeded: 0,
+      retried: 0,
+      failed: 0,
+      blocked: 0,
+      remainingDue: 1,
+      remainingScheduled: 0,
+    });
     expect(value.executor.recover).not.toHaveBeenCalled();
     expect(value.executor.handle).not.toHaveBeenCalled();
   } finally { value.db.close(); }

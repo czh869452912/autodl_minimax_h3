@@ -1,7 +1,15 @@
 import type { OperationRepository } from './operationRepository';
 import type { OperationKind, WorkflowOperation } from './types';
 
-export type TickSummary = { claimed: number; succeeded: number; retried: number; failed: number; blocked: number; remainingDue: number };
+export type TickSummary = {
+  claimed: number;
+  succeeded: number;
+  retried: number;
+  failed: number;
+  blocked: number;
+  remainingDue: number;
+  remainingScheduled: number;
+};
 export type TickOptions = { reason: 'foreground' | 'background' | 'service'; maxOperations?: number; now?: number };
 
 const laneOrder: OperationKind[] = ['SUBMIT', 'STATUS_SYNC', 'ARTIFACT_DOWNLOAD', 'EXPORT'];
@@ -42,9 +50,23 @@ export function createExecutorTick(deps: TickDeps) {
   const runOnce = async (options: TickOptions): Promise<TickSummary> => {
     const timestamp = options.now ?? Date.now();
     const maxOperations = Math.max(1, Math.min(32, options.maxOperations ?? 8));
-    const remainingDue = () => deps.operations.list().filter((item) => item.state === 'PENDING' && item.nextRetryAt <= timestamp).length;
-    const summary: TickSummary = { claimed: 0, succeeded: 0, retried: 0, failed: 0, blocked: 0, remainingDue: 0 };
-    if (deps.isReadonly()) return { ...summary, remainingDue: remainingDue() };
+    const remaining = () => {
+      const pending = deps.operations.list().filter((item) => item.state === 'PENDING');
+      return {
+        remainingDue: pending.filter((item) => item.nextRetryAt <= timestamp).length,
+        remainingScheduled: pending.filter((item) => item.nextRetryAt > timestamp).length,
+      };
+    };
+    const summary: TickSummary = {
+      claimed: 0,
+      succeeded: 0,
+      retried: 0,
+      failed: 0,
+      blocked: 0,
+      remainingDue: 0,
+      remainingScheduled: 0,
+    };
+    if (deps.isReadonly()) return { ...summary, ...remaining() };
     await deps.executor.recover(timestamp);
     const snapshot = dueSnapshot(deps.operations, timestamp, maxOperations);
     const owner = deps.owner();
@@ -74,7 +96,7 @@ export function createExecutorTick(deps: TickDeps) {
       await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
     };
     await Promise.all(laneOrder.map((kind) => runLane(snapshot.filter((item) => item.kind === kind), concurrency[kind])));
-    summary.remainingDue = remainingDue();
+    Object.assign(summary, remaining());
     return summary;
   };
   return {

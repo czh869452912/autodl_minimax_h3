@@ -8,7 +8,8 @@ import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
 import { createJobStateRepository } from '../workflows/executor/jobStateRepository';
 import { createOperationRepository } from '../workflows/executor/operationRepository';
 import { createDurableExecutor } from '../workflows/executor/durableExecutor';
-import { createExecutorTick, type TickOptions, type TickSummary } from '../workflows/executor/tick';
+import { createExecutorTick, type TickOptions } from '../workflows/executor/tick';
+import { createExecutorCycle, type CycleOptions, type CycleSummary } from '../workflows/executor/cycle';
 import { createArtifactCas } from '../media/cas';
 import { createCasRepository } from '../media/casRepository';
 import { createSqliteArtifactCommitter, handleArtifactDownload } from '../workflows/executor/artifactOperation';
@@ -76,6 +77,7 @@ const tick = createExecutorTick({
   owner: () => `app-${Date.now()}-${Math.random().toString(16).slice(2)}`,
   isReadonly: () => Boolean(getAppRecoveryState(database)),
 });
+const cycle = createExecutorCycle({ runTick: (options) => tick.run(options) });
 
 async function repairTaskProjections(limit = 32): Promise<number> {
   const persisted = (await compatibilityJobs.list()).slice(0, limit);
@@ -92,16 +94,16 @@ async function repairTaskProjections(limit = 32): Promise<number> {
   return updated;
 }
 
-export type SyncSummary = { updated: number; failed: number; skipped: number; remaining: number; lastSyncAt: number; operations: TickSummary };
+export type SyncSummary = { updated: number; failed: number; skipped: number; remaining: number; lastSyncAt: number; operations: CycleSummary };
 
 export function createSyncTaskRunner(deps: {
-  runTick(options: TickOptions): Promise<TickSummary>;
+  runCycle(options: CycleOptions): Promise<CycleSummary>;
   repair(): Promise<number>;
   listTasks(): ReturnType<typeof taskStore.listActive>;
   now(): number;
 }) {
   return async (reason: TickOptions['reason'] = 'foreground') => {
-    const operationSummary = await deps.runTick({ reason });
+    const operationSummary = await deps.runCycle({ reason });
     const updated = await deps.repair();
     const tasks = await deps.listTasks();
     return {
@@ -110,7 +112,7 @@ export function createSyncTaskRunner(deps: {
         updated,
         failed: operationSummary.failed,
         skipped: operationSummary.blocked,
-        remaining: operationSummary.remainingDue,
+        remaining: operationSummary.remainingDue + operationSummary.remainingScheduled,
         lastSyncAt: deps.now(),
         operations: operationSummary,
       } satisfies SyncSummary,
@@ -119,7 +121,7 @@ export function createSyncTaskRunner(deps: {
 }
 
 const run = createSyncTaskRunner({
-  runTick: (options) => tick.run(options),
+  runCycle: (options) => cycle.run(options),
   repair: () => repairTaskProjections(),
   listTasks: () => taskStore.listActive(),
   now: Date.now,

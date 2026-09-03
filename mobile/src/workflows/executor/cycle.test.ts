@@ -1,0 +1,63 @@
+import { createExecutorCycle } from './cycle';
+import type { TickSummary } from './tick';
+
+const summary = (patch: Partial<TickSummary> = {}): TickSummary => ({
+  claimed: 0,
+  succeeded: 0,
+  retried: 0,
+  failed: 0,
+  blocked: 0,
+  remainingDue: 0,
+  remainingScheduled: 0,
+  ...patch,
+});
+
+test('runs newly-created due work in later bounded passes', async () => {
+  const runTick = jest.fn()
+    .mockResolvedValueOnce(summary({ claimed: 1, succeeded: 1, remainingDue: 1 }))
+    .mockResolvedValueOnce(summary({ claimed: 1, succeeded: 1 }));
+  const cycle = createExecutorCycle({ runTick, now: () => 100 });
+
+  await expect(cycle.run({ reason: 'foreground', maxPasses: 4, maxOperationsTotal: 8 })).resolves.toMatchObject({
+    passes: 2,
+    claimed: 2,
+    succeeded: 2,
+    remainingDue: 0,
+    budgetExhausted: false,
+  });
+});
+
+test('stops at both budgets without draining indefinitely', async () => {
+  const runTick = jest.fn(async () => summary({ claimed: 2, succeeded: 2, remainingDue: 3 }));
+  const cycle = createExecutorCycle({ runTick, now: () => 100 });
+
+  await expect(cycle.run({ reason: 'service', maxPasses: 2, maxOperationsTotal: 3 })).resolves.toMatchObject({
+    passes: 2,
+    claimed: 3,
+    remainingDue: 3,
+    budgetExhausted: true,
+  });
+  expect(runTick).toHaveBeenNthCalledWith(2, expect.objectContaining({ maxOperations: 1 }));
+});
+
+test('stops when a pass claims nothing even if another writer reports due work', async () => {
+  const runTick = jest.fn(async () => summary({ claimed: 0, remainingDue: 1 }));
+  const cycle = createExecutorCycle({ runTick, now: () => 100 });
+
+  await cycle.run({ reason: 'background' });
+
+  expect(runTick).toHaveBeenCalledTimes(1);
+});
+
+test('overlapping callers share one bounded cycle', async () => {
+  let resolveTick!: (value: TickSummary) => void;
+  const runTick = jest.fn(() => new Promise<TickSummary>((resolve) => { resolveTick = resolve; }));
+  const cycle = createExecutorCycle({ runTick, now: () => 100 });
+
+  const first = cycle.run({ reason: 'foreground' });
+  const second = cycle.run({ reason: 'service' });
+  resolveTick(summary());
+
+  await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+  expect(runTick).toHaveBeenCalledTimes(1);
+});
