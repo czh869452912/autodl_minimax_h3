@@ -34,6 +34,7 @@ import { createOperationRepository } from '../workflows/executor/operationReposi
 import { createDurableExecutor } from '../workflows/executor/durableExecutor';
 import { queueCreateFormSubmission } from './submissionQueue';
 import { syncTaskRun } from '../tasks/sync';
+import { buildSubmissionInputSnapshot } from './submissionInput';
 
 const database = getDatabase();
 const taskStore = createTaskRepository(database);
@@ -121,11 +122,12 @@ export function CreateForm({
       if (!definition || !activeRecord) throw new Error('工作流尚未加载完成');
       const settings = await readSettings();
       if (!settings.token) throw new Error('请先在设置中保存 AutoDL Token');
-      const inputSnapshot: Record<string, unknown> = { ...workflowValues, images, audios };
-      if ('prompt' in workflowValues) inputSnapshot.prompt = String(workflowValues.prompt ?? prompt).trim();
-      if ('resolution' in workflowValues) inputSnapshot.resolution = String(workflowValues.resolution ?? resolution) as Resolution;
-      if ('duration' in workflowValues) inputSnapshot.duration = Number(workflowValues.duration ?? duration) || 0;
-      if ('seed' in workflowValues) inputSnapshot.seed = String(workflowValues.seed ?? seed).trim() || undefined;
+      const inputSnapshot = buildSubmissionInputSnapshot({
+        workflowValues,
+        fallback: { prompt, resolution, duration, seed },
+        images,
+        audios,
+      });
       const adapters = createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? settings.token : undefined });
       const runtime = createWorkflowRuntime({ adapters, jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `job-${Date.now()}-${Math.random().toString(16).slice(2)}` });
       const executor = createDurableExecutor({ jobs: jobStateStore, operations: operationStore, runtime, adapters, credentials: { get: async () => ({ ok: Boolean(settings.token) }) } });
