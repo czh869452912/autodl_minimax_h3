@@ -1,5 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import type { JobRecord, JobStatus, NormalizedError } from '../../jobs/types';
+import type { ArtifactRecord, JobRecord, JobStatus, NormalizedError } from '../../jobs/types';
 import { assertAppDatabaseWritable } from '../../storage/database';
 import type { EnqueueOperation, JobEvent, ProviderHandle, TransitionResult } from './types';
 
@@ -18,6 +18,7 @@ export type JobTransition = {
   expectedRevision: number;
   patch: Partial<Pick<JobRecord, 'status' | 'providerHandle' | 'lastError' | 'nextSyncAt' | 'remote' | 'error' | 'updatedAt' | 'startedAt' | 'executionDuration'>>;
   event: NewEvent;
+  artifacts?: ArtifactRecord[];
   nextOperations?: EnqueueOperation[];
 };
 
@@ -81,6 +82,21 @@ function insertEvent(db: SQLiteDatabase, jobId: string, sequence: number, event:
     event.id, jobId, sequence, event.type, JSON.stringify(event.payload), event.createdAt,
   );
   return { ...event, jobId, sequence };
+}
+
+function replaceArtifacts(db: SQLiteDatabase, jobId: string, artifacts: ArtifactRecord[]): void {
+  db.runSync('DELETE FROM workflow_artifacts WHERE job_id = ?', jobId);
+  for (const artifact of artifacts) {
+    db.runSync(
+      'INSERT INTO workflow_artifacts (id,job_id,kind,uri,mime,metadata_json) VALUES (?,?,?,?,?,?)',
+      artifact.id,
+      jobId,
+      artifact.kind,
+      artifact.uri ?? null,
+      artifact.mime ?? null,
+      artifact.metadata ? JSON.stringify(artifact.metadata) : null,
+    );
+  }
 }
 
 export function createJobStateRepository(db: SQLiteDatabase) {
@@ -152,6 +168,7 @@ export function createJobStateRepository(db: SQLiteDatabase) {
           if (!conflicted) throw new Error(`job not found: ${input.jobId}`);
           return { ok: false, current: conflicted };
         }
+        if (input.artifacts !== undefined) replaceArtifacts(db, input.jobId, input.artifacts);
         const event = insertEvent(db, input.jobId, input.expectedRevision + 1, input.event);
         for (const operation of input.nextOperations ?? []) insertOperation(db, operation);
         const updated = get(input.jobId);

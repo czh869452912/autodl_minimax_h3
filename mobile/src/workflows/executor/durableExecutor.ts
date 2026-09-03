@@ -1,4 +1,4 @@
-import type { JobRecord, NormalizedError } from '../../jobs/types';
+import type { ArtifactRecord, JobRecord, NormalizedError } from '../../jobs/types';
 import type { ProviderAdapter, ProviderStatusUpdate } from '../providers/registry';
 import type { PreparedWorkflowSubmission, QueueSubmissionInput } from '../runtime/runtime';
 import type { JobStateRepository } from './jobStateRepository';
@@ -12,7 +12,7 @@ type RuntimePreparation = {
     draft: QueueSubmissionInput['draft'],
     provenance: QueueSubmissionInput['provenance'],
   ): PreparedWorkflowSubmission;
-  mapStatus(job: JobRecord, update: ProviderStatusUpdate, timestamp?: number): { job: JobRecord; artifacts: Array<Record<string, any>> };
+  mapStatus(job: JobRecord, update: ProviderStatusUpdate, timestamp?: number): { job: JobRecord; artifacts: ArtifactRecord[] };
 };
 
 type DurableExecutorDeps = {
@@ -188,6 +188,7 @@ export function createDurableExecutor(deps: DurableExecutorDeps) {
           updatedAt: timestamp,
         },
         event: { id: eventId(job, 'status'), type: 'STATUS_RECONCILED', payload: { status: update.status }, createdAt: timestamp },
+        artifacts: update.status === 'SUCCEEDED' || update.status === 'PARTIAL_SUCCEEDED' ? mapped.artifacts : undefined,
         nextOperations,
       });
       deps.operations.finish(operation.id, owner, 'SUCCEEDED', timestamp);

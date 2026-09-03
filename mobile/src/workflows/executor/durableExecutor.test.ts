@@ -144,6 +144,9 @@ test('status reconciliation uses only the persisted handle and maps artifacts to
     expect(value.operations.list('ARTIFACT_DOWNLOAD')).toMatchObject([
       { payload: { artifact: expect.objectContaining({ id: 'artifact-1', kind: 'video' }) } },
     ]);
+    expect(value.db.getAllSync(
+      'SELECT id, kind, uri FROM workflow_artifacts WHERE job_id = ?', queued.id,
+    )).toEqual([{ id: 'artifact-1', kind: 'video', uri: 'https://cdn.test/video' }]);
   } finally { value.db.close(); }
 });
 

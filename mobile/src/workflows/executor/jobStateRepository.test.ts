@@ -60,6 +60,59 @@ test('updates snapshot, appends event, and enqueues next work atomically', () =>
   } finally { db.close(); }
 });
 
+test('replaces artifacts with the job transition, event, and next operation', () => {
+  const { db, jobs, operations } = setup();
+  try {
+    jobs.createWithEventAndOperation(job, initialEvent, submitOperation);
+    const result = jobs.transition({
+      jobId: job.id,
+      expectedRevision: job.revision,
+      patch: { status: 'SUCCEEDED', updatedAt: 200 },
+      artifacts: [{
+        id: 'video-1', jobId: job.id, kind: 'video',
+        uri: 'https://cdn.test/video.mp4', mime: 'video/mp4',
+      }],
+      event: { id: 'status-done', type: 'STATUS_RECONCILED', payload: { status: 'SUCCEEDED' }, createdAt: 200 },
+      nextOperations: [{
+        id: 'download-1', kind: 'ARTIFACT_DOWNLOAD', jobId: job.id,
+        idempotencyKey: `artifact:${job.id}:video-1`, payload: {}, now: 200,
+      }],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(db.getAllSync(
+      'SELECT id, kind, uri FROM workflow_artifacts WHERE job_id = ?', job.id,
+    )).toEqual([{ id: 'video-1', kind: 'video', uri: 'https://cdn.test/video.mp4' }]);
+    expect(operations.get('download-1')).toMatchObject({ state: 'PENDING' });
+  } finally { db.close(); }
+});
+
+test('rolls back job, event, artifacts, and operations when artifact replacement fails', () => {
+  const { db, jobs, operations } = setup();
+  try {
+    jobs.createWithEventAndOperation(job, initialEvent, submitOperation);
+    expect(() => jobs.transition({
+      jobId: job.id,
+      expectedRevision: job.revision,
+      patch: { status: 'SUCCEEDED', updatedAt: 200 },
+      artifacts: [
+        { id: 'same', jobId: job.id, kind: 'video' },
+        { id: 'same', jobId: job.id, kind: 'image' },
+      ],
+      event: { id: 'status-done', type: 'STATUS_RECONCILED', payload: {}, createdAt: 200 },
+      nextOperations: [{
+        id: 'download-1', kind: 'ARTIFACT_DOWNLOAD', jobId: job.id,
+        idempotencyKey: `artifact:${job.id}:same`, payload: {}, now: 200,
+      }],
+    })).toThrow();
+
+    expect(jobs.get(job.id)).toMatchObject({ revision: 0, status: 'READY_TO_SUBMIT' });
+    expect(jobs.listEvents(job.id)).toHaveLength(1);
+    expect(db.getAllSync('SELECT * FROM workflow_artifacts WHERE job_id = ?', job.id)).toEqual([]);
+    expect(operations.get('download-1')).toBeUndefined();
+  } finally { db.close(); }
+});
+
 test('returns current snapshot on CAS conflict without duplicate effects', () => {
   const { db, jobs, operations } = setup();
   try {
