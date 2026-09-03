@@ -106,6 +106,11 @@ export class H3AgUiAgent extends AbstractAgent {
   }
 
   abortRun(): void { this.abortController?.abort(); }
+  dispose(): void {
+    this.abortRun();
+    this.pendingAttachments = [];
+    this.consumePendingAttachments = undefined;
+  }
   clone(): H3AgUiAgent { return new H3AgUiAgent(this.graph, { agentId: this.agentId, description: this.description }); }
 
   setPendingAttachments(attachments: Attachment[], onConsumed?: () => void): void {

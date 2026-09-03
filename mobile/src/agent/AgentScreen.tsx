@@ -85,6 +85,7 @@ function ReadyAgent({
   config: AgentConfig;
   onError: (message: string) => void;
 }) {
+  useEffect(() => () => { void promptRuntimeRegistry.disposeAll(); }, []);
   const router = useRouter();
   const threadStore = useMemo<LocalThreadStore>(
     () => createLocalThreadStore(getDatabase()),
@@ -157,6 +158,7 @@ function ReadyAgent({
   const deleteSession = useCallback(
     async (threadId: string) => {
       try {
+        await promptRuntimeRegistry.evictThread(threadId);
         await threadStore.remove(threadId);
         const next = sortSessionSnapshots(await threadStore.list());
         setThreads(next);
