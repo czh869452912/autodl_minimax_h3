@@ -26,3 +26,11 @@ Pending on a short-path checkout or fixed native build environment:
 3. Auto-export on, private copy off: verify system-gallery playback, cleared private projections, and later bounded CAS collection.
 4. Force-stop between native publication and SQLite success commit: verify restart replays without a duplicate MediaStore row.
 5. Seed a pre-fix missing asset/delivery row: verify opening the app repairs it without clearing app data.
+
+## Prompt data-correctness evidence
+
+- Automated matrix: 8 suites and 59 tests passed on 2026-09-03; TypeScript checking passed.
+- Covered: same-batch and cross-source attachment identity, mention stability, deterministic history ordering, normalized visible-row counts, duplicate-title disambiguation, runtime generation revocation, final flush, eviction, and late-event rejection.
+- The expected provider-failure test logs its deliberately injected `provider failed` error; the suite exits successfully.
+
+Pending device checks remain blocked by the native CMake issue described above: multi-image chip removal, mixed provider/gallery mentions, duplicate-title navigation, visible Timeline counts, model changes during streaming, and deletion during generation.
