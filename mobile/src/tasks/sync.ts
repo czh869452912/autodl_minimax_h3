@@ -19,6 +19,8 @@ import type { WorkflowOperation } from '../workflows/executor/types';
 import { createSqliteMediaStore } from '../media/repository';
 import { materializeJobArtifacts } from '../media/materializer';
 import type { ArtifactRecord } from '../jobs/types';
+import { assertLocalExportSource, createSqliteExportStore, handleExport } from '../workflows/executor/exportOperation';
+import { exportVideo } from '../native/media';
 
 const database = getDatabase();
 export const taskStore = createTaskRepository(database);
@@ -29,6 +31,7 @@ const operations = createOperationRepository(database);
 const blobs = createCasRepository(database);
 const cas = createArtifactCas();
 const commitArtifact = createSqliteArtifactCommitter(database);
+const exportStore = createSqliteExportStore(database);
 
 async function executorForCurrentSettings() {
   const settings = await readSettings();
@@ -50,6 +53,18 @@ const executor = {
   async recover(now: number) { await (await executorForCurrentSettings()).durable.recover(now); },
   async handle(operation: WorkflowOperation, owner: string) {
     const current = await executorForCurrentSettings();
+    if (operation.kind === 'EXPORT') {
+      await handleExport(operation, owner, {
+        now: Date.now,
+        assertSource: assertLocalExportSource,
+        markExporting: exportStore.markExporting,
+        publish: exportVideo,
+        commitSuccess: exportStore.commitSuccess,
+        retry: exportStore.retry,
+        finishFailure: exportStore.finishFailure,
+      });
+      return;
+    }
     if (operation.kind !== 'ARTIFACT_DOWNLOAD') return current.durable.handle(operation, owner);
     await handleArtifactDownload(operation, owner, {
       operations,

@@ -10,9 +10,11 @@ test('references are idempotent and referenced blobs are never listed or removed
     repository.upsertBlob(blob);
     repository.retain(blob.sha256, 'workflow_artifact', 'job-1:video-1', 10);
     repository.retain(blob.sha256, 'workflow_artifact', 'job-1:video-1', 11);
+    expect(repository.hasReference(blob.sha256, 'workflow_artifact', 'job-1:video-1')).toBe(true);
     expect(repository.listUnreferenced(10)).toEqual([]);
     expect(repository.removeBlobIfUnreferenced(blob.sha256)).toBe(false);
     repository.release(blob.sha256, 'workflow_artifact', 'job-1:video-1');
+    expect(repository.hasReference(blob.sha256, 'workflow_artifact', 'job-1:video-1')).toBe(false);
     expect(repository.listUnreferenced(10)).toEqual([blob]);
     expect(repository.removeBlobIfUnreferenced(blob.sha256)).toBe(true);
     expect(repository.listUnreferenced(10)).toEqual([]);

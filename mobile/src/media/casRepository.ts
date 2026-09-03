@@ -29,6 +29,12 @@ export function createCasRepository(db: SQLiteDatabase) {
       assertAppDatabaseWritable(db);
       db.runSync('DELETE FROM artifact_blob_refs WHERE blob_sha256 = ? AND owner_type = ? AND owner_id = ?', sha256, ownerType, ownerId);
     },
+    hasReference(sha256: string, ownerType: string, ownerId: string): boolean {
+      return Boolean(db.getFirstSync(
+        'SELECT 1 AS present FROM artifact_blob_refs WHERE blob_sha256 = ? AND owner_type = ? AND owner_id = ? LIMIT 1',
+        sha256, ownerType, ownerId,
+      ));
+    },
     listUnreferenced(limit: number): ArtifactBlob[] {
       return db.getAllSync<BlobRow>(
         'SELECT b.* FROM artifact_blobs b WHERE NOT EXISTS (SELECT 1 FROM artifact_blob_refs r WHERE r.blob_sha256 = b.sha256) ORDER BY b.created_at ASC, b.sha256 ASC LIMIT ?',
