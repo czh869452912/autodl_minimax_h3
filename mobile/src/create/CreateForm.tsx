@@ -23,17 +23,23 @@ import { resolveDraftPrompt } from './draftPrompt';
 import { WorkflowForm } from '../workflows/renderer/WorkflowForm';
 import type { WorkflowDefinition } from '../workflows/schema/types';
 import { createJobRepository } from '../jobs/repository';
-import { jobToTaskProjection } from '../tasks/projection';
 import { createWorkflowRuntime } from '../workflows/runtime/runtime';
 import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
 import { createSubmissionGate } from './submissionGate';
 import { createAppWorkflowCatalog } from '../workflows/registry/builtin';
 import type { RegistryRecord } from '../workflows/registry/types';
 import { registryRecordToDefinition } from '../workflows/registry/catalog';
+import { createJobStateRepository } from '../workflows/executor/jobStateRepository';
+import { createOperationRepository } from '../workflows/executor/operationRepository';
+import { createDurableExecutor } from '../workflows/executor/durableExecutor';
+import { queueCreateFormSubmission } from './submissionQueue';
+import { syncTaskRun } from '../tasks/sync';
 
 const database = getDatabase();
 const taskStore = createTaskRepository(database);
 const jobStore = createJobRepository(database);
+const jobStateStore = createJobStateRepository(database);
+const operationStore = createOperationRepository(database);
 const submissionGate = createSubmissionGate();
 
 const promptDraftStore = createPromptDraftStore(
@@ -44,9 +50,11 @@ const workflowCatalog = createAppWorkflowCatalog();
 export function CreateForm({
   initialPrompt = '',
   draftId,
+  foregroundTick = () => syncTaskRun('foreground'),
 }: {
   initialPrompt?: string;
   draftId?: string;
+  foregroundTick?: () => void | Promise<unknown>;
 }) {
   const router = useRouter();
   const [prompt, setPrompt] = useState(initialPrompt);
@@ -120,11 +128,19 @@ export function CreateForm({
       if ('seed' in workflowValues) inputSnapshot.seed = String(workflowValues.seed ?? seed).trim() || undefined;
       const adapters = createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? settings.token : undefined });
       const runtime = createWorkflowRuntime({ adapters, jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `job-${Date.now()}-${Math.random().toString(16).slice(2)}` });
+      const executor = createDurableExecutor({ jobs: jobStateStore, operations: operationStore, runtime, adapters, credentials: { get: async () => ({ ok: Boolean(settings.token) }) } });
       const currentActive = await workflowCatalog.getActive(definition.id);
       if (!currentActive || currentActive.contentHash !== activeRecord.contentHash) throw new Error('工作流已更新，请重新打开创建页');
-      const job = await runtime.submit(definition, { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord.contentHash, inputs: inputSnapshot, source: 'user', status: 'ready' }, { provenance: { workflowId: activeRecord.workflowId, workflowVersion: activeRecord.version, contentHash: activeRecord.contentHash } });
-      const task = { ...jobToTaskProjection(job, []), images, audios };
-      await taskStore.upsert(task);
+      const task = await queueCreateFormSubmission(
+        { queueSubmission: (input) => executor.queueSubmission(input), upsertTask: (value) => taskStore.upsert(value), foregroundTick },
+        {
+          submissionId: `submission-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          workflow: definition,
+          draft: { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord.contentHash, inputs: inputSnapshot, source: 'user', status: 'ready' },
+          provenance: { workflowId: activeRecord.workflowId, workflowVersion: activeRecord.version, contentHash: activeRecord.contentHash },
+        },
+        { images, audios },
+      );
       Alert.alert('提交成功', `任务 ${task.id} 已加入队列`, [
         { text: '查看任务', onPress: () => router.navigate('/(tabs)/tasks') },
       ]);

@@ -26,3 +26,11 @@ test('normalizes provider start time and execution duration', async () => {
     executionDuration: 42,
   });
 });
+
+test('rejects an opaque handle without a non-empty provider job id', async () => {
+  const transport = jest.fn();
+  const adapter = createAutodlComfyUiAdapter({ transport, token: 'token' });
+  await expect(adapter.getStatus({ region: 'unknown' })).rejects.toThrow('任务句柄无效');
+  await expect(adapter.getStatus({ providerJobId: '   ' })).rejects.toThrow('任务句柄无效');
+  expect(transport).not.toHaveBeenCalled();
+});

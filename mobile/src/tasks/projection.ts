@@ -35,6 +35,6 @@ export function jobToTaskProjection(job: JobRecord, artifacts: ArtifactRecord[] 
     updatedAt: job.updatedAt,
     startedAt: job.startedAt ?? previous?.startedAt,
     executionDuration: job.executionDuration ?? previous?.executionDuration,
-    syncError: job.error?.message,
+    syncError: job.lastError?.message ?? job.error?.message,
   };
 }

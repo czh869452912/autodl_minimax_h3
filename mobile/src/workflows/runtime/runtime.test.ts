@@ -20,6 +20,36 @@ test('validates drafts before network calls and previews provenance', async () =
   expect(value.adapter.submit).not.toHaveBeenCalled();
 });
 
+test('prepares a deterministic request without credentials, persistence, or provider calls', () => {
+  const value = deps();
+  const runtime = createWorkflowRuntime(value.deps);
+  expect(runtime.prepareSubmission(workflow, draft, provenance)).toMatchObject({
+    workflowId: 'demo',
+    workflowContentHash: 'hash',
+    requestInput: { prompt: 'hello' },
+    target: { operation: 'workflow.submit', workflowId: 'demo' },
+  });
+  expect(value.deps.credentials.get).not.toHaveBeenCalled();
+  expect(value.deps.jobs.upsert).not.toHaveBeenCalled();
+  expect(value.adapter.submit).not.toHaveBeenCalled();
+});
+
+test('maps status and output artifacts without persistence', () => {
+  const value = deps();
+  const runtime = createWorkflowRuntime(value.deps);
+  const current: JobRecord = {
+    id: 'local-1', revision: 2, workflowId: 'demo', workflowVersion: '1.0.0', workflowContentHash: 'hash',
+    adapterId: 'demo', adapterVersion: '1.0.0', inputSnapshot: draft.inputs, outputMapping: workflow.outputs,
+    providerHandle: { providerJobId: 'remote-1' }, status: 'RUNNING', createdAt: 100, updatedAt: 100,
+  };
+  const mapped = runtime.mapStatus(current, {
+    status: 'SUCCEEDED', artifacts: [{ id: 'a', jobId: '', kind: 'file', metadata: { path: 'result.video' } }],
+  }, 200);
+  expect(mapped).toMatchObject({ job: { status: 'SUCCEEDED', updatedAt: 200 }, artifacts: [{ kind: 'video', jobId: 'local-1' }] });
+  expect(value.deps.jobs.upsert).not.toHaveBeenCalled();
+  expect(value.deps.jobs.replaceArtifacts).not.toHaveBeenCalled();
+});
+
 test('requires explicit active workflow provenance before validation', () => {
   const value = deps();
   const runtime = createWorkflowRuntime(value.deps);
