@@ -58,7 +58,10 @@ export function createArtifactCas(
   const nonce = deps.nonce ?? (() => `${Date.now()}-${Math.random().toString(16).slice(2)}`);
   return {
     async put(stream, options) {
-      const part = `cas/parts/${options.operationId ?? 'put'}-${nonce()}.part`;
+      const partId = options.operationId
+        ? CryptoJS.SHA256(options.operationId).toString(CryptoJS.enc.Hex)
+        : `put-${nonce()}`;
+      const part = `cas/parts/${partId}.part`;
       let publishedByCopy: string | undefined;
       await files.makeDirectory('cas/parts');
       try {

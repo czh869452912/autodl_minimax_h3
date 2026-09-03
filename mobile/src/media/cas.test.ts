@@ -72,6 +72,33 @@ test('keeps a part cleanup boundary when writing or publishing fails', async () 
   expect([...publishFailure.entries.keys()].filter((path) => path.endsWith('.part'))).toEqual([]);
 });
 
+test('a restarted operation replaces its abandoned part and publishes one blob', async () => {
+  const { files, entries } = memoryFiles();
+  const write = files.write;
+  const remove = files.remove;
+  files.write = jest.fn(async (...args) => {
+    await write(...args);
+    throw new Error('process stopped');
+  });
+  files.remove = jest.fn(async () => { throw new Error('process already gone'); });
+  await expect(createArtifactCas(files, { nonce: () => 'first-process' }).put(
+    streamOf(bytes('interrupted')),
+    { mime: 'video/mp4', maxBytes: 20, operationId: 'download-1' },
+  )).rejects.toThrow('process stopped');
+
+  files.write = write;
+  files.remove = remove;
+
+  const result = await createArtifactCas(files, { nonce: () => 'second-process' }).put(
+    streamOf(bytes('abc')),
+    { mime: 'video/mp4', maxBytes: 10, operationId: 'download-1' },
+  );
+
+  expect(entries.get(result.relativePath)).toEqual(bytes('abc'));
+  expect([...entries.keys()].filter((path) => path.startsWith('cas/sha256/'))).toEqual([result.relativePath]);
+  expect([...entries.keys()].filter((path) => path.endsWith('.part'))).toEqual([]);
+});
+
 test('gc never deletes a referenced blob and retains rows after file deletion failure', async () => {
   const blob = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 1, verifiedAt: 1 };
   let referenced = true;
