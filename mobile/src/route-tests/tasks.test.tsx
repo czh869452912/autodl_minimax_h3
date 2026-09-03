@@ -23,11 +23,19 @@ jest.mock('expo-router', () => ({
   },
 }));
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
-jest.mock('../tasks/sync', () => ({
-  taskStore: { list: jest.fn(async () => [{ id: 'task-1', prompt: 'x', status: 'RUNNING', resolution: '768p竖', duration: 5, createdAt: 1_000, startedAt: 1_500, updatedAt: 2_000 }]), upsert: (value: unknown) => mockTaskUpsert(value), upsertMediaProjection: (value: unknown) => mockTaskMediaUpsert(value), updateMediaProjection: (id: string, value: unknown) => mockTaskMediaPatch(id, value) },
-  mediaStore: { getPrimaryVideoByTaskId: (taskId: string) => mockPrimaryVideo(taskId) },
-  syncTasks: jest.fn(async () => [{ id: 'task-1', prompt: 'x', status: 'RUNNING', resolution: '768p竖', duration: 5, createdAt: 1_000, startedAt: 1_500, updatedAt: 2_000 }]),
-}));
+jest.mock('../tasks/sync', () => {
+  const tasks = [{ id: 'task-1', prompt: 'x', status: 'RUNNING', resolution: '768p竖', duration: 5, createdAt: 1_000, startedAt: 1_500, updatedAt: 2_000 }];
+  const syncTasks = jest.fn(async () => tasks);
+  return {
+    taskStore: { list: jest.fn(async () => tasks), upsert: (value: unknown) => mockTaskUpsert(value), upsertMediaProjection: (value: unknown) => mockTaskMediaUpsert(value), updateMediaProjection: (id: string, value: unknown) => mockTaskMediaPatch(id, value) },
+    mediaStore: { getPrimaryVideoByTaskId: (taskId: string) => mockPrimaryVideo(taskId) },
+    syncTasks,
+    syncTaskRun: jest.fn(async () => ({
+      tasks: await syncTasks(),
+      summary: { operations: { remainingDue: 0, remainingScheduled: 0, budgetExhausted: false } },
+    })),
+  };
+});
 jest.mock('../tasks/media', () => ({
   ensureTaskDownloaded: jest.fn(),
   exportTaskVideo: jest.fn(async (task) => ({ ...task, exportState: 'EXPORTED', galleryUri: 'content://media/video/7' })),
@@ -42,7 +50,7 @@ jest.mock('../workflows/providers/registry', () => ({
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
 import TasksScreen from '../../app/(tabs)/tasks';
-import { mediaStore, syncTasks, taskStore } from '../tasks/sync';
+import { mediaStore, syncTaskRun, syncTasks, taskStore } from '../tasks/sync';
 import { ensureTaskDownloaded, exportTaskVideo } from '../tasks/media';
 
 afterEach(() => {
@@ -196,6 +204,19 @@ test('does not poll again when the visible task set is terminal', async () => {
   const callsAfterLoad = jest.mocked(syncTasks).mock.calls.length;
   await act(async () => { jest.advanceTimersByTime(30_000); });
   expect(jest.mocked(syncTasks).mock.calls.length).toBe(callsAfterLoad);
+});
+
+test('continues polling after task success while durable delivery is scheduled', async () => {
+  jest.useFakeTimers();
+  const pendingResult = {
+    tasks: [{ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 2 }],
+    summary: { operations: { remainingDue: 0, remainingScheduled: 1, budgetExhausted: false } },
+  } as never;
+  jest.mocked(syncTaskRun).mockResolvedValueOnce(pendingResult).mockResolvedValueOnce(pendingResult);
+  await act(async () => { create(<TasksScreen />); });
+  const calls = jest.mocked(syncTaskRun).mock.calls.length;
+  await act(async () => { jest.advanceTimersByTimeAsync(10_000); });
+  expect(jest.mocked(syncTaskRun).mock.calls.length).toBe(calls + 1);
 });
 
 test('refreshes when the task page receives focus after a new task is created', async () => {
