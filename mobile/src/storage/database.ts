@@ -54,8 +54,8 @@ export function isLegacyAppDatabase(db: SQLiteDatabase | undefined): boolean {
   const getAllSync = (db as unknown as { getAllSync?: (sql: string) => Array<{ name?: string }> }).getAllSync;
   if (typeof getAllSync !== 'function') return true;
   try {
-    const rows = getAllSync.call(db, "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('workflow_jobs','tasks','media_assets','prompt_drafts','agent_threads')");
-    return rows.length > 0;
+    const rows = getAllSync.call(db, "SELECT name FROM sqlite_master WHERE type = 'table'");
+    return rows.some((row) => typeof row.name === 'string' && APP_TABLES.includes(row.name));
   } catch {
     return true;
   }

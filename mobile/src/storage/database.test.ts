@@ -42,6 +42,17 @@ test('does not stamp a version-zero database containing legacy app data', () => 
   }
 });
 
+test('does not stamp a version-zero database containing only a legacy registry table', () => {
+  const db = createRealSqliteTestDb();
+  try {
+    db.execSync('CREATE TABLE workflow_registry (workflow_id TEXT NOT NULL, version TEXT NOT NULL, content_hash TEXT NOT NULL, source TEXT NOT NULL, trust TEXT NOT NULL, definition_json TEXT NOT NULL, installed_at INTEGER NOT NULL, PRIMARY KEY (workflow_id, version))');
+    ensureAppDatabase(db as never);
+    expect(readAppSchemaVersion(db as never)).toBe(0);
+  } finally {
+    db.close();
+  }
+});
+
 test('fresh initialization supports workflow registry activation', async () => {
   const db = createRealSqliteTestDb();
   try {
