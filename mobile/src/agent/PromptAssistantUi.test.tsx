@@ -358,6 +358,43 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
+  it('preserves the viewport while the user reads older messages', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<ConversationTimeline rows={[]} isRunning onExportPrompt={() => Promise.resolve()} />);
+    });
+    const list = tree.root.findByType(FlatList);
+    act(() => list.props.onScrollBeginDrag());
+    expect(tree.root.findByProps({ accessibilityLabel: '回到最新消息' })).toBeTruthy();
+
+    act(() => list.props.onContentSizeChange(320, 1200));
+    expect(tree.root.findByProps({ accessibilityLabel: '回到最新消息' })).toBeTruthy();
+    act(() => tree.unmount());
+  });
+
+  it('restores latest-message following at the bottom or by explicit action', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<ConversationTimeline rows={[]} isRunning onExportPrompt={() => Promise.resolve()} />);
+    });
+    let list = tree.root.findByType(FlatList);
+    act(() => list.props.onScrollBeginDrag());
+    act(() => list.props.onScrollEndDrag({
+      nativeEvent: {
+        contentOffset: { y: 500 },
+        layoutMeasurement: { height: 500 },
+        contentSize: { height: 1000 },
+      },
+    }));
+    expect(tree.root.findAllByProps({ accessibilityLabel: '回到最新消息' })).toHaveLength(0);
+
+    list = tree.root.findByType(FlatList);
+    act(() => list.props.onScrollBeginDrag());
+    act(() => tree.root.findByProps({ accessibilityLabel: '回到最新消息' }).props.onPress());
+    expect(tree.root.findAllByProps({ accessibilityLabel: '回到最新消息' })).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
   it('shows the submitted user bubble before the agent run resolves', async () => {
     let tree!: ReturnType<typeof create>;
     await act(async () => {

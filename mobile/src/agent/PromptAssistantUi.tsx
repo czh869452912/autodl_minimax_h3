@@ -43,6 +43,7 @@ import {
 import { type PromptParseResult } from './promptParser';
 import type { LocalThreadSnapshot } from './threadStore';
 import { DraggableBottomSheet } from '../ui/DraggableSheet';
+import { nextFollowState, type TimelineMetrics } from './timelineScroll';
 
 type AttachmentLike = {
   id: string;
@@ -405,6 +406,9 @@ export function ConversationTimeline({
   onExportPrompt: (prompt: string) => Promise<void>;
 }) {
   const listRef = useRef<FlatList<ReturnType<typeof normalizeMessages>[number]>>(null);
+  const [followingLatest, setFollowingLatest] = useState(true);
+  const followingLatestRef = useRef(true);
+  const setFollow = useCallback((value: boolean) => { followingLatestRef.current = value; setFollowingLatest(value); }, []);
   const timelineSignature = rows
     .map((row) =>
       row.kind === 'assistant'
@@ -412,27 +416,44 @@ export function ConversationTimeline({
         : `${row.id}:${row.text}`,
     )
     .join('\u0001');
-  const scrollToLatest = useCallback(() => {
-    listRef.current?.scrollToEnd({ animated: true });
+  const scrollToLatest = useCallback((animated = true) => {
+    if (followingLatestRef.current) listRef.current?.scrollToEnd({ animated });
   }, []);
   useEffect(() => {
     scrollToLatest();
   }, [isRunning, scrollToLatest, timelineSignature]);
+  const updateFollow = useCallback((type: 'scroll' | 'scroll-end', metrics: TimelineMetrics) => {
+    setFollow(nextFollowState(followingLatestRef.current, { type, metrics }));
+  }, [setFollow]);
   return (
-    <FlatList
-      ref={listRef}
-      data={rows}
-      keyExtractor={(item) => item.id}
-      style={styles.timeline}
-      contentContainerStyle={styles.timelineContent}
-      keyboardShouldPersistTaps="handled"
-      onContentSizeChange={scrollToLatest}
-      onLayout={() => scrollToLatest()}
-      ListEmptyComponent={
-        isRunning ? <RunningIndicator /> : <EmptyTimeline />
-      }
-      ListFooterComponent={rows.length && isRunning ? <RunningIndicator compact /> : null}
-      renderItem={({ item }) =>
+      <View style={{ flex: 1 }}>
+        <FlatList
+          ref={listRef}
+          data={rows}
+          keyExtractor={(item) => item.id}
+          style={styles.timeline}
+          contentContainerStyle={styles.timelineContent}
+          keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={16}
+          onScrollBeginDrag={() =>
+            setFollow(nextFollowState(followingLatestRef.current, { type: 'drag-start' }))
+          }
+          onScroll={({ nativeEvent }) => updateFollow('scroll', nativeEvent)}
+          onMomentumScrollEnd={({ nativeEvent }) =>
+            updateFollow('scroll-end', nativeEvent)
+          }
+          onScrollEndDrag={({ nativeEvent }) =>
+            updateFollow('scroll-end', nativeEvent)
+          }
+          onContentSizeChange={() => scrollToLatest()}
+          onLayout={() => scrollToLatest()}
+          ListEmptyComponent={
+            isRunning ? <RunningIndicator /> : <EmptyTimeline />
+          }
+          ListFooterComponent={
+            rows.length && isRunning ? <RunningIndicator compact /> : null
+          }
+          renderItem={({ item }) =>
         item.kind === 'user' ? (
           <View style={styles.userRow}>
             {item.attachments.length ? (
@@ -483,8 +504,32 @@ export function ConversationTimeline({
             </View>
           </View>
         )
-      }
-    />
+          }
+        />
+        {!followingLatest ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="回到最新消息"
+            onPress={() => {
+              setFollow(nextFollowState(followingLatestRef.current, { type: 'back-to-latest' }));
+              listRef.current?.scrollToEnd({ animated: true });
+            }}
+            style={{
+              position: 'absolute',
+              right: 16,
+              bottom: 12,
+              flexDirection: 'row',
+              gap: 4,
+              padding: 10,
+              borderRadius: 18,
+              backgroundColor: LIGHT_PROMPT_COLORS.surface,
+            }}
+          >
+            <AppIcon name="download" size={16} color={LIGHT_PROMPT_COLORS.ink} />
+            <Text>回到最新</Text>
+          </Pressable>
+        ) : null}
+      </View>
   );
 }
 
