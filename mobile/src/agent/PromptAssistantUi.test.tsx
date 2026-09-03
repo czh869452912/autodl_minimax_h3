@@ -17,8 +17,42 @@ jest.mock('./assistantImagePicker', () => ({
   pickAssistantImages: jest.fn(() => Promise.resolve([])),
 }));
 
-import { getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline } from './PromptAssistantUi';
+import { getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline, type RunIssue } from './PromptAssistantUi';
 import { normalizeMessages } from './agentPresentation';
+
+const basePromptProps = {
+  threads: [{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }],
+  activeThreadId: 't1',
+  onSelect: () => undefined,
+  onNew: () => undefined,
+  onDelete: () => undefined,
+  onRename: () => undefined,
+  onExportPrompt: () => Promise.resolve(),
+};
+
+function PromptIssueHarness({
+  initialIssue = null,
+  onRetry = async () => undefined,
+}: {
+  initialIssue?: RunIssue | null;
+  onRetry?: () => Promise<void>;
+}) {
+  const [runIssue, setRunIssue] = React.useState<RunIssue | null>(initialIssue);
+  return (
+    <PromptAssistantUi
+      {...basePromptProps}
+      runIssue={runIssue}
+      onRunIssueChange={setRunIssue}
+      onRetry={onRetry}
+    />
+  );
+}
+
+function renderedText(tree: ReturnType<typeof create>): string[] {
+  return tree.root.findAllByType(Text).map((node) =>
+    [node.props.children].flat(Infinity).join(''),
+  );
+}
 
 describe('Prompt assistant UI primitives', () => {
   beforeEach(() => {
@@ -533,21 +567,59 @@ describe('Prompt assistant UI primitives', () => {
     mockChatContext = { ...mockChatContext, isRunning: true, agent: { abortRun } };
     let tree!: ReturnType<typeof create>;
     await act(async () => {
-      tree = create(
-        <PromptAssistantUi
-          threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
-          activeThreadId="t1"
-          onSelect={() => undefined}
-          onNew={() => undefined}
-          onDelete={() => undefined}
-          onRename={() => undefined}
-          onExportPrompt={() => Promise.resolve()}
-        />,
-      );
+      tree = create(<PromptIssueHarness />);
     });
     act(() => tree.root.findByProps({ accessibilityLabel: '停止生成' }).props.onPress());
     expect(abortRun).toHaveBeenCalledTimes(1);
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === '已停止生成')).toBe(true);
+    act(() => tree.unmount());
+  });
+
+  it('renders an inline retry for the last failed round without resubmitting input', async () => {
+    const onRetry = jest.fn(async () => undefined);
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(
+        <PromptIssueHarness
+          initialIssue={{ kind: 'error', message: '网络失败' }}
+          onRetry={onRetry}
+        />,
+      );
+    });
+    expect(tree.root.findByProps({ accessibilityLabel: '重试上一轮' })).toBeTruthy();
+    await act(async () => {
+      tree.root.findByProps({ accessibilityLabel: '重试上一轮' }).props.onPress();
+    });
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(mockChatContext.submitMessage).not.toHaveBeenCalled();
+    act(() => tree.unmount());
+  });
+
+  it('renders an aborted issue inline after stop', () => {
+    const abortRun = jest.fn();
+    mockChatContext = { ...mockChatContext, isRunning: true, agent: { abortRun } };
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptIssueHarness />); });
+    act(() => tree.root.findByProps({ accessibilityLabel: '停止生成' }).props.onPress());
+    expect(abortRun).toHaveBeenCalledTimes(1);
+    expect(tree.root.findByProps({ accessibilityLabel: '重试上一轮' })).toBeTruthy();
+    expect(renderedText(tree)).toContain('已停止生成');
+    act(() => tree.unmount());
+  });
+
+  it('resets issue state when the thread-keyed session changes', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(
+        <PromptIssueHarness
+          key="thread-1"
+          initialIssue={{ kind: 'error', message: '旧错误' }}
+        />,
+      );
+    });
+    expect(renderedText(tree)).toContain('旧错误');
+    act(() => { tree.update(<PromptIssueHarness key="thread-2" />); });
+    expect(renderedText(tree)).not.toContain('旧错误');
     act(() => tree.unmount());
   });
 });

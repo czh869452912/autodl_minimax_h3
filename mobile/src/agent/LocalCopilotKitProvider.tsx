@@ -21,6 +21,10 @@ export function createLocalCopilotKitCore(agent: AbstractAgent): CopilotKitCoreR
   return core;
 }
 
+export async function rerunLocalAgent(agent: AbstractAgent): Promise<void> {
+  await createLocalCopilotKitCore(agent).runAgent({ agent });
+}
+
 export function LocalCopilotKitProvider({ children, agent, onError }: {
   children: ReactNode;
   agent: AbstractAgent;

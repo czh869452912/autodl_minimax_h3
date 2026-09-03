@@ -5,7 +5,7 @@ import { getDatabase } from '../storage/databaseClient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { readSettings } from '../settings/storage';
 import { COLORS } from '../ui/theme';
-import { LocalCopilotKitProvider } from './LocalCopilotKitProvider';
+import { LocalCopilotKitProvider, rerunLocalAgent } from './LocalCopilotKitProvider';
 import { promptRuntimeRegistry } from './runtimeStore';
 import {
   createLocalThreadStore,
@@ -16,7 +16,7 @@ import { isH3AgentConfigReady, type H3AgentConfig } from './agentTypes';
 import { applyAgentSettings } from './agentConfig';
 import { readImageAsDataSource } from './imageAttachmentUpload';
 import { getH3AgentConfigError } from './modelAdapter';
-import { PromptAssistantUi } from './PromptAssistantUi';
+import { PromptAssistantUi, type RunIssue } from './PromptAssistantUi';
 import { createPromptDraftStore } from './promptDraft';
 import { sortSessionSnapshots } from './agentPresentation';
 
@@ -243,6 +243,7 @@ function AgentSession({
   onExportPrompt: (prompt: string) => Promise<void>;
 }) {
   const [notice, setNotice] = useState<string | undefined>();
+  const [runIssue, setRunIssue] = useState<RunIssue | null>(null);
   const runtime = useMemo(
     () => promptRuntimeRegistry.ensure(config, snapshot, threadStore),
     [config, snapshot.threadId, threadStore],
@@ -258,7 +259,9 @@ function AgentSession({
   return (
     <LocalCopilotKitProvider
       agent={agent}
-      onError={(reason) => setNotice(reason.message)}
+      onError={(reason) =>
+        setRunIssue({ kind: 'error', message: reason.message })
+      }
     >
       <CopilotChat
         agentId={agent.agentId}
@@ -268,7 +271,24 @@ function AgentSession({
           onUpload: readImageAsDataSource,
         }}
       >
-        <PromptAssistantUi {...uiProps} onExportPrompt={onExportPrompt} notice={notice} />
+        <PromptAssistantUi
+          {...uiProps}
+          onExportPrompt={onExportPrompt}
+          notice={notice}
+          runIssue={runIssue}
+          onRunIssueChange={setRunIssue}
+          onRetry={async () => {
+            setRunIssue(null);
+            try {
+              await rerunLocalAgent(agent);
+            } catch (reason) {
+              setRunIssue({
+                kind: 'error',
+                message: reason instanceof Error ? reason.message : '重试失败',
+              });
+            }
+          }}
+        />
       </CopilotChat>
     </LocalCopilotKitProvider>
   );

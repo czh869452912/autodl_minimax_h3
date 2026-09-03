@@ -62,6 +62,8 @@ type HistoryProps = {
   onRename: (id: string, title: string) => void;
 };
 
+export type RunIssue = { kind: 'error' | 'aborted'; message: string };
+
 export function PromptAssistantUi({
   threads,
   activeThreadId,
@@ -71,7 +73,16 @@ export function PromptAssistantUi({
   onRename: onRenameThread,
   onExportPrompt,
   notice,
-}: HistoryProps & { onExportPrompt: (prompt: string) => Promise<void>; notice?: string }) {
+  runIssue = null,
+  onRunIssueChange = () => undefined,
+  onRetry = async () => undefined,
+}: HistoryProps & {
+  onExportPrompt: (prompt: string) => Promise<void>;
+  notice?: string;
+  runIssue?: RunIssue | null;
+  onRunIssueChange?: (issue: RunIssue | null) => void;
+  onRetry?: () => Promise<void>;
+}) {
   const {
     messages,
     isRunning,
@@ -86,7 +97,6 @@ export function PromptAssistantUi({
   const [inputSelection, setInputSelection] = useState({ start: 0, end: 0 });
   const [mentionSheetOpen, setMentionSheetOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [stopNotice, setStopNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const submitLock = useRef(false);
   const inputRef = useRef<TextInput>(null);
@@ -161,7 +171,7 @@ export function PromptAssistantUi({
       return;
     submitLock.current = true;
     setSubmitting(true);
-    setStopNotice(null);
+    onRunIssueChange(null);
     const readyAttachments: Array<{ uri: string; filename?: string; displayName?: string }> = ready
       .map((item) => {
         if (!item.source) return null;
@@ -190,7 +200,10 @@ export function PromptAssistantUi({
     try {
       await submitMessage(value);
     } catch (error) {
-      setStopNotice(error instanceof Error ? error.message : '发送失败');
+      onRunIssueChange({
+        kind: 'error',
+        message: error instanceof Error ? error.message : '发送失败',
+      });
     } finally {
       submitLock.current = false;
       setSubmitting(false);
@@ -326,16 +339,18 @@ export function PromptAssistantUi({
       <View style={styles.body}>
         {wide ? <View style={styles.sidebar}>{history}</View> : null}
         <View style={styles.conversation}>
-          {stopNotice ?? notice ? (
+          {notice ? (
             <View style={styles.notice}>
               <AppIcon name="info" size={16} color={LIGHT_PROMPT_COLORS.accent} />
-              <Text style={styles.noticeText}>{stopNotice ?? notice}</Text>
+              <Text style={styles.noticeText}>{notice}</Text>
             </View>
           ) : null}
           <ConversationTimeline
             rows={rows}
             isRunning={isRunning || submitting}
             onExportPrompt={onExportPrompt}
+            runIssue={runIssue}
+            onRetry={onRetry}
           />
           <View style={styles.composerDock}>
             <Composer
@@ -346,7 +361,7 @@ export function PromptAssistantUi({
               onOpenMentionPicker={() => setMentionSheetOpen(true)}
               onCancel={() => {
                 agent.abortRun?.();
-                setStopNotice('已停止生成');
+                onRunIssueChange({ kind: 'aborted', message: '已停止生成' });
               }}
               isRunning={isRunning || submitting}
               attachments={composerAttachments}
@@ -400,10 +415,14 @@ export function ConversationTimeline({
   rows,
   isRunning,
   onExportPrompt,
+  runIssue = null,
+  onRetry = async () => undefined,
 }: {
   rows: ReturnType<typeof normalizeMessages>;
   isRunning: boolean;
   onExportPrompt: (prompt: string) => Promise<void>;
+  runIssue?: RunIssue | null;
+  onRetry?: () => Promise<void>;
 }) {
   const listRef = useRef<FlatList<ReturnType<typeof normalizeMessages>[number]>>(null);
   const [followingLatest, setFollowingLatest] = useState(true);
@@ -451,7 +470,11 @@ export function ConversationTimeline({
             isRunning ? <RunningIndicator /> : <EmptyTimeline />
           }
           ListFooterComponent={
-            rows.length && isRunning ? <RunningIndicator compact /> : null
+            rows.length && isRunning ? (
+              <RunningIndicator compact />
+            ) : runIssue ? (
+              <RunIssueRow issue={runIssue} onRetry={onRetry} />
+            ) : null
           }
           renderItem={({ item }) =>
         item.kind === 'user' ? (
@@ -530,6 +553,42 @@ export function ConversationTimeline({
           </Pressable>
         ) : null}
       </View>
+  );
+}
+
+function RunIssueRow({
+  issue,
+  onRetry,
+}: {
+  issue: RunIssue;
+  onRetry: () => Promise<void>;
+}) {
+  const [retrying, setRetrying] = useState(false);
+  const handleRetry = async () => {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      await onRetry();
+    } finally {
+      setRetrying(false);
+    }
+  };
+  return (
+    <View accessibilityRole="alert" style={styles.runIssue}>
+      <Text style={styles.runIssueText}>{issue.message}</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="重试上一轮"
+        accessibilityState={{ disabled: retrying }}
+        disabled={retrying}
+        onPress={() => void handleRetry()}
+        style={styles.runIssueAction}
+      >
+        <Text style={styles.runIssueActionText}>
+          {retrying ? '正在重试…' : '重试'}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -1137,6 +1196,33 @@ const styles = StyleSheet.create({
     backgroundColor: LIGHT_PROMPT_COLORS.surface,
   },
   runningIndicatorCompact: { alignSelf: 'flex-start', marginTop: 8, marginBottom: 8 },
+  runIssue: {
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5C4BC',
+    backgroundColor: '#FFF4F1',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  runIssueText: {
+    flex: 1,
+    color: '#8B3528',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  runIssueAction: {
+    minHeight: 32,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3D9D2',
+  },
+  runIssueActionText: { color: '#743026', fontSize: 12, fontWeight: '700' },
   runningDot: {
     width: 8,
     height: 8,
