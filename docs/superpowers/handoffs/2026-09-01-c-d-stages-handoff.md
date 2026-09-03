@@ -1,7 +1,7 @@
 # A/B 闭环与 C/D 阶段交接
 
-> 更新时间：2026-09-02
-> B 发布基线：`main`、`origin/main` 与 `v1.4.6^{}` 指向 `536934fc6e2ad0914aa2feb4922d2919d206d764`；本交接文档在该发布基线之后写入 `dev`。
+> 更新时间：2026-09-03
+> B 发布基线：`origin/main` 与 `v1.4.7^{}` 指向 `ad7110de87271285affc6750900a12bd0f36acdd`；`dev` 已合并该发布基线，本交接文档继续在 `dev` 维护。
 
 ## 1. 接手后先看什么
 
@@ -10,15 +10,16 @@
 3. `docs/superpowers/plans/2026-09-01-d-core.md`：C-Core 验收通过后的 D-Core 计划。
 4. `docs/superpowers/specs/2026-09-01-local-first-workflow-architecture-design.md`：不可突破的架构约束。
 
-下一项具体动作：B 热修复的自动化、模拟器和用户手动带凭据验收均已完成。现在从 `dev` 创建隔离 worktree，按 `docs/superpowers/plans/2026-09-01-c-core.md` 从 Task 1（版本化 durable schema migration）开始，先写真实 SQLite RED 测试；C-Core 验收完成前不得开始 D-Core。
+下一项具体动作：v1.4.7 fresh-install 发布级热修复已经完成，B 对 C/D 的阻塞重新解除。现在从 `dev` 创建隔离 worktree，按 `docs/superpowers/plans/2026-09-01-c-core.md` 从 Task 1（版本化 durable schema migration）开始；第一批真实 SQLite RED 测试必须覆盖 fresh v0、legacy v0、v4→v6、v5→v6、失败回滚与 recovery。C-Core 验收完成前不得开始 D-Core。
 
 ## 2. 当前发布与分支状态
 
-- B 发布热修复通过 PR #20 合并回 `main`：<https://github.com/czh869452912/autodl_minimax_h3/pull/20>。
-- `v1.4.6` 标签已推送，GitHub Release 已发布：<https://github.com/czh869452912/autodl_minimax_h3/releases/tag/v1.4.6>。
-- Release 资产：`AutoDL-H3-v1.4.6-apk-universal.apk`，SHA-256 `b2ccc5bb510ae6955699c0f63a5f3ff41dc95d8721af5af63c9253c987981434`。
-- 正式发布 Actions 运行 `33600021016` 成功：版本归属、类型检查、单元测试、签名 universal APK、四 ABI、`apksigner` 和 Release 创建均通过：<https://github.com/czh869452912/autodl_minimax_h3/actions/runs/33600021016>。
-- v1.4.6 发布完成时，`HEAD`、本地 `main`/`dev`、`origin/main`/`origin/dev` 与 `v1.4.6^{}` 均为 `536934fc6e2ad0914aa2feb4922d2919d206d764`；此后的 handoff 文档提交只增加说明，不改变已发布代码基线。
+- 媒体并发与导出热修复先通过 PR #20 合并并以 `v1.4.6` 发布：<https://github.com/czh869452912/autodl_minimax_h3/pull/20>、<https://github.com/czh869452912/autodl_minimax_h3/releases/tag/v1.4.6>。
+- 状态审查发现的 fresh-install registry 缺表问题随后通过 PR #21 合并回 `main`：<https://github.com/czh869452912/autodl_minimax_h3/pull/21>；merge commit 为 `ad7110de87271285affc6750900a12bd0f36acdd`。
+- `v1.4.7` 标签与 GitHub Release 已发布：<https://github.com/czh869452912/autodl_minimax_h3/releases/tag/v1.4.7>。
+- Release 资产：`AutoDL-H3-v1.4.7-apk-universal.apk`，大小 `164874442` 字节，SHA-256 `7307e5d51c052f1c62969c38cc18ad977acfa5fe7a19b4fe27a2d72a4bf18163`。
+- 正式发布 Actions 运行 `33709797498` 成功：标签属于 `main`、版本一致、类型检查、单元测试、签名 universal APK、四 ABI、`apksigner` 和 Release 创建均通过：<https://github.com/czh869452912/autodl_minimax_h3/actions/runs/33709797498>。
+- 2026-09-03 同步时，`origin/main` 与 `v1.4.7^{}` 均为 `ad7110de`；主工作区 `dev` 已合并该提交，并在其上更新本 handoff。
 - 主工作区当前在用户指定的开发分支 `dev`；用户本地 `local.properties` 与 `mobile/.expo/` 必须继续保持未提交、未修改。
 - 已保留的 `.worktrees/codex-b1-closure` 是既有工作目录，不要擅自删除。
 
@@ -100,6 +101,25 @@
 - 用户已在带真实凭据的设备上完成剩余手动验收：双任务同一轮询窗口并发完成且无 NativeDatabase 事务错误、两个私有下载完成、详情页正确显示 `已下载`、手动导出到 `Movies/AutoDL-H3`、自动导出投递均成功；存在已验证私有文件时，两类导出均不再报告 `域名不在允许列表`。
 - **B 阶段结论**：实现、自动化、模拟器、用户手动验收和 v1.4.6 正式发布均已完成，B 对 C/D 的阻塞已解除。B 的有意保留项仍按上文边界进入 C-Extended、D-Core 或更晚阶段，不在 C-Core Task 1 前追加新范围。
 
+### B 发布热修复：fresh-install 数据库初始化（2026-09-03）
+
+2026-09-03 的 A/B 阶段状态审查发现 v1.4.6 的发布级回归：全新 Expo SQLite 库从 `user_version=0` 启动时，`ensureAppDatabase` 只接受 v4→v5，导致 `workflow_registry` 永不创建，CreateForm builtin bootstrap 报 `no such table: workflow_registry`。该问题已按 `docs/superpowers/specs/2026-09-03-fresh-install-database-hotfix-design.md` 与同名 plan 完成独立 hotfix：
+
+- 真正空的 v0 数据库现在在单一事务内创建当前完整 schema（包括 registry、active、jobs、artifacts、media、tasks、drafts、threads、scheduler lease 和 recovery），并写入 `user_version=5`；fresh 路径不执行无意义备份。
+- legacy v0 确认门保留：只要存在任意 app-owned 表，包括仅有旧 `workflow_registry` 或 recovery 表，都不会被误判为空库或自动盖上 v5。
+- 既有 v4→v5 的备份、事务、数据保留和失败 recovery 行为不变；reset 现在也会清理 recovery marker。
+- 独立代码审查先发现“空库判定遗漏部分 app-owned 表”的 P1，修复后复审无阻塞问题。
+
+v1.4.7 验收证据：
+
+- `cd mobile; npm run typecheck`：通过。
+- `cd mobile; npm test -- --runInBand`：84 suites 通过，371 tests 通过，1 skipped，0 failed；真实 node:sqlite 覆盖 fresh v0 全表初始化、重复调用、legacy tasks、registry-only legacy v0、v4 数据保留、registry 激活和 recovery reset。
+- Windows 长路径 worktree 复现了已知 CMake/Ninja 路径限制；切到 `D:\wt\h147` 短路径后，最新 HEAD 的 x86_64 Debug APK `BUILD SUCCESSFUL`。
+- `emulator-5554` 卸载旧包后全新安装并冷启动成功，CreateForm 实际可见；设备内 `files/SQLite/autodl-h3.db` 为 `user_version=5`，11 张 app-owned 表齐全，logcat 无 `no such table`、SQLiteException 或本应用崩溃。
+- v1.4.7 正式发布工作流构建并验证四 ABI 签名 universal APK；下载后的资产版本为 `1.4.7 (17)`，APK Signature Scheme v2、RSA 4096 签名复核通过。
+
+状态审查中的 migration 基础设施缺口没有被本次最小发布热修复越界解决，必须在 C-Core Task 1 明确完成：显式逐版本 migration step/列演进、生产备份接线、启动期只读 recovery 产品化，以及 DDL 单一所有权。下载总超时与 2GB 上限不匹配挂到 C-Core Task 4；动态 provider 公网节点权限收紧挂到 C-Extended，不阻塞 Task 1。
+
 ## 5. C 阶段：C-Core Durable Local Executor
 
 C-Core 尚未开始；B 已解除阻塞，当前可立即进入 Task 1。
@@ -108,12 +128,12 @@ C 的目标是：submit、status sync、artifact download 变成可跨进程恢�
 
 执行顺序（详见 `docs/superpowers/plans/2026-09-01-c-core.md`）：
 
-1. **Task 1：版本化 schema migration** — 当前 B.1 已占用 schema v5，C 必须提升到 `APP_SCHEMA_VERSION=6`；新增 `workflow_operations`、`workflow_job_events`，为 job 增加 revision、provider handle、last error、next sync；事务、备份、可重复 migration 和 read-only recovery 必须先有 RED 测试。
+1. **Task 1：版本化 schema migration** — 当前 v1.4.7 已稳定在 schema v5，C 必须提升到 `APP_SCHEMA_VERSION=6`；新增 `workflow_operations`、`workflow_job_events`，为 job 增加 revision、provider handle、last error、next sync。必须实现显式逐版本 migration step 和真实列演进，接线生产备份，收敛 DDL 所有权，并让启动失败进入可诊断的只读 recovery，而不是 import 崩溃；fresh v0、legacy v0、v4→v6、v5→v6、重复 migration 和失败回滚必须先有 RED 测试。
 2. **Task 2：Operation/Lease/CAS repository** — 稳定幂等键、唯一约束、claim/renew/release、过期 lease 回收、`nextRetryAt` 过滤、revision/CAS 冲突返回当前 snapshot。
 3. **Task 3：Durable submit 与 UNKNOWN 对账** — `VALIDATED → SUBMITTING → QUEUED/RUNNING` 事件化；超时进入 `UNKNOWN`，只用 opaque provider handle reconcile，禁止自动 resubmit。
 4. **Task 4：有界 Artifact CAS** — SHA-256 内容寻址、`.part`、原子 rename、hash/MIME/字节/超时限制、引用安全 GC；status snapshot 不等待媒体下载。
 5. **Task 5：有界调度与进程恢复** — foreground/background/headless 统一 tick，每轮有界 operation 数量，status/download/export 独立 lease，进程启动回收过期 lease。
-6. **Task 6：C-Core 验收** — duplicate submit、lease contention/expiry、UNKNOWN reconciliation、CAS conflict、restart recovery、bounded queue 自动化测试，加 Android force-stop 恢复验证。
+6. **Task 6：C-Core 验收** — duplicate submit、lease contention/expiry、UNKNOWN reconciliation、CAS conflict、restart recovery、bounded queue 自动化测试，加 Android fresh-install 创建任务、v4/v5 升级数据保留与 force-stop 恢复验证。
 
 C-Core 通过前不得开始 D 的 Project UI 或产品域迁移。每个 task 单独提交，遵守 RED → GREEN → REFACTOR；使用隔离 worktree，不直接在 `dev` 上开发。
 
@@ -159,12 +179,12 @@ D-Core 之后再规划 Batch/Variant、项目包导出/导入、备份/同步/�
 
 ## 8. 下一次接手的执行清单
 
-1. `git status --short --branch`，确认当前为 `dev`，并用 `git merge-base --is-ancestor v1.4.6 dev` 确认开发基线包含 v1.4.6；不要改动 `local.properties` 与 `mobile/.expo/`。
+1. `git status --short --branch`，确认当前为 `dev`，并用 `git merge-base --is-ancestor v1.4.7 dev` 确认开发基线包含 v1.4.7；不要改动 `local.properties` 与 `mobile/.expo/`。
 2. 从 `dev` 创建 `codex/c-core-schema` 隔离 worktree，不在发布基线工作区直接开发 C-Core。
-3. 阅读 `docs/superpowers/plans/2026-09-01-c-core.md` Task 1、架构设计的 durable executor 章节和现有 `mobile/src/storage/database*` 实现。
-4. 先写真实 SQLite migration RED 测试：repeatable migration、legacy table 保留、注入 DDL 失败后 rollback + recovery state。
+3. 阅读 `docs/superpowers/plans/2026-09-01-c-core.md` Task 1、本文件的状态审查收口、v1.4.7 fresh-install hotfix plan、架构设计的 durable executor 章节和现有 `mobile/src/storage/database*` 实现。
+4. 先写真实 SQLite migration RED 测试：fresh v0、legacy v0、v4→v6、v5→v6、repeatable migration、列演进、legacy table 保留、生产 backup 接线，以及注入 DDL 失败后的 rollback + 可启动 read-only recovery。
 5. 运行 focused Jest 看到预期失败，再实现 `runner.ts`/`v6DurableExecutor.ts`，随后运行 typecheck、全量 Jest 和 Android 门禁。
 6. 完成并记录 C-Core Task 1 后，才继续 Task 2；C-Core 六项全部验收通过后再切换到 D-Core Task 1。
 7. D-Core 必须从 C-Core 已稳定的 job/artifact/CAS snapshot 向上构建；不得绕过 v6 durable executor，或提前把 Project UI、Batch/Variant、同步协作并入 C-Core。
 
-交接结论：A/B 已闭环，B 新增的媒体并发、投影所有权、动态 AutoDL 产物节点、下载完整性和相册导出修复已通过自动化、模拟器及用户手动带凭据验收，并以 v1.4.6 正式发布。当前唯一正确的后续顺序是 C-Core Durable Local Executor → C-Core 验收 → D-Core Local Product Domain → D-Core 验收；下一项工作从 C-Core Task 1 的 v6 migration 开始。
+交接结论：A/B 已闭环。媒体并发、投影所有权、动态 AutoDL 产物节点、下载完整性和相册导出修复已通过自动化、模拟器及用户手动带凭据验收，并以 v1.4.6 发布；状态审查发现的 fresh-install registry 回归随后完成 TDD、独立复审、模拟器全新安装和正式签名发布，以 v1.4.7 收口。当前唯一正确的后续顺序是 C-Core Durable Local Executor → C-Core 验收 → D-Core Local Product Domain → D-Core 验收；下一项工作从 C-Core Task 1 的 v6 migration runner、生产备份与只读 recovery 开始。
