@@ -130,3 +130,15 @@ test('gc never deletes a referenced blob and retains rows after file deletion fa
   expect(await collectGarbage({ repository, files, limit: 10 })).toEqual({ deleted: 0, failed: 1 });
   expect(removed).toBe(false);
 });
+
+test('gc removes metadata only when the blob is still unreferenced after file removal', async () => {
+  const blob = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 1, verifiedAt: 1 };
+  const repository = {
+    listUnreferenced: jest.fn(() => [blob]),
+    removeBlobIfUnreferenced: jest.fn(() => false),
+  };
+  const files = { remove: jest.fn(async () => undefined) };
+  await expect(collectGarbage({ repository, files, limit: 1 })).resolves.toEqual({ deleted: 0, failed: 0 });
+  expect(files.remove).toHaveBeenCalledWith(blob.relativePath);
+  expect(repository.removeBlobIfUnreferenced).toHaveBeenCalledWith(blob.sha256);
+});

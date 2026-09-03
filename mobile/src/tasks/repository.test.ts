@@ -1,6 +1,7 @@
 import { createTaskRepository } from './repository';
 import type { TaskRecord } from './types';
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
+import * as FileSystem from 'expo-file-system/legacy';
 
 function fakeDb() {
   let row: Record<string, unknown> | undefined;
@@ -223,4 +224,37 @@ test('ignores malformed persisted task JSON instead of crashing', async () => {
   };
   const store = createTaskRepository(db as never);
   await expect(store.list()).resolves.toMatchObject([{ id: 'bad', inputSnapshot: undefined, images: undefined, audios: undefined }]);
+});
+
+test('removes task projections transactionally and leaves CAS files for garbage collection', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const store = createTaskRepository(db as never);
+    await store.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, localUri: 'file:///documents/cas/sha256/aa/blob', createdAt: 1, updatedAt: 2 });
+    const remove = jest.spyOn(FileSystem, 'deleteAsync').mockResolvedValue(undefined as never);
+    await store.remove('task-1');
+    expect(remove).not.toHaveBeenCalledWith(expect.stringContaining('/cas/sha256/'), expect.anything());
+    remove.mockRestore();
+  } finally { db.close(); }
+});
+
+test('rolls back every task projection delete when one delete fails', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const original = createTaskRepository(db as never);
+    await original.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 2 });
+    db.runSync("INSERT INTO media_assets (id,task_id,title,prompt,source_url,mime_type,status,created_at,updated_at,kind) VALUES ('asset-1','task-1','x','x','https://cdn/video','video/mp4','queued',1,2,'video')");
+    const failingDb = {
+      getAllSync: db.getAllSync.bind(db),
+      getFirstSync: db.getFirstSync.bind(db),
+      execSync: db.execSync.bind(db),
+      runSync(sql: string, ...params: any[]) {
+        if (sql.startsWith('DELETE FROM workflow_artifacts')) throw new Error('injected delete failure');
+        return db.runSync(sql, ...params);
+      },
+    };
+    await expect(createTaskRepository(failingDb as never).remove('task-1')).rejects.toThrow('injected delete failure');
+    expect(db.getFirstSync("SELECT id FROM tasks WHERE id='task-1'")).toEqual({ id: 'task-1' });
+    expect(db.getFirstSync("SELECT id FROM media_assets WHERE id='asset-1'")).toEqual({ id: 'asset-1' });
+  } finally { db.close(); }
 });

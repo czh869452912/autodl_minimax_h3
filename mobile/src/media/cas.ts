@@ -50,6 +50,11 @@ const expoCasFiles: CasFiles = {
   remove: (path) => FileSystem.deleteAsync(absolute(path), { idempotent: true }),
 };
 
+export async function removeCasPath(relativePath: string): Promise<void> {
+  if (!/^cas\/sha256\/[a-f0-9]{2}\/[a-f0-9]{64}$/.test(relativePath)) throw new Error('invalid CAS blob path');
+  await expoCasFiles.remove(relativePath);
+}
+
 function wordArray(bytes: Uint8Array): CryptoJS.lib.WordArray {
   const words: number[] = [];
   for (let index = 0; index < bytes.length; index += 1) {

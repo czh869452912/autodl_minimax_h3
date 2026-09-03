@@ -21,6 +21,9 @@ import { materializeJobArtifacts } from '../media/materializer';
 import type { ArtifactRecord } from '../jobs/types';
 import { assertLocalExportSource, createSqliteExportStore, handleExport } from '../workflows/executor/exportOperation';
 import { exportVideo } from '../native/media';
+import * as FileSystem from 'expo-file-system/legacy';
+import { removeCasPath } from '../media/cas';
+import { reconcileMediaState, type ReconciliationSummary } from '../media/reconciliation';
 
 const database = getDatabase();
 export const taskStore = createTaskRepository(database);
@@ -142,17 +145,27 @@ async function repairTaskProjections(limit = 32): Promise<number> {
   return updated;
 }
 
-export type SyncSummary = { updated: number; failed: number; skipped: number; remaining: number; lastSyncAt: number; operations: CycleSummary };
+export type SyncSummary = {
+  updated: number;
+  failed: number;
+  skipped: number;
+  remaining: number;
+  lastSyncAt: number;
+  operations: CycleSummary;
+  reconciliation: ReconciliationSummary;
+};
 
 export function createSyncTaskRunner(deps: {
   runCycle(options: CycleOptions): Promise<CycleSummary>;
   repair(): Promise<number>;
+  reconcile(): Promise<ReconciliationSummary>;
   listTasks(): ReturnType<typeof taskStore.listActive>;
   now(): number;
 }) {
   return async (reason: TickOptions['reason'] = 'foreground') => {
     const operationSummary = await deps.runCycle({ reason });
     const updated = await deps.repair();
+    const reconciliation = await deps.reconcile();
     const tasks = await deps.listTasks();
     return {
       tasks,
@@ -163,6 +176,7 @@ export function createSyncTaskRunner(deps: {
         remaining: operationSummary.remainingDue + operationSummary.remainingScheduled,
         lastSyncAt: deps.now(),
         operations: operationSummary,
+        reconciliation,
       } satisfies SyncSummary,
     };
   };
@@ -171,6 +185,14 @@ export function createSyncTaskRunner(deps: {
 const run = createSyncTaskRunner({
   runCycle: (options) => cycle.run(options),
   repair: () => repairTaskProjections(),
+  reconcile: () => reconcileMediaState({
+    db: database,
+    fileExists: async (uri) => {
+      const info = await FileSystem.getInfoAsync(uri);
+      return info.exists && !info.isDirectory;
+    },
+    removeCasPath,
+  }),
   listTasks: () => taskStore.listActive(),
   now: Date.now,
 });

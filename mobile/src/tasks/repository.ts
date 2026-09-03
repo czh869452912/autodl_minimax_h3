@@ -5,6 +5,15 @@ import { assertAppDatabaseWritable } from '../storage/database';
 
 export type TaskPageCursor = { createdAt: number; id: string };
 export type TaskPageOptions = { limit?: number; cursor?: TaskPageCursor; status?: TaskRecord['status']; query?: string };
+function transaction<T>(db: SQLiteDatabase, work: () => T): T {
+  if (typeof db.withTransactionSync === 'function') {
+    let result!: T;
+    db.withTransactionSync(() => { result = work(); });
+    return result;
+  }
+  db.execSync('BEGIN IMMEDIATE');
+  try { const result = work(); db.execSync('COMMIT'); return result; } catch (error) { try { db.execSync('ROLLBACK'); } catch { /* best effort */ } throw error; }
+}
 export function createTaskRepository(db: SQLiteDatabase) {
   const parseJson = <T>(source: string | null | undefined, fallback: T): T => { if (!source) return fallback; try { return JSON.parse(source) as T; } catch { return fallback; } };
   const map = (r: any): TaskRecord => ({ id: r.id, prompt: r.prompt, status: r.status, resolution: r.resolution, duration: Number(r.duration), seed: r.seed || undefined, workflowId: r.workflow_id || undefined, workflowVersion: r.workflow_version || undefined, workflowContentHash: r.workflow_hash || undefined, adapterId: r.adapter_id || undefined, adapterVersion: r.adapter_version || undefined, inputSnapshot: parseJson(r.input_json, undefined), images: parseJson(r.images_json, undefined), audios: parseJson(r.audios_json, undefined), videoUrl: r.video_url || undefined, localUri: r.local_uri || undefined, thumbnailUrl: r.thumbnail_url || undefined, downloadState: r.download_state || (r.local_uri ? 'DOWNLOADED' : 'IDLE'), downloadError: r.download_error || undefined, downloadProgress: r.download_progress == null ? undefined : Number(r.download_progress), galleryUri: r.gallery_uri || undefined, exportState: r.export_state || 'NOT_REQUESTED', exportError: r.export_error || undefined, exportedAt: r.exported_at == null ? undefined : Number(r.exported_at), createdAt: Number(r.created_at), updatedAt: Number(r.updated_at), startedAt: r.started_at == null ? undefined : Number(r.started_at), executionDuration: r.execution_duration == null ? undefined : Number(r.execution_duration), syncError: r.sync_error || undefined, lastSyncAt: r.last_sync_at == null ? undefined : Number(r.last_sync_at) });
@@ -60,6 +69,24 @@ export function createTaskRepository(db: SQLiteDatabase) {
     async listSyncCandidates() { return (await all<any>("SELECT * FROM tasks WHERE status IN ('SUCCESS','PARTIAL_SUCCESS') AND workflow_id IS NOT NULL AND last_sync_at IS NULL AND (started_at IS NULL OR (video_url IS NULL AND local_uri IS NULL AND gallery_uri IS NULL)) ORDER BY updated_at ASC, id ASC LIMIT 200")).map(map); },
     async listMediaPending() { return (await all<any>("SELECT * FROM tasks WHERE status IN ('SUCCESS','PARTIAL_SUCCESS') AND (video_url IS NOT NULL OR local_uri IS NOT NULL) AND (((download_state IN ('IDLE','DOWNLOADING')) AND download_error IS NULL) OR export_state IN ('QUEUED','EXPORTING')) ORDER BY updated_at ASC, id ASC LIMIT 40")).map(map); },
     async listMediaProjectionCandidates(limit = 200) { return (await all<any>("SELECT t.* FROM tasks t WHERE t.status IN ('SUCCESS','PARTIAL_SUCCESS') AND (t.video_url IS NOT NULL OR t.local_uri IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM media_assets m WHERE m.task_id = t.id AND m.kind = 'video') ORDER BY t.updated_at ASC, t.id ASC LIMIT ?", Math.max(1, Math.min(1000, limit)))).map(map); },
-    async remove(id: string) { assertAppDatabaseWritable(db); const rows = db.getAllSync<any>('SELECT local_uri, thumbnail_url FROM tasks WHERE id = ? LIMIT 1', id); const assets = db.getAllSync<any>('SELECT local_path, poster_path FROM media_assets WHERE task_id = ?', id); db.runSync('DELETE FROM media_deliveries WHERE asset_id IN (SELECT id FROM media_assets WHERE task_id = ?)', id); db.runSync('DELETE FROM media_assets WHERE task_id = ?', id); db.runSync('DELETE FROM workflow_artifacts WHERE job_id = ?', id); db.runSync('DELETE FROM workflow_jobs WHERE id = ?', id); db.runSync('DELETE FROM tasks WHERE id = ?', id); for (const row of [...rows, ...assets]) { for (const uri of [row.local_uri, row.thumbnail_url, row.local_path, row.poster_path]) { if (typeof uri === 'string' && uri.startsWith('file://')) { try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {} } } } },
+    async remove(id: string) {
+      assertAppDatabaseWritable(db);
+      const rows = db.getAllSync<any>('SELECT local_uri, thumbnail_url FROM tasks WHERE id = ? LIMIT 1', id);
+      const assets = db.getAllSync<any>('SELECT local_path, poster_path FROM media_assets WHERE task_id = ?', id);
+      transaction(db, () => {
+        db.runSync("DELETE FROM artifact_blob_refs WHERE owner_type='workflow_artifact' AND owner_id IN (SELECT job_id || ':' || id FROM workflow_artifacts WHERE job_id=?)", id);
+        db.runSync('DELETE FROM media_deliveries WHERE asset_id IN (SELECT id FROM media_assets WHERE task_id = ?)', id);
+        db.runSync('DELETE FROM media_assets WHERE task_id = ?', id);
+        db.runSync('DELETE FROM workflow_artifacts WHERE job_id = ?', id);
+        db.runSync('DELETE FROM workflow_jobs WHERE id = ?', id);
+        db.runSync('DELETE FROM tasks WHERE id = ?', id);
+      });
+      for (const row of [...rows, ...assets]) {
+        for (const uri of [row.local_uri, row.thumbnail_url, row.local_path, row.poster_path]) {
+          if (typeof uri !== 'string' || !uri.startsWith('file://') || /\/cas\/sha256\//.test(uri)) continue;
+          try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch { /* best effort */ }
+        }
+      }
+    },
   };
 }
