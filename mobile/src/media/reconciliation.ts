@@ -165,10 +165,11 @@ export async function reconcileMediaState(options: {
     );
   }
 
-  const garbage = await withSchedulerLease('cas-gc', () => collectGarbage({
+  const garbage = await withSchedulerLease('cas-gc', (lease) => collectGarbage({
     repository: createCasRepository(options.db),
     files: { remove: options.removeCasPath },
     limit,
+    assertLease: lease.assertOwned,
   }), {
     db: options.db,
     now: options.now,

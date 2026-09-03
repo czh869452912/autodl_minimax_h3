@@ -26,6 +26,15 @@ export default function AgentScreen() {
   useEffect(() => () => { void promptRuntimeRegistry.disposeAll(); }, []);
   const [config, setConfig] = useState<AgentConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const runtimeAvailable = Boolean(
+    !error
+      && config
+      && isH3AgentConfigReady(config)
+      && !getH3AgentConfigError(config),
+  );
+  useEffect(() => {
+    if (!runtimeAvailable) void promptRuntimeRegistry.disposeAll();
+  }, [runtimeAvailable]);
   const refresh = useCallback(() => {
     let active = true;
     void readSettings()

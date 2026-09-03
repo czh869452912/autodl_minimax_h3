@@ -149,12 +149,15 @@ export async function collectGarbage(options: {
   };
   files: Pick<CasFiles, 'remove'>;
   limit: number;
+  assertLease?: () => void;
 }): Promise<{ deleted: number; failed: number }> {
   let deleted = 0;
   let failed = 0;
   for (const blob of options.repository.listUnreferenced(Math.max(0, options.limit))) {
+    options.assertLease?.();
     if (!options.repository.removeBlobIfUnreferenced(blob.sha256)) continue;
     try {
+      options.assertLease?.();
       await options.files.remove(blob.relativePath);
       deleted += 1;
     } catch {

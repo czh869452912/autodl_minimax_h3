@@ -35,3 +35,30 @@ test('claims a database lease atomically and excludes a second executor', async 
     await expect(first).resolves.toBe('done');
   } finally { db.close(); }
 });
+
+test('renews a database lease while asynchronous work is still active', async () => {
+  jest.useFakeTimers();
+  const db = createInitializedRealSqliteTestDb();
+  let release!: () => void;
+  let clock = 100;
+  try {
+    const first = withSchedulerLease(
+      'cas-gc',
+      () => new Promise<string>((resolve) => { release = () => resolve('done'); }),
+      { db: db as never, now: () => clock, ttlMs: 5_000 },
+    );
+    clock = 4_000;
+    await jest.advanceTimersByTimeAsync(1_700);
+    clock = 6_000;
+    await expect(withSchedulerLease('cas-gc', async () => 'duplicate', {
+      db: db as never,
+      now: () => clock,
+      ttlMs: 5_000,
+    })).resolves.toBeUndefined();
+    release();
+    await expect(first).resolves.toBe('done');
+  } finally {
+    db.close();
+    jest.useRealTimers();
+  }
+});
