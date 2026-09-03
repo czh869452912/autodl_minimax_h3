@@ -6,7 +6,7 @@ export type WorkflowUiSchema = { sections: Array<{ id: string; title: string; fi
 export type RequestMapping = { operation: string; bindings: Record<string, string> };
 export type OutputMapping = { artifacts: Array<{ kind: ArtifactKind; from: string }> };
 export type Compatibility = { minAppVersion?: string; requiredAdapterVersion?: string; artifactKinds?: ArtifactKind[] };
-export type ArtifactDownloadPolicy = { allowedHosts?: string[]; allowProviderSuppliedPublicHosts?: boolean; acceptedMimes?: string[]; maxBytes?: number; timeoutMs?: number };
+export type ArtifactDownloadPolicy = { allowedHosts?: string[]; allowProviderSuppliedPublicHosts?: boolean; acceptedMimes?: string[]; maxBytes?: number; connectTimeoutMs?: number; idleTimeoutMs?: number; timeoutMs?: number };
 export type PlatformAdapterManifest = { id: string; adapterVersion: string; platforms: string[]; capabilities: string[]; credentialKinds: string[]; operations: string[]; supportedArtifactKinds: ArtifactKind[]; artifactDownloadPolicy?: ArtifactDownloadPolicy };
 export type WorkflowDefinition = {
   schemaVersion: '1.0'; id: string; version: string; kind: 'atomic' | 'composite';

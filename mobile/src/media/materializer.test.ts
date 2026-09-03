@@ -35,3 +35,11 @@ test('uses the non-destructive artifact projection writer when available', async
   }));
   expect(store.upsert).not.toHaveBeenCalled();
 });
+
+test('persists remote metadata and only enqueues byte transfer', async () => {
+  const store = { upsertArtifactProjection: jest.fn(async () => undefined), upsert: jest.fn(async () => undefined) };
+  const enqueueDownload = jest.fn();
+  await materializeJobArtifacts(job, [artifacts[0]], store, undefined, { enqueueDownload });
+  expect(store.upsertArtifactProjection).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl: 'https://cdn/video', status: 'downloading' }));
+  expect(enqueueDownload).toHaveBeenCalledWith(expect.objectContaining({ artifactId: 'video-1' }), artifacts[0]);
+});
