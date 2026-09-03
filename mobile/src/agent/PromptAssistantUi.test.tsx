@@ -17,7 +17,7 @@ jest.mock('./assistantImagePicker', () => ({
   pickAssistantImages: jest.fn(() => Promise.resolve([])),
 }));
 
-import { getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline, type RunIssue } from './PromptAssistantUi';
+import { applyComposerSuggestion, getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline, type RunIssue } from './PromptAssistantUi';
 import { normalizeMessages } from './agentPresentation';
 
 const basePromptProps = {
@@ -621,5 +621,61 @@ describe('Prompt assistant UI primitives', () => {
     act(() => { tree.update(<PromptIssueHarness key="thread-2" />); });
     expect(renderedText(tree)).not.toContain('旧错误');
     act(() => tree.unmount());
+  });
+
+  it('copies only the selected assistant body', async () => {
+    const rows = normalizeMessages([
+      { id: 'a1', role: 'assistant', content: '第一条' },
+      { id: 'a2', role: 'assistant', content: '第二条' },
+    ]);
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(
+        <ConversationTimeline
+          rows={rows}
+          isRunning={false}
+          onExportPrompt={() => Promise.resolve()}
+        />,
+      );
+    });
+    await act(async () => {
+      tree.root.findByProps({ accessibilityLabel: '复制回答 a2' }).props.onPress();
+    });
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith('第二条');
+    act(() => tree.unmount());
+  });
+
+  it('fills and focuses the composer without submitting a suggestion', () => {
+    const focus = jest.fn();
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<PromptAssistantUi {...basePromptProps} />, {
+        createNodeMock: () => ({ focus, scrollToEnd: jest.fn() }),
+      });
+    });
+    act(() => {
+      tree.root.findByProps({
+        accessibilityLabel: '使用建议 一镜到底的城市夜跑',
+      }).props.onPress();
+    });
+    expect(tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.value)
+      .toBe('一镜到底的城市夜跑');
+    expect(mockChatContext.submitMessage).not.toHaveBeenCalled();
+    act(() => tree.unmount());
+  });
+
+  it('focuses the composer when applying a suggestion', () => {
+    const setDraft = jest.fn();
+    const setSelection = jest.fn();
+    const focus = jest.fn();
+    applyComposerSuggestion(
+      '纸艺风格的产品广告',
+      setDraft,
+      setSelection,
+      { current: { focus } },
+    );
+    expect(setDraft).toHaveBeenCalledWith('纸艺风格的产品广告');
+    expect(setSelection).toHaveBeenCalledWith({ start: 9, end: 9 });
+    expect(focus).toHaveBeenCalledTimes(1);
   });
 });

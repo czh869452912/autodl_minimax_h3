@@ -64,6 +64,17 @@ type HistoryProps = {
 
 export type RunIssue = { kind: 'error' | 'aborted'; message: string };
 
+export function applyComposerSuggestion(
+  value: string,
+  setDraft: (value: string) => void,
+  setSelection: (selection: { start: number; end: number }) => void,
+  input: { current: { focus: () => void } | null },
+): void {
+  setDraft(value);
+  setSelection({ start: value.length, end: value.length });
+  input.current?.focus();
+}
+
 export function PromptAssistantUi({
   threads,
   activeThreadId,
@@ -276,6 +287,9 @@ export function PromptAssistantUi({
     setMentionSheetOpen(false);
     inputRef.current?.focus();
   };
+  const applySuggestion = useCallback((value: string) => {
+    applyComposerSuggestion(value, setDraft, setInputSelection, inputRef);
+  }, []);
   const history = (
     <HistoryList
       threads={threads}
@@ -351,6 +365,7 @@ export function PromptAssistantUi({
             onExportPrompt={onExportPrompt}
             runIssue={runIssue}
             onRetry={onRetry}
+            onSelectSuggestion={applySuggestion}
           />
           <View style={styles.composerDock}>
             <Composer
@@ -417,12 +432,14 @@ export function ConversationTimeline({
   onExportPrompt,
   runIssue = null,
   onRetry = async () => undefined,
+  onSelectSuggestion = () => undefined,
 }: {
   rows: ReturnType<typeof normalizeMessages>;
   isRunning: boolean;
   onExportPrompt: (prompt: string) => Promise<void>;
   runIssue?: RunIssue | null;
   onRetry?: () => Promise<void>;
+  onSelectSuggestion?: (suggestion: string) => void;
 }) {
   const listRef = useRef<FlatList<ReturnType<typeof normalizeMessages>[number]>>(null);
   const [followingLatest, setFollowingLatest] = useState(true);
@@ -467,7 +484,11 @@ export function ConversationTimeline({
           onContentSizeChange={() => scrollToLatest()}
           onLayout={() => scrollToLatest()}
           ListEmptyComponent={
-            isRunning ? <RunningIndicator /> : <EmptyTimeline />
+            isRunning ? (
+              <RunningIndicator />
+            ) : (
+              <EmptyTimeline onSelectSuggestion={onSelectSuggestion} />
+            )
           }
           ListFooterComponent={
             rows.length && isRunning ? (
@@ -511,11 +532,26 @@ export function ConversationTimeline({
             </View>
             <View style={styles.assistantContent}>
               {item.text ? (
-                <CopilotMarkdown
-                  content={item.text}
-                  streamingAnimation={isRunning}
-                  style={markdownStyles}
-                />
+                <>
+                  <CopilotMarkdown
+                    content={item.text}
+                    streamingAnimation={isRunning}
+                    style={markdownStyles}
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`复制回答 ${item.id}`}
+                    onPress={() => void Clipboard.setStringAsync(item.text)}
+                    style={styles.assistantCopy}
+                  >
+                    <AppIcon
+                      name="content_copy"
+                      size={14}
+                      color={LIGHT_PROMPT_COLORS.muted}
+                    />
+                    <Text style={styles.assistantCopyText}>复制</Text>
+                  </Pressable>
+                </>
               ) : null}
               {item.tools.length ? <ToolTimeline steps={item.tools} /> : null}
               {item.prompt ? (
@@ -592,7 +628,13 @@ function RunIssueRow({
   );
 }
 
-function EmptyTimeline() {
+const EMPTY_SUGGESTIONS = ['一镜到底的城市夜跑', '纸艺风格的产品广告'];
+
+function EmptyTimeline({
+  onSelectSuggestion,
+}: {
+  onSelectSuggestion: (suggestion: string) => void;
+}) {
   return (
     <View style={styles.empty}>
       <View style={styles.emptyMark}>
@@ -609,8 +651,17 @@ function EmptyTimeline() {
         描述主体、动作、镜头和氛围；我会帮你补全细节。
       </Text>
       <View style={styles.suggestions}>
-        <Text style={styles.suggestion}>“一镜到底的城市夜跑”</Text>
-        <Text style={styles.suggestion}>“纸艺风格的产品广告”</Text>
+        {EMPTY_SUGGESTIONS.map((suggestion) => (
+          <Pressable
+            key={suggestion}
+            accessibilityRole="button"
+            accessibilityLabel={`使用建议 ${suggestion}`}
+            onPress={() => onSelectSuggestion(suggestion)}
+            style={styles.suggestion}
+          >
+            <Text style={styles.suggestionText}>{suggestion}</Text>
+          </Pressable>
+        ))}
       </View>
     </View>
   );
@@ -1259,10 +1310,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 14,
-    color: LIGHT_PROMPT_COLORS.ink,
     backgroundColor: LIGHT_PROMPT_COLORS.surface,
     overflow: 'hidden',
   },
+  suggestionText: { color: LIGHT_PROMPT_COLORS.ink, fontSize: 14 },
   userRow: { alignItems: 'flex-end', marginVertical: 8 },
   userBubble: {
     maxWidth: '84%',
@@ -1291,6 +1342,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   assistantContent: { flex: 1, minWidth: 0 },
+  assistantCopy: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    minHeight: 30,
+    paddingHorizontal: 8,
+    marginTop: 2,
+    borderRadius: 10,
+  },
+  assistantCopyText: {
+    color: LIGHT_PROMPT_COLORS.muted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   toolTimeline: {
     marginTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
