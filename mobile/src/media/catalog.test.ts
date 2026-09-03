@@ -8,7 +8,7 @@ const completed: TaskRecord = {
 };
 
 test('materializes normalized workflow artifacts into the app media catalog', async () => {
-  const workflowJob = { id: 'job-1', workflowId: 'workflow-1', workflowVersion: '1', workflowContentHash: 'hash', adapterId: 'adapter', adapterVersion: '1', inputSnapshot: { prompt: 'cinematic city' }, status: 'SUCCEEDED' as const, createdAt: 1, updatedAt: 2 };
+  const workflowJob = { id: 'job-1', revision: 0, workflowId: 'workflow-1', workflowVersion: '1', workflowContentHash: 'hash', adapterId: 'adapter', adapterVersion: '1', inputSnapshot: { prompt: 'cinematic city' }, status: 'SUCCEEDED' as const, createdAt: 1, updatedAt: 2 };
   const taskStore = { listMediaProjectionCandidates: jest.fn(async () => [completed]) };
   const jobStore = { get: jest.fn(async () => workflowJob), listArtifacts: jest.fn(async () => [{ id: 'video-1', jobId: 'job-1', kind: 'video' as const, uri: 'https://cdn.test/artifact.mp4' }]) };
   const mediaStore = { upsert: jest.fn(async () => undefined) };

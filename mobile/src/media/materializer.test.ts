@@ -1,7 +1,7 @@
 import { materializeJobArtifacts } from './materializer';
 import type { ArtifactRecord, JobRecord } from '../jobs/types';
 
-const job: JobRecord = { id: 'job-1', workflowId: 'h3', workflowVersion: '1.0.0', workflowContentHash: 'hash', adapterId: 'autodl-comfyui', adapterVersion: '1.0.0', inputSnapshot: { prompt: 'p' }, status: 'SUCCEEDED', createdAt: 1, updatedAt: 2 };
+const job: JobRecord = { id: 'job-1', revision: 0, workflowId: 'h3', workflowVersion: '1.0.0', workflowContentHash: 'hash', adapterId: 'autodl-comfyui', adapterVersion: '1.0.0', inputSnapshot: { prompt: 'p' }, status: 'SUCCEEDED', createdAt: 1, updatedAt: 2 };
 const artifacts: ArtifactRecord[] = [
   { id: 'video-1', jobId: 'job-1', kind: 'video', uri: 'https://cdn/video' },
   { id: 'image-1', jobId: 'job-1', kind: 'image', uri: 'https://cdn/image' },

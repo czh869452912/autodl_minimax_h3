@@ -53,7 +53,7 @@ export function createWorkflowRuntime(deps: RuntimeDeps) {
       const validated = await adapter.validateCredentials(); if (!validated.ok) throw new Error('workflow credentials unavailable');
       const id = deps.id(); if (locks.has(id)) throw new Error('workflow submission already in progress'); locks.add(id);
       const timestamp = now();
-      let job: JobRecord = { id, workflowId: workflow.id, workflowVersion: workflow.version, workflowContentHash: draft.contentHash, adapterId: adapter.manifest().id, adapterVersion: adapter.manifest().adapterVersion, inputSnapshot: draft.inputs, outputMapping: workflow.outputs, status: 'SUBMITTING', createdAt: timestamp, updatedAt: timestamp };
+      let job: JobRecord = { id, revision: 0, workflowId: workflow.id, workflowVersion: workflow.version, workflowContentHash: draft.contentHash, adapterId: adapter.manifest().id, adapterVersion: adapter.manifest().adapterVersion, inputSnapshot: draft.inputs, outputMapping: workflow.outputs, status: 'SUBMITTING', createdAt: timestamp, updatedAt: timestamp };
       await deps.jobs.upsert(job);
       try {
         const requestInput = compileWorkflow(workflow, draft.contentHash).buildRequest(draft.inputs);

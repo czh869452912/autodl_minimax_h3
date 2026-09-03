@@ -28,7 +28,7 @@ test('all app repositories reject writes in recovery mode', async () => {
 
     await expect(tasks.upsert({ id: 't', prompt: 'p', status: 'QUEUED', resolution: '768p', duration: 5, createdAt: 1, updatedAt: 1 })).rejects.toThrow('APP_DATABASE_READ_ONLY');
     await expect(media.upsert({ id: 'm', taskId: 't', title: 'x', prompt: 'p', sourceUrl: 'https://example.test/x', mimeType: 'video/mp4', status: 'downloading', kind: 'video', createdAt: 1, updatedAt: 1 })).rejects.toThrow('APP_DATABASE_READ_ONLY');
-    await expect(jobs.upsert({ id: 'j', workflowId: 'w', workflowVersion: '1', workflowContentHash: 'h', adapterId: 'a', adapterVersion: '1', inputSnapshot: {}, status: 'QUEUED', createdAt: 1, updatedAt: 1 })).rejects.toThrow('APP_DATABASE_READ_ONLY');
+    await expect(jobs.upsert({ id: 'j', revision: 0, workflowId: 'w', workflowVersion: '1', workflowContentHash: 'h', adapterId: 'a', adapterVersion: '1', inputSnapshot: {}, status: 'QUEUED', createdAt: 1, updatedAt: 1 })).rejects.toThrow('APP_DATABASE_READ_ONLY');
     await expect(drafts.save({ prompt: 'p', attachmentIds: [] })).rejects.toThrow('APP_DATABASE_READ_ONLY');
     await expect(threads.save({ threadId: 'th', messages: [], state: {}, createdAt: 1, updatedAt: 1 })).rejects.toThrow('APP_DATABASE_READ_ONLY');
     await expect(registry.upsert({ workflowId: 'w', version: '1', contentHash: 'h', source: 'builtin', trust: 'builtin', definitionJson: '{}', installedAt: 1 })).rejects.toThrow('APP_DATABASE_READ_ONLY');
