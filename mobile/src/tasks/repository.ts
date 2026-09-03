@@ -74,6 +74,7 @@ export function createTaskRepository(db: SQLiteDatabase) {
       const rows = db.getAllSync<any>('SELECT local_uri, thumbnail_url FROM tasks WHERE id = ? LIMIT 1', id);
       const assets = db.getAllSync<any>('SELECT local_path, poster_path FROM media_assets WHERE task_id = ?', id);
       transaction(db, () => {
+        db.runSync('DELETE FROM workflow_operations WHERE job_id = ?', id);
         db.runSync("DELETE FROM artifact_blob_refs WHERE owner_type='workflow_artifact' AND owner_id IN (SELECT job_id || ':' || id FROM workflow_artifacts WHERE job_id=?)", id);
         db.runSync('DELETE FROM media_deliveries WHERE asset_id IN (SELECT id FROM media_assets WHERE task_id = ?)', id);
         db.runSync('DELETE FROM media_assets WHERE task_id = ?', id);

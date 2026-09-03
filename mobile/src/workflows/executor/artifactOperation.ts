@@ -80,7 +80,7 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase) {
             sourceUri: input.localUri,
             blobSha256: input.blob.sha256,
             keepPrivateCopy: input.deliveryPolicy.keepPrivateCopy,
-            displayName: `${input.jobId}.mp4`,
+            displayName: `${input.jobId}-${input.artifact.id}.mp4`,
           }),
           input.now,
           input.now,

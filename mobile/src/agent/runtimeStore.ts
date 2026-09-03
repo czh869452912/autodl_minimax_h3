@@ -58,13 +58,21 @@ export function createPromptRuntimeRegistry(
         existing.runtime.updateMetadata(initial);
         return existing.runtime;
       }
+      const seed = existing
+        ? {
+            ...initial,
+            ...existing.runtime.getSnapshot(),
+            customTitle: initial.customTitle ?? existing.runtime.getSnapshot().customTitle,
+            createdAt: initial.createdAt,
+          }
+        : initial;
       if (existing) void existing.runtime.dispose();
 
       const agent = createAgent(config);
-      agent.threadId = initial.threadId;
-      agent.setMessages(initial.messages);
-      agent.setState(initial.state);
-      let snapshot = initial;
+      agent.threadId = seed.threadId;
+      agent.setMessages(seed.messages);
+      agent.setState(seed.state);
+      let snapshot = seed;
       let pendingSave: LocalThreadSnapshot | undefined;
       let saveTimer: ReturnType<typeof setTimeout> | undefined;
       let active = true;

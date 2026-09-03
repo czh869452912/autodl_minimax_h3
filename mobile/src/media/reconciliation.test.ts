@@ -84,3 +84,23 @@ test('never scans more than the supplied limit', async () => {
     await expect(reconcileMediaState({ ...deps(db), limit: 4 })).resolves.toMatchObject({ scanned: 4 });
   } finally { db.close(); }
 });
+
+test('advances a persisted cursor so healthy old tasks cannot starve later repairs', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    for (let index = 0; index < 6; index += 1) {
+      const id = `job-${index}`;
+      await seedCompletedTask(db, id);
+      db.runSync('UPDATE tasks SET updated_at=? WHERE id=?', index + 1, id);
+      db.runSync(
+        "INSERT INTO media_assets (id,task_id,title,prompt,source_url,mime_type,status,created_at,updated_at,kind) VALUES (?,?,?,?,?,'video/mp4','queued',1,?,'video')",
+        `${id}:video`, id, id, id, `https://cdn.test/${id}.mp4`, index + 1,
+      );
+    }
+    const options = { ...deps(db), limit: 3 };
+    await expect(reconcileMediaState(options)).resolves.toMatchObject({ scanned: 3 });
+    db.runSync("DELETE FROM media_assets WHERE task_id='job-4'");
+    await expect(reconcileMediaState(options)).resolves.toMatchObject({ scanned: 3, repaired: 1 });
+    expect(db.getFirstSync("SELECT id FROM media_assets WHERE task_id='job-4'")).toBeTruthy();
+  } finally { db.close(); }
+});

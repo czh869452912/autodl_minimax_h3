@@ -35,10 +35,10 @@ export function createExecutorCycle(deps: CycleDeps) {
   const runOnce = async (options: CycleOptions): Promise<CycleSummary> => {
     const maxPasses = Math.max(1, Math.min(16, options.maxPasses ?? 4));
     const maxOperationsTotal = Math.max(1, Math.min(128, options.maxOperationsTotal ?? 8));
-    const timestamp = options.now ?? deps.now?.() ?? Date.now();
     const result = emptySummary();
 
     while (result.passes < maxPasses && result.claimed < maxOperationsTotal) {
+      const timestamp = options.now ?? deps.now?.() ?? Date.now();
       const remainingOperationBudget = maxOperationsTotal - result.claimed;
       const pass = await deps.runTick({
         reason: options.reason,
@@ -54,7 +54,10 @@ export function createExecutorCycle(deps: CycleDeps) {
       result.remainingDue = pass.remainingDue;
       result.remainingScheduled = pass.remainingScheduled;
 
-      if (pass.claimed === 0 || pass.remainingDue === 0) break;
+      if (
+        pass.claimed === 0
+        || (pass.remainingDue === 0 && pass.remainingScheduled === 0)
+      ) break;
     }
 
     result.budgetExhausted = result.remainingDue > 0

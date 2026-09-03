@@ -61,6 +61,7 @@ const executor = {
         now: Date.now,
         assertSource: assertLocalExportSource,
         markExporting: exportStore.markExporting,
+        canPublish: exportStore.canPublish,
         publish: exportVideo,
         commitSuccess: exportStore.commitSuccess,
         retry: exportStore.retry,

@@ -142,7 +142,7 @@ test('commits the download and enqueues enabled gallery export atomically', asyn
       idempotencyKey: 'export:job-1:video-1:system-gallery',
       payload: {
         assetId: 'job-1:video-1', artifactId: 'video-1', sourceUri: 'file:///cas/video',
-        blobSha256: 'a'.repeat(64), keepPrivateCopy: false, displayName: 'job-1.mp4',
+        blobSha256: 'a'.repeat(64), keepPrivateCopy: false, displayName: 'job-1-video-1.mp4',
       },
     }]);
     await expect(taskStore.get('job-1')).resolves.toMatchObject({ downloadState: 'DOWNLOADED', exportState: 'QUEUED' });

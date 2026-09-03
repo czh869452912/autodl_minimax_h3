@@ -28,6 +28,7 @@ type ExportDeps = {
   now(): number;
   assertSource(sourceUri: string): Promise<void>;
   markExporting(operation: WorkflowOperation, owner: string, payload: ExportPayload, now: number): Promise<void> | void;
+  canPublish?(operation: WorkflowOperation, owner: string, payload: ExportPayload): boolean;
   publish(sourceUri: string, options: { mediaId: string; displayName: string }): Promise<{ uri: string }>;
   commitSuccess(input: ExportSuccessInput): Promise<void> | void;
   retry(operation: WorkflowOperation, owner: string, payload: ExportPayload, input: ExportFailureInput & { nextRetryAt: number }): Promise<void> | void;
@@ -90,6 +91,7 @@ export async function handleExport(operation: WorkflowOperation, owner: string, 
   }
 
   await deps.markExporting(operation, owner, payload, timestamp);
+  if (deps.canPublish && !deps.canPublish(operation, owner, payload)) return;
   try {
     const result = await deps.publish(payload.sourceUri, { mediaId: payload.assetId, displayName: payload.displayName });
     await deps.commitSuccess({
@@ -115,6 +117,12 @@ export async function handleExport(operation: WorkflowOperation, owner: string, 
 export function createSqliteExportStore(db: SQLiteDatabase) {
   const deliveryId = (payload: ExportPayload) => `${payload.assetId}:system-gallery`;
   return {
+    canPublish(operation: WorkflowOperation, owner: string, payload: ExportPayload): boolean {
+      return Boolean(db.getFirstSync(
+        "SELECT 1 AS present FROM workflow_operations o WHERE o.id=? AND o.state='CLAIMED' AND o.lease_owner=? AND EXISTS (SELECT 1 FROM tasks t WHERE t.id=o.job_id) AND EXISTS (SELECT 1 FROM media_assets m WHERE m.id=? AND m.task_id=o.job_id) LIMIT 1",
+        operation.id, owner, payload.assetId,
+      ));
+    },
     markExporting(operation: WorkflowOperation, owner: string, payload: ExportPayload, now: number): void {
       assertAppDatabaseWritable(db);
       if (!operation.jobId) throw new Error('export job id missing');

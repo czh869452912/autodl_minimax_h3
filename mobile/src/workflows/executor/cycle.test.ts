@@ -14,7 +14,7 @@ const summary = (patch: Partial<TickSummary> = {}): TickSummary => ({
 
 test('runs newly-created due work in later bounded passes', async () => {
   const runTick = jest.fn()
-    .mockResolvedValueOnce(summary({ claimed: 1, succeeded: 1, remainingDue: 1 }))
+    .mockResolvedValueOnce(summary({ claimed: 1, succeeded: 1, remainingScheduled: 1 }))
     .mockResolvedValueOnce(summary({ claimed: 1, succeeded: 1 }));
   const cycle = createExecutorCycle({ runTick, now: () => 100 });
 
@@ -25,6 +25,21 @@ test('runs newly-created due work in later bounded passes', async () => {
     remainingDue: 0,
     budgetExhausted: false,
   });
+});
+
+test('refreshes the clock between passes so asynchronously-created work is due', async () => {
+  const runTick = jest.fn()
+    .mockResolvedValueOnce(summary({ claimed: 1, succeeded: 1, remainingDue: 1 }))
+    .mockResolvedValueOnce(summary({ claimed: 1, succeeded: 1 }));
+  const now = jest.fn()
+    .mockReturnValueOnce(100)
+    .mockReturnValueOnce(125);
+  const cycle = createExecutorCycle({ runTick, now });
+
+  await cycle.run({ reason: 'foreground' });
+
+  expect(runTick).toHaveBeenNthCalledWith(1, expect.objectContaining({ now: 100 }));
+  expect(runTick).toHaveBeenNthCalledWith(2, expect.objectContaining({ now: 125 }));
 });
 
 test('stops at both budgets without draining indefinitely', async () => {

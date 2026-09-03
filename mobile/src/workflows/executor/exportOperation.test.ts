@@ -22,6 +22,7 @@ function setupExport() {
     now: () => 50,
     assertSource: jest.fn(async () => undefined),
     markExporting: jest.fn(async () => undefined),
+    canPublish: jest.fn(() => true),
     publish: jest.fn(async () => ({ uri: 'content://media/external/video/7' })),
     commitSuccess: jest.fn(async () => undefined),
     retry: jest.fn(async () => undefined),
@@ -38,6 +39,14 @@ test('publishes with a stable name and commits all delivery projections', async 
   expect(deps.commitSuccess).toHaveBeenCalledWith(expect.objectContaining({
     galleryUri: 'content://media/external/video/7', keepPrivateCopy: true,
   }));
+});
+
+test('does not publish after the durable operation or task projection is deleted', async () => {
+  const deps = setupExport();
+  deps.canPublish.mockReturnValueOnce(false);
+  await handleExport(operation, 'worker', deps);
+  expect(deps.publish).not.toHaveBeenCalled();
+  expect(deps.commitSuccess).not.toHaveBeenCalled();
 });
 
 test('replays native publication with the same stable identity', async () => {

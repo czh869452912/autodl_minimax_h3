@@ -115,13 +115,14 @@ test('expired and replacement attempts never interleave writes to one part', asy
   expect(entries.get(replacement.relativePath)).toEqual(bytes('xyz'));
 });
 
-test('gc never deletes a referenced blob and retains rows after file deletion failure', async () => {
+test('gc never deletes a referenced blob and restores rows after file deletion failure', async () => {
   const blob = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 1, verifiedAt: 1 };
   let referenced = true;
   let removed = false;
   const repository = {
     listUnreferenced: jest.fn(() => referenced ? [] : [blob]),
     removeBlobIfUnreferenced: jest.fn(() => { removed = true; return true; }),
+    restoreBlob: jest.fn(() => { removed = false; }),
   };
   const files = { remove: jest.fn(async () => undefined) };
   expect(await collectGarbage({ repository, files, limit: 10 })).toEqual({ deleted: 0, failed: 0 });
@@ -129,16 +130,30 @@ test('gc never deletes a referenced blob and retains rows after file deletion fa
   files.remove.mockRejectedValueOnce(new Error('busy'));
   expect(await collectGarbage({ repository, files, limit: 10 })).toEqual({ deleted: 0, failed: 1 });
   expect(removed).toBe(false);
+  expect(repository.restoreBlob).toHaveBeenCalledWith(blob);
 });
 
-test('gc removes metadata only when the blob is still unreferenced after file removal', async () => {
+test('gc never removes the file when the blob becomes referenced before deletion', async () => {
   const blob = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 1, verifiedAt: 1 };
   const repository = {
     listUnreferenced: jest.fn(() => [blob]),
     removeBlobIfUnreferenced: jest.fn(() => false),
+    restoreBlob: jest.fn(),
   };
   const files = { remove: jest.fn(async () => undefined) };
   await expect(collectGarbage({ repository, files, limit: 1 })).resolves.toEqual({ deleted: 0, failed: 0 });
-  expect(files.remove).toHaveBeenCalledWith(blob.relativePath);
   expect(repository.removeBlobIfUnreferenced).toHaveBeenCalledWith(blob.sha256);
+  expect(files.remove).not.toHaveBeenCalled();
+});
+
+test('gc restores blob metadata when physical deletion fails', async () => {
+  const blob = { sha256: 'b'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/bb/blob', createdAt: 1, verifiedAt: 1 };
+  const repository = {
+    listUnreferenced: jest.fn(() => [blob]),
+    removeBlobIfUnreferenced: jest.fn(() => true),
+    restoreBlob: jest.fn(),
+  };
+  const files = { remove: jest.fn(async () => { throw new Error('busy'); }) };
+  await expect(collectGarbage({ repository, files, limit: 1 })).resolves.toEqual({ deleted: 0, failed: 1 });
+  expect(repository.restoreBlob).toHaveBeenCalledWith(blob);
 });

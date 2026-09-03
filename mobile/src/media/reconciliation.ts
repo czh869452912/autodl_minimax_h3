@@ -25,6 +25,33 @@ type TaskRow = {
 
 type ArtifactRow = { id: string; job_id: string; kind: string; uri?: string | null; mime?: string | null; metadata_json?: string | null };
 type AssetRow = { id: string; local_path?: string | null; source_url: string; status: string };
+type ReconciliationCursor = { updatedAt: number; id: string };
+
+const RECONCILIATION_CURSOR_KEY = 'media-reconciliation-cursor';
+
+function readCursor(db: SQLiteDatabase): ReconciliationCursor | undefined {
+  const row = db.getFirstSync<{ owner: string }>(
+    'SELECT owner FROM app_scheduler_leases WHERE lease_key=? LIMIT 1',
+    RECONCILIATION_CURSOR_KEY,
+  );
+  if (!row) return undefined;
+  try {
+    const cursor = JSON.parse(row.owner) as Partial<ReconciliationCursor>;
+    return typeof cursor.updatedAt === 'number' && typeof cursor.id === 'string'
+      ? cursor as ReconciliationCursor
+      : undefined;
+  } catch { return undefined; }
+}
+
+function listTaskPage(db: SQLiteDatabase, limit: number, cursor?: ReconciliationCursor): TaskRow[] {
+  const select = "SELECT id,prompt,video_url,local_uri,download_state,gallery_uri,export_state,created_at,updated_at FROM tasks WHERE status IN ('SUCCESS','PARTIAL_SUCCESS')";
+  if (!cursor) return db.getAllSync<TaskRow>(`${select} ORDER BY updated_at ASC,id ASC LIMIT ?`, limit);
+  const rows = db.getAllSync<TaskRow>(
+    `${select} AND (updated_at > ? OR (updated_at = ? AND id > ?)) ORDER BY updated_at ASC,id ASC LIMIT ?`,
+    cursor.updatedAt, cursor.updatedAt, cursor.id, limit,
+  );
+  return rows.length ? rows : db.getAllSync<TaskRow>(`${select} ORDER BY updated_at ASC,id ASC LIMIT ?`, limit);
+}
 
 function parseArtifact(source: string, jobId: string): ArtifactRecord | undefined {
   try {
@@ -58,10 +85,7 @@ export async function reconcileMediaState(options: {
 }): Promise<ReconciliationSummary> {
   const limit = Math.max(1, Math.min(32, Math.floor(options.limit ?? 8)));
   const now = options.now?.() ?? Date.now();
-  const tasks = options.db.getAllSync<TaskRow>(
-    "SELECT id,prompt,video_url,local_uri,download_state,gallery_uri,export_state,created_at,updated_at FROM tasks WHERE status IN ('SUCCESS','PARTIAL_SUCCESS') ORDER BY updated_at ASC,id ASC LIMIT ?",
-    limit,
-  );
+  const tasks = listTaskPage(options.db, limit, readCursor(options.db));
   let repaired = 0;
   let staleFiles = 0;
 
@@ -128,6 +152,16 @@ export async function reconcileMediaState(options: {
       options.db.runSync("UPDATE media_assets SET export_status='EXPORTED',updated_at=MAX(updated_at,?) WHERE id=?", now, assets[0].id);
     }
     if (changed) repaired += 1;
+  }
+
+  const lastTask = tasks[tasks.length - 1];
+  if (lastTask) {
+    options.db.runSync(
+      'INSERT OR REPLACE INTO app_scheduler_leases (lease_key,owner,expires_at) VALUES (?,?,?)',
+      RECONCILIATION_CURSOR_KEY,
+      JSON.stringify({ updatedAt: lastTask.updated_at, id: lastTask.id }),
+      now,
+    );
   }
 
   const garbage = await collectGarbage({

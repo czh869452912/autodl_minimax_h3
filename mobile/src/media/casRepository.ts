@@ -21,6 +21,13 @@ export function createCasRepository(db: SQLiteDatabase) {
         blob.sha256, blob.byteSize, blob.mime, blob.relativePath, blob.createdAt, blob.verifiedAt,
       );
     },
+    restoreBlob(blob: ArtifactBlob): void {
+      assertAppDatabaseWritable(db);
+      db.runSync(
+        'INSERT OR IGNORE INTO artifact_blobs (sha256,byte_size,mime,relative_path,created_at,verified_at) VALUES (?,?,?,?,?,?)',
+        blob.sha256, blob.byteSize, blob.mime, blob.relativePath, blob.createdAt, blob.verifiedAt,
+      );
+    },
     retain(sha256: string, ownerType: string, ownerId: string, now: number): void {
       assertAppDatabaseWritable(db);
       db.runSync('INSERT OR IGNORE INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)', sha256, ownerType, ownerId, now);

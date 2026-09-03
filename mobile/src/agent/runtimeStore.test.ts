@@ -69,6 +69,32 @@ describe('prompt runtime registry', () => {
     }
   });
 
+  it('hydrates a replacement runtime from the old generation latest snapshot', () => {
+    const agents: ReturnType<typeof fakeAgent>[] = [];
+    const registry = createPromptRuntimeRegistry(() => {
+      const agent = fakeAgent();
+      agents.push(agent);
+      return agent as never;
+    });
+    const first = registry.ensure(config, snapshot('thread-1'), store);
+    agents[0].emitMessages(
+      [{ id: 'latest', role: 'assistant', content: 'streamed' }],
+      { phase: 'latest' },
+    );
+
+    const replacement = registry.ensure(
+      { ...config, model: 'new-model' },
+      snapshot('thread-1'),
+      store,
+    );
+
+    expect(replacement.agent.messages).toEqual([
+      { id: 'latest', role: 'assistant', content: 'streamed' },
+    ]);
+    expect(replacement.agent.state).toEqual({ phase: 'latest' });
+    expect(first.disposed()).toBe(true);
+  });
+
   it('revokes the old generation before replacing a thread config', async () => {
     saveMock.mockClear();
     const agents: ReturnType<typeof fakeAgent>[] = [];
