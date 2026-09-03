@@ -1,7 +1,7 @@
 # Fresh-install Database Hotfix Design
 
-> Date: 2026-09-03  
-> Target release: v1.4.7  
+> Date: 2026-09-03
+> Target release: v1.4.7
 > Base: `main` / v1.4.6
 
 ## Goal
