@@ -6,6 +6,7 @@ import type { OperationRepository } from './operationRepository';
 import type { WorkflowOperation } from './types';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { assertAppDatabaseWritable } from '../../storage/database';
+import CryptoJS from 'crypto-js';
 
 type ArtifactPolicy = {
   allowedHosts: string[];
@@ -49,10 +50,20 @@ function transaction(db: SQLiteDatabase, work: () => void): void {
   try { work(); db.execSync('COMMIT'); } catch (error) { try { db.execSync('ROLLBACK'); } catch { /* best effort */ } throw error; }
 }
 
-export function createSqliteArtifactCommitter(db: SQLiteDatabase) {
+export function artifactExportDisplayName(jobId: string, artifactId: string): string {
+  const safeJobId = jobId.replace(/[^A-Za-z0-9._-]/g, '_').replace(/^[_\.]+|[_\.]+$/g, '').slice(0, 48) || 'job';
+  const identity = CryptoJS.SHA256(`${jobId}\u0000${artifactId}`).toString(CryptoJS.enc.Hex).slice(0, 16);
+  return `${safeJobId}-${identity}.mp4`;
+}
+
+export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => number = Date.now) {
   return (input: ArtifactCommitInput): void => {
     assertAppDatabaseWritable(db);
     transaction(db, () => {
+      const gcLease = db.getFirstSync<{ expires_at: number }>(
+        "SELECT expires_at FROM app_scheduler_leases WHERE lease_key='cas-gc' LIMIT 1",
+      );
+      if (gcLease && Number(gcLease.expires_at) > clock()) throw new Error('CAS_GC_IN_PROGRESS');
       db.runSync(
         'INSERT INTO artifact_blobs (sha256,byte_size,mime,relative_path,created_at,verified_at) VALUES (?,?,?,?,?,?) ON CONFLICT(sha256) DO UPDATE SET verified_at=MAX(artifact_blobs.verified_at, excluded.verified_at)',
         input.blob.sha256, input.blob.byteSize, input.blob.mime, input.blob.relativePath, input.blob.createdAt, input.blob.verifiedAt,
@@ -80,7 +91,7 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase) {
             sourceUri: input.localUri,
             blobSha256: input.blob.sha256,
             keepPrivateCopy: input.deliveryPolicy.keepPrivateCopy,
-            displayName: `${input.jobId}-${input.artifact.id}.mp4`,
+            displayName: artifactExportDisplayName(input.jobId, input.artifact.id),
           }),
           input.now,
           input.now,
@@ -150,7 +161,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     }
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
-    if (/连接超时|空闲超时|network|fetch failed/i.test(message)) {
+    if (/连接超时|空闲超时|network|fetch failed|CAS_GC_IN_PROGRESS/i.test(message)) {
       const nextRetryAt = timestamp + Math.min(60_000, 1_000 * (2 ** Math.max(0, operation.attempt - 1)));
       await deps.updateDownloadState('ENQUEUED');
       deps.operations.retry(operation.id, owner, { now: timestamp, nextRetryAt, error: normalized('ARTIFACT_TRANSFER_RETRY', true) });

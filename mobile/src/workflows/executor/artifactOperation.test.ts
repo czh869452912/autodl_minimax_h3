@@ -1,6 +1,6 @@
 import { createInitializedRealSqliteTestDb } from '../../test/realSqlite';
 import type { ArtifactCas } from '../../media/cas';
-import { createSqliteArtifactCommitter, handleArtifactDownload } from './artifactOperation';
+import { artifactExportDisplayName, createSqliteArtifactCommitter, handleArtifactDownload } from './artifactOperation';
 import type { WorkflowOperation } from './types';
 import { createOperationRepository } from './operationRepository';
 import { createTaskRepository } from '../../tasks/repository';
@@ -142,11 +142,36 @@ test('commits the download and enqueues enabled gallery export atomically', asyn
       idempotencyKey: 'export:job-1:video-1:system-gallery',
       payload: {
         assetId: 'job-1:video-1', artifactId: 'video-1', sourceUri: 'file:///cas/video',
-        blobSha256: 'a'.repeat(64), keepPrivateCopy: false, displayName: 'job-1-video-1.mp4',
+        blobSha256: 'a'.repeat(64), keepPrivateCopy: false,
+        displayName: artifactExportDisplayName('job-1', 'video-1'),
       },
     }]);
     await expect(taskStore.get('job-1')).resolves.toMatchObject({ downloadState: 'DOWNLOADED', exportState: 'QUEUED' });
     await expect(mediaStore.get('job-1:video-1')).resolves.toMatchObject({ status: 'downloaded', exportStatus: 'QUEUED' });
+  } finally { db.close(); }
+});
+
+test('uses distinct native-safe display names for artifact ids that sanitize alike', () => {
+  const first = artifactExportDisplayName('job-1', 'artifact:0');
+  const second = artifactExportDisplayName('job-1', 'artifact/0');
+  expect(first).not.toBe(second);
+  expect(first).toMatch(/^[A-Za-z0-9._-]+\.mp4$/);
+  expect(second).toMatch(/^[A-Za-z0-9._-]+\.mp4$/);
+});
+
+test('rejects a blob commit while another executor owns the CAS GC lease', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const { operationStore } = await seedArtifactCommit(db);
+    db.runSync("INSERT INTO app_scheduler_leases (lease_key,owner,expires_at) VALUES ('cas-gc','collector',200)");
+    expect(() => createSqliteArtifactCommitter(db as never, () => 100)({
+      operationId: 'download-1', owner: 'worker', jobId: 'job-1',
+      artifact: operation.payload.artifact as never,
+      blob: { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 50, verifiedAt: 50 },
+      localUri: 'file:///cas/video', now: 50,
+      deliveryPolicy: { autoExportToGallery: true, keepPrivateCopy: false },
+    })).toThrow('CAS_GC_IN_PROGRESS');
+    expect(operationStore.get('download-1')).toMatchObject({ state: 'CLAIMED' });
   } finally { db.close(); }
 });
 

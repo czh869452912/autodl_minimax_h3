@@ -71,6 +71,11 @@ export function createTaskRepository(db: SQLiteDatabase) {
     async listMediaProjectionCandidates(limit = 200) { return (await all<any>("SELECT t.* FROM tasks t WHERE t.status IN ('SUCCESS','PARTIAL_SUCCESS') AND (t.video_url IS NOT NULL OR t.local_uri IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM media_assets m WHERE m.task_id = t.id AND m.kind = 'video') ORDER BY t.updated_at ASC, t.id ASC LIMIT ?", Math.max(1, Math.min(1000, limit)))).map(map); },
     async remove(id: string) {
       assertAppDatabaseWritable(db);
+      const activeOperation = db.getFirstSync<{ id: string }>(
+        "SELECT id FROM workflow_operations WHERE job_id=? AND state='CLAIMED' LIMIT 1",
+        id,
+      );
+      if (activeOperation) throw new Error('TASK_OPERATION_IN_PROGRESS');
       const rows = db.getAllSync<any>('SELECT local_uri, thumbnail_url FROM tasks WHERE id = ? LIMIT 1', id);
       const assets = db.getAllSync<any>('SELECT local_path, poster_path FROM media_assets WHERE task_id = ?', id);
       transaction(db, () => {

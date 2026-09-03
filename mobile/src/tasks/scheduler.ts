@@ -1,9 +1,12 @@
 import { assertAppDatabaseWritable } from '../storage/database';
 
 type LeaseDb = {
-  getFirstSync?: (sql: string, ...params: unknown[]) => { expires_at?: number } | null;
-  runSync?: (sql: string, ...params: unknown[]) => unknown;
+  runSync?: (sql: string, ...params: any[]) => unknown;
 };
+
+function changes(result: unknown): number {
+  return Number((result as { changes?: number | bigint } | undefined)?.changes ?? 0);
+}
 
 const localLeases = new Map<string, number>();
 
@@ -17,11 +20,13 @@ export async function withSchedulerLease<T>(
   const timestamp = now();
   const db = options.db;
   const owner = `${timestamp}-${Math.random()}`;
-  if (db?.getFirstSync && db.runSync) {
+  if (db?.runSync) {
     assertAppDatabaseWritable(db as never);
-    const current = db.getFirstSync('SELECT expires_at FROM app_scheduler_leases WHERE lease_key = ? LIMIT 1', key);
-    if (current && Number(current.expires_at) > timestamp) return undefined;
-    db.runSync('INSERT OR REPLACE INTO app_scheduler_leases (lease_key, owner, expires_at) VALUES (?, ?, ?)', key, owner, timestamp + ttlMs);
+    const claimed = db.runSync(
+      'INSERT INTO app_scheduler_leases (lease_key,owner,expires_at) VALUES (?,?,?) ON CONFLICT(lease_key) DO UPDATE SET owner=excluded.owner,expires_at=excluded.expires_at WHERE app_scheduler_leases.expires_at <= ?',
+      key, owner, timestamp + ttlMs, timestamp,
+    );
+    if (changes(claimed) !== 1) return undefined;
   } else {
     const expiresAt = localLeases.get(key) ?? 0;
     if (expiresAt > timestamp) return undefined;

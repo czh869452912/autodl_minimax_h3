@@ -23,6 +23,7 @@ import { sortSessionSnapshots } from './agentPresentation';
 type AgentConfig = H3AgentConfig;
 
 export default function AgentScreen() {
+  useEffect(() => () => { void promptRuntimeRegistry.disposeAll(); }, []);
   const [config, setConfig] = useState<AgentConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const refresh = useCallback(() => {
@@ -85,7 +86,6 @@ function ReadyAgent({
   config: AgentConfig;
   onError: (message: string) => void;
 }) {
-  useEffect(() => () => { void promptRuntimeRegistry.disposeAll(); }, []);
   const router = useRouter();
   const threadStore = useMemo<LocalThreadStore>(
     () => createLocalThreadStore(getDatabase()),

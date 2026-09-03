@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import type { ArtifactRecord } from '../jobs/types';
 import { collectGarbage } from './cas';
 import { createCasRepository } from './casRepository';
+import { withSchedulerLease } from '../tasks/scheduler';
 
 export type ReconciliationSummary = {
   scanned: number;
@@ -164,11 +165,15 @@ export async function reconcileMediaState(options: {
     );
   }
 
-  const garbage = await collectGarbage({
+  const garbage = await withSchedulerLease('cas-gc', () => collectGarbage({
     repository: createCasRepository(options.db),
     files: { remove: options.removeCasPath },
     limit,
-  });
+  }), {
+    db: options.db,
+    now: options.now,
+    ttlMs: 120_000,
+  }) ?? { deleted: 0, failed: 0 };
   return {
     scanned: tasks.length,
     repaired,

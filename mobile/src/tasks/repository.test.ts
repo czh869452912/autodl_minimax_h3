@@ -243,11 +243,25 @@ test('removes queued and claimed workflow operations with the task', async () =>
   try {
     const store = createTaskRepository(db as never);
     await store.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 2 });
-    db.runSync("INSERT INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES ('export-1','EXPORT','task-1','export:task-1:video','{}','CLAIMED',1,1,1,2)");
+    db.runSync("INSERT INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES ('export-1','EXPORT','task-1','export:task-1:video','{}','PENDING',0,1,1,2)");
 
     await store.remove('task-1');
 
     expect(db.getFirstSync("SELECT id FROM workflow_operations WHERE job_id='task-1'")).toBeUndefined();
+  } finally { db.close(); }
+});
+
+test('refuses deletion while an operation owns the task lease', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const store = createTaskRepository(db as never);
+    await store.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 2 });
+    db.runSync("INSERT INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,lease_owner,lease_expires_at,created_at,updated_at) VALUES ('export-1','EXPORT','task-1','export:task-1:video','{}','CLAIMED',1,1,'worker',100,1,2)");
+
+    await expect(store.remove('task-1')).rejects.toThrow('TASK_OPERATION_IN_PROGRESS');
+
+    expect(db.getFirstSync("SELECT id FROM tasks WHERE id='task-1'")).toEqual({ id: 'task-1' });
+    expect(db.getFirstSync("SELECT id FROM workflow_operations WHERE id='export-1'")).toEqual({ id: 'export-1' });
   } finally { db.close(); }
 });
 
