@@ -34,6 +34,8 @@ import {
   groupSessions,
   matchesSessionQuery,
   normalizeMessages,
+  sessionDisplayTitle,
+  sessionMessageCount,
   sessionTitle,
   toolTimelineSummary,
   type ToolTimelineStep,
@@ -941,8 +943,8 @@ function HistoryList({
             style={[styles.historyItem, thread.threadId === activeThreadId && styles.historyItemActive]}
           >
             <View style={styles.historyItemMain}>
-              <Text numberOfLines={1} style={styles.historyTitle}>{sessionTitle(thread)}</Text>
-              <Text style={styles.historyMeta}>{thread.messages.length} 条消息 · {new Date(thread.updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</Text>
+              <Text numberOfLines={1} style={styles.historyTitle}>{sessionDisplayTitle(thread, threads)}</Text>
+              <Text style={styles.historyMeta}>{sessionMessageCount(thread)} 条消息 · {new Date(thread.updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</Text>
             </View>
             <Pressable accessibilityLabel={`管理会话 ${thread.threadId}`} onPress={() => { setRenameTarget(thread); setRenameValue(sessionTitle(thread)); }}>
               <Text style={styles.more}>•••</Text>

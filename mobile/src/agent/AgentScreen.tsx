@@ -18,6 +18,7 @@ import { readImageAsDataSource } from './imageAttachmentUpload';
 import { getH3AgentConfigError } from './modelAdapter';
 import { PromptAssistantUi } from './PromptAssistantUi';
 import { createPromptDraftStore } from './promptDraft';
+import { sortSessionSnapshots } from './agentPresentation';
 
 type AgentConfig = H3AgentConfig;
 
@@ -102,11 +103,12 @@ function ReadyAgent({
       .then((snapshots) => {
         if (!active) return;
         if (snapshots.length) {
-          setThreads(snapshots);
+          const sorted = sortSessionSnapshots(snapshots);
+          setThreads(sorted);
           setActiveThreadId((current) =>
-            current && snapshots.some((item) => item.threadId === current)
+            current && sorted.some((item) => item.threadId === current)
               ? current
-              : snapshots[0].threadId,
+              : sorted[0].threadId,
           );
           return;
         }
@@ -146,7 +148,7 @@ function ReadyAgent({
     };
     try {
       await threadStore.save(snapshot);
-      setThreads((current) => [snapshot, ...current]);
+      setThreads((current) => sortSessionSnapshots([snapshot, ...current]));
       setActiveThreadId(snapshot.threadId);
     } catch (reason) {
       onError(reason instanceof Error ? reason.message : '创建会话失败');
@@ -156,7 +158,7 @@ function ReadyAgent({
     async (threadId: string) => {
       try {
         await threadStore.remove(threadId);
-        const next = await threadStore.list();
+        const next = sortSessionSnapshots(await threadStore.list());
         setThreads(next);
         setActiveThreadId((current) =>
           current === threadId ? (next[0]?.threadId ?? null) : current,
@@ -174,9 +176,9 @@ function ReadyAgent({
       const next = { ...current, customTitle: title, updatedAt: Date.now() };
       try {
         await threadStore.save(next);
-        setThreads((items) =>
+        setThreads((items) => sortSessionSnapshots(
           items.map((item) => (item.threadId === threadId ? next : item)),
-        );
+        ));
       } catch (reason) {
         onError(reason instanceof Error ? reason.message : '重命名会话失败');
       }
@@ -185,9 +187,9 @@ function ReadyAgent({
   );
   const handleSnapshotChange = useCallback(
     (next: LocalThreadSnapshot) =>
-      setThreads((items) =>
+      setThreads((items) => sortSessionSnapshots(
         items.map((item) => (item.threadId === next.threadId ? next : item)),
-      ),
+      )),
     [],
   );
   const activeSnapshot = threads.find(
