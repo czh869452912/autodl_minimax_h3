@@ -22,6 +22,7 @@ const APP_TABLES = [
   'prompt_drafts',
   'agent_threads',
   'app_scheduler_leases',
+  RECOVERY_TABLE,
 ];
 
 const APP_CREATE_STATEMENTS = [
@@ -119,9 +120,10 @@ export function ensureAppDatabase(db: SQLiteDatabase | undefined, options: AppDa
   if (version === undefined) return;
   if (version === APP_SCHEMA_VERSION) return;
   if (version != null && version > APP_SCHEMA_VERSION) return;
-  if (version !== APP_SCHEMA_VERSION - 1) return;
+  const freshInstall = version === 0 && !isLegacyAppDatabase(db);
+  if (!freshInstall && version !== APP_SCHEMA_VERSION - 1) return;
   try {
-    options.backup?.();
+    if (!freshInstall) options.backup?.();
     withTransaction(db, () => {
       for (const statement of APP_CREATE_STATEMENTS) db.execSync(statement);
       db.execSync(`CREATE TABLE IF NOT EXISTS ${RECOVERY_TABLE} (id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1), diagnostic TEXT NOT NULL, created_at INTEGER NOT NULL)`);
