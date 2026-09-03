@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { JobRecord, JobRepository, ArtifactRecord, JobStatus } from './types';
-import { ensureAppDatabase } from '../storage/database';
+import { assertAppDatabaseWritable } from '../storage/database';
 
 type JobRow = { id: string; workflow_id: string; workflow_version: string; workflow_hash: string; adapter_id: string; adapter_version: string; input_json: string; output_mapping_json?: string; remote_json?: string; status: string; error_json?: string; created_at: number; updated_at: number; started_at?: number; execution_duration?: number };
 type ArtifactRow = { id: string; job_id: string; kind: string; uri?: string; mime?: string; metadata_json?: string };
@@ -14,15 +14,12 @@ export function createJobRepository(db: SQLiteDatabase | undefined): JobReposito
   const jobs = new Map<string, JobRecord>();
   const artifacts = new Map<string, ArtifactRecord[]>();
   const database = db && typeof (db as unknown as { execSync?: unknown }).execSync === 'function' ? db : undefined;
-  if (database) {
-    ensureAppDatabase(database);
-    database.execSync('CREATE TABLE IF NOT EXISTS workflow_jobs (id TEXT PRIMARY KEY NOT NULL, workflow_id TEXT NOT NULL, workflow_version TEXT NOT NULL, workflow_hash TEXT NOT NULL, adapter_id TEXT NOT NULL, adapter_version TEXT NOT NULL, input_json TEXT NOT NULL, output_mapping_json TEXT, remote_json TEXT, status TEXT NOT NULL, error_json TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, started_at INTEGER, execution_duration REAL);');
-    database.execSync('CREATE TABLE IF NOT EXISTS workflow_artifacts (id TEXT NOT NULL, job_id TEXT NOT NULL, kind TEXT NOT NULL, uri TEXT, mime TEXT, metadata_json TEXT, PRIMARY KEY (job_id, id));');
-    database.execSync('CREATE INDEX IF NOT EXISTS idx_workflow_jobs_status_updated_id ON workflow_jobs(status, updated_at ASC, id ASC);');
-  }
   const fromJob = (row: JobRow): JobRecord => ({ id: row.id, workflowId: row.workflow_id, workflowVersion: row.workflow_version, workflowContentHash: row.workflow_hash, adapterId: row.adapter_id, adapterVersion: row.adapter_version, inputSnapshot: parseJson(row.input_json, {}), outputMapping: parseJson(row.output_mapping_json, undefined), remote: parseJson(row.remote_json, undefined), status: row.status as JobStatus, error: parseJson(row.error_json, undefined), createdAt: Number(row.created_at), updatedAt: Number(row.updated_at), startedAt: row.started_at == null ? undefined : Number(row.started_at), executionDuration: row.execution_duration == null ? undefined : Number(row.execution_duration) });
   const fromArtifact = (row: ArtifactRow): ArtifactRecord => ({ id: row.id, jobId: row.job_id, kind: row.kind as ArtifactRecord['kind'], uri: row.uri || undefined, mime: row.mime || undefined, metadata: parseJson(row.metadata_json, undefined) });
-  const run = async (sql: string, ...params: any[]) => typeof (database as any)?.runAsync === 'function' ? (database as any).runAsync(sql, ...params) : database?.runSync(sql, ...params);
+  const run = async (sql: string, ...params: any[]) => {
+    assertAppDatabaseWritable(database);
+    return typeof (database as any)?.runAsync === 'function' ? (database as any).runAsync(sql, ...params) : database?.runSync(sql, ...params);
+  };
   const all = async <T>(sql: string, ...params: any[]): Promise<T[]> => typeof (database as any)?.getAllAsync === 'function' ? ((await (database as any).getAllAsync(sql, ...params)) ?? []) : ((database?.getAllSync<T>(sql, ...params) ?? []) as T[]);
   const first = async <T>(sql: string, ...params: any[]): Promise<T | null> => typeof (database as any)?.getFirstAsync === 'function' ? ((await (database as any).getFirstAsync(sql, ...params)) ?? null) : database ? ((database.getFirstSync<JobRow>(sql, ...params) as unknown as T | null) ?? null) : null;
   return {
@@ -45,6 +42,7 @@ export function createJobRepository(db: SQLiteDatabase | undefined): JobReposito
     },
     async replaceArtifacts(jobId, values) {
       if (!database) { artifacts.set(jobId, values); return; }
+      assertAppDatabaseWritable(database);
       const transaction = (database as unknown as { withTransactionSync?: (fn: () => void) => void }).withTransactionSync;
       const exclusiveTransaction = (database as unknown as {
         withExclusiveTransactionAsync?: (

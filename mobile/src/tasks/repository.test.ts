@@ -1,6 +1,6 @@
 import { createTaskRepository } from './repository';
 import type { TaskRecord } from './types';
-import { createRealSqliteTestDb } from '../test/realSqlite';
+import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 
 function fakeDb() {
   let row: Record<string, unknown> | undefined;
@@ -58,7 +58,7 @@ test('persists gallery publication independently from private download', async (
 });
 
 test('workflow projection upsert preserves media-owned columns on conflict', async () => {
-  const db = createRealSqliteTestDb();
+  const db = createInitializedRealSqliteTestDb();
   try {
     const store = createTaskRepository(db as never);
     await store.upsert({
@@ -84,7 +84,7 @@ test('workflow projection upsert preserves media-owned columns on conflict', asy
 });
 
 test('media projection update preserves newer workflow-owned fields', async () => {
-  const db = createRealSqliteTestDb();
+  const db = createInitializedRealSqliteTestDb();
   try {
     const store = createTaskRepository(db as never);
     await store.upsert({
@@ -112,7 +112,7 @@ test('media projection update preserves newer workflow-owned fields', async () =
 });
 
 test('media projection updates never recreate a removed task', async () => {
-  const db = createRealSqliteTestDb();
+  const db = createInitializedRealSqliteTestDb();
   try {
     const store = createTaskRepository(db as never);
     await store.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 1 });
@@ -128,7 +128,7 @@ test('media projection updates never recreate a removed task', async () => {
 });
 
 test('field-level download patches preserve a completed gallery export', async () => {
-  const db = createRealSqliteTestDb();
+  const db = createInitializedRealSqliteTestDb();
   try {
     const store = createTaskRepository(db as never);
     await store.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, galleryUri: 'content://gallery/1', exportState: 'EXPORTED', exportedAt: 2, createdAt: 1, updatedAt: 2 });

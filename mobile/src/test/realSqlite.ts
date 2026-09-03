@@ -14,3 +14,11 @@ export function createRealSqliteTestDb() {
     close() { database.close(); },
   };
 }
+
+export function createInitializedRealSqliteTestDb() {
+  const db = createRealSqliteTestDb();
+  // Lazy require avoids a storage -> test helper import cycle in production modules.
+  const { ensureAppDatabase } = require('../storage/database') as typeof import('../storage/database');
+  ensureAppDatabase(db as never);
+  return db;
+}

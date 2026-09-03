@@ -1,6 +1,6 @@
 import { createSqliteMediaStore } from './repository';
 import type { MediaAsset } from './types';
-import { createRealSqliteTestDb } from '../test/realSqlite';
+import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 
 function fakeDb() {
   const rows = new Map<string, Record<string, unknown>>();
@@ -92,7 +92,7 @@ test('prefers async SQLite operations when available', async () => {
 });
 
 test('artifact projection merge cannot clear an existing private download', async () => {
-  const db = createRealSqliteTestDb();
+  const db = createInitializedRealSqliteTestDb();
   try {
     const store = createSqliteMediaStore(db);
     await store.upsert({
@@ -114,7 +114,7 @@ test('artifact projection merge cannot clear an existing private download', asyn
 });
 
 test('loads the newest primary video asset for a task', async () => {
-  const db = createRealSqliteTestDb();
+  const db = createInitializedRealSqliteTestDb();
   try {
     const store = createSqliteMediaStore(db);
     await store.upsert({ ...asset, id: 'older-video', taskId: 'task-1', kind: 'video', localPath: 'file:///older.mp4', updatedAt: 10 });
