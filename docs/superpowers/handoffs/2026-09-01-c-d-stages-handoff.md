@@ -8,10 +8,11 @@
 1. 本文件：当前状态、验收证据和 C/D 执行顺序。
 2. `docs/superpowers/specs/2026-09-03-c-core-durable-executor-design.md`：C-Core 已批准的详细设计与任务边界。
 3. `docs/superpowers/plans/2026-09-01-c-core.md`：C-Core 唯一执行计划。
-4. `docs/superpowers/plans/2026-09-01-d-core.md`：C-Core 验收通过后的 D-Core 计划。
-5. `docs/superpowers/specs/2026-09-01-local-first-workflow-architecture-design.md`：不可突破的架构约束。
+4. `docs/superpowers/verification/2026-09-03-c-core-acceptance.md`：C-Core 自动化、跨进程和 Android 验收证据。
+5. `docs/superpowers/plans/2026-09-01-d-core.md`：C-Core 集成后的 D-Core 计划。
+6. `docs/superpowers/specs/2026-09-01-local-first-workflow-architecture-design.md`：不可突破的架构约束。
 
-下一项具体动作：v1.4.7 fresh-install 发布级热修复已经完成，B 对 C/D 的阻塞重新解除。现在从 `dev` 创建隔离 worktree，按 `docs/superpowers/plans/2026-09-01-c-core.md` 从 Task 1（版本化 durable schema migration）开始；第一批真实 SQLite RED 测试必须覆盖 fresh v0、legacy v0、v4→v6、v5→v6、失败回滚与 recovery。C-Core 验收完成前不得开始 D-Core。
+下一项具体动作：C-Core 已在隔离分支 `codex/c-core-plan-rewrite` 完成并通过 Task 6 验收。先审查并把该分支集成到 `dev`，复跑 typecheck/full Jest/diff gate；随后按 `docs/superpowers/plans/2026-09-01-d-core.md` 从 Task 1（v7 migration + legacy projection）开始。D-Core 不得绕过已验收的 v6 durable executor 基线。
 
 ## 2. 当前发布与分支状态
 
@@ -21,6 +22,7 @@
 - Release 资产：`AutoDL-H3-v1.4.7-apk-universal.apk`，大小 `164874442` 字节，SHA-256 `7307e5d51c052f1c62969c38cc18ad977acfa5fe7a19b4fe27a2d72a4bf18163`。
 - 正式发布 Actions 运行 `33709797498` 成功：标签属于 `main`、版本一致、类型检查、单元测试、签名 universal APK、四 ABI、`apksigner` 和 Release 创建均通过：<https://github.com/czh869452912/autodl_minimax_h3/actions/runs/33709797498>。
 - 2026-09-03 同步时，`origin/main` 与 `v1.4.7^{}` 均为 `ad7110de`；主工作区 `dev` 已合并该提交，并在其上更新本 handoff。
+- C-Core 隔离分支 `codex/c-core-plan-rewrite` 的已验收代码提交为 `7ef0857025f98e9a5997be1feac2ca437f2987bf`；验收文档提交在其后，不改变产品代码。
 - 主工作区当前在用户指定的开发分支 `dev`；用户本地 `local.properties` 与 `mobile/.expo/` 必须继续保持未提交、未修改。
 - 已保留的 `.worktrees/codex-b1-closure` 是既有工作目录，不要擅自删除。
 
@@ -123,26 +125,28 @@ v1.4.7 验收证据：
 
 ## 5. C 阶段：C-Core Durable Local Executor
 
-C-Core 尚未开始；B 已解除阻塞，当前可立即进入 Task 1。
+C-Core 已完成；代码提交 `7ef08570` 通过自动化、真实 SQLite、跨进程恢复、Android build、fresh install 与 v4/v5 覆盖升级门。完整证据见 `docs/superpowers/verification/2026-09-03-c-core-acceptance.md`。
 
 C 的目标是：submit、status sync、artifact download 变成可跨进程恢复的数据库 operation，在网络超时或进程被杀时不重复产生可能计费的 provider 任务。
 
 执行顺序（详见 `docs/superpowers/plans/2026-09-01-c-core.md`）：
 
-1. **Task 1：版本化 schema migration** — 当前 v1.4.7 已稳定在 schema v5，C 必须提升到 `APP_SCHEMA_VERSION=6`；一次性新增 `workflow_operations`、`workflow_job_events`、`artifact_blobs`、`artifact_blob_refs`，为 job 增加 revision、provider handle、last error、next sync。必须实现显式逐版本 migration step 和真实列演进，接线生产备份，收敛 DDL 所有权，并让启动失败进入可诊断的只读 recovery，而不是 import 崩溃；fresh v0、legacy v0、v4→v6、v5→v6、重复 migration 和失败回滚必须先有 RED 测试。
-2. **Task 2：Operation/Lease/Job CAS repository** — 稳定幂等键、唯一约束、claim/renew/release、过期 lease 回收、`nextRetryAt` 过滤，以及 job snapshot、append-only event、next operation 的单事务 revision/CAS；冲突返回当前 snapshot。
-3. **Task 3：Durable submit 与 UNKNOWN 对账** — `VALIDATED → SUBMITTING → QUEUED/RUNNING` 事件化；超时进入 `UNKNOWN`。有 opaque provider handle 时只 reconcile 原任务；没有 handle 时 submit operation 保持 `BLOCKED`，只能经用户明确确认创建全新尝试，任何路径都禁止自动 resubmit。
-4. **Task 4：有界 Artifact CAS** — SHA-256 内容寻址、随机 `.part`、原子 rename、hash/MIME/字节/连接超时/逐块 idle timeout、引用安全 GC；status snapshot 不等待媒体下载。
-5. **Task 5：有界调度与进程恢复** — foreground/background/headless 统一 tick，每轮有界 operation 数量，status/download/export 独立 lease，进程启动回收过期 lease。
-6. **Task 6：C-Core 验收** — duplicate submit、lease contention/expiry、UNKNOWN reconciliation、CAS conflict、restart recovery、bounded queue 自动化测试，加 Android fresh-install 创建任务、v4/v5 升级数据保留与 force-stop 恢复验证。
+1. **Task 1（`c9e05e32`）：版本化 schema migration** — schema v6、逐版本 migration、真实列演进、生产 backup、单一 DDL owner 和只读 recovery 已完成。
+2. **Task 2（`070f75c2`）：Operation/Lease/Job CAS repository** — 幂等 enqueue、claim/renew/release/recover、revision CAS、append-only event 与 next operation 原子事务已完成。
+3. **Task 3（`e8932c4a`）：Durable submit 与 UNKNOWN 对账** — submit/status operation、opaque handle、错误分类、UNKNOWN/BLOCKED 与显式 replacement 已完成。
+4. **Task 4（`c342cf1c`）：有界 Artifact CAS** — SHA-256 CAS、attempt-isolated `.part`、lease fence、连接/idle timeout、引用安全 GC 已完成；Task 6 发现的强停残留修复见 `ad94e363`、`7ef08570`。
+5. **Task 5（`1782119b`）：有界调度与进程恢复** — foreground/background/headless 统一有界 tick、lane fairness、启动回收与真实 SQLite reopen 已完成。
+6. **Task 6：C-Core 验收** — duplicate submit、lease contention/expiry、UNKNOWN、原 handle status、Artifact restart、进程级 seed/recover、Android fresh/v4/v5 全部 PASS。
 
-C-Core 通过前不得开始 D 的 Project UI 或产品域迁移。每个 task 单独提交，遵守 RED → GREEN → REFACTOR；使用隔离 worktree，不直接在 `dev` 上开发。
+最终门：typecheck PASS；Jest 98/99 suites passed（1 phase-gated skip），460 passed/2 skipped；migration matrix 14/14；跨进程 10/10 阶段；JDK 21 x86_64 Android 358-task build PASS；API 37 模拟器 fresh/v4/v5 的 fatal scan 均为 0。独立复审最终为 0 Critical / 0 Important / 0 Minor。
+
+C-Core 产品代码仍位于隔离分支，必须先集成到 `dev`，再开始 D 的 Project UI 或产品域迁移；不得从旧 v5 基线另起 D-Core。
 
 C-Core 明确不做：完整 foreground service、MediaStore delivery/delete、Batch/Variant、成本策略、原生 ComfyUI 语义和复杂 workflow UI；这些属于 C-Extended 或 D。
 
 ## 6. D 阶段：D-Core Product Domain
 
-D-Core 尚未开始，并继续受 C-Core 完整验收门禁约束。
+D-Core 尚未开始。C-Core 完整验收门已经通过；待 `codex/c-core-plan-rewrite` 集成到 `dev` 后即可进入 D-Core Task 1。
 
 D 只在 C-Core 的 job/artifact snapshot 稳定后开始，目标是建立离线可用、版本不可变且可追溯的创作项目模型：
 
@@ -180,12 +184,12 @@ D-Core 之后再规划 Batch/Variant、项目包导出/导入、备份/同步/�
 
 ## 8. 下一次接手的执行清单
 
-1. `git status --short --branch`，确认当前为 `dev`，并用 `git merge-base --is-ancestor v1.4.7 dev` 确认开发基线包含 v1.4.7；不要改动 `local.properties` 与 `mobile/.expo/`。
-2. 从 `dev` 创建 `codex/c-core-schema` 隔离 worktree，不在发布基线工作区直接开发 C-Core。
-3. 阅读 `docs/superpowers/specs/2026-09-03-c-core-durable-executor-design.md`、`docs/superpowers/plans/2026-09-01-c-core.md` Task 1、本文件的状态审查收口、v1.4.7 fresh-install hotfix plan、架构设计的 durable executor 章节和现有 `mobile/src/storage/database*` 实现。
-4. 先写真实 SQLite migration RED 测试：fresh v0、legacy v0、v4→v6、v5→v6、repeatable migration、列演进、legacy table 保留、生产 backup 接线，以及注入 DDL 失败后的 rollback + 可启动 read-only recovery。
-5. 运行 focused Jest 看到预期失败，再实现 `runner.ts`/`v6DurableExecutor.ts`，随后运行 typecheck、全量 Jest 和 Android 门禁。
-6. 完成并记录 C-Core Task 1 后，才继续 Task 2；C-Core 六项全部验收通过后再切换到 D-Core Task 1。
-7. D-Core 必须从 C-Core 已稳定的 job/artifact/CAS snapshot 向上构建；不得绕过 v6 durable executor，或提前把 Project UI、Batch/Variant、同步协作并入 C-Core。
+1. 审查 `codex/c-core-plan-rewrite` 相对 `dev` 的完整差异和 `docs/superpowers/verification/2026-09-03-c-core-acceptance.md`，确认七个 C-Core 产品/修复提交、两项设计/计划提交与 Task 6 文档提交齐全。
+2. 将该分支集成到 `dev`；不要改动用户自有的 `local.properties`、`mobile/.expo/` 或未跟踪 review 文档。
+3. 在集成后的 `dev` 复跑 `npm run typecheck`、`npm test -- --runInBand`、`git diff --check` 和 `git status --short`；若产品代码未变化，无需重复制造另一份 C-Core 验收记录。
+4. 阅读 `docs/superpowers/plans/2026-09-01-d-core.md` 与本文件 D-Core 章节，从最新 `dev` 创建独立 D-Core worktree。
+5. D-Core Task 1 从 `APP_SCHEMA_VERSION=6` 提升到 v7；先写 v6→v7、fresh v0→v7、legacy projection 保留、backup/rollback/readonly recovery 的真实 SQLite RED 测试。
+6. D-Core 必须复用 C-Core 的 operation/job/event/CAS 权威状态，不得恢复旧 snapshot-only scheduler 或另建重复下载队列。
+7. Batch/Variant、同步/协作、完整 foreground service 与复杂导出仍不属于 D-Core Task 1，不得顺手并入。
 
-交接结论：A/B 已闭环。媒体并发、投影所有权、动态 AutoDL 产物节点、下载完整性和相册导出修复已通过自动化、模拟器及用户手动带凭据验收，并以 v1.4.6 发布；状态审查发现的 fresh-install registry 回归随后完成 TDD、独立复审、模拟器全新安装和正式签名发布，以 v1.4.7 收口。当前唯一正确的后续顺序是 C-Core Durable Local Executor → C-Core 验收 → D-Core Local Product Domain → D-Core 验收；下一项工作从 C-Core Task 1 的 v6 migration runner、生产备份与只读 recovery 开始。
+交接结论：A/B 已闭环并以 v1.4.7 收口；C-Core Durable Local Executor 的六项实现、恢复修复、独立复审和发布级验收也已在 `codex/c-core-plan-rewrite` 完成。当前正确顺序是：审查并集成 C-Core → 在 v6 基线上执行 D-Core Local Product Domain → D-Core 验收。下一项工程工作从 D-Core Task 1 的 v7 migration 与 legacy projection 开始。
