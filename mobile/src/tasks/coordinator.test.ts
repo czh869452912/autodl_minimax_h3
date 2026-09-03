@@ -3,7 +3,7 @@ import type { JobRecord } from '../jobs/types';
 import type { TaskRecord } from './types';
 
 const task = (id: string, status: TaskRecord['status'] = 'RUNNING'): TaskRecord => ({ id, prompt: id, status, resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 1 });
-const job = (id: string, remote: string): JobRecord => ({ id, workflowId: 'demo', workflowVersion: '1.0.0', workflowContentHash: 'hash', adapterId: 'demo', adapterVersion: '1.0.0', inputSnapshot: { prompt: id, resolution: '768p竖', duration: 5 }, remote: { providerJobId: remote }, status: 'RUNNING', createdAt: 1, updatedAt: 1 });
+const job = (id: string, remote: string): JobRecord => ({ id, revision: 0, workflowId: 'demo', workflowVersion: '1.0.0', workflowContentHash: 'hash', adapterId: 'demo', adapterVersion: '1.0.0', inputSnapshot: { prompt: id, resolution: '768p竖', duration: 5 }, remote: { providerJobId: remote }, status: 'RUNNING', createdAt: 1, updatedAt: 1 });
 
 function setup(tasks: TaskRecord[], jobs: JobRecord[]) {
   const persist = async (value: TaskRecord) => { const index = tasks.findIndex((item) => item.id === value.id); if (index >= 0) tasks[index] = value; else tasks.push(value); };

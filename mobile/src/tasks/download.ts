@@ -38,7 +38,7 @@ async function publishCompletedDownload(partial: string, target: string, expecte
   }
 }
 
-async function performDownloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; allowProviderSuppliedPublicHosts?: boolean; maxBytes?: number; acceptedMimes?: string[]; timeoutMs?: number; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
+async function performDownloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; allowProviderSuppliedPublicHosts?: boolean; maxBytes?: number; acceptedMimes?: string[]; connectTimeoutMs?: number; idleTimeoutMs?: number; timeoutMs?: number; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
   if (!task.videoUrl) throw new Error('任务没有可下载的视频地址');
   if (task.localUri) {
     const info = await FileSystem.getInfoAsync(task.localUri);
@@ -58,6 +58,8 @@ async function performDownloadTask(task: TaskRecord, options: { onUpdate?: (patc
       allowProviderSuppliedPublicHosts: options.allowProviderSuppliedPublicHosts,
       maxBytes: options.maxBytes ?? DEFAULT_VIDEO_DOWNLOAD_BYTES,
       acceptedMimes: options.acceptedMimes,
+      connectTimeoutMs: options.connectTimeoutMs,
+      idleTimeoutMs: options.idleTimeoutMs,
       timeoutMs: options.timeoutMs,
       fetcher: options.fetcher,
       writer: async (chunk, append) => { partialFile.write(chunk, { append }); },
@@ -78,7 +80,7 @@ async function performDownloadTask(task: TaskRecord, options: { onUpdate?: (patc
   }
 }
 
-export function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; allowProviderSuppliedPublicHosts?: boolean; maxBytes?: number; acceptedMimes?: string[]; timeoutMs?: number; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
+export function downloadTask(task: TaskRecord, options: { onUpdate?: (patch: Partial<TaskRecord>) => Promise<void>; allowedHosts?: string[]; allowProviderSuppliedPublicHosts?: boolean; maxBytes?: number; acceptedMimes?: string[]; connectTimeoutMs?: number; idleTimeoutMs?: number; timeoutMs?: number; fetcher?: typeof fetch } = {}): Promise<TaskRecord> {
   const existing = downloadsInFlight.get(task.id);
   if (existing) return existing;
   const operation = performDownloadTask(task, options);

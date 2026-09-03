@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View }
 import { useFocusEffect } from 'expo-router';
 import { AppIcon } from '../../src/ui/icons';
 import { COLORS, SPACING } from '../../src/ui/theme';
-import { mediaStore, taskStore, syncTasks } from '../../src/tasks/sync';
+import { mediaStore, taskStore, syncTaskRun } from '../../src/tasks/sync';
 import { ensureTaskDownloaded, exportTaskVideo } from '../../src/tasks/media';
 import { exportStatusLabel } from '../../src/gallery/presentation';
 import type { TaskRecord } from '../../src/tasks/types';
@@ -41,13 +41,15 @@ export default function TasksScreen() {
   const [cursor, setCursor] = useState<{ createdAt: number; id: string }>();
   const [loadingMore, setLoadingMore] = useState(false);
   const [monitoring, setMonitoring] = useState(false);
+  const [hasPendingOperations, setHasPendingOperations] = useState(false);
   const mediaBusyRef = useRef(new Set<string>());
   const loadInFlight = useRef(false);
-  const load = useCallback(async (manual = false) => { if (loadInFlight.current) return; loadInFlight.current = true; setSyncing(true); try { const synced = await syncTasks(); const page = await (taskStore as typeof taskStore & { listPage?: (options?: { limit?: number }) => Promise<{ items: TaskRecord[]; nextCursor?: { createdAt: number; id: string } }> }).listPage?.({ limit: 40 }); if (page) { setTasks(await repairTaskMediaPage(page.items)); setCursor(page.nextCursor); } else setTasks(await repairTaskMediaPage(synced)); setLastUpdatedAt(Date.now()); } catch (error) { if (manual) Alert.alert('刷新失败', error instanceof Error ? error.message : '任务状态同步失败'); } finally { loadInFlight.current = false; setSyncing(false); } }, []);
+  const load = useCallback(async (manual = false) => { if (loadInFlight.current) return; loadInFlight.current = true; setSyncing(true); try { const result = await syncTaskRun('foreground'); const operationActive = result.summary.operations.remainingDue > 0 || result.summary.operations.remainingScheduled > 0 || result.summary.operations.budgetExhausted; setHasPendingOperations(operationActive); const page = await (taskStore as typeof taskStore & { listPage?: (options?: { limit?: number }) => Promise<{ items: TaskRecord[]; nextCursor?: { createdAt: number; id: string } }> }).listPage?.({ limit: 40 }); if (page) { setTasks(await repairTaskMediaPage(page.items)); setCursor(page.nextCursor); } else setTasks(await repairTaskMediaPage(result.tasks)); setLastUpdatedAt(Date.now()); } catch (error) { if (manual) Alert.alert('刷新失败', error instanceof Error ? error.message : '任务状态同步失败'); } finally { loadInFlight.current = false; setSyncing(false); } }, []);
   const loadMore = useCallback(async () => { if (!cursor || loadingMore || !(taskStore as typeof taskStore & { listPage?: unknown }).listPage) return; setLoadingMore(true); try { const page = await (taskStore as typeof taskStore & { listPage: (options: { limit: number; cursor: { createdAt: number; id: string } }) => Promise<{ items: TaskRecord[]; nextCursor?: { createdAt: number; id: string } }> }).listPage({ limit: 40, cursor }); const repaired = await repairTaskMediaPage(page.items); setTasks((items) => [...items, ...repaired.filter((item) => !items.some((current) => current.id === item.id))]); setCursor(page.nextCursor); } finally { setLoadingMore(false); } }, [cursor, loadingMore]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   const hasActiveTasks = tasks.some((item) => item.status === 'QUEUED' || item.status === 'RUNNING' || item.status === 'UNKNOWN');
-  useEffect(() => { if (!hasActiveTasks) return; const timer = setInterval(() => void load(), 10000); return () => clearInterval(timer); }, [hasActiveTasks, load]);
+  const shouldPoll = hasActiveTasks || hasPendingOperations;
+  useEffect(() => { if (!shouldPoll) return; const timer = setInterval(() => void load(), 10000); return () => clearInterval(timer); }, [load, shouldPoll]);
   useEffect(() => { void getTaskMonitorStatus().then((value) => setMonitoring(value.running)); }, []);
   const toggleMonitoring = async () => { if (monitoring) { await stopTaskMonitor(); setMonitoring(false); return; } const activeIds = tasks.filter((item) => item.status === 'QUEUED' || item.status === 'RUNNING' || item.status === 'UNKNOWN').map((item) => item.id); if (await startTaskMonitor(activeIds)) setMonitoring(true); };
   const setMediaBusy = (id: string, busy: boolean) => {

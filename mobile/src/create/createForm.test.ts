@@ -3,6 +3,7 @@ import { resolveDraftPrompt } from './draftPrompt';
 import { RESOLUTION_OPTIONS } from './resolutions';
 import type { TaskMediaInput } from '../tasks/types';
 import { createSubmissionGate } from './submissionGate';
+import { queueCreateFormSubmission } from './submissionQueue';
 
 const image: TaskMediaInput = { dataUri: 'data:image/png;base64,a', name: 'ref.png', mime: 'image/png' };
 
@@ -32,5 +33,27 @@ describe('create form contracts', () => {
     expect(gate.tryAcquire()).toBe(false);
     gate.release();
     expect(gate.tryAcquire()).toBe(true);
+  });
+
+  it('queues locally, persists the task projection, and triggers a foreground tick', async () => {
+    const queued = {
+      id: 'job-1', revision: 0, workflowId: 'demo', workflowVersion: '1', workflowContentHash: 'hash',
+      adapterId: 'demo', adapterVersion: '1', inputSnapshot: { prompt: 'hello', resolution: '768p竖', duration: 5 },
+      status: 'READY_TO_SUBMIT' as const, createdAt: 1, updatedAt: 1,
+    };
+    const queueSubmission = jest.fn(async () => queued);
+    const upsertTask = jest.fn(async () => undefined);
+    const foregroundTick = jest.fn(async () => undefined);
+    const directSubmit = jest.fn();
+    const task = await queueCreateFormSubmission(
+      { queueSubmission, upsertTask, foregroundTick },
+      { submissionId: 'submission-1', workflow: {} as never, draft: {} as never, provenance: {} as never },
+      { images: [image], audios: [] },
+    );
+    expect(queueSubmission).toHaveBeenCalledTimes(1);
+    expect(upsertTask).toHaveBeenCalledWith(expect.objectContaining({ id: 'job-1', status: 'QUEUED', images: [image] }));
+    expect(foregroundTick).toHaveBeenCalledTimes(1);
+    expect(directSubmit).not.toHaveBeenCalled();
+    expect(task.id).toBe('job-1');
   });
 });

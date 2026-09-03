@@ -1,4 +1,4 @@
-import { pickAssistantImages } from './assistantImagePicker';
+import { mergeUniqueAssistantAttachments, pickAssistantImages } from './assistantImagePicker';
 
 jest.mock('expo-document-picker', () => ({
   getDocumentAsync: jest.fn().mockResolvedValue({
@@ -40,5 +40,23 @@ describe('pickAssistantImages', () => {
       read,
     })).rejects.toThrow('图片附件不能超过 20MB');
     expect(read).not.toHaveBeenCalled();
+  });
+
+  it('allocates unique IDs when every candidate ID collides', async () => {
+    const attachments = await pickAssistantImages('gallery', 3, {
+      pickGallery: async () => [1, 2, 3].map((index) => ({ uri: `file:///${index}.jpg`, name: `${index}.jpg`, mimeType: 'image/jpeg', size: 1 })),
+      pickFiles: async () => [],
+      read: async (file) => ({ type: 'data', value: file.uri, mimeType: file.mimeType }),
+      createId: () => 'same-id',
+    });
+    expect(attachments.map((item) => item.id)).toEqual(['same-id', 'same-id-2', 'same-id-3']);
+  });
+
+  it('repairs incoming IDs without changing existing attachment identity', () => {
+    const current = [{ id: 'same-id' }] as never;
+    const incoming = [{ id: 'same-id' }, { id: 'fresh' }] as never;
+    expect(mergeUniqueAssistantAttachments(current, incoming, new Set(['provider-id']))).toMatchObject([
+      { id: 'same-id' }, { id: 'same-id-2' }, { id: 'fresh' },
+    ]);
   });
 });

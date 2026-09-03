@@ -5,7 +5,7 @@ import { getDatabase } from '../storage/databaseClient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { readSettings } from '../settings/storage';
 import { COLORS } from '../ui/theme';
-import { LocalCopilotKitProvider } from './LocalCopilotKitProvider';
+import { LocalCopilotKitProvider, rerunLocalAgent } from './LocalCopilotKitProvider';
 import { promptRuntimeRegistry } from './runtimeStore';
 import {
   createLocalThreadStore,
@@ -16,14 +16,25 @@ import { isH3AgentConfigReady, type H3AgentConfig } from './agentTypes';
 import { applyAgentSettings } from './agentConfig';
 import { readImageAsDataSource } from './imageAttachmentUpload';
 import { getH3AgentConfigError } from './modelAdapter';
-import { PromptAssistantUi } from './PromptAssistantUi';
+import { PromptAssistantUi, type RunIssue } from './PromptAssistantUi';
 import { createPromptDraftStore } from './promptDraft';
+import { sortSessionSnapshots } from './agentPresentation';
 
 type AgentConfig = H3AgentConfig;
 
 export default function AgentScreen() {
+  useEffect(() => () => { void promptRuntimeRegistry.disposeAll(); }, []);
   const [config, setConfig] = useState<AgentConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const runtimeAvailable = Boolean(
+    !error
+      && config
+      && isH3AgentConfigReady(config)
+      && !getH3AgentConfigError(config),
+  );
+  useEffect(() => {
+    if (!runtimeAvailable) void promptRuntimeRegistry.disposeAll();
+  }, [runtimeAvailable]);
   const refresh = useCallback(() => {
     let active = true;
     void readSettings()
@@ -102,11 +113,12 @@ function ReadyAgent({
       .then((snapshots) => {
         if (!active) return;
         if (snapshots.length) {
-          setThreads(snapshots);
+          const sorted = sortSessionSnapshots(snapshots);
+          setThreads(sorted);
           setActiveThreadId((current) =>
-            current && snapshots.some((item) => item.threadId === current)
+            current && sorted.some((item) => item.threadId === current)
               ? current
-              : snapshots[0].threadId,
+              : sorted[0].threadId,
           );
           return;
         }
@@ -146,7 +158,7 @@ function ReadyAgent({
     };
     try {
       await threadStore.save(snapshot);
-      setThreads((current) => [snapshot, ...current]);
+      setThreads((current) => sortSessionSnapshots([snapshot, ...current]));
       setActiveThreadId(snapshot.threadId);
     } catch (reason) {
       onError(reason instanceof Error ? reason.message : '创建会话失败');
@@ -155,8 +167,9 @@ function ReadyAgent({
   const deleteSession = useCallback(
     async (threadId: string) => {
       try {
+        await promptRuntimeRegistry.evictThread(threadId);
         await threadStore.remove(threadId);
-        const next = await threadStore.list();
+        const next = sortSessionSnapshots(await threadStore.list());
         setThreads(next);
         setActiveThreadId((current) =>
           current === threadId ? (next[0]?.threadId ?? null) : current,
@@ -174,9 +187,9 @@ function ReadyAgent({
       const next = { ...current, customTitle: title, updatedAt: Date.now() };
       try {
         await threadStore.save(next);
-        setThreads((items) =>
+        setThreads((items) => sortSessionSnapshots(
           items.map((item) => (item.threadId === threadId ? next : item)),
-        );
+        ));
       } catch (reason) {
         onError(reason instanceof Error ? reason.message : '重命名会话失败');
       }
@@ -185,9 +198,9 @@ function ReadyAgent({
   );
   const handleSnapshotChange = useCallback(
     (next: LocalThreadSnapshot) =>
-      setThreads((items) =>
+      setThreads((items) => sortSessionSnapshots(
         items.map((item) => (item.threadId === next.threadId ? next : item)),
-      ),
+      )),
     [],
   );
   const activeSnapshot = threads.find(
@@ -239,6 +252,7 @@ function AgentSession({
   onExportPrompt: (prompt: string) => Promise<void>;
 }) {
   const [notice, setNotice] = useState<string | undefined>();
+  const [runIssue, setRunIssue] = useState<RunIssue | null>(null);
   const runtime = useMemo(
     () => promptRuntimeRegistry.ensure(config, snapshot, threadStore),
     [config, snapshot.threadId, threadStore],
@@ -254,7 +268,9 @@ function AgentSession({
   return (
     <LocalCopilotKitProvider
       agent={agent}
-      onError={(reason) => setNotice(reason.message)}
+      onError={(reason) =>
+        setRunIssue({ kind: 'error', message: reason.message })
+      }
     >
       <CopilotChat
         agentId={agent.agentId}
@@ -264,7 +280,24 @@ function AgentSession({
           onUpload: readImageAsDataSource,
         }}
       >
-        <PromptAssistantUi {...uiProps} onExportPrompt={onExportPrompt} notice={notice} />
+        <PromptAssistantUi
+          {...uiProps}
+          onExportPrompt={onExportPrompt}
+          notice={notice}
+          runIssue={runIssue}
+          onRunIssueChange={setRunIssue}
+          onRetry={async () => {
+            setRunIssue(null);
+            try {
+              await rerunLocalAgent(agent);
+            } catch (reason) {
+              setRunIssue({
+                kind: 'error',
+                message: reason instanceof Error ? reason.message : '重试失败',
+              });
+            }
+          }}
+        />
       </CopilotChat>
     </LocalCopilotKitProvider>
   );

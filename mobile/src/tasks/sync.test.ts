@@ -1,37 +1,48 @@
-const task = {
-  id: 'task-1', prompt: 'x', status: 'SUCCESS' as const, resolution: '768p竖', duration: 5,
-  videoUrl: 'https://example/video.mp4', createdAt: 1, updatedAt: 2,
-};
-let mockUpdate: ((patch: Record<string, unknown>) => Promise<void>) | undefined;
-jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
-jest.mock('./repository', () => ({ createTaskRepository: jest.fn(() => ({
-  list: jest.fn(async () => [{
-    id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5,
-    videoUrl: 'https://example/video.mp4', createdAt: 1, updatedAt: 2,
-  }]),
-  upsert: jest.fn(async () => undefined),
-})) }));
-jest.mock('../settings/storage', () => ({ readSettings: jest.fn(async () => ({
-  token: '', llmEndpoint: '', llmModel: '', llmApiKey: '', llmTimeoutSeconds: '600', llmMaxRetries: '2',
-  autoExportToGallery: true, keepPrivateCopy: true,
-})) }));
-jest.mock('./download', () => ({ downloadTask: jest.fn(async () => task) }));
-jest.mock('./media', () => ({ ensureTaskMedia: jest.fn(async (value, options) => {
-  mockUpdate = options.onUpdate;
-  return { ...value, localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED', exportState: 'EXPORTING' };
-}) }));
+jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})), backupDatabaseSync: jest.fn() }));
+jest.mock('../storage/databaseClient', () => ({ getDatabase: jest.fn(() => ({})) }));
 
-import { ensureTaskMedia } from './media';
-import { syncTasks } from './sync';
+import { createSyncTaskRunner } from './sync';
 
-it('routes newly completed media through the shared delivery orchestrator', async () => {
-  await syncTasks();
-  expect(ensureTaskMedia).toHaveBeenCalledWith(task, expect.objectContaining({
-    policy: { autoExportToGallery: true, keepPrivateCopy: true },
+test('compatibility facade routes through the bounded executor cycle and converts its summary', async () => {
+  const runCycle = jest.fn(async () => ({
+    claimed: 3,
+    succeeded: 2,
+    retried: 0,
+    failed: 1,
+    blocked: 0,
+    remainingDue: 4,
+    remainingScheduled: 2,
+    passes: 2,
+    budgetExhausted: false,
   }));
-  await mockUpdate?.({ localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED' });
-  await mockUpdate?.({ exportState: 'EXPORTING' });
-  const repositoryFactory = jest.requireMock('./repository').createTaskRepository;
-  const repository = repositoryFactory.mock.results[0].value;
-  expect(repository.upsert).toHaveBeenLastCalledWith(expect.objectContaining({ localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED', exportState: 'EXPORTING' }));
+  const repair = jest.fn(async () => 2);
+  const reconcile = jest.fn(async () => ({ scanned: 3, repaired: 1, staleFiles: 0, garbageDeleted: 0, garbageFailed: 0 }));
+  const listTasks = jest.fn(async () => [{ id: 'task-1' }] as never);
+  const run = createSyncTaskRunner({ runCycle, repair, reconcile, listTasks, now: () => 500 });
+  await expect(run('background')).resolves.toEqual({
+    tasks: [{ id: 'task-1' }],
+    summary: {
+      updated: 2,
+      failed: 1,
+      skipped: 0,
+      remaining: 6,
+      lastSyncAt: 500,
+      operations: {
+        claimed: 3,
+        succeeded: 2,
+        retried: 0,
+        failed: 1,
+        blocked: 0,
+        remainingDue: 4,
+        remainingScheduled: 2,
+        passes: 2,
+        budgetExhausted: false,
+      },
+      reconciliation: { scanned: 3, repaired: 1, staleFiles: 0, garbageDeleted: 0, garbageFailed: 0 },
+    },
+  });
+  expect(runCycle).toHaveBeenCalledWith({ reason: 'background' });
+  expect(repair.mock.invocationCallOrder[0]).toBeGreaterThan(runCycle.mock.invocationCallOrder[0]);
+  expect(reconcile.mock.invocationCallOrder[0]).toBeGreaterThan(repair.mock.invocationCallOrder[0]);
+  expect(listTasks.mock.invocationCallOrder[0]).toBeGreaterThan(reconcile.mock.invocationCallOrder[0]);
 });

@@ -5,11 +5,17 @@ type NativeMonitor = { start?(taskIds: string[]): void | Promise<void>; stop?():
 
 function native(): NativeMonitor | undefined { return Platform.OS === 'android' ? (NativeModules.AutoDLTaskMonitor as NativeMonitor | undefined) : undefined; }
 
+export async function runTaskMonitorTick(taskIds: string[]): Promise<void> {
+  const { syncTaskRun } = require('../tasks/background') as typeof import('../tasks/background');
+  await syncTaskRun('service', taskIds);
+}
+
 export async function startTaskMonitor(taskIds: string[]): Promise<boolean> {
   const module = native();
   const ids = taskIds.map((id) => id.trim()).filter(Boolean);
   if (!module?.start || ids.length === 0) return false;
   await module.start(ids);
+  await runTaskMonitorTick(ids);
   return true;
 }
 

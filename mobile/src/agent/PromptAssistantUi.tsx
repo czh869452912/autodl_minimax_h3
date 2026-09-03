@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import { AppIcon } from '../ui/icons';
 import { LIGHT_PROMPT_COLORS } from '../ui/theme';
-import { pickAssistantImages, type AssistantImageAttachment } from './assistantImagePicker';
+import { mergeUniqueAssistantAttachments, pickAssistantImages, type AssistantImageAttachment } from './assistantImagePicker';
 import {
   insertImageMention,
   removeImageMentionOnBackspace,
@@ -34,6 +34,8 @@ import {
   groupSessions,
   matchesSessionQuery,
   normalizeMessages,
+  sessionDisplayTitle,
+  sessionMessageCount,
   sessionTitle,
   toolTimelineSummary,
   type ToolTimelineStep,
@@ -41,6 +43,7 @@ import {
 import { type PromptParseResult } from './promptParser';
 import type { LocalThreadSnapshot } from './threadStore';
 import { DraggableBottomSheet } from '../ui/DraggableSheet';
+import { nextFollowState, type TimelineMetrics } from './timelineScroll';
 
 type AttachmentLike = {
   id: string;
@@ -59,6 +62,19 @@ type HistoryProps = {
   onRename: (id: string, title: string) => void;
 };
 
+export type RunIssue = { kind: 'error' | 'aborted'; message: string };
+
+export function applyComposerSuggestion(
+  value: string,
+  setDraft: (value: string) => void,
+  setSelection: (selection: { start: number; end: number }) => void,
+  input: { current: { focus: () => void } | null },
+): void {
+  setDraft(value);
+  setSelection({ start: value.length, end: value.length });
+  input.current?.focus();
+}
+
 export function PromptAssistantUi({
   threads,
   activeThreadId,
@@ -68,7 +84,16 @@ export function PromptAssistantUi({
   onRename: onRenameThread,
   onExportPrompt,
   notice,
-}: HistoryProps & { onExportPrompt: (prompt: string) => Promise<void>; notice?: string }) {
+  runIssue = null,
+  onRunIssueChange = () => undefined,
+  onRetry = async () => undefined,
+}: HistoryProps & {
+  onExportPrompt: (prompt: string) => Promise<void>;
+  notice?: string;
+  runIssue?: RunIssue | null;
+  onRunIssueChange?: (issue: RunIssue | null) => void;
+  onRetry?: () => Promise<void>;
+}) {
   const {
     messages,
     isRunning,
@@ -83,7 +108,6 @@ export function PromptAssistantUi({
   const [inputSelection, setInputSelection] = useState({ start: 0, end: 0 });
   const [mentionSheetOpen, setMentionSheetOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [stopNotice, setStopNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const submitLock = useRef(false);
   const inputRef = useRef<TextInput>(null);
@@ -158,7 +182,7 @@ export function PromptAssistantUi({
       return;
     submitLock.current = true;
     setSubmitting(true);
-    setStopNotice(null);
+    onRunIssueChange(null);
     const readyAttachments: Array<{ uri: string; filename?: string; displayName?: string }> = ready
       .map((item) => {
         if (!item.source) return null;
@@ -187,7 +211,10 @@ export function PromptAssistantUi({
     try {
       await submitMessage(value);
     } catch (error) {
-      setStopNotice(error instanceof Error ? error.message : '发送失败');
+      onRunIssueChange({
+        kind: 'error',
+        message: error instanceof Error ? error.message : '发送失败',
+      });
     } finally {
       submitLock.current = false;
       setSubmitting(false);
@@ -197,7 +224,11 @@ export function PromptAssistantUi({
     try {
       const remaining = Math.max(0, 9 - attachments.filter((item) => item.status === 'ready').length - galleryAttachments.length);
       const picked = await pickAssistantImages('gallery', remaining);
-      setGalleryAttachments((current) => [...current, ...picked]);
+      setGalleryAttachments((current) => mergeUniqueAssistantAttachments(
+        current,
+        picked,
+        new Set(attachments.map((attachment) => attachment.id)),
+      ));
     } catch (error) {
       Alert.alert('相册不可用', error instanceof Error ? error.message : '读取相册图片失败');
     }
@@ -256,6 +287,9 @@ export function PromptAssistantUi({
     setMentionSheetOpen(false);
     inputRef.current?.focus();
   };
+  const applySuggestion = useCallback((value: string) => {
+    applyComposerSuggestion(value, setDraft, setInputSelection, inputRef);
+  }, []);
   const history = (
     <HistoryList
       threads={threads}
@@ -319,16 +353,19 @@ export function PromptAssistantUi({
       <View style={styles.body}>
         {wide ? <View style={styles.sidebar}>{history}</View> : null}
         <View style={styles.conversation}>
-          {stopNotice ?? notice ? (
+          {notice ? (
             <View style={styles.notice}>
               <AppIcon name="info" size={16} color={LIGHT_PROMPT_COLORS.accent} />
-              <Text style={styles.noticeText}>{stopNotice ?? notice}</Text>
+              <Text style={styles.noticeText}>{notice}</Text>
             </View>
           ) : null}
           <ConversationTimeline
             rows={rows}
             isRunning={isRunning || submitting}
             onExportPrompt={onExportPrompt}
+            runIssue={runIssue}
+            onRetry={onRetry}
+            onSelectSuggestion={applySuggestion}
           />
           <View style={styles.composerDock}>
             <Composer
@@ -339,7 +376,7 @@ export function PromptAssistantUi({
               onOpenMentionPicker={() => setMentionSheetOpen(true)}
               onCancel={() => {
                 agent.abortRun?.();
-                setStopNotice('已停止生成');
+                onRunIssueChange({ kind: 'aborted', message: '已停止生成' });
               }}
               isRunning={isRunning || submitting}
               attachments={composerAttachments}
@@ -393,12 +430,21 @@ export function ConversationTimeline({
   rows,
   isRunning,
   onExportPrompt,
+  runIssue = null,
+  onRetry = async () => undefined,
+  onSelectSuggestion = () => undefined,
 }: {
   rows: ReturnType<typeof normalizeMessages>;
   isRunning: boolean;
   onExportPrompt: (prompt: string) => Promise<void>;
+  runIssue?: RunIssue | null;
+  onRetry?: () => Promise<void>;
+  onSelectSuggestion?: (suggestion: string) => void;
 }) {
   const listRef = useRef<FlatList<ReturnType<typeof normalizeMessages>[number]>>(null);
+  const [followingLatest, setFollowingLatest] = useState(true);
+  const followingLatestRef = useRef(true);
+  const setFollow = useCallback((value: boolean) => { followingLatestRef.current = value; setFollowingLatest(value); }, []);
   const timelineSignature = rows
     .map((row) =>
       row.kind === 'assistant'
@@ -406,27 +452,52 @@ export function ConversationTimeline({
         : `${row.id}:${row.text}`,
     )
     .join('\u0001');
-  const scrollToLatest = useCallback(() => {
-    listRef.current?.scrollToEnd({ animated: true });
+  const scrollToLatest = useCallback((animated = true) => {
+    if (followingLatestRef.current) listRef.current?.scrollToEnd({ animated });
   }, []);
   useEffect(() => {
     scrollToLatest();
   }, [isRunning, scrollToLatest, timelineSignature]);
+  const updateFollow = useCallback((type: 'scroll' | 'scroll-end', metrics: TimelineMetrics) => {
+    setFollow(nextFollowState(followingLatestRef.current, { type, metrics }));
+  }, [setFollow]);
   return (
-    <FlatList
-      ref={listRef}
-      data={rows}
-      keyExtractor={(item) => item.id}
-      style={styles.timeline}
-      contentContainerStyle={styles.timelineContent}
-      keyboardShouldPersistTaps="handled"
-      onContentSizeChange={scrollToLatest}
-      onLayout={() => scrollToLatest()}
-      ListEmptyComponent={
-        isRunning ? <RunningIndicator /> : <EmptyTimeline />
-      }
-      ListFooterComponent={rows.length && isRunning ? <RunningIndicator compact /> : null}
-      renderItem={({ item }) =>
+      <View style={{ flex: 1 }}>
+        <FlatList
+          ref={listRef}
+          data={rows}
+          keyExtractor={(item) => item.id}
+          style={styles.timeline}
+          contentContainerStyle={styles.timelineContent}
+          keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={16}
+          onScrollBeginDrag={() =>
+            setFollow(nextFollowState(followingLatestRef.current, { type: 'drag-start' }))
+          }
+          onScroll={({ nativeEvent }) => updateFollow('scroll', nativeEvent)}
+          onMomentumScrollEnd={({ nativeEvent }) =>
+            updateFollow('scroll-end', nativeEvent)
+          }
+          onScrollEndDrag={({ nativeEvent }) =>
+            updateFollow('scroll-end', nativeEvent)
+          }
+          onContentSizeChange={() => scrollToLatest()}
+          onLayout={() => scrollToLatest()}
+          ListEmptyComponent={
+            isRunning ? (
+              <RunningIndicator />
+            ) : (
+              <EmptyTimeline onSelectSuggestion={onSelectSuggestion} />
+            )
+          }
+          ListFooterComponent={
+            rows.length && isRunning ? (
+              <RunningIndicator compact />
+            ) : runIssue ? (
+              <RunIssueRow issue={runIssue} onRetry={onRetry} />
+            ) : null
+          }
+          renderItem={({ item }) =>
         item.kind === 'user' ? (
           <View style={styles.userRow}>
             {item.attachments.length ? (
@@ -461,11 +532,26 @@ export function ConversationTimeline({
             </View>
             <View style={styles.assistantContent}>
               {item.text ? (
-                <CopilotMarkdown
-                  content={item.text}
-                  streamingAnimation={isRunning}
-                  style={markdownStyles}
-                />
+                <>
+                  <CopilotMarkdown
+                    content={item.text}
+                    streamingAnimation={isRunning}
+                    style={markdownStyles}
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`复制回答 ${item.id}`}
+                    onPress={() => void Clipboard.setStringAsync(item.text)}
+                    style={styles.assistantCopy}
+                  >
+                    <AppIcon
+                      name="content_copy"
+                      size={14}
+                      color={LIGHT_PROMPT_COLORS.muted}
+                    />
+                    <Text style={styles.assistantCopyText}>复制</Text>
+                  </Pressable>
+                </>
               ) : null}
               {item.tools.length ? <ToolTimeline steps={item.tools} /> : null}
               {item.prompt ? (
@@ -477,12 +563,78 @@ export function ConversationTimeline({
             </View>
           </View>
         )
-      }
-    />
+          }
+        />
+        {!followingLatest ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="回到最新消息"
+            onPress={() => {
+              setFollow(nextFollowState(followingLatestRef.current, { type: 'back-to-latest' }));
+              listRef.current?.scrollToEnd({ animated: true });
+            }}
+            style={{
+              position: 'absolute',
+              right: 16,
+              bottom: 12,
+              flexDirection: 'row',
+              gap: 4,
+              padding: 10,
+              borderRadius: 18,
+              backgroundColor: LIGHT_PROMPT_COLORS.surface,
+            }}
+          >
+            <AppIcon name="download" size={16} color={LIGHT_PROMPT_COLORS.ink} />
+            <Text>回到最新</Text>
+          </Pressable>
+        ) : null}
+      </View>
   );
 }
 
-function EmptyTimeline() {
+function RunIssueRow({
+  issue,
+  onRetry,
+}: {
+  issue: RunIssue;
+  onRetry: () => Promise<void>;
+}) {
+  const [retrying, setRetrying] = useState(false);
+  const handleRetry = async () => {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      await onRetry();
+    } finally {
+      setRetrying(false);
+    }
+  };
+  return (
+    <View accessibilityRole="alert" style={styles.runIssue}>
+      <Text style={styles.runIssueText}>{issue.message}</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="重试上一轮"
+        accessibilityState={{ disabled: retrying }}
+        disabled={retrying}
+        onPress={() => void handleRetry()}
+        style={styles.runIssueAction}
+      >
+        <Text style={styles.runIssueActionText}>
+          {retrying ? '正在重试…' : '重试'}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const EMPTY_SUGGESTIONS = ['一镜到底的城市夜跑', '纸艺风格的产品广告'];
+
+function EmptyTimeline({
+  onSelectSuggestion,
+}: {
+  onSelectSuggestion: (suggestion: string) => void;
+}) {
   return (
     <View style={styles.empty}>
       <View style={styles.emptyMark}>
@@ -499,8 +651,17 @@ function EmptyTimeline() {
         描述主体、动作、镜头和氛围；我会帮你补全细节。
       </Text>
       <View style={styles.suggestions}>
-        <Text style={styles.suggestion}>“一镜到底的城市夜跑”</Text>
-        <Text style={styles.suggestion}>“纸艺风格的产品广告”</Text>
+        {EMPTY_SUGGESTIONS.map((suggestion) => (
+          <Pressable
+            key={suggestion}
+            accessibilityRole="button"
+            accessibilityLabel={`使用建议 ${suggestion}`}
+            onPress={() => onSelectSuggestion(suggestion)}
+            style={styles.suggestion}
+          >
+            <Text style={styles.suggestionText}>{suggestion}</Text>
+          </Pressable>
+        ))}
       </View>
     </View>
   );
@@ -937,8 +1098,8 @@ function HistoryList({
             style={[styles.historyItem, thread.threadId === activeThreadId && styles.historyItemActive]}
           >
             <View style={styles.historyItemMain}>
-              <Text numberOfLines={1} style={styles.historyTitle}>{sessionTitle(thread)}</Text>
-              <Text style={styles.historyMeta}>{thread.messages.length} 条消息 · {new Date(thread.updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</Text>
+              <Text numberOfLines={1} style={styles.historyTitle}>{sessionDisplayTitle(thread, threads)}</Text>
+              <Text style={styles.historyMeta}>{sessionMessageCount(thread)} 条消息 · {new Date(thread.updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</Text>
             </View>
             <Pressable accessibilityLabel={`管理会话 ${thread.threadId}`} onPress={() => { setRenameTarget(thread); setRenameValue(sessionTitle(thread)); }}>
               <Text style={styles.more}>•••</Text>
@@ -1086,6 +1247,33 @@ const styles = StyleSheet.create({
     backgroundColor: LIGHT_PROMPT_COLORS.surface,
   },
   runningIndicatorCompact: { alignSelf: 'flex-start', marginTop: 8, marginBottom: 8 },
+  runIssue: {
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5C4BC',
+    backgroundColor: '#FFF4F1',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  runIssueText: {
+    flex: 1,
+    color: '#8B3528',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  runIssueAction: {
+    minHeight: 32,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3D9D2',
+  },
+  runIssueActionText: { color: '#743026', fontSize: 12, fontWeight: '700' },
   runningDot: {
     width: 8,
     height: 8,
@@ -1122,10 +1310,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 14,
-    color: LIGHT_PROMPT_COLORS.ink,
     backgroundColor: LIGHT_PROMPT_COLORS.surface,
     overflow: 'hidden',
   },
+  suggestionText: { color: LIGHT_PROMPT_COLORS.ink, fontSize: 14 },
   userRow: { alignItems: 'flex-end', marginVertical: 8 },
   userBubble: {
     maxWidth: '84%',
@@ -1154,6 +1342,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   assistantContent: { flex: 1, minWidth: 0 },
+  assistantCopy: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    minHeight: 30,
+    paddingHorizontal: 8,
+    marginTop: 2,
+    borderRadius: 10,
+  },
+  assistantCopyText: {
+    color: LIGHT_PROMPT_COLORS.muted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   toolTimeline: {
     marginTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,

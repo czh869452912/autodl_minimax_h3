@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 
-export function createRealSqliteTestDb() {
-  const database = new DatabaseSync(':memory:');
+export function createRealSqliteTestDb(path = ':memory:') {
+  const database = new DatabaseSync(path);
   const values = (params: unknown[]) => params as Parameters<ReturnType<DatabaseSync['prepare']>['run']>;
   return {
     execSync(source: string) { database.exec(source); },
@@ -13,4 +13,12 @@ export function createRealSqliteTestDb() {
     async getAllAsync<T>(source: string, ...params: unknown[]) { return database.prepare(source).all(...values(params)) as T[]; },
     close() { database.close(); },
   };
+}
+
+export function createInitializedRealSqliteTestDb(path = ':memory:') {
+  const db = createRealSqliteTestDb(path);
+  // Lazy require avoids a storage -> test helper import cycle in production modules.
+  const { ensureAppDatabase } = require('../storage/database') as typeof import('../storage/database');
+  ensureAppDatabase(db as never);
+  return db;
 }

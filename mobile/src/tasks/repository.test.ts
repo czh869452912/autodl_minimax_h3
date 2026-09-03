@@ -1,6 +1,7 @@
 import { createTaskRepository } from './repository';
 import type { TaskRecord } from './types';
-import { createRealSqliteTestDb } from '../test/realSqlite';
+import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
+import * as FileSystem from 'expo-file-system/legacy';
 
 function fakeDb() {
   let row: Record<string, unknown> | undefined;
@@ -58,7 +59,7 @@ test('persists gallery publication independently from private download', async (
 });
 
 test('workflow projection upsert preserves media-owned columns on conflict', async () => {
-  const db = createRealSqliteTestDb();
+  const db = createInitializedRealSqliteTestDb();
   try {
     const store = createTaskRepository(db as never);
     await store.upsert({
@@ -84,7 +85,7 @@ test('workflow projection upsert preserves media-owned columns on conflict', asy
 });
 
 test('media projection update preserves newer workflow-owned fields', async () => {
-  const db = createRealSqliteTestDb();
+  const db = createInitializedRealSqliteTestDb();
   try {
     const store = createTaskRepository(db as never);
     await store.upsert({
@@ -112,7 +113,7 @@ test('media projection update preserves newer workflow-owned fields', async () =
 });
 
 test('media projection updates never recreate a removed task', async () => {
-  const db = createRealSqliteTestDb();
+  const db = createInitializedRealSqliteTestDb();
   try {
     const store = createTaskRepository(db as never);
     await store.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 1 });
@@ -128,7 +129,7 @@ test('media projection updates never recreate a removed task', async () => {
 });
 
 test('field-level download patches preserve a completed gallery export', async () => {
-  const db = createRealSqliteTestDb();
+  const db = createInitializedRealSqliteTestDb();
   try {
     const store = createTaskRepository(db as never);
     await store.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, galleryUri: 'content://gallery/1', exportState: 'EXPORTED', exportedAt: 2, createdAt: 1, updatedAt: 2 });
@@ -223,4 +224,64 @@ test('ignores malformed persisted task JSON instead of crashing', async () => {
   };
   const store = createTaskRepository(db as never);
   await expect(store.list()).resolves.toMatchObject([{ id: 'bad', inputSnapshot: undefined, images: undefined, audios: undefined }]);
+});
+
+test('removes task projections transactionally and leaves CAS files for garbage collection', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const store = createTaskRepository(db as never);
+    await store.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, localUri: 'file:///documents/cas/sha256/aa/blob', createdAt: 1, updatedAt: 2 });
+    const remove = jest.spyOn(FileSystem, 'deleteAsync').mockResolvedValue(undefined as never);
+    await store.remove('task-1');
+    expect(remove).not.toHaveBeenCalledWith(expect.stringContaining('/cas/sha256/'), expect.anything());
+    remove.mockRestore();
+  } finally { db.close(); }
+});
+
+test('removes queued and claimed workflow operations with the task', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const store = createTaskRepository(db as never);
+    await store.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 2 });
+    db.runSync("INSERT INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES ('export-1','EXPORT','task-1','export:task-1:video','{}','PENDING',0,1,1,2)");
+
+    await store.remove('task-1');
+
+    expect(db.getFirstSync("SELECT id FROM workflow_operations WHERE job_id='task-1'")).toBeUndefined();
+  } finally { db.close(); }
+});
+
+test('refuses deletion while an operation owns the task lease', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const store = createTaskRepository(db as never);
+    await store.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 2 });
+    db.runSync("INSERT INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,lease_owner,lease_expires_at,created_at,updated_at) VALUES ('export-1','EXPORT','task-1','export:task-1:video','{}','CLAIMED',1,1,'worker',100,1,2)");
+
+    await expect(store.remove('task-1')).rejects.toThrow('TASK_OPERATION_IN_PROGRESS');
+
+    expect(db.getFirstSync("SELECT id FROM tasks WHERE id='task-1'")).toEqual({ id: 'task-1' });
+    expect(db.getFirstSync("SELECT id FROM workflow_operations WHERE id='export-1'")).toEqual({ id: 'export-1' });
+  } finally { db.close(); }
+});
+
+test('rolls back every task projection delete when one delete fails', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const original = createTaskRepository(db as never);
+    await original.upsert({ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 2 });
+    db.runSync("INSERT INTO media_assets (id,task_id,title,prompt,source_url,mime_type,status,created_at,updated_at,kind) VALUES ('asset-1','task-1','x','x','https://cdn/video','video/mp4','queued',1,2,'video')");
+    const failingDb = {
+      getAllSync: db.getAllSync.bind(db),
+      getFirstSync: db.getFirstSync.bind(db),
+      execSync: db.execSync.bind(db),
+      runSync(sql: string, ...params: any[]) {
+        if (sql.startsWith('DELETE FROM workflow_artifacts')) throw new Error('injected delete failure');
+        return db.runSync(sql, ...params);
+      },
+    };
+    await expect(createTaskRepository(failingDb as never).remove('task-1')).rejects.toThrow('injected delete failure');
+    expect(db.getFirstSync("SELECT id FROM tasks WHERE id='task-1'")).toEqual({ id: 'task-1' });
+    expect(db.getFirstSync("SELECT id FROM media_assets WHERE id='asset-1'")).toEqual({ id: 'asset-1' });
+  } finally { db.close(); }
 });

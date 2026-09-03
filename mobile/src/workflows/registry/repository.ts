@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { RegistryRecord, WorkflowRegistry } from './types';
-import { assertAppDatabaseWritable, ensureAppDatabase } from '../../storage/database';
+import { assertAppDatabaseWritable } from '../../storage/database';
 
 type Row = { workflow_id: string; version: string; content_hash: string; source: string; trust: string; definition_json: string; installed_at: number; repository?: string; ref?: string; commit_sha?: string };
 type ActiveRow = { workflow_id: string; version: string; content_hash: string; previous_version?: string; previous_hash?: string };
@@ -9,9 +9,6 @@ export function createWorkflowRegistry(db: SQLiteDatabase | undefined): Workflow
   const memory = new Map<string, RegistryRecord>();
   const active = new Map<string, ActiveRow>();
   const key = (id: string, version: string) => `${id}\u0000${version}`;
-  if (db) {
-    ensureAppDatabase(db);
-  }
   const fromRow = (row: Row): RegistryRecord => ({ workflowId: row.workflow_id, version: row.version, contentHash: row.content_hash, source: row.source as RegistryRecord['source'], trust: row.trust as RegistryRecord['trust'], definitionJson: row.definition_json, installedAt: Number(row.installed_at), repository: row.repository, ref: row.ref, commit: row.commit_sha });
   const get = async (workflowId: string, version: string) => {
     if (!db) return memory.get(key(workflowId, version));

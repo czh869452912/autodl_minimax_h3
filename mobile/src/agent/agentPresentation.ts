@@ -168,6 +168,25 @@ export function sessionTitle(snapshot: LocalThreadSnapshot): string {
   return text ? text.slice(0, 40) : '新会话';
 }
 
+export function sortSessionSnapshots(values: readonly LocalThreadSnapshot[]): LocalThreadSnapshot[] {
+  return [...values].sort((left, right) => right.updatedAt - left.updatedAt || left.threadId.localeCompare(right.threadId));
+}
+
+export function sessionMessageCount(snapshot: LocalThreadSnapshot): number {
+  return normalizeMessages(snapshot.messages).length;
+}
+
+export function sessionDisplayTitle(snapshot: LocalThreadSnapshot, siblings: readonly LocalThreadSnapshot[]): string {
+  const title = sessionTitle(snapshot);
+  if (snapshot.customTitle?.trim()) return title;
+  const duplicates = siblings.filter((item) => !item.customTitle?.trim() && sessionTitle(item) === title);
+  if (duplicates.length < 2) return title;
+  const created = new Date(snapshot.createdAt).toLocaleString('zh-CN', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  });
+  return `${title} · ${created} · ${snapshot.threadId.slice(-4)}`;
+}
+
 export function matchesSessionQuery(
   snapshot: LocalThreadSnapshot,
   query: string,
@@ -195,7 +214,7 @@ export function groupSessions(
     { label: '近 7 天', snapshots: [] },
     { label: '更早', snapshots: [] },
   ];
-  for (const snapshot of snapshots) {
+  for (const snapshot of sortSessionSnapshots(snapshots)) {
     groups[
       snapshot.updatedAt >= today ? 0 : snapshot.updatedAt >= week ? 1 : 2
     ].snapshots.push(snapshot);

@@ -1,4 +1,4 @@
-import { exportStatusLabel, mediaSource, mediaStatusLabel } from './presentation';
+import { exportStatusLabel, mediaExportStatusLabel, mediaSource, mediaStatusLabel } from './presentation';
 import type { TaskRecord } from '../tasks/types';
 
 const task: TaskRecord = { id: 'task-1', prompt: 'cinematic city', status: 'SUCCESS', resolution: '768p竖', duration: 5, videoUrl: 'https://example/video.mp4', localUri: 'file:///local.mp4', thumbnailUrl: 'file:///poster.jpg', downloadState: 'DOWNLOADED', createdAt: 1, updatedAt: 2 };
@@ -20,6 +20,13 @@ describe('media presentation helpers', () => {
     expect(exportStatusLabel({ exportState: 'EXPORTED', galleryUri: 'content://media/video/1', downloadState: 'DOWNLOADED' })).toBe('已保存到相册');
     expect(exportStatusLabel({ exportState: 'EXPORT_FAILED', downloadState: 'DOWNLOADED' })).toBe('保存到相册失败');
     expect(exportStatusLabel({ downloadState: 'DOWNLOADED' })).toBe('已下载到应用');
+  });
+
+  it('translates stored media export enums only at presentation time', () => {
+    expect(mediaExportStatusLabel('EXPORTED')).toBe('已保存到相册');
+    expect(mediaExportStatusLabel('QUEUED')).toBe('正在保存到相册');
+    expect(mediaExportStatusLabel('EXPORT_FAILED')).toBe('保存到相册失败');
+    expect(mediaExportStatusLabel('NOT_REQUESTED')).toBe('');
   });
 
 });

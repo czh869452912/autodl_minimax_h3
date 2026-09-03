@@ -1,14 +1,25 @@
+import { assertAppDatabaseWritable } from '../storage/database';
+
 type LeaseDb = {
-  getFirstSync?: (sql: string, ...params: unknown[]) => { expires_at?: number } | null;
-  runSync?: (sql: string, ...params: unknown[]) => unknown;
+  runSync?: (sql: string, ...params: any[]) => unknown;
 };
 
-const localLeases = new Map<string, number>();
-const initializedDatabases = new WeakSet<object>();
+export type SchedulerLease = {
+  key: string;
+  owner: string;
+  assertOwned(): void;
+  renew(): void;
+};
+
+function changes(result: unknown): number {
+  return Number((result as { changes?: number | bigint } | undefined)?.changes ?? 0);
+}
+
+const localLeases = new Map<string, { owner: string; expiresAt: number }>();
 
 export async function withSchedulerLease<T>(
   key: string,
-  work: () => Promise<T>,
+  work: (lease: SchedulerLease) => Promise<T>,
   options: { db?: LeaseDb; now?: () => number; ttlMs?: number } = {},
 ): Promise<T | undefined> {
   const now = options.now ?? Date.now;
@@ -16,24 +27,75 @@ export async function withSchedulerLease<T>(
   const timestamp = now();
   const db = options.db;
   const owner = `${timestamp}-${Math.random()}`;
-  if (db?.getFirstSync && db.runSync) {
-    if (!initializedDatabases.has(db as object)) {
-      db.runSync('CREATE TABLE IF NOT EXISTS app_scheduler_leases (lease_key TEXT PRIMARY KEY NOT NULL, owner TEXT NOT NULL, expires_at INTEGER NOT NULL)');
-      initializedDatabases.add(db as object);
-    }
-    const current = db.getFirstSync('SELECT expires_at FROM app_scheduler_leases WHERE lease_key = ? LIMIT 1', key);
-    if (current && Number(current.expires_at) > timestamp) return undefined;
-    db.runSync('INSERT OR REPLACE INTO app_scheduler_leases (lease_key, owner, expires_at) VALUES (?, ?, ?)', key, owner, timestamp + ttlMs);
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let leaseError: Error | undefined;
+  let lease: SchedulerLease;
+  if (db?.runSync) {
+    assertAppDatabaseWritable(db as never);
+    const claimed = db.runSync(
+      'INSERT INTO app_scheduler_leases (lease_key,owner,expires_at) VALUES (?,?,?) ON CONFLICT(lease_key) DO UPDATE SET owner=excluded.owner,expires_at=excluded.expires_at WHERE app_scheduler_leases.expires_at <= ?',
+      key, owner, timestamp + ttlMs, timestamp,
+    );
+    if (changes(claimed) !== 1) return undefined;
+    const assertOwned = () => {
+      if (leaseError) throw leaseError;
+      const result = db.runSync!(
+        'UPDATE app_scheduler_leases SET expires_at=expires_at WHERE lease_key=? AND owner=? AND expires_at>?',
+        key, owner, now(),
+      );
+      if (changes(result) !== 1) throw new Error('SCHEDULER_LEASE_LOST');
+    };
+    const renew = () => {
+      if (leaseError) throw leaseError;
+      const renewalTime = now();
+      const result = db.runSync!(
+        'UPDATE app_scheduler_leases SET expires_at=? WHERE lease_key=? AND owner=? AND expires_at>?',
+        renewalTime + ttlMs, key, owner, renewalTime,
+      );
+      if (changes(result) !== 1) throw new Error('SCHEDULER_LEASE_LOST');
+    };
+    lease = { key, owner, assertOwned, renew };
+    heartbeat = setInterval(() => {
+      try { renew(); } catch (reason) {
+        leaseError = reason instanceof Error ? reason : new Error('SCHEDULER_LEASE_LOST');
+      }
+    }, Math.max(1_000, Math.floor(ttlMs / 3)));
   } else {
-    const expiresAt = localLeases.get(key) ?? 0;
-    if (expiresAt > timestamp) return undefined;
-    localLeases.set(key, timestamp + ttlMs);
+    const current = localLeases.get(key);
+    if (current && current.expiresAt > timestamp) return undefined;
+    localLeases.set(key, { owner, expiresAt: timestamp + ttlMs });
+    lease = {
+      key,
+      owner,
+      assertOwned() {
+        const active = localLeases.get(key);
+        if (!active || active.owner !== owner || active.expiresAt <= now()) {
+          throw new Error('SCHEDULER_LEASE_LOST');
+        }
+      },
+      renew() {
+        const renewalTime = now();
+        const active = localLeases.get(key);
+        if (!active || active.owner !== owner || active.expiresAt <= renewalTime) {
+          throw new Error('SCHEDULER_LEASE_LOST');
+        }
+        localLeases.set(key, { owner, expiresAt: renewalTime + ttlMs });
+      },
+    };
+    heartbeat = setInterval(() => {
+      try { lease.renew(); } catch (reason) {
+        leaseError = reason instanceof Error ? reason : new Error('SCHEDULER_LEASE_LOST');
+      }
+    }, Math.max(1_000, Math.floor(ttlMs / 3)));
   }
   try {
-    return await work();
+    const result = await work(lease);
+    lease.assertOwned();
+    return result;
   } finally {
+    if (heartbeat) clearInterval(heartbeat);
     if (db?.runSync) db.runSync('DELETE FROM app_scheduler_leases WHERE lease_key = ? AND owner = ?', key, owner);
-    else localLeases.delete(key);
+    else if (localLeases.get(key)?.owner === owner) localLeases.delete(key);
   }
 }
 

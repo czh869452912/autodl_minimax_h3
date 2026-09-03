@@ -4,7 +4,7 @@ import type { MediaAsset, MediaStore } from './types';
 
 type AssetStore = Pick<MediaStore, 'upsert'> & Partial<Pick<MediaStore, 'upsertArtifactProjection'>>;
 
-export async function materializeJobArtifacts(job: JobRecord, artifacts: ArtifactRecord[], store: AssetStore, task?: Pick<TaskRecord, 'prompt' | 'thumbnailUrl' | 'createdAt' | 'localUri'>): Promise<MediaAsset[]> {
+export async function materializeJobArtifacts(job: JobRecord, artifacts: ArtifactRecord[], store: AssetStore, task?: Pick<TaskRecord, 'prompt' | 'thumbnailUrl' | 'createdAt' | 'localUri'>, options: { enqueueDownload?: (asset: MediaAsset, artifact: ArtifactRecord) => void } = {}): Promise<MediaAsset[]> {
   const assets: MediaAsset[] = [];
   for (const artifact of artifacts) {
     const sourceUrl = artifact.uri?.trim();
@@ -21,7 +21,7 @@ export async function materializeJobArtifacts(job: JobRecord, artifacts: Artifac
       posterPath: task?.thumbnailUrl,
       mimeType: artifact.mime || (artifact.kind === 'video' ? 'video/mp4' : `${artifact.kind}/*`),
       kind: artifact.kind,
-      status: 'downloading',
+      status: 'queued',
       durationMs: typeof artifact.metadata?.durationMs === 'number' ? artifact.metadata.durationMs : undefined,
       createdAt: task?.createdAt ?? job.createdAt,
       updatedAt: job.updatedAt,
@@ -29,6 +29,7 @@ export async function materializeJobArtifacts(job: JobRecord, artifacts: Artifac
     if (task?.localUri && artifact.kind === 'video') { asset.localPath = task.localUri; asset.status = 'downloaded'; }
     const persist = store.upsertArtifactProjection?.bind(store) ?? store.upsert.bind(store);
     await persist(asset);
+    options.enqueueDownload?.(asset, artifact);
     assets.push(asset);
   }
   return assets;

@@ -1,5 +1,5 @@
 import type { LocalThreadSnapshot } from './threadStore';
-import { groupSessions, matchesSessionQuery, normalizeMessages, toolTimelineSummary } from './agentPresentation';
+import { groupSessions, matchesSessionQuery, normalizeMessages, sessionDisplayTitle, sessionMessageCount, toolTimelineSummary } from './agentPresentation';
 
 const snapshot = (updatedAt: number, customTitle?: string): LocalThreadSnapshot => ({
   threadId: `t-${updatedAt}`, messages: [{ id: 'u', role: 'user', content: '屋顶上的猫' }] as never, state: {}, createdAt: updatedAt, updatedAt, customTitle,
@@ -42,5 +42,32 @@ describe('agent presentation helpers', () => {
     expect(matchesSessionQuery(snapshot(now, '镜头草稿'), '镜头')).toBe(true);
     expect(matchesSessionQuery(snapshot(now), '屋顶')).toBe(true);
     expect(groupSessions([snapshot(now), snapshot(now - 2 * 86400000), snapshot(now - 9 * 86400000)], now).map((group) => group.label)).toEqual(['今天', '近 7 天', '更早']);
+  });
+
+  it('sorts every group by activity and thread id', () => {
+    const now = Date.now();
+    const a = { ...snapshot(now), threadId: 'a' };
+    const b = { ...snapshot(now), threadId: 'b' };
+    const older = { ...snapshot(now - 1), threadId: 'z' };
+    expect(groupSessions([older, b, a], now)[0].snapshots.map((item) => item.threadId)).toEqual(['a', 'b', 'z']);
+  });
+
+  it('counts normalized timeline rows rather than raw tool records', () => {
+    const thread = { ...snapshot(1), messages: [
+      { id: 'u', role: 'user', content: '猫' },
+      { id: 'a', role: 'assistant', content: '完成', toolCalls: [{ id: 'tc', function: { name: 'skill' } }] },
+      { id: 'tool', role: 'tool', toolCallId: 'tc', content: 'done' },
+    ] as never };
+    expect(sessionMessageCount(thread)).toBe(2);
+  });
+
+  it('disambiguates only duplicate derived titles', () => {
+    const threads = [
+      { ...snapshot(1000), threadId: 'thread-a', createdAt: 1000 },
+      { ...snapshot(2000), threadId: 'thread-b', createdAt: 2000 },
+    ];
+    expect(sessionDisplayTitle(threads[0], threads)).toMatch(/^屋顶上的猫 · /);
+    expect(sessionDisplayTitle(threads[0], threads)).not.toBe(sessionDisplayTitle(threads[1], threads));
+    expect(sessionDisplayTitle({ ...threads[0], customTitle: '我的命名' }, threads)).toBe('我的命名');
   });
 });

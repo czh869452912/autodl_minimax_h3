@@ -170,9 +170,31 @@ test('times out while the response body is stalled', async () => {
   try {
     const reader = { read: jest.fn(() => new Promise<never>(() => undefined)), cancel: jest.fn(async () => undefined) };
     const fetcher = jest.fn().mockResolvedValue({ status: 200, ok: true, headers: new Headers({ 'content-type': 'video/mp4' }), body: { getReader: () => reader } });
-    const pending = downloadArtifact('https://cdn.example.test/video', { allowedHosts: ['example.test'], timeoutMs: 10, fetcher, writer: jest.fn(async () => undefined) });
-    await Promise.resolve();
-    jest.advanceTimersByTime(10);
-    await expect(pending).rejects.toThrow('超时');
+    const pending = downloadArtifact('https://cdn.example.test/video', { allowedHosts: ['example.test'], connectTimeoutMs: 30, idleTimeoutMs: 10, fetcher, writer: jest.fn(async () => undefined) });
+    const assertion = expect(pending).rejects.toThrow('超时');
+    await jest.advanceTimersByTimeAsync(10);
+    await assertion;
+  } finally { jest.useRealTimers(); }
+});
+
+test('allows a long transfer while every chunk arrives within the idle timeout', async () => {
+  jest.useFakeTimers();
+  try {
+    const chunks = [new Uint8Array([1]), new Uint8Array([2]), new Uint8Array([3])];
+    const reader = {
+      read: jest.fn(() => new Promise<ReadableStreamReadResult<Uint8Array>>((resolve) => {
+        setTimeout(() => resolve(chunks.length ? { done: false, value: chunks.shift()! } : { done: true, value: undefined }), 9);
+      })),
+      cancel: jest.fn(async () => undefined),
+    };
+    const fetcher = jest.fn().mockResolvedValue({ status: 200, ok: true, headers: new Headers({ 'content-type': 'video/mp4' }), body: { getReader: () => reader } });
+    const pending = downloadArtifact('https://cdn.example.test/video', {
+      allowedHosts: ['example.test'], maxBytes: 1024, connectTimeoutMs: 30, idleTimeoutMs: 10,
+      fetcher, writer: jest.fn(async () => undefined),
+    });
+    for (let index = 0; index < 4; index += 1) {
+      await jest.advanceTimersByTimeAsync(9);
+    }
+    await expect(pending).resolves.toMatchObject({ size: 3 });
   } finally { jest.useRealTimers(); }
 });

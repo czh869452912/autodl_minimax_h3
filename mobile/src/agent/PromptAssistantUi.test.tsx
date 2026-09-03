@@ -12,10 +12,47 @@ jest.mock('@copilotkit/react-native/components', () => ({ CopilotMarkdown: ({ co
 jest.mock('@copilotkit/shared', () => ({ getSourceUrl: (source: { value?: string }) => source.value || '' }));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
-jest.mock('./assistantImagePicker', () => ({ pickAssistantImages: jest.fn(() => Promise.resolve([])) }));
+jest.mock('./assistantImagePicker', () => ({
+  ...jest.requireActual('./assistantImagePicker'),
+  pickAssistantImages: jest.fn(() => Promise.resolve([])),
+}));
 
-import { getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline } from './PromptAssistantUi';
+import { applyComposerSuggestion, getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline, type RunIssue } from './PromptAssistantUi';
 import { normalizeMessages } from './agentPresentation';
+
+const basePromptProps = {
+  threads: [{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }],
+  activeThreadId: 't1',
+  onSelect: () => undefined,
+  onNew: () => undefined,
+  onDelete: () => undefined,
+  onRename: () => undefined,
+  onExportPrompt: () => Promise.resolve(),
+};
+
+function PromptIssueHarness({
+  initialIssue = null,
+  onRetry = async () => undefined,
+}: {
+  initialIssue?: RunIssue | null;
+  onRetry?: () => Promise<void>;
+}) {
+  const [runIssue, setRunIssue] = React.useState<RunIssue | null>(initialIssue);
+  return (
+    <PromptAssistantUi
+      {...basePromptProps}
+      runIssue={runIssue}
+      onRunIssueChange={setRunIssue}
+      onRetry={onRetry}
+    />
+  );
+}
+
+function renderedText(tree: ReturnType<typeof create>): string[] {
+  return tree.root.findAllByType(Text).map((node) =>
+    [node.props.children].flat(Infinity).join(''),
+  );
+}
 
 describe('Prompt assistant UI primitives', () => {
   beforeEach(() => {
@@ -355,6 +392,43 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
+  it('preserves the viewport while the user reads older messages', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<ConversationTimeline rows={[]} isRunning onExportPrompt={() => Promise.resolve()} />);
+    });
+    const list = tree.root.findByType(FlatList);
+    act(() => list.props.onScrollBeginDrag());
+    expect(tree.root.findByProps({ accessibilityLabel: '回到最新消息' })).toBeTruthy();
+
+    act(() => list.props.onContentSizeChange(320, 1200));
+    expect(tree.root.findByProps({ accessibilityLabel: '回到最新消息' })).toBeTruthy();
+    act(() => tree.unmount());
+  });
+
+  it('restores latest-message following at the bottom or by explicit action', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<ConversationTimeline rows={[]} isRunning onExportPrompt={() => Promise.resolve()} />);
+    });
+    let list = tree.root.findByType(FlatList);
+    act(() => list.props.onScrollBeginDrag());
+    act(() => list.props.onScrollEndDrag({
+      nativeEvent: {
+        contentOffset: { y: 500 },
+        layoutMeasurement: { height: 500 },
+        contentSize: { height: 1000 },
+      },
+    }));
+    expect(tree.root.findAllByProps({ accessibilityLabel: '回到最新消息' })).toHaveLength(0);
+
+    list = tree.root.findByType(FlatList);
+    act(() => list.props.onScrollBeginDrag());
+    act(() => tree.root.findByProps({ accessibilityLabel: '回到最新消息' }).props.onPress());
+    expect(tree.root.findAllByProps({ accessibilityLabel: '回到最新消息' })).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
   it('shows the submitted user bubble before the agent run resolves', async () => {
     let tree!: ReturnType<typeof create>;
     await act(async () => {
@@ -493,21 +567,115 @@ describe('Prompt assistant UI primitives', () => {
     mockChatContext = { ...mockChatContext, isRunning: true, agent: { abortRun } };
     let tree!: ReturnType<typeof create>;
     await act(async () => {
-      tree = create(
-        <PromptAssistantUi
-          threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
-          activeThreadId="t1"
-          onSelect={() => undefined}
-          onNew={() => undefined}
-          onDelete={() => undefined}
-          onRename={() => undefined}
-          onExportPrompt={() => Promise.resolve()}
-        />,
-      );
+      tree = create(<PromptIssueHarness />);
     });
     act(() => tree.root.findByProps({ accessibilityLabel: '停止生成' }).props.onPress());
     expect(abortRun).toHaveBeenCalledTimes(1);
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === '已停止生成')).toBe(true);
     act(() => tree.unmount());
+  });
+
+  it('renders an inline retry for the last failed round without resubmitting input', async () => {
+    const onRetry = jest.fn(async () => undefined);
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(
+        <PromptIssueHarness
+          initialIssue={{ kind: 'error', message: '网络失败' }}
+          onRetry={onRetry}
+        />,
+      );
+    });
+    expect(tree.root.findByProps({ accessibilityLabel: '重试上一轮' })).toBeTruthy();
+    await act(async () => {
+      tree.root.findByProps({ accessibilityLabel: '重试上一轮' }).props.onPress();
+    });
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(mockChatContext.submitMessage).not.toHaveBeenCalled();
+    act(() => tree.unmount());
+  });
+
+  it('renders an aborted issue inline after stop', () => {
+    const abortRun = jest.fn();
+    mockChatContext = { ...mockChatContext, isRunning: true, agent: { abortRun } };
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptIssueHarness />); });
+    act(() => tree.root.findByProps({ accessibilityLabel: '停止生成' }).props.onPress());
+    expect(abortRun).toHaveBeenCalledTimes(1);
+    expect(tree.root.findByProps({ accessibilityLabel: '重试上一轮' })).toBeTruthy();
+    expect(renderedText(tree)).toContain('已停止生成');
+    act(() => tree.unmount());
+  });
+
+  it('resets issue state when the thread-keyed session changes', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(
+        <PromptIssueHarness
+          key="thread-1"
+          initialIssue={{ kind: 'error', message: '旧错误' }}
+        />,
+      );
+    });
+    expect(renderedText(tree)).toContain('旧错误');
+    act(() => { tree.update(<PromptIssueHarness key="thread-2" />); });
+    expect(renderedText(tree)).not.toContain('旧错误');
+    act(() => tree.unmount());
+  });
+
+  it('copies only the selected assistant body', async () => {
+    const rows = normalizeMessages([
+      { id: 'a1', role: 'assistant', content: '第一条' },
+      { id: 'a2', role: 'assistant', content: '第二条' },
+    ]);
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(
+        <ConversationTimeline
+          rows={rows}
+          isRunning={false}
+          onExportPrompt={() => Promise.resolve()}
+        />,
+      );
+    });
+    await act(async () => {
+      tree.root.findByProps({ accessibilityLabel: '复制回答 a2' }).props.onPress();
+    });
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith('第二条');
+    act(() => tree.unmount());
+  });
+
+  it('fills and focuses the composer without submitting a suggestion', () => {
+    const focus = jest.fn();
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<PromptAssistantUi {...basePromptProps} />, {
+        createNodeMock: () => ({ focus, scrollToEnd: jest.fn() }),
+      });
+    });
+    act(() => {
+      tree.root.findByProps({
+        accessibilityLabel: '使用建议 一镜到底的城市夜跑',
+      }).props.onPress();
+    });
+    expect(tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.value)
+      .toBe('一镜到底的城市夜跑');
+    expect(mockChatContext.submitMessage).not.toHaveBeenCalled();
+    act(() => tree.unmount());
+  });
+
+  it('focuses the composer when applying a suggestion', () => {
+    const setDraft = jest.fn();
+    const setSelection = jest.fn();
+    const focus = jest.fn();
+    applyComposerSuggestion(
+      '纸艺风格的产品广告',
+      setDraft,
+      setSelection,
+      { current: { focus } },
+    );
+    expect(setDraft).toHaveBeenCalledWith('纸艺风格的产品广告');
+    expect(setSelection).toHaveBeenCalledWith({ start: 9, end: 9 });
+    expect(focus).toHaveBeenCalledTimes(1);
   });
 });

@@ -101,6 +101,8 @@ test('migrates the previous schema additively inside a transaction', () => {
   const db = {
     execSync: (sql: string) => calls.push(sql),
     getFirstSync: () => ({ user_version: APP_SCHEMA_VERSION - 1 }),
+    getAllSync: () => [],
+    runSync: jest.fn(),
     withTransactionSync: jest.fn((callback: () => void) => callback()),
   };
   ensureAppDatabase(db as never, { backup });
@@ -110,9 +112,9 @@ test('migrates the previous schema additively inside a transaction', () => {
   expect(calls).toContain(`PRAGMA user_version = ${APP_SCHEMA_VERSION}`);
 });
 
-test('does not mutate an older legacy schema before confirmation', () => {
+test('does not mutate a pre-v4 legacy schema before confirmation', () => {
   const execSync = jest.fn();
-  const db = { execSync, getFirstSync: () => ({ user_version: APP_SCHEMA_VERSION - 2 }) };
+  const db = { execSync, getFirstSync: () => ({ user_version: 3 }) };
   ensureAppDatabase(db as never);
   expect(execSync).not.toHaveBeenCalled();
 });
@@ -133,6 +135,8 @@ test('detects old schema without mutating it', () => {
 test('resetAppDatabase binds transaction context', () => {
   const db = {
     execSync: jest.fn(),
+    runSync: jest.fn(),
+    getAllSync: jest.fn(() => []),
     withTransactionSync(this: unknown, callback: () => void) {
       if (this !== db) throw new TypeError('database context missing');
       callback();

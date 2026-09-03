@@ -21,6 +21,23 @@ export function createLocalCopilotKitCore(agent: AbstractAgent): CopilotKitCoreR
   return core;
 }
 
+export async function rerunLocalAgent(agent: AbstractAgent): Promise<void> {
+  const messages = agent.messages as Array<{ role?: string }>;
+  let lastUserIndex = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const role = String(messages[index]?.role ?? '').toLowerCase();
+    if (role === 'user' || role === 'human') {
+      lastUserIndex = index;
+      break;
+    }
+  }
+  if (lastUserIndex < 0) throw new Error('没有可重试的用户消息');
+  if (lastUserIndex < messages.length - 1) {
+    agent.setMessages(messages.slice(0, lastUserIndex + 1) as never);
+  }
+  await createLocalCopilotKitCore(agent).runAgent({ agent });
+}
+
 export function LocalCopilotKitProvider({ children, agent, onError }: {
   children: ReactNode;
   agent: AbstractAgent;

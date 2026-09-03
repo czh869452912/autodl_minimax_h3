@@ -1,5 +1,6 @@
 export type MediaStatus = 'queued' | 'downloading' | 'downloaded' | 'failed';
 export type MediaKind = 'image' | 'video' | 'audio' | 'text' | 'file' | 'json';
+export type MediaExportStatus = 'NOT_REQUESTED' | 'QUEUED' | 'EXPORTING' | 'EXPORTED' | 'EXPORT_FAILED';
 
 export type MediaDelivery = { id: string; assetId: string; target: 'system-gallery' | 'share' | 'cloud'; uri?: string; status: 'QUEUED' | 'EXPORTING' | 'EXPORTED' | 'FAILED'; error?: string; createdAt: number; updatedAt: number };
 
@@ -20,8 +21,7 @@ export interface MediaAsset {
   height?: number;
   durationMs?: number;
   status: MediaStatus;
-  /** Human-readable publication state for the system gallery. */
-  exportStatus?: string;
+  exportStatus?: MediaExportStatus;
   createdAt: number;
   updatedAt: number;
 }

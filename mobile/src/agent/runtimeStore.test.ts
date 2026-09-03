@@ -17,7 +17,9 @@ function fakeAgent() {
     messages: [] as unknown[],
     state: {} as Record<string, unknown>,
     isRunning: false,
-    subscribe(subscriber: typeof subscribers[number]) { subscribers.push(subscriber); return { unsubscribe: () => undefined }; },
+    abortRun: jest.fn(),
+    dispose: jest.fn(function(this: { abortRun(): void }) { this.abortRun(); }),
+    subscribe(subscriber: typeof subscribers[number]) { subscribers.push(subscriber); return { unsubscribe: jest.fn(() => { const index = subscribers.indexOf(subscriber); if (index >= 0) subscribers.splice(index, 1); }) }; },
     setMessages(messages: unknown[]) { this.messages = messages; },
     setState(state: Record<string, unknown>) { this.state = state; },
     emitMessages(messages: unknown[], state: Record<string, unknown>) { for (const subscriber of subscribers) subscriber.onMessagesChanged?.({ messages, state }); },
@@ -65,5 +67,54 @@ describe('prompt runtime registry', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('hydrates a replacement runtime from the old generation latest snapshot', () => {
+    const agents: ReturnType<typeof fakeAgent>[] = [];
+    const registry = createPromptRuntimeRegistry(() => {
+      const agent = fakeAgent();
+      agents.push(agent);
+      return agent as never;
+    });
+    const first = registry.ensure(config, snapshot('thread-1'), store);
+    agents[0].emitMessages(
+      [{ id: 'latest', role: 'assistant', content: 'streamed' }],
+      { phase: 'latest' },
+    );
+
+    const replacement = registry.ensure(
+      { ...config, model: 'new-model' },
+      snapshot('thread-1'),
+      store,
+    );
+
+    expect(replacement.agent.messages).toEqual([
+      { id: 'latest', role: 'assistant', content: 'streamed' },
+    ]);
+    expect(replacement.agent.state).toEqual({ phase: 'latest' });
+    expect(first.disposed()).toBe(true);
+  });
+
+  it('revokes the old generation before replacing a thread config', async () => {
+    saveMock.mockClear();
+    const agents: ReturnType<typeof fakeAgent>[] = [];
+    const registry = createPromptRuntimeRegistry(() => { const agent = fakeAgent(); agents.push(agent); return agent as never; });
+    const first = registry.ensure(config, snapshot('thread-1'), store);
+    registry.ensure({ ...config, model: 'new-model' }, snapshot('thread-1'), store);
+    agents[0].emitMessages([{ id: 'late', role: 'assistant', content: 'late' }], {});
+    await first.flush();
+    expect(agents[0].abortRun).toHaveBeenCalledTimes(1);
+    expect(saveMock).not.toHaveBeenCalledWith(expect.objectContaining({ messages: [{ id: 'late' }] }));
+  });
+
+  it('flushes, unsubscribes, and removes every runtime for an evicted thread', async () => {
+    saveMock.mockClear();
+    const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
+    const runtime = registry.ensure(config, snapshot('thread-1'), store);
+    (runtime.agent as never as ReturnType<typeof fakeAgent>).emitMessages([{ id: 'm', role: 'user', content: 'saved' }], {});
+    await registry.evictThread('thread-1');
+    expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ threadId: 'thread-1' }));
+    expect(runtime.disposed()).toBe(true);
+    expect(registry.size()).toBe(0);
   });
 });

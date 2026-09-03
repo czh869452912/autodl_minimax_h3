@@ -1,18 +1,26 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { TaskMediaPatch, TaskRecord } from './types';
 import * as FileSystem from 'expo-file-system/legacy';
-import { ensureAppDatabase } from '../storage/database';
+import { assertAppDatabaseWritable } from '../storage/database';
 
-const schema = `CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY NOT NULL, prompt TEXT NOT NULL, status TEXT NOT NULL, resolution TEXT NOT NULL, duration INTEGER NOT NULL, seed TEXT, images_json TEXT, audios_json TEXT, video_url TEXT, local_uri TEXT, thumbnail_url TEXT, download_state TEXT NOT NULL DEFAULT 'IDLE', download_error TEXT, download_progress REAL, gallery_uri TEXT, export_state TEXT NOT NULL DEFAULT 'NOT_REQUESTED', export_error TEXT, exported_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, started_at INTEGER, execution_duration INTEGER, workflow_id TEXT, workflow_version TEXT, workflow_hash TEXT, adapter_id TEXT, adapter_version TEXT, input_json TEXT, sync_error TEXT, last_sync_at INTEGER);`;
 export type TaskPageCursor = { createdAt: number; id: string };
 export type TaskPageOptions = { limit?: number; cursor?: TaskPageCursor; status?: TaskRecord['status']; query?: string };
+function transaction<T>(db: SQLiteDatabase, work: () => T): T {
+  if (typeof db.withTransactionSync === 'function') {
+    let result!: T;
+    db.withTransactionSync(() => { result = work(); });
+    return result;
+  }
+  db.execSync('BEGIN IMMEDIATE');
+  try { const result = work(); db.execSync('COMMIT'); return result; } catch (error) { try { db.execSync('ROLLBACK'); } catch { /* best effort */ } throw error; }
+}
 export function createTaskRepository(db: SQLiteDatabase) {
-  ensureAppDatabase(db);
-  db.execSync(schema);
-  db.execSync('CREATE INDEX IF NOT EXISTS idx_tasks_created_id ON tasks(created_at DESC, id DESC); CREATE INDEX IF NOT EXISTS idx_tasks_status_updated_id ON tasks(status, updated_at DESC, id DESC);');
   const parseJson = <T>(source: string | null | undefined, fallback: T): T => { if (!source) return fallback; try { return JSON.parse(source) as T; } catch { return fallback; } };
   const map = (r: any): TaskRecord => ({ id: r.id, prompt: r.prompt, status: r.status, resolution: r.resolution, duration: Number(r.duration), seed: r.seed || undefined, workflowId: r.workflow_id || undefined, workflowVersion: r.workflow_version || undefined, workflowContentHash: r.workflow_hash || undefined, adapterId: r.adapter_id || undefined, adapterVersion: r.adapter_version || undefined, inputSnapshot: parseJson(r.input_json, undefined), images: parseJson(r.images_json, undefined), audios: parseJson(r.audios_json, undefined), videoUrl: r.video_url || undefined, localUri: r.local_uri || undefined, thumbnailUrl: r.thumbnail_url || undefined, downloadState: r.download_state || (r.local_uri ? 'DOWNLOADED' : 'IDLE'), downloadError: r.download_error || undefined, downloadProgress: r.download_progress == null ? undefined : Number(r.download_progress), galleryUri: r.gallery_uri || undefined, exportState: r.export_state || 'NOT_REQUESTED', exportError: r.export_error || undefined, exportedAt: r.exported_at == null ? undefined : Number(r.exported_at), createdAt: Number(r.created_at), updatedAt: Number(r.updated_at), startedAt: r.started_at == null ? undefined : Number(r.started_at), executionDuration: r.execution_duration == null ? undefined : Number(r.execution_duration), syncError: r.sync_error || undefined, lastSyncAt: r.last_sync_at == null ? undefined : Number(r.last_sync_at) });
-  const run = async (sql: string, ...params: any[]) => typeof (db as any).runAsync === 'function' ? (db as any).runAsync(sql, ...params) : db.runSync(sql, ...params);
+  const run = async (sql: string, ...params: any[]) => {
+    assertAppDatabaseWritable(db);
+    return typeof (db as any).runAsync === 'function' ? (db as any).runAsync(sql, ...params) : db.runSync(sql, ...params);
+  };
   const all = async <T>(sql: string, ...params: any[]): Promise<T[]> => typeof (db as any).getAllAsync === 'function' ? ((await (db as any).getAllAsync(sql, ...params)) ?? []) : (db.getAllSync<T>(sql, ...params) ?? []);
   const first = async <T>(sql: string, ...params: any[]): Promise<T | null> => typeof (db as any).getFirstAsync === 'function' ? ((await (db as any).getFirstAsync(sql, ...params)) ?? null) : typeof (db as any).getFirstSync === 'function' ? ((db as any).getFirstSync(sql, ...params) ?? null) : ((await all<T>(sql, ...params))[0] ?? null);
   const updateMediaProjection = async (id: string, patch: TaskMediaPatch): Promise<boolean> => {
@@ -61,6 +69,32 @@ export function createTaskRepository(db: SQLiteDatabase) {
     async listSyncCandidates() { return (await all<any>("SELECT * FROM tasks WHERE status IN ('SUCCESS','PARTIAL_SUCCESS') AND workflow_id IS NOT NULL AND last_sync_at IS NULL AND (started_at IS NULL OR (video_url IS NULL AND local_uri IS NULL AND gallery_uri IS NULL)) ORDER BY updated_at ASC, id ASC LIMIT 200")).map(map); },
     async listMediaPending() { return (await all<any>("SELECT * FROM tasks WHERE status IN ('SUCCESS','PARTIAL_SUCCESS') AND (video_url IS NOT NULL OR local_uri IS NOT NULL) AND (((download_state IN ('IDLE','DOWNLOADING')) AND download_error IS NULL) OR export_state IN ('QUEUED','EXPORTING')) ORDER BY updated_at ASC, id ASC LIMIT 40")).map(map); },
     async listMediaProjectionCandidates(limit = 200) { return (await all<any>("SELECT t.* FROM tasks t WHERE t.status IN ('SUCCESS','PARTIAL_SUCCESS') AND (t.video_url IS NOT NULL OR t.local_uri IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM media_assets m WHERE m.task_id = t.id AND m.kind = 'video') ORDER BY t.updated_at ASC, t.id ASC LIMIT ?", Math.max(1, Math.min(1000, limit)))).map(map); },
-    async remove(id: string) { const rows = db.getAllSync<any>('SELECT local_uri, thumbnail_url FROM tasks WHERE id = ? LIMIT 1', id); const assets = db.getAllSync<any>('SELECT local_path, poster_path FROM media_assets WHERE task_id = ?', id); db.runSync('DELETE FROM media_deliveries WHERE asset_id IN (SELECT id FROM media_assets WHERE task_id = ?)', id); db.runSync('DELETE FROM media_assets WHERE task_id = ?', id); db.runSync('DELETE FROM workflow_artifacts WHERE job_id = ?', id); db.runSync('DELETE FROM workflow_jobs WHERE id = ?', id); db.runSync('DELETE FROM tasks WHERE id = ?', id); for (const row of [...rows, ...assets]) { for (const uri of [row.local_uri, row.thumbnail_url, row.local_path, row.poster_path]) { if (typeof uri === 'string' && uri.startsWith('file://')) { try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {} } } } },
+    async remove(id: string) {
+      assertAppDatabaseWritable(db);
+      let rows: any[] = [];
+      let assets: any[] = [];
+      transaction(db, () => {
+        const activeOperation = db.getFirstSync<{ id: string }>(
+          "SELECT id FROM workflow_operations WHERE job_id=? AND state='CLAIMED' LIMIT 1",
+          id,
+        );
+        if (activeOperation) throw new Error('TASK_OPERATION_IN_PROGRESS');
+        rows = db.getAllSync<any>('SELECT local_uri, thumbnail_url FROM tasks WHERE id = ? LIMIT 1', id);
+        assets = db.getAllSync<any>('SELECT local_path, poster_path FROM media_assets WHERE task_id = ?', id);
+        db.runSync('DELETE FROM workflow_operations WHERE job_id = ?', id);
+        db.runSync("DELETE FROM artifact_blob_refs WHERE owner_type='workflow_artifact' AND owner_id IN (SELECT job_id || ':' || id FROM workflow_artifacts WHERE job_id=?)", id);
+        db.runSync('DELETE FROM media_deliveries WHERE asset_id IN (SELECT id FROM media_assets WHERE task_id = ?)', id);
+        db.runSync('DELETE FROM media_assets WHERE task_id = ?', id);
+        db.runSync('DELETE FROM workflow_artifacts WHERE job_id = ?', id);
+        db.runSync('DELETE FROM workflow_jobs WHERE id = ?', id);
+        db.runSync('DELETE FROM tasks WHERE id = ?', id);
+      });
+      for (const row of [...rows, ...assets]) {
+        for (const uri of [row.local_uri, row.thumbnail_url, row.local_path, row.poster_path]) {
+          if (typeof uri !== 'string' || !uri.startsWith('file://') || /\/cas\/sha256\//.test(uri)) continue;
+          try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch { /* best effort */ }
+        }
+      }
+    },
   };
 }

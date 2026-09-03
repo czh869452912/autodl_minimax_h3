@@ -4,7 +4,7 @@ import type { LocalThreadSnapshot, LocalThreadStore } from './threadStore';
 
 export type PromptAgentConfig = H3AgentConfig;
 
-type RuntimeEvent =
+export type RuntimeEvent =
   | { type: 'snapshot'; snapshot: LocalThreadSnapshot }
   | { type: 'error'; message: string };
 
@@ -13,6 +13,8 @@ export type PromptRuntime = {
   getSnapshot: () => LocalThreadSnapshot;
   updateMetadata: (snapshot: LocalThreadSnapshot) => void;
   flush: () => Promise<void>;
+  dispose: () => Promise<void>;
+  disposed: () => boolean;
   subscribe: (listener: (event: RuntimeEvent) => void) => () => void;
 };
 
@@ -35,7 +37,14 @@ function configKey(config: PromptAgentConfig): string {
 export function createPromptRuntimeRegistry(
   createAgent: AgentFactory = defaultAgentFactory,
 ) {
-  const runtimes = new Map<string, PromptRuntime>();
+  const runtimes = new Map<string, { configKey: string; runtime: PromptRuntime }>();
+  const saveTails = new Map<string, Promise<void>>();
+
+  const enqueueSave = (threadId: string, work: () => Promise<void>): Promise<void> => {
+    const tail = (saveTails.get(threadId) ?? Promise.resolve()).then(work);
+    saveTails.set(threadId, tail.catch(() => undefined));
+    return tail;
+  };
 
   return {
     ensure(
@@ -43,26 +52,38 @@ export function createPromptRuntimeRegistry(
       initial: LocalThreadSnapshot,
       threadStore: LocalThreadStore,
     ): PromptRuntime {
-      const key = `${configKey(config)}\u0000${initial.threadId}`;
-      const existing = runtimes.get(key);
-      if (existing) {
-        existing.updateMetadata(initial);
-        return existing;
+      const key = configKey(config);
+      const existing = runtimes.get(initial.threadId);
+      if (existing?.configKey === key) {
+        existing.runtime.updateMetadata(initial);
+        return existing.runtime;
       }
+      const seed = existing
+        ? {
+            ...initial,
+            ...existing.runtime.getSnapshot(),
+            customTitle: initial.customTitle ?? existing.runtime.getSnapshot().customTitle,
+            createdAt: initial.createdAt,
+          }
+        : initial;
+      if (existing) void existing.runtime.dispose();
 
       const agent = createAgent(config);
-      agent.threadId = initial.threadId;
-      agent.setMessages(initial.messages);
-      agent.setState(initial.state);
-      let snapshot = initial;
+      agent.threadId = seed.threadId;
+      agent.setMessages(seed.messages);
+      agent.setState(seed.state);
+      let snapshot = seed;
       let pendingSave: LocalThreadSnapshot | undefined;
       let saveTimer: ReturnType<typeof setTimeout> | undefined;
-      let saveInFlight: Promise<void> | undefined;
+      let active = true;
+      let disposePromise: Promise<void> | undefined;
       const listeners = new Set<(event: RuntimeEvent) => void>();
       const emit = (event: RuntimeEvent) => {
+        if (!active) return;
         for (const listener of listeners) listener(event);
       };
       const persist = (messages: readonly unknown[], state: unknown) => {
+        if (!active) return;
         snapshot = {
           ...snapshot,
           messages: [...messages] as never,
@@ -78,22 +99,42 @@ export function createPromptRuntimeRegistry(
         if (saveTimer) { clearTimeout(saveTimer); saveTimer = undefined; }
         const next = pendingSave;
         pendingSave = undefined;
-        if (!next) return saveInFlight;
-        saveInFlight = (saveInFlight ?? Promise.resolve())
-          .then(() => threadStore.save(next))
-          .catch((reason) => emit({ type: 'error', message: reason instanceof Error ? `本地会话保存失败：${reason.message}` : '本地会话保存失败' }));
-        await saveInFlight;
-        if (pendingSave) await flush();
+        if (!next) return saveTails.get(initial.threadId);
+        try {
+          await enqueueSave(initial.threadId, () => threadStore.save(next));
+        } catch (reason) {
+          emit({ type: 'error', message: reason instanceof Error ? `本地会话保存失败：${reason.message}` : '本地会话保存失败' });
+        }
+        if (active && pendingSave) await flush();
       };
-      agent.subscribe({
+      const subscription = agent.subscribe({
         onMessagesChanged: ({ messages, state }) => persist(messages, state),
         onStateChanged: ({ messages, state }) => persist(messages, state),
       });
+      const unsubscribe = () => {
+        subscription?.unsubscribe?.();
+      };
+      const dispose = (): Promise<void> => {
+        if (disposePromise) return disposePromise;
+        active = false;
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = undefined; }
+        unsubscribe();
+        agent.dispose?.();
+        const next = pendingSave;
+        pendingSave = undefined;
+        disposePromise = (next
+          ? enqueueSave(initial.threadId, () => threadStore.save(next))
+          : saveTails.get(initial.threadId) ?? Promise.resolve())
+          .catch(() => undefined)
+          .then(() => { listeners.clear(); });
+        return disposePromise;
+      };
 
       const runtime: PromptRuntime = {
         agent,
         getSnapshot: () => snapshot,
         updateMetadata: (next) => {
+          if (!active) return;
           snapshot = {
             ...snapshot,
             customTitle: next.customTitle,
@@ -101,14 +142,28 @@ export function createPromptRuntimeRegistry(
           };
         },
         flush,
+        dispose,
+        disposed: () => !active,
         subscribe: (listener) => {
           listeners.add(listener);
           return () => listeners.delete(listener);
         },
       };
-      runtimes.set(key, runtime);
+      runtimes.set(initial.threadId, { configKey: key, runtime });
       return runtime;
     },
+    async evictThread(threadId: string): Promise<void> {
+      const entry = runtimes.get(threadId);
+      if (!entry) return;
+      runtimes.delete(threadId);
+      await entry.runtime.dispose();
+    },
+    async disposeAll(): Promise<void> {
+      const entries = [...runtimes.values()];
+      runtimes.clear();
+      await Promise.all(entries.map((entry) => entry.runtime.dispose()));
+    },
+    size(): number { return runtimes.size; },
   };
 }
 
