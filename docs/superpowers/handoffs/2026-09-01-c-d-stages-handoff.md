@@ -6,9 +6,10 @@
 ## 1. 接手后先看什么
 
 1. 本文件：当前状态、验收证据和 C/D 执行顺序。
-2. `docs/superpowers/plans/2026-09-01-c-core.md`：C-Core 唯一执行计划。
-3. `docs/superpowers/plans/2026-09-01-d-core.md`：C-Core 验收通过后的 D-Core 计划。
-4. `docs/superpowers/specs/2026-09-01-local-first-workflow-architecture-design.md`：不可突破的架构约束。
+2. `docs/superpowers/specs/2026-09-03-c-core-durable-executor-design.md`：C-Core 已批准的详细设计与任务边界。
+3. `docs/superpowers/plans/2026-09-01-c-core.md`：C-Core 唯一执行计划。
+4. `docs/superpowers/plans/2026-09-01-d-core.md`：C-Core 验收通过后的 D-Core 计划。
+5. `docs/superpowers/specs/2026-09-01-local-first-workflow-architecture-design.md`：不可突破的架构约束。
 
 下一项具体动作：v1.4.7 fresh-install 发布级热修复已经完成，B 对 C/D 的阻塞重新解除。现在从 `dev` 创建隔离 worktree，按 `docs/superpowers/plans/2026-09-01-c-core.md` 从 Task 1（版本化 durable schema migration）开始；第一批真实 SQLite RED 测试必须覆盖 fresh v0、legacy v0、v4→v6、v5→v6、失败回滚与 recovery。C-Core 验收完成前不得开始 D-Core。
 
@@ -128,10 +129,10 @@ C 的目标是：submit、status sync、artifact download 变成可跨进程恢�
 
 执行顺序（详见 `docs/superpowers/plans/2026-09-01-c-core.md`）：
 
-1. **Task 1：版本化 schema migration** — 当前 v1.4.7 已稳定在 schema v5，C 必须提升到 `APP_SCHEMA_VERSION=6`；新增 `workflow_operations`、`workflow_job_events`，为 job 增加 revision、provider handle、last error、next sync。必须实现显式逐版本 migration step 和真实列演进，接线生产备份，收敛 DDL 所有权，并让启动失败进入可诊断的只读 recovery，而不是 import 崩溃；fresh v0、legacy v0、v4→v6、v5→v6、重复 migration 和失败回滚必须先有 RED 测试。
-2. **Task 2：Operation/Lease/CAS repository** — 稳定幂等键、唯一约束、claim/renew/release、过期 lease 回收、`nextRetryAt` 过滤、revision/CAS 冲突返回当前 snapshot。
-3. **Task 3：Durable submit 与 UNKNOWN 对账** — `VALIDATED → SUBMITTING → QUEUED/RUNNING` 事件化；超时进入 `UNKNOWN`，只用 opaque provider handle reconcile，禁止自动 resubmit。
-4. **Task 4：有界 Artifact CAS** — SHA-256 内容寻址、`.part`、原子 rename、hash/MIME/字节/超时限制、引用安全 GC；status snapshot 不等待媒体下载。
+1. **Task 1：版本化 schema migration** — 当前 v1.4.7 已稳定在 schema v5，C 必须提升到 `APP_SCHEMA_VERSION=6`；一次性新增 `workflow_operations`、`workflow_job_events`、`artifact_blobs`、`artifact_blob_refs`，为 job 增加 revision、provider handle、last error、next sync。必须实现显式逐版本 migration step 和真实列演进，接线生产备份，收敛 DDL 所有权，并让启动失败进入可诊断的只读 recovery，而不是 import 崩溃；fresh v0、legacy v0、v4→v6、v5→v6、重复 migration 和失败回滚必须先有 RED 测试。
+2. **Task 2：Operation/Lease/Job CAS repository** — 稳定幂等键、唯一约束、claim/renew/release、过期 lease 回收、`nextRetryAt` 过滤，以及 job snapshot、append-only event、next operation 的单事务 revision/CAS；冲突返回当前 snapshot。
+3. **Task 3：Durable submit 与 UNKNOWN 对账** — `VALIDATED → SUBMITTING → QUEUED/RUNNING` 事件化；超时进入 `UNKNOWN`。有 opaque provider handle 时只 reconcile 原任务；没有 handle 时 submit operation 保持 `BLOCKED`，只能经用户明确确认创建全新尝试，任何路径都禁止自动 resubmit。
+4. **Task 4：有界 Artifact CAS** — SHA-256 内容寻址、随机 `.part`、原子 rename、hash/MIME/字节/连接超时/逐块 idle timeout、引用安全 GC；status snapshot 不等待媒体下载。
 5. **Task 5：有界调度与进程恢复** — foreground/background/headless 统一 tick，每轮有界 operation 数量，status/download/export 独立 lease，进程启动回收过期 lease。
 6. **Task 6：C-Core 验收** — duplicate submit、lease contention/expiry、UNKNOWN reconciliation、CAS conflict、restart recovery、bounded queue 自动化测试，加 Android fresh-install 创建任务、v4/v5 升级数据保留与 force-stop 恢复验证。
 
@@ -181,7 +182,7 @@ D-Core 之后再规划 Batch/Variant、项目包导出/导入、备份/同步/�
 
 1. `git status --short --branch`，确认当前为 `dev`，并用 `git merge-base --is-ancestor v1.4.7 dev` 确认开发基线包含 v1.4.7；不要改动 `local.properties` 与 `mobile/.expo/`。
 2. 从 `dev` 创建 `codex/c-core-schema` 隔离 worktree，不在发布基线工作区直接开发 C-Core。
-3. 阅读 `docs/superpowers/plans/2026-09-01-c-core.md` Task 1、本文件的状态审查收口、v1.4.7 fresh-install hotfix plan、架构设计的 durable executor 章节和现有 `mobile/src/storage/database*` 实现。
+3. 阅读 `docs/superpowers/specs/2026-09-03-c-core-durable-executor-design.md`、`docs/superpowers/plans/2026-09-01-c-core.md` Task 1、本文件的状态审查收口、v1.4.7 fresh-install hotfix plan、架构设计的 durable executor 章节和现有 `mobile/src/storage/database*` 实现。
 4. 先写真实 SQLite migration RED 测试：fresh v0、legacy v0、v4→v6、v5→v6、repeatable migration、列演进、legacy table 保留、生产 backup 接线，以及注入 DDL 失败后的 rollback + 可启动 read-only recovery。
 5. 运行 focused Jest 看到预期失败，再实现 `runner.ts`/`v6DurableExecutor.ts`，随后运行 typecheck、全量 Jest 和 Android 门禁。
 6. 完成并记录 C-Core Task 1 后，才继续 Task 2；C-Core 六项全部验收通过后再切换到 D-Core Task 1。
