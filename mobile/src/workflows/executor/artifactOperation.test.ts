@@ -2,6 +2,9 @@ import { createInitializedRealSqliteTestDb } from '../../test/realSqlite';
 import type { ArtifactCas } from '../../media/cas';
 import { createSqliteArtifactCommitter, handleArtifactDownload } from './artifactOperation';
 import type { WorkflowOperation } from './types';
+import { createOperationRepository } from './operationRepository';
+import { createTaskRepository } from '../../tasks/repository';
+import { createSqliteMediaStore } from '../../media/repository';
 
 const operation: WorkflowOperation = {
   id: 'download-1', kind: 'ARTIFACT_DOWNLOAD', jobId: 'job-1', idempotencyKey: 'artifact:job-1:video-1',
@@ -19,7 +22,8 @@ function setup() {
   const updateProjection = jest.fn(async () => undefined);
   const ensureProjection = jest.fn(async () => undefined);
   const updateDownloadState = jest.fn(async () => undefined);
-  return { operations, blobs, cas, openDownload, updateProjection, ensureProjection, updateDownloadState };
+  const deliveryPolicy = { autoExportToGallery: true, keepPrivateCopy: true };
+  return { operations, blobs, cas, openDownload, updateProjection, ensureProjection, updateDownloadState, deliveryPolicy };
 }
 
 test('ensures the media row and marks downloading before opening the network stream', async () => {
@@ -86,14 +90,80 @@ test('treats URL policy, MIME, size, and hash failures as terminal', async () =>
 test('rolls back blob and reference metadata when the operation lease is lost', () => {
   const db = createInitializedRealSqliteTestDb();
   try {
+    db.runSync("INSERT INTO tasks (id,prompt,status,resolution,duration,created_at,updated_at) VALUES ('job-1','result','SUCCESS','768p竖',5,1,2)");
+    db.runSync("INSERT INTO media_assets (id,task_id,title,prompt,source_url,mime_type,status,created_at,updated_at,artifact_id,job_id,kind) VALUES ('job-1:video-1','job-1','result','result','https://cdn.example/video.mp4','video/mp4','downloading',1,2,'video-1','job-1','video')");
     const commit = createSqliteArtifactCommitter(db as never);
     expect(() => commit({
       operationId: 'missing-operation', owner: 'worker', jobId: 'job-1',
       artifact: { id: 'video-1', jobId: 'job-1', kind: 'video' },
       blob: { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 50, verifiedAt: 50 },
       localUri: 'file:///cas/sha256/aa/blob', now: 50,
+      deliveryPolicy: { autoExportToGallery: true, keepPrivateCopy: false },
     })).toThrow('lease lost');
     expect(db.getFirstSync('SELECT sha256 FROM artifact_blobs LIMIT 1')).toBeUndefined();
     expect(db.getFirstSync('SELECT blob_sha256 FROM artifact_blob_refs LIMIT 1')).toBeUndefined();
+  } finally { db.close(); }
+});
+
+async function seedArtifactCommit(db: ReturnType<typeof createInitializedRealSqliteTestDb>) {
+  const taskStore = createTaskRepository(db as never);
+  const mediaStore = createSqliteMediaStore(db);
+  const operationStore = createOperationRepository(db as never);
+  await taskStore.upsert({
+    id: 'job-1', prompt: 'result', status: 'SUCCESS', resolution: '768p竖', duration: 5,
+    videoUrl: 'https://cdn.example/video.mp4', createdAt: 1, updatedAt: 2,
+  });
+  await mediaStore.upsert({
+    id: 'job-1:video-1', taskId: 'job-1', artifactId: 'video-1', jobId: 'job-1',
+    title: 'result', prompt: 'result', sourceUrl: 'https://cdn.example/video.mp4', mimeType: 'video/mp4',
+    kind: 'video', status: 'downloading', createdAt: 1, updatedAt: 2,
+  });
+  operationStore.enqueue({
+    id: 'download-1', kind: 'ARTIFACT_DOWNLOAD', jobId: 'job-1', idempotencyKey: 'artifact:job-1:video-1',
+    payload: operation.payload, now: 1,
+  });
+  operationStore.claimById('download-1', 'worker', 1, 100);
+  return { taskStore, mediaStore, operationStore };
+}
+
+test('commits the download and enqueues enabled gallery export atomically', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const { taskStore, mediaStore, operationStore } = await seedArtifactCommit(db);
+    createSqliteArtifactCommitter(db as never)({
+      operationId: 'download-1', owner: 'worker', jobId: 'job-1',
+      artifact: operation.payload.artifact as never,
+      blob: { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 50, verifiedAt: 50 },
+      localUri: 'file:///cas/video', now: 50,
+      deliveryPolicy: { autoExportToGallery: true, keepPrivateCopy: false },
+    });
+
+    expect(operationStore.list('EXPORT')).toMatchObject([{
+      idempotencyKey: 'export:job-1:video-1:system-gallery',
+      payload: {
+        assetId: 'job-1:video-1', artifactId: 'video-1', sourceUri: 'file:///cas/video',
+        blobSha256: 'a'.repeat(64), keepPrivateCopy: false, displayName: 'job-1.mp4',
+      },
+    }]);
+    await expect(taskStore.get('job-1')).resolves.toMatchObject({ downloadState: 'DOWNLOADED', exportState: 'QUEUED' });
+    await expect(mediaStore.get('job-1:video-1')).resolves.toMatchObject({ status: 'downloaded', exportStatus: 'QUEUED' });
+  } finally { db.close(); }
+});
+
+test('commits a private download without export when auto export is disabled', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const { taskStore, mediaStore, operationStore } = await seedArtifactCommit(db);
+    createSqliteArtifactCommitter(db as never)({
+      operationId: 'download-1', owner: 'worker', jobId: 'job-1',
+      artifact: operation.payload.artifact as never,
+      blob: { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 50, verifiedAt: 50 },
+      localUri: 'file:///cas/video', now: 50,
+      deliveryPolicy: { autoExportToGallery: false, keepPrivateCopy: true },
+    });
+
+    expect(operationStore.list('EXPORT')).toEqual([]);
+    await expect(taskStore.get('job-1')).resolves.toMatchObject({ downloadState: 'DOWNLOADED', exportState: 'NOT_REQUESTED' });
+    await expect(mediaStore.get('job-1:video-1')).resolves.toMatchObject({ status: 'downloaded', exportStatus: 'NOT_REQUESTED' });
   } finally { db.close(); }
 });

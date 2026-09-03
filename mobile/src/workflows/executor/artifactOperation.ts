@@ -24,6 +24,7 @@ type ArtifactOperationDeps = {
   policy(jobId: string, artifact: ArtifactRecord): ArtifactPolicy;
   ensureProjection(jobId: string, artifact: ArtifactRecord): Promise<void>;
   updateDownloadState(state: 'ENQUEUED' | 'DOWNLOADING' | 'DOWNLOAD_FAILED', errorCode?: string): Promise<void>;
+  deliveryPolicy: { autoExportToGallery: boolean; keepPrivateCopy: boolean };
   updateProjection(input: { jobId: string; artifactId: string; localUri: string; mime: string; sha256: string; byteSize: number }): Promise<void> | void;
   resolveUri?: (relativePath: string) => string;
   commit?: (input: ArtifactCommitInput) => Promise<void> | void;
@@ -39,6 +40,7 @@ export type ArtifactCommitInput = {
   blob: ArtifactBlob;
   localUri: string;
   now: number;
+  deliveryPolicy: { autoExportToGallery: boolean; keepPrivateCopy: boolean };
 };
 
 function transaction(db: SQLiteDatabase, work: () => void): void {
@@ -56,8 +58,35 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase) {
         input.blob.sha256, input.blob.byteSize, input.blob.mime, input.blob.relativePath, input.blob.createdAt, input.blob.verifiedAt,
       );
       db.runSync('INSERT OR IGNORE INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)', input.blob.sha256, 'workflow_artifact', `${input.jobId}:${input.artifact.id}`, input.now);
-      db.runSync("UPDATE media_assets SET local_path = ?, mime_type = ?, status = 'downloaded', updated_at = ? WHERE job_id = ? AND artifact_id = ?", input.localUri, input.blob.mime, input.now, input.jobId, input.artifact.id);
-      if (input.artifact.kind === 'video') db.runSync("UPDATE tasks SET local_uri = ?, download_state = 'DOWNLOADED', download_error = NULL, download_progress = 1, updated_at = MAX(updated_at, ?) WHERE id = ?", input.localUri, input.now, input.jobId);
+      const autoExport = input.artifact.kind === 'video' && input.deliveryPolicy.autoExportToGallery;
+      const exportStatus = autoExport ? 'QUEUED' : 'NOT_REQUESTED';
+      const assetResult = db.runSync("UPDATE media_assets SET local_path = ?, mime_type = ?, status = 'downloaded', export_status = ?, updated_at = ? WHERE job_id = ? AND artifact_id = ?", input.localUri, input.blob.mime, exportStatus, input.now, input.jobId, input.artifact.id) as { changes?: number | bigint };
+      if (Number(assetResult.changes ?? 0) !== 1) throw new Error('media asset projection missing');
+      if (input.artifact.kind === 'video') {
+        const taskResult = db.runSync("UPDATE tasks SET local_uri = ?, download_state = 'DOWNLOADED', download_error = NULL, download_progress = 1, export_state = ?, export_error = NULL, updated_at = MAX(updated_at, ?) WHERE id = ?", input.localUri, exportStatus, input.now, input.jobId) as { changes?: number | bigint };
+        if (Number(taskResult.changes ?? 0) !== 1) throw new Error('task projection missing');
+      }
+      if (autoExport) {
+        const assetId = `${input.jobId}:${input.artifact.id}`;
+        const exportId = `${input.jobId}:export:${input.artifact.id}:system-gallery`;
+        db.runSync(
+          "INSERT OR IGNORE INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES (?,'EXPORT',?,?,?,'PENDING',0,?,?,?)",
+          exportId,
+          input.jobId,
+          `export:${input.jobId}:${input.artifact.id}:system-gallery`,
+          JSON.stringify({
+            assetId,
+            artifactId: input.artifact.id,
+            sourceUri: input.localUri,
+            blobSha256: input.blob.sha256,
+            keepPrivateCopy: input.deliveryPolicy.keepPrivateCopy,
+            displayName: `${input.jobId}.mp4`,
+          }),
+          input.now,
+          input.now,
+          input.now,
+        );
+      }
       const result = db.runSync("UPDATE workflow_operations SET state = 'SUCCEEDED', lease_owner = NULL, lease_expires_at = NULL, last_error_json = NULL, updated_at = ? WHERE id = ? AND state = 'CLAIMED' AND lease_owner = ?", input.now, input.operationId, input.owner) as { changes?: number | bigint };
       if (Number(result.changes ?? 0) !== 1) throw new Error('artifact operation lease lost');
     });
@@ -112,7 +141,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     const resolveUri = deps.resolveUri ?? ((relativePath: string) => `${FileSystem.documentDirectory ?? ''}${relativePath}`);
     const localUri = resolveUri(blob.relativePath);
     if (deps.commit) {
-      await deps.commit({ operationId: operation.id, owner, jobId: operation.jobId, artifact, blob, localUri, now: timestamp });
+      await deps.commit({ operationId: operation.id, owner, jobId: operation.jobId, artifact, blob, localUri, now: timestamp, deliveryPolicy: deps.deliveryPolicy });
     } else {
       deps.blobs.upsertBlob(blob);
       deps.blobs.retain(blob.sha256, 'workflow_artifact', `${operation.jobId}:${artifact.id}`, timestamp);

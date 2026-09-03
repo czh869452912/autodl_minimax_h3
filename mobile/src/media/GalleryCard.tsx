@@ -1,14 +1,15 @@
 import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MediaAsset } from './types';
-import { mediaStatusLabel } from '../gallery/presentation';
+import { mediaExportStatusLabel, mediaStatusLabel } from '../gallery/presentation';
 
 export function GalleryCard({ asset, onPress, selected = false, onLongPress }: { asset: MediaAsset; onPress: () => void; selected?: boolean; onLongPress?: () => void }) {
   const poster = asset.posterPath;
+  const publication = mediaExportStatusLabel(asset.exportStatus);
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`打开视频 ${asset.title}`} onPress={onPress} onLongPress={onLongPress} style={({ pressed }) => [styles.card, selected && styles.selected, pressed && styles.pressed]}>
       {poster ? <Image source={{ uri: poster }} style={styles.poster} resizeMode="cover" /> : <View style={styles.posterFallback}><Text style={styles.fallbackText}>{asset.sourceUrl || asset.localPath ? '正在准备首帧…' : '视频就绪'}</Text></View>}
-      {selected && <View style={styles.check}><Text style={styles.checkText}>✓</Text></View>}<View style={styles.footer}><Text numberOfLines={2} style={styles.title}>{asset.title || asset.taskId}</Text><Text style={styles.meta}>{asset.durationMs ? `${Math.round(asset.durationMs / 1000)}s` : '—'} · {asset.exportStatus || mediaStatusLabel(asset.status)}</Text></View>
+      {selected && <View style={styles.check}><Text style={styles.checkText}>✓</Text></View>}<View style={styles.footer}><Text numberOfLines={2} style={styles.title}>{asset.title || asset.taskId}</Text><Text style={styles.meta}>{asset.durationMs ? `${Math.round(asset.durationMs / 1000)}s` : '—'} · {publication || mediaStatusLabel(asset.status)}</Text></View>
     </Pressable>
   );
 }

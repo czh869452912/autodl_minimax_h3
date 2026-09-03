@@ -7,7 +7,7 @@ function fakeDb() {
   return {
     execSync: () => undefined,
     runSync: (sql: string, ...params: unknown[]) => {
-      if (sql.startsWith('INSERT') && sql.includes('media_assets')) rows.set(String(params[0]), { id: params[0], task_id: params[1], title: params[2], prompt: params[3], source_url: params[4], local_path: params[5], poster_path: params[6], mime_type: params[7], width: params[8], height: params[9], duration_ms: params[10], status: params[11], created_at: params[12], updated_at: params[13], artifact_id: params[14], job_id: params[15], workflow_id: params[16], kind: params[17] });
+      if (sql.startsWith('INSERT') && sql.includes('media_assets')) rows.set(String(params[0]), { id: params[0], task_id: params[1], title: params[2], prompt: params[3], source_url: params[4], local_path: params[5], poster_path: params[6], mime_type: params[7], width: params[8], height: params[9], duration_ms: params[10], status: params[11], created_at: params[12], updated_at: params[13], artifact_id: params[14], job_id: params[15], workflow_id: params[16], kind: params[17], export_status: params[18] });
       if (sql.startsWith('DELETE')) rows.delete(String(params[0]));
     },
     getAllSync: <T>(sql: string, ...params: unknown[]) => (sql.includes('WHERE id')
@@ -65,13 +65,13 @@ test('round-trips workflow artifact provenance independently from task state', a
   expect(await store.get('job-1:artifact-1')).toMatchObject({ artifactId: 'artifact-1', jobId: 'job-1', workflowId: 'workflow-1', kind: 'audio' });
 });
 
-test('persists delivery presentation status on the media asset', async () => {
+test('persists a stable delivery status enum on the media asset', async () => {
   const store = createSqliteMediaStore({
     execSync: () => undefined,
     runSync: jest.fn(),
-    getAllSync: <T>(sql: string) => sql.includes('media_assets') ? [{ id: 'm1', task_id: 'job-1', title: 'Demo', prompt: 'p', source_url: 'https://cdn/video', mime_type: 'video/mp4', status: 'downloaded', created_at: 1, updated_at: 2, kind: 'video', export_status: '已保存到相册' } as T] : [],
+    getAllSync: <T>(sql: string) => sql.includes('media_assets') ? [{ id: 'm1', task_id: 'job-1', title: 'Demo', prompt: 'p', source_url: 'https://cdn/video', mime_type: 'video/mp4', status: 'downloaded', created_at: 1, updated_at: 2, kind: 'video', export_status: 'EXPORTED' } as T] : [],
   });
-  expect(await store.get('m1')).toMatchObject({ exportStatus: '已保存到相册' });
+  expect(await store.get('m1')).toMatchObject({ exportStatus: 'EXPORTED' });
 });
 
 test('prefers async SQLite operations when available', async () => {
@@ -97,7 +97,7 @@ test('artifact projection merge cannot clear an existing private download', asyn
     const store = createSqliteMediaStore(db);
     await store.upsert({
       ...asset, localPath: 'file:///private.mp4', posterPath: 'file:///poster.jpg',
-      status: 'downloaded', exportStatus: '已保存到相册', updatedAt: 10,
+      status: 'downloaded', exportStatus: 'EXPORTED', updatedAt: 10,
     });
     await store.upsertArtifactProjection?.({
       ...asset, localPath: undefined, posterPath: undefined, status: 'downloading',
@@ -106,11 +106,24 @@ test('artifact projection merge cannot clear an existing private download', asyn
 
     await expect(store.get(asset.id)).resolves.toMatchObject({
       sourceUrl: 'https://provider/new-result.mp4', localPath: 'file:///private.mp4',
-      posterPath: 'file:///poster.jpg', status: 'downloaded', exportStatus: '已保存到相册', updatedAt: 20,
+      posterPath: 'file:///poster.jpg', status: 'downloaded', exportStatus: 'EXPORTED', updatedAt: 20,
     });
   } finally {
     db.close();
   }
+});
+
+test('updates delivery and asset with the same stable enum', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const store = createSqliteMediaStore(db);
+    await store.upsert({ ...asset, exportStatus: 'QUEUED' });
+    await store.upsertDelivery?.({
+      id: 'delivery-1', assetId: asset.id, target: 'system-gallery', uri: 'content://media/1',
+      status: 'EXPORTED', createdAt: 2, updatedAt: 3,
+    });
+    await expect(store.get(asset.id)).resolves.toMatchObject({ exportStatus: 'EXPORTED' });
+  } finally { db.close(); }
 });
 
 test('loads the newest primary video asset for a task', async () => {

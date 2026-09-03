@@ -1,4 +1,4 @@
-import type { MediaAsset, MediaStatus, MediaStore } from './types';
+import type { MediaAsset, MediaExportStatus, MediaStatus, MediaStore } from './types';
 import * as FileSystem from 'expo-file-system/legacy';
 import { assertAppDatabaseWritable } from '../storage/database';
 
@@ -6,6 +6,7 @@ type SqlDatabase = {
   execSync?: (source: string) => void;
   runSync?: (source: string, ...params: any[]) => unknown;
   getAllSync?: <T>(source: string, ...params: any[]) => T[];
+  withTransactionSync?: (work: () => void) => void;
 };
 
 type MediaPageOptions = { query?: string; status?: MediaStatus; kind?: MediaAsset['kind']; limit?: number; cursor?: { createdAt: number; id: string } };
@@ -16,7 +17,7 @@ const toAsset = (row: Record<string, unknown>): MediaAsset => ({
   posterPath: row.poster_path ? String(row.poster_path) : undefined, mimeType: String(row.mime_type),
   width: row.width == null ? undefined : Number(row.width), height: row.height == null ? undefined : Number(row.height),
   durationMs: row.duration_ms == null ? undefined : Number(row.duration_ms), status: row.status as MediaStatus,
-  createdAt: Number(row.created_at), updatedAt: Number(row.updated_at), exportStatus: row.export_status ? String(row.export_status) : undefined,
+  createdAt: Number(row.created_at), updatedAt: Number(row.updated_at), exportStatus: row.export_status ? String(row.export_status) as MediaExportStatus : undefined,
   artifactId: row.artifact_id ? String(row.artifact_id) : undefined, jobId: row.job_id ? String(row.job_id) : undefined, workflowId: row.workflow_id ? String(row.workflow_id) : undefined, kind: (row.kind as MediaAsset['kind']) || 'video',
 });
 
@@ -24,6 +25,18 @@ async function removePrivateFile(uri: unknown): Promise<void> {
   const value = uri == null ? '' : String(uri);
   if (!value.startsWith('file://')) return;
   try { await FileSystem.deleteAsync(value, { idempotent: true }); } catch { /* best effort */ }
+}
+
+function transaction(database: SqlDatabase, work: () => void): void {
+  if (typeof database.withTransactionSync === 'function') { database.withTransactionSync(work); return; }
+  database.execSync?.('BEGIN IMMEDIATE');
+  try {
+    work();
+    database.execSync?.('COMMIT');
+  } catch (error) {
+    try { database.execSync?.('ROLLBACK'); } catch { /* best effort */ }
+    throw error;
+  }
 }
 
 export function createSqliteMediaStore(database: SqlDatabase): MediaStore {
@@ -63,7 +76,14 @@ export function createSqliteMediaStore(database: SqlDatabase): MediaStore {
       return rows[0] ? toAsset(rows[0]) : null;
     },
     async remove(id) { assertAppDatabaseWritable(database as never); const rows = database.getAllSync?.<Record<string, unknown>>('SELECT local_path, poster_path FROM media_assets WHERE id = ? LIMIT 1', id) ?? []; database.runSync?.('DELETE FROM media_deliveries WHERE asset_id = ?', id); database.runSync?.('DELETE FROM media_assets WHERE id = ?', id); for (const row of rows) for (const uri of [row.local_path, row.poster_path]) await removePrivateFile(uri); },
-    async upsertDelivery(delivery) { assertAppDatabaseWritable(database as never); database.runSync?.('INSERT OR REPLACE INTO media_deliveries (id, asset_id, target, uri, status, error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', delivery.id, delivery.assetId, delivery.target, delivery.uri ?? null, delivery.status, delivery.error ?? null, delivery.createdAt, delivery.updatedAt); database.runSync?.('UPDATE media_assets SET export_status = ?, updated_at = ? WHERE id = ?', delivery.status === 'EXPORTED' ? '已保存到相册' : delivery.status === 'FAILED' ? '保存到相册失败' : '正在保存到相册', delivery.updatedAt, delivery.assetId); },
+    async upsertDelivery(delivery) {
+      assertAppDatabaseWritable(database as never);
+      transaction(database, () => {
+        database.runSync?.('INSERT OR REPLACE INTO media_deliveries (id, asset_id, target, uri, status, error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', delivery.id, delivery.assetId, delivery.target, delivery.uri ?? null, delivery.status, delivery.error ?? null, delivery.createdAt, delivery.updatedAt);
+        const exportStatus: MediaExportStatus = delivery.status === 'FAILED' ? 'EXPORT_FAILED' : delivery.status;
+        database.runSync?.('UPDATE media_assets SET export_status = ?, updated_at = ? WHERE id = ?', exportStatus, delivery.updatedAt, delivery.assetId);
+      });
+    },
     async listDeliveries(assetId) { const rows = database.getAllSync?.<Record<string, unknown>>('SELECT * FROM media_deliveries WHERE asset_id = ? ORDER BY created_at DESC', assetId) ?? []; return rows.map((row) => ({ id: String(row.id), assetId: String(row.asset_id), target: row.target as 'system-gallery' | 'share' | 'cloud', uri: row.uri ? String(row.uri) : undefined, status: row.status as 'QUEUED' | 'EXPORTING' | 'EXPORTED' | 'FAILED', error: row.error ? String(row.error) : undefined, createdAt: Number(row.created_at), updatedAt: Number(row.updated_at) })); },
   };
 }

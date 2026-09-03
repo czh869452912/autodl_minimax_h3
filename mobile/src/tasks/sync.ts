@@ -56,6 +56,10 @@ const executor = {
       blobs,
       cas,
       commit: commitArtifact,
+      deliveryPolicy: {
+        autoExportToGallery: current.settings.autoExportToGallery,
+        keepPrivateCopy: current.settings.keepPrivateCopy,
+      },
       updateProjection: async () => undefined,
       async ensureProjection(jobId, artifact) {
         const job = jobs.get(jobId);
