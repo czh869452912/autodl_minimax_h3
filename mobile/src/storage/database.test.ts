@@ -1,4 +1,99 @@
-import { APP_SCHEMA_VERSION, ensureAppDatabase, getAppRecoveryState, isLegacyAppDatabase, resetAppDatabase } from './database';
+import { createRealSqliteTestDb } from '../test/realSqlite';
+import { createWorkflowRegistry } from '../workflows/registry/repository';
+import { APP_SCHEMA_VERSION, ensureAppDatabase, getAppRecoveryState, isLegacyAppDatabase, readAppSchemaVersion, resetAppDatabase } from './database';
+
+test('initializes a fresh database with the complete current schema', () => {
+  const db = createRealSqliteTestDb();
+  try {
+    ensureAppDatabase(db as never);
+    expect(readAppSchemaVersion(db as never)).toBe(APP_SCHEMA_VERSION);
+    const names = db.getAllSync<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table'").map((row) => row.name);
+    expect(names).toEqual(expect.arrayContaining([
+      'workflow_artifacts', 'workflow_jobs', 'media_deliveries', 'media_assets', 'tasks',
+      'workflow_registry_active', 'workflow_registry', 'prompt_drafts', 'agent_threads',
+      'app_scheduler_leases', 'app_database_recovery',
+    ]));
+  } finally {
+    db.close();
+  }
+});
+
+test('fresh initialization is repeatable', () => {
+  const db = createRealSqliteTestDb();
+  try {
+    ensureAppDatabase(db as never);
+    ensureAppDatabase(db as never);
+    expect(readAppSchemaVersion(db as never)).toBe(APP_SCHEMA_VERSION);
+    expect(db.getAllSync<{ name: string }>("SELECT name FROM sqlite_master WHERE name='workflow_registry'")).toHaveLength(1);
+  } finally {
+    db.close();
+  }
+});
+
+test('does not stamp a version-zero database containing legacy app data', () => {
+  const db = createRealSqliteTestDb();
+  try {
+    db.execSync('CREATE TABLE tasks (id TEXT PRIMARY KEY NOT NULL)');
+    ensureAppDatabase(db as never);
+    expect(readAppSchemaVersion(db as never)).toBe(0);
+    expect(db.getAllSync<{ name: string }>("SELECT name FROM sqlite_master WHERE name='workflow_registry'")).toHaveLength(0);
+  } finally {
+    db.close();
+  }
+});
+
+test('does not stamp a version-zero database containing only a legacy registry table', () => {
+  const db = createRealSqliteTestDb();
+  try {
+    db.execSync('CREATE TABLE workflow_registry (workflow_id TEXT NOT NULL, version TEXT NOT NULL, content_hash TEXT NOT NULL, source TEXT NOT NULL, trust TEXT NOT NULL, definition_json TEXT NOT NULL, installed_at INTEGER NOT NULL, PRIMARY KEY (workflow_id, version))');
+    ensureAppDatabase(db as never);
+    expect(readAppSchemaVersion(db as never)).toBe(0);
+  } finally {
+    db.close();
+  }
+});
+
+test('fresh initialization supports workflow registry activation', async () => {
+  const db = createRealSqliteTestDb();
+  try {
+    ensureAppDatabase(db as never);
+    const registry = createWorkflowRegistry(db as never);
+    await registry.installAndActivate!({
+      workflowId: 'demo', version: '1.0.0', contentHash: 'abc', source: 'builtin', trust: 'builtin', definitionJson: '{}', installedAt: 1,
+    });
+    await expect(registry.getActive('demo')).resolves.toMatchObject({ workflowId: 'demo', contentHash: 'abc' });
+  } finally {
+    db.close();
+  }
+});
+
+test('migrates version four additively without deleting registry data', () => {
+  const db = createRealSqliteTestDb();
+  try {
+    resetAppDatabase(db as never);
+    db.runSync(
+      'INSERT INTO workflow_registry (workflow_id,version,content_hash,source,trust,definition_json,installed_at) VALUES (?,?,?,?,?,?,?)',
+      'demo', '1.0.0', 'abc', 'builtin', 'builtin', '{}', 1,
+    );
+    db.execSync('PRAGMA user_version = 4');
+    ensureAppDatabase(db as never);
+    expect(readAppSchemaVersion(db as never)).toBe(APP_SCHEMA_VERSION);
+    expect(db.getFirstSync<{ workflow_id: string }>("SELECT workflow_id FROM workflow_registry WHERE workflow_id='demo'")?.workflow_id).toBe('demo');
+  } finally {
+    db.close();
+  }
+});
+
+test('reset clears a persisted recovery marker', () => {
+  const db = createRealSqliteTestDb();
+  try {
+    db.execSync("CREATE TABLE app_database_recovery (id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1), diagnostic TEXT NOT NULL, created_at INTEGER NOT NULL); INSERT INTO app_database_recovery VALUES (1, 'failed', 1)");
+    resetAppDatabase(db as never);
+    expect(getAppRecoveryState(db as never)).toBeUndefined();
+  } finally {
+    db.close();
+  }
+});
 
 test('migrates the previous schema additively inside a transaction', () => {
   const calls: string[] = [];
