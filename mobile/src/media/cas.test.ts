@@ -83,7 +83,7 @@ test('a restarted operation replaces its abandoned part and publishes one blob',
   files.remove = jest.fn(async () => { throw new Error('process already gone'); });
   await expect(createArtifactCas(files, { nonce: () => 'first-process' }).put(
     streamOf(bytes('interrupted')),
-    { mime: 'video/mp4', maxBytes: 20, operationId: 'download-1' },
+    { mime: 'video/mp4', maxBytes: 20, operationId: 'download-1', operationAttempt: 1 } as never,
   )).rejects.toThrow('process stopped');
 
   files.write = write;
@@ -91,12 +91,28 @@ test('a restarted operation replaces its abandoned part and publishes one blob',
 
   const result = await createArtifactCas(files, { nonce: () => 'second-process' }).put(
     streamOf(bytes('abc')),
-    { mime: 'video/mp4', maxBytes: 10, operationId: 'download-1' },
+    { mime: 'video/mp4', maxBytes: 10, operationId: 'download-1', operationAttempt: 2 } as never,
   );
 
   expect(entries.get(result.relativePath)).toEqual(bytes('abc'));
   expect([...entries.keys()].filter((path) => path.startsWith('cas/sha256/'))).toEqual([result.relativePath]);
   expect([...entries.keys()].filter((path) => path.endsWith('.part'))).toEqual([]);
+});
+
+test('expired and replacement attempts never interleave writes to one part', async () => {
+  const { files, entries } = memoryFiles();
+  const cas = createArtifactCas(files);
+  const [expired, replacement] = await Promise.all([
+    cas.put(streamOf(bytes('a'), bytes('bc')), {
+      mime: 'video/mp4', maxBytes: 10, operationId: 'download-race', operationAttempt: 1,
+    } as never),
+    cas.put(streamOf(bytes('x'), bytes('yz')), {
+      mime: 'video/mp4', maxBytes: 10, operationId: 'download-race', operationAttempt: 2,
+    } as never),
+  ]);
+
+  expect(entries.get(expired.relativePath)).toEqual(bytes('abc'));
+  expect(entries.get(replacement.relativePath)).toEqual(bytes('xyz'));
 });
 
 test('gc never deletes a referenced blob and retains rows after file deletion failure', async () => {

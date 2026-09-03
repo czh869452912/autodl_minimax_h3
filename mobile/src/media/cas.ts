@@ -23,7 +23,14 @@ export type CasFiles = {
 export type ArtifactCas = {
   put(
     stream: AsyncIterable<Uint8Array>,
-    options: { mime: string; maxBytes: number; expectedSha256?: string; operationId?: string },
+    options: {
+      mime: string;
+      maxBytes: number;
+      expectedSha256?: string;
+      operationId?: string;
+      operationAttempt?: number;
+      assertLease?: () => void | Promise<void>;
+    },
   ): Promise<{ sha256: string; byteSize: number; mime: string; relativePath: string }>;
 };
 
@@ -51,6 +58,11 @@ function wordArray(bytes: Uint8Array): CryptoJS.lib.WordArray {
   return CryptoJS.lib.WordArray.create(words, bytes.length);
 }
 
+function operationPart(operationId: string, attempt: number): string {
+  const key = CryptoJS.SHA256(`${operationId}\u0000${attempt}`).toString(CryptoJS.enc.Hex);
+  return `cas/parts/${key}.part`;
+}
+
 export function createArtifactCas(
   files: CasFiles = expoCasFiles,
   deps: { nonce?: () => string } = {},
@@ -58,12 +70,17 @@ export function createArtifactCas(
   const nonce = deps.nonce ?? (() => `${Date.now()}-${Math.random().toString(16).slice(2)}`);
   return {
     async put(stream, options) {
-      const partId = options.operationId
-        ? CryptoJS.SHA256(options.operationId).toString(CryptoJS.enc.Hex)
-        : `put-${nonce()}`;
-      const part = `cas/parts/${partId}.part`;
+      const operationAttempt = Math.max(1, Math.floor(options.operationAttempt ?? 1));
+      const part = options.operationId
+        ? operationPart(options.operationId, operationAttempt)
+        : `cas/parts/put-${nonce()}.part`;
       let publishedByCopy: string | undefined;
       await files.makeDirectory('cas/parts');
+      if (options.operationId) {
+        for (let attempt = 1; attempt < operationAttempt; attempt += 1) {
+          await files.remove(operationPart(options.operationId, attempt)).catch(() => undefined);
+        }
+      }
       try {
         const hasher = CryptoJS.algo.SHA256.create();
         let byteSize = 0;
@@ -71,12 +88,14 @@ export function createArtifactCas(
         for await (const chunk of stream) {
           if (!(chunk instanceof Uint8Array)) throw new Error('CAS stream emitted an invalid chunk');
           if (byteSize + chunk.byteLength > options.maxBytes) throw new Error('CAS 文件大小超过限制');
+          await options.assertLease?.();
           await files.write(part, chunk, append);
           append = true;
           byteSize += chunk.byteLength;
           hasher.update(wordArray(chunk));
         }
         if (byteSize <= 0) throw new Error('CAS 文件为空');
+        await options.assertLease?.();
         const sha256 = hasher.finalize().toString(CryptoJS.enc.Hex);
         if (options.expectedSha256 && options.expectedSha256.toLowerCase() !== sha256) throw new Error('CAS hash mismatch');
         const relativePath = `cas/sha256/${sha256.slice(0, 2)}/${sha256}`;

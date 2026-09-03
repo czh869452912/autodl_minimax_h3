@@ -17,7 +17,7 @@ type ArtifactPolicy = {
 };
 
 type ArtifactOperationDeps = {
-  operations: Pick<OperationRepository, 'retry' | 'finish'>;
+  operations: Pick<OperationRepository, 'retry' | 'finish' | 'renew'>;
   blobs: { upsertBlob(blob: ArtifactBlob): void; retain(sha256: string, ownerType: string, ownerId: string, now: number): void };
   cas: ArtifactCas;
   openDownload?: typeof openArtifactDownload;
@@ -26,6 +26,7 @@ type ArtifactOperationDeps = {
   resolveUri?: (relativePath: string) => string;
   commit?: (input: ArtifactCommitInput) => Promise<void> | void;
   now?: () => number;
+  leaseMs?: number;
 };
 
 export type ArtifactCommitInput = {
@@ -73,7 +74,8 @@ function normalized(code: string, retryable: boolean): NormalizedError {
 }
 
 export async function handleArtifactDownload(operation: WorkflowOperation, owner: string, deps: ArtifactOperationDeps): Promise<void> {
-  const timestamp = (deps.now ?? Date.now)();
+  const clock = deps.now ?? Date.now;
+  const timestamp = clock();
   const artifact = artifactFrom(operation);
   const url = artifact?.uri?.trim();
   if (!operation.jobId || !artifact || !url) {
@@ -95,6 +97,12 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
       maxBytes: policy.maxBytes,
       expectedSha256: typeof artifact.metadata?.sha256 === 'string' ? artifact.metadata.sha256 : undefined,
       operationId: operation.id,
+      operationAttempt: operation.attempt,
+      assertLease: () => {
+        if (!deps.operations.renew(operation.id, owner, clock(), deps.leaseMs ?? 120_000)) {
+          throw new Error('artifact operation lease lost');
+        }
+      },
     });
     const blob: ArtifactBlob = { ...stored, createdAt: timestamp, verifiedAt: timestamp };
     const resolveUri = deps.resolveUri ?? ((relativePath: string) => `${FileSystem.documentDirectory ?? ''}${relativePath}`);

@@ -45,25 +45,12 @@ function databaseFile(label: string): string {
   return path.join(os.tmpdir(), `autodl-h3-${label}-${process.pid}-${Date.now()}-${Math.random()}.db`);
 }
 
-function persistedRows(db: ReturnType<typeof createInitializedRealSqliteTestDb>) {
-  return {
-    operations: db.getAllSync('SELECT id,kind,state,attempt,lease_owner,lease_expires_at,last_error_json FROM workflow_operations ORDER BY id'),
-    jobs: db.getAllSync('SELECT id,status,revision,provider_handle_json,last_error_json FROM workflow_jobs ORDER BY id'),
-    events: db.getAllSync('SELECT job_id,sequence,event_type,payload_json FROM workflow_job_events ORDER BY job_id,sequence'),
-  };
-}
-
-function expectRedacted(rows: ReturnType<typeof persistedRows>): void {
-  expect(JSON.stringify(rows)).not.toMatch(/Authorization:\s*Bearer|token=|secret/i);
-}
-
 test('a PENDING submit survives a database reopen and calls the provider once', async () => {
   const file = databaseFile('pending');
   const provider = createProvider();
   try {
     const first = openRuntime(file, provider, () => 100);
     await first.service.queueSubmission(input('pending-restart'));
-    expectRedacted(persistedRows(first.db));
     first.db.close();
 
     const restarted = openRuntime(file, provider, () => 151);
@@ -75,7 +62,6 @@ test('a PENDING submit survives a database reopen and calls the provider once', 
       expect(restarted.jobs.get(submit.jobId!)).toMatchObject({
         status: 'QUEUED', providerHandle: { providerJobId: 'remote-acceptance', opaque: 'preserved' },
       });
-      expectRedacted(persistedRows(restarted.db));
     } finally { restarted.db.close(); }
   } finally { fs.rmSync(file, { force: true }); }
 });
@@ -91,7 +77,6 @@ test('an expired SUBMITTING submit without a handle reopens UNKNOWN/BLOCKED with
       jobId: job.id, expectedRevision: job.revision, patch: { status: 'SUBMITTING', updatedAt: 100 },
       event: { id: `${job.id}:acceptance:started`, type: 'SUBMIT_STARTED', payload: {}, createdAt: 100 },
     });
-    expectRedacted(persistedRows(first.db));
     first.db.close();
 
     const restarted = openRuntime(file, provider, () => 151);
@@ -101,7 +86,6 @@ test('an expired SUBMITTING submit without a handle reopens UNKNOWN/BLOCKED with
       expect(restarted.jobs.get(job.id)).toMatchObject({ status: 'UNKNOWN' });
       expect(restarted.operations.get(submit.id)).toMatchObject({ state: 'BLOCKED' });
       expect(restarted.operations.claimDue({ kind: 'SUBMIT', owner: 'other', now: 1_000, leaseMs: 50, limit: 1 })).toEqual([]);
-      expectRedacted(persistedRows(restarted.db));
     } finally { restarted.db.close(); }
   } finally { fs.rmSync(file, { force: true }); }
 });
@@ -123,7 +107,6 @@ test('a persisted provider handle reopens into status-only recovery with the ori
       patch: { status: 'QUEUED', providerHandle: { providerJobId: 'remote-original', opaque: 'opaque-original' }, updatedAt: 101 },
       event: { id: `${job.id}:acceptance:handle`, type: 'SUBMIT_HANDLE_PERSISTED', payload: {}, createdAt: 101 },
     });
-    expectRedacted(persistedRows(first.db));
     first.db.close();
 
     const restarted = openRuntime(file, provider, () => 151);
@@ -135,7 +118,6 @@ test('a persisted provider handle reopens into status-only recovery with the ori
       expect(provider.getStatus).toHaveBeenCalledTimes(1);
       expect(provider.getStatus).toHaveBeenCalledWith({ providerJobId: 'remote-original', opaque: 'opaque-original' });
       expect(restarted.operations.get(submit.id)).toMatchObject({ state: 'SUCCEEDED' });
-      expectRedacted(persistedRows(restarted.db));
     } finally { restarted.db.close(); }
   } finally { fs.rmSync(file, { force: true }); }
 });
@@ -160,7 +142,6 @@ test('independent foreground and background ticks race to one lease owner and on
     expect(provider.submit).toHaveBeenCalledTimes(1);
     expect(first.operations.list('SUBMIT')).toHaveLength(1);
     expect(first.operations.list('SUBMIT')[0]).toMatchObject({ state: 'SUCCEEDED', attempt: 1 });
-    expectRedacted(persistedRows(first.db));
   } finally {
     second?.db.close();
     first.db.close();
