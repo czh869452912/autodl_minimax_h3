@@ -12,7 +12,8 @@ export async function pickImagesFromGallery(remaining: number, launch: GalleryLa
   if (remaining <= 0) return [];
   const result = await launch(remaining);
   if (result.canceled) return [];
-  return (result.assets ?? []).slice(0, remaining).map((asset) => ({
-    uri: asset.uri, name: asset.fileName ?? `image-${Date.now()}.jpg`, mimeType: asset.mimeType ?? 'image/jpeg', size: asset.fileSize ?? 0,
+  const batch = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return (result.assets ?? []).slice(0, remaining).map((asset, index) => ({
+    uri: asset.uri, name: asset.fileName?.trim() || `image-${batch}-${index + 1}.jpg`, mimeType: asset.mimeType ?? 'image/jpeg', size: asset.fileSize ?? 0,
   }));
 }

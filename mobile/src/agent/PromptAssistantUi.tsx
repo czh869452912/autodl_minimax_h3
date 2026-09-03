@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import { AppIcon } from '../ui/icons';
 import { LIGHT_PROMPT_COLORS } from '../ui/theme';
-import { pickAssistantImages, type AssistantImageAttachment } from './assistantImagePicker';
+import { mergeUniqueAssistantAttachments, pickAssistantImages, type AssistantImageAttachment } from './assistantImagePicker';
 import {
   insertImageMention,
   removeImageMentionOnBackspace,
@@ -197,7 +197,11 @@ export function PromptAssistantUi({
     try {
       const remaining = Math.max(0, 9 - attachments.filter((item) => item.status === 'ready').length - galleryAttachments.length);
       const picked = await pickAssistantImages('gallery', remaining);
-      setGalleryAttachments((current) => [...current, ...picked]);
+      setGalleryAttachments((current) => mergeUniqueAssistantAttachments(
+        current,
+        picked,
+        new Set(attachments.map((attachment) => attachment.id)),
+      ));
     } catch (error) {
       Alert.alert('相册不可用', error instanceof Error ? error.message : '读取相册图片失败');
     }

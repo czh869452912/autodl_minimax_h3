@@ -12,7 +12,10 @@ jest.mock('@copilotkit/react-native/components', () => ({ CopilotMarkdown: ({ co
 jest.mock('@copilotkit/shared', () => ({ getSourceUrl: (source: { value?: string }) => source.value || '' }));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
-jest.mock('./assistantImagePicker', () => ({ pickAssistantImages: jest.fn(() => Promise.resolve([])) }));
+jest.mock('./assistantImagePicker', () => ({
+  ...jest.requireActual('./assistantImagePicker'),
+  pickAssistantImages: jest.fn(() => Promise.resolve([])),
+}));
 
 import { getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline } from './PromptAssistantUi';
 import { normalizeMessages } from './agentPresentation';
