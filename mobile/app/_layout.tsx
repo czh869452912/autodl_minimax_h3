@@ -1,11 +1,11 @@
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Alert, BackHandler } from 'react-native';
+import { Alert, AppState, BackHandler } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
 import { getDatabase, getDatabaseStartupState, type DatabaseStartupState } from '../src/storage/databaseClient';
 import { isLegacyAppDatabase, resetAppDatabase } from '../src/storage/database';
 import { DatabaseRecoveryScreen } from '../src/storage/DatabaseRecoveryScreen';
-import { registerBackgroundSync } from '../src/tasks/background';
+import { registerBackgroundSync, syncTaskRun } from '../src/tasks/background';
 
 const startupDatabase = getDatabase();
 
@@ -33,6 +33,11 @@ export default function RootLayout() {
       return;
     }
     void registerBackgroundSync();
+    void syncTaskRun('foreground');
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void syncTaskRun('foreground');
+    });
+    return () => subscription.remove();
   }, [startupState]);
   if (startupState.mode === 'readonly') {
     return (

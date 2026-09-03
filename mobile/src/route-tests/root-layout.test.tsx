@@ -15,7 +15,7 @@ const mockRecoveryScreen = jest.fn((_props: { diagnostic: string }) => null);
 jest.mock('../storage/databaseClient', () => ({ getDatabase: jest.fn(() => mockDatabase), getDatabaseStartupState: () => mockStartupState() }));
 jest.mock('expo-router', () => ({ Stack: (props: { children?: React.ReactNode }) => <>{props.children}</> }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: (props: { children?: React.ReactNode }) => <>{props.children}</> }));
-jest.mock('../tasks/background', () => ({ registerBackgroundSync: jest.fn(async () => undefined) }));
+jest.mock('../tasks/background', () => ({ registerBackgroundSync: jest.fn(async () => undefined), syncTaskRun: jest.fn(async () => undefined) }));
 jest.mock('../storage/database', () => ({ ensureAppDatabase: jest.fn(), isLegacyAppDatabase: jest.fn(() => true), resetAppDatabase: jest.fn() }));
 jest.mock('../storage/DatabaseRecoveryScreen', () => ({ DatabaseRecoveryScreen: (props: { diagnostic: string }) => mockRecoveryScreen(props) }));
 
@@ -48,7 +48,9 @@ test('blocks old databases until the user explicitly clears or exits', async () 
 test('renders readonly recovery without registering background work', async () => {
   mockStartupState.mockReturnValue({ mode: 'readonly', diagnostic: 'MIGRATION_5_TO_6_FAILED', allowReset: true });
   const register = require('../tasks/background').registerBackgroundSync;
+  const sync = require('../tasks/background').syncTaskRun;
   register.mockClear();
+  sync.mockClear();
   mockRecoveryScreen.mockClear();
   let tree!: ReturnType<typeof create>;
   await act(async () => { tree = create(<RootLayout />); });
@@ -56,5 +58,6 @@ test('renders readonly recovery without registering background work', async () =
   expect(mockStartupState.mock.results.at(-1)?.value).toEqual({ mode: 'readonly', diagnostic: 'MIGRATION_5_TO_6_FAILED', allowReset: true });
   expect(mockRecoveryScreen).toHaveBeenCalledWith(expect.objectContaining({ diagnostic: 'MIGRATION_5_TO_6_FAILED' }));
   expect(register).not.toHaveBeenCalled();
+  expect(sync).not.toHaveBeenCalled();
   act(() => tree.unmount());
 });

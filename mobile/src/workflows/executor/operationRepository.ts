@@ -104,6 +104,14 @@ export function createOperationRepository(db: SQLiteDatabase) {
         : db.getAllSync<OperationRow>('SELECT * FROM workflow_operations ORDER BY created_at ASC, id ASC');
       return rows.map(mapRow);
     },
+    claimById(id: string, owner: string, now: number, leaseMs: number): WorkflowOperation | undefined {
+      assertAppDatabaseWritable(db);
+      const result = db.runSync(
+        "UPDATE workflow_operations SET state = 'CLAIMED', lease_owner = ?, lease_expires_at = ?, attempt = attempt + 1, updated_at = ? WHERE id = ? AND state = 'PENDING' AND next_retry_at <= ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?)",
+        owner, now + Math.max(1, leaseMs), now, id, now, now,
+      );
+      return changes(result) === 1 ? get(id) : undefined;
+    },
     claimDue(options: { kind: OperationKind; owner: string; now: number; leaseMs: number; limit: number }): WorkflowOperation[] {
       assertAppDatabaseWritable(db);
       return transaction(db, () => {
