@@ -22,6 +22,8 @@ type ArtifactOperationDeps = {
   cas: ArtifactCas;
   openDownload?: typeof openArtifactDownload;
   policy(jobId: string, artifact: ArtifactRecord): ArtifactPolicy;
+  ensureProjection(jobId: string, artifact: ArtifactRecord): Promise<void>;
+  updateDownloadState(state: 'ENQUEUED' | 'DOWNLOADING' | 'DOWNLOAD_FAILED', errorCode?: string): Promise<void>;
   updateProjection(input: { jobId: string; artifactId: string; localUri: string; mime: string; sha256: string; byteSize: number }): Promise<void> | void;
   resolveUri?: (relativePath: string) => string;
   commit?: (input: ArtifactCommitInput) => Promise<void> | void;
@@ -83,6 +85,8 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     return;
   }
   try {
+    await deps.ensureProjection(operation.jobId, artifact);
+    await deps.updateDownloadState('DOWNLOADING');
     const policy = deps.policy(operation.jobId, artifact);
     const opened = await (deps.openDownload ?? openArtifactDownload)(url, {
       allowedHosts: policy.allowedHosts,
@@ -119,9 +123,11 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     const message = cause instanceof Error ? cause.message : String(cause);
     if (/连接超时|空闲超时|network|fetch failed/i.test(message)) {
       const nextRetryAt = timestamp + Math.min(60_000, 1_000 * (2 ** Math.max(0, operation.attempt - 1)));
+      await deps.updateDownloadState('ENQUEUED');
       deps.operations.retry(operation.id, owner, { now: timestamp, nextRetryAt, error: normalized('ARTIFACT_TRANSFER_RETRY', true) });
       return;
     }
+    try { await deps.updateDownloadState('DOWNLOAD_FAILED', 'ARTIFACT_VALIDATION_FAILED'); } catch { /* operation failure remains authoritative */ }
     deps.operations.finish(operation.id, owner, 'FAILED', timestamp, normalized('ARTIFACT_VALIDATION_FAILED', false));
   }
 }

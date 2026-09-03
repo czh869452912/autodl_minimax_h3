@@ -17,8 +17,33 @@ function setup() {
   const cas = { put: jest.fn(async (..._args: Parameters<ArtifactCas['put']>) => ({ sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}` })) };
   const openDownload = jest.fn(async () => ({ finalUrl: 'https://cdn.example/video.mp4', status: 200, mime: 'video/mp4', stream }));
   const updateProjection = jest.fn(async () => undefined);
-  return { operations, blobs, cas, openDownload, updateProjection };
+  const ensureProjection = jest.fn(async () => undefined);
+  const updateDownloadState = jest.fn(async () => undefined);
+  return { operations, blobs, cas, openDownload, updateProjection, ensureProjection, updateDownloadState };
 }
+
+test('ensures the media row and marks downloading before opening the network stream', async () => {
+  const order: string[] = [];
+  await handleArtifactDownload(operation, 'worker', {
+    ...setup(),
+    ensureProjection: jest.fn(async () => { order.push('projection'); }),
+    updateDownloadState: jest.fn(async (state) => { order.push(state); }),
+    openDownload: jest.fn(async () => { order.push('network'); throw new Error('域名不在允许列表'); }),
+    policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+  expect(order.slice(0, 3)).toEqual(['projection', 'DOWNLOADING', 'network']);
+});
+
+test('writes a terminal failed projection when validation fails', async () => {
+  const deps = setup();
+  deps.openDownload.mockRejectedValueOnce(new Error('CAS hash mismatch'));
+  await handleArtifactDownload(operation, 'worker', {
+    ...deps,
+    now: () => 50,
+    policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('DOWNLOAD_FAILED', 'ARTIFACT_VALIDATION_FAILED');
+});
 
 test('streams into CAS, retains the blob, updates projection, and finishes', async () => {
   const deps = setup();
@@ -44,6 +69,7 @@ test('retries connection and idle timeouts with bounded backoff', async () => {
   deps.openDownload.mockRejectedValueOnce(new Error('下载连接超时'));
   await handleArtifactDownload(operation, 'worker', { ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
   expect(deps.operations.retry).toHaveBeenCalledWith('download-1', 'worker', expect.objectContaining({ now: 50, nextRetryAt: 1050 }));
+  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('ENQUEUED');
   expect(deps.operations.finish).not.toHaveBeenCalled();
 });
 

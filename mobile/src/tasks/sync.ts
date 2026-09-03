@@ -17,6 +17,8 @@ import { DEFAULT_VIDEO_DOWNLOAD_BYTES } from './downloadPolicy';
 import { jobToTaskProjection } from './projection';
 import type { WorkflowOperation } from '../workflows/executor/types';
 import { createSqliteMediaStore } from '../media/repository';
+import { materializeJobArtifacts } from '../media/materializer';
+import type { ArtifactRecord } from '../jobs/types';
 
 const database = getDatabase();
 export const taskStore = createTaskRepository(database);
@@ -55,6 +57,33 @@ const executor = {
       cas,
       commit: commitArtifact,
       updateProjection: async () => undefined,
+      async ensureProjection(jobId, artifact) {
+        const job = jobs.get(jobId);
+        const task = await taskStore.get(jobId);
+        if (!job) throw new Error('JOB_NOT_FOUND');
+        if (!task) throw new Error('TASK_NOT_FOUND');
+        await materializeJobArtifacts(job, [artifact], mediaStore, task);
+      },
+      async updateDownloadState(state, errorCode) {
+        if (!operation.jobId) throw new Error('JOB_ID_MISSING');
+        const artifact = operation.payload.artifact as ArtifactRecord | undefined;
+        if (!artifact?.id) throw new Error('ARTIFACT_INPUT_INVALID');
+        const timestamp = Date.now();
+        const taskUpdated = await taskStore.updateMediaProjection(operation.jobId, {
+          downloadState: state,
+          downloadError: errorCode,
+          downloadProgress: state === 'ENQUEUED' || state === 'DOWNLOADING' ? 0 : undefined,
+          updatedAt: timestamp,
+        });
+        if (!taskUpdated) throw new Error('TASK_NOT_FOUND');
+        const asset = await mediaStore.get(`${operation.jobId}:${artifact.id}`);
+        if (!asset) throw new Error('MEDIA_ASSET_NOT_FOUND');
+        await mediaStore.upsertArtifactProjection?.({
+          ...asset,
+          status: state === 'ENQUEUED' ? 'queued' : state === 'DOWNLOADING' ? 'downloading' : 'failed',
+          updatedAt: timestamp,
+        });
+      },
       policy(jobId) {
         const job = jobs.get(jobId);
         const policy = job ? current.adapters.get(job.adapterId)?.manifest().artifactDownloadPolicy : undefined;

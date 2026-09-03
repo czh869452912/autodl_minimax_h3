@@ -21,7 +21,7 @@ export async function materializeJobArtifacts(job: JobRecord, artifacts: Artifac
       posterPath: task?.thumbnailUrl,
       mimeType: artifact.mime || (artifact.kind === 'video' ? 'video/mp4' : `${artifact.kind}/*`),
       kind: artifact.kind,
-      status: 'downloading',
+      status: 'queued',
       durationMs: typeof artifact.metadata?.durationMs === 'number' ? artifact.metadata.durationMs : undefined,
       createdAt: task?.createdAt ?? job.createdAt,
       updatedAt: job.updatedAt,

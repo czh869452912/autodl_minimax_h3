@@ -40,6 +40,6 @@ test('persists remote metadata and only enqueues byte transfer', async () => {
   const store = { upsertArtifactProjection: jest.fn(async () => undefined), upsert: jest.fn(async () => undefined) };
   const enqueueDownload = jest.fn();
   await materializeJobArtifacts(job, [artifacts[0]], store, undefined, { enqueueDownload });
-  expect(store.upsertArtifactProjection).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl: 'https://cdn/video', status: 'downloading' }));
+  expect(store.upsertArtifactProjection).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl: 'https://cdn/video', status: 'queued' }));
   expect(enqueueDownload).toHaveBeenCalledWith(expect.objectContaining({ artifactId: 'video-1' }), artifacts[0]);
 });
