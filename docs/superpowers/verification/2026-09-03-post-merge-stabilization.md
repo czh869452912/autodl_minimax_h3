@@ -34,3 +34,29 @@ Pending on a short-path checkout or fixed native build environment:
 - The expected provider-failure test logs its deliberately injected `provider failed` error; the suite exits successfully.
 
 Pending device checks remain blocked by the native CMake issue described above: multi-image chip removal, mixed provider/gallery mentions, duplicate-title navigation, visible Timeline counts, model changes during streaming, and deletion during generation.
+
+## Prompt Timeline P0 evidence
+
+- Focus-state tests cover the exact 48-pixel bottom threshold, drag detachment, bottom reattachment, and explicit return-to-latest.
+- Component tests verify that streamed content and layout changes do not take over a detached viewport, while reaching the bottom or tapping `回到最新` restores following.
+- Run-recovery tests verify inline provider errors and user aborts, issue isolation across thread-keyed sessions, disabled in-flight retry, and direct core reruns that leave the existing user-message array unchanged.
+- Action tests verify per-answer clipboard content and that empty-state suggestions populate and focus the composer without calling `submitMessage`.
+
+Pending device checks remain blocked by the native CMake issue described above: long streamed response following, detached viewport stability during tool/keyboard/layout changes, return-to-latest, provider-error retry, stopped-run retry, clipboard inspection, and suggestion focus/send separation.
+
+## Final automated regression
+
+Recorded at 2026-09-03 22:03:41 +08:00 from `codex/post-merge-stabilization` after the final independent review:
+
+- `npm test -- --runInBand`: 104 suites passed, 1 skipped; 520 tests passed, 2 skipped; exit 0.
+- `npm run typecheck`: exit 0.
+- `git diff --check`: exit 0 for the working tree.
+- `git diff --check ce7a6a2c..HEAD`: exit 0.
+- The `aguiAgent.test.ts` provider-failure case intentionally emits its injected `provider failed` console error; it is an asserted failure-path fixture, not a suite failure.
+
+## Independent review closure
+
+- The first independent review found seven Important issues in async cycle time, task deletion, reconciliation pagination, runtime replacement, retry-tail handling, MediaStore naming, and CAS collection ordering.
+- Two follow-up reviews found and drove closure of cross-executor deletion/GC lease races and valid-to-invalid runtime revocation.
+- The final review of `adc4a877..ac6efc78` reported no remaining or newly introduced Critical/Important findings.
+- Added regressions cover scheduled-operation clock refresh, transactional operation cancellation, persisted repair-page progress, latest-snapshot runtime hydration, partial-tail removal, native-safe hashed export identity, atomic/renewed CAS GC leases, and invalid-config runtime disposal.
