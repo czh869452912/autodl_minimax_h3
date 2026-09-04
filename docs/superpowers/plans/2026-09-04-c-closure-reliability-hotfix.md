@@ -191,7 +191,7 @@ Expected: all selected tests and typecheck PASS。
 - Modify: `mobile/src/jobs/repository.ts`
 - Modify: `mobile/src/jobs/repository.test.ts`
 
-- [ ] **Step 1: 写真实 SQLite 查询失败测试**
+- [x] **Step 1: 写真实 SQLite 查询失败测试**
 
 用现有 `createInitializedRealSqliteTestDb` 插入 100 个 terminal operation、不同 kind 的 due/scheduled/leased rows，断言新 API：
 
@@ -213,7 +213,7 @@ npm test -- --runInBand src/workflows/executor/operationRepository.test.ts src/w
 
 Expected: FAIL，新 API 不存在且 tick 仍调用 `list()`。
 
-- [ ] **Step 2: 实现有界 SQL API**
+- [x] **Step 2: 实现有界 SQL API**
 
 新增：
 
@@ -234,11 +234,11 @@ expediteRetryableNetwork(jobIds: string[], now: number): number;
 
 为 `createJobRepository` 增加 `listRecent(limit)`，SQLite 直接 `LIMIT ?`，内存实现 slice。
 
-- [ ] **Step 3: tick 改用 SQL 查询**
+- [x] **Step 3: tick 改用 SQL 查询**
 
 `dueSnapshot` 每 lane 调一次 `listDue`，每 lane limit 不超过本 tick budget；公平轮转保持不变。执行前后仅调 `pendingSummary`，删除 `operations.list().filter(...)`。保留 `list()` 供审计和非热路径测试。
 
-- [ ] **Step 4: 验证并提交**
+- [x] **Step 4: 验证并提交**
 
 ```powershell
 npm test -- --runInBand src/workflows/executor/operationRepository.test.ts src/workflows/executor/tick.test.ts src/workflows/executor/cycle.test.ts src/jobs/repository.test.ts

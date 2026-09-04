@@ -48,6 +48,16 @@ test('filters future work and recovers before taking the due snapshot', async ()
   } finally { value.db.close(); }
 });
 
+test('uses bounded due and summary queries instead of the audit list API', async () => {
+  const value = setup();
+  try {
+    enqueue(value.operations, 'STATUS_SYNC', 0);
+    jest.spyOn(value.operations, 'list').mockImplementation(() => { throw new Error('full list scan'); });
+
+    await expect(value.tick.run({ reason: 'foreground', now: 100 })).resolves.toMatchObject({ claimed: 1, succeeded: 1 });
+  } finally { value.db.close(); }
+});
+
 test('overlapping entrypoints share one pass and thrown handlers release claims', async () => {
   const value = setup();
   try {
