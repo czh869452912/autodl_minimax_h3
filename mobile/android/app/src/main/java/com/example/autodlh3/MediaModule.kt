@@ -15,6 +15,7 @@ import com.facebook.react.bridge.Arguments
 class MediaModule(private val context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
   private val executor = Executors.newSingleThreadExecutor()
   private val publisher = MediaStorePublisher(context.contentResolver)
+  private val integrity = MediaIntegrity(context)
   override fun getName() = "AutoDLMedia"
 
   @ReactMethod
@@ -56,6 +57,34 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
         })
       } catch (error: Exception) {
         promise.reject("EXPORT_FAILED", error.message ?: "保存到系统相册失败", error)
+      }
+    }
+  }
+
+  @ReactMethod
+  fun sha256File(source: String, promise: Promise) {
+    if (source.isBlank()) { promise.reject("MEDIA_SOURCE_INVALID", "媒体 URI 为空"); return }
+    executor.execute {
+      try { promise.resolve(integrity.sha256(source)) }
+      catch (error: Exception) { promise.reject("MEDIA_INTEGRITY_FAILED", error.message, error) }
+    }
+  }
+
+  @ReactMethod
+  fun probeVideo(source: String, promise: Promise) {
+    if (source.isBlank()) { promise.reject("MEDIA_SOURCE_INVALID", "媒体 URI 为空"); return }
+    executor.execute {
+      try {
+        val result = integrity.probeVideo(source)
+        promise.resolve(Arguments.createMap().apply {
+          putDouble("durationMs", result.durationMs.toDouble())
+          putInt("videoTrackCount", result.videoTrackCount)
+          putInt("decodedFrames", result.decodedFrames)
+          putDouble("sampleCount", result.sampleCount.toDouble())
+        })
+      } catch (error: Exception) {
+        val diagnostic = (error as? MediaIntegrityException)?.diagnosticCode ?: "MEDIA_CONTAINER_INVALID"
+        promise.reject("MEDIA_INVALID", diagnostic, error)
       }
     }
   }

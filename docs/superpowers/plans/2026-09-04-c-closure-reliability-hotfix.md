@@ -404,7 +404,7 @@ git commit -m "fix: resume task sync when connectivity returns"
 - Modify: `mobile/src/native/media.ts`
 - Modify: `mobile/src/native/media.test.ts`
 
-- [ ] **Step 1: 写 JS bridge 和 Kotlin policy 失败测试**
+- [x] **Step 1: 写 JS bridge 和 Kotlin policy 失败测试**
 
 JS 测试期望：
 
@@ -425,7 +425,7 @@ cd android
 
 Expected: FAIL，新 bridge/Kotlin 类不存在。
 
-- [ ] **Step 2: 实现原生 hash 与 probe**
+- [x] **Step 2: 实现原生 hash 与 probe**
 
 `MediaIntegrity` 接受 file path/content URI opener，SHA-256 使用 64 KiB buffer。probe 用 `MediaExtractor` 遍历 track 和 samples，拒绝负 sample size/无 video track；读取正 duration；用 `MediaMetadataRetriever.getFrameAtTime` 在 0、duration/2、max(0,duration-100ms) 解码三帧并及时 recycle。
 
@@ -442,11 +442,11 @@ data class VideoProbeResult(
 
 MediaModule 暴露 `sha256File` 和 `probeVideo` Promise 方法，所有工作在现有单线程 executor 上执行。
 
-- [ ] **Step 3: 写真实 Android instrumentation fixture**
+- [x] **Step 3: 写真实 Android instrumentation fixture**
 
 instrumentation 测试用 `MediaCodec` 的 AVC encoder 编码三张纯色 YUV420 frame，把 output format 和 encoded buffers 写入 `MediaMuxer`，生成一个最小有效 MP4；再创建截断副本和纯文本 `.mp4`。断言有效文件能发现视频轨/正时长/3 个解码帧，损坏文件抛出 `MEDIA_INVALID`。不提交大型二进制 fixture。
 
-- [ ] **Step 4: 验证并提交**
+- [x] **Step 4: 验证并提交**
 
 ```powershell
 cd mobile
