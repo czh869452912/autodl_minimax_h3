@@ -34,7 +34,7 @@ type ArtifactOperationDeps = {
   updateProjection(input: { jobId: string; artifactId: string; localUri: string; mime: string; sha256: string; byteSize: number }): Promise<void> | void;
   verifyVideo(source: string): Promise<unknown>;
   resolveUri?: (relativePath: string) => string;
-  commit?: (input: ArtifactCommitInput) => Promise<void> | void;
+  commit?: ArtifactCommitter;
   now?: () => number;
   leaseMs?: number;
 };
@@ -51,6 +51,19 @@ export type ArtifactCommitInput = {
   deliveryIntent?: SystemGalleryIntent;
 };
 
+export type ArtifactReservationInput = {
+  operationId: string;
+  owner: string;
+  blob: ArtifactBlob;
+  now: number;
+};
+
+export type ArtifactCommitter = {
+  (input: ArtifactCommitInput): Promise<void> | void;
+  reserve(input: ArtifactReservationInput): Promise<void> | void;
+  release(input: { operationId: string }): Promise<void> | void;
+};
+
 function transaction(db: SQLiteDatabase, work: () => void): void {
   if (typeof db.withTransactionSync === 'function') { db.withTransactionSync(work); return; }
   db.execSync('BEGIN IMMEDIATE');
@@ -63,19 +76,23 @@ export function artifactExportDisplayName(jobId: string, artifactId: string): st
   return `${safeJobId}-${identity}.mp4`;
 }
 
-export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => number = Date.now) {
-  return (input: ArtifactCommitInput): void => {
+export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => number = Date.now): ArtifactCommitter {
+  const assertGcIdle = () => {
+    const gcLease = db.getFirstSync<{ expires_at: number }>(
+      "SELECT expires_at FROM app_scheduler_leases WHERE lease_key='cas-gc' LIMIT 1",
+    );
+    if (gcLease && Number(gcLease.expires_at) > clock()) throw new ArtifactOperationError('ARTIFACT_CAS_BUSY', 'CAS_GC_IN_PROGRESS', true);
+  };
+  const commit = (input: ArtifactCommitInput): void => {
     assertAppDatabaseWritable(db);
     transaction(db, () => {
-      const gcLease = db.getFirstSync<{ expires_at: number }>(
-        "SELECT expires_at FROM app_scheduler_leases WHERE lease_key='cas-gc' LIMIT 1",
-      );
-      if (gcLease && Number(gcLease.expires_at) > clock()) throw new ArtifactOperationError('ARTIFACT_CAS_BUSY', 'CAS_GC_IN_PROGRESS', true);
+      assertGcIdle();
       db.runSync(
         'INSERT INTO artifact_blobs (sha256,byte_size,mime,relative_path,created_at,verified_at) VALUES (?,?,?,?,?,?) ON CONFLICT(sha256) DO UPDATE SET verified_at=MAX(artifact_blobs.verified_at, excluded.verified_at)',
         input.blob.sha256, input.blob.byteSize, input.blob.mime, input.blob.relativePath, input.blob.createdAt, input.blob.verifiedAt,
       );
       db.runSync('INSERT OR IGNORE INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)', input.blob.sha256, 'workflow_artifact', `${input.jobId}:${input.artifact.id}`, input.now);
+      db.runSync("DELETE FROM artifact_blob_refs WHERE blob_sha256=? AND owner_type='artifact_operation' AND owner_id=?", input.blob.sha256, input.operationId);
       const automaticIntent = input.artifact.kind === 'video' && input.deliveryPolicy.autoExportToGallery
         ? { target: 'system-gallery' as const, keepPrivateCopy: input.deliveryPolicy.keepPrivateCopy }
         : undefined;
@@ -113,6 +130,37 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => n
       if (Number(result.changes ?? 0) !== 1) throw new Error('artifact operation lease lost');
     });
   };
+  return Object.assign(commit, {
+    reserve(input: ArtifactReservationInput): void {
+      assertAppDatabaseWritable(db);
+      transaction(db, () => {
+        assertGcIdle();
+        const claim = db.getFirstSync<{ present: number }>(
+          "SELECT 1 AS present FROM workflow_operations WHERE id=? AND state='CLAIMED' AND lease_owner=? LIMIT 1",
+          input.operationId, input.owner,
+        );
+        if (!claim) throw new Error('artifact operation lease lost');
+        db.runSync("DELETE FROM artifact_blob_refs WHERE owner_type='artifact_operation' AND owner_id=?", input.operationId);
+        db.runSync(
+          'INSERT INTO artifact_blobs (sha256,byte_size,mime,relative_path,created_at,verified_at) VALUES (?,?,?,?,?,?) ON CONFLICT(sha256) DO UPDATE SET verified_at=MAX(artifact_blobs.verified_at, excluded.verified_at)',
+          input.blob.sha256, input.blob.byteSize, input.blob.mime, input.blob.relativePath, input.blob.createdAt, input.blob.verifiedAt,
+        );
+        db.runSync(
+          "INSERT OR IGNORE INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,'artifact_operation',?,?)",
+          input.blob.sha256, input.operationId, input.now,
+        );
+      });
+    },
+    release(input: { operationId: string }): void {
+      assertAppDatabaseWritable(db);
+      transaction(db, () => {
+        db.runSync(
+          "DELETE FROM artifact_blob_refs WHERE owner_type='artifact_operation' AND owner_id=?",
+          input.operationId,
+        );
+      });
+    },
+  });
 }
 
 function payloadFrom(operation: WorkflowOperation): ArtifactDownloadPayload | undefined {
@@ -148,7 +196,9 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     return;
   }
   let staged: Awaited<ReturnType<ArtifactCas['stage']>> | undefined;
+  let reservation: { operationId: string } | undefined;
   try {
+    if (deps.commit) await deps.commit.release({ operationId: operation.id });
     await deps.ensureProjection(operation.jobId, artifact);
     await deps.updateDownloadState('DOWNLOADING');
     const policy = deps.policy(operation.jobId, artifact);
@@ -181,6 +231,11 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
         throw new ArtifactOperationError(failure.code, mediaValidationMessage(failure.code), failure.retryable, { cause });
       }
     }
+    if (deps.commit) {
+      const blob = { ...staged, createdAt: timestamp, verifiedAt: timestamp };
+      await deps.commit.reserve({ operationId: operation.id, owner, blob, now: timestamp });
+      reservation = { operationId: operation.id };
+    }
     const stored = await staged.publish();
     const blob: ArtifactBlob = { ...stored, createdAt: timestamp, verifiedAt: timestamp };
     const localUri = resolveUri(blob.relativePath);
@@ -197,6 +252,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
         deliveryPolicy: deps.deliveryPolicy,
         deliveryIntent: latestPayload?.deliveryIntent ?? payload.deliveryIntent,
       });
+      reservation = undefined;
     } else {
       deps.blobs.upsertBlob(blob);
       deps.blobs.retain(blob.sha256, 'workflow_artifact', `${operation.jobId}:${artifact.id}`, timestamp);
@@ -205,6 +261,9 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     }
   } catch (cause) {
     await staged?.abort().catch(() => undefined);
+    if (reservation && deps.commit) {
+      await Promise.resolve(deps.commit.release(reservation)).catch(() => undefined);
+    }
     const failure = artifactError(cause);
     const normalizedFailure = normalized(failure.code, failure.retryable);
     if (failure.retryable) {

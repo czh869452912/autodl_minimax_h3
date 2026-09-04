@@ -130,6 +130,48 @@ test('fails an invalid downloaded video on attempt 3 without committing projecti
   expect(deps.staged.abort).toHaveBeenCalledTimes(1);
 });
 
+test('reserves blob metadata before publication and releases it for GC when commit fails', async () => {
+  const deps = setup();
+  const order: string[] = [];
+  deps.staged.publish.mockImplementationOnce(async () => { order.push('publish'); return {
+    sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}`,
+  }; });
+  const commit = Object.assign(
+    jest.fn(() => { order.push('commit'); throw new Error('artifact operation lease lost'); }),
+    {
+      reserve: jest.fn(() => { order.push('reserve'); }),
+      release: jest.fn(() => { order.push('release'); }),
+    },
+  );
+
+  await handleArtifactDownload(operation, 'worker', {
+    ...deps, commit, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+
+  expect(order).toEqual(['release', 'reserve', 'publish', 'commit', 'release']);
+  expect(commit.reserve).toHaveBeenCalledWith(expect.objectContaining({ operationId: 'download-1', owner: 'worker' }));
+  expect(commit.release).toHaveBeenCalledTimes(2);
+  expect(commit.release).toHaveBeenCalledWith({ operationId: 'download-1' });
+});
+
+test('clears a crashed prior reservation even when the next attempt fails before staging', async () => {
+  const deps = setup();
+  deps.openDownload.mockRejectedValueOnce(Object.assign(new Error('offline'), { code: 'ARTIFACT_NETWORK', retryable: true }));
+  const commit = Object.assign(jest.fn(), {
+    reserve: jest.fn(),
+    release: jest.fn(),
+  });
+
+  await handleArtifactDownload(operation, 'worker', {
+    ...deps, commit, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+
+  expect(commit.release).toHaveBeenCalledTimes(1);
+  expect(commit.release).toHaveBeenCalledWith({ operationId: 'download-1' });
+  expect(commit.reserve).not.toHaveBeenCalled();
+  expect(deps.operations.retry).toHaveBeenCalled();
+});
+
 test('probe failure aborts the staged part before publication', async () => {
   const deps = setup();
   let stagedPartExists = true;
@@ -157,7 +199,10 @@ test('does not run the video decoder probe for non-video artifacts', async () =>
 
 test('uses the latest persisted delivery intent when save joins a claimed download', async () => {
   const deps = setup();
-  const commit = jest.fn(async () => undefined);
+  const commit = Object.assign(jest.fn(async () => undefined), {
+    reserve: jest.fn(async () => undefined),
+    release: jest.fn(async () => undefined),
+  });
   deps.operations.get.mockReturnValue({
     ...operation,
     payload: { ...operation.payload, deliveryIntent: { target: 'system-gallery', keepPrivateCopy: false } },
@@ -295,6 +340,47 @@ test('commits a private download without export when auto export is disabled', a
     expect(operationStore.list('EXPORT')).toEqual([]);
     await expect(taskStore.get('job-1')).resolves.toMatchObject({ downloadState: 'DOWNLOADED', exportState: 'NOT_REQUESTED' });
     await expect(mediaStore.get('job-1:video-1')).resolves.toMatchObject({ status: 'downloaded', exportStatus: 'NOT_REQUESTED' });
+  } finally { db.close(); }
+});
+
+test('failed post-publication commit leaves a database-visible unreferenced blob for GC', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const { operationStore } = await seedArtifactCommit(db);
+    const commit = createSqliteArtifactCommitter(db as never);
+    const blob = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 50, verifiedAt: 50 };
+    commit.reserve({ operationId: 'download-1', owner: 'worker', blob, now: 50 });
+    expect(db.getFirstSync("SELECT owner_type FROM artifact_blob_refs WHERE blob_sha256=?", blob.sha256))
+      .toMatchObject({ owner_type: 'artifact_operation' });
+
+    operationStore.retry('download-1', 'worker', { now: 50, nextRetryAt: 60, error: { code: 'TEST', message: 'test', retryable: true } });
+    expect(() => commit({
+      operationId: 'download-1', owner: 'worker', jobId: 'job-1', artifact: operation.payload.artifact as never,
+      blob, localUri: 'file:///cas/sha256/aa/blob', now: 50,
+      deliveryPolicy: { autoExportToGallery: false, keepPrivateCopy: true },
+    })).toThrow('lease lost');
+    commit.release({ operationId: 'download-1' });
+
+    expect(db.getFirstSync('SELECT sha256 FROM artifact_blobs WHERE sha256=?', blob.sha256)).toMatchObject({ sha256: blob.sha256 });
+    expect(db.getFirstSync('SELECT blob_sha256 FROM artifact_blob_refs WHERE blob_sha256=?', blob.sha256)).toBeUndefined();
+  } finally { db.close(); }
+});
+
+test('a replacement reservation releases the previous attempt hash for GC', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    await seedArtifactCommit(db);
+    const commit = createSqliteArtifactCommitter(db as never);
+    const first = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/first', createdAt: 40, verifiedAt: 40 };
+    const second = { sha256: 'b'.repeat(64), byteSize: 4, mime: 'video/mp4', relativePath: 'cas/sha256/bb/second', createdAt: 50, verifiedAt: 50 };
+
+    commit.reserve({ operationId: 'download-1', owner: 'worker', blob: first, now: 40 });
+    commit.reserve({ operationId: 'download-1', owner: 'worker', blob: second, now: 50 });
+
+    expect(db.getFirstSync('SELECT 1 AS present FROM artifact_blob_refs WHERE blob_sha256=?', first.sha256)).toBeUndefined();
+    expect(db.getFirstSync('SELECT owner_id FROM artifact_blob_refs WHERE blob_sha256=?', second.sha256))
+      .toMatchObject({ owner_id: 'download-1' });
+    expect(db.getFirstSync('SELECT sha256 FROM artifact_blobs WHERE sha256=?', first.sha256)).toMatchObject({ sha256: first.sha256 });
   } finally { db.close(); }
 });
 

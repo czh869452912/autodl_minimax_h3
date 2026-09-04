@@ -236,6 +236,25 @@ test('quarantines and cleans a partially copied destination when copy throws', a
   expect([...base.entries.keys()].filter((path) => path.startsWith('cas/parts/'))).toEqual([]);
 });
 
+test('quarantines and cleans a silently corrupted destination after copy reports success', async () => {
+  const base = memoryFiles();
+  const move = base.files.move;
+  base.files.move = jest.fn(async (from, to) => {
+    if (from.startsWith('cas/parts/') && !from.includes('quarantine-') && to.startsWith('cas/sha256/')) {
+      throw new Error('rename unavailable');
+    }
+    await move(from, to);
+  });
+  base.files.copy = jest.fn(async (_from, to) => { base.entries.set(to, bytes('abd')); });
+
+  await expect(createArtifactCas(base.files, { nonce: () => 'silent-copy-corruption' }).put(
+    streamOf(bytes('abc')),
+    { mime: 'video/mp4', maxBytes: 10 },
+  )).rejects.toMatchObject({ code: 'ARTIFACT_INTEGRITY_FAILED' });
+  expect([...base.entries.keys()].filter((path) => path.startsWith('cas/sha256/'))).toEqual([]);
+  expect([...base.entries.keys()].filter((path) => path.startsWith('cas/parts/'))).toEqual([]);
+});
+
 test('a restarted operation replaces its abandoned part and publishes one blob', async () => {
   const { files, entries } = memoryFiles();
   const write = files.write;

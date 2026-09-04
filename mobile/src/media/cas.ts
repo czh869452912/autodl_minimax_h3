@@ -237,14 +237,14 @@ export function createArtifactCas(
                 state = 'published';
                 return blob;
               }
+              if (published === 'invalid') {
+                const quarantine = quarantinePath();
+                try {
+                  await files.move(relativePath, quarantine);
+                  quarantines.push(quarantine);
+                } catch { /* another publisher may have replaced the destination */ }
+              }
               if (movedPart) {
-                if (published === 'invalid') {
-                  const quarantine = quarantinePath();
-                  try {
-                    await files.move(relativePath, quarantine);
-                    quarantines.push(quarantine);
-                  } catch { /* another publisher may have replaced the destination */ }
-                }
                 throw casFailure('ARTIFACT_INTEGRITY_FAILED', 'CAS published blob durable reread mismatch');
               }
             }
