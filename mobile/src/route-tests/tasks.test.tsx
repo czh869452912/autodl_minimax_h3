@@ -51,6 +51,10 @@ afterEach(() => {
   jest.clearAllMocks();
   jest.restoreAllMocks();
   mockFocusCallbacks.splice(0, mockFocusCallbacks.length);
+  jest.mocked(syncTaskRun).mockReset().mockImplementation(async () => ({
+    tasks: await syncTasks(),
+    summary: { operations: { remainingDue: 0, remainingScheduled: 0, budgetExhausted: false } },
+  }) as never);
 });
 
 test('refreshes visible running duration every second while task is in progress', async () => {
@@ -134,17 +138,47 @@ test('does not poll again when the visible task set is terminal', async () => {
   expect(jest.mocked(syncTasks).mock.calls.length).toBe(callsAfterLoad);
 });
 
-test('continues polling active provider tasks at ten seconds', async () => {
+test('continues polling active provider tasks across unchanged summaries', async () => {
   jest.useFakeTimers();
   const pendingResult = {
     tasks: [{ id: 'task-1', prompt: 'x', status: 'RUNNING', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 2 }],
     summary: { operations: { remainingDue: 0, remainingScheduled: 0, budgetExhausted: false } },
   } as never;
-  jest.mocked(syncTaskRun).mockResolvedValueOnce(pendingResult).mockResolvedValueOnce(pendingResult);
-  await act(async () => { create(<TasksScreen />); });
+  jest.mocked(syncTaskRun).mockResolvedValue(pendingResult);
+  let renderer: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<TasksScreen />); });
   const calls = jest.mocked(syncTaskRun).mock.calls.length;
+
+  for (let poll = 0; poll < 3; poll += 1) {
+    await act(async () => { jest.advanceTimersByTimeAsync(10_000); });
+  }
+
+  expect(jest.mocked(syncTaskRun)).toHaveBeenCalledTimes(calls + 3);
+  act(() => { renderer!.unmount(); });
+});
+
+test('renders a terminal state reached on a later automatic poll', async () => {
+  jest.useFakeTimers();
+  const running = { id: 'task-1', prompt: 'x', status: 'RUNNING' as const, resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 2 };
+  const succeeded = { ...running, status: 'SUCCESS' as const, downloadState: 'DOWNLOADED' as const, exportState: 'EXPORTED' as const, updatedAt: 3 };
+  const result = (tasks: Array<typeof running | typeof succeeded>) => ({
+    tasks,
+    summary: { operations: { remainingDue: 0, remainingScheduled: 0, budgetExhausted: false } },
+  }) as never;
+  jest.mocked(syncTaskRun)
+    .mockResolvedValueOnce(result([running]))
+    .mockResolvedValueOnce(result([running]))
+    .mockResolvedValueOnce(result([succeeded]));
+  let renderer: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<TasksScreen />); });
+
   await act(async () => { jest.advanceTimersByTimeAsync(10_000); });
-  expect(jest.mocked(syncTaskRun).mock.calls.length).toBe(calls + 1);
+  await act(async () => { jest.advanceTimersByTimeAsync(10_000); });
+
+  const texts = renderer!.root.findAllByType(Text).map((node) => [node.props.children].flat(Infinity).join(''));
+  expect(texts).toContain('成功');
+  expect(texts).toContain('已保存到相册');
+  act(() => { renderer!.unmount(); });
 });
 
 test('waits for the exact scheduled retry instead of polling every ten seconds', async () => {
