@@ -108,6 +108,18 @@ test('treats structured policy and integrity failures as terminal', async () => 
   }
 });
 
+test('rejects unknown structured artifact codes and caller-controlled retryability', async () => {
+  const deps = setup();
+  deps.openDownload.mockRejectedValueOnce({ code: 'ARTIFACT_SECRET_FROM_URL', retryable: false, message: 'secret' });
+  await handleArtifactDownload(operation, 'worker', { ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
+  expect(deps.operations.retry).toHaveBeenCalledWith('download-1', 'worker', expect.objectContaining({ error: expect.objectContaining({ code: 'ARTIFACT_NETWORK' }) }));
+
+  const canonical = setup();
+  canonical.openDownload.mockRejectedValueOnce({ code: 'ARTIFACT_HOST_DENIED', retryable: true, message: 'secret' });
+  await handleArtifactDownload(operation, 'worker', { ...canonical, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
+  expect(canonical.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50, expect.objectContaining({ code: 'ARTIFACT_HOST_DENIED', retryable: false }));
+});
+
 test('rolls back blob and reference metadata when the operation lease is lost', () => {
   const db = createInitializedRealSqliteTestDb();
   try {

@@ -33,8 +33,8 @@ test('publishes by computed sha256 and removes the part', async () => {
 test('rejects expected hash mismatch and byte overflow without retaining a part', async () => {
   const { files, entries } = memoryFiles();
   const cas = createArtifactCas(files, { nonce: () => 'nonce' });
-  await expect(cas.put(streamOf(bytes('abc')), { mime: 'video/mp4', maxBytes: 10, expectedSha256: '0'.repeat(64) })).rejects.toThrow('hash');
-  await expect(cas.put(streamOf(bytes('abc')), { mime: 'video/mp4', maxBytes: 2 })).rejects.toThrow('大小');
+  await expect(cas.put(streamOf(bytes('abc')), { mime: 'video/mp4', maxBytes: 10, expectedSha256: '0'.repeat(64) })).rejects.toMatchObject({ code: 'ARTIFACT_INTEGRITY_FAILED', retryable: false });
+  await expect(cas.put(streamOf(bytes('abc')), { mime: 'video/mp4', maxBytes: 2 })).rejects.toMatchObject({ code: 'ARTIFACT_SIZE_REJECTED', retryable: false });
   expect([...entries.keys()].filter((path) => path.endsWith('.part'))).toEqual([]);
 });
 

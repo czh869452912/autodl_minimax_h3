@@ -26,11 +26,6 @@ export type MediaCommandService = {
 type Context = { task: TaskRow; asset: AssetRow; artifact: ArtifactRecord };
 
 function transaction<T>(db: SQLiteDatabase, work: () => T): T {
-  if (typeof db.withTransactionSync === 'function') {
-    let value!: T;
-    db.withTransactionSync(() => { value = work(); });
-    return value;
-  }
   db.execSync('BEGIN IMMEDIATE');
   try {
     const value = work();
@@ -72,10 +67,10 @@ function loadContext(db: SQLiteDatabase, taskId: string): Context {
   return { task, asset, artifact };
 }
 
-function activeOperation(db: SQLiteDatabase, taskId: string, kind: OperationKind): OperationRow | undefined {
+function activeOperation(db: SQLiteDatabase, taskId: string, kind: OperationKind, canonicalKey: string): OperationRow | undefined {
   return db.getFirstSync<OperationRow>(
-    "SELECT id,idempotency_key,payload_json,state FROM workflow_operations WHERE job_id=? AND kind=? AND state IN ('PENDING','CLAIMED') ORDER BY created_at DESC,id DESC LIMIT 1",
-    taskId, kind,
+    "SELECT id,idempotency_key,payload_json,state FROM workflow_operations WHERE job_id=? AND kind=? AND state IN ('PENDING','CLAIMED') AND (idempotency_key=? OR idempotency_key LIKE ?) ORDER BY created_at DESC,id DESC LIMIT 1",
+    taskId, kind, canonicalKey, `${canonicalKey}:manual:%`,
   ) ?? undefined;
 }
 
@@ -96,6 +91,13 @@ function mergeDeliveryIntent(row: OperationRow, intent: SystemGalleryIntent): st
   let payload: Record<string, unknown> = {};
   try { payload = JSON.parse(row.payload_json) as Record<string, unknown>; } catch { /* invalid payload is replaced below */ }
   return JSON.stringify({ ...payload, deliveryIntent: intent });
+}
+
+function hasDeliveryIntent(row: OperationRow): boolean {
+  try {
+    const payload = JSON.parse(row.payload_json) as { deliveryIntent?: unknown };
+    return payload.deliveryIntent != null;
+  } catch { return false; }
 }
 
 export function createMediaCommandService(options: {
@@ -125,9 +127,10 @@ export function createMediaCommandService(options: {
     const outcome = transaction(db, () => {
       assertAppDatabaseWritable(db);
       const context = loadContext(db, taskId);
-      const active = activeOperation(db, taskId, 'ARTIFACT_DOWNLOAD');
+      const canonicalKey = `artifact:${taskId}:${context.artifact.id}`;
+      const active = activeOperation(db, taskId, 'ARTIFACT_DOWNLOAD', canonicalKey);
       if (active) {
-        if (deliveryIntent) {
+        if (deliveryIntent && !hasDeliveryIntent(active)) {
           const timestamp = now();
           db.runSync('UPDATE workflow_operations SET payload_json=?,updated_at=? WHERE id=?', mergeDeliveryIntent(active, deliveryIntent), timestamp, active.id);
           db.runSync("UPDATE tasks SET export_state='QUEUED',export_error=NULL,updated_at=MAX(updated_at,?) WHERE id=?", timestamp, taskId);
@@ -139,7 +142,7 @@ export function createMediaCommandService(options: {
         }
         return { id: active.id, status: 'in-flight' as const };
       }
-      const identity = nextIdentity(db, 'ARTIFACT_DOWNLOAD', `${taskId}:artifact:${context.artifact.id}`, `artifact:${taskId}:${context.artifact.id}`);
+      const identity = nextIdentity(db, 'ARTIFACT_DOWNLOAD', `${taskId}:artifact:${context.artifact.id}`, canonicalKey);
       const timestamp = now();
       const payload = { artifact: context.artifact, ...(deliveryIntent ? { deliveryIntent } : {}) };
       db.runSync(
@@ -164,11 +167,12 @@ export function createMediaCommandService(options: {
   const enqueueExport = (context: Context, payload: ExportPayload): MediaCommandResult => {
     const outcome = transaction(db, () => {
       assertAppDatabaseWritable(db);
-      const active = activeOperation(db, context.task.id, 'EXPORT');
+      const canonicalKey = `export:${context.task.id}:${context.artifact.id}:system-gallery`;
+      const active = activeOperation(db, context.task.id, 'EXPORT', canonicalKey);
       if (active) return { id: active.id, status: 'in-flight' as const };
       const identity = nextIdentity(
         db, 'EXPORT', `${context.task.id}:export:${context.artifact.id}:system-gallery`,
-        `export:${context.task.id}:${context.artifact.id}:system-gallery`,
+        canonicalKey,
       );
       const timestamp = now();
       db.runSync(
@@ -193,7 +197,7 @@ export function createMediaCommandService(options: {
       const context = loadContext(db, taskId);
       const delivery = db.getFirstSync<{ status: string }>('SELECT status FROM media_deliveries WHERE id=? LIMIT 1', `${context.asset.id}:system-gallery`);
       if (delivery?.status === 'EXPORTED') return { status: 'already-complete' };
-      const active = activeOperation(db, taskId, 'EXPORT');
+      const active = activeOperation(db, taskId, 'EXPORT', `export:${taskId}:${context.artifact.id}:system-gallery`);
       if (active) return { status: 'in-flight', operation: operations.get(active.id) };
       const cas = await casSource(context);
       if (cas) return enqueueExport(context, {

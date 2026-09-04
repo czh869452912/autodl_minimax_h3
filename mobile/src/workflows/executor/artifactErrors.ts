@@ -30,15 +30,30 @@ export class ArtifactOperationError extends Error {
   }
 }
 
+const RETRYABILITY: Record<ArtifactErrorCode, boolean> = {
+  ARTIFACT_POLICY_MISSING: false, ARTIFACT_URL_INVALID: false, ARTIFACT_HTTPS_REQUIRED: false,
+  ARTIFACT_URL_CREDENTIALS: false, ARTIFACT_PRIVATE_NETWORK: false, ARTIFACT_HOST_DENIED: false,
+  ARTIFACT_REDIRECT_INVALID: false, ARTIFACT_REDIRECT_LIMIT: false, ARTIFACT_CONNECT_TIMEOUT: true,
+  ARTIFACT_IDLE_TIMEOUT: true, ARTIFACT_NETWORK: true, ARTIFACT_HTTP_RETRYABLE: true,
+  ARTIFACT_HTTP_REJECTED: false, ARTIFACT_MIME_REJECTED: false, ARTIFACT_SIZE_REJECTED: false,
+  ARTIFACT_INTEGRITY_FAILED: false, ARTIFACT_CAS_BUSY: true, ARTIFACT_INPUT_INVALID: false,
+};
+
+function knownCode(value: unknown): value is ArtifactErrorCode {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(RETRYABILITY, value);
+}
+
 export function artifactError(cause: unknown): ArtifactOperationError {
-  if (cause instanceof ArtifactOperationError) return cause;
+  if (cause instanceof ArtifactOperationError) {
+    return new ArtifactOperationError(cause.code, cause.message, RETRYABILITY[cause.code], { cause });
+  }
   if (cause && typeof cause === 'object') {
     const candidate = cause as { code?: unknown; message?: unknown; retryable?: unknown };
-    if (typeof candidate.code === 'string' && candidate.code.startsWith('ARTIFACT_') && typeof candidate.retryable === 'boolean') {
+    if (knownCode(candidate.code)) {
       return new ArtifactOperationError(
-        candidate.code as ArtifactErrorCode,
-        typeof candidate.message === 'string' ? candidate.message : 'Artifact transfer failed.',
-        candidate.retryable,
+        candidate.code,
+        'Artifact transfer failed.',
+        RETRYABILITY[candidate.code],
       );
     }
   }

@@ -68,6 +68,10 @@ function operationPart(operationId: string, attempt: number): string {
   return `cas/parts/${key}.part`;
 }
 
+function casFailure(code: 'ARTIFACT_SIZE_REJECTED' | 'ARTIFACT_INTEGRITY_FAILED', message: string): Error {
+  return Object.assign(new Error(message), { code, retryable: false });
+}
+
 export function createArtifactCas(
   files: CasFiles = expoCasFiles,
   deps: { nonce?: () => string } = {},
@@ -91,23 +95,23 @@ export function createArtifactCas(
         let byteSize = 0;
         let append = false;
         for await (const chunk of stream) {
-          if (!(chunk instanceof Uint8Array)) throw new Error('CAS stream emitted an invalid chunk');
-          if (byteSize + chunk.byteLength > options.maxBytes) throw new Error('CAS 文件大小超过限制');
+          if (!(chunk instanceof Uint8Array)) throw casFailure('ARTIFACT_INTEGRITY_FAILED', 'CAS stream emitted an invalid chunk');
+          if (byteSize + chunk.byteLength > options.maxBytes) throw casFailure('ARTIFACT_SIZE_REJECTED', 'CAS 文件大小超过限制');
           await options.assertLease?.();
           await files.write(part, chunk, append);
           append = true;
           byteSize += chunk.byteLength;
           hasher.update(wordArray(chunk));
         }
-        if (byteSize <= 0) throw new Error('CAS 文件为空');
+        if (byteSize <= 0) throw casFailure('ARTIFACT_INTEGRITY_FAILED', 'CAS 文件为空');
         await options.assertLease?.();
         const sha256 = hasher.finalize().toString(CryptoJS.enc.Hex);
-        if (options.expectedSha256 && options.expectedSha256.toLowerCase() !== sha256) throw new Error('CAS hash mismatch');
+        if (options.expectedSha256 && options.expectedSha256.toLowerCase() !== sha256) throw casFailure('ARTIFACT_INTEGRITY_FAILED', 'CAS hash mismatch');
         const relativePath = `cas/sha256/${sha256.slice(0, 2)}/${sha256}`;
         await files.makeDirectory(`cas/sha256/${sha256.slice(0, 2)}`);
         const existing = await files.stat(relativePath);
         if (existing.exists) {
-          if (existing.size !== byteSize) throw new Error('CAS existing blob size mismatch');
+          if (existing.size !== byteSize) throw casFailure('ARTIFACT_INTEGRITY_FAILED', 'CAS existing blob size mismatch');
           await files.remove(part);
           return { sha256, byteSize, mime: options.mime, relativePath };
         }
@@ -126,11 +130,11 @@ export function createArtifactCas(
             throw Object.assign(copyError instanceof Error ? copyError : new Error(String(copyError)), { cause: moveError });
           }
           const copied = await files.stat(relativePath);
-          if (!copied.exists || copied.size !== byteSize) throw new Error('CAS copied blob size mismatch');
+          if (!copied.exists || copied.size !== byteSize) throw casFailure('ARTIFACT_INTEGRITY_FAILED', 'CAS copied blob size mismatch');
           await files.remove(part);
         }
         const published = await files.stat(relativePath);
-        if (!published.exists || published.size !== byteSize) throw new Error('CAS published blob size mismatch');
+        if (!published.exists || published.size !== byteSize) throw casFailure('ARTIFACT_INTEGRITY_FAILED', 'CAS published blob size mismatch');
         return { sha256, byteSize, mime: options.mime, relativePath };
       } catch (error) {
         await files.remove(part).catch(() => undefined);

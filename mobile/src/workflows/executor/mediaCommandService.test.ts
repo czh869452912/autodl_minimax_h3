@@ -1,5 +1,8 @@
 import { createInitializedRealSqliteTestDb } from '../../test/realSqlite';
 import { createMediaCommandService } from './mediaCommandService';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 function seed(db: ReturnType<typeof createInitializedRealSqliteTestDb>, options: { localUri?: string } = {}) {
   db.runSync(
@@ -109,6 +112,56 @@ test('persists delivery intent and queued delivery when save joins an active dow
     expect(db.getFirstSync('SELECT export_state FROM tasks WHERE id=?', 'job-1')).toEqual({ export_state: 'QUEUED' });
     expect(db.getFirstSync('SELECT status FROM media_deliveries WHERE id=?', 'job-1:video-1:system-gallery')).toEqual({ status: 'QUEUED' });
   } finally { db.close(); }
+});
+
+test('does not join an active operation for another artifact in the same job', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    seed(db);
+    db.runSync("INSERT INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES (?,?,?,?,?,'PENDING',0,1,1,1)",
+      'other-download', 'ARTIFACT_DOWNLOAD', 'job-1', 'artifact:job-1:image-1', JSON.stringify({ artifact: { id: 'image-1', jobId: 'job-1', kind: 'image', uri: 'https://cdn.example/image.png' } }));
+    await expect(service(db, new Set()).requestDownload('job-1')).resolves.toMatchObject({
+      status: 'queued', operation: { idempotencyKey: 'artifact:job-1:video-1' },
+    });
+  } finally { db.close(); }
+});
+
+test('does not overwrite a frozen delivery intent on an active download', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    seed(db);
+    const commands = service(db, new Set());
+    await commands.requestExport('job-1', { keepPrivateCopy: false });
+    const second = await commands.requestExport('job-1', { keepPrivateCopy: true });
+    expect(second.operation).toMatchObject({ payload: { deliveryIntent: { keepPrivateCopy: false } } });
+  } finally { db.close(); }
+});
+
+test('two real SQLite connections converge on one queued generation', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'media-command-race-'));
+  const path = join(directory, 'app.db');
+  const firstDb = createInitializedRealSqliteTestDb(path);
+  const secondDb = createInitializedRealSqliteTestDb(path);
+  try {
+    seed(firstDb);
+    firstDb.runSync('INSERT INTO artifact_blobs (sha256,byte_size,mime,relative_path,created_at,verified_at) VALUES (?,?,?,?,?,?)',
+      'a'.repeat(64), 3, 'video/mp4', 'cas/sha256/aa/blob', 1, 1);
+    firstDb.runSync('INSERT INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)',
+      'a'.repeat(64), 'workflow_artifact', 'job-1:video-1', 1);
+    let arrivals = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const missingAfterBothRead = async () => { arrivals += 1; if (arrivals === 2) release(); await gate; return false; };
+    const first = createMediaCommandService({ db: firstDb as never, fileExists: missingAfterBothRead, resolveCasUri: (value) => value, now: () => 100 });
+    const second = createMediaCommandService({ db: secondDb as never, fileExists: missingAfterBothRead, resolveCasUri: (value) => value, now: () => 100 });
+    const results = await Promise.all([first.requestDownload('job-1'), second.requestDownload('job-1')]);
+    expect(results.map((value) => value.status).sort()).toEqual(['in-flight', 'queued']);
+    expect(firstDb.getAllSync("SELECT id FROM workflow_operations WHERE kind='ARTIFACT_DOWNLOAD'")).toHaveLength(1);
+  } finally {
+    secondDb.close();
+    firstDb.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('allocates the next retry generation without reopening terminal audit rows', async () => {

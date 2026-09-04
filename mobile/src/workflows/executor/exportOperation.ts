@@ -122,7 +122,9 @@ export async function handleExport(operation: WorkflowOperation, owner: string, 
       referenceOwnerId: `${operation.jobId}:${payload.artifactId}`,
       now: deps.now(),
     });
-    if (!payload.keepPrivateCopy && payload.sourceKind === 'legacy' && deps.removeLegacyPrivate) {
+    if (!payload.keepPrivateCopy && payload.sourceKind === 'legacy'
+      && payload.sourceUri.startsWith('file://') && !payload.sourceUri.includes('/cas/sha256/')
+      && deps.removeLegacyPrivate) {
       await deps.removeLegacyPrivate(payload.sourceUri).catch(() => undefined);
     }
   } catch (cause) {

@@ -91,6 +91,15 @@ test('durably exports a legacy private source without inventing or releasing a C
   expect(deps.removeLegacyPrivate).toHaveBeenCalledWith('file:///legacy/video.mp4');
 });
 
+test('never removes a legacy-labeled source inside the CAS tree', async () => {
+  const deps = { ...setupExport(), removeLegacyPrivate: jest.fn(async () => undefined) };
+  await handleExport({ ...operation, payload: {
+    assetId: 'job-1:video-1', artifactId: 'video-1', sourceUri: 'file:///documents/cas/sha256/aa/blob',
+    sourceKind: 'legacy', keepPrivateCopy: false, displayName: 'job-1.mp4',
+  } }, 'worker', deps);
+  expect(deps.removeLegacyPrivate).not.toHaveBeenCalled();
+});
+
 test('rejects a CAS export payload without a valid hash', async () => {
   const deps = setupExport();
   await handleExport({ ...operation, payload: { ...operation.payload, blobSha256: undefined } }, 'worker', deps);
