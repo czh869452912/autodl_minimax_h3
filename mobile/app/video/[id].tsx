@@ -10,7 +10,8 @@ import { AppIcon } from '../../src/ui/icons';
 import { COLORS, SPACING } from '../../src/ui/theme';
 import type { MediaAsset } from '../../src/media/types';
 import { resolveLocalVideoSource } from '../../src/tasks/localMedia';
-import { mediaStore, requestTaskExport, syncTaskRun, taskStore } from '../../src/tasks/sync';
+import { mediaStore, requestTaskExport, requestTaskRedownload, syncTaskRun, taskStore } from '../../src/tasks/sync';
+import { probeVideo } from '../../src/native/media';
 
 export default function VideoDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -19,6 +20,7 @@ export default function VideoDetailScreen() {
   const [asset, setAsset] = useState<MediaAsset | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [redownloading, setRedownloading] = useState(false);
   const [localSource, setLocalSource] = useState<string>();
 
   const reloadTaskAndAsset = useCallback(async () => {
@@ -70,10 +72,21 @@ export default function VideoDetailScreen() {
       Alert.alert('保存失败', error instanceof Error ? error.message : '保存到系统相册失败');
     } finally { setExporting(false); }
   };
+  const redownloadInvalidSource = async (invalidSource: string) => {
+    if (!task || !localSource || invalidSource !== localSource || redownloading) return;
+    setRedownloading(true);
+    try {
+      await requestTaskRedownload(task.id);
+      await reloadTaskAndAsset();
+      Alert.alert('已开始重新下载', '已清除损坏的本地副本并开始重新下载');
+    } catch (error) {
+      Alert.alert('重新下载失败', error instanceof Error ? error.message : '无法重新下载视频');
+    } finally { setRedownloading(false); }
+  };
 
   return <SafeAreaView style={styles.safe} edges={['top', 'bottom']}><ScrollView testID="detail-content" style={styles.container} contentContainerStyle={styles.content}>
     <View style={styles.header}><Pressable accessibilityRole="button" accessibilityLabel="返回画廊" onPress={() => router.back()} hitSlop={10} style={styles.back}><Text style={styles.backGlyph}>‹</Text><Text style={styles.backText}>返回画廊</Text></Pressable><Text style={styles.title}>视频详情</Text></View>
-    <View testID="adaptive-media-region" style={styles.mediaRegion}><View testID="video-frame" style={styles.player}>{source ? <VideoPlayer source={source} poster={asset?.posterPath || task.thumbnailUrl} /> : <View accessibilityLabel="视频源不可用" style={styles.sourceEmpty}><AppIcon name="movie_filter" size={30} color={COLORS.textSubtle} /><Text style={styles.sourceEmptyText}>视频源不可用</Text></View>}</View></View>
+    <View testID="adaptive-media-region" style={styles.mediaRegion}><View testID="video-frame" style={styles.player}>{source ? <VideoPlayer source={source} poster={asset?.posterPath || task.thumbnailUrl} validateSource={localSource && source === localSource ? probeVideo : undefined} onInvalidSource={localSource && source === localSource ? redownloadInvalidSource : undefined} recovering={redownloading} /> : <View accessibilityLabel="视频源不可用" style={styles.sourceEmpty}><AppIcon name="movie_filter" size={30} color={COLORS.textSubtle} /><Text style={styles.sourceEmptyText}>视频源不可用</Text></View>}</View></View>
     <Text style={styles.meta}>{task.resolution} · {task.duration}s · {task.status} · {localSource ? '已下载' : mediaStatusLabel(task.downloadState === 'DOWNLOAD_FAILED' ? 'failed' : 'downloading')}</Text>
     {source ? <View style={styles.exportRow}><Text style={styles.exportStatus}>{exporting || task.exportState === 'QUEUED' || task.exportState === 'EXPORTING' ? '正在保存到相册' : exportStatusLabel(task) || '尚未保存到相册'}</Text>{task.exportState !== 'EXPORTED' && <Pressable accessibilityRole="button" accessibilityLabel={task.exportState === 'EXPORT_FAILED' ? '重试保存到系统相册' : '保存到系统相册'} disabled={exporting || task.exportState === 'QUEUED' || task.exportState === 'EXPORTING'} onPress={() => void saveToGallery()} style={[styles.exportButton, (exporting || task.exportState === 'QUEUED' || task.exportState === 'EXPORTING') && styles.disabled]}><Text style={styles.exportButtonText}>{exporting || task.exportState === 'QUEUED' || task.exportState === 'EXPORTING' ? '保存中…' : task.exportState === 'EXPORT_FAILED' ? '重试保存到系统相册' : '保存到系统相册'}</Text></Pressable>}</View> : null}
     <View testID="bottom-prompt-card" style={styles.promptCard}><View style={styles.promptHeader}><Text style={styles.sectionTitle}>Prompt</Text><Text style={styles.promptCount}>{task.prompt.length.toLocaleString()} 字符</Text></View><ScrollView accessibilityLabel="滚动 Prompt" nestedScrollEnabled style={styles.promptScroll}><Text selectable style={styles.prompt}>{task.prompt || '暂无 Prompt'}</Text></ScrollView><Pressable accessibilityRole="button" accessibilityLabel="复制 Prompt" onPress={() => void copyPrompt()} style={styles.copy}><AppIcon name="content_copy" size={18} color={COLORS.text} /><Text style={styles.copyText}>复制 Prompt</Text></Pressable></View>

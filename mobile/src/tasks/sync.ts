@@ -137,7 +137,7 @@ const tick = createExecutorTick({
 const cycle = createExecutorCycle({ runTick: (options) => tick.run(options) });
 
 export function createMediaCommandFacade(
-  commands: Pick<MediaCommandService, 'requestDownload' | 'requestExport'>,
+  commands: Pick<MediaCommandService, 'requestDownload' | 'requestRedownload' | 'requestExport'>,
   runCycle: (options: CycleOptions) => Promise<CycleSummary>,
 ) {
   return {
@@ -148,6 +148,11 @@ export function createMediaCommandFacade(
     },
     async requestTaskExport(taskId: string, policy: { keepPrivateCopy: boolean }) {
       const result = await commands.requestExport(taskId, policy);
+      if (result.status !== 'already-complete') await runCycle({ reason: 'foreground' });
+      return result;
+    },
+    async requestTaskRedownload(taskId: string) {
+      const result = await commands.requestRedownload(taskId);
       if (result.status !== 'already-complete') await runCycle({ reason: 'foreground' });
       return result;
     },
@@ -170,6 +175,7 @@ const mediaCommandFacade = createMediaCommandFacade(mediaCommands, (options) => 
 
 export const requestTaskDownload = mediaCommandFacade.requestTaskDownload;
 export const requestTaskExport = mediaCommandFacade.requestTaskExport;
+export const requestTaskRedownload = mediaCommandFacade.requestTaskRedownload;
 
 async function repairTaskProjections(limit = 32): Promise<number> {
   const persisted = await compatibilityJobs.listRecent(limit);

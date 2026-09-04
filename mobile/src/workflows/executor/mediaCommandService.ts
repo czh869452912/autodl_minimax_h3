@@ -19,6 +19,7 @@ export type MediaCommandResult = {
 
 export type MediaCommandService = {
   requestDownload(taskId: string): Promise<MediaCommandResult>;
+  requestRedownload(taskId: string): Promise<MediaCommandResult>;
   requestExport(taskId: string, policy: { keepPrivateCopy: boolean }): Promise<MediaCommandResult>;
   hasActiveMediaOperation(taskId: string): boolean;
 };
@@ -196,6 +197,41 @@ export function createMediaCommandService(options: {
 
   return {
     requestDownload: (taskId) => requestDownload(taskId),
+    async requestRedownload(taskId) {
+      assertAppDatabaseWritable(db);
+      const outcome = transaction(db, () => {
+        assertAppDatabaseWritable(db);
+        const context = loadContext(db, taskId);
+        const canonicalKey = `artifact:${taskId}:${context.artifact.id}`;
+        const active = activeOperation(db, taskId, 'ARTIFACT_DOWNLOAD', canonicalKey);
+        if (active) return { id: active.id, status: 'in-flight' as const };
+
+        const timestamp = now();
+        const identity = nextIdentity(db, 'ARTIFACT_DOWNLOAD', `${taskId}:artifact:${context.artifact.id}`, canonicalKey);
+        if (changes(db.runSync(
+          "UPDATE tasks SET local_uri=NULL,gallery_uri=NULL,download_state='ENQUEUED',download_error=NULL,download_progress=0,export_state='NOT_REQUESTED',export_error=NULL,exported_at=NULL,updated_at=MAX(updated_at,?) WHERE id=?",
+          timestamp, taskId,
+        )) !== 1) throw new Error('TASK_NOT_FOUND');
+        if (changes(db.runSync(
+          "UPDATE media_assets SET local_path=NULL,status='queued',export_status='NOT_REQUESTED',updated_at=? WHERE id=? AND task_id=?",
+          timestamp, context.asset.id, taskId,
+        )) !== 1) throw new Error('MEDIA_ASSET_NOT_FOUND');
+        db.runSync(
+          "UPDATE media_deliveries SET status='FAILED',error='SOURCE_INVALIDATED',updated_at=? WHERE asset_id=?",
+          timestamp, context.asset.id,
+        );
+        db.runSync(
+          "DELETE FROM artifact_blob_refs WHERE owner_type='workflow_artifact' AND owner_id=?",
+          `${taskId}:${context.artifact.id}`,
+        );
+        db.runSync(
+          "INSERT INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES (?,'ARTIFACT_DOWNLOAD',?,?,?,'PENDING',0,?,?,?)",
+          identity.id, taskId, identity.key, JSON.stringify({ artifact: context.artifact }), timestamp, timestamp, timestamp,
+        );
+        return { id: identity.id, status: 'queued' as const };
+      });
+      return { status: outcome.status, operation: operations.get(outcome.id) };
+    },
     async requestExport(taskId, policy) {
       assertAppDatabaseWritable(db);
       const context = loadContext(db, taskId);

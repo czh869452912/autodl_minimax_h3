@@ -64,6 +64,60 @@ test('appends one manual generation after terminal download and reuses it while 
   } finally { db.close(); }
 });
 
+test('invalidates an exported bad copy transactionally and converges repeated redownload requests', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const uri = `file:///documents/cas/sha256/aa/${'a'.repeat(64)}`;
+    seed(db, { localUri: uri });
+    db.runSync("UPDATE tasks SET gallery_uri='content://media/video/7',export_state='EXPORTED' WHERE id='job-1'");
+    db.runSync("UPDATE media_assets SET export_status='EXPORTED' WHERE id='job-1:video-1'");
+    db.runSync('INSERT INTO artifact_blobs (sha256,byte_size,mime,relative_path,created_at,verified_at) VALUES (?,?,?,?,?,?)',
+      'a'.repeat(64), 3, 'video/mp4', `cas/sha256/aa/${'a'.repeat(64)}`, 1, 1);
+    db.runSync('INSERT INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)',
+      'a'.repeat(64), 'workflow_artifact', 'job-1:video-1', 1);
+    db.runSync('INSERT INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)',
+      'a'.repeat(64), 'workflow_artifact', 'other-job:video-1', 1);
+    db.runSync("INSERT INTO media_deliveries (id,asset_id,target,uri,status,error,created_at,updated_at) VALUES ('job-1:video-1:system-gallery','job-1:video-1','system-gallery','content://media/video/7','EXPORTED',NULL,1,2)");
+    db.runSync("INSERT INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES (?,?,?,?,?,'SUCCEEDED',1,1,1,1)",
+      'job-1:artifact:video-1', 'ARTIFACT_DOWNLOAD', 'job-1', 'artifact:job-1:video-1', JSON.stringify({ artifact: { id: 'video-1', jobId: 'job-1', kind: 'video', uri: 'https://cdn.example/video.mp4', mime: 'video/mp4' } }));
+
+    const commands = service(db, new Set([uri]));
+    const first = await commands.requestRedownload('job-1');
+    const second = await commands.requestRedownload('job-1');
+
+    expect(first).toMatchObject({ status: 'queued', operation: { idempotencyKey: 'artifact:job-1:video-1:manual:1' } });
+    expect(second).toMatchObject({ status: 'in-flight', operation: { id: first.operation?.id } });
+    expect(db.getFirstSync('SELECT local_uri,gallery_uri,download_state,export_state FROM tasks WHERE id=?', 'job-1')).toEqual({
+      local_uri: null, gallery_uri: null, download_state: 'ENQUEUED', export_state: 'NOT_REQUESTED',
+    });
+    expect(db.getFirstSync('SELECT local_path,status,export_status FROM media_assets WHERE id=?', 'job-1:video-1')).toEqual({
+      local_path: null, status: 'queued', export_status: 'NOT_REQUESTED',
+    });
+    expect(db.getFirstSync('SELECT uri,status,error FROM media_deliveries WHERE id=?', 'job-1:video-1:system-gallery')).toEqual({
+      uri: 'content://media/video/7', status: 'FAILED', error: 'SOURCE_INVALIDATED',
+    });
+    expect(db.getAllSync('SELECT owner_id FROM artifact_blob_refs ORDER BY owner_id')).toEqual([{ owner_id: 'other-job:video-1' }]);
+  } finally { db.close(); }
+});
+
+test('rolls back every invalidation change when redownload enqueue fails', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const uri = `file:///documents/cas/sha256/aa/${'a'.repeat(64)}`;
+    seed(db, { localUri: uri });
+    db.runSync('INSERT INTO artifact_blobs (sha256,byte_size,mime,relative_path,created_at,verified_at) VALUES (?,?,?,?,?,?)',
+      'a'.repeat(64), 3, 'video/mp4', `cas/sha256/aa/${'a'.repeat(64)}`, 1, 1);
+    db.runSync('INSERT INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)',
+      'a'.repeat(64), 'workflow_artifact', 'job-1:video-1', 1);
+    db.execSync("CREATE TRIGGER reject_redownload BEFORE INSERT ON workflow_operations BEGIN SELECT RAISE(ABORT, 'enqueue failed'); END");
+
+    await expect(service(db, new Set([uri])).requestRedownload('job-1')).rejects.toThrow('enqueue failed');
+    expect(db.getFirstSync('SELECT local_uri,download_state FROM tasks WHERE id=?', 'job-1')).toEqual({ local_uri: uri, download_state: 'DOWNLOADED' });
+    expect(db.getFirstSync('SELECT local_path,status FROM media_assets WHERE id=?', 'job-1:video-1')).toEqual({ local_path: uri, status: 'downloaded' });
+    expect(db.getAllSync('SELECT owner_id FROM artifact_blob_refs')).toEqual([{ owner_id: 'job-1:video-1' }]);
+  } finally { db.close(); }
+});
+
 test('queues a CAS export with frozen policy and deterministic delivery projection', async () => {
   const db = createInitializedRealSqliteTestDb();
   try {

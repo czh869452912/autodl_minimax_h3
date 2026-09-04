@@ -525,7 +525,7 @@ git commit -m "fix: reject invalid media before durable commit"
 - Modify: `mobile/app/video/[id].tsx`
 - Modify: `mobile/src/route-tests/video-detail.test.tsx`
 
-- [ ] **Step 1: 写坏副本失效事务失败测试**
+- [x] **Step 1: 写坏副本失效事务失败测试**
 
 seed DOWNLOADED/EXPORTED task、asset、delivery、CAS ref 和 SUCCEEDED canonical download。调用 `requestRedownload(taskId)` 后断言：
 
@@ -544,11 +544,11 @@ npm test -- --runInBand src/workflows/executor/mediaCommandService.test.ts src/w
 
 Expected: FAIL，service 无 `requestRedownload`。
 
-- [ ] **Step 2: 实现 transactional redownload**
+- [x] **Step 2: 实现 transactional redownload**
 
 复用 literal-safe manual family generation。事务内读取 blob ref、更新三个投影、标记 delivery、删除精确 ref、append ARTIFACT_DOWNLOAD。事务外由 facade 运行 command cycle；物理 CAS 文件交给既有 GC，不在 UI/事务中删除。
 
-- [ ] **Step 3: 写播放器错误分流失败测试**
+- [x] **Step 3: 写播放器错误分流失败测试**
 
 VideoPlayer 收到本地 source 的 status error 后调用 probe：探针成功只显示“重试播放”；探针失败显示“重新下载”并触发 `onInvalidSource`。远程 source 或 transient probe failure 不误删。VideoDetail 点击重新下载后调用 durable facade 并 reload。
 
@@ -560,7 +560,7 @@ npm test -- --runInBand src/media/VideoPlayer.test.tsx src/route-tests/video-det
 
 Expected: FAIL，无 probe 和 redownload callback。
 
-- [ ] **Step 4: 接入 UI 并提交**
+- [x] **Step 4: 接入 UI 并提交**
 
 VideoPlayer 增加可选 `validateSource`、`onInvalidSource`，error overlay 异步判定且按 source generation 忽略过期结果。VideoDetail 只有已验证 localSource 时提供 redownload，执行中禁用按钮并显示明确 Alert。
 
