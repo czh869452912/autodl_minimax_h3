@@ -17,14 +17,24 @@ function setup() {
   const stream = { async *[Symbol.asyncIterator]() { yield new Uint8Array([1, 2, 3]); } };
   const operations = { finish: jest.fn(() => true), retry: jest.fn(() => true), renew: jest.fn(() => true), get: jest.fn(() => operation) };
   const blobs = { upsertBlob: jest.fn(), retain: jest.fn() };
-  const cas = { put: jest.fn(async (..._args: Parameters<ArtifactCas['put']>) => ({ sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}` })) };
+  const stored = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}` };
+  const staged = {
+    ...stored,
+    stagedRelativePath: 'cas/parts/download-1.part',
+    publish: jest.fn(async () => stored),
+    abort: jest.fn(async () => undefined),
+  };
+  const cas = {
+    stage: jest.fn(async (..._args: Parameters<ArtifactCas['stage']>) => staged),
+    put: jest.fn(async (..._args: Parameters<ArtifactCas['put']>) => stored),
+  };
   const openDownload = jest.fn(async () => ({ finalUrl: 'https://cdn.example/video.mp4', status: 200, mime: 'video/mp4', stream }));
   const updateProjection = jest.fn(async () => undefined);
   const ensureProjection = jest.fn(async () => undefined);
   const updateDownloadState = jest.fn(async () => undefined);
   const verifyVideo = jest.fn(async () => undefined);
   const deliveryPolicy = { autoExportToGallery: true, keepPrivateCopy: true };
-  return { operations, blobs, cas, openDownload, updateProjection, ensureProjection, updateDownloadState, verifyVideo, deliveryPolicy };
+  return { operations, blobs, cas, staged, openDownload, updateProjection, ensureProjection, updateDownloadState, verifyVideo, deliveryPolicy };
 }
 
 test('ensures the media row and marks downloading before opening the network stream', async () => {
@@ -58,14 +68,16 @@ test('streams into CAS, retains the blob, updates projection, and finishes', asy
     ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10, acceptedMimes: ['video/mp4'] }),
   });
   expect(deps.openDownload).toHaveBeenCalledWith('https://cdn.example/video.mp4', expect.objectContaining({ allowedHosts: ['cdn.example'] }));
-  expect(deps.cas.put).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ mime: 'video/mp4', maxBytes: 10, operationId: 'download-1' }));
-  const putOptions = deps.cas.put.mock.calls[0][1];
+  expect(deps.cas.stage).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ mime: 'video/mp4', maxBytes: 10, operationId: 'download-1' }));
+  const putOptions = deps.cas.stage.mock.calls[0][1];
   expect(putOptions.operationAttempt).toBe(1);
   expect(putOptions.assertLease).toEqual(expect.any(Function));
   if (!putOptions.assertLease) throw new Error('lease fence missing');
   expect(putOptions.assertLease()).toBeUndefined();
   expect(deps.operations.renew).toHaveBeenCalledWith('download-1', 'worker', 50, 120_000);
-  expect(deps.verifyVideo).toHaveBeenCalledWith(expect.stringContaining('cas/sha256'));
+  expect(deps.verifyVideo).toHaveBeenCalledWith(expect.stringContaining('cas/parts/'));
+  expect(deps.staged.publish).toHaveBeenCalledTimes(1);
+  expect(deps.staged.abort).not.toHaveBeenCalled();
   expect(deps.blobs.upsertBlob).toHaveBeenCalledWith(expect.objectContaining({ sha256: 'a'.repeat(64), createdAt: 50, verifiedAt: 50 }));
   expect(deps.blobs.retain).toHaveBeenCalledWith('a'.repeat(64), 'workflow_artifact', 'job-1:video-1', 50);
   expect(deps.updateProjection).toHaveBeenCalledWith(expect.objectContaining({ localUri: expect.stringContaining('cas/sha256') }));
@@ -98,6 +110,8 @@ test.each([1, 2])('retries an invalid downloaded video on attempt %s without com
   expect(deps.blobs.upsertBlob).not.toHaveBeenCalled();
   expect(deps.updateProjection).not.toHaveBeenCalled();
   expect(deps.operations.finish).not.toHaveBeenCalled();
+  expect(deps.staged.publish).not.toHaveBeenCalled();
+  expect(deps.staged.abort).toHaveBeenCalledTimes(1);
 });
 
 test('fails an invalid downloaded video on attempt 3 without committing projections or export', async () => {
@@ -112,6 +126,23 @@ test('fails an invalid downloaded video on attempt 3 without committing projecti
   expect(deps.updateDownloadState).toHaveBeenLastCalledWith('DOWNLOAD_FAILED', 'ARTIFACT_MEDIA_INVALID');
   expect(deps.blobs.upsertBlob).not.toHaveBeenCalled();
   expect(deps.updateProjection).not.toHaveBeenCalled();
+  expect(deps.staged.publish).not.toHaveBeenCalled();
+  expect(deps.staged.abort).toHaveBeenCalledTimes(1);
+});
+
+test('probe failure aborts the staged part before publication', async () => {
+  const deps = setup();
+  let stagedPartExists = true;
+  deps.staged.abort.mockImplementationOnce(async () => { stagedPartExists = false; });
+  deps.verifyVideo.mockRejectedValueOnce(Object.assign(new Error('invalid staged video'), { code: 'MEDIA_INVALID' }));
+
+  await handleArtifactDownload(operation, 'worker', {
+    ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+
+  expect(stagedPartExists).toBe(false);
+  expect(deps.staged.publish).not.toHaveBeenCalled();
+  expect(deps.blobs.retain).not.toHaveBeenCalled();
 });
 
 test('does not run the video decoder probe for non-video artifacts', async () => {

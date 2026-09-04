@@ -69,6 +69,16 @@ test('manual save joins a claimed download and publication recovery commits one 
             operations,
             blobs,
             cas: {
+              stage: async () => {
+                const relativePath = `cas/sha256/aa/${'a'.repeat(64)}`;
+                const blob = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath };
+                return {
+                  ...blob,
+                  stagedRelativePath: 'cas/parts/download.part',
+                  publish: async () => { existing.add(`file:///documents/${relativePath}`); return blob; },
+                  abort: async () => undefined,
+                };
+              },
               put: async () => {
                 const relativePath = `cas/sha256/aa/${'a'.repeat(64)}`;
                 existing.add(`file:///documents/${relativePath}`);

@@ -62,7 +62,18 @@ test('drives terminal status through download and system-gallery export exactly 
           await handleArtifactDownload(operation, owner, {
             operations,
             blobs,
-            cas: { put: async () => ({ sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}` }) },
+            cas: {
+              stage: async () => {
+                const blob = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}` };
+                return {
+                  ...blob,
+                  stagedRelativePath: 'cas/parts/download.part',
+                  publish: async () => blob,
+                  abort: async () => undefined,
+                };
+              },
+              put: async () => ({ sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}` }),
+            },
             openDownload: async () => ({ finalUrl: 'https://cdn.test/video.mp4', status: 200, mime: 'video/mp4', stream: { async *[Symbol.asyncIterator]() { yield new Uint8Array([1]); } } }),
             policy: () => ({ allowedHosts: ['cdn.test'], maxBytes: 10 }),
             deliveryPolicy: { autoExportToGallery: true, keepPrivateCopy: true },

@@ -147,6 +147,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     deps.operations.finish(operation.id, owner, 'FAILED', timestamp, normalized('ARTIFACT_INPUT_INVALID', false));
     return;
   }
+  let staged: Awaited<ReturnType<ArtifactCas['stage']>> | undefined;
   try {
     await deps.ensureProjection(operation.jobId, artifact);
     await deps.updateDownloadState('DOWNLOADING');
@@ -159,7 +160,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
       connectTimeoutMs: policy.connectTimeoutMs,
       idleTimeoutMs: policy.idleTimeoutMs,
     });
-    const stored = await deps.cas.put(opened.stream, {
+    staged = await deps.cas.stage(opened.stream, {
       mime: opened.mime,
       maxBytes: policy.maxBytes,
       expectedSha256: typeof artifact.metadata?.sha256 === 'string' ? artifact.metadata.sha256 : undefined,
@@ -171,17 +172,18 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
         }
       },
     });
-    const blob: ArtifactBlob = { ...stored, createdAt: timestamp, verifiedAt: timestamp };
     const resolveUri = deps.resolveUri ?? ((relativePath: string) => `${FileSystem.documentDirectory ?? ''}${relativePath}`);
-    const localUri = resolveUri(blob.relativePath);
     if (artifact.kind === 'video') {
       try {
-        await deps.verifyVideo(localUri);
+        await deps.verifyVideo(resolveUri(staged.stagedRelativePath));
       } catch (cause) {
         const failure = classifyMediaValidationFailure(operation.attempt);
         throw new ArtifactOperationError(failure.code, mediaValidationMessage(failure.code), failure.retryable, { cause });
       }
     }
+    const stored = await staged.publish();
+    const blob: ArtifactBlob = { ...stored, createdAt: timestamp, verifiedAt: timestamp };
+    const localUri = resolveUri(blob.relativePath);
     if (deps.commit) {
       const latestPayload = payloadFrom(deps.operations.get(operation.id) ?? operation);
       await deps.commit({
@@ -202,6 +204,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
       deps.operations.finish(operation.id, owner, 'SUCCEEDED', timestamp);
     }
   } catch (cause) {
+    await staged?.abort().catch(() => undefined);
     const failure = artifactError(cause);
     const normalizedFailure = normalized(failure.code, failure.retryable);
     if (failure.retryable) {
