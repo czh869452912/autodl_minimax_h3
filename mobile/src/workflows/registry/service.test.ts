@@ -6,7 +6,7 @@ import { sha256Hex } from './crypto';
 jest.mock('./trust', () => ({ verifySignedPayload: jest.fn(async () => true) }));
 
 const definition = { schemaVersion: '1.0', id: 'demo', version: '1.0.0', kind: 'atomic', platform: { adapter: 'demo', operation: 'workflow.submit' }, metadata: { title: 'Demo', category: 'video' }, inputs: { type: 'object', properties: {} }, request: { operation: 'workflow.submit', bindings: {} }, outputs: { artifacts: [] } };
-const record = (source: RegistryRecord['source']): RegistryRecord => ({ workflowId: 'demo', version: '1.0.0', contentHash: 'hash', source, trust: source === 'builtin' ? 'builtin' : 'trusted', definitionJson: JSON.stringify(definition), installedAt: 1 });
+const record = (source: RegistryRecord['source']): RegistryRecord => ({ workflowId: 'demo', version: '1.0.0', contentHash: 'hash', hashScheme: 'workflow-package/without-declared-hash+sorted-json@1', source, trust: source === 'builtin' ? 'builtin' : 'trusted', definitionJson: JSON.stringify(definition), installedAt: 1 });
 
 test('discovers builtin, local, and remote records with builtin precedence', async () => {
   const records = [record('remote'), record('local-import'), record('builtin')];
@@ -57,7 +57,12 @@ test('installs a builtin without changing the active version', async () => {
 
   await service.installBuiltin(definition as never);
 
-  expect(repository.upsert).toHaveBeenCalledWith(expect.objectContaining({ workflowId: 'demo', version: '1.0.0', source: 'builtin' }));
+  expect(repository.upsert).toHaveBeenCalledWith(expect.objectContaining({
+    workflowId: 'demo',
+    version: '1.0.0',
+    source: 'builtin',
+    hashScheme: 'workflow-package/without-declared-hash+sorted-json@1',
+  }));
   expect(repository.setActive).not.toHaveBeenCalled();
 });
 
@@ -98,6 +103,7 @@ test('activates a verified remote package after installation', async () => {
   const record = await service.fetchAndActivate('remote-demo', '1.0.0', 'https://registry.example.test');
 
   expect(record.contentHash).toBe(contentHash);
+  expect(record.hashScheme).toBe('workflow-package/without-declared-hash+sorted-json@1');
   expect(repository.upsert).toHaveBeenCalledWith(record);
   expect(repository.setActive).toHaveBeenCalledWith('remote-demo', '1.0.0', contentHash);
 });

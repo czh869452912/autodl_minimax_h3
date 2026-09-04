@@ -2,7 +2,7 @@ import { createWorkflowRegistry } from './repository';
 import type { RegistryRecord } from './types';
 
 function record(version: string, hash: string): RegistryRecord {
-  return { workflowId: 'demo', version, contentHash: hash, source: 'remote', trust: 'trusted', definitionJson: '{}', installedAt: 1 };
+  return { workflowId: 'demo', version, contentHash: hash, hashScheme: 'workflow-package/without-declared-hash+sorted-json@1', source: 'remote', trust: 'trusted', definitionJson: '{}', installedAt: 1 };
 }
 
 test('keeps versions immutable and rolls activation back atomically', async () => {
@@ -15,6 +15,10 @@ test('keeps versions immutable and rolls activation back atomically', async () =
   await store.rollback('demo');
   expect(await store.getActive('demo')).toMatchObject({ version: '1.0.0', contentHash: 'aaa' });
   await expect(store.upsert(record('1.0.0', 'changed'))).rejects.toThrow('immutable');
+  await expect(store.upsert({
+    ...record('1.0.0', 'aaa'),
+    hashScheme: 'workflow-definition/sorted-json@1',
+  })).rejects.toThrow('immutable');
 });
 
 test('removes only unreferenced inactive definitions', async () => {

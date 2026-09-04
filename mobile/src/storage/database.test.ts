@@ -64,9 +64,13 @@ test('fresh initialization supports workflow registry activation', async () => {
     ensureAppDatabase(db as never);
     const registry = createWorkflowRegistry(db as never);
     await registry.installAndActivate!({
-      workflowId: 'demo', version: '1.0.0', contentHash: 'abc', source: 'builtin', trust: 'builtin', definitionJson: '{}', installedAt: 1,
+      workflowId: 'demo', version: '1.0.0', contentHash: 'abc', hashScheme: 'workflow-package/without-declared-hash+sorted-json@1', source: 'builtin', trust: 'builtin', definitionJson: '{}', installedAt: 1,
     });
-    await expect(registry.getActive('demo')).resolves.toMatchObject({ workflowId: 'demo', contentHash: 'abc' });
+    await expect(registry.getActive('demo')).resolves.toMatchObject({
+      workflowId: 'demo',
+      contentHash: 'abc',
+      hashScheme: 'workflow-package/without-declared-hash+sorted-json@1',
+    });
   } finally {
     db.close();
   }

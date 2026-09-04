@@ -77,6 +77,7 @@ describe('create form contracts', () => {
       workflowId: definition.id,
       version: definition.version,
       contentHash: 'active-hash',
+      hashScheme: 'workflow-package/without-declared-hash+sorted-json@1',
       source: 'builtin',
       trust: 'builtin',
       definitionJson: JSON.stringify(definition),

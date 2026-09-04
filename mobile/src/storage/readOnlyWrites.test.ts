@@ -31,7 +31,7 @@ test('all app repositories reject writes in recovery mode', async () => {
     await expect(jobs.upsert({ id: 'j', revision: 0, workflowId: 'w', workflowVersion: '1', workflowContentHash: 'h', adapterId: 'a', adapterVersion: '1', inputSnapshot: {}, status: 'QUEUED', createdAt: 1, updatedAt: 1 })).rejects.toThrow('APP_DATABASE_READ_ONLY');
     await expect(drafts.save({ prompt: 'p', attachmentIds: [] })).rejects.toThrow('APP_DATABASE_READ_ONLY');
     await expect(threads.save({ threadId: 'th', messages: [], state: {}, createdAt: 1, updatedAt: 1 })).rejects.toThrow('APP_DATABASE_READ_ONLY');
-    await expect(registry.upsert({ workflowId: 'w', version: '1', contentHash: 'h', source: 'builtin', trust: 'builtin', definitionJson: '{}', installedAt: 1 })).rejects.toThrow('APP_DATABASE_READ_ONLY');
+    await expect(registry.upsert({ workflowId: 'w', version: '1', contentHash: 'h', hashScheme: 'workflow-package/without-declared-hash+sorted-json@1', source: 'builtin', trust: 'builtin', definitionJson: '{}', installedAt: 1 })).rejects.toThrow('APP_DATABASE_READ_ONLY');
     await expect(withSchedulerLease('status', async () => true, { db: db as never })).rejects.toThrow('APP_DATABASE_READ_ONLY');
   } finally {
     db.close();

@@ -8,6 +8,7 @@ import { validateWorkflowDefinition } from '../schema/validator';
 import { compareVersions, satisfiesVersion } from './semver';
 import { legacyDefinitionToPackage, parseWorkflowPackage, packageToDefinition, type WorkflowPackage } from '../schema/package';
 import { verifyCommitAttestation, type GitSubscriptionConfig, type CommitAttestation } from './gitSource';
+import { WORKFLOW_PACKAGE_IDENTITY_V1 } from './identity';
 
 export class RegistryError extends Error { constructor(public readonly code: string, message: string) { super(message); this.name = 'RegistryError'; } }
 type Dependencies = { repository: WorkflowRegistry; adapters: Array<Pick<PlatformAdapterManifest, 'id' | 'operations'>>; appVersion: string; adapterVersions?: Record<string, string>; adapterArtifactKinds?: Record<string, string[]>; fetch?: typeof fetch; keyring?: RegistryKey[]; allowDomains?: string[]; now?: () => number; fetchTimeoutMs?: number; maxResponseBytes?: number };
@@ -66,6 +67,7 @@ export function createWorkflowRegistryService(deps: Dependencies) {
       workflowId: definition.id,
       version: definition.version,
       contentHash: verified.packageHash,
+      hashScheme: WORKFLOW_PACKAGE_IDENTITY_V1,
       source: 'builtin',
       trust: 'builtin',
       definitionJson: canonicalizePackage(verified.pkg),
@@ -138,7 +140,7 @@ export function createWorkflowRegistryService(deps: Dependencies) {
       const result = validateWorkflowDefinition(verified.definition, adapterContext);
       if (!result.ok) throw new RegistryError('REGISTRY_SCHEMA_INVALID', result.errors.map((error) => error.message).join('; '));
       checkCompatibility(result.value);
-      const record: RegistryRecord = { workflowId: result.value.id, version: result.value.version, contentHash: verified.packageHash, source: 'local-import', trust: 'untrusted-local', definitionJson: canonicalizePackage(verified.pkg), installedAt: (deps.now ?? Date.now)() };
+      const record: RegistryRecord = { workflowId: result.value.id, version: result.value.version, contentHash: verified.packageHash, hashScheme: WORKFLOW_PACKAGE_IDENTITY_V1, source: 'local-import', trust: 'untrusted-local', definitionJson: canonicalizePackage(verified.pkg), installedAt: (deps.now ?? Date.now)() };
       await deps.repository.upsert(record);
       return record;
     },
@@ -171,7 +173,7 @@ export function createWorkflowRegistryService(deps: Dependencies) {
       const signature = (await fetchSafe(`${baseUrl.replace(/\/$/, '')}/registry/workflows/${encodeURIComponent(workflowId)}/${encodeURIComponent(version)}.sig`)).trim();
       const key = keyring.find((item) => item.registryId === index.registryId);
        if (!key || !(await verifySignedPayload(canonical, signature, key, (deps.now ?? Date.now)()))) throw new RegistryError('REGISTRY_SIGNATURE_INVALID', 'workflow package signature is invalid');
-      const record: RegistryRecord = { workflowId, version, contentHash: hash, source: 'remote', trust: 'trusted', definitionJson: canonical, installedAt: (deps.now ?? Date.now)() };
+      const record: RegistryRecord = { workflowId, version, contentHash: hash, hashScheme: WORKFLOW_PACKAGE_IDENTITY_V1, source: 'remote', trust: 'trusted', definitionJson: canonical, installedAt: (deps.now ?? Date.now)() };
       await installAndActivate(record);
       return record;
     },
@@ -185,7 +187,7 @@ export function createWorkflowRegistryService(deps: Dependencies) {
        const canonical = canonicalizePackage(verifiedPackage.pkg); const hash = verifiedPackage.packageHash;
        const entry = verified.attestation.entries.find((item) => item.workflowId === result.value.id && item.version === result.value.version);
       if (!entry || entry.contentHash !== hash) throw new RegistryError('REGISTRY_HASH_MISMATCH', 'git workflow hash does not match attestation');
-      const record: RegistryRecord = { workflowId: result.value.id, version: result.value.version, contentHash: hash, source: 'remote', trust: 'trusted', definitionJson: canonical, installedAt: (deps.now ?? Date.now)(), repository: config.repository, ref: config.allowedRef, commit: verified.attestation.commit };
+      const record: RegistryRecord = { workflowId: result.value.id, version: result.value.version, contentHash: hash, hashScheme: WORKFLOW_PACKAGE_IDENTITY_V1, source: 'remote', trust: 'trusted', definitionJson: canonical, installedAt: (deps.now ?? Date.now)(), repository: config.repository, ref: config.allowedRef, commit: verified.attestation.commit };
       await installAndActivate(record); return record;
     },
   };

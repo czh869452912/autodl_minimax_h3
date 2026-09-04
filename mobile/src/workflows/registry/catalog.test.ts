@@ -53,7 +53,7 @@ test('converts package-backed registry records for form consumers', () => {
       outputs: { artifacts: [] },
     },
   };
-  const record = { workflowId: 'demo', version: '1.0.0', contentHash: 'hash', source: 'builtin' as const, trust: 'builtin' as const, definitionJson: JSON.stringify(pkg), installedAt: 1 };
+  const record = { workflowId: 'demo', version: '1.0.0', contentHash: 'hash', hashScheme: 'workflow-package/without-declared-hash+sorted-json@1' as const, source: 'builtin' as const, trust: 'builtin' as const, definitionJson: JSON.stringify(pkg), installedAt: 1 };
   expect(registryRecordToDefinition(record).id).toBe('demo');
   expect((registryRecordToDefinition(record).inputs.properties as Record<string, unknown>)?.prompt).toEqual({ type: 'string' });
 });

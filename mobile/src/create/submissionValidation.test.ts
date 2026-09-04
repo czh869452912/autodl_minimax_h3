@@ -7,6 +7,7 @@ const loaded: RegistryRecord = {
   workflowId: definition.id,
   version: definition.version,
   contentHash: 'h3-1.0.1',
+  hashScheme: 'workflow-package/without-declared-hash+sorted-json@1',
   source: 'builtin',
   trust: 'builtin',
   definitionJson: JSON.stringify(definition),
