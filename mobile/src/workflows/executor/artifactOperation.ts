@@ -7,6 +7,7 @@ import type { WorkflowOperation } from './types';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { assertAppDatabaseWritable } from '../../storage/database';
 import CryptoJS from 'crypto-js';
+import { ArtifactOperationError, artifactError } from './artifactErrors';
 
 type ArtifactPolicy = {
   allowedHosts: string[];
@@ -63,7 +64,7 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => n
       const gcLease = db.getFirstSync<{ expires_at: number }>(
         "SELECT expires_at FROM app_scheduler_leases WHERE lease_key='cas-gc' LIMIT 1",
       );
-      if (gcLease && Number(gcLease.expires_at) > clock()) throw new Error('CAS_GC_IN_PROGRESS');
+      if (gcLease && Number(gcLease.expires_at) > clock()) throw new ArtifactOperationError('ARTIFACT_CAS_BUSY', 'CAS_GC_IN_PROGRESS', true);
       db.runSync(
         'INSERT INTO artifact_blobs (sha256,byte_size,mime,relative_path,created_at,verified_at) VALUES (?,?,?,?,?,?) ON CONFLICT(sha256) DO UPDATE SET verified_at=MAX(artifact_blobs.verified_at, excluded.verified_at)',
         input.blob.sha256, input.blob.byteSize, input.blob.mime, input.blob.relativePath, input.blob.createdAt, input.blob.verifiedAt,
@@ -160,14 +161,15 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
       deps.operations.finish(operation.id, owner, 'SUCCEEDED', timestamp);
     }
   } catch (cause) {
-    const message = cause instanceof Error ? cause.message : String(cause);
-    if (/连接超时|空闲超时|network|fetch failed|CAS_GC_IN_PROGRESS/i.test(message)) {
+    const failure = artifactError(cause);
+    const normalizedFailure = normalized(failure.code, failure.retryable);
+    if (failure.retryable) {
       const nextRetryAt = timestamp + Math.min(60_000, 1_000 * (2 ** Math.max(0, operation.attempt - 1)));
-      await deps.updateDownloadState('ENQUEUED');
-      deps.operations.retry(operation.id, owner, { now: timestamp, nextRetryAt, error: normalized('ARTIFACT_TRANSFER_RETRY', true) });
+      await deps.updateDownloadState('ENQUEUED', failure.code);
+      deps.operations.retry(operation.id, owner, { now: timestamp, nextRetryAt, error: normalizedFailure });
       return;
     }
-    try { await deps.updateDownloadState('DOWNLOAD_FAILED', 'ARTIFACT_VALIDATION_FAILED'); } catch { /* operation failure remains authoritative */ }
-    deps.operations.finish(operation.id, owner, 'FAILED', timestamp, normalized('ARTIFACT_VALIDATION_FAILED', false));
+    try { await deps.updateDownloadState('DOWNLOAD_FAILED', failure.code); } catch { /* operation failure remains authoritative */ }
+    deps.operations.finish(operation.id, owner, 'FAILED', timestamp, normalizedFailure);
   }
 }

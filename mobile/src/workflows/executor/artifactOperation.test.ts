@@ -40,13 +40,15 @@ test('ensures the media row and marks downloading before opening the network str
 
 test('writes a terminal failed projection when validation fails', async () => {
   const deps = setup();
-  deps.openDownload.mockRejectedValueOnce(new Error('CAS hash mismatch'));
+  deps.openDownload.mockRejectedValueOnce(Object.assign(new Error('opaque integrity failure'), {
+    code: 'ARTIFACT_INTEGRITY_FAILED', retryable: false,
+  }));
   await handleArtifactDownload(operation, 'worker', {
     ...deps,
     now: () => 50,
     policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
   });
-  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('DOWNLOAD_FAILED', 'ARTIFACT_VALIDATION_FAILED');
+  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('DOWNLOAD_FAILED', 'ARTIFACT_INTEGRITY_FAILED');
 });
 
 test('streams into CAS, retains the blob, updates projection, and finishes', async () => {
@@ -70,19 +72,23 @@ test('streams into CAS, retains the blob, updates projection, and finishes', asy
 
 test('retries connection and idle timeouts with bounded backoff', async () => {
   const deps = setup();
-  deps.openDownload.mockRejectedValueOnce(new Error('下载连接超时'));
+  deps.openDownload.mockRejectedValueOnce(Object.assign(new Error('opaque transfer failure'), {
+    code: 'ARTIFACT_CONNECT_TIMEOUT', retryable: true,
+  }));
   await handleArtifactDownload(operation, 'worker', { ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
-  expect(deps.operations.retry).toHaveBeenCalledWith('download-1', 'worker', expect.objectContaining({ now: 50, nextRetryAt: 1050 }));
-  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('ENQUEUED');
+  expect(deps.operations.retry).toHaveBeenCalledWith('download-1', 'worker', expect.objectContaining({
+    now: 50, nextRetryAt: 1050, error: expect.objectContaining({ code: 'ARTIFACT_CONNECT_TIMEOUT' }),
+  }));
+  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('ENQUEUED', 'ARTIFACT_CONNECT_TIMEOUT');
   expect(deps.operations.finish).not.toHaveBeenCalled();
 });
 
-test('treats URL policy, MIME, size, and hash failures as terminal', async () => {
-  for (const message of ['域名不在允许列表', '下载媒体类型不受支持', 'CAS 文件大小超过限制', 'CAS hash mismatch']) {
+test('treats structured policy and integrity failures as terminal', async () => {
+  for (const code of ['ARTIFACT_HOST_DENIED', 'ARTIFACT_MIME_REJECTED', 'ARTIFACT_SIZE_REJECTED', 'ARTIFACT_INTEGRITY_FAILED']) {
     const deps = setup();
-    deps.openDownload.mockRejectedValueOnce(new Error(message));
+    deps.openDownload.mockRejectedValueOnce(Object.assign(new Error('opaque terminal failure'), { code, retryable: false }));
     await handleArtifactDownload(operation, 'worker', { ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
-    expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50, expect.objectContaining({ retryable: false }));
+    expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50, expect.objectContaining({ code, retryable: false }));
     expect(deps.operations.retry).not.toHaveBeenCalled();
   }
 });
