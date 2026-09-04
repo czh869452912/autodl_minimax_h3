@@ -6,6 +6,7 @@ const allowed = new Set([
   'storage/recovery.ts',
   'storage/migrations/v5Registry.ts',
   'storage/migrations/v6DurableExecutor.ts',
+  'storage/migrations/v7RegistryRelease.ts',
 ]);
 
 function sourceFiles(root: string): string[] {
