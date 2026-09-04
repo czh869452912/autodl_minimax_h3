@@ -16,7 +16,7 @@
 - Modify: `mobile/src/route-tests/tasks.test.tsx:137-148`
 - Test: `mobile/src/route-tests/tasks.test.tsx`
 
-- [ ] **Step 1: Strengthen the active polling test to require three consecutive polls**
+- [x] **Step 1: Strengthen the active polling test to require three consecutive polls**
 
 Replace the existing single-cycle assertion with:
 
@@ -41,7 +41,7 @@ test('continues polling active provider tasks across unchanged summaries', async
 });
 ```
 
-- [ ] **Step 2: Add a terminal projection test**
+- [x] **Step 2: Add a terminal projection test**
 
 Add:
 
@@ -71,13 +71,13 @@ test('renders a terminal state reached on a later automatic poll', async () => {
 });
 ```
 
-- [ ] **Step 3: Run the focused route test and verify RED**
+- [x] **Step 3: Run the focused route test and verify RED**
 
 Run: `npm test -- --runInBand src/route-tests/tasks.test.tsx`
 
 Expected: both new assertions fail because only the first automatic timeout fires; the consecutive test observes one poll instead of three and the terminal card remains running.
 
-- [ ] **Step 4: Commit the regression tests**
+- [x] **Step 4: Commit the regression tests**
 
 ```powershell
 git add mobile/src/route-tests/tasks.test.tsx
@@ -90,7 +90,7 @@ git commit -m "test: reproduce stalled task auto-refresh"
 - Modify: `mobile/app/(tabs)/tasks.tsx:21-29`
 - Test: `mobile/src/route-tests/tasks.test.tsx`
 
-- [ ] **Step 1: Add a poll generation state**
+- [x] **Step 1: Add a poll generation state**
 
 After `pollState`, add:
 
@@ -98,7 +98,7 @@ After `pollState`, add:
 const [pollGeneration, setPollGeneration] = useState(0);
 ```
 
-- [ ] **Step 2: Reschedule after every timer-triggered load settles**
+- [x] **Step 2: Reschedule after every timer-triggered load settles**
 
 Replace the current adaptive polling effect with:
 
@@ -126,19 +126,19 @@ useEffect(() => {
 
 This advances the generation even when `load` returns early because another screen load is in flight, so the automatic chain cannot terminate silently.
 
-- [ ] **Step 3: Run focused tests and verify GREEN**
+- [x] **Step 3: Run focused tests and verify GREEN**
 
 Run: `npm test -- --runInBand src/route-tests/tasks.test.tsx src/tasks/pollSchedule.test.ts`
 
 Expected: both suites pass, including three unchanged automatic cycles, terminal projection refresh, exact scheduled wake, and terminal-page stop behavior.
 
-- [ ] **Step 4: Run TypeScript checks**
+- [x] **Step 4: Run TypeScript checks**
 
 Run: `npm run typecheck`
 
 Expected: exit code 0 with no TypeScript errors.
 
-- [ ] **Step 5: Commit the production fix**
+- [x] **Step 5: Commit the production fix**
 
 ```powershell
 git add "mobile/app/(tabs)/tasks.tsx"
@@ -152,7 +152,7 @@ git commit -m "fix: keep task auto-refresh polling alive"
 - Verify: `mobile/src/route-tests/tasks.test.tsx`
 - Artifact: `mobile/android/app/build/outputs/apk/debug/app-debug.apk`
 
-- [ ] **Step 1: Run release identity verification and all tests**
+- [x] **Step 1: Run release identity verification and all tests**
 
 Run from `mobile`:
 
@@ -164,7 +164,7 @@ npm test -- --runInBand
 
 Expected: workflow release hashes verify, TypeScript exits 0, and all non-skipped Jest suites pass.
 
-- [ ] **Step 2: Build and install the emulator ABI without clearing data**
+- [x] **Step 2: Build and install the emulator ABI without clearing data**
 
 Run from `mobile/android`:
 
@@ -175,7 +175,7 @@ $env:ANDROID_HOME='C:\Users\Administrator\AppData\Local\Android\Sdk'
 
 Expected: `BUILD SUCCESSFUL` and `Installed on 1 device`. Do not uninstall the package or clear application data.
 
-- [ ] **Step 3: Launch and inspect the task queue**
+- [x] **Step 3: Launch and inspect the task queue**
 
 Run:
 
@@ -187,7 +187,7 @@ $adb='C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe'
 
 Navigate to the task queue using coordinates derived from a fresh UI hierarchy. Confirm the app launches, existing tasks remain, the crash buffer is empty, and the installed package remains `1.4.10`/`versionCode=20`.
 
-- [ ] **Step 4: Confirm repository state**
+- [x] **Step 4: Confirm repository state**
 
 Run:
 
