@@ -18,6 +18,9 @@ type ArtifactPolicy = {
   idleTimeoutMs?: number;
 };
 
+export type SystemGalleryIntent = { target: 'system-gallery'; keepPrivateCopy: boolean };
+export type ArtifactDownloadPayload = { artifact: ArtifactRecord; deliveryIntent?: SystemGalleryIntent };
+
 type ArtifactOperationDeps = {
   operations: Pick<OperationRepository, 'retry' | 'finish' | 'renew'>;
   blobs: { upsertBlob(blob: ArtifactBlob): void; retain(sha256: string, ownerType: string, ownerId: string, now: number): void };
@@ -43,6 +46,7 @@ export type ArtifactCommitInput = {
   localUri: string;
   now: number;
   deliveryPolicy: { autoExportToGallery: boolean; keepPrivateCopy: boolean };
+  deliveryIntent?: SystemGalleryIntent;
 };
 
 function transaction(db: SQLiteDatabase, work: () => void): void {
@@ -70,15 +74,18 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => n
         input.blob.sha256, input.blob.byteSize, input.blob.mime, input.blob.relativePath, input.blob.createdAt, input.blob.verifiedAt,
       );
       db.runSync('INSERT OR IGNORE INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)', input.blob.sha256, 'workflow_artifact', `${input.jobId}:${input.artifact.id}`, input.now);
-      const autoExport = input.artifact.kind === 'video' && input.deliveryPolicy.autoExportToGallery;
-      const exportStatus = autoExport ? 'QUEUED' : 'NOT_REQUESTED';
+      const automaticIntent = input.artifact.kind === 'video' && input.deliveryPolicy.autoExportToGallery
+        ? { target: 'system-gallery' as const, keepPrivateCopy: input.deliveryPolicy.keepPrivateCopy }
+        : undefined;
+      const deliveryIntent = input.deliveryIntent ?? automaticIntent;
+      const exportStatus = deliveryIntent ? 'QUEUED' : 'NOT_REQUESTED';
       const assetResult = db.runSync("UPDATE media_assets SET local_path = ?, mime_type = ?, status = 'downloaded', export_status = ?, updated_at = ? WHERE job_id = ? AND artifact_id = ?", input.localUri, input.blob.mime, exportStatus, input.now, input.jobId, input.artifact.id) as { changes?: number | bigint };
       if (Number(assetResult.changes ?? 0) !== 1) throw new Error('media asset projection missing');
       if (input.artifact.kind === 'video') {
         const taskResult = db.runSync("UPDATE tasks SET local_uri = ?, download_state = 'DOWNLOADED', download_error = NULL, download_progress = 1, export_state = ?, export_error = NULL, updated_at = MAX(updated_at, ?) WHERE id = ?", input.localUri, exportStatus, input.now, input.jobId) as { changes?: number | bigint };
         if (Number(taskResult.changes ?? 0) !== 1) throw new Error('task projection missing');
       }
-      if (autoExport) {
+      if (deliveryIntent) {
         const assetId = `${input.jobId}:${input.artifact.id}`;
         const exportId = `${input.jobId}:export:${input.artifact.id}:system-gallery`;
         db.runSync(
@@ -90,8 +97,9 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => n
             assetId,
             artifactId: input.artifact.id,
             sourceUri: input.localUri,
+            sourceKind: 'cas',
             blobSha256: input.blob.sha256,
-            keepPrivateCopy: input.deliveryPolicy.keepPrivateCopy,
+            keepPrivateCopy: deliveryIntent.keepPrivateCopy,
             displayName: artifactExportDisplayName(input.jobId, input.artifact.id),
           }),
           input.now,
@@ -105,11 +113,19 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => n
   };
 }
 
-function artifactFrom(operation: WorkflowOperation): ArtifactRecord | undefined {
+function payloadFrom(operation: WorkflowOperation): ArtifactDownloadPayload | undefined {
   const value = operation.payload.artifact;
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const artifact = value as Partial<ArtifactRecord>;
-  return typeof artifact.id === 'string' && typeof artifact.kind === 'string' ? artifact as ArtifactRecord : undefined;
+  if (typeof artifact.id !== 'string' || typeof artifact.kind !== 'string') return undefined;
+  const delivery = operation.payload.deliveryIntent;
+  if (delivery != null) {
+    if (!delivery || typeof delivery !== 'object' || Array.isArray(delivery)) return undefined;
+    const candidate = delivery as Partial<SystemGalleryIntent>;
+    if (candidate.target !== 'system-gallery' || typeof candidate.keepPrivateCopy !== 'boolean') return undefined;
+    return { artifact: artifact as ArtifactRecord, deliveryIntent: candidate as SystemGalleryIntent };
+  }
+  return { artifact: artifact as ArtifactRecord };
 }
 
 function normalized(code: string, retryable: boolean): NormalizedError {
@@ -119,7 +135,8 @@ function normalized(code: string, retryable: boolean): NormalizedError {
 export async function handleArtifactDownload(operation: WorkflowOperation, owner: string, deps: ArtifactOperationDeps): Promise<void> {
   const clock = deps.now ?? Date.now;
   const timestamp = clock();
-  const artifact = artifactFrom(operation);
+  const payload = payloadFrom(operation);
+  const artifact = payload?.artifact;
   const url = artifact?.uri?.trim();
   if (!operation.jobId || !artifact || !url) {
     deps.operations.finish(operation.id, owner, 'FAILED', timestamp, normalized('ARTIFACT_INPUT_INVALID', false));
@@ -153,7 +170,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     const resolveUri = deps.resolveUri ?? ((relativePath: string) => `${FileSystem.documentDirectory ?? ''}${relativePath}`);
     const localUri = resolveUri(blob.relativePath);
     if (deps.commit) {
-      await deps.commit({ operationId: operation.id, owner, jobId: operation.jobId, artifact, blob, localUri, now: timestamp, deliveryPolicy: deps.deliveryPolicy });
+      await deps.commit({ operationId: operation.id, owner, jobId: operation.jobId, artifact, blob, localUri, now: timestamp, deliveryPolicy: deps.deliveryPolicy, deliveryIntent: payload.deliveryIntent });
     } else {
       deps.blobs.upsertBlob(blob);
       deps.blobs.retain(blob.sha256, 'workflow_artifact', `${operation.jobId}:${artifact.id}`, timestamp);

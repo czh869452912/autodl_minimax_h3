@@ -148,7 +148,7 @@ test('commits the download and enqueues enabled gallery export atomically', asyn
       idempotencyKey: 'export:job-1:video-1:system-gallery',
       payload: {
         assetId: 'job-1:video-1', artifactId: 'video-1', sourceUri: 'file:///cas/video',
-        blobSha256: 'a'.repeat(64), keepPrivateCopy: false,
+        sourceKind: 'cas', blobSha256: 'a'.repeat(64), keepPrivateCopy: false,
         displayName: artifactExportDisplayName('job-1', 'video-1'),
       },
     }]);
@@ -196,5 +196,23 @@ test('commits a private download without export when auto export is disabled', a
     expect(operationStore.list('EXPORT')).toEqual([]);
     await expect(taskStore.get('job-1')).resolves.toMatchObject({ downloadState: 'DOWNLOADED', exportState: 'NOT_REQUESTED' });
     await expect(mediaStore.get('job-1:video-1')).resolves.toMatchObject({ status: 'downloaded', exportStatus: 'NOT_REQUESTED' });
+  } finally { db.close(); }
+});
+
+test('explicit delivery intent overrides disabled auto export and freezes private-copy policy', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const { operationStore } = await seedArtifactCommit(db);
+    createSqliteArtifactCommitter(db as never)({
+      operationId: 'download-1', owner: 'worker', jobId: 'job-1',
+      artifact: operation.payload.artifact as never,
+      blob: { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 50, verifiedAt: 50 },
+      localUri: 'file:///cas/video', now: 50,
+      deliveryPolicy: { autoExportToGallery: false, keepPrivateCopy: true },
+      deliveryIntent: { target: 'system-gallery', keepPrivateCopy: false },
+    });
+    expect(operationStore.list('EXPORT')).toMatchObject([{
+      payload: { sourceKind: 'cas', blobSha256: 'a'.repeat(64), keepPrivateCopy: false },
+    }]);
   } finally { db.close(); }
 });

@@ -8,7 +8,8 @@ export type ExportPayload = {
   assetId: string;
   artifactId: string;
   sourceUri: string;
-  blobSha256: string;
+  sourceKind: 'cas' | 'legacy';
+  blobSha256?: string;
   keepPrivateCopy: boolean;
   displayName: string;
 };
@@ -33,6 +34,7 @@ type ExportDeps = {
   commitSuccess(input: ExportSuccessInput): Promise<void> | void;
   retry(operation: WorkflowOperation, owner: string, payload: ExportPayload, input: ExportFailureInput & { nextRetryAt: number }): Promise<void> | void;
   finishFailure(operation: WorkflowOperation, owner: string, payload: ExportPayload | undefined, now: number, error: NormalizedError): Promise<void> | void;
+  removeLegacyPrivate?(sourceUri: string): Promise<void>;
 };
 
 function transaction(db: SQLiteDatabase, work: () => void): void {
@@ -47,10 +49,12 @@ function changes(result: unknown): number {
 
 function payloadFrom(operation: WorkflowOperation): ExportPayload | undefined {
   const value = operation.payload as Partial<ExportPayload>;
+  const validSource = (value.sourceKind === 'cas' && typeof value.blobSha256 === 'string' && /^[a-f0-9]{64}$/.test(value.blobSha256))
+    || (value.sourceKind === 'legacy' && value.blobSha256 == null);
   return typeof value.assetId === 'string'
     && typeof value.artifactId === 'string'
     && typeof value.sourceUri === 'string'
-    && typeof value.blobSha256 === 'string'
+    && validSource
     && typeof value.keepPrivateCopy === 'boolean'
     && typeof value.displayName === 'string'
     ? value as ExportPayload
@@ -103,6 +107,9 @@ export async function handleExport(operation: WorkflowOperation, owner: string, 
       referenceOwnerId: `${operation.jobId}:${payload.artifactId}`,
       now: deps.now(),
     });
+    if (!payload.keepPrivateCopy && payload.sourceKind === 'legacy' && deps.removeLegacyPrivate) {
+      await deps.removeLegacyPrivate(payload.sourceUri).catch(() => undefined);
+    }
   } catch (cause) {
     if (transientNativeFailure(cause)) {
       const retryError = failure('EXPORT_NATIVE_RETRY', true);
@@ -155,7 +162,7 @@ export function createSqliteExportStore(db: SQLiteDatabase) {
           input.keepPrivateCopy ? 1 : 0, input.galleryUri, input.now, input.now, input.jobId,
         );
         if (changes(taskResult) !== 1) throw new Error('task projection missing');
-        if (!input.keepPrivateCopy) {
+        if (!input.keepPrivateCopy && input.sourceKind === 'cas' && input.blobSha256) {
           db.runSync(
             "DELETE FROM artifact_blob_refs WHERE blob_sha256=? AND owner_type='workflow_artifact' AND owner_id=?",
             input.blobSha256, input.referenceOwnerId,

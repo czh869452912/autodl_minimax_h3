@@ -11,7 +11,7 @@ const operation: WorkflowOperation = {
   idempotencyKey: 'export:job-1:video-1:system-gallery',
   payload: {
     assetId: 'job-1:video-1', artifactId: 'video-1', sourceUri: 'file:///cas/video',
-    blobSha256: 'a'.repeat(64), keepPrivateCopy: true, displayName: 'job-1.mp4',
+    sourceKind: 'cas', blobSha256: 'a'.repeat(64), keepPrivateCopy: true, displayName: 'job-1.mp4',
   },
   state: 'CLAIMED', attempt: 1, nextRetryAt: 1,
   leaseOwner: 'worker', leaseExpiresAt: 100, createdAt: 1, updatedAt: 1,
@@ -63,6 +63,31 @@ test('releases only the matching blob reference when private copy is disabled', 
   expect(deps.commitSuccess).toHaveBeenCalledWith(expect.objectContaining({
     blobSha256: 'a'.repeat(64), referenceOwnerId: 'job-1:video-1', keepPrivateCopy: false,
   }));
+});
+
+test('durably exports a legacy private source without inventing or releasing a CAS reference', async () => {
+  const deps = { ...setupExport(), removeLegacyPrivate: jest.fn(async () => undefined) };
+  const legacy = {
+    ...operation,
+    payload: {
+      assetId: 'job-1:video-1', artifactId: 'video-1', sourceUri: 'file:///legacy/video.mp4',
+      sourceKind: 'legacy', keepPrivateCopy: false, displayName: 'job-1.mp4',
+    },
+  } as WorkflowOperation;
+  await handleExport(legacy, 'worker', deps);
+  expect(deps.commitSuccess).toHaveBeenCalledWith(expect.objectContaining({
+    sourceKind: 'legacy', keepPrivateCopy: false,
+  }));
+  expect(deps.removeLegacyPrivate).toHaveBeenCalledWith('file:///legacy/video.mp4');
+});
+
+test('rejects a CAS export payload without a valid hash', async () => {
+  const deps = setupExport();
+  await handleExport({ ...operation, payload: { ...operation.payload, blobSha256: undefined } }, 'worker', deps);
+  expect(deps.publish).not.toHaveBeenCalled();
+  expect(deps.finishFailure).toHaveBeenCalledWith(
+    expect.anything(), 'worker', undefined, expect.any(Number), expect.objectContaining({ code: 'EXPORT_NATIVE_FAILED' }),
+  );
 });
 
 test('classifies missing source, transient native, and terminal native failures', async () => {
