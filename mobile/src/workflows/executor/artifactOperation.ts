@@ -8,6 +8,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { assertAppDatabaseWritable } from '../../storage/database';
 import CryptoJS from 'crypto-js';
 import { ArtifactOperationError, artifactError } from './artifactErrors';
+import { classifyMediaValidationFailure, mediaValidationMessage } from '../../media/mediaValidation';
 
 type ArtifactPolicy = {
   allowedHosts: string[];
@@ -31,6 +32,7 @@ type ArtifactOperationDeps = {
   updateDownloadState(state: 'ENQUEUED' | 'DOWNLOADING' | 'DOWNLOAD_FAILED', errorCode?: string): Promise<void>;
   deliveryPolicy: { autoExportToGallery: boolean; keepPrivateCopy: boolean };
   updateProjection(input: { jobId: string; artifactId: string; localUri: string; mime: string; sha256: string; byteSize: number }): Promise<void> | void;
+  verifyVideo(source: string): Promise<unknown>;
   resolveUri?: (relativePath: string) => string;
   commit?: (input: ArtifactCommitInput) => Promise<void> | void;
   now?: () => number;
@@ -129,6 +131,9 @@ function payloadFrom(operation: WorkflowOperation): ArtifactDownloadPayload | un
 }
 
 function normalized(code: string, retryable: boolean): NormalizedError {
+  if (code === 'ARTIFACT_MEDIA_INVALID_RETRYABLE' || code === 'ARTIFACT_MEDIA_INVALID') {
+    return { code, message: mediaValidationMessage(code), retryable };
+  }
   return { code, message: retryable ? 'Artifact transfer will be retried.' : 'Artifact transfer failed policy or integrity validation.', retryable };
 }
 
@@ -169,6 +174,14 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     const blob: ArtifactBlob = { ...stored, createdAt: timestamp, verifiedAt: timestamp };
     const resolveUri = deps.resolveUri ?? ((relativePath: string) => `${FileSystem.documentDirectory ?? ''}${relativePath}`);
     const localUri = resolveUri(blob.relativePath);
+    if (artifact.kind === 'video') {
+      try {
+        await deps.verifyVideo(localUri);
+      } catch (cause) {
+        const failure = classifyMediaValidationFailure(operation.attempt);
+        throw new ArtifactOperationError(failure.code, mediaValidationMessage(failure.code), failure.retryable, { cause });
+      }
+    }
     if (deps.commit) {
       const latestPayload = payloadFrom(deps.operations.get(operation.id) ?? operation);
       await deps.commit({

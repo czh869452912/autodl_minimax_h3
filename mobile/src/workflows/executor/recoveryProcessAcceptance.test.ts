@@ -101,6 +101,21 @@ function physicalFiles(root: string): CasFiles {
     move: async (from, to) => { await fs.promises.rename(absolute(from), absolute(to)); },
     copy: async (from, to) => { await fs.promises.copyFile(absolute(from), absolute(to)); },
     remove: async (relative) => { await fs.promises.rm(absolute(relative), { force: true }); },
+    async *readChunks(relative) {
+      const handle = await fs.promises.open(absolute(relative), 'r');
+      try {
+        const buffer = Buffer.alloc(64 * 1024);
+        let position = 0;
+        while (true) {
+          const { bytesRead } = await handle.read(buffer, 0, buffer.length, position);
+          if (bytesRead === 0) break;
+          position += bytesRead;
+          yield new Uint8Array(buffer.subarray(0, bytesRead));
+        }
+      } finally {
+        await handle.close();
+      }
+    },
   };
 }
 

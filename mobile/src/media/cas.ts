@@ -1,5 +1,5 @@
 import CryptoJS from 'crypto-js';
-import { File } from 'expo-file-system';
+import { File, FileMode } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
 
 export type ArtifactBlob = {
@@ -18,6 +18,7 @@ export type CasFiles = {
   move(from: string, to: string): Promise<void>;
   copy(from: string, to: string): Promise<void>;
   remove(path: string): Promise<void>;
+  readChunks(path: string): AsyncIterable<Uint8Array>;
 };
 
 export type ArtifactCas = {
@@ -48,6 +49,18 @@ const expoCasFiles: CasFiles = {
   move: (from, to) => FileSystem.moveAsync({ from: absolute(from), to: absolute(to) }),
   copy: (from, to) => FileSystem.copyAsync({ from: absolute(from), to: absolute(to) }),
   remove: (path) => FileSystem.deleteAsync(absolute(path), { idempotent: true }),
+  async *readChunks(path) {
+    const handle = new File(absolute(path)).open(FileMode.ReadOnly);
+    try {
+      while (true) {
+        const chunk = handle.readBytes(64 * 1024);
+        if (chunk.byteLength === 0) break;
+        yield chunk;
+      }
+    } finally {
+      handle.close();
+    }
+  },
 };
 
 export async function removeCasPath(relativePath: string): Promise<void> {
@@ -72,6 +85,20 @@ function casFailure(code: 'ARTIFACT_SIZE_REJECTED' | 'ARTIFACT_INTEGRITY_FAILED'
   return Object.assign(new Error(message), { code, retryable: false });
 }
 
+async function verifyPublishedBlob(files: CasFiles, path: string, expectedSha256: string, expectedBytes: number): Promise<void> {
+  const hasher = CryptoJS.algo.SHA256.create();
+  let byteSize = 0;
+  for await (const chunk of files.readChunks(path)) {
+    if (!(chunk instanceof Uint8Array)) throw casFailure('ARTIFACT_INTEGRITY_FAILED', 'CAS reread emitted an invalid chunk');
+    byteSize += chunk.byteLength;
+    hasher.update(wordArray(chunk));
+  }
+  const sha256 = hasher.finalize().toString(CryptoJS.enc.Hex);
+  if (byteSize !== expectedBytes || sha256 !== expectedSha256) {
+    throw casFailure('ARTIFACT_INTEGRITY_FAILED', 'CAS durable reread mismatch');
+  }
+}
+
 export function createArtifactCas(
   files: CasFiles = expoCasFiles,
   deps: { nonce?: () => string } = {},
@@ -83,7 +110,7 @@ export function createArtifactCas(
       const part = options.operationId
         ? operationPart(options.operationId, operationAttempt)
         : `cas/parts/put-${nonce()}.part`;
-      let publishedByCopy: string | undefined;
+      let publishedByThisPut: string | undefined;
       await files.makeDirectory('cas/parts');
       if (options.operationId) {
         for (let attempt = 1; attempt < operationAttempt; attempt += 1) {
@@ -112,19 +139,22 @@ export function createArtifactCas(
         const existing = await files.stat(relativePath);
         if (existing.exists) {
           if (existing.size !== byteSize) throw casFailure('ARTIFACT_INTEGRITY_FAILED', 'CAS existing blob size mismatch');
+          await verifyPublishedBlob(files, relativePath, sha256, byteSize);
           await files.remove(part);
           return { sha256, byteSize, mime: options.mime, relativePath };
         }
         try {
           await files.move(part, relativePath);
+          publishedByThisPut = relativePath;
         } catch (moveError) {
           const raced = await files.stat(relativePath);
           if (raced.exists && raced.size === byteSize) {
+            await verifyPublishedBlob(files, relativePath, sha256, byteSize);
             await files.remove(part);
             return { sha256, byteSize, mime: options.mime, relativePath };
           }
           try {
-            publishedByCopy = relativePath;
+            publishedByThisPut = relativePath;
             await files.copy(part, relativePath);
           } catch (copyError) {
             throw Object.assign(copyError instanceof Error ? copyError : new Error(String(copyError)), { cause: moveError });
@@ -135,10 +165,11 @@ export function createArtifactCas(
         }
         const published = await files.stat(relativePath);
         if (!published.exists || published.size !== byteSize) throw casFailure('ARTIFACT_INTEGRITY_FAILED', 'CAS published blob size mismatch');
+        await verifyPublishedBlob(files, relativePath, sha256, byteSize);
         return { sha256, byteSize, mime: options.mime, relativePath };
       } catch (error) {
         await files.remove(part).catch(() => undefined);
-        if (publishedByCopy) await files.remove(publishedByCopy).catch(() => undefined);
+        if (publishedByThisPut) await files.remove(publishedByThisPut).catch(() => undefined);
         throw error;
       }
     },

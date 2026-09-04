@@ -86,6 +86,7 @@ test('manual save joins a claimed download and publication recovery commits one 
             ensureProjection: async () => undefined,
             updateDownloadState: async () => undefined,
             deliveryPolicy: { autoExportToGallery: false, keepPrivateCopy: true },
+            verifyVideo: async () => undefined,
             updateProjection: async () => undefined,
             commit: createSqliteArtifactCommitter(db as never),
             resolveUri: (path) => `file:///documents/${path}`,

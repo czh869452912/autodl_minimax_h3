@@ -470,7 +470,7 @@ git commit -m "feat: verify downloaded video integrity natively"
 - Modify: `mobile/src/workflows/executor/artifactErrors.ts`
 - Modify: `mobile/src/tasks/sync.ts`
 
-- [ ] **Step 1: 写 CAS 重读验证失败测试**
+- [x] **Step 1: 写 CAS 重读验证失败测试**
 
 构造 files fake：输入流 hash 为 A，但 publish 后 `readChunks(relativePath)` 返回 B。断言 `put` 抛 `ARTIFACT_INTEGRITY_FAILED`，不会返回 blob，坏的无引用文件进入可清理状态。正确重读、既有相同 blob 和 copy race 都通过。
 
@@ -482,11 +482,11 @@ npm test -- --runInBand src/media/cas.test.ts
 
 Expected: FAIL，CasFiles 没有 readChunks 且只验证 size。
 
-- [ ] **Step 2: 实现分块重读 hash**
+- [x] **Step 2: 实现分块重读 hash**
 
 扩展 `CasFiles.read(path, offset, length)` 或 `readChunks(path)`，生产实现使用 `File.open('r')`/handle 分块读取并 finally close。发布后计算 hash 与 byteSize，必须同时匹配。保持所有现有 `casFailure` 为 canonical non-retryable 完整性错误；下载 attempt 策略在上层决定是否临时重试。
 
-- [ ] **Step 3: 写 artifact attempt 失败测试**
+- [x] **Step 3: 写 artifact attempt 失败测试**
 
 probe 在 attempt 1/2 抛媒体无效，断言 operation 回到 PENDING、错误码 `ARTIFACT_MEDIA_INVALID_RETRYABLE`；attempt 3 进入 FAILED、错误码 `ARTIFACT_MEDIA_INVALID`。三个场景都断言 task/asset 未成为 DOWNLOADED、没有 EXPORT operation。
 
@@ -498,13 +498,13 @@ npm test -- --runInBand src/media/mediaValidation.test.ts src/workflows/executor
 
 Expected: FAIL，handler 没有 probe 且完整性错误当前直接终态。
 
-- [ ] **Step 4: 接入验证策略**
+- [x] **Step 4: 接入验证策略**
 
 `mediaValidation.ts` 导出 `classifyMediaValidationFailure(attempt)` 和安全中文投影信息。artifact handler 在 `cas.put` 后、commit 前调用 `verifyVideo(localUri)`。attempt `<3` 时用现有指数退避 retry；attempt `>=3` finish FAILED。非 video artifact 不运行视频 probe，但仍执行 CAS 重读 hash。
 
 `sync.ts` 注入 `probeVideo`，并把错误码写入 download projection；不暴露原生异常细节。
 
-- [ ] **Step 5: 验证并提交**
+- [x] **Step 5: 验证并提交**
 
 ```powershell
 npm test -- --runInBand src/media/cas.test.ts src/media/mediaValidation.test.ts src/workflows/executor/artifactOperation.test.ts src/workflows/executor/mediaDeliveryAcceptance.test.ts

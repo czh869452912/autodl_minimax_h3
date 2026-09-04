@@ -66,6 +66,7 @@ test('drives terminal status through download and system-gallery export exactly 
             openDownload: async () => ({ finalUrl: 'https://cdn.test/video.mp4', status: 200, mime: 'video/mp4', stream: { async *[Symbol.asyncIterator]() { yield new Uint8Array([1]); } } }),
             policy: () => ({ allowedHosts: ['cdn.test'], maxBytes: 10 }),
             deliveryPolicy: { autoExportToGallery: true, keepPrivateCopy: true },
+            verifyVideo: async () => undefined,
             ensureProjection: async (jobId, artifact) => {
               const current = jobs.get(jobId);
               const task = await tasks.get(jobId);

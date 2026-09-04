@@ -3,9 +3,9 @@ import { collectGarbage, createArtifactCas, type CasFiles } from './cas';
 const streamOf = (...chunks: Uint8Array[]): AsyncIterable<Uint8Array> => ({ async *[Symbol.asyncIterator]() { yield* chunks; } });
 const bytes = (value: string) => new TextEncoder().encode(value);
 
-function memoryFiles(overrides: Partial<CasFiles> = {}) {
+function memoryFiles(overrides: Partial<CasFiles> & Record<string, unknown> = {}) {
   const entries = new Map<string, Uint8Array>();
-  const files: CasFiles = {
+  const files = {
     makeDirectory: jest.fn(async () => undefined),
     write: jest.fn(async (path, chunk, append) => {
       const previous = append ? entries.get(path) ?? new Uint8Array() : new Uint8Array();
@@ -16,9 +16,14 @@ function memoryFiles(overrides: Partial<CasFiles> = {}) {
     move: jest.fn(async (from, to) => { const value = entries.get(from); if (!value) throw new Error('missing'); entries.set(to, value); entries.delete(from); }),
     copy: jest.fn(async (from, to) => { const value = entries.get(from); if (!value) throw new Error('missing'); entries.set(to, value.slice()); }),
     remove: jest.fn(async (path) => { entries.delete(path); }),
+    async *readChunks(path: string) {
+      const value = entries.get(path);
+      if (!value) throw new Error('missing');
+      yield value.slice();
+    },
     ...overrides,
   };
-  return { files, entries };
+  return { files: files as CasFiles, entries };
 }
 
 test('publishes by computed sha256 and removes the part', async () => {
@@ -45,6 +50,26 @@ test('uses a verified copy fallback when atomic rename is unavailable', async ()
   expect(base.files.copy).toHaveBeenCalled();
   expect(await base.files.stat(result.relativePath)).toEqual({ exists: true, size: 3 });
   expect([...base.entries.keys()].filter((path) => path.endsWith('.part'))).toEqual([]);
+});
+
+test('rejects a published blob when a durable reread does not match the streamed bytes', async () => {
+  const base = memoryFiles({
+    async *readChunks() { yield bytes('abd'); },
+  });
+  await expect(createArtifactCas(base.files, { nonce: () => 'nonce' }).put(
+    streamOf(bytes('abc')),
+    { mime: 'video/mp4', maxBytes: 10 },
+  )).rejects.toMatchObject({ code: 'ARTIFACT_INTEGRITY_FAILED', retryable: false });
+  expect([...base.entries.keys()].filter((path) => path.startsWith('cas/sha256/'))).toEqual([]);
+});
+
+test('durably rereads an existing matching blob before reusing it', async () => {
+  const base = memoryFiles();
+  const cas = createArtifactCas(base.files, { nonce: () => 'nonce' });
+  const first = await cas.put(streamOf(bytes('abc')), { mime: 'video/mp4', maxBytes: 10 });
+  const second = await cas.put(streamOf(bytes('abc')), { mime: 'video/mp4', maxBytes: 10 });
+  expect(second).toEqual(first);
+  expect((base.files as CasFiles & { readChunks: jest.Mock }).readChunks).toBeDefined();
 });
 
 test('concurrent publishers of the same hash converge on one verified destination', async () => {

@@ -20,7 +20,7 @@ import { createSqliteMediaStore } from '../media/repository';
 import { materializeJobArtifacts } from '../media/materializer';
 import type { ArtifactRecord } from '../jobs/types';
 import { assertLocalExportSource, createSqliteExportStore, handleExport } from '../workflows/executor/exportOperation';
-import { exportVideo } from '../native/media';
+import { exportVideo, probeVideo } from '../native/media';
 import * as FileSystem from 'expo-file-system/legacy';
 import { removeCasPath } from '../media/cas';
 import { EMPTY_RECONCILIATION_SUMMARY, reconcileMediaState, type ReconciliationSummary } from '../media/reconciliation';
@@ -84,6 +84,7 @@ const executor = {
         keepPrivateCopy: current.settings.keepPrivateCopy,
       },
       updateProjection: async () => undefined,
+      verifyVideo: probeVideo,
       async ensureProjection(jobId, artifact) {
         const job = jobs.get(jobId);
         const task = await taskStore.get(jobId);

@@ -22,8 +22,9 @@ function setup() {
   const updateProjection = jest.fn(async () => undefined);
   const ensureProjection = jest.fn(async () => undefined);
   const updateDownloadState = jest.fn(async () => undefined);
+  const verifyVideo = jest.fn(async () => undefined);
   const deliveryPolicy = { autoExportToGallery: true, keepPrivateCopy: true };
-  return { operations, blobs, cas, openDownload, updateProjection, ensureProjection, updateDownloadState, deliveryPolicy };
+  return { operations, blobs, cas, openDownload, updateProjection, ensureProjection, updateDownloadState, verifyVideo, deliveryPolicy };
 }
 
 test('ensures the media row and marks downloading before opening the network stream', async () => {
@@ -64,6 +65,7 @@ test('streams into CAS, retains the blob, updates projection, and finishes', asy
   if (!putOptions.assertLease) throw new Error('lease fence missing');
   expect(putOptions.assertLease()).toBeUndefined();
   expect(deps.operations.renew).toHaveBeenCalledWith('download-1', 'worker', 50, 120_000);
+  expect(deps.verifyVideo).toHaveBeenCalledWith(expect.stringContaining('cas/sha256'));
   expect(deps.blobs.upsertBlob).toHaveBeenCalledWith(expect.objectContaining({ sha256: 'a'.repeat(64), createdAt: 50, verifiedAt: 50 }));
   expect(deps.blobs.retain).toHaveBeenCalledWith('a'.repeat(64), 'workflow_artifact', 'job-1:video-1', 50);
   expect(deps.updateProjection).toHaveBeenCalledWith(expect.objectContaining({ localUri: expect.stringContaining('cas/sha256') }));
@@ -81,6 +83,45 @@ test('retries connection and idle timeouts with bounded backoff', async () => {
   }));
   expect(deps.updateDownloadState).toHaveBeenLastCalledWith('ENQUEUED', 'ARTIFACT_CONNECT_TIMEOUT');
   expect(deps.operations.finish).not.toHaveBeenCalled();
+});
+
+test.each([1, 2])('retries an invalid downloaded video on attempt %s without committing projections', async (attempt) => {
+  const deps = setup();
+  deps.verifyVideo.mockRejectedValueOnce(Object.assign(new Error('native decoder detail'), { code: 'MEDIA_INVALID' }));
+  await handleArtifactDownload({ ...operation, attempt }, 'worker', {
+    ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+  expect(deps.operations.retry).toHaveBeenCalledWith('download-1', 'worker', expect.objectContaining({
+    error: expect.objectContaining({ code: 'ARTIFACT_MEDIA_INVALID_RETRYABLE', retryable: true }),
+  }));
+  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('ENQUEUED', 'ARTIFACT_MEDIA_INVALID_RETRYABLE');
+  expect(deps.blobs.upsertBlob).not.toHaveBeenCalled();
+  expect(deps.updateProjection).not.toHaveBeenCalled();
+  expect(deps.operations.finish).not.toHaveBeenCalled();
+});
+
+test('fails an invalid downloaded video on attempt 3 without committing projections or export', async () => {
+  const deps = setup();
+  deps.verifyVideo.mockRejectedValueOnce(Object.assign(new Error('native decoder detail'), { code: 'MEDIA_INVALID' }));
+  await handleArtifactDownload({ ...operation, attempt: 3 }, 'worker', {
+    ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+  expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50, expect.objectContaining({
+    code: 'ARTIFACT_MEDIA_INVALID', retryable: false,
+  }));
+  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('DOWNLOAD_FAILED', 'ARTIFACT_MEDIA_INVALID');
+  expect(deps.blobs.upsertBlob).not.toHaveBeenCalled();
+  expect(deps.updateProjection).not.toHaveBeenCalled();
+});
+
+test('does not run the video decoder probe for non-video artifacts', async () => {
+  const deps = setup();
+  await handleArtifactDownload({
+    ...operation,
+    payload: { artifact: { id: 'image-1', jobId: 'job-1', kind: 'image', uri: 'https://cdn.example/image.png', mime: 'image/png' } },
+  }, 'worker', { ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
+  expect(deps.verifyVideo).not.toHaveBeenCalled();
+  expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'SUCCEEDED', 50);
 });
 
 test('uses the latest persisted delivery intent when save joins a claimed download', async () => {
