@@ -160,7 +160,7 @@ test('continues polling active provider tasks across unchanged summaries', async
 test('renders a terminal state reached on a later automatic poll', async () => {
   jest.useFakeTimers();
   const running = { id: 'task-1', prompt: 'x', status: 'RUNNING' as const, resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 2 };
-  const succeeded = { ...running, status: 'SUCCESS' as const, downloadState: 'DOWNLOADED' as const, exportState: 'EXPORTED' as const, updatedAt: 3 };
+  const succeeded = { ...running, status: 'SUCCESS' as const, downloadState: 'DOWNLOADED' as const, exportState: 'EXPORTED' as const, galleryUri: 'content://media/video/1', updatedAt: 3 };
   const result = (tasks: Array<typeof running | typeof succeeded>) => ({
     tasks,
     summary: { operations: { remainingDue: 0, remainingScheduled: 0, budgetExhausted: false } },

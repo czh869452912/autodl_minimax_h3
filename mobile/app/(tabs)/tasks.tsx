@@ -19,13 +19,32 @@ export default function TasksScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [monitoring, setMonitoring] = useState(false);
   const [pollState, setPollState] = useState<{ remainingDue: number; nextWakeAt?: number }>({ remainingDue: 0 });
+  const [pollGeneration, setPollGeneration] = useState(0);
   const mediaBusyRef = useRef(new Set<string>());
   const loadInFlight = useRef(false);
   const load = useCallback(async (mode: 'poll' | 'focus' | 'manual' = 'poll') => { if (loadInFlight.current) return; loadInFlight.current = true; setSyncing(true); try { const result = await syncTaskRun({ reason: 'foreground', mode: mode === 'poll' ? 'poll' : 'maintenance', forceMaintenance: mode === 'manual' }); setPollState({ remainingDue: result.summary.operations.remainingDue, ...(result.summary.nextWakeAt == null ? {} : { nextWakeAt: result.summary.nextWakeAt }) }); const page = await (taskStore as typeof taskStore & { listPage?: (options?: { limit?: number }) => Promise<{ items: TaskRecord[]; nextCursor?: { createdAt: number; id: string } }> }).listPage?.({ limit: 40 }); if (page) { setTasks(page.items); setCursor(page.nextCursor); } else setTasks(result.tasks); setLastUpdatedAt(Date.now()); } catch (error) { if (mode === 'manual') Alert.alert('刷新失败', error instanceof Error ? error.message : '任务状态同步失败'); } finally { loadInFlight.current = false; setSyncing(false); } }, []);
   const loadMore = useCallback(async () => { if (!cursor || loadingMore || !(taskStore as typeof taskStore & { listPage?: unknown }).listPage) return; setLoadingMore(true); try { const page = await (taskStore as typeof taskStore & { listPage: (options: { limit: number; cursor: { createdAt: number; id: string } }) => Promise<{ items: TaskRecord[]; nextCursor?: { createdAt: number; id: string } }> }).listPage({ limit: 40, cursor }); setTasks((items) => [...items, ...page.items.filter((item) => !items.some((current) => current.id === item.id))]); setCursor(page.nextCursor); } finally { setLoadingMore(false); } }, [cursor, loadingMore]);
   useFocusEffect(useCallback(() => { void load('focus'); }, [load]));
   const hasActiveTasks = tasks.some((item) => item.status === 'QUEUED' || item.status === 'RUNNING' || item.status === 'UNKNOWN');
-  useEffect(() => { const delay = nextPollDelay({ now: Date.now(), hasActiveTasks, remainingDue: pollState.remainingDue, nextWakeAt: pollState.nextWakeAt }); if (delay == null) return; const timer = setTimeout(() => void load('poll'), delay); return () => clearTimeout(timer); }, [hasActiveTasks, load, pollState.nextWakeAt, pollState.remainingDue]);
+  useEffect(() => {
+    const delay = nextPollDelay({
+      now: Date.now(),
+      hasActiveTasks,
+      remainingDue: pollState.remainingDue,
+      nextWakeAt: pollState.nextWakeAt,
+    });
+    if (delay == null) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void load('poll').finally(() => {
+        if (!cancelled) setPollGeneration((generation) => generation + 1);
+      });
+    }, delay);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [hasActiveTasks, load, pollGeneration, pollState.nextWakeAt, pollState.remainingDue]);
   useEffect(() => { void getTaskMonitorStatus().then((value) => setMonitoring(value.running)); }, []);
   const toggleMonitoring = async () => {
     if (monitoring) { await stopTaskMonitor(); setMonitoring(false); return; }
