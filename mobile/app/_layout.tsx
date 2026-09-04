@@ -9,10 +9,10 @@ import { registerBackgroundSync, syncTaskRun } from '../src/tasks/background';
 import { resumeTaskSyncAfterReconnect } from '../src/tasks/background';
 import * as Network from 'expo-network';
 import { createConnectivityEdgeDetector } from '../src/tasks/networkRecovery';
-
-const startupDatabase = getDatabase();
+import { listFullDatabaseBackups, restoreFullDatabaseBackup } from '../src/storage/backup';
 
 export default function RootLayout() {
+  const [startupDatabase] = useState(() => getDatabase());
   const [startupState, setStartupState] = useState<DatabaseStartupState>(() => {
     const state = getDatabaseStartupState();
     if (state.mode === 'writable' && isLegacyAppDatabase(startupDatabase)) return { mode: 'legacy' };
@@ -48,12 +48,21 @@ export default function RootLayout() {
     return () => { subscription.remove(); networkSubscription.remove(); };
   }, [startupState]);
   if (startupState.mode === 'readonly') {
+    let backupNames: string[] = [];
+    if (startupState.allowReset) {
+      try { backupNames = listFullDatabaseBackups(); } catch { backupNames = []; }
+    }
     return (
       <SafeAreaProvider>
         <DatabaseRecoveryScreen
           diagnostic={startupState.diagnostic}
           allowReset={startupState.allowReset}
           onReset={() => { resetAppDatabase(startupDatabase); setStartupState({ mode: 'writable' }); }}
+          backupNames={backupNames}
+          onRestore={async (backupName) => {
+            restoreFullDatabaseBackup(startupDatabase, backupName);
+            BackHandler.exitApp();
+          }}
         />
       </SafeAreaProvider>
     );

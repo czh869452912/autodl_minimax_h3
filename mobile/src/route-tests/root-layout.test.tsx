@@ -11,7 +11,7 @@ const mockDatabase = {
 
 type StartupState = { mode: 'writable' | 'legacy' } | { mode: 'readonly'; diagnostic: string; allowReset: boolean };
 const mockStartupState = jest.fn<StartupState, []>(() => ({ mode: 'legacy' }));
-const mockRecoveryScreen = jest.fn((_props: { diagnostic: string }) => null);
+const mockRecoveryScreen = jest.fn((_props: { diagnostic: string; backupNames?: string[]; onRestore?(name: string): Promise<void> }) => null);
 let mockNetworkListener: ((state: { isConnected?: boolean; isInternetReachable?: boolean }) => void) | undefined;
 const mockNetworkRemove = jest.fn();
 jest.mock('../storage/databaseClient', () => ({ getDatabase: jest.fn(() => mockDatabase), getDatabaseStartupState: () => mockStartupState() }));
@@ -21,6 +21,10 @@ jest.mock('../tasks/background', () => ({ registerBackgroundSync: jest.fn(async 
 jest.mock('expo-network', () => ({ addNetworkStateListener: jest.fn((listener) => { mockNetworkListener = listener; return { remove: mockNetworkRemove }; }) }));
 jest.mock('../storage/database', () => ({ ensureAppDatabase: jest.fn(), isLegacyAppDatabase: jest.fn(() => true), resetAppDatabase: jest.fn() }));
 jest.mock('../storage/DatabaseRecoveryScreen', () => ({ DatabaseRecoveryScreen: (props: { diagnostic: string }) => mockRecoveryScreen(props) }));
+jest.mock('../storage/backup', () => ({
+  listFullDatabaseBackups: jest.fn(() => ['autodl-h3-v6-to-v7-200.backup.db']),
+  restoreFullDatabaseBackup: jest.fn(),
+}));
 
 import RootLayout from '../../app/_layout';
 
@@ -55,11 +59,21 @@ test('renders readonly recovery without registering background work', async () =
   register.mockClear();
   sync.mockClear();
   mockRecoveryScreen.mockClear();
+  const exit = jest.spyOn(BackHandler, 'exitApp').mockImplementation(() => undefined);
+  exit.mockClear();
   let tree!: ReturnType<typeof create>;
   await act(async () => { tree = create(<RootLayout />); });
   expect(mockStartupState).toHaveBeenCalled();
   expect(mockStartupState.mock.results.at(-1)?.value).toEqual({ mode: 'readonly', diagnostic: 'MIGRATION_5_TO_6_FAILED', allowReset: true });
   expect(mockRecoveryScreen).toHaveBeenCalledWith(expect.objectContaining({ diagnostic: 'MIGRATION_5_TO_6_FAILED' }));
+  const recoveryProps = mockRecoveryScreen.mock.calls.at(-1)?.[0];
+  expect(recoveryProps?.backupNames).toEqual(['autodl-h3-v6-to-v7-200.backup.db']);
+  await recoveryProps?.onRestore?.('autodl-h3-v6-to-v7-200.backup.db');
+  expect(require('../storage/backup').restoreFullDatabaseBackup).toHaveBeenCalledWith(
+    mockDatabase,
+    'autodl-h3-v6-to-v7-200.backup.db',
+  );
+  expect(exit).toHaveBeenCalledTimes(1);
   expect(register).not.toHaveBeenCalled();
   expect(sync).not.toHaveBeenCalled();
   act(() => tree.unmount());

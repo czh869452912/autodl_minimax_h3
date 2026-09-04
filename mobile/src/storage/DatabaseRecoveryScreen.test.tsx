@@ -42,3 +42,45 @@ test('requires confirmation before reset', async () => {
   expect(onReset).toHaveBeenCalledTimes(1);
   act(() => tree.unmount());
 });
+
+test('requires confirmation before restoring the newest full backup', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const onRestore = jest.fn(async () => undefined);
+  const backup = 'autodl-h3-v6-to-v7-200.backup.db';
+  let tree!: ReturnType<typeof create>;
+  await act(async () => {
+    tree = create(<DatabaseRecoveryScreen
+      diagnostic="MIGRATION_6_TO_7_FAILED"
+      allowReset
+      onReset={jest.fn()}
+      backupNames={[backup]}
+      onRestore={onRestore}
+    />);
+  });
+  const button = tree.root.findAll((node) => node.props.accessibilityLabel === '恢复最新完整备份')[0];
+  act(() => button.props.onPress());
+  const actions = alert.mock.calls.at(-1)?.[2]!;
+  await act(async () => { await actions[1].onPress?.(); });
+  expect(onRestore).toHaveBeenCalledWith(backup);
+  act(() => tree.unmount());
+});
+
+test('keeps recovery mode visible and localizes restore failures', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  let tree!: ReturnType<typeof create>;
+  await act(async () => {
+    tree = create(<DatabaseRecoveryScreen
+      diagnostic="MIGRATION_6_TO_7_FAILED"
+      allowReset
+      onReset={jest.fn()}
+      backupNames={['autodl-h3-v6-to-v7-200.backup.db']}
+      onRestore={jest.fn(async () => { throw new Error('private path'); })}
+    />);
+  });
+  act(() => tree.root.findAll((node) => node.props.accessibilityLabel === '恢复最新完整备份')[0].props.onPress());
+  const actions = alert.mock.calls.at(-1)?.[2]!;
+  await act(async () => { await actions[1].onPress?.(); });
+  expect(text(tree)).toContain('完整备份恢复失败');
+  expect(text(tree)).not.toContain('private path');
+  act(() => tree.unmount());
+});

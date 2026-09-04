@@ -14,6 +14,26 @@ export class RegistryError extends Error { constructor(public readonly code: str
 type Dependencies = { repository: WorkflowRegistry; adapters: Array<Pick<PlatformAdapterManifest, 'id' | 'operations'>>; appVersion: string; adapterVersions?: Record<string, string>; adapterArtifactKinds?: Record<string, string[]>; fetch?: typeof fetch; keyring?: RegistryKey[]; allowDomains?: string[]; now?: () => number; fetchTimeoutMs?: number; maxResponseBytes?: number };
 const rank: Record<RegistrySource, number> = { builtin: 3, 'local-import': 2, remote: 1 };
 
+export type WorkflowCompatibilityContext = Pick<
+  Dependencies,
+  'adapters' | 'appVersion' | 'adapterVersions' | 'adapterArtifactKinds'
+>;
+
+export function isWorkflowCompatible(
+  definition: WorkflowDefinition,
+  context: WorkflowCompatibilityContext,
+): boolean {
+  const adapter = context.adapters.find((item) => item.id === definition.platform.adapter);
+  if (!adapter || !adapter.operations.includes(definition.platform.operation)) return false;
+  const compatibility = definition.compatibility;
+  if (compatibility?.minAppVersion && compareVersions(context.appVersion, compatibility.minAppVersion) < 0) return false;
+  const adapterVersion = context.adapterVersions?.[definition.platform.adapter];
+  if (compatibility?.requiredAdapterVersion && (!adapterVersion || !satisfiesVersion(adapterVersion, compatibility.requiredAdapterVersion))) return false;
+  const supported = context.adapterArtifactKinds?.[definition.platform.adapter];
+  if (supported && compatibility?.artifactKinds?.some((kind) => !supported.includes(kind))) return false;
+  return true;
+}
+
 export type WorkflowPackageSource = RegistrySource | 'git';
 export type VerifiedWorkflowPackage = { pkg: WorkflowPackage; definition: WorkflowDefinition; packageHash: string };
 
@@ -45,12 +65,9 @@ export function createWorkflowRegistryService(deps: Dependencies) {
   const keyring = deps.keyring ?? [];
   const adapterContext = { adapters: deps.adapters.map((adapter) => ({ id: adapter.id, operations: adapter.operations })) };
   const checkCompatibility = (definition: WorkflowDefinition) => {
-    const compatibility = definition.compatibility;
-    if (compatibility?.minAppVersion && compareVersions(deps.appVersion, compatibility.minAppVersion) < 0) throw new RegistryError('REGISTRY_INCOMPATIBLE', 'workflow requires a newer app version');
-    const adapterVersion = deps.adapterVersions?.[definition.platform.adapter];
-    if (compatibility?.requiredAdapterVersion && (!adapterVersion || !satisfiesVersion(adapterVersion, compatibility.requiredAdapterVersion))) throw new RegistryError('REGISTRY_INCOMPATIBLE', 'workflow requires an incompatible adapter version');
-    const supported = deps.adapterArtifactKinds?.[definition.platform.adapter];
-    if (supported && compatibility?.artifactKinds?.some((kind) => !supported.includes(kind))) throw new RegistryError('REGISTRY_INCOMPATIBLE', 'workflow artifact kind is unsupported');
+    if (!isWorkflowCompatible(definition, deps)) {
+      throw new RegistryError('REGISTRY_INCOMPATIBLE', 'workflow is incompatible with this app or adapter');
+    }
   };
   const installAndActivate = async (record: RegistryRecord): Promise<void> => {
     if (deps.repository.installAndActivate) return deps.repository.installAndActivate(record);
