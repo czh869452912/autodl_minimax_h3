@@ -3,36 +3,12 @@ import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View }
 import { useFocusEffect } from 'expo-router';
 import { AppIcon } from '../../src/ui/icons';
 import { COLORS, SPACING } from '../../src/ui/theme';
-import { mediaStore, taskStore, syncTaskRun } from '../../src/tasks/sync';
-import { ensureTaskDownloaded, exportTaskVideo } from '../../src/tasks/media';
+import { requestTaskDownload, requestTaskExport, taskStore, syncTaskRun } from '../../src/tasks/sync';
 import { exportStatusLabel } from '../../src/gallery/presentation';
 import type { TaskRecord } from '../../src/tasks/types';
 import { formatTaskCreatedAt, formatTaskStatus, getTaskTiming } from '../../src/tasks/presentation';
 import { readSettings } from '../../src/settings/storage';
 import { getTaskMonitorStatus, startTaskMonitor, stopTaskMonitor } from '../../src/native/taskMonitor';
-import { getBuiltinArtifactDownloadPolicy } from '../../src/workflows/providers/registry';
-import { resolveLocalVideoSource } from '../../src/tasks/localMedia';
-
-async function repairTaskMediaState(task: TaskRecord): Promise<TaskRecord> {
-  if (task.downloadState !== 'DOWNLOADED' && !task.localUri) return task;
-  const asset = await mediaStore.getPrimaryVideoByTaskId?.(task.id);
-  const localUri = await resolveLocalVideoSource({ task, asset });
-  if (localUri) {
-    const patch = { localUri, downloadState: 'DOWNLOADED' as const, downloadError: undefined, downloadProgress: 1, updatedAt: Date.now() };
-    if (task.localUri !== localUri || task.downloadState !== 'DOWNLOADED') await taskStore.updateMediaProjection(task.id, patch);
-    if (asset && (asset.localPath !== localUri || asset.status !== 'downloaded')) await mediaStore.upsert({ ...asset, localPath: localUri, status: 'downloaded', updatedAt: patch.updatedAt });
-    return { ...task, ...patch };
-  }
-  const downloadState = task.downloadState === 'DOWNLOAD_FAILED' ? 'DOWNLOAD_FAILED' as const : task.videoUrl ? 'IDLE' as const : 'DOWNLOAD_FAILED' as const;
-  const patch = { localUri: undefined, downloadState, downloadError: downloadState === 'DOWNLOAD_FAILED' ? task.downloadError || '视频源文件不可用' : undefined, downloadProgress: undefined, updatedAt: Date.now() };
-  await taskStore.updateMediaProjection(task.id, patch);
-  if (asset && (asset.localPath || asset.status === 'downloaded')) await mediaStore.upsert({ ...asset, localPath: undefined, status: asset.sourceUrl ? 'queued' : 'failed', updatedAt: patch.updatedAt });
-  return { ...task, ...patch };
-}
-
-async function repairTaskMediaPage(tasks: TaskRecord[]): Promise<TaskRecord[]> {
-  return Promise.all(tasks.map((task) => repairTaskMediaState(task)));
-}
 
 export default function TasksScreen() {
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
@@ -44,8 +20,8 @@ export default function TasksScreen() {
   const [hasPendingOperations, setHasPendingOperations] = useState(false);
   const mediaBusyRef = useRef(new Set<string>());
   const loadInFlight = useRef(false);
-  const load = useCallback(async (manual = false) => { if (loadInFlight.current) return; loadInFlight.current = true; setSyncing(true); try { const result = await syncTaskRun('foreground'); const operationActive = result.summary.operations.remainingDue > 0 || result.summary.operations.remainingScheduled > 0 || result.summary.operations.budgetExhausted; setHasPendingOperations(operationActive); const page = await (taskStore as typeof taskStore & { listPage?: (options?: { limit?: number }) => Promise<{ items: TaskRecord[]; nextCursor?: { createdAt: number; id: string } }> }).listPage?.({ limit: 40 }); if (page) { setTasks(await repairTaskMediaPage(page.items)); setCursor(page.nextCursor); } else setTasks(await repairTaskMediaPage(result.tasks)); setLastUpdatedAt(Date.now()); } catch (error) { if (manual) Alert.alert('刷新失败', error instanceof Error ? error.message : '任务状态同步失败'); } finally { loadInFlight.current = false; setSyncing(false); } }, []);
-  const loadMore = useCallback(async () => { if (!cursor || loadingMore || !(taskStore as typeof taskStore & { listPage?: unknown }).listPage) return; setLoadingMore(true); try { const page = await (taskStore as typeof taskStore & { listPage: (options: { limit: number; cursor: { createdAt: number; id: string } }) => Promise<{ items: TaskRecord[]; nextCursor?: { createdAt: number; id: string } }> }).listPage({ limit: 40, cursor }); const repaired = await repairTaskMediaPage(page.items); setTasks((items) => [...items, ...repaired.filter((item) => !items.some((current) => current.id === item.id))]); setCursor(page.nextCursor); } finally { setLoadingMore(false); } }, [cursor, loadingMore]);
+  const load = useCallback(async (manual = false) => { if (loadInFlight.current) return; loadInFlight.current = true; setSyncing(true); try { const result = await syncTaskRun('foreground'); const operationActive = result.summary.operations.remainingDue > 0 || result.summary.operations.remainingScheduled > 0 || result.summary.operations.budgetExhausted; setHasPendingOperations(operationActive); const page = await (taskStore as typeof taskStore & { listPage?: (options?: { limit?: number }) => Promise<{ items: TaskRecord[]; nextCursor?: { createdAt: number; id: string } }> }).listPage?.({ limit: 40 }); if (page) { setTasks(page.items); setCursor(page.nextCursor); } else setTasks(result.tasks); setLastUpdatedAt(Date.now()); } catch (error) { if (manual) Alert.alert('刷新失败', error instanceof Error ? error.message : '任务状态同步失败'); } finally { loadInFlight.current = false; setSyncing(false); } }, []);
+  const loadMore = useCallback(async () => { if (!cursor || loadingMore || !(taskStore as typeof taskStore & { listPage?: unknown }).listPage) return; setLoadingMore(true); try { const page = await (taskStore as typeof taskStore & { listPage: (options: { limit: number; cursor: { createdAt: number; id: string } }) => Promise<{ items: TaskRecord[]; nextCursor?: { createdAt: number; id: string } }> }).listPage({ limit: 40, cursor }); setTasks((items) => [...items, ...page.items.filter((item) => !items.some((current) => current.id === item.id))]); setCursor(page.nextCursor); } finally { setLoadingMore(false); } }, [cursor, loadingMore]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   const hasActiveTasks = tasks.some((item) => item.status === 'QUEUED' || item.status === 'RUNNING' || item.status === 'UNKNOWN');
   const shouldPoll = hasActiveTasks || hasPendingOperations;
@@ -61,20 +37,8 @@ export default function TasksScreen() {
     if (mediaBusyRef.current.has(task.id)) return;
     setMediaBusy(task.id, true);
     try {
-      const artifactPolicy = getBuiltinArtifactDownloadPolicy(task.adapterId);
-      const asset = await mediaStore.getPrimaryVideoByTaskId?.(task.id);
-      const recovered = await resolveLocalVideoSource({ task, asset });
-      let current: TaskRecord = { ...task, localUri: recovered, downloadState: recovered ? 'DOWNLOADED' : 'IDLE', downloadError: undefined };
-      const update = async (patch: Partial<TaskRecord>) => {
-        current = { ...current, ...patch };
-        if (!(await taskStore.updateMediaProjection(task.id, patch))) throw new Error('任务已删除');
-        setTasks((items) => items.map((item) => item.id === task.id ? current : item));
-      };
-      const updated = recovered
-        ? { ...current, downloadProgress: 1, updatedAt: Date.now() }
-        : await ensureTaskDownloaded(current, { policy: { autoExportToGallery: false, keepPrivateCopy: true }, asset, ...artifactPolicy, onUpdate: update });
-      if (recovered) await update({ localUri: recovered, downloadState: 'DOWNLOADED', downloadError: undefined, downloadProgress: 1, updatedAt: updated.updatedAt });
-      setTasks((items) => items.map((item) => item.id === task.id ? updated : item));
+      await requestTaskDownload(task.id);
+      await load();
     } catch (error) {
       Alert.alert('下载失败', error instanceof Error ? error.message : '视频下载失败');
     } finally { setMediaBusy(task.id, false); }
@@ -84,15 +48,8 @@ export default function TasksScreen() {
     setMediaBusy(task.id, true);
     try {
       const settings = await readSettings();
-      const artifactPolicy = getBuiltinArtifactDownloadPolicy(task.adapterId);
-      const asset = await mediaStore.getPrimaryVideoByTaskId?.(task.id);
-      let current = task;
-      const updated = await exportTaskVideo(task, { policy: { autoExportToGallery: settings.autoExportToGallery, keepPrivateCopy: settings.keepPrivateCopy }, asset, ...artifactPolicy, onUpdate: async (patch) => {
-        current = { ...current, ...patch };
-        if (!(await taskStore.updateMediaProjection(task.id, patch))) throw new Error('任务已删除');
-        setTasks((items) => items.map((item) => item.id === task.id ? current : item));
-      } });
-      setTasks((items) => items.map((item) => item.id === task.id ? updated : item));
+      await requestTaskExport(task.id, { keepPrivateCopy: settings.keepPrivateCopy });
+      await load();
     } catch (error) {
       Alert.alert('保存失败', error instanceof Error ? error.message : '保存到系统相册失败');
     } finally { setMediaBusy(task.id, false); }
