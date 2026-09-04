@@ -28,6 +28,7 @@ import { createMediaCommandService, type MediaCommandService } from '../workflow
 import { claimMaintenanceWindow, createExecutorSettingsCache, type SyncRequest } from './syncPolicy';
 import type { PendingSummary } from '../workflows/executor/operationRepository';
 import { resumeAfterConnectivityReturns } from './networkRecovery';
+import { projectTerminalNotifications, type TerminalNotification } from './terminalEvents';
 
 const database = getDatabase();
 export const taskStore = createTaskRepository(database);
@@ -201,7 +202,7 @@ export type SyncSummary = {
   operations: CycleSummary;
   reconciliation: ReconciliationSummary;
   maintenanceRan: boolean;
-  terminalEvents: [];
+  terminalEvents: TerminalNotification[];
   nextWakeAt?: number;
 };
 
@@ -212,6 +213,7 @@ export function createSyncTaskRunner(deps: {
   listTasks(): ReturnType<typeof taskStore.listActive>;
   pendingSummary(options: { now: number; jobIds?: string[] }): PendingSummary;
   claimMaintenance(force: boolean): boolean;
+  listTerminalEvents(jobIds: string[]): Parameters<typeof projectTerminalNotifications>[0];
   now(): number;
 }) {
   return async (request: SyncRequest) => {
@@ -221,7 +223,9 @@ export function createSyncTaskRunner(deps: {
     const updated = maintenanceRan ? await deps.repair() : 0;
     const reconciliation = maintenanceRan ? await deps.reconcile() : EMPTY_RECONCILIATION_SUMMARY;
     const tasks = await deps.listTasks();
-    const pending = deps.pendingSummary({ now: timestamp, ...(request.mode === 'service' ? { jobIds: request.taskIds ?? [] } : {}) });
+    const serviceIds = request.mode === 'service' ? request.taskIds ?? [] : [];
+    const pending = deps.pendingSummary({ now: timestamp, ...(request.mode === 'service' ? { jobIds: serviceIds } : {}) });
+    const terminalEvents = request.mode === 'service' ? projectTerminalNotifications(deps.listTerminalEvents(serviceIds)) : [];
     return {
       tasks,
       summary: {
@@ -233,7 +237,7 @@ export function createSyncTaskRunner(deps: {
         operations: operationSummary,
         reconciliation,
         maintenanceRan,
-        terminalEvents: [],
+        terminalEvents,
         ...(pending.nextWakeAt == null ? {} : { nextWakeAt: pending.nextWakeAt }),
       } satisfies SyncSummary,
     };
@@ -254,6 +258,7 @@ const run = createSyncTaskRunner({
   listTasks: () => taskStore.listActive(),
   pendingSummary: (options) => operations.pendingSummary(options),
   claimMaintenance: (force) => claimMaintenanceWindow(database, Date.now(), force),
+  listTerminalEvents: (jobIds) => jobs.listTerminalEvents(jobIds),
   now: Date.now,
 });
 

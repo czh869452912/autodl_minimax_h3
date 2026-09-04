@@ -625,7 +625,7 @@ git commit -m "fix: replace stale gallery media by content"
 - Modify: `mobile/app/(tabs)/tasks.tsx`
 - Modify: `mobile/src/route-tests/tasks.test.tsx`
 
-- [ ] **Step 1: 写终态事件筛选失败测试**
+- [x] **Step 1: 写终态事件筛选失败测试**
 
 job state repository 新增 `listTerminalEvents(jobIds)`。真实 SQLite 测试插入 STATUS_RECONCILED 的 RUNNING/SUCCEEDED/PARTIAL/CANCELLED、STATUS_SYNC_FAILED、网络 retry 事件，断言仅最终 SUCCESS/PARTIAL_SUCCESS/FAILED/CANCELLED 返回，按 created_at/id 稳定排序，并携带 eventId/taskId/status。
 
@@ -637,11 +637,11 @@ npm test -- --runInBand src/tasks/terminalEvents.test.ts src/workflows/executor/
 
 Expected: FAIL，repository 无批量终态事件查询。
 
-- [ ] **Step 2: 实现安全的通知事件投影**
+- [x] **Step 2: 实现安全的通知事件投影**
 
 SQL 限定 job IDs 和终态 event 类型，结合事件 payload/current job status。`terminalEvents.ts` 生成不含 URL、token、完整 Prompt 的短 title/body：成功、部分成功、失败、取消。service sync summary 返回 `terminalEvents` 和 scoped `remaining`。
 
-- [ ] **Step 3: 写 JS monitor 权限与 headless 编排失败测试**
+- [x] **Step 3: 写 JS monitor 权限与 headless 编排失败测试**
 
 测试 start 顺序：requestPermission→native.start→service tick。拒绝返回 `{ started:false, reason:'permission-denied' }`，不调 start。Headless tick 先 publish terminal events，再在 scoped remaining=0 时 stop；publish/stop 重试不会重复事件。
 
@@ -653,7 +653,7 @@ npm test -- --runInBand src/native/taskMonitor.test.ts src/tasks/terminalEvents.
 
 Expected: FAIL，native bridge 没有 permission/publish 方法，UI 静默失败。
 
-- [ ] **Step 4: 写 Kotlin 通知 policy 失败测试**
+- [x] **Step 4: 写 Kotlin 通知 policy 失败测试**
 
 用内存 preference gateway 测 event IDs 原子去重、最多保留最近 256 条、重复 publish 不调用 notifier；任务状态映射到不同标题；常驻文案为 `正在监控 N 个任务`。
 
@@ -666,7 +666,7 @@ cd mobile/android
 
 Expected: FAIL，TaskNotificationManager 不存在。
 
-- [ ] **Step 5: 实现原生权限和通知**
+- [x] **Step 5: 实现原生权限和通知**
 
 TaskMonitorModule 实现 `PermissionListener`，暴露：
 
@@ -679,11 +679,11 @@ Android <33 直接允许；>=33 使用 `PermissionAwareActivity.requestPermissio
 
 TaskMonitorService 每次 start/update task IDs 后用 `NotificationManager.notify` 更新 `N`。stop 时清 running 标志但不清已通知集合。
 
-- [ ] **Step 6: 接入 JS、UI 和 headless**
+- [x] **Step 6: 接入 JS、UI 和 headless**
 
 `startTaskMonitor` 返回 discriminated result 而不是 boolean。TasksScreen 对 permission denied、no-active-tasks、native-unavailable 和 start-failed 分别 Alert。`mobile/index.js` 使用 service sync 返回的 terminalEvents 调 publish，再按 scoped remaining 停止。
 
-- [ ] **Step 7: 验证并提交**
+- [x] **Step 7: 验证并提交**
 
 ```powershell
 cd mobile

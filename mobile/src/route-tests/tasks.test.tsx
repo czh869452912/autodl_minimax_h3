@@ -5,6 +5,7 @@ import { FlatList, Text } from 'react-native';
 const mockFocusCallbacks: Array<() => void> = [];
 const mockRequestDownload = jest.fn(async (_taskId: string) => ({ status: 'queued' as const }));
 const mockRequestExport = jest.fn(async (_taskId: string, _policy: { keepPrivateCopy: boolean }) => ({ status: 'queued' as const }));
+const mockStartMonitor = jest.fn(async (_taskIds: string[]) => ({ started: true } as const));
 jest.mock('expo-router', () => ({
   useFocusEffect: (effect: () => void) => {
     const ReactModule = require('react');
@@ -36,6 +37,11 @@ jest.mock('../tasks/sync', () => {
 });
 jest.mock('../settings/storage', () => ({ readSettings: jest.fn(async () => ({ keepPrivateCopy: false })) }));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
+jest.mock('../native/taskMonitor', () => ({
+  getTaskMonitorStatus: jest.fn(async () => ({ running: false, taskIds: [] })),
+  startTaskMonitor: (taskIds: string[]) => mockStartMonitor(taskIds),
+  stopTaskMonitor: jest.fn(async () => true),
+}));
 
 import TasksScreen from '../../app/(tabs)/tasks';
 import { syncTaskRun, syncTasks, taskStore } from '../tasks/sync';
@@ -171,5 +177,35 @@ test('refreshes when the task page receives focus after a new task is created', 
   await act(async () => { mockFocusCallbacks[0]?.(); });
   expect(jest.mocked(syncTasks)).toHaveBeenCalledTimes(2);
   expect(renderer!.root.findAllByType(Text).some((node) => node.props.children === 'new')).toBe(true);
+  act(() => renderer!.unmount());
+});
+
+test.each([
+  ['permission-denied', '需要通知权限', '请允许通知权限后再开启持续监控。'],
+  ['native-unavailable', '暂不支持持续监控', '当前设备不支持后台任务通知。'],
+  ['start-failed', '开启失败', '持续监控启动失败，请稍后重试。'],
+] as const)('shows a specific monitor error for %s', async (reason, title, body) => {
+  const { Alert } = require('react-native');
+  jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  mockStartMonitor.mockResolvedValueOnce({ started: false, reason } as never);
+  let renderer: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<TasksScreen />); });
+  await act(async () => renderer!.root.findByProps({ accessibilityLabel: '开启持续监控' }).props.onPress());
+  expect(Alert.alert).toHaveBeenCalledWith(title, body);
+  act(() => renderer!.unmount());
+});
+
+test('explains that continuous monitoring needs an active task', async () => {
+  const { Alert } = require('react-native');
+  jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  mockStartMonitor.mockResolvedValueOnce({ started: false, reason: 'no-active-tasks' } as never);
+  jest.mocked(taskStore.list).mockResolvedValueOnce([]);
+  jest.mocked(syncTasks).mockResolvedValueOnce([]);
+  let renderer: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<TasksScreen />); });
+
+  await act(async () => renderer!.root.findByProps({ accessibilityLabel: '开启持续监控' }).props.onPress());
+
+  expect(Alert.alert).toHaveBeenCalledWith('没有可监控任务', '当前没有排队中或运行中的任务。');
   act(() => renderer!.unmount());
 });

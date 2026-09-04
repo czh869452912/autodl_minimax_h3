@@ -156,3 +156,36 @@ test('rolls back snapshot and event when next-operation insertion fails', () => 
     expect(operations.get('status-1')).toBeUndefined();
   } finally { db.close(); }
 });
+
+test('lists only scoped terminal reconciliation events in stable creation order', () => {
+  const { db, jobs } = setup();
+  try {
+    for (const [id, status] of [['job-1', 'SUCCEEDED'], ['job-2', 'FAILED'], ['job-3', 'RUNNING']] as const) {
+      db.runSync(
+        "INSERT INTO workflow_jobs (id,revision,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,status,created_at,updated_at) VALUES (?,0,'demo','1','hash','demo','1','{}',?,1,1)",
+        id, status,
+      );
+    }
+    const sequences = new Map<string, number>();
+    const insert = (id: string, jobId: string, type: string, payload: object, createdAt: number) => {
+      const sequence = sequences.get(jobId) ?? 0;
+      sequences.set(jobId, sequence + 1);
+      db.runSync(
+        'INSERT INTO workflow_job_events (id,job_id,sequence,event_type,payload_json,created_at) VALUES (?,?,?,?,?,?)',
+        id, jobId, sequence, type, JSON.stringify(payload), createdAt,
+      );
+    };
+    insert('event-running', 'job-3', 'STATUS_RECONCILED', { status: 'RUNNING' }, 10);
+    insert('event-retry', 'job-2', 'STATUS_RETRY_SCHEDULED', { code: 'NETWORK' }, 11);
+    insert('event-success', 'job-1', 'STATUS_RECONCILED', { status: 'SUCCEEDED' }, 20);
+    insert('event-sync-failed', 'job-2', 'STATUS_SYNC_FAILED', { code: 'NETWORK' }, 21);
+    insert('event-failed', 'job-2', 'STATUS_RECONCILED', { status: 'FAILED' }, 20);
+
+    expect(jobs.listTerminalEvents(['job-2', 'job-1'])).toEqual([
+      { eventId: 'event-failed', taskId: 'job-2', status: 'FAILED', createdAt: 20 },
+      { eventId: 'event-success', taskId: 'job-1', status: 'SUCCESS', createdAt: 20 },
+    ]);
+    expect(jobs.listTerminalEvents(['job-3'])).toEqual([]);
+    expect(jobs.listTerminalEvents([])).toEqual([]);
+  } finally { db.close(); }
+});
