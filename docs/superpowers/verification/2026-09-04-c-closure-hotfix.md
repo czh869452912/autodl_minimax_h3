@@ -4,14 +4,14 @@
 
 ## 范围与结论
 
-本次热修复将手动下载/保存纳入 C-Core 的持久执行器，统一自动与手动媒体路径，并删除 UI 直连下载、MediaStore 与投影写入的旧队列。当前代码与自动化门禁通过；Android 构建、设备矩阵、v1.4.8 覆盖升级、独立审查及正式发布仍需完成，完成前不得宣布 C 阶段发布闭环或开始 D 阶段实现。
+本次热修复将手动下载/保存纳入 C-Core 的持久执行器，统一自动与手动媒体路径，并删除 UI 直连下载、MediaStore 与投影写入的旧队列。代码、自动化门禁、Android 构建、fresh install、v1.4.8 覆盖升级与独立审查均已通过；七项媒体设备场景及 Prompt/Timeline 携带项仍需人工验收，完成前不得宣布 C 阶段发布闭环或开始 D 阶段实现。
 
 ## 自动化证据
 
 - 分支：`codex/c-closure-hotfix`
-- 自动化基线提交：`58b6dad6`（版本与本记录提交前）
+- 自动化验证提交：`c5f3a499`（本记录更新前）
 - `npm run typecheck`：PASS。
-- `CI=true npm test -- --runInBand`：105/106 suites passed，1 skipped；516 passed，2 skipped，0 failed；共 518 tests。
+- `CI=true npm test -- --runInBand`：105/106 suites passed，1 skipped；522 passed，2 skipped，0 failed；共 524 tests。
 - 预期日志：`aguiAgent.test.ts` 的故障注入输出 `provider failed`；不代表测试失败。
 - `git diff --check`：PASS。
 - 旧符号扫描：`ensureTaskMedia|ensureTaskDownloaded|exportTaskVideo|createTaskCoordinator|createMediaDeliveryQueue` 零匹配。
@@ -38,7 +38,7 @@ AutoDL 实测会从集群内动态可用存储节点分发，URL 不含稳定的
 - [x] fresh install：`1.4.9 (19)` 冷启动成功，`MainActivity isOnScreen=true/isVisible=true`，数据库 `user_version=6`、15 张当前表齐全，fatal SQLite/ReactNative logcat 零命中。
 - [x] v1.4.8 数据保留覆盖升级：正式 v1.4.8 APK 与 Debug APK 证书不同，故从 tag `v1.4.8` 构建同一 debug 签名的 `1.4.8 (18)` 作为 Android 可接受升级基线，再覆盖安装 `1.4.9 (19)`。升级后 task、media asset、delivery URI、workflow operation、blob ref sentinel 均保持，4-byte 私有 CAS sentinel 文件保持；任务页 UI 树可见 `upgrade-sentinel` 与“已保存到相册”；fatal scan 零命中。正式 v1.4.8 Release 资产 SHA-256 另核对为 `1CEBB70CBF45B12986E4F34350D3693983C46D05DECAF6CBCA7D39C9886EFB0B`。
 - [ ] 七项媒体设备场景与 Prompt/Timeline 携带项。
-- [ ] 独立代码审查无 Critical/Important。
+- [x] 独立代码审查无 Critical/Important：最终复核无 Critical、Important 或 Minor；真实 SQLite 探针确认 operation family 中 `%`、`_`、`\` 均按字面量匹配；复核聚焦测试 5 suites、46 tests 全部通过。
 - [ ] PR 检查、合并、`v1.4.9` annotated tag、Android Release workflow 与签名资产复核。
 
 ## D 阶段入口
