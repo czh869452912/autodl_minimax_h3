@@ -24,6 +24,7 @@ import { exportVideo } from '../native/media';
 import * as FileSystem from 'expo-file-system/legacy';
 import { removeCasPath } from '../media/cas';
 import { reconcileMediaState, type ReconciliationSummary } from '../media/reconciliation';
+import { createMediaCommandService, type MediaCommandService } from '../workflows/executor/mediaCommandService';
 
 const database = getDatabase();
 export const taskStore = createTaskRepository(database);
@@ -66,6 +67,7 @@ const executor = {
         commitSuccess: exportStore.commitSuccess,
         retry: exportStore.retry,
         finishFailure: exportStore.finishFailure,
+        removeLegacyPrivate: (sourceUri) => FileSystem.deleteAsync(sourceUri, { idempotent: true }),
       });
       return;
     }
@@ -130,6 +132,37 @@ const tick = createExecutorTick({
   isReadonly: () => Boolean(getAppRecoveryState(database)),
 });
 const cycle = createExecutorCycle({ runTick: (options) => tick.run(options) });
+
+export function createMediaCommandFacade(
+  commands: Pick<MediaCommandService, 'requestDownload' | 'requestExport'>,
+  runCycle: (options: CycleOptions) => Promise<CycleSummary>,
+) {
+  return {
+    async requestTaskDownload(taskId: string) {
+      const result = await commands.requestDownload(taskId);
+      if (result.status !== 'already-complete') await runCycle({ reason: 'foreground' });
+      return result;
+    },
+    async requestTaskExport(taskId: string, policy: { keepPrivateCopy: boolean }) {
+      const result = await commands.requestExport(taskId, policy);
+      if (result.status !== 'already-complete') await runCycle({ reason: 'foreground' });
+      return result;
+    },
+  };
+}
+
+const mediaCommands = createMediaCommandService({
+  db: database,
+  fileExists: async (uri) => {
+    const info = await FileSystem.getInfoAsync(uri);
+    return info.exists && !info.isDirectory;
+  },
+  resolveCasUri: (relativePath) => `${FileSystem.documentDirectory ?? ''}${relativePath}`,
+});
+const mediaCommandFacade = createMediaCommandFacade(mediaCommands, (options) => cycle.run(options));
+
+export const requestTaskDownload = mediaCommandFacade.requestTaskDownload;
+export const requestTaskExport = mediaCommandFacade.requestTaskExport;
 
 async function repairTaskProjections(limit = 32): Promise<number> {
   const persisted = (await compatibilityJobs.list()).slice(0, limit);

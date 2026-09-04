@@ -15,7 +15,7 @@ const operation: WorkflowOperation = {
 
 function setup() {
   const stream = { async *[Symbol.asyncIterator]() { yield new Uint8Array([1, 2, 3]); } };
-  const operations = { finish: jest.fn(() => true), retry: jest.fn(() => true), renew: jest.fn(() => true) };
+  const operations = { finish: jest.fn(() => true), retry: jest.fn(() => true), renew: jest.fn(() => true), get: jest.fn(() => operation) };
   const blobs = { upsertBlob: jest.fn(), retain: jest.fn() };
   const cas = { put: jest.fn(async (..._args: Parameters<ArtifactCas['put']>) => ({ sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}` })) };
   const openDownload = jest.fn(async () => ({ finalUrl: 'https://cdn.example/video.mp4', status: 200, mime: 'video/mp4', stream }));
@@ -81,6 +81,21 @@ test('retries connection and idle timeouts with bounded backoff', async () => {
   }));
   expect(deps.updateDownloadState).toHaveBeenLastCalledWith('ENQUEUED', 'ARTIFACT_CONNECT_TIMEOUT');
   expect(deps.operations.finish).not.toHaveBeenCalled();
+});
+
+test('uses the latest persisted delivery intent when save joins a claimed download', async () => {
+  const deps = setup();
+  const commit = jest.fn(async () => undefined);
+  deps.operations.get.mockReturnValue({
+    ...operation,
+    payload: { ...operation.payload, deliveryIntent: { target: 'system-gallery', keepPrivateCopy: false } },
+  });
+  await handleArtifactDownload(operation, 'worker', {
+    ...deps, commit, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+  expect(commit).toHaveBeenCalledWith(expect.objectContaining({
+    deliveryIntent: { target: 'system-gallery', keepPrivateCopy: false },
+  }));
 });
 
 test('treats structured policy and integrity failures as terminal', async () => {

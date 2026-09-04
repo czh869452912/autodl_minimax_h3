@@ -65,6 +65,16 @@ test('releases only the matching blob reference when private copy is disabled', 
   }));
 });
 
+test('exposes a deterministic interruption seam after native publish and before SQLite commit', async () => {
+  const deps = { ...setupExport(), afterPublish: jest.fn(async () => { throw new Error('SIMULATED_PROCESS_EXIT'); }) };
+  await expect(handleExport(operation, 'worker', deps)).rejects.toThrow('SIMULATED_PROCESS_EXIT');
+  expect(deps.publish).toHaveBeenCalledTimes(1);
+  expect(deps.afterPublish).toHaveBeenCalledWith({ operationId: 'export-1', galleryUri: 'content://media/external/video/7' });
+  expect(deps.commitSuccess).not.toHaveBeenCalled();
+  expect(deps.retry).not.toHaveBeenCalled();
+  expect(deps.finishFailure).not.toHaveBeenCalled();
+});
+
 test('durably exports a legacy private source without inventing or releasing a CAS reference', async () => {
   const deps = { ...setupExport(), removeLegacyPrivate: jest.fn(async () => undefined) };
   const legacy = {

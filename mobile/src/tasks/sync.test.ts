@@ -1,7 +1,21 @@
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})), backupDatabaseSync: jest.fn() }));
 jest.mock('../storage/databaseClient', () => ({ getDatabase: jest.fn(() => ({})) }));
 
-import { createSyncTaskRunner } from './sync';
+import { createMediaCommandFacade, createSyncTaskRunner } from './sync';
+
+test('media command facade persists intent before kicking the foreground cycle', async () => {
+  const order: string[] = [];
+  const commands = {
+    requestDownload: jest.fn(async () => { order.push('download'); return { status: 'queued' as const }; }),
+    requestExport: jest.fn(async () => { order.push('export'); return { status: 'queued' as const }; }),
+  };
+  const runCycle = jest.fn(async () => { order.push('cycle'); return {} as never; });
+  const facade = createMediaCommandFacade(commands, runCycle);
+  await facade.requestTaskDownload('task-1');
+  await facade.requestTaskExport('task-1', { keepPrivateCopy: false });
+  expect(order).toEqual(['download', 'cycle', 'export', 'cycle']);
+  expect(commands.requestExport).toHaveBeenCalledWith('task-1', { keepPrivateCopy: false });
+});
 
 test('compatibility facade routes through the bounded executor cycle and converts its summary', async () => {
   const runCycle = jest.fn(async () => ({

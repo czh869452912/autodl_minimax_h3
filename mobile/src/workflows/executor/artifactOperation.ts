@@ -22,7 +22,7 @@ export type SystemGalleryIntent = { target: 'system-gallery'; keepPrivateCopy: b
 export type ArtifactDownloadPayload = { artifact: ArtifactRecord; deliveryIntent?: SystemGalleryIntent };
 
 type ArtifactOperationDeps = {
-  operations: Pick<OperationRepository, 'retry' | 'finish' | 'renew'>;
+  operations: Pick<OperationRepository, 'get' | 'retry' | 'finish' | 'renew'>;
   blobs: { upsertBlob(blob: ArtifactBlob): void; retain(sha256: string, ownerType: string, ownerId: string, now: number): void };
   cas: ArtifactCas;
   openDownload?: typeof openArtifactDownload;
@@ -170,7 +170,18 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     const resolveUri = deps.resolveUri ?? ((relativePath: string) => `${FileSystem.documentDirectory ?? ''}${relativePath}`);
     const localUri = resolveUri(blob.relativePath);
     if (deps.commit) {
-      await deps.commit({ operationId: operation.id, owner, jobId: operation.jobId, artifact, blob, localUri, now: timestamp, deliveryPolicy: deps.deliveryPolicy, deliveryIntent: payload.deliveryIntent });
+      const latestPayload = payloadFrom(deps.operations.get(operation.id) ?? operation);
+      await deps.commit({
+        operationId: operation.id,
+        owner,
+        jobId: operation.jobId,
+        artifact,
+        blob,
+        localUri,
+        now: timestamp,
+        deliveryPolicy: deps.deliveryPolicy,
+        deliveryIntent: latestPayload?.deliveryIntent ?? payload.deliveryIntent,
+      });
     } else {
       deps.blobs.upsertBlob(blob);
       deps.blobs.retain(blob.sha256, 'workflow_artifact', `${operation.jobId}:${artifact.id}`, timestamp);

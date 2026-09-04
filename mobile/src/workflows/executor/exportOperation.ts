@@ -31,6 +31,7 @@ type ExportDeps = {
   markExporting(operation: WorkflowOperation, owner: string, payload: ExportPayload, now: number): Promise<void> | void;
   canPublish?(operation: WorkflowOperation, owner: string, payload: ExportPayload): boolean;
   publish(sourceUri: string, options: { mediaId: string; displayName: string }): Promise<{ uri: string }>;
+  afterPublish?(input: { operationId: string; galleryUri: string }): Promise<void> | void;
   commitSuccess(input: ExportSuccessInput): Promise<void> | void;
   retry(operation: WorkflowOperation, owner: string, payload: ExportPayload, input: ExportFailureInput & { nextRetryAt: number }): Promise<void> | void;
   finishFailure(operation: WorkflowOperation, owner: string, payload: ExportPayload | undefined, now: number, error: NormalizedError): Promise<void> | void;
@@ -96,8 +97,22 @@ export async function handleExport(operation: WorkflowOperation, owner: string, 
 
   await deps.markExporting(operation, owner, payload, timestamp);
   if (deps.canPublish && !deps.canPublish(operation, owner, payload)) return;
+  let result: { uri: string };
   try {
-    const result = await deps.publish(payload.sourceUri, { mediaId: payload.assetId, displayName: payload.displayName });
+    result = await deps.publish(payload.sourceUri, { mediaId: payload.assetId, displayName: payload.displayName });
+  } catch (cause) {
+    if (transientNativeFailure(cause)) {
+      const retryError = failure('EXPORT_NATIVE_RETRY', true);
+      const nextRetryAt = timestamp + Math.min(60_000, 1_000 * (2 ** Math.max(0, operation.attempt - 1)));
+      await deps.retry(operation, owner, payload, { now: timestamp, nextRetryAt, error: retryError });
+      return;
+    }
+    await deps.finishFailure(operation, owner, payload, timestamp, failure('EXPORT_NATIVE_FAILED'));
+    return;
+  }
+
+  await deps.afterPublish?.({ operationId: operation.id, galleryUri: result.uri });
+  try {
     await deps.commitSuccess({
       operationId: operation.id,
       owner,
