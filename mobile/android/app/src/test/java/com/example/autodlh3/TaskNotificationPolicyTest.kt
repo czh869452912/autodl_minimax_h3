@@ -10,7 +10,15 @@ import org.junit.Test
 private class MemoryNotificationHistory : NotificationHistory {
   var ids = emptyList<String>()
   override fun read(): List<String> = ids
-  override fun write(eventIds: List<String>) { ids = eventIds }
+  override fun write(eventIds: List<String>): Boolean {
+    ids = eventIds
+    return true
+  }
+}
+
+private class FailingNotificationHistory : NotificationHistory {
+  override fun read(): List<String> = emptyList()
+  override fun write(eventIds: List<String>): Boolean = false
 }
 
 class TaskNotificationPolicyTest {
@@ -42,5 +50,15 @@ class TaskNotificationPolicyTest {
     assertEquals(listOf("任务已完成", "任务部分完成", "任务失败", "任务已取消"), titles)
     assertTrue(TaskNotificationPolicy.monitorText(3).contains("3"))
     assertEquals("正在监控 3 个任务", TaskNotificationPolicy.monitorText(3))
+  }
+
+  @Test fun doesNotNotifyWhenDeduplicationCannotBePersisted() {
+    var notifications = 0
+    val policy = TaskNotificationPolicy(FailingNotificationHistory()) { _, _, _ -> notifications += 1 }
+
+    val failure = runCatching { policy.publish(listOf(TaskTerminalEvent("event", "task", "SUCCESS"))) }.exceptionOrNull()
+
+    assertTrue(failure is IllegalStateException)
+    assertEquals(0, notifications)
   }
 }

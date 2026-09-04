@@ -15,7 +15,7 @@ data class TaskTerminalEvent(val eventId: String, val taskId: String, val status
 
 interface NotificationHistory {
   fun read(): List<String>
-  fun write(eventIds: List<String>)
+  fun write(eventIds: List<String>): Boolean
 }
 
 class TaskNotificationPolicy(
@@ -31,7 +31,7 @@ class TaskNotificationPolicy(
       val copy = copyFor(event.status) ?: continue
       known += event.eventId
       while (known.size > MAX_HISTORY) known.remove(known.first())
-      history.write(known.toList())
+      check(history.write(known.toList())) { "notification history commit failed" }
       notifier(event, copy.first, copy.second)
       published += 1
     }
@@ -62,9 +62,8 @@ class TaskNotificationManager(private val context: Context) {
         (0 until json.length()).mapNotNull { json.optString(it).takeIf(String::isNotBlank) }
       }.getOrDefault(emptyList())
     }
-    override fun write(eventIds: List<String>) {
+    override fun write(eventIds: List<String>): Boolean =
       prefs.edit().putString(KEY_NOTIFIED_EVENTS, JSONArray(eventIds).toString()).commit()
-    }
   }
   private val policy = TaskNotificationPolicy(history) { event, title, body ->
     notifications.notify(event.eventId.hashCode(), resultNotification(event, title, body))
