@@ -36,7 +36,7 @@ test('compatibility facade routes through the bounded executor cycle and convert
   const listTasks = jest.fn(async () => [{ id: 'task-1' }] as never);
   const pendingSummary = jest.fn(() => ({ remainingDue: 4, remainingScheduled: 2 }));
   const claimMaintenance = jest.fn(() => true);
-  const run = createSyncTaskRunner({ runCycle, repair, reconcile, listTasks, pendingSummary, claimMaintenance, listTerminalEvents: jest.fn(() => []), now: () => 500 });
+  const run = createSyncTaskRunner({ runCycle, repair, reconcile, listTasks, pendingSummary, countOutstanding: jest.fn(() => 0), claimMaintenance, listTerminalEvents: jest.fn(() => []), now: () => 500 });
   await expect(run({ reason: 'background', mode: 'maintenance' })).resolves.toEqual({
     tasks: [{ id: 'task-1' }],
     summary: {
@@ -82,13 +82,15 @@ test('poll skips maintenance and service reports only scoped outstanding work', 
     return { scanned: 100, repaired: 0, staleFiles: 0, garbageDeleted: 0, garbageFailed: 0 };
   });
   const pendingSummary = jest.fn(({ jobIds }: { jobIds?: string[] }) => jobIds ? { remainingDue: 1, remainingScheduled: 2, nextWakeAt: 900 } : { remainingDue: 20, remainingScheduled: 30 });
+  const countOutstanding = jest.fn(() => 3);
   const run = createSyncTaskRunner({
-    runCycle, repair, reconcile, pendingSummary, claimMaintenance: jest.fn(() => true), listTerminalEvents: jest.fn(() => []),
+    runCycle, repair, reconcile, pendingSummary, countOutstanding, claimMaintenance: jest.fn(() => true), listTerminalEvents: jest.fn(() => []),
     listTasks: jest.fn(async () => Array.from({ length: 100 }, (_, id) => ({ id })) as never), now: () => 500,
   });
 
   const poll = await run({ reason: 'foreground', mode: 'poll' });
   expect(poll.summary).toMatchObject({ updated: 0, remaining: 50, maintenanceRan: false, reconciliation: { scanned: 0 } });
+  expect(countOutstanding).not.toHaveBeenCalled();
   expect(repair).not.toHaveBeenCalled();
   expect(reconcile).not.toHaveBeenCalled();
   expect(fileExists).not.toHaveBeenCalled();
@@ -97,6 +99,41 @@ test('poll skips maintenance and service reports only scoped outstanding work', 
   const service = await run({ reason: 'service', mode: 'service', taskIds: ['job-a'] });
   expect(service.summary).toMatchObject({ remaining: 3, maintenanceRan: false, terminalEvents: [] });
   expect(pendingSummary).toHaveBeenLastCalledWith({ now: 500, jobIds: ['job-a'] });
+  expect(countOutstanding).toHaveBeenCalledWith(['job-a']);
+});
+
+test('service stays alive for scoped claimed work after pending summary reaches zero', async () => {
+  const countOutstanding = jest.fn(() => 1);
+  const run = createSyncTaskRunner({
+    runCycle: jest.fn(async () => ({ claimed: 0, succeeded: 0, retried: 0, failed: 0, blocked: 0, remainingDue: 0, remainingScheduled: 0, passes: 1, budgetExhausted: false })),
+    repair: jest.fn(async () => 0),
+    reconcile: jest.fn(async () => ({ scanned: 0, repaired: 0, staleFiles: 0, garbageDeleted: 0, garbageFailed: 0 })),
+    listTasks: jest.fn(async () => []),
+    pendingSummary: jest.fn(() => ({ remainingDue: 0, remainingScheduled: 0 })),
+    countOutstanding,
+    claimMaintenance: jest.fn(() => false),
+    listTerminalEvents: jest.fn(() => []),
+    now: () => 500,
+  });
+
+  expect((await run({ reason: 'service', mode: 'service', taskIds: ['job-a'] })).summary.remaining).toBe(1);
+  expect(countOutstanding).toHaveBeenCalledWith(['job-a']);
+});
+
+test('service stays alive for a scoped active task with no pending or claimed operation', async () => {
+  const run = createSyncTaskRunner({
+    runCycle: jest.fn(async () => ({ claimed: 0, succeeded: 0, retried: 0, failed: 0, blocked: 0, remainingDue: 0, remainingScheduled: 0, passes: 1, budgetExhausted: false })),
+    repair: jest.fn(async () => 0),
+    reconcile: jest.fn(async () => ({ scanned: 0, repaired: 0, staleFiles: 0, garbageDeleted: 0, garbageFailed: 0 })),
+    listTasks: jest.fn(async () => [{ id: 'job-a' }, { id: 'job-b' }] as never),
+    pendingSummary: jest.fn(() => ({ remainingDue: 0, remainingScheduled: 0 })),
+    countOutstanding: jest.fn(() => 0),
+    claimMaintenance: jest.fn(() => false),
+    listTerminalEvents: jest.fn(() => []),
+    now: () => 500,
+  });
+
+  expect((await run({ reason: 'service', mode: 'service', taskIds: ['job-a'] })).summary.remaining).toBe(1);
 });
 
 test('maintenance obeys cooldown while force requests always run repair and reconciliation', async () => {
@@ -105,7 +142,7 @@ test('maintenance obeys cooldown while force requests always run repair and reco
   const reconcile = jest.fn(async () => ({ scanned: 1, repaired: 0, staleFiles: 0, garbageDeleted: 0, garbageFailed: 0 }));
   let claimCount = 0;
   const claimMaintenance = jest.fn((_force: boolean): boolean => { claimCount += 1; return claimCount !== 2; });
-  const run = createSyncTaskRunner({ runCycle, repair, reconcile, claimMaintenance, listTerminalEvents: jest.fn(() => []), pendingSummary: jest.fn(() => ({ remainingDue: 0, remainingScheduled: 0 })), listTasks: jest.fn(async () => []), now: () => 500 });
+  const run = createSyncTaskRunner({ runCycle, repair, reconcile, claimMaintenance, listTerminalEvents: jest.fn(() => []), pendingSummary: jest.fn(() => ({ remainingDue: 0, remainingScheduled: 0 })), countOutstanding: jest.fn(() => 0), listTasks: jest.fn(async () => []), now: () => 500 });
 
   expect((await run({ reason: 'foreground', mode: 'maintenance' })).summary.maintenanceRan).toBe(true);
   expect((await run({ reason: 'foreground', mode: 'maintenance' })).summary.maintenanceRan).toBe(false);

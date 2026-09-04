@@ -212,6 +212,7 @@ export function createSyncTaskRunner(deps: {
   reconcile(): Promise<ReconciliationSummary>;
   listTasks(): ReturnType<typeof taskStore.listActive>;
   pendingSummary(options: { now: number; jobIds?: string[] }): PendingSummary;
+  countOutstanding(jobIds: string[]): number;
   claimMaintenance(force: boolean): boolean;
   listTerminalEvents(jobIds: string[]): Parameters<typeof projectTerminalNotifications>[0];
   now(): number;
@@ -225,6 +226,10 @@ export function createSyncTaskRunner(deps: {
     const tasks = await deps.listTasks();
     const serviceIds = request.mode === 'service' ? request.taskIds ?? [] : [];
     const pending = deps.pendingSummary({ now: timestamp, ...(request.mode === 'service' ? { jobIds: serviceIds } : {}) });
+    const serviceIdSet = request.mode === 'service' ? new Set(serviceIds) : undefined;
+    const remaining = request.mode === 'service'
+      ? tasks.filter((task) => serviceIdSet!.has(task.id)).length + deps.countOutstanding(serviceIds)
+      : pending.remainingDue + pending.remainingScheduled;
     const terminalEvents = request.mode === 'service' ? projectTerminalNotifications(deps.listTerminalEvents(serviceIds)) : [];
     return {
       tasks,
@@ -232,7 +237,7 @@ export function createSyncTaskRunner(deps: {
         updated,
         failed: operationSummary.failed,
         skipped: operationSummary.blocked,
-        remaining: pending.remainingDue + pending.remainingScheduled,
+        remaining,
         lastSyncAt: timestamp,
         operations: operationSummary,
         reconciliation,
@@ -257,6 +262,7 @@ const run = createSyncTaskRunner({
   }),
   listTasks: () => taskStore.listActive(),
   pendingSummary: (options) => operations.pendingSummary(options),
+  countOutstanding: (jobIds) => operations.countOutstanding(jobIds),
   claimMaintenance: (force) => claimMaintenanceWindow(database, Date.now(), force),
   listTerminalEvents: (jobIds) => jobs.listTerminalEvents(jobIds),
   now: Date.now,

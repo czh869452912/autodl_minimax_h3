@@ -1,5 +1,8 @@
 import { createInitializedRealSqliteTestDb } from '../../test/realSqlite';
 import { createOperationRepository } from './operationRepository';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 function setup() {
   const db = createInitializedRealSqliteTestDb();
@@ -97,6 +100,27 @@ test('expired safe work is requeued while expired submits require job-aware reco
     expect(repository.get('status')).not.toHaveProperty('leaseExpiresAt');
     expect(repository.get('submit')).toMatchObject({ state: 'CLAIMED', leaseOwner: 'dead' });
   } finally { db.close(); }
+});
+
+test('countOutstanding observes claimed work from another database connection', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'operation-repository-'));
+  const path = join(directory, 'operations.db');
+  const claimantDb = createInitializedRealSqliteTestDb(path);
+  const observerDb = createInitializedRealSqliteTestDb(path);
+  const claimant = createOperationRepository(claimantDb as never);
+  const observer = createOperationRepository(observerDb as never);
+  try {
+    enqueue(claimant, { jobId: 'job-a' });
+    expect(claimant.claimDue({ kind: 'STATUS_SYNC', owner: 'worker-a', now: 100, leaseMs: 1_000, limit: 1 }))
+      .toMatchObject([{ id: 'op-1', state: 'CLAIMED' }]);
+
+    expect(observer.pendingSummary({ now: 100, jobIds: ['job-a'] })).toEqual({ remainingDue: 0, remainingScheduled: 0 });
+    expect(observer.countOutstanding(['job-a'])).toBe(1);
+  } finally {
+    observerDb.close();
+    claimantDb.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('queries bounded due work and aggregates pending state without scanning terminal history', () => {
