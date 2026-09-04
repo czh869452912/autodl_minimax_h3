@@ -89,7 +89,7 @@ Expected: FAIL，因为只有 `1.0.0` 且 bootstrap 只处理无 active record �
 
 - [x] **Step 3: 验证 workflow registry 测试转绿**
 
-Run: Task 1 Step 1 命令。  
+Run: Task 1 Step 1 命令。
 Expected: PASS，且旧 package record 未被覆盖。
 
 - [x] **Step 4: 写 snapshot 规范化和提交校验失败测试**
@@ -703,7 +703,7 @@ git commit -m "feat: notify terminal monitored task results"
 - Modify: `docs/superpowers/handoffs/2026-09-01-c-d-stages-handoff.md`
 - Modify: `docs/superpowers/reviews/2026-09-04-task-list-refresh-performance-review.md` only if the user explicitly wants the untracked dev review imported into this branch; otherwise reference it without copying.
 
-- [ ] **Step 1: 跑完整 JS/SQLite 门禁**
+- [x] **Step 1: 跑完整 JS/SQLite 门禁**
 
 ```powershell
 cd mobile
@@ -715,7 +715,7 @@ npx expo install --check
 
 Expected: zero failed suites/tests/type errors/dependency mismatches。记录 suite/test 精确计数和唯一预期 console fault-injection 输出。
 
-- [ ] **Step 2: 跑 Android 单元、instrumentation 和 debug build**
+- [x] **Step 2: 跑 Android 单元、instrumentation 和 debug build**
 
 ```powershell
 cd mobile/android
@@ -725,7 +725,7 @@ $env:JAVA_HOME='C:\Users\fai_l\.jdks\jbr-21.0.11'
 
 Expected: BUILD SUCCESSFUL；记录 task 数、APK byte size、SHA-256、设备 ABI 和测试数。
 
-- [ ] **Step 3: fresh install 与 schema/崩溃检查**
+- [x] **Step 3: fresh install 与 schema/崩溃检查**
 
 ```powershell
 $adb='C:\Users\fai_l\AppData\Local\Android\Sdk\platform-tools\adb.exe'
@@ -756,7 +756,7 @@ $adb='C:\Users\fai_l\AppData\Local\Android\Sdk\platform-tools\adb.exe'
 
 重新验证 auto-export on/off、keep-private-copy on/off、manual save/retry、native publish 后重启幂等、缺失投影修复、background/foreground 状态，以及 Prompt/Timeline 携带项。此前 v1.4.8→v1.4.9 数据保留证据仍有效；若 APK 行为影响启动或 schema，则重新跑覆盖升级。
 
-- [ ] **Step 6: 独立审查**
+- [x] **Step 6: 独立审查**
 
 使用 `superpowers:requesting-code-review`，审查基线 `ae526b97` 到最终 HEAD，重点：
 
@@ -770,7 +770,7 @@ $adb='C:\Users\fai_l\AppData\Local\Android\Sdk\platform-tools\adb.exe'
 
 必须无 Critical/Important；对合理 finding 走 TDD 修复并重新完整验证。
 
-- [ ] **Step 7: 更新证据并提交**
+- [x] **Step 7: 更新证据并提交**
 
 把真实命令、计数、APK hash、设备证据、性能观察和审查结论写入 verification/handoff。不得把未执行项标为 PASS。
 
