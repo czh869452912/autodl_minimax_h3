@@ -5,6 +5,9 @@ import type { WorkflowOperation } from './types';
 import { createOperationRepository } from './operationRepository';
 import { createTaskRepository } from '../../tasks/repository';
 import { createSqliteMediaStore } from '../../media/repository';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const operation: WorkflowOperation = {
   id: 'download-1', kind: 'ARTIFACT_DOWNLOAD', jobId: 'job-1', idempotencyKey: 'artifact:job-1:video-1',
@@ -139,6 +142,7 @@ test('reserves blob metadata before publication and releases it for GC when comm
   const commit = Object.assign(
     jest.fn(() => { order.push('commit'); throw new Error('artifact operation lease lost'); }),
     {
+      clearStale: jest.fn(() => { order.push('clear'); }),
       reserve: jest.fn(() => { order.push('reserve'); }),
       release: jest.fn(() => { order.push('release'); }),
     },
@@ -148,16 +152,17 @@ test('reserves blob metadata before publication and releases it for GC when comm
     ...deps, commit, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
   });
 
-  expect(order).toEqual(['release', 'reserve', 'publish', 'commit', 'release']);
+  expect(order).toEqual(['clear', 'reserve', 'publish', 'commit', 'release']);
   expect(commit.reserve).toHaveBeenCalledWith(expect.objectContaining({ operationId: 'download-1', owner: 'worker' }));
-  expect(commit.release).toHaveBeenCalledTimes(2);
-  expect(commit.release).toHaveBeenCalledWith({ operationId: 'download-1' });
+  expect(commit.release).toHaveBeenCalledTimes(1);
+  expect(commit.release).toHaveBeenCalledWith({ operationId: 'download-1', owner: 'worker' });
 });
 
 test('clears a crashed prior reservation even when the next attempt fails before staging', async () => {
   const deps = setup();
   deps.openDownload.mockRejectedValueOnce(Object.assign(new Error('offline'), { code: 'ARTIFACT_NETWORK', retryable: true }));
   const commit = Object.assign(jest.fn(), {
+    clearStale: jest.fn(),
     reserve: jest.fn(),
     release: jest.fn(),
   });
@@ -166,8 +171,9 @@ test('clears a crashed prior reservation even when the next attempt fails before
     ...deps, commit, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
   });
 
-  expect(commit.release).toHaveBeenCalledTimes(1);
-  expect(commit.release).toHaveBeenCalledWith({ operationId: 'download-1' });
+  expect(commit.clearStale).toHaveBeenCalledTimes(1);
+  expect(commit.clearStale).toHaveBeenCalledWith({ operationId: 'download-1', owner: 'worker' });
+  expect(commit.release).not.toHaveBeenCalled();
   expect(commit.reserve).not.toHaveBeenCalled();
   expect(deps.operations.retry).toHaveBeenCalled();
 });
@@ -200,6 +206,7 @@ test('does not run the video decoder probe for non-video artifacts', async () =>
 test('uses the latest persisted delivery intent when save joins a claimed download', async () => {
   const deps = setup();
   const commit = Object.assign(jest.fn(async () => undefined), {
+    clearStale: jest.fn(async () => undefined),
     reserve: jest.fn(async () => undefined),
     release: jest.fn(async () => undefined),
   });
@@ -351,7 +358,7 @@ test('failed post-publication commit leaves a database-visible unreferenced blob
     const blob = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 50, verifiedAt: 50 };
     commit.reserve({ operationId: 'download-1', owner: 'worker', blob, now: 50 });
     expect(db.getFirstSync("SELECT owner_type FROM artifact_blob_refs WHERE blob_sha256=?", blob.sha256))
-      .toMatchObject({ owner_type: 'artifact_operation' });
+      .toMatchObject({ owner_type: 'artifact_operation:download-1' });
 
     operationStore.retry('download-1', 'worker', { now: 50, nextRetryAt: 60, error: { code: 'TEST', message: 'test', retryable: true } });
     expect(() => commit({
@@ -359,7 +366,7 @@ test('failed post-publication commit leaves a database-visible unreferenced blob
       blob, localUri: 'file:///cas/sha256/aa/blob', now: 50,
       deliveryPolicy: { autoExportToGallery: false, keepPrivateCopy: true },
     })).toThrow('lease lost');
-    commit.release({ operationId: 'download-1' });
+    commit.release({ operationId: 'download-1', owner: 'worker' });
 
     expect(db.getFirstSync('SELECT sha256 FROM artifact_blobs WHERE sha256=?', blob.sha256)).toMatchObject({ sha256: blob.sha256 });
     expect(db.getFirstSync('SELECT blob_sha256 FROM artifact_blob_refs WHERE blob_sha256=?', blob.sha256)).toBeUndefined();
@@ -379,9 +386,36 @@ test('a replacement reservation releases the previous attempt hash for GC', asyn
 
     expect(db.getFirstSync('SELECT 1 AS present FROM artifact_blob_refs WHERE blob_sha256=?', first.sha256)).toBeUndefined();
     expect(db.getFirstSync('SELECT owner_id FROM artifact_blob_refs WHERE blob_sha256=?', second.sha256))
-      .toMatchObject({ owner_id: 'download-1' });
+      .toMatchObject({ owner_id: 'worker' });
     expect(db.getFirstSync('SELECT sha256 FROM artifact_blobs WHERE sha256=?', first.sha256)).toMatchObject({ sha256: first.sha256 });
   } finally { db.close(); }
+});
+
+test('a late expired owner cannot release the replacement owner reservation', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'artifact-reservation-'));
+  const path = join(directory, 'reservation.db');
+  const firstDb = createInitializedRealSqliteTestDb(path);
+  const secondDb = createInitializedRealSqliteTestDb(path);
+  try {
+    await seedArtifactCommit(firstDb);
+    const firstCommit = createSqliteArtifactCommitter(firstDb as never);
+    const secondCommit = createSqliteArtifactCommitter(secondDb as never);
+    const first = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/first', createdAt: 40, verifiedAt: 40 };
+    const second = { sha256: 'b'.repeat(64), byteSize: 4, mime: 'video/mp4', relativePath: 'cas/sha256/bb/second', createdAt: 50, verifiedAt: 50 };
+    firstCommit.reserve({ operationId: 'download-1', owner: 'worker', blob: first, now: 40 });
+
+    secondDb.runSync("UPDATE workflow_operations SET lease_owner='worker-b', lease_expires_at=200 WHERE id='download-1'");
+    secondCommit.reserve({ operationId: 'download-1', owner: 'worker-b', blob: second, now: 50 });
+    firstCommit.release({ operationId: 'download-1', owner: 'worker' });
+
+    expect(secondDb.getFirstSync('SELECT owner_type,owner_id FROM artifact_blob_refs WHERE blob_sha256=?', second.sha256))
+      .toMatchObject({ owner_type: 'artifact_operation:download-1', owner_id: 'worker-b' });
+    expect(secondDb.getFirstSync('SELECT 1 AS present FROM artifact_blob_refs WHERE blob_sha256=?', first.sha256)).toBeUndefined();
+  } finally {
+    secondDb.close();
+    firstDb.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('explicit delivery intent overrides disabled auto export and freezes private-copy policy', async () => {

@@ -60,9 +60,14 @@ export type ArtifactReservationInput = {
 
 export type ArtifactCommitter = {
   (input: ArtifactCommitInput): Promise<void> | void;
+  clearStale(input: { operationId: string; owner: string }): Promise<void> | void;
   reserve(input: ArtifactReservationInput): Promise<void> | void;
-  release(input: { operationId: string }): Promise<void> | void;
+  release(input: { operationId: string; owner: string }): Promise<void> | void;
 };
+
+function reservationOwnerType(operationId: string): string {
+  return `artifact_operation:${operationId}`;
+}
 
 function transaction(db: SQLiteDatabase, work: () => void): void {
   if (typeof db.withTransactionSync === 'function') { db.withTransactionSync(work); return; }
@@ -92,7 +97,7 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => n
         input.blob.sha256, input.blob.byteSize, input.blob.mime, input.blob.relativePath, input.blob.createdAt, input.blob.verifiedAt,
       );
       db.runSync('INSERT OR IGNORE INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)', input.blob.sha256, 'workflow_artifact', `${input.jobId}:${input.artifact.id}`, input.now);
-      db.runSync("DELETE FROM artifact_blob_refs WHERE blob_sha256=? AND owner_type='artifact_operation' AND owner_id=?", input.blob.sha256, input.operationId);
+      db.runSync('DELETE FROM artifact_blob_refs WHERE blob_sha256=? AND owner_type=? AND owner_id=?', input.blob.sha256, reservationOwnerType(input.operationId), input.owner);
       const automaticIntent = input.artifact.kind === 'video' && input.deliveryPolicy.autoExportToGallery
         ? { target: 'system-gallery' as const, keepPrivateCopy: input.deliveryPolicy.keepPrivateCopy }
         : undefined;
@@ -131,6 +136,17 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => n
     });
   };
   return Object.assign(commit, {
+    clearStale(input: { operationId: string; owner: string }): void {
+      assertAppDatabaseWritable(db);
+      transaction(db, () => {
+        const claim = db.getFirstSync<{ present: number }>(
+          "SELECT 1 AS present FROM workflow_operations WHERE id=? AND state='CLAIMED' AND lease_owner=? LIMIT 1",
+          input.operationId, input.owner,
+        );
+        if (!claim) throw new Error('artifact operation lease lost');
+        db.runSync('DELETE FROM artifact_blob_refs WHERE owner_type=?', reservationOwnerType(input.operationId));
+      });
+    },
     reserve(input: ArtifactReservationInput): void {
       assertAppDatabaseWritable(db);
       transaction(db, () => {
@@ -140,23 +156,24 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => n
           input.operationId, input.owner,
         );
         if (!claim) throw new Error('artifact operation lease lost');
-        db.runSync("DELETE FROM artifact_blob_refs WHERE owner_type='artifact_operation' AND owner_id=?", input.operationId);
+        const ownerType = reservationOwnerType(input.operationId);
+        db.runSync('DELETE FROM artifact_blob_refs WHERE owner_type=?', ownerType);
         db.runSync(
           'INSERT INTO artifact_blobs (sha256,byte_size,mime,relative_path,created_at,verified_at) VALUES (?,?,?,?,?,?) ON CONFLICT(sha256) DO UPDATE SET verified_at=MAX(artifact_blobs.verified_at, excluded.verified_at)',
           input.blob.sha256, input.blob.byteSize, input.blob.mime, input.blob.relativePath, input.blob.createdAt, input.blob.verifiedAt,
         );
         db.runSync(
-          "INSERT OR IGNORE INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,'artifact_operation',?,?)",
-          input.blob.sha256, input.operationId, input.now,
+          'INSERT OR IGNORE INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)',
+          input.blob.sha256, ownerType, input.owner, input.now,
         );
       });
     },
-    release(input: { operationId: string }): void {
+    release(input: { operationId: string; owner: string }): void {
       assertAppDatabaseWritable(db);
       transaction(db, () => {
         db.runSync(
-          "DELETE FROM artifact_blob_refs WHERE owner_type='artifact_operation' AND owner_id=?",
-          input.operationId,
+          'DELETE FROM artifact_blob_refs WHERE owner_type=? AND owner_id=?',
+          reservationOwnerType(input.operationId), input.owner,
         );
       });
     },
@@ -196,9 +213,9 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     return;
   }
   let staged: Awaited<ReturnType<ArtifactCas['stage']>> | undefined;
-  let reservation: { operationId: string } | undefined;
+  let reservation: { operationId: string; owner: string } | undefined;
   try {
-    if (deps.commit) await deps.commit.release({ operationId: operation.id });
+    if (deps.commit) await deps.commit.clearStale({ operationId: operation.id, owner });
     await deps.ensureProjection(operation.jobId, artifact);
     await deps.updateDownloadState('DOWNLOADING');
     const policy = deps.policy(operation.jobId, artifact);
@@ -234,7 +251,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     if (deps.commit) {
       const blob = { ...staged, createdAt: timestamp, verifiedAt: timestamp };
       await deps.commit.reserve({ operationId: operation.id, owner, blob, now: timestamp });
-      reservation = { operationId: operation.id };
+      reservation = { operationId: operation.id, owner };
     }
     const stored = await staged.publish();
     const blob: ArtifactBlob = { ...stored, createdAt: timestamp, verifiedAt: timestamp };
