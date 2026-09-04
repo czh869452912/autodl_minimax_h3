@@ -12,6 +12,9 @@ import {
   type BuiltinWorkflowReleaseSet,
 } from './releaseManifest';
 import type { WorkflowPackage } from '../schema/package';
+import { createWorkflowReleaseCoordinator } from './releaseCoordinator';
+import { isWorkflowCompatible } from './service';
+import { createReleaseBackup } from '../../storage/backup';
 
 export const builtinWorkflowDefinitions: WorkflowDefinition[] = [h3Definition as WorkflowDefinition, h3DefinitionV101 as WorkflowDefinition];
 
@@ -38,6 +41,18 @@ export const builtinWorkflowReleases: BuiltinWorkflowReleaseSet = {
 };
 
 export function createAppWorkflowCatalog() {
-  const registry = createWorkflowRegistry(getDatabase());
-  return createWorkflowCatalog({ registry, builtins: builtinWorkflowDefinitions, adapters: [{ id: 'autodl-comfyui', operations: ['workflow.submit'] }], appVersion: '1.4.0', adapterVersions: { 'autodl-comfyui': '1.0.0' } });
+  const database = getDatabase();
+  const registry = createWorkflowRegistry(database);
+  const compatibility = {
+    adapters: [{ id: 'autodl-comfyui', operations: ['workflow.submit'] }],
+    appVersion: '1.4.10',
+    adapterVersions: { 'autodl-comfyui': '1.0.0' },
+  };
+  const coordinator = createWorkflowReleaseCoordinator({
+    registry,
+    backup: (releaseId, manifestHash) => createReleaseBackup(database, releaseId, manifestHash),
+    now: Date.now,
+    isCompatible: (definition) => isWorkflowCompatible(definition, compatibility),
+  });
+  return createWorkflowCatalog({ registry, coordinator, releaseSet: builtinWorkflowReleases });
 }

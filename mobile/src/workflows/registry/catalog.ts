@@ -1,8 +1,8 @@
 import type { WorkflowDefinition } from '../schema/types';
 import { packageToDefinition, parseWorkflowPackage } from '../schema/package';
-import { createWorkflowRegistryService } from './service';
 import type { WorkflowRegistry, RegistryRecord } from './types';
-import { compareVersions } from './semver';
+import { RegistryReleaseError, type BuiltinWorkflowReleaseSet } from './releaseManifest';
+import type { WorkflowReleaseCoordinator } from './releaseCoordinator';
 
 export function registryRecordToDefinition(record: RegistryRecord): WorkflowDefinition {
   const raw: unknown = JSON.parse(record.definitionJson);
@@ -12,30 +12,45 @@ export function registryRecordToDefinition(record: RegistryRecord): WorkflowDefi
   return raw as WorkflowDefinition;
 }
 
-export function createWorkflowCatalog(deps: { registry: WorkflowRegistry; builtins: WorkflowDefinition[]; adapters: Array<{ id: string; operations: string[] }>; appVersion: string; adapterVersions?: Record<string, string> }) {
-  const service = createWorkflowRegistryService({ repository: deps.registry, adapters: deps.adapters, appVersion: deps.appVersion, adapterVersions: deps.adapterVersions });
+async function strictActiveRecord(
+  registry: WorkflowRegistry,
+  workflowId: string,
+): Promise<RegistryRecord | undefined> {
+  const pointer = await registry.getActivePointer(workflowId);
+  if (!pointer) return undefined;
+  const record = await registry.get(pointer.workflowId, pointer.version);
+  if (!record || record.contentHash !== pointer.contentHash) {
+    throw new RegistryReleaseError('REGISTRY_ACTIVE_POINTER_INVALID');
+  }
+  return record;
+}
+
+export function createWorkflowCatalog(deps: {
+  registry: WorkflowRegistry;
+  coordinator: WorkflowReleaseCoordinator;
+  releaseSet: BuiltinWorkflowReleaseSet;
+}) {
   return {
-    async bootstrap(): Promise<void> {
-      const grouped = new Map<string, WorkflowDefinition[]>();
-      for (const definition of deps.builtins) {
-        await service.installBuiltin(definition);
-        const versions = grouped.get(definition.id) ?? [];
-        versions.push(definition);
-        grouped.set(definition.id, versions);
-      }
-      for (const [workflowId, definitions] of grouped) {
-        const newest = [...definitions].sort((a, b) => compareVersions(b.version, a.version))[0];
-        const active = await deps.registry.getActive(workflowId);
-        if (!active || (active.source === 'builtin' && compareVersions(active.version, newest.version) < 0)) {
-          const record = await deps.registry.get(workflowId, newest.version);
-          if (!record) throw new Error('installed builtin workflow version not found');
-          await deps.registry.setActive(workflowId, record.version, record.contentHash);
-        }
-      }
+    async bootstrap() {
+      return deps.coordinator.reconcile(deps.releaseSet);
     },
-    async listActive(): Promise<RegistryRecord[]> { return service.discoverWorkflows(); },
-    async getActive(workflowId: string): Promise<RegistryRecord | undefined> { return deps.registry.getActive(workflowId); },
-    async rollback(workflowId: string): Promise<void> { await deps.registry.rollback(workflowId); },
-    async activate(workflowId: string, version: string): Promise<void> { const record = await deps.registry.get(workflowId, version); if (!record) throw new Error('workflow version not found'); await deps.registry.setActive(workflowId, version, record.contentHash); },
+    async listActive(): Promise<RegistryRecord[]> {
+      const workflowIds = [...new Set((await deps.registry.list()).map((record) => record.workflowId))].sort();
+      const records = await Promise.all(
+        workflowIds.map((workflowId) => strictActiveRecord(deps.registry, workflowId)),
+      );
+      return records.filter((record): record is RegistryRecord => Boolean(record));
+    },
+    async getActive(workflowId: string): Promise<RegistryRecord | undefined> {
+      return strictActiveRecord(deps.registry, workflowId);
+    },
+    async rollback(workflowId: string): Promise<void> {
+      await deps.registry.rollback(workflowId);
+    },
+    async activate(workflowId: string, version: string): Promise<void> {
+      const record = await deps.registry.get(workflowId, version);
+      if (!record) throw new Error('workflow version not found');
+      await deps.registry.setActive(workflowId, version, record.contentHash);
+    },
   };
 }

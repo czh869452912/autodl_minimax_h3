@@ -770,7 +770,7 @@ export function restoreFullDatabaseBackup(
 }
 ```
 
-The Expo dependency implementation lists `defaultDatabaseDirectory` with `expo-file-system`, returning filenames only. `DatabaseRecoveryScreen` receives `backupNames`, `onRestore(name): Promise<void>`, shows the newest backup timestamp, and requires confirmation before restore. `app/_layout.tsx` calls `restoreFullDatabaseBackup(startupDatabase, name)` and then `DevSettings.reload()` only after success. Tests prove an invalid/missing backup never writes the destination, the source closes on every path, restore copies the full database rather than selected tables, and a failed restore remains on the read-only screen with a localized error.
+The Expo dependency implementation lists `defaultDatabaseDirectory` with `expo-file-system`, returning filenames only. `DatabaseRecoveryScreen` receives `backupNames`, `onRestore(name): Promise<void>`, shows the newest backup timestamp, and requires confirmation before restore. `app/_layout.tsx` calls `restoreFullDatabaseBackup(startupDatabase, name)` and then exits the Android process only after success; reopening guarantees all database singletons are rebuilt against the restored file (React Native's release implementation of `DevSettings.reload()` is a no-op). Tests prove an invalid/missing backup never writes the destination, the source closes on every path, restore copies the full database rather than selected tables, and a failed restore remains on the read-only screen with a localized error.
 
 - [ ] **Step 5: Implement preflight and reconciliation**
 
