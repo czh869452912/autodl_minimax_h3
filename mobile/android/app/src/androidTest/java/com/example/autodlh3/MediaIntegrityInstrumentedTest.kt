@@ -7,6 +7,7 @@ import android.media.MediaMuxer
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.File
+import java.io.RandomAccessFile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -15,6 +16,32 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class MediaIntegrityInstrumentedTest {
+  private fun corruptFirstNalLength(source: File, target: File) {
+    source.copyTo(target, overwrite = true)
+    RandomAccessFile(target, "rw").use { file ->
+      var offset = 0L
+      while (offset + 8 <= file.length()) {
+        file.seek(offset)
+        val size32 = file.readInt().toLong() and 0xffff_ffffL
+        val type = ByteArray(4).also(file::readFully).decodeToString()
+        val headerSize = if (size32 == 1L) 16L else 8L
+        val atomSize = when {
+          size32 == 0L -> file.length() - offset
+          size32 == 1L -> file.readLong()
+          else -> size32
+        }
+        check(atomSize >= headerSize && offset + atomSize <= file.length())
+        if (type == "mdat") {
+          file.seek(offset + headerSize)
+          file.writeInt(Int.MAX_VALUE)
+          return
+        }
+        offset += atomSize
+      }
+      error("fixture does not contain mdat")
+    }
+  }
+
   private fun createAvcFixture(file: File) {
     val width = 64
     val height = 64
@@ -96,15 +123,17 @@ class MediaIntegrityInstrumentedTest {
     }
   }
 
-  @Test fun validatesGeneratedMp4AndRejectsTruncatedAndTextFiles() {
+  @Test fun validatesGeneratedMp4AndRejectsMalformedNalTruncatedAndTextFiles() {
     val context = ApplicationProvider.getApplicationContext<android.content.Context>()
     val directory = File(context.cacheDir, "media-integrity-test").apply { mkdirs() }
     val valid = File(directory, "valid.mp4")
     val truncated = File(directory, "truncated.mp4")
+    val malformedNal = File(directory, "malformed-nal.mp4")
     val text = File(directory, "text.mp4")
     createAvcFixture(valid)
     val bytes = valid.readBytes()
     truncated.writeBytes(bytes.copyOf(maxOf(1, bytes.size / 2)))
+    corruptFirstNalLength(valid, malformedNal)
     text.writeText("not an mp4")
 
     val integrity = MediaIntegrity(context)
@@ -113,6 +142,7 @@ class MediaIntegrityInstrumentedTest {
     assertTrue(result.durationMs > 0)
     assertTrue(result.sampleCount >= 3)
     assertEquals(3, result.decodedFrames)
+    assertInvalid(integrity, malformedNal)
     assertInvalid(integrity, truncated)
     assertInvalid(integrity, text)
   }

@@ -8,6 +8,7 @@ import android.net.Uri
 import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
+import java.nio.ByteBuffer
 import java.security.MessageDigest
 
 data class VideoProbeResult(
@@ -27,11 +28,59 @@ object MediaValidationPolicy {
   }
 }
 
+object NalUnitPolicy {
+  private fun byteAt(sample: ByteBuffer, index: Int) = sample.get(index).toInt() and 0xff
+
+  private fun startCodeSize(sample: ByteBuffer, offset: Int, size: Int): Int = when {
+    offset + 4 <= size && byteAt(sample, offset) == 0 && byteAt(sample, offset + 1) == 0 &&
+      byteAt(sample, offset + 2) == 0 && byteAt(sample, offset + 3) == 1 -> 4
+    offset + 3 <= size && byteAt(sample, offset) == 0 && byteAt(sample, offset + 1) == 0 &&
+      byteAt(sample, offset + 2) == 1 -> 3
+    else -> 0
+  }
+
+  private fun annexBIsValid(sample: ByteBuffer, size: Int): Boolean {
+    var offset = 0
+    var units = 0
+    while (offset < size) {
+      val prefix = startCodeSize(sample, offset, size)
+      if (prefix == 0) return false
+      val payloadStart = offset + prefix
+      var next = payloadStart
+      while (next < size && startCodeSize(sample, next, size) == 0) next += 1
+      if (next <= payloadStart) return false
+      units += 1
+      offset = next
+    }
+    return units > 0
+  }
+
+  fun isValid(sample: ByteBuffer, size: Int, lengthSize: Int): Boolean {
+    if (size <= 0 || size > sample.capacity()) return false
+    if (startCodeSize(sample, 0, size) > 0) return annexBIsValid(sample, size)
+    if (lengthSize !in 1..4) return false
+    var offset = 0
+    var units = 0
+    while (offset < size) {
+      if (offset + lengthSize > size) return false
+      var unitSize = 0L
+      repeat(lengthSize) { unitSize = (unitSize shl 8) or byteAt(sample, offset + it).toLong() }
+      offset += lengthSize
+      if (unitSize <= 0 || unitSize > size - offset) return false
+      offset += unitSize.toInt()
+      units += 1
+    }
+    return units > 0
+  }
+}
+
 class MediaIntegrityException(val diagnosticCode: String, cause: Throwable? = null) :
   IllegalArgumentException(diagnosticCode, cause)
 
 class MediaIntegrity(private val context: Context) {
   companion object {
+    private const val MAX_VIDEO_SAMPLE_BYTES = 64L * 1024L * 1024L
+
     fun sha256(input: InputStream): String {
       val digest = MessageDigest.getInstance("SHA-256")
       val buffer = ByteArray(64 * 1024)
@@ -109,19 +158,31 @@ class MediaIntegrity(private val context: Context) {
     try {
       val container = withExtractor(source) { extractor ->
         val videoTracks = mutableSetOf<Int>()
+        val nalLengthSizes = mutableMapOf<Int, Int>()
         var durationUs = 0L
         for (index in 0 until extractor.trackCount) {
           val format = extractor.getTrackFormat(index)
           val mime = format.getString(MediaFormat.KEY_MIME).orEmpty()
           if (!mime.startsWith("video/")) continue
           videoTracks += index
+          if (mime == MediaFormat.MIMETYPE_VIDEO_AVC || mime == MediaFormat.MIMETYPE_VIDEO_HEVC) {
+            nalLengthSizes[index] = if (format.containsKey("nal-length-size")) format.getInteger("nal-length-size") else 4
+          }
           extractor.selectTrack(index)
           if (format.containsKey(MediaFormat.KEY_DURATION)) durationUs = maxOf(durationUs, format.getLong(MediaFormat.KEY_DURATION))
         }
         var sampleCount = 0L
         while (extractor.sampleTrackIndex >= 0) {
           if (extractor.sampleTrackIndex in videoTracks) {
-            if (extractor.sampleSize < 0) throw MediaIntegrityException("MEDIA_SAMPLE_INVALID")
+            val sampleSize = extractor.sampleSize
+            if (sampleSize <= 0 || sampleSize > MAX_VIDEO_SAMPLE_BYTES) throw MediaIntegrityException("MEDIA_SAMPLE_INVALID")
+            nalLengthSizes[extractor.sampleTrackIndex]?.let { nalLengthSize ->
+              val sample = ByteBuffer.allocateDirect(sampleSize.toInt())
+              val bytesRead = extractor.readSampleData(sample, 0)
+              if (bytesRead != sampleSize.toInt() || !NalUnitPolicy.isValid(sample, bytesRead, nalLengthSize)) {
+                throw MediaIntegrityException("MEDIA_NAL_INVALID")
+              }
+            }
             sampleCount += 1
           }
           if (!extractor.advance()) break
@@ -150,4 +211,5 @@ class MediaIntegrity(private val context: Context) {
       throw MediaIntegrityException("MEDIA_CONTAINER_INVALID", error)
     }
   }
+
 }
