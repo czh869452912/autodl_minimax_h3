@@ -25,6 +25,10 @@ export type MediaCommandService = {
 
 type Context = { task: TaskRow; asset: AssetRow; artifact: ArtifactRecord };
 
+function manualFamilyPattern(canonicalKey: string): string {
+  return `${canonicalKey.replace(/[\\%_]/g, (value) => `\\${value}`)}:manual:%`;
+}
+
 function transaction<T>(db: SQLiteDatabase, work: () => T): T {
   db.execSync('BEGIN IMMEDIATE');
   try {
@@ -69,15 +73,15 @@ function loadContext(db: SQLiteDatabase, taskId: string): Context {
 
 function activeOperation(db: SQLiteDatabase, taskId: string, kind: OperationKind, canonicalKey: string): OperationRow | undefined {
   return db.getFirstSync<OperationRow>(
-    "SELECT id,idempotency_key,payload_json,state FROM workflow_operations WHERE job_id=? AND kind=? AND state IN ('PENDING','CLAIMED') AND (idempotency_key=? OR idempotency_key LIKE ?) ORDER BY created_at DESC,id DESC LIMIT 1",
-    taskId, kind, canonicalKey, `${canonicalKey}:manual:%`,
+    "SELECT id,idempotency_key,payload_json,state FROM workflow_operations WHERE job_id=? AND kind=? AND state IN ('PENDING','CLAIMED') AND (idempotency_key=? OR idempotency_key LIKE ? ESCAPE '\\') ORDER BY created_at DESC,id DESC LIMIT 1",
+    taskId, kind, canonicalKey, manualFamilyPattern(canonicalKey),
   ) ?? undefined;
 }
 
 function nextIdentity(db: SQLiteDatabase, kind: OperationKind, canonicalId: string, canonicalKey: string): { id: string; key: string } {
   const rows = db.getAllSync<{ idempotency_key: string }>(
-    'SELECT idempotency_key FROM workflow_operations WHERE kind=? AND (idempotency_key=? OR idempotency_key LIKE ?) ORDER BY idempotency_key',
-    kind, canonicalKey, `${canonicalKey}:manual:%`,
+    "SELECT idempotency_key FROM workflow_operations WHERE kind=? AND (idempotency_key=? OR idempotency_key LIKE ? ESCAPE '\\') ORDER BY idempotency_key",
+    kind, canonicalKey, manualFamilyPattern(canonicalKey),
   );
   if (rows.length === 0) return { id: canonicalId, key: canonicalKey };
   const generation = rows.reduce((maximum, row) => {

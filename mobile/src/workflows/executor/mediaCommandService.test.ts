@@ -126,6 +126,20 @@ test('does not join an active operation for another artifact in the same job', a
   } finally { db.close(); }
 });
 
+test('treats wildcard characters in artifact ids as literal operation-family characters', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    seed(db);
+    db.runSync("UPDATE workflow_artifacts SET id='video_1' WHERE job_id='job-1' AND id='video-1'");
+    db.runSync("UPDATE media_assets SET artifact_id='video_1' WHERE id='job-1:video-1'");
+    db.runSync("INSERT INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES (?,?,?,?,?,'PENDING',0,1,1,1)",
+      'wildcard-neighbor', 'ARTIFACT_DOWNLOAD', 'job-1', 'artifact:job-1:videoA1:manual:1', JSON.stringify({ artifact: { id: 'videoA1', jobId: 'job-1', kind: 'video', uri: 'https://cdn.example/other.mp4' } }));
+    await expect(service(db, new Set()).requestDownload('job-1')).resolves.toMatchObject({
+      status: 'queued', operation: { idempotencyKey: 'artifact:job-1:video_1' },
+    });
+  } finally { db.close(); }
+});
+
 test('does not overwrite a frozen delivery intent on an active download', async () => {
   const db = createInitializedRealSqliteTestDb();
   try {
