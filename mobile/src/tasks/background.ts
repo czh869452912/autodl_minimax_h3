@@ -15,7 +15,7 @@ export const H3_BACKGROUND_TASK = 'autodl-h3-sync';
 
 TaskManager.defineTask(H3_BACKGROUND_TASK, async () => {
   try {
-    await syncTaskRun('background');
+    await syncTaskRun({ reason: 'background', mode: 'maintenance' });
     return BackgroundTask.BackgroundTaskResult.Success;
   } catch { return BackgroundTask.BackgroundTaskResult.Failed; }
 });

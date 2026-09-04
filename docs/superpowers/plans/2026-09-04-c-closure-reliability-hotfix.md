@@ -258,7 +258,7 @@ git commit -m "perf: bound durable operation queries"
 - Modify: `mobile/src/media/reconciliation.ts`
 - Modify: `mobile/src/media/reconciliation.test.ts`
 
-- [ ] **Step 1: 写同步模式和 cooldown 失败测试**
+- [x] **Step 1: 写同步模式和 cooldown 失败测试**
 
 定义请求：
 
@@ -281,7 +281,7 @@ npm test -- --runInBand src/tasks/syncPolicy.test.ts src/tasks/sync.test.ts src/
 
 Expected: FAIL，runner 当前每次都 repair/reconcile。
 
-- [ ] **Step 2: 实现持久维护窗口**
+- [x] **Step 2: 实现持久维护窗口**
 
 `syncPolicy.ts` 提供 `claimMaintenanceWindow(db, now, force, intervalMs=300_000)`，使用固定 key `foreground-maintenance-next`：
 
@@ -294,13 +294,13 @@ WHERE ? OR app_scheduler_leases.expires_at <= ?
 
 返回 changes 是否为 1。该 row 是持久 cooldown，不由 `withSchedulerLease` 删除；实际 reconciliation/CAS GC 仍保留各自的运行 lease。
 
-- [ ] **Step 3: 拆分 runner 并限制 maintenance 范围**
+- [x] **Step 3: 拆分 runner 并限制 maintenance 范围**
 
 `createSyncTaskRunner` 按 mode 选择步骤。maintenance 中 `repairTaskProjections` 改用 `compatibilityJobs.listRecent(32)`；reconcile 只在 claim 成功时运行。未运行 maintenance 时返回零值 `ReconciliationSummary` 和 `maintenanceRan:false`。
 
 service 使用 task IDs 调 scoped summary、terminal event reader（Task 9 接入前先返回空 events），其 `summary.remaining` 不再来自全局 operation。
 
-- [ ] **Step 4: 缓存 settings 驱动的 executor**
+- [x] **Step 4: 缓存 settings 驱动的 executor**
 
 `syncPolicy.ts` 增加：
 
@@ -316,7 +316,7 @@ export function executorSettingsFingerprint(settings: AppSettings): string {
 
 实现 `getOrCreate(settings)`：fingerprint 相同返回同一 adapters/runtime/durable；变化重建。测试连续 4 pass 只构建一次，token 或媒体策略改变各重建一次。
 
-- [ ] **Step 5: 更新调用边界并提交**
+- [x] **Step 5: 更新调用边界并提交**
 
 background task 用 `{ reason:'background', mode:'maintenance' }`；command facade 继续直接运行 cycle，不触发 maintenance。先更新编译范围内所有 `syncTaskRun` 调用，使没有隐式旧签名。
 

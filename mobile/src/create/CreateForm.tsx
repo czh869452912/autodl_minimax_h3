@@ -87,7 +87,7 @@ const defaultSubmissionDependencies: CreateFormSubmissionDependencies = {
 export function CreateForm({
   initialPrompt = '',
   draftId,
-  foregroundTick = () => syncTaskRun('foreground'),
+  foregroundTick = () => syncTaskRun({ reason: 'foreground', mode: 'poll' }),
   submissionDependencies = defaultSubmissionDependencies,
 }: {
   initialPrompt?: string;

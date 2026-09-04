@@ -33,9 +33,9 @@ export default function RootLayout() {
       return;
     }
     void registerBackgroundSync();
-    void syncTaskRun('foreground');
+    void syncTaskRun({ reason: 'foreground', mode: 'maintenance' });
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void syncTaskRun('foreground');
+      if (state === 'active') void syncTaskRun({ reason: 'foreground', mode: 'maintenance' });
     });
     return () => subscription.remove();
   }, [startupState]);

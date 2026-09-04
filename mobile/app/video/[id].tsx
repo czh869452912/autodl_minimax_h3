@@ -23,7 +23,7 @@ export default function VideoDetailScreen() {
 
   const reloadTaskAndAsset = useCallback(async () => {
     if (!id) return null;
-    await syncTaskRun('foreground', [id]);
+    await syncTaskRun({ reason: 'foreground', mode: 'poll', taskIds: [id] });
     const media = await mediaStore.get(id);
       const taskId = media?.taskId || id;
     const value = await taskStore.get(taskId);

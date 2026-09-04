@@ -7,7 +7,7 @@ function native(): NativeMonitor | undefined { return Platform.OS === 'android' 
 
 export async function runTaskMonitorTick(taskIds: string[]): Promise<void> {
   const { syncTaskRun } = require('../tasks/background') as typeof import('../tasks/background');
-  await syncTaskRun('service', taskIds);
+  await syncTaskRun({ reason: 'service', mode: 'service', taskIds });
 }
 
 export async function startTaskMonitor(taskIds: string[]): Promise<boolean> {

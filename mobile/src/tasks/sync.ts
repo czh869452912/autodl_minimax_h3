@@ -8,7 +8,7 @@ import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
 import { createJobStateRepository } from '../workflows/executor/jobStateRepository';
 import { createOperationRepository } from '../workflows/executor/operationRepository';
 import { createDurableExecutor } from '../workflows/executor/durableExecutor';
-import { createExecutorTick, type TickOptions } from '../workflows/executor/tick';
+import { createExecutorTick } from '../workflows/executor/tick';
 import { createExecutorCycle, type CycleOptions, type CycleSummary } from '../workflows/executor/cycle';
 import { createArtifactCas } from '../media/cas';
 import { createCasRepository } from '../media/casRepository';
@@ -23,8 +23,10 @@ import { assertLocalExportSource, createSqliteExportStore, handleExport } from '
 import { exportVideo } from '../native/media';
 import * as FileSystem from 'expo-file-system/legacy';
 import { removeCasPath } from '../media/cas';
-import { reconcileMediaState, type ReconciliationSummary } from '../media/reconciliation';
+import { EMPTY_RECONCILIATION_SUMMARY, reconcileMediaState, type ReconciliationSummary } from '../media/reconciliation';
 import { createMediaCommandService, type MediaCommandService } from '../workflows/executor/mediaCommandService';
+import { claimMaintenanceWindow, createExecutorSettingsCache, type SyncRequest } from './syncPolicy';
+import type { PendingSummary } from '../workflows/executor/operationRepository';
 
 const database = getDatabase();
 export const taskStore = createTaskRepository(database);
@@ -37,8 +39,7 @@ const cas = createArtifactCas();
 const commitArtifact = createSqliteArtifactCommitter(database);
 const exportStore = createSqliteExportStore(database);
 
-async function executorForCurrentSettings() {
-  const settings = await readSettings();
+const executorSettingsCache = createExecutorSettingsCache((settings) => {
   const adapters = createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? settings.token : undefined });
   const runtime = createWorkflowRuntime({
     adapters,
@@ -51,7 +52,7 @@ async function executorForCurrentSettings() {
     adapters,
     durable: createDurableExecutor({ jobs, operations, runtime, adapters, credentials: { get: async () => ({ ok: Boolean(settings.token) }) } }),
   };
-}
+});
 
 const executor = {
   async recover(now: number) { await (await executorForCurrentSettings()).durable.recover(now); },
@@ -151,6 +152,10 @@ export function createMediaCommandFacade(
   };
 }
 
+async function executorForCurrentSettings() {
+  return executorSettingsCache.getOrCreate(await readSettings());
+}
+
 const mediaCommands = createMediaCommandService({
   db: database,
   fileExists: async (uri) => {
@@ -165,7 +170,7 @@ export const requestTaskDownload = mediaCommandFacade.requestTaskDownload;
 export const requestTaskExport = mediaCommandFacade.requestTaskExport;
 
 async function repairTaskProjections(limit = 32): Promise<number> {
-  const persisted = (await compatibilityJobs.list()).slice(0, limit);
+  const persisted = await compatibilityJobs.listRecent(limit);
   let updated = 0;
   for (const job of persisted) {
     const previous = await taskStore.get(job.id);
@@ -187,6 +192,8 @@ export type SyncSummary = {
   lastSyncAt: number;
   operations: CycleSummary;
   reconciliation: ReconciliationSummary;
+  maintenanceRan: boolean;
+  terminalEvents: [];
 };
 
 export function createSyncTaskRunner(deps: {
@@ -194,23 +201,30 @@ export function createSyncTaskRunner(deps: {
   repair(): Promise<number>;
   reconcile(): Promise<ReconciliationSummary>;
   listTasks(): ReturnType<typeof taskStore.listActive>;
+  pendingSummary(options: { now: number; jobIds?: string[] }): PendingSummary;
+  claimMaintenance(force: boolean): boolean;
   now(): number;
 }) {
-  return async (reason: TickOptions['reason'] = 'foreground') => {
-    const operationSummary = await deps.runCycle({ reason });
-    const updated = await deps.repair();
-    const reconciliation = await deps.reconcile();
+  return async (request: SyncRequest) => {
+    const timestamp = deps.now();
+    const operationSummary = await deps.runCycle({ reason: request.reason });
+    const maintenanceRan = request.mode === 'maintenance' && deps.claimMaintenance(Boolean(request.forceMaintenance));
+    const updated = maintenanceRan ? await deps.repair() : 0;
+    const reconciliation = maintenanceRan ? await deps.reconcile() : EMPTY_RECONCILIATION_SUMMARY;
     const tasks = await deps.listTasks();
+    const pending = deps.pendingSummary({ now: timestamp, ...(request.mode === 'service' ? { jobIds: request.taskIds ?? [] } : {}) });
     return {
       tasks,
       summary: {
         updated,
         failed: operationSummary.failed,
         skipped: operationSummary.blocked,
-        remaining: operationSummary.remainingDue + operationSummary.remainingScheduled,
-        lastSyncAt: deps.now(),
+        remaining: pending.remainingDue + pending.remainingScheduled,
+        lastSyncAt: timestamp,
         operations: operationSummary,
         reconciliation,
+        maintenanceRan,
+        terminalEvents: [],
       } satisfies SyncSummary,
     };
   };
@@ -228,11 +242,13 @@ const run = createSyncTaskRunner({
     removeCasPath,
   }),
   listTasks: () => taskStore.listActive(),
+  pendingSummary: (options) => operations.pendingSummary(options),
+  claimMaintenance: (force) => claimMaintenanceWindow(database, Date.now(), force),
   now: Date.now,
 });
 
-export async function syncTaskRun(reason: TickOptions['reason'] = 'foreground', _taskIds?: string[]) {
-  return run(reason);
+export async function syncTaskRun(request: SyncRequest) {
+  return run(request);
 }
 
-export async function syncTasks() { return (await syncTaskRun()).tasks; }
+export async function syncTasks() { return (await syncTaskRun({ reason: 'foreground', mode: 'maintenance' })).tasks; }
