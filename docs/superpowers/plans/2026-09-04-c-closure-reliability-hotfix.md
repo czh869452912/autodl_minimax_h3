@@ -342,7 +342,7 @@ git commit -m "perf: separate task polling from maintenance"
 - Modify: `mobile/src/route-tests/tasks.test.tsx`
 - Modify: `mobile/app/video/[id].tsx`
 
-- [ ] **Step 1: 安装 SDK 匹配的联网模块**
+- [x] **Step 1: 安装 SDK 匹配的联网模块**
 
 ```powershell
 cd mobile
@@ -351,7 +351,7 @@ npx expo install expo-network
 
 Expected: package/lock 中为 `expo-network ~57.0.1`；运行 `npx expo install --check` 无版本不匹配。
 
-- [ ] **Step 2: 写网络边沿和 timer 失败测试**
+- [x] **Step 2: 写网络边沿和 timer 失败测试**
 
 `networkRecovery.test.ts` 覆盖 unknown→true 不触发、true→true 不触发、false→false 不触发、false→true 只触发一次。恢复函数断言先 `expediteRetryableNetwork(activeIds, now)`，仅 changes>0 或存在活跃任务时运行 poll。
 
@@ -373,17 +373,17 @@ npm test -- --runInBand src/tasks/networkRecovery.test.ts src/tasks/pollSchedule
 
 Expected: FAIL，新模块和精确 timer 不存在。
 
-- [ ] **Step 3: 实现网络恢复监听**
+- [x] **Step 3: 实现网络恢复监听**
 
 根布局订阅 `Network.addNetworkStateListener`。用 `createConnectivityEdgeDetector` 保存已知状态，仅明确观察过离线后第一次在线触发：读取活跃 job IDs、调用 repository expedite、执行 `{ reason:'foreground', mode:'poll' }`。cleanup 时移除 listener。
 
 冷启动与 AppState active 使用 maintenance（if-due），避免网络事件与 lifecycle 双重完整维护。
 
-- [ ] **Step 4: 将固定 interval 改为一次性 timer**
+- [x] **Step 4: 将固定 interval 改为一次性 timer**
 
 sync summary 暴露 `nextWakeAt`。TasksScreen 每次 load 后根据可见 active tasks 和 summary 安排一次 `setTimeout`；回调执行 poll 并重新计算。focus 使用 maintenance if-due，人工按钮使用 maintenance force。VideoDetail 只使用 poll。
 
-- [ ] **Step 5: 验证并提交**
+- [x] **Step 5: 验证并提交**
 
 ```powershell
 npm test -- --runInBand src/tasks/networkRecovery.test.ts src/tasks/pollSchedule.test.ts src/route-tests/root-layout.test.tsx src/route-tests/tasks.test.tsx src/route-tests/video-detail.test.tsx

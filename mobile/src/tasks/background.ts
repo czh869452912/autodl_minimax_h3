@@ -11,6 +11,11 @@ export async function syncTasks() {
   return run();
 }
 
+export async function resumeTaskSyncAfterReconnect() {
+  const { resumeTaskSyncAfterReconnect: resume } = await import('./sync');
+  return resume();
+}
+
 export const H3_BACKGROUND_TASK = 'autodl-h3-sync';
 
 TaskManager.defineTask(H3_BACKGROUND_TASK, async () => {

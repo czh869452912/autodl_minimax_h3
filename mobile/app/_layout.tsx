@@ -6,6 +6,9 @@ import { getDatabase, getDatabaseStartupState, type DatabaseStartupState } from 
 import { isLegacyAppDatabase, resetAppDatabase } from '../src/storage/database';
 import { DatabaseRecoveryScreen } from '../src/storage/DatabaseRecoveryScreen';
 import { registerBackgroundSync, syncTaskRun } from '../src/tasks/background';
+import { resumeTaskSyncAfterReconnect } from '../src/tasks/background';
+import * as Network from 'expo-network';
+import { createConnectivityEdgeDetector } from '../src/tasks/networkRecovery';
 
 const startupDatabase = getDatabase();
 
@@ -16,6 +19,7 @@ export default function RootLayout() {
     return state;
   });
   const prompted = useRef(false);
+  const connectivity = useRef(createConnectivityEdgeDetector());
   useEffect(() => {
     if (startupState.mode === 'readonly') return;
     if (startupState.mode === 'legacy') {
@@ -37,7 +41,11 @@ export default function RootLayout() {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') void syncTaskRun({ reason: 'foreground', mode: 'maintenance' });
     });
-    return () => subscription.remove();
+    const networkSubscription = Network.addNetworkStateListener((state) => {
+      const reachable = state.isInternetReachable ?? state.isConnected;
+      if (connectivity.current.observe(reachable)) void resumeTaskSyncAfterReconnect();
+    });
+    return () => { subscription.remove(); networkSubscription.remove(); };
   }, [startupState]);
   if (startupState.mode === 'readonly') {
     return (

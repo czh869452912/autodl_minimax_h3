@@ -12,10 +12,13 @@ const mockDatabase = {
 type StartupState = { mode: 'writable' | 'legacy' } | { mode: 'readonly'; diagnostic: string; allowReset: boolean };
 const mockStartupState = jest.fn<StartupState, []>(() => ({ mode: 'legacy' }));
 const mockRecoveryScreen = jest.fn((_props: { diagnostic: string }) => null);
+let mockNetworkListener: ((state: { isConnected?: boolean; isInternetReachable?: boolean }) => void) | undefined;
+const mockNetworkRemove = jest.fn();
 jest.mock('../storage/databaseClient', () => ({ getDatabase: jest.fn(() => mockDatabase), getDatabaseStartupState: () => mockStartupState() }));
 jest.mock('expo-router', () => ({ Stack: (props: { children?: React.ReactNode }) => <>{props.children}</> }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: (props: { children?: React.ReactNode }) => <>{props.children}</> }));
-jest.mock('../tasks/background', () => ({ registerBackgroundSync: jest.fn(async () => undefined), syncTaskRun: jest.fn(async () => undefined) }));
+jest.mock('../tasks/background', () => ({ registerBackgroundSync: jest.fn(async () => undefined), syncTaskRun: jest.fn(async () => undefined), resumeTaskSyncAfterReconnect: jest.fn(async () => undefined) }));
+jest.mock('expo-network', () => ({ addNetworkStateListener: jest.fn((listener) => { mockNetworkListener = listener; return { remove: mockNetworkRemove }; }) }));
 jest.mock('../storage/database', () => ({ ensureAppDatabase: jest.fn(), isLegacyAppDatabase: jest.fn(() => true), resetAppDatabase: jest.fn() }));
 jest.mock('../storage/DatabaseRecoveryScreen', () => ({ DatabaseRecoveryScreen: (props: { diagnostic: string }) => mockRecoveryScreen(props) }));
 
@@ -60,4 +63,24 @@ test('renders readonly recovery without registering background work', async () =
   expect(register).not.toHaveBeenCalled();
   expect(sync).not.toHaveBeenCalled();
   act(() => tree.unmount());
+});
+
+test('resumes once after an observed offline-to-online edge and removes the listener', async () => {
+  mockStartupState.mockReturnValue({ mode: 'writable' });
+  jest.mocked(require('../storage/database').isLegacyAppDatabase).mockReturnValue(false);
+  const resume = require('../tasks/background').resumeTaskSyncAfterReconnect;
+  resume.mockClear();
+  mockNetworkRemove.mockClear();
+  let tree!: ReturnType<typeof create>;
+  await act(async () => { tree = create(<RootLayout />); });
+
+  await act(async () => { mockNetworkListener?.({ isConnected: true, isInternetReachable: true }); });
+  expect(resume).not.toHaveBeenCalled();
+  await act(async () => { mockNetworkListener?.({ isConnected: false, isInternetReachable: false }); });
+  await act(async () => { mockNetworkListener?.({ isConnected: true, isInternetReachable: true }); });
+  await act(async () => { mockNetworkListener?.({ isConnected: true, isInternetReachable: true }); });
+  expect(resume).toHaveBeenCalledTimes(1);
+
+  act(() => tree.unmount());
+  expect(mockNetworkRemove).toHaveBeenCalledTimes(1);
 });

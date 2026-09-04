@@ -128,17 +128,35 @@ test('does not poll again when the visible task set is terminal', async () => {
   expect(jest.mocked(syncTasks).mock.calls.length).toBe(callsAfterLoad);
 });
 
-test('continues polling after task success while durable delivery is scheduled', async () => {
+test('continues polling active provider tasks at ten seconds', async () => {
   jest.useFakeTimers();
   const pendingResult = {
-    tasks: [{ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 2 }],
-    summary: { operations: { remainingDue: 0, remainingScheduled: 1, budgetExhausted: false } },
+    tasks: [{ id: 'task-1', prompt: 'x', status: 'RUNNING', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 2 }],
+    summary: { operations: { remainingDue: 0, remainingScheduled: 0, budgetExhausted: false } },
   } as never;
   jest.mocked(syncTaskRun).mockResolvedValueOnce(pendingResult).mockResolvedValueOnce(pendingResult);
   await act(async () => { create(<TasksScreen />); });
   const calls = jest.mocked(syncTaskRun).mock.calls.length;
   await act(async () => { jest.advanceTimersByTimeAsync(10_000); });
   expect(jest.mocked(syncTaskRun).mock.calls.length).toBe(calls + 1);
+});
+
+test('waits for the exact scheduled retry instead of polling every ten seconds', async () => {
+  jest.useFakeTimers();
+  jest.spyOn(Date, 'now').mockReturnValue(1_000);
+  const scheduledResult = {
+    tasks: [{ id: 'task-1', prompt: 'x', status: 'SUCCESS', resolution: '768p竖', duration: 5, createdAt: 1, updatedAt: 2 }],
+    summary: { nextWakeAt: 61_000, operations: { remainingDue: 0, remainingScheduled: 1, budgetExhausted: false } },
+  } as never;
+  jest.mocked(syncTaskRun).mockImplementationOnce(async () => scheduledResult).mockImplementationOnce(async () => scheduledResult);
+  let renderer: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<TasksScreen />); });
+  const calls = jest.mocked(syncTaskRun).mock.calls.length;
+  await act(async () => { jest.advanceTimersByTimeAsync(50_000); });
+  expect(jest.mocked(syncTaskRun)).toHaveBeenCalledTimes(calls);
+  await act(async () => { jest.advanceTimersByTimeAsync(10_000); });
+  expect(jest.mocked(syncTaskRun)).toHaveBeenCalledTimes(calls + 1);
+  act(() => renderer!.unmount());
 });
 
 test('refreshes when the task page receives focus after a new task is created', async () => {

@@ -92,7 +92,7 @@ describe('video detail screen', () => {
     await act(async () => { tree = create(<VideoDetailScreen />); });
     await act(async () => tree!.root.findByProps({ accessibilityLabel: '保存到系统相册' }).props.onPress());
     expect(mockRequestExport).toHaveBeenCalledWith('task-1', { keepPrivateCopy: true });
-    expect(mockSync).toHaveBeenCalledWith('foreground', ['task-1']);
+    expect(mockSync).toHaveBeenCalledWith({ reason: 'foreground', mode: 'poll', taskIds: ['task-1'] });
   });
 
   it('uses a verified private file for playback without writing projections in the route', async () => {

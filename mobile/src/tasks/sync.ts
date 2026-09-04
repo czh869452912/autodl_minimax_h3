@@ -27,6 +27,7 @@ import { EMPTY_RECONCILIATION_SUMMARY, reconcileMediaState, type ReconciliationS
 import { createMediaCommandService, type MediaCommandService } from '../workflows/executor/mediaCommandService';
 import { claimMaintenanceWindow, createExecutorSettingsCache, type SyncRequest } from './syncPolicy';
 import type { PendingSummary } from '../workflows/executor/operationRepository';
+import { resumeAfterConnectivityReturns } from './networkRecovery';
 
 const database = getDatabase();
 export const taskStore = createTaskRepository(database);
@@ -194,6 +195,7 @@ export type SyncSummary = {
   reconciliation: ReconciliationSummary;
   maintenanceRan: boolean;
   terminalEvents: [];
+  nextWakeAt?: number;
 };
 
 export function createSyncTaskRunner(deps: {
@@ -225,6 +227,7 @@ export function createSyncTaskRunner(deps: {
         reconciliation,
         maintenanceRan,
         terminalEvents: [],
+        ...(pending.nextWakeAt == null ? {} : { nextWakeAt: pending.nextWakeAt }),
       } satisfies SyncSummary,
     };
   };
@@ -249,6 +252,15 @@ const run = createSyncTaskRunner({
 
 export async function syncTaskRun(request: SyncRequest) {
   return run(request);
+}
+
+export async function resumeTaskSyncAfterReconnect() {
+  return resumeAfterConnectivityReturns({
+    listActiveJobIds: async () => (await compatibilityJobs.listActive!()).map((job) => job.id),
+    expediteRetryableNetwork: (jobIds, now) => operations.expediteRetryableNetwork(jobIds, now),
+    runPoll: run,
+    now: Date.now,
+  });
 }
 
 export async function syncTasks() { return (await syncTaskRun({ reason: 'foreground', mode: 'maintenance' })).tasks; }
