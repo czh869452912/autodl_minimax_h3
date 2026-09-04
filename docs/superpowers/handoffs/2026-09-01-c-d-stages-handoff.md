@@ -192,4 +192,12 @@ D-Core 之后再规划 Batch/Variant、项目包导出/导入、备份/同步/�
 6. D-Core 必须复用 C-Core 的 operation/job/event/CAS 权威状态，不得恢复旧 snapshot-only scheduler 或另建重复下载队列。
 7. Batch/Variant、同步/协作、完整 foreground service 与复杂导出仍不属于 D-Core Task 1，不得顺手并入。
 
-交接结论：A/B 已闭环并以 v1.4.7 收口；C-Core Durable Local Executor 的六项实现、恢复修复、独立复审和发布级验收也已在 `codex/c-core-plan-rewrite` 完成。当前正确顺序是：审查并集成 C-Core → 在 v6 基线上执行 D-Core Local Product Domain → D-Core 验收。下一项工程工作从 D-Core Task 1 的 v7 migration 与 legacy projection 开始。
+### C 收尾热修复 v1.4.9（2026-09-04）
+
+C 最终审查后的收尾热修复已在 `codex/c-closure-hotfix` 完成代码实现：手动下载/保存已统一进入持久 operation 与有界 executor cycle；下载中途保存会持久合并 delivery intent；导出重放使用稳定 display name；`keepPrivateCopy=false` 的投影清理与 CAS 引用释放原子提交；页面不再直接下载、导出或写媒体投影；三套旧媒体队列已删除。自动化基线为 typecheck PASS、105/106 suites passed（1 skipped）、516/518 tests passed（2 skipped）、0 failed，schema 保持 v6。完整记录见 `docs/superpowers/verification/2026-09-04-c-closure-hotfix.md`。
+
+M6 按已确认的产品现实记录为 Accepted Constraint：AutoDL 使用动态存储节点，不能依赖固定 AutoDL 前缀。受控边界是 trusted adapter origin、HTTPS、逐跳重定向校验、literal private/reserved address 拒绝、不转发凭据、MIME/大小/timeout/完整性及诊断脱敏；不宣称 DNS resolution pinning 或固定 host allowlist。
+
+C 实现只有在 v1.4.9 的 Android fresh/upgrade/媒体与 Prompt/Timeline 设备矩阵、独立审查、PR 合并、tag 和发布资产复核全部完成后才是 release-complete。在此之前不得启动 D 实现。D Task 1 必须从最终 v1.4.9 merge/tag commit、schema v6 建立新 worktree；UNKNOWN UI 与低优先级 query/cursor 观察继续延期到 D。
+
+交接结论：当前顺序为完成 v1.4.9 发布门 → 从已验证 tag 基线开始 D-Core Task 1 的 v7 migration 与 legacy projection。不得从未合并 hotfix 分支或旧 v6 提交提前启动 D。

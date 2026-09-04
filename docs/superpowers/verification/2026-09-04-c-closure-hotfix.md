@@ -1,0 +1,45 @@
+# C 阶段收尾热修复 v1.4.9 验证记录
+
+日期：2026-09-04
+
+## 范围与结论
+
+本次热修复将手动下载/保存纳入 C-Core 的持久执行器，统一自动与手动媒体路径，并删除 UI 直连下载、MediaStore 与投影写入的旧队列。当前代码与自动化门禁通过；Android 构建、设备矩阵、v1.4.8 覆盖升级、独立审查及正式发布仍需完成，完成前不得宣布 C 阶段发布闭环或开始 D 阶段实现。
+
+## 自动化证据
+
+- 分支：`codex/c-closure-hotfix`
+- 自动化基线提交：`58b6dad6`（版本与本记录提交前）
+- `npm run typecheck`：PASS。
+- `CI=true npm test -- --runInBand`：105/106 suites passed，1 skipped；516 passed，2 skipped，0 failed；共 518 tests。
+- 预期日志：`aguiAgent.test.ts` 的故障注入输出 `provider failed`；不代表测试失败。
+- `git diff --check`：PASS。
+- 旧符号扫描：`ensureTaskMedia|ensureTaskDownloaded|exportTaskVideo|createTaskCoordinator|createMediaDeliveryQueue` 零匹配。
+- schema：`APP_SCHEMA_VERSION=6`，本热修复无 schema 变更。
+- 版本所有者：package、package-lock、Expo 均为 `1.4.9`；Android 为 `versionName 1.4.9`、`versionCode 19`。
+
+## 已覆盖的关键行为
+
+- 结构化 URL、MIME、大小、完整性与网络错误码决定稳定的终态/重试策略。
+- 手动下载与保存先持久化 operation，再触发有界 foreground cycle。
+- 手动保存可并入已经 CLAIMED 的下载；下载提交前重读最新 delivery intent。
+- 导出在 native publish 与 SQLite commit 之间提供仅依赖注入可达的测试中断点；重放使用稳定 display name。
+- `keepPrivateCopy=false` 原子清空私有路径投影，并只释放匹配的 workflow-artifact CAS 引用。
+- 任务删除继续受活跃媒体 operation fence 保护。
+- 页面只发持久命令和读取投影，不直接执行下载、导出或写媒体投影。
+
+## M6：Accepted Constraint
+
+AutoDL 实测会从集群内动态可用存储节点分发，URL 不含稳定的 AutoDL 域名前缀，因此不能建立可靠的固定 host allowlist。本版本明确采用 trusted adapter origin 的受控公网下载能力：强制 HTTPS、逐跳校验重定向、拒绝 URL 中的 literal private/reserved address、不转发凭据，并实施 MIME、大小、连接/idle timeout、SHA-256 完整性与诊断脱敏。这里不声称具备 DNS resolution pinning，也不声称动态节点已被固定域名白名单穷举。
+
+## 待完成发布门
+
+- [ ] JDK 21、x86_64 Debug APK 构建与 APK SHA-256。
+- [ ] fresh install 与 v1.4.8 数据保留覆盖升级。
+- [ ] 七项媒体设备场景与 Prompt/Timeline 携带项。
+- [ ] 独立代码审查无 Critical/Important。
+- [ ] PR 检查、合并、`v1.4.9` annotated tag、Android Release workflow 与签名资产复核。
+
+## D 阶段入口
+
+D Task 1 只能从最终已验证的 v1.4.9 合并/tag 提交启动，schema 基线为 v6。UNKNOWN UI 与低优先级 query/cursor 观察项继续延期到 D，不纳入本热修复。
