@@ -4,10 +4,21 @@ import { RESOLUTION_OPTIONS } from './resolutions';
 import type { TaskMediaInput } from '../tasks/types';
 import { createSubmissionGate } from './submissionGate';
 import { queueCreateFormSubmission } from './submissionQueue';
+import { act, create } from 'react-test-renderer';
+import { Alert, Pressable, Text, TextInput } from 'react-native';
+import { CreateForm } from './CreateForm';
+import { builtinWorkflowDefinitions } from '../workflows/registry/builtin';
+import type { RegistryRecord } from '../workflows/registry/types';
+import { createElement } from 'react';
+
+jest.mock('../storage/databaseClient', () => ({ getDatabase: () => undefined }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ navigate: jest.fn() }) }));
+jest.mock('expo-audio', () => ({ useAudioPlayer: () => ({}), useAudioPlayerStatus: () => ({}) }));
 
 const image: TaskMediaInput = { dataUri: 'data:image/png;base64,a', name: 'ref.png', mime: 'image/png' };
 
 describe('create form contracts', () => {
+  beforeEach(() => { jest.restoreAllMocks(); });
   it('uses an exported draft to replace an existing prompt', () => {
     expect(resolveDraftPrompt('', 'exported prompt')).toBe('exported prompt');
     expect(resolveDraftPrompt('manual edit', 'exported prompt')).toBe('exported prompt');
@@ -55,5 +66,53 @@ describe('create form contracts', () => {
     expect(foregroundTick).toHaveBeenCalledTimes(1);
     expect(directSubmit).not.toHaveBeenCalled();
     expect(task.id).toBe('job-1');
+  });
+
+  it.each([
+    ['rejects 10,001 prompt characters before credentials or queue access', 10_001, 0],
+    ['accepts exactly 10,000 prompt characters and queues once', 10_000, 1],
+  ])('%s', async (_name, promptLength, expectedQueues) => {
+    const definition = builtinWorkflowDefinitions[1];
+    const active: RegistryRecord = {
+      workflowId: definition.id,
+      version: definition.version,
+      contentHash: 'active-hash',
+      source: 'builtin',
+      trust: 'builtin',
+      definitionJson: JSON.stringify(definition),
+      installedAt: 1,
+    };
+    const readSettings = jest.fn(async () => ({
+      token: 'token', llmEndpoint: 'https://api.example.test/v1', llmModel: 'model', llmApiKey: '',
+      llmTimeoutSeconds: '600', llmMaxRetries: '2', autoExportToGallery: true, keepPrivateCopy: true,
+    }));
+    const queue = jest.fn(async () => ({ id: 'task-1' }));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const catalog = {
+      bootstrap: jest.fn(async () => undefined),
+      listActive: jest.fn(async () => [active]),
+      getActive: jest.fn(async () => active),
+    };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(createElement(CreateForm, { submissionDependencies: { catalog, readSettings, queue } }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const promptInput = tree.root.findAllByType(TextInput).find((node) => node.props.multiline);
+    expect(promptInput).toBeDefined();
+    act(() => { promptInput?.props.onChangeText('a'.repeat(promptLength)); });
+    const submitButton = tree.root.findAll((node) => node.props.accessibilityLabel === '提交 AutoDL 任务生成')[0];
+    expect(submitButton).toBeDefined();
+    await act(async () => {
+      submitButton!.props.onPress();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(queue).toHaveBeenCalledTimes(expectedQueues);
+    expect(readSettings).toHaveBeenCalledTimes(expectedQueues);
+    if (expectedQueues === 0) {
+      expect(alert).toHaveBeenCalledWith('参数设置不合法', expect.stringContaining('最多 10,000 个字符'));
+    }
   });
 });

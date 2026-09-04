@@ -55,7 +55,7 @@
 - Modify: `mobile/src/create/CreateForm.tsx`
 - Modify: `mobile/src/create/createForm.test.ts`
 
-- [ ] **Step 1: 写 workflow 版本和输入合同失败测试**
+- [x] **Step 1: 写 workflow 版本和输入合同失败测试**
 
 在 registry 测试中断言：内置定义同时保留 `1.0.0` 和 `1.0.1`；新安装激活 `1.0.1`；已有 builtin `1.0.0` 自动升级；已激活的 local-import/remote 版本不被 bootstrap 覆盖。对 `1.0.1` 断言：
 
@@ -73,7 +73,7 @@ npm test -- --runInBand src/workflows/registry/builtin.test.ts src/workflows/reg
 
 Expected: FAIL，因为只有 `1.0.0` 且 bootstrap 只处理无 active record 的情况。
 
-- [ ] **Step 2: 新增 immutable `1.0.1` 并让 catalog 安全升级 builtin**
+- [x] **Step 2: 新增 immutable `1.0.1` 并让 catalog 安全升级 builtin**
 
 复制现有定义为 `minimax-h3-i2v-15s-v1.0.1.json`，仅改变合同版本和已确认约束：
 
@@ -87,12 +87,12 @@ Expected: FAIL，因为只有 `1.0.0` 且 bootstrap 只处理无 active record �
 
 保留完整原文件为 `1.0.0`。`builtinWorkflowDefinitions` 同时导入两个定义。给 registry service 增加“安装但不激活 builtin record”的窄接口；catalog bootstrap 先安装所有缺失版本，再按 workflow ID 选择最高 builtin semver，并仅在 active 不存在或 active.source 为 `builtin` 且版本更旧时 `setActive`。
 
-- [ ] **Step 3: 验证 workflow registry 测试转绿**
+- [x] **Step 3: 验证 workflow registry 测试转绿**
 
 Run: Task 1 Step 1 命令。  
 Expected: PASS，且旧 package record 未被覆盖。
 
-- [ ] **Step 4: 写 snapshot 规范化和提交校验失败测试**
+- [x] **Step 4: 写 snapshot 规范化和提交校验失败测试**
 
 新增纯函数期望：空 seed 生成安全整数；合法数字字符串转 number；非数字字符串保留为非法值供 schema 报错。为 `validateSubmissionBeforeQueue` 写下列断言：
 
@@ -117,7 +117,7 @@ npm test -- --runInBand src/create/submissionInput.test.ts src/create/submission
 
 Expected: FAIL，因为 seed 仍为 string 且校验适配器不存在。
 
-- [ ] **Step 5: 实现纯校验边界**
+- [x] **Step 5: 实现纯校验边界**
 
 `submissionValidation.ts` 导出：
 
@@ -141,7 +141,7 @@ export function validateSubmissionBeforeQueue(input: {
 
 `buildSubmissionInputSnapshot` 对 seed 使用：空白则生成 number；纯十进制则 `Number`；其他内容保留原 string 让 TYPE_INVALID 生效。
 
-- [ ] **Step 6: 写 CreateForm/WorkflowForm 失败测试**
+- [x] **Step 6: 写 CreateForm/WorkflowForm 失败测试**
 
 测试注入 queue/token reader，输入 10,001 字符后点击提交，断言：
 
@@ -164,13 +164,13 @@ npm test -- --runInBand src/create/createForm.test.ts src/workflows/renderer/Wor
 
 Expected: FAIL，因为 CreateForm 仍先占 gate/读 token，WorkflowForm 没接收规范化字段错误和 max counter。
 
-- [ ] **Step 7: 接入 UI 提交门**
+- [x] **Step 7: 接入 UI 提交门**
 
 CreateForm 提交顺序固定为：build snapshot → `workflowCatalog.getActive` → validate → 设置字段错误/Alert 并 return → acquire gate → read settings → queue。合法编辑后清除对应字段错误；所有错误继续保留用户输入。
 
 WorkflowForm 将 `errors[].path` 与 property key 精确匹配；renderer 在 multiline schema 有 maxLength 时显示 `${length.toLocaleString()} / ${max.toLocaleString()} 字符`，只改变视觉颜色，不给 TextInput 设置截断式 `maxLength`。
 
-- [ ] **Step 8: 运行创建页聚焦门禁并提交**
+- [x] **Step 8: 运行创建页聚焦门禁并提交**
 
 ```powershell
 npm test -- --runInBand src/create/createForm.test.ts src/create/submissionInput.test.ts src/create/submissionValidation.test.ts src/workflows/renderer/WorkflowForm.test.tsx src/workflows/registry/builtin.test.ts src/workflows/registry/catalog.test.ts

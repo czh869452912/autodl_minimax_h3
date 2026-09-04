@@ -57,6 +57,21 @@ export function createWorkflowRegistryService(deps: Dependencies) {
     await deps.repository.setActive(record.workflowId, record.version, record.contentHash);
   };
   const parsePayload = async (payload: unknown, source: WorkflowPackageSource): Promise<VerifiedWorkflowPackage> => parseVerifiedWorkflowPackage(payload, source);
+  const createBuiltinRecord = async (definition: WorkflowDefinition): Promise<RegistryRecord> => {
+    const verified = await parseVerifiedWorkflowPackage(definition, 'builtin');
+    const result = validateWorkflowDefinition(verified.definition, adapterContext);
+    if (!result.ok) throw new RegistryError('REGISTRY_SCHEMA_INVALID', 'builtin definition is invalid');
+    checkCompatibility(result.value);
+    return {
+      workflowId: definition.id,
+      version: definition.version,
+      contentHash: verified.packageHash,
+      source: 'builtin',
+      trust: 'builtin',
+      definitionJson: canonicalizePackage(verified.pkg),
+      installedAt: (deps.now ?? Date.now)(),
+    };
+  };
   const fetchSafe = async (url: string): Promise<string> => {
     const controller = new AbortController();
     const timeoutMs = deps.fetchTimeoutMs ?? 15000;
@@ -127,13 +142,13 @@ export function createWorkflowRegistryService(deps: Dependencies) {
       await deps.repository.upsert(record);
       return record;
     },
+    async installBuiltin(definition: WorkflowDefinition): Promise<RegistryRecord> {
+      const record = await createBuiltinRecord(definition);
+      await deps.repository.upsert(record);
+      return record;
+    },
     async activateBuiltin(definition: WorkflowDefinition): Promise<void> {
-      const verified = await parseVerifiedWorkflowPackage(definition, 'builtin');
-      const result = validateWorkflowDefinition(verified.definition, adapterContext);
-      if (!result.ok) throw new RegistryError('REGISTRY_SCHEMA_INVALID', 'builtin definition is invalid');
-      checkCompatibility(result.value);
-      const canonical = canonicalizePackage(verified.pkg);
-      await installAndActivate({ workflowId: definition.id, version: definition.version, contentHash: verified.packageHash, source: 'builtin', trust: 'builtin', definitionJson: canonical, installedAt: (deps.now ?? Date.now)() });
+      await installAndActivate(await createBuiltinRecord(definition));
     },
     async syncRemoteIndex(url: string): Promise<RegistryIndex> {
       if (!allowedUrl(url, deps.allowDomains ?? [])) throw new RegistryError('REGISTRY_DOMAIN_REJECTED', 'registry URL is not allowlisted HTTPS');

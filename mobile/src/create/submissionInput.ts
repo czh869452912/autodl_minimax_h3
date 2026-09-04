@@ -11,8 +11,8 @@ type SubmissionInput = {
   random?: () => number;
 };
 
-function randomSeed(random: () => number): string {
-  return String(Math.floor(random() * (MAX_SEED - MIN_SEED + 1)) + MIN_SEED);
+function randomSeed(random: () => number): number {
+  return Math.floor(random() * (MAX_SEED - MIN_SEED + 1)) + MIN_SEED;
 }
 
 export function buildSubmissionInputSnapshot({
@@ -28,7 +28,7 @@ export function buildSubmissionInputSnapshot({
   if ('duration' in workflowValues) snapshot.duration = Number(workflowValues.duration ?? fallback.duration) || 0;
   if ('seed' in workflowValues) {
     const seed = String(workflowValues.seed ?? fallback.seed).trim();
-    snapshot.seed = seed || randomSeed(random);
+    snapshot.seed = seed === '' ? randomSeed(random) : /^\d+$/.test(seed) ? Number(seed) : seed;
   }
   return snapshot;
 }
