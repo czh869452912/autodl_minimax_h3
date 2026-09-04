@@ -781,7 +781,7 @@ git add docs/superpowers/verification/2026-09-04-c-closure-hotfix.md docs/superp
 git commit -m "docs: record v1.4.9 reliability verification"
 ```
 
-- [ ] **Step 8: 最终发布前只读检查**
+- [x] **Step 8: 最终发布前只读检查**
 
 ```powershell
 git diff --check 8a6ec4d3...HEAD
