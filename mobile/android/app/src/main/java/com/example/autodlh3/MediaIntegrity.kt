@@ -31,6 +31,18 @@ class MediaIntegrityException(val diagnosticCode: String, cause: Throwable? = nu
   IllegalArgumentException(diagnosticCode, cause)
 
 class MediaIntegrity(private val context: Context) {
+  companion object {
+    fun sha256(input: InputStream): String {
+      val digest = MessageDigest.getInstance("SHA-256")
+      val buffer = ByteArray(64 * 1024)
+      while (true) {
+        val count = input.read(buffer)
+        if (count < 0) break
+        if (count > 0) digest.update(buffer, 0, count)
+      }
+      return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+  }
   private fun localFile(source: String): File? {
     val uri = Uri.parse(source)
     return when {
@@ -49,16 +61,7 @@ class MediaIntegrity(private val context: Context) {
 
   fun sha256(source: String): String {
     if (source.isBlank()) throw MediaIntegrityException("MEDIA_SOURCE_INVALID")
-    val digest = MessageDigest.getInstance("SHA-256")
-    val buffer = ByteArray(64 * 1024)
-    openInput(source).use { input ->
-      while (true) {
-        val count = input.read(buffer)
-        if (count < 0) break
-        if (count > 0) digest.update(buffer, 0, count)
-      }
-    }
-    return digest.digest().joinToString("") { "%02x".format(it) }
+    return openInput(source).use(::sha256)
   }
 
   private fun <T> withExtractor(source: String, block: (MediaExtractor) -> T): T {

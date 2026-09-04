@@ -578,7 +578,7 @@ git commit -m "fix: redownload invalid gallery media durably"
 - Create: `mobile/android/app/src/test/java/com/example/autodlh3/MediaStorePublisherTest.kt`
 - Modify: `mobile/android/app/src/main/java/com/example/autodlh3/MediaStorePublisher.kt`
 
-- [ ] **Step 1: 写 publisher 失败测试**
+- [x] **Step 1: 写 publisher 失败测试**
 
 用 fake gateway 覆盖：同 display name + 同 SHA 返回 alreadyExisted 且不 insert；不同 SHA 删除旧 row 后 insert/write/finalize；旧 row hash 读取失败也替换；写入失败删除 pending；多个旧 row 时删除全部不一致条目，最终仅一个完成条目。
 
@@ -591,13 +591,13 @@ cd mobile/android
 
 Expected: FAIL，publisher 直接依赖 ContentResolver 且无 hash 比较。
 
-- [ ] **Step 2: 提取 gateway 并实现内容判断**
+- [x] **Step 2: 提取 gateway 并实现内容判断**
 
 `MediaStoreGateway` 只暴露 query/insert/openInput/openOutput/finalize/delete；Android 实现包装 ContentResolver。Publisher 复用 `MediaIntegrity.sha256(InputStream)` 对源和候选目标计算 hash。先完整读取源 hash，再决定 REUSE/REPLACE，避免在判断前消耗实际复制流。
 
 只查询 `Movies/AutoDL-H3/` + sanitized display name，不碰其他目录或用户文件。
 
-- [ ] **Step 3: 验证并提交**
+- [x] **Step 3: 验证并提交**
 
 ```powershell
 cd mobile/android
