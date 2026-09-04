@@ -10,7 +10,7 @@ function parseJson<T>(source: string | null | undefined, fallback: T): T {
   try { return JSON.parse(source) as T; } catch { return fallback; }
 }
 
-export function createJobRepository(db: SQLiteDatabase | undefined): JobRepository {
+export function createJobRepository(db: SQLiteDatabase | undefined): JobRepository & { listRecent(limit: number): Promise<JobRecord[]> } {
   const jobs = new Map<string, JobRecord>();
   const artifacts = new Map<string, ArtifactRecord[]>();
   const database = db && typeof (db as unknown as { execSync?: unknown }).execSync === 'function' ? db : undefined;
@@ -39,6 +39,12 @@ export function createJobRepository(db: SQLiteDatabase | undefined): JobReposito
     async list() {
       if (!database) return Array.from(jobs.values()).sort((a, b) => b.createdAt - a.createdAt);
       return (await all<JobRow>('SELECT * FROM workflow_jobs ORDER BY created_at DESC')).map(fromJob);
+    },
+    async listRecent(limit: number) {
+      const bounded = Math.max(0, Math.floor(limit));
+      if (bounded === 0) return [];
+      if (!database) return Array.from(jobs.values()).sort((a, b) => b.createdAt - a.createdAt).slice(0, bounded);
+      return (await all<JobRow>('SELECT * FROM workflow_jobs ORDER BY created_at DESC LIMIT ?', bounded)).map(fromJob);
     },
     async listActive() {
       if (!database) return Array.from(jobs.values()).filter((job) => ['QUEUED', 'RUNNING', 'UNKNOWN'].includes(job.status)).sort((a, b) => a.updatedAt - b.updatedAt);

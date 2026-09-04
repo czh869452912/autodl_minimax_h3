@@ -11,7 +11,7 @@ const operation: WorkflowOperation = {
   idempotencyKey: 'export:job-1:video-1:system-gallery',
   payload: {
     assetId: 'job-1:video-1', artifactId: 'video-1', sourceUri: 'file:///cas/video',
-    blobSha256: 'a'.repeat(64), keepPrivateCopy: true, displayName: 'job-1.mp4',
+    sourceKind: 'cas', blobSha256: 'a'.repeat(64), keepPrivateCopy: true, displayName: 'job-1.mp4',
   },
   state: 'CLAIMED', attempt: 1, nextRetryAt: 1,
   leaseOwner: 'worker', leaseExpiresAt: 100, createdAt: 1, updatedAt: 1,
@@ -63,6 +63,50 @@ test('releases only the matching blob reference when private copy is disabled', 
   expect(deps.commitSuccess).toHaveBeenCalledWith(expect.objectContaining({
     blobSha256: 'a'.repeat(64), referenceOwnerId: 'job-1:video-1', keepPrivateCopy: false,
   }));
+});
+
+test('exposes a deterministic interruption seam after native publish and before SQLite commit', async () => {
+  const deps = { ...setupExport(), afterPublish: jest.fn(async () => { throw new Error('SIMULATED_PROCESS_EXIT'); }) };
+  await expect(handleExport(operation, 'worker', deps)).rejects.toThrow('SIMULATED_PROCESS_EXIT');
+  expect(deps.publish).toHaveBeenCalledTimes(1);
+  expect(deps.afterPublish).toHaveBeenCalledWith({ operationId: 'export-1', galleryUri: 'content://media/external/video/7' });
+  expect(deps.commitSuccess).not.toHaveBeenCalled();
+  expect(deps.retry).not.toHaveBeenCalled();
+  expect(deps.finishFailure).not.toHaveBeenCalled();
+});
+
+test('durably exports a legacy private source without inventing or releasing a CAS reference', async () => {
+  const deps = { ...setupExport(), removeLegacyPrivate: jest.fn(async () => undefined) };
+  const legacy = {
+    ...operation,
+    payload: {
+      assetId: 'job-1:video-1', artifactId: 'video-1', sourceUri: 'file:///legacy/video.mp4',
+      sourceKind: 'legacy', keepPrivateCopy: false, displayName: 'job-1.mp4',
+    },
+  } as WorkflowOperation;
+  await handleExport(legacy, 'worker', deps);
+  expect(deps.commitSuccess).toHaveBeenCalledWith(expect.objectContaining({
+    sourceKind: 'legacy', keepPrivateCopy: false,
+  }));
+  expect(deps.removeLegacyPrivate).toHaveBeenCalledWith('file:///legacy/video.mp4');
+});
+
+test('never removes a legacy-labeled source inside the CAS tree', async () => {
+  const deps = { ...setupExport(), removeLegacyPrivate: jest.fn(async () => undefined) };
+  await handleExport({ ...operation, payload: {
+    assetId: 'job-1:video-1', artifactId: 'video-1', sourceUri: 'file:///documents/cas/sha256/aa/blob',
+    sourceKind: 'legacy', keepPrivateCopy: false, displayName: 'job-1.mp4',
+  } }, 'worker', deps);
+  expect(deps.removeLegacyPrivate).not.toHaveBeenCalled();
+});
+
+test('rejects a CAS export payload without a valid hash', async () => {
+  const deps = setupExport();
+  await handleExport({ ...operation, payload: { ...operation.payload, blobSha256: undefined } }, 'worker', deps);
+  expect(deps.publish).not.toHaveBeenCalled();
+  expect(deps.finishFailure).toHaveBeenCalledWith(
+    expect.anything(), 'worker', undefined, expect.any(Number), expect.objectContaining({ code: 'EXPORT_NATIVE_FAILED' }),
+  );
 });
 
 test('classifies missing source, transient native, and terminal native failures', async () => {

@@ -51,6 +51,16 @@ test('discovers only active versions and activates a builtin during bootstrap', 
   expect(repository.setActive).toHaveBeenCalledWith('demo', '1.0.0', expect.any(String));
 });
 
+test('installs a builtin without changing the active version', async () => {
+  const repository = { upsert: jest.fn(), get: jest.fn(), list: jest.fn(async () => []), setActive: jest.fn(), getActive: jest.fn(), rollback: jest.fn(), removeUnreferenced: jest.fn() };
+  const service = createWorkflowRegistryService({ repository: repository as never, adapters: [{ id: 'demo', operations: ['workflow.submit'] }], appVersion: '1.0.0' });
+
+  await service.installBuiltin(definition as never);
+
+  expect(repository.upsert).toHaveBeenCalledWith(expect.objectContaining({ workflowId: 'demo', version: '1.0.0', source: 'builtin' }));
+  expect(repository.setActive).not.toHaveBeenCalled();
+});
+
 test('rejects incompatible app and adapter versions before installation', async () => {
   const incompatible = { ...definition, compatibility: { minAppVersion: '2.0.0', requiredAdapterVersion: '^9.0.0' } };
   const service = createWorkflowRegistryService({ repository: { upsert: jest.fn(), get: jest.fn(), list: jest.fn(async () => []), setActive: jest.fn(), getActive: jest.fn(), rollback: jest.fn(), removeUnreferenced: jest.fn() } as never, adapters: [{ id: 'demo', operations: ['workflow.submit'] }], appVersion: '1.0.0', adapterVersions: { demo: '1.0.0' } });

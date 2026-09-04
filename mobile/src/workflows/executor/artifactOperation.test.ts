@@ -5,6 +5,9 @@ import type { WorkflowOperation } from './types';
 import { createOperationRepository } from './operationRepository';
 import { createTaskRepository } from '../../tasks/repository';
 import { createSqliteMediaStore } from '../../media/repository';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const operation: WorkflowOperation = {
   id: 'download-1', kind: 'ARTIFACT_DOWNLOAD', jobId: 'job-1', idempotencyKey: 'artifact:job-1:video-1',
@@ -15,15 +18,26 @@ const operation: WorkflowOperation = {
 
 function setup() {
   const stream = { async *[Symbol.asyncIterator]() { yield new Uint8Array([1, 2, 3]); } };
-  const operations = { finish: jest.fn(() => true), retry: jest.fn(() => true), renew: jest.fn(() => true) };
+  const operations = { finish: jest.fn(() => true), retry: jest.fn(() => true), renew: jest.fn(() => true), get: jest.fn(() => operation) };
   const blobs = { upsertBlob: jest.fn(), retain: jest.fn() };
-  const cas = { put: jest.fn(async (..._args: Parameters<ArtifactCas['put']>) => ({ sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}` })) };
+  const stored = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}` };
+  const staged = {
+    ...stored,
+    stagedRelativePath: 'cas/parts/download-1.part',
+    publish: jest.fn(async () => stored),
+    abort: jest.fn(async () => undefined),
+  };
+  const cas = {
+    stage: jest.fn(async (..._args: Parameters<ArtifactCas['stage']>) => staged),
+    put: jest.fn(async (..._args: Parameters<ArtifactCas['put']>) => stored),
+  };
   const openDownload = jest.fn(async () => ({ finalUrl: 'https://cdn.example/video.mp4', status: 200, mime: 'video/mp4', stream }));
   const updateProjection = jest.fn(async () => undefined);
   const ensureProjection = jest.fn(async () => undefined);
   const updateDownloadState = jest.fn(async () => undefined);
+  const verifyVideo = jest.fn(async () => undefined);
   const deliveryPolicy = { autoExportToGallery: true, keepPrivateCopy: true };
-  return { operations, blobs, cas, openDownload, updateProjection, ensureProjection, updateDownloadState, deliveryPolicy };
+  return { operations, blobs, cas, staged, openDownload, updateProjection, ensureProjection, updateDownloadState, verifyVideo, deliveryPolicy };
 }
 
 test('ensures the media row and marks downloading before opening the network stream', async () => {
@@ -40,13 +54,15 @@ test('ensures the media row and marks downloading before opening the network str
 
 test('writes a terminal failed projection when validation fails', async () => {
   const deps = setup();
-  deps.openDownload.mockRejectedValueOnce(new Error('CAS hash mismatch'));
+  deps.openDownload.mockRejectedValueOnce(Object.assign(new Error('opaque integrity failure'), {
+    code: 'ARTIFACT_INTEGRITY_FAILED', retryable: false,
+  }));
   await handleArtifactDownload(operation, 'worker', {
     ...deps,
     now: () => 50,
     policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
   });
-  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('DOWNLOAD_FAILED', 'ARTIFACT_VALIDATION_FAILED');
+  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('DOWNLOAD_FAILED', 'ARTIFACT_INTEGRITY_FAILED');
 });
 
 test('streams into CAS, retains the blob, updates projection, and finishes', async () => {
@@ -55,13 +71,16 @@ test('streams into CAS, retains the blob, updates projection, and finishes', asy
     ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10, acceptedMimes: ['video/mp4'] }),
   });
   expect(deps.openDownload).toHaveBeenCalledWith('https://cdn.example/video.mp4', expect.objectContaining({ allowedHosts: ['cdn.example'] }));
-  expect(deps.cas.put).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ mime: 'video/mp4', maxBytes: 10, operationId: 'download-1' }));
-  const putOptions = deps.cas.put.mock.calls[0][1];
+  expect(deps.cas.stage).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ mime: 'video/mp4', maxBytes: 10, operationId: 'download-1' }));
+  const putOptions = deps.cas.stage.mock.calls[0][1];
   expect(putOptions.operationAttempt).toBe(1);
   expect(putOptions.assertLease).toEqual(expect.any(Function));
   if (!putOptions.assertLease) throw new Error('lease fence missing');
   expect(putOptions.assertLease()).toBeUndefined();
   expect(deps.operations.renew).toHaveBeenCalledWith('download-1', 'worker', 50, 120_000);
+  expect(deps.verifyVideo).toHaveBeenCalledWith(expect.stringContaining('cas/parts/'));
+  expect(deps.staged.publish).toHaveBeenCalledTimes(1);
+  expect(deps.staged.abort).not.toHaveBeenCalled();
   expect(deps.blobs.upsertBlob).toHaveBeenCalledWith(expect.objectContaining({ sha256: 'a'.repeat(64), createdAt: 50, verifiedAt: 50 }));
   expect(deps.blobs.retain).toHaveBeenCalledWith('a'.repeat(64), 'workflow_artifact', 'job-1:video-1', 50);
   expect(deps.updateProjection).toHaveBeenCalledWith(expect.objectContaining({ localUri: expect.stringContaining('cas/sha256') }));
@@ -70,21 +89,159 @@ test('streams into CAS, retains the blob, updates projection, and finishes', asy
 
 test('retries connection and idle timeouts with bounded backoff', async () => {
   const deps = setup();
-  deps.openDownload.mockRejectedValueOnce(new Error('下载连接超时'));
+  deps.openDownload.mockRejectedValueOnce(Object.assign(new Error('opaque transfer failure'), {
+    code: 'ARTIFACT_CONNECT_TIMEOUT', retryable: true,
+  }));
   await handleArtifactDownload(operation, 'worker', { ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
-  expect(deps.operations.retry).toHaveBeenCalledWith('download-1', 'worker', expect.objectContaining({ now: 50, nextRetryAt: 1050 }));
-  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('ENQUEUED');
+  expect(deps.operations.retry).toHaveBeenCalledWith('download-1', 'worker', expect.objectContaining({
+    now: 50, nextRetryAt: 1050, error: expect.objectContaining({ code: 'ARTIFACT_CONNECT_TIMEOUT' }),
+  }));
+  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('ENQUEUED', 'ARTIFACT_CONNECT_TIMEOUT');
   expect(deps.operations.finish).not.toHaveBeenCalled();
 });
 
-test('treats URL policy, MIME, size, and hash failures as terminal', async () => {
-  for (const message of ['域名不在允许列表', '下载媒体类型不受支持', 'CAS 文件大小超过限制', 'CAS hash mismatch']) {
+test.each([1, 2])('retries an invalid downloaded video on attempt %s without committing projections', async (attempt) => {
+  const deps = setup();
+  deps.verifyVideo.mockRejectedValueOnce(Object.assign(new Error('native decoder detail'), { code: 'MEDIA_INVALID' }));
+  await handleArtifactDownload({ ...operation, attempt }, 'worker', {
+    ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+  expect(deps.operations.retry).toHaveBeenCalledWith('download-1', 'worker', expect.objectContaining({
+    error: expect.objectContaining({ code: 'ARTIFACT_MEDIA_INVALID_RETRYABLE', retryable: true }),
+  }));
+  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('ENQUEUED', 'ARTIFACT_MEDIA_INVALID_RETRYABLE');
+  expect(deps.blobs.upsertBlob).not.toHaveBeenCalled();
+  expect(deps.updateProjection).not.toHaveBeenCalled();
+  expect(deps.operations.finish).not.toHaveBeenCalled();
+  expect(deps.staged.publish).not.toHaveBeenCalled();
+  expect(deps.staged.abort).toHaveBeenCalledTimes(1);
+});
+
+test('fails an invalid downloaded video on attempt 3 without committing projections or export', async () => {
+  const deps = setup();
+  deps.verifyVideo.mockRejectedValueOnce(Object.assign(new Error('native decoder detail'), { code: 'MEDIA_INVALID' }));
+  await handleArtifactDownload({ ...operation, attempt: 3 }, 'worker', {
+    ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+  expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50, expect.objectContaining({
+    code: 'ARTIFACT_MEDIA_INVALID', retryable: false,
+  }));
+  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('DOWNLOAD_FAILED', 'ARTIFACT_MEDIA_INVALID');
+  expect(deps.blobs.upsertBlob).not.toHaveBeenCalled();
+  expect(deps.updateProjection).not.toHaveBeenCalled();
+  expect(deps.staged.publish).not.toHaveBeenCalled();
+  expect(deps.staged.abort).toHaveBeenCalledTimes(1);
+});
+
+test('reserves blob metadata before publication and releases it for GC when commit fails', async () => {
+  const deps = setup();
+  const order: string[] = [];
+  deps.staged.publish.mockImplementationOnce(async () => { order.push('publish'); return {
+    sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}`,
+  }; });
+  const commit = Object.assign(
+    jest.fn(() => { order.push('commit'); throw new Error('artifact operation lease lost'); }),
+    {
+      clearStale: jest.fn(() => { order.push('clear'); }),
+      reserve: jest.fn(() => { order.push('reserve'); }),
+      release: jest.fn(() => { order.push('release'); }),
+    },
+  );
+
+  await handleArtifactDownload(operation, 'worker', {
+    ...deps, commit, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+
+  expect(order).toEqual(['clear', 'reserve', 'publish', 'commit', 'release']);
+  expect(commit.reserve).toHaveBeenCalledWith(expect.objectContaining({ operationId: 'download-1', owner: 'worker' }));
+  expect(commit.release).toHaveBeenCalledTimes(1);
+  expect(commit.release).toHaveBeenCalledWith({ operationId: 'download-1', owner: 'worker' });
+});
+
+test('clears a crashed prior reservation even when the next attempt fails before staging', async () => {
+  const deps = setup();
+  deps.openDownload.mockRejectedValueOnce(Object.assign(new Error('offline'), { code: 'ARTIFACT_NETWORK', retryable: true }));
+  const commit = Object.assign(jest.fn(), {
+    clearStale: jest.fn(),
+    reserve: jest.fn(),
+    release: jest.fn(),
+  });
+
+  await handleArtifactDownload(operation, 'worker', {
+    ...deps, commit, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+
+  expect(commit.clearStale).toHaveBeenCalledTimes(1);
+  expect(commit.clearStale).toHaveBeenCalledWith({ operationId: 'download-1', owner: 'worker' });
+  expect(commit.release).not.toHaveBeenCalled();
+  expect(commit.reserve).not.toHaveBeenCalled();
+  expect(deps.operations.retry).toHaveBeenCalled();
+});
+
+test('probe failure aborts the staged part before publication', async () => {
+  const deps = setup();
+  let stagedPartExists = true;
+  deps.staged.abort.mockImplementationOnce(async () => { stagedPartExists = false; });
+  deps.verifyVideo.mockRejectedValueOnce(Object.assign(new Error('invalid staged video'), { code: 'MEDIA_INVALID' }));
+
+  await handleArtifactDownload(operation, 'worker', {
+    ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+
+  expect(stagedPartExists).toBe(false);
+  expect(deps.staged.publish).not.toHaveBeenCalled();
+  expect(deps.blobs.retain).not.toHaveBeenCalled();
+});
+
+test('does not run the video decoder probe for non-video artifacts', async () => {
+  const deps = setup();
+  await handleArtifactDownload({
+    ...operation,
+    payload: { artifact: { id: 'image-1', jobId: 'job-1', kind: 'image', uri: 'https://cdn.example/image.png', mime: 'image/png' } },
+  }, 'worker', { ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
+  expect(deps.verifyVideo).not.toHaveBeenCalled();
+  expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'SUCCEEDED', 50);
+});
+
+test('uses the latest persisted delivery intent when save joins a claimed download', async () => {
+  const deps = setup();
+  const commit = Object.assign(jest.fn(async () => undefined), {
+    clearStale: jest.fn(async () => undefined),
+    reserve: jest.fn(async () => undefined),
+    release: jest.fn(async () => undefined),
+  });
+  deps.operations.get.mockReturnValue({
+    ...operation,
+    payload: { ...operation.payload, deliveryIntent: { target: 'system-gallery', keepPrivateCopy: false } },
+  });
+  await handleArtifactDownload(operation, 'worker', {
+    ...deps, commit, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+  expect(commit).toHaveBeenCalledWith(expect.objectContaining({
+    deliveryIntent: { target: 'system-gallery', keepPrivateCopy: false },
+  }));
+});
+
+test('treats structured policy and integrity failures as terminal', async () => {
+  for (const code of ['ARTIFACT_HOST_DENIED', 'ARTIFACT_MIME_REJECTED', 'ARTIFACT_SIZE_REJECTED', 'ARTIFACT_INTEGRITY_FAILED']) {
     const deps = setup();
-    deps.openDownload.mockRejectedValueOnce(new Error(message));
+    deps.openDownload.mockRejectedValueOnce(Object.assign(new Error('opaque terminal failure'), { code, retryable: false }));
     await handleArtifactDownload(operation, 'worker', { ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
-    expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50, expect.objectContaining({ retryable: false }));
+    expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50, expect.objectContaining({ code, retryable: false }));
     expect(deps.operations.retry).not.toHaveBeenCalled();
   }
+});
+
+test('rejects unknown structured artifact codes and caller-controlled retryability', async () => {
+  const deps = setup();
+  deps.openDownload.mockRejectedValueOnce({ code: 'ARTIFACT_SECRET_FROM_URL', retryable: false, message: 'secret' });
+  await handleArtifactDownload(operation, 'worker', { ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
+  expect(deps.operations.retry).toHaveBeenCalledWith('download-1', 'worker', expect.objectContaining({ error: expect.objectContaining({ code: 'ARTIFACT_NETWORK' }) }));
+
+  const canonical = setup();
+  canonical.openDownload.mockRejectedValueOnce({ code: 'ARTIFACT_HOST_DENIED', retryable: true, message: 'secret' });
+  await handleArtifactDownload(operation, 'worker', { ...canonical, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
+  expect(canonical.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50, expect.objectContaining({ code: 'ARTIFACT_HOST_DENIED', retryable: false }));
 });
 
 test('rolls back blob and reference metadata when the operation lease is lost', () => {
@@ -142,7 +299,7 @@ test('commits the download and enqueues enabled gallery export atomically', asyn
       idempotencyKey: 'export:job-1:video-1:system-gallery',
       payload: {
         assetId: 'job-1:video-1', artifactId: 'video-1', sourceUri: 'file:///cas/video',
-        blobSha256: 'a'.repeat(64), keepPrivateCopy: false,
+        sourceKind: 'cas', blobSha256: 'a'.repeat(64), keepPrivateCopy: false,
         displayName: artifactExportDisplayName('job-1', 'video-1'),
       },
     }]);
@@ -190,5 +347,91 @@ test('commits a private download without export when auto export is disabled', a
     expect(operationStore.list('EXPORT')).toEqual([]);
     await expect(taskStore.get('job-1')).resolves.toMatchObject({ downloadState: 'DOWNLOADED', exportState: 'NOT_REQUESTED' });
     await expect(mediaStore.get('job-1:video-1')).resolves.toMatchObject({ status: 'downloaded', exportStatus: 'NOT_REQUESTED' });
+  } finally { db.close(); }
+});
+
+test('failed post-publication commit leaves a database-visible unreferenced blob for GC', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const { operationStore } = await seedArtifactCommit(db);
+    const commit = createSqliteArtifactCommitter(db as never);
+    const blob = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 50, verifiedAt: 50 };
+    commit.reserve({ operationId: 'download-1', owner: 'worker', blob, now: 50 });
+    expect(db.getFirstSync("SELECT owner_type FROM artifact_blob_refs WHERE blob_sha256=?", blob.sha256))
+      .toMatchObject({ owner_type: 'artifact_operation:download-1' });
+
+    operationStore.retry('download-1', 'worker', { now: 50, nextRetryAt: 60, error: { code: 'TEST', message: 'test', retryable: true } });
+    expect(() => commit({
+      operationId: 'download-1', owner: 'worker', jobId: 'job-1', artifact: operation.payload.artifact as never,
+      blob, localUri: 'file:///cas/sha256/aa/blob', now: 50,
+      deliveryPolicy: { autoExportToGallery: false, keepPrivateCopy: true },
+    })).toThrow('lease lost');
+    commit.release({ operationId: 'download-1', owner: 'worker' });
+
+    expect(db.getFirstSync('SELECT sha256 FROM artifact_blobs WHERE sha256=?', blob.sha256)).toMatchObject({ sha256: blob.sha256 });
+    expect(db.getFirstSync('SELECT blob_sha256 FROM artifact_blob_refs WHERE blob_sha256=?', blob.sha256)).toBeUndefined();
+  } finally { db.close(); }
+});
+
+test('a replacement reservation releases the previous attempt hash for GC', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    await seedArtifactCommit(db);
+    const commit = createSqliteArtifactCommitter(db as never);
+    const first = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/first', createdAt: 40, verifiedAt: 40 };
+    const second = { sha256: 'b'.repeat(64), byteSize: 4, mime: 'video/mp4', relativePath: 'cas/sha256/bb/second', createdAt: 50, verifiedAt: 50 };
+
+    commit.reserve({ operationId: 'download-1', owner: 'worker', blob: first, now: 40 });
+    commit.reserve({ operationId: 'download-1', owner: 'worker', blob: second, now: 50 });
+
+    expect(db.getFirstSync('SELECT 1 AS present FROM artifact_blob_refs WHERE blob_sha256=?', first.sha256)).toBeUndefined();
+    expect(db.getFirstSync('SELECT owner_id FROM artifact_blob_refs WHERE blob_sha256=?', second.sha256))
+      .toMatchObject({ owner_id: 'worker' });
+    expect(db.getFirstSync('SELECT sha256 FROM artifact_blobs WHERE sha256=?', first.sha256)).toMatchObject({ sha256: first.sha256 });
+  } finally { db.close(); }
+});
+
+test('a late expired owner cannot release the replacement owner reservation', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'artifact-reservation-'));
+  const path = join(directory, 'reservation.db');
+  const firstDb = createInitializedRealSqliteTestDb(path);
+  const secondDb = createInitializedRealSqliteTestDb(path);
+  try {
+    await seedArtifactCommit(firstDb);
+    const firstCommit = createSqliteArtifactCommitter(firstDb as never);
+    const secondCommit = createSqliteArtifactCommitter(secondDb as never);
+    const first = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/first', createdAt: 40, verifiedAt: 40 };
+    const second = { sha256: 'b'.repeat(64), byteSize: 4, mime: 'video/mp4', relativePath: 'cas/sha256/bb/second', createdAt: 50, verifiedAt: 50 };
+    firstCommit.reserve({ operationId: 'download-1', owner: 'worker', blob: first, now: 40 });
+
+    secondDb.runSync("UPDATE workflow_operations SET lease_owner='worker-b', lease_expires_at=200 WHERE id='download-1'");
+    secondCommit.reserve({ operationId: 'download-1', owner: 'worker-b', blob: second, now: 50 });
+    firstCommit.release({ operationId: 'download-1', owner: 'worker' });
+
+    expect(secondDb.getFirstSync('SELECT owner_type,owner_id FROM artifact_blob_refs WHERE blob_sha256=?', second.sha256))
+      .toMatchObject({ owner_type: 'artifact_operation:download-1', owner_id: 'worker-b' });
+    expect(secondDb.getFirstSync('SELECT 1 AS present FROM artifact_blob_refs WHERE blob_sha256=?', first.sha256)).toBeUndefined();
+  } finally {
+    secondDb.close();
+    firstDb.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('explicit delivery intent overrides disabled auto export and freezes private-copy policy', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const { operationStore } = await seedArtifactCommit(db);
+    createSqliteArtifactCommitter(db as never)({
+      operationId: 'download-1', owner: 'worker', jobId: 'job-1',
+      artifact: operation.payload.artifact as never,
+      blob: { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 50, verifiedAt: 50 },
+      localUri: 'file:///cas/video', now: 50,
+      deliveryPolicy: { autoExportToGallery: false, keepPrivateCopy: true },
+      deliveryIntent: { target: 'system-gallery', keepPrivateCopy: false },
+    });
+    expect(operationStore.list('EXPORT')).toMatchObject([{
+      payload: { sourceKind: 'cas', blobSha256: 'a'.repeat(64), keepPrivateCopy: false },
+    }]);
   } finally { db.close(); }
 });

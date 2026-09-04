@@ -7,14 +7,12 @@ const mockCopy = jest.fn(async (_value: string) => undefined);
 const mockReadClipboard = jest.fn(async () => task.prompt);
 const mockList = jest.fn();
 const mockGet = jest.fn();
-const mockTaskUpsert = jest.fn(async (_value: unknown) => undefined);
-const mockTaskMediaUpsert = jest.fn(async (_value: unknown) => undefined);
-const mockTaskMediaPatch = jest.fn(async (_id: string, _value: unknown) => true);
 const mockMediaGet = jest.fn();
-const mockMediaUpsert = jest.fn(async (_value: unknown) => undefined);
-const mockDeliveryUpsert = jest.fn(async (_value: unknown) => undefined);
 const mockResolveLocal = jest.fn(async (..._args: unknown[]): Promise<string | undefined> => undefined);
-const mockExport = jest.fn(async (value: typeof task, _options?: unknown) => ({ ...value, exportState: 'EXPORTED' as const, galleryUri: 'content://media/video/7' }));
+const mockSync = jest.fn(async (..._args: unknown[]) => ({ tasks: [], summary: { operations: { remainingDue: 0, remainingScheduled: 0, budgetExhausted: false } } }));
+const mockRequestExport = jest.fn(async (_taskId: string, _policy: { keepPrivateCopy: boolean }) => ({ status: 'queued' as const }));
+const mockRequestRedownload = jest.fn(async (_taskId: string) => ({ status: 'queued' as const }));
+const mockProbeVideo = jest.fn(async (_source: string) => undefined);
 const task = {
   id: 'task-1', prompt: 'A very long prompt. '.repeat(300), status: 'SUCCESS' as const,
   resolution: '768p竖', duration: 5, videoUrl: 'https://example/video.mp4',
@@ -26,18 +24,17 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ back: mockBack }),
 }));
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
-jest.mock('../tasks/repository', () => ({
-  createTaskRepository: jest.fn(() => ({ list: () => mockList(), get: (id: string) => mockGet(id), upsert: (value: unknown) => mockTaskUpsert(value), upsertMediaProjection: (value: unknown) => mockTaskMediaUpsert(value), updateMediaProjection: (id: string, value: unknown) => mockTaskMediaPatch(id, value) })),
-}));
-jest.mock('../media/repository', () => ({
-  createSqliteMediaStore: jest.fn(() => ({
+jest.mock('../tasks/sync', () => ({
+  taskStore: { list: () => mockList(), get: (id: string) => mockGet(id) },
+  mediaStore: {
     get: (id: string) => mockMediaGet(id),
-    upsert: (value: unknown) => mockMediaUpsert(value),
-    upsertDelivery: (value: unknown) => mockDeliveryUpsert(value),
-  })),
+  },
+  syncTaskRun: (...args: unknown[]) => mockSync(...args),
+  requestTaskExport: (taskId: string, policy: { keepPrivateCopy: boolean }) => mockRequestExport(taskId, policy),
+  requestTaskRedownload: (taskId: string) => mockRequestRedownload(taskId),
 }));
+jest.mock('../native/media', () => ({ probeVideo: (source: string) => mockProbeVideo(source) }));
 jest.mock('../tasks/localMedia', () => ({ resolveLocalVideoSource: (...args: unknown[]) => mockResolveLocal(...args) }));
-jest.mock('../tasks/media', () => ({ exportTaskVideo: (...args: unknown[]) => mockExport(args[0] as typeof task, args[1]) }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: (value: string) => mockCopy(value), getStringAsync: () => mockReadClipboard() }));
 jest.mock('../media/VideoPlayer', () => ({
   VideoPlayer: (props: Record<string, unknown>) => require('react').createElement('View', { ...props, testID: 'video-player-mock' }),
@@ -53,16 +50,14 @@ describe('video detail screen', () => {
     mockReadClipboard.mockResolvedValue(task.prompt);
     mockGet.mockReset();
     mockGet.mockResolvedValue(task);
-    mockTaskUpsert.mockClear();
-    mockTaskMediaUpsert.mockClear();
-    mockTaskMediaPatch.mockClear();
     mockMediaGet.mockReset();
     mockMediaGet.mockResolvedValue(null);
-    mockMediaUpsert.mockClear();
-    mockDeliveryUpsert.mockClear();
     mockResolveLocal.mockReset();
     mockResolveLocal.mockResolvedValue(undefined);
-    mockExport.mockClear();
+    mockSync.mockClear();
+    mockRequestExport.mockClear();
+    mockRequestRedownload.mockClear();
+    mockProbeVideo.mockClear();
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   });
 
@@ -102,10 +97,11 @@ describe('video detail screen', () => {
     let tree: ReturnType<typeof create>;
     await act(async () => { tree = create(<VideoDetailScreen />); });
     await act(async () => tree!.root.findByProps({ accessibilityLabel: '保存到系统相册' }).props.onPress());
-    expect(mockExport).toHaveBeenCalled();
+    expect(mockRequestExport).toHaveBeenCalledWith('task-1', { keepPrivateCopy: true });
+    expect(mockSync).toHaveBeenCalledWith({ reason: 'foreground', mode: 'poll', taskIds: ['task-1'] });
   });
 
-  it('repairs stale projections and exports the verified private file', async () => {
+  it('uses a verified private file for playback without writing projections in the route', async () => {
     const staleTask = { ...task, downloadState: 'DOWNLOAD_FAILED' as const, downloadError: '域名不在允许列表' };
     const staleAsset = {
       id: 'asset-1', taskId: 'task-1', title: 'x', prompt: task.prompt,
@@ -122,12 +118,21 @@ describe('video detail screen', () => {
     const texts = tree!.root.findAllByType(Text).map((node) => [node.props.children].flat(Infinity).join(''));
     expect(texts.some((text) => text.includes('已下载'))).toBe(true);
     expect(tree!.root.findByProps({ testID: 'video-player-mock' }).props.source).toBe('file:///documents/media/task-1.mp4');
-    expect(mockTaskMediaPatch).toHaveBeenCalledWith('task-1', expect.objectContaining({ localUri: 'file:///documents/media/task-1.mp4', downloadState: 'DOWNLOADED', downloadError: undefined }));
-    expect(mockTaskUpsert).not.toHaveBeenCalled();
-    expect(mockMediaUpsert).toHaveBeenCalledWith(expect.objectContaining({ localPath: 'file:///documents/media/task-1.mp4', status: 'downloaded' }));
 
     await act(async () => tree!.root.findByProps({ accessibilityLabel: '保存到系统相册' }).props.onPress());
-    expect(mockExport).toHaveBeenCalledWith(expect.objectContaining({ localUri: 'file:///documents/media/task-1.mp4', downloadState: 'DOWNLOADED' }), expect.objectContaining({ asset: expect.objectContaining({ localPath: 'file:///documents/media/task-1.mp4' }) }));
+    expect(mockRequestExport).toHaveBeenCalledWith('task-1', { keepPrivateCopy: true });
+  });
+
+  it('queues a durable redownload when the verified local player reports invalid media', async () => {
+    mockGet.mockResolvedValue({ ...task, localUri: 'file:///private.mp4', downloadState: 'DOWNLOADED', exportState: 'EXPORTED' });
+    mockResolveLocal.mockResolvedValue('file:///private.mp4');
+    let tree: ReturnType<typeof create>;
+    await act(async () => { tree = create(<VideoDetailScreen />); });
+    const player = tree!.root.findByProps({ testID: 'video-player-mock' });
+    expect(player.props.validateSource).toEqual(expect.any(Function));
+    await act(async () => player.props.onInvalidSource('file:///private.mp4'));
+    expect(mockRequestRedownload).toHaveBeenCalledWith('task-1');
+    expect(Alert.alert).toHaveBeenCalledWith('已开始重新下载', '已清除损坏的本地副本并开始重新下载');
   });
 
   it('does not present a missing private path as downloaded', async () => {

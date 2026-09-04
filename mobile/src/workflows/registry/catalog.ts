@@ -2,6 +2,7 @@ import type { WorkflowDefinition } from '../schema/types';
 import { packageToDefinition, parseWorkflowPackage } from '../schema/package';
 import { createWorkflowRegistryService } from './service';
 import type { WorkflowRegistry, RegistryRecord } from './types';
+import { compareVersions } from './semver';
 
 export function registryRecordToDefinition(record: RegistryRecord): WorkflowDefinition {
   const raw: unknown = JSON.parse(record.definitionJson);
@@ -15,9 +16,21 @@ export function createWorkflowCatalog(deps: { registry: WorkflowRegistry; builti
   const service = createWorkflowRegistryService({ repository: deps.registry, adapters: deps.adapters, appVersion: deps.appVersion, adapterVersions: deps.adapterVersions });
   return {
     async bootstrap(): Promise<void> {
+      const grouped = new Map<string, WorkflowDefinition[]>();
       for (const definition of deps.builtins) {
-        const active = await deps.registry.getActive(definition.id);
-        if (!active) await service.activateBuiltin(definition);
+        await service.installBuiltin(definition);
+        const versions = grouped.get(definition.id) ?? [];
+        versions.push(definition);
+        grouped.set(definition.id, versions);
+      }
+      for (const [workflowId, definitions] of grouped) {
+        const newest = [...definitions].sort((a, b) => compareVersions(b.version, a.version))[0];
+        const active = await deps.registry.getActive(workflowId);
+        if (!active || (active.source === 'builtin' && compareVersions(active.version, newest.version) < 0)) {
+          const record = await deps.registry.get(workflowId, newest.version);
+          if (!record) throw new Error('installed builtin workflow version not found');
+          await deps.registry.setActive(workflowId, record.version, record.contentHash);
+        }
       }
     },
     async listActive(): Promise<RegistryRecord[]> { return service.discoverWorkflows(); },

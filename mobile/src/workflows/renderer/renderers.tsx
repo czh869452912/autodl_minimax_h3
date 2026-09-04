@@ -36,11 +36,16 @@ function textInputProps(ctx: FieldRenderContext) {
 
 function renderText(ctx: FieldRenderContext) {
   const multiline = Boolean(textInputProps(ctx).multiline);
+  const length = String(ctx.value ?? '').length;
+  const maximum = typeof ctx.schema.maxLength === 'number' ? ctx.schema.maxLength : undefined;
+  const counter = maximum === undefined
+    ? `${length.toLocaleString()} 字符`
+    : `${length.toLocaleString()} / ${maximum.toLocaleString()} 字符`;
   return (
     <View style={styles.field}>
       <FieldLabel ctx={ctx} />
       <TextInput {...textInputProps(ctx)} style={[styles.input, multiline && styles.promptInput]} textAlignVertical={multiline ? 'top' : 'center'} />
-      {multiline ? <Text style={styles.counter}>{String(ctx.value ?? '').length} 字符</Text> : null}
+      {multiline ? <Text style={[styles.counter, ctx.error && styles.counterError]}>{counter}</Text> : null}
       <ErrorText message={ctx.error} />
     </View>
   );
@@ -100,6 +105,7 @@ const styles = StyleSheet.create({
   input: { minHeight: 44, paddingHorizontal: SPACING.md, borderRadius: 10, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, color: COLORS.text, fontSize: 14 },
   promptInput: { minHeight: 150, paddingTop: SPACING.md, paddingBottom: SPACING.md, lineHeight: 23 },
   counter: { borderTopWidth: 1, borderTopColor: COLORS.border, color: COLORS.textSubtle, fontSize: 11, paddingTop: SPACING.sm, fontFamily: 'monospace' },
+  counterError: { color: COLORS.danger, borderTopColor: COLORS.danger },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
   chip: { minWidth: '46%', paddingVertical: 12, paddingHorizontal: 10, borderRadius: 10, alignItems: 'center', backgroundColor: COLORS.surfaceRaised, borderWidth: 1, borderColor: COLORS.border },
   selectedChip: { borderColor: COLORS.primaryActive, backgroundColor: COLORS.primarySoft },

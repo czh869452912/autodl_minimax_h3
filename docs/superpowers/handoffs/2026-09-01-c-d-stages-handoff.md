@@ -192,4 +192,14 @@ D-Core 之后再规划 Batch/Variant、项目包导出/导入、备份/同步/�
 6. D-Core 必须复用 C-Core 的 operation/job/event/CAS 权威状态，不得恢复旧 snapshot-only scheduler 或另建重复下载队列。
 7. Batch/Variant、同步/协作、完整 foreground service 与复杂导出仍不属于 D-Core Task 1，不得顺手并入。
 
-交接结论：A/B 已闭环并以 v1.4.7 收口；C-Core Durable Local Executor 的六项实现、恢复修复、独立复审和发布级验收也已在 `codex/c-core-plan-rewrite` 完成。当前正确顺序是：审查并集成 C-Core → 在 v6 基线上执行 D-Core Local Product Domain → D-Core 验收。下一项工程工作从 D-Core Task 1 的 v7 migration 与 legacy projection 开始。
+### C 收尾热修复 v1.4.9（2026-09-04）
+
+C 最终审查后的收尾热修复已在 `codex/c-closure-hotfix` 完成代码实现。除此前已统一的持久手动下载/保存外，本轮还完成：创建参数在读取 token/写数据库前按 immutable workflow schema 拦截；任务刷新热路径改为有界 SQL 并分离 poll/maintenance/service；离线→在线主动恢复；下载内容在 CAS part 上通过 SHA-256 与原生 MP4/NAL 探针后才发布并提交成功投影；坏副本 durable redownload；MediaStore 按内容替换；Android 13+ 通知权限、终态通知持久去重与 scoped 停服。自动化基线为 typecheck PASS、111/112 suites passed（1 skipped）、603/605 tests passed（2 skipped）、0 failed，schema 保持 v6。独立复审为 0 Critical / 0 Important，代码层面可作为 RC；极端 I/O 下 quarantine 残留的非阻塞 Minor 延期到 D 做按龄清扫与遥测。完整记录见 `docs/superpowers/verification/2026-09-04-c-closure-hotfix.md`。
+
+M6 按已确认的产品现实记录为 Accepted Constraint：AutoDL 使用动态存储节点，不能依赖固定 AutoDL 前缀。受控边界是 trusted adapter origin、HTTPS、逐跳重定向校验、literal private/reserved address 拒绝、不转发凭据、MIME/大小/timeout/完整性及诊断脱敏；不宣称 DNS resolution pinning 或固定 host allowlist。
+
+C 实现只有在 v1.4.9 的真实 AutoDL 媒体、断网恢复、100+ 历史任务、非法参数与既有媒体策略设备矩阵，以及独立审查、PR 合并、tag 和发布资产复核全部完成后才是 release-complete。在此之前不得启动 D 实现。D Task 1 必须从最终 v1.4.9 merge/tag commit、schema v6 建立新 worktree；UNKNOWN UI 与低优先级 query/cursor 观察继续延期到 D。
+
+已完成的 Android 子门：JBR 21.0.11 x86_64 Debug 全门禁（393 actionable tasks）通过；JVM 11 tests 与 API 37 instrumentation 1 test 零失败。最新 APK 126,032,207 bytes，SHA-256 `9F49CCA176743AA4EBA9DBCC9F87C1A9086F79EE8E5F0045676C66931761DA8A`。1.4.9 fresh install、SQLite integrity/schema v6/15 tables、可见 MainActivity 与 fatal scan 通过；此前从 tag 构建的同 debug 签名 1.4.8(18) 覆盖到 1.4.9(19) 后，task/asset/delivery/operation/blob ref 与私有 CAS sentinel 保留，任务页实际可见。正式 v1.4.8 Release 与 Debug 证书不同，不能混用作 Android 覆盖升级链。
+
+交接结论：当前顺序为完成 v1.4.9 发布门 → 从已验证 tag 基线开始 D-Core Task 1 的 v7 migration 与 legacy projection。不得从未合并 hotfix 分支或旧 v6 提交提前启动 D。

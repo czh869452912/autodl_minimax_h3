@@ -9,6 +9,7 @@ export type TickSummary = {
   blocked: number;
   remainingDue: number;
   remainingScheduled: number;
+  nextWakeAt?: number;
 };
 export type TickOptions = { reason: 'foreground' | 'background' | 'service'; maxOperations?: number; now?: number };
 
@@ -26,9 +27,7 @@ type TickDeps = {
 function dueSnapshot(operations: OperationRepository, now: number, maxOperations: number): WorkflowOperation[] {
   const byKind = new Map<OperationKind, WorkflowOperation[]>();
   for (const kind of laneOrder) {
-    byKind.set(kind, operations.list(kind)
-      .filter((item) => item.state === 'PENDING' && item.nextRetryAt <= now && (item.leaseExpiresAt == null || item.leaseExpiresAt <= now))
-      .sort((left, right) => left.nextRetryAt - right.nextRetryAt || left.createdAt - right.createdAt || left.id.localeCompare(right.id)));
+    byKind.set(kind, operations.listDue({ kind, now, limit: maxOperations }));
   }
   const snapshot: WorkflowOperation[] = [];
   while (snapshot.length < maxOperations) {
@@ -50,13 +49,7 @@ export function createExecutorTick(deps: TickDeps) {
   const runOnce = async (options: TickOptions): Promise<TickSummary> => {
     const timestamp = options.now ?? Date.now();
     const maxOperations = Math.max(1, Math.min(32, options.maxOperations ?? 8));
-    const remaining = () => {
-      const pending = deps.operations.list().filter((item) => item.state === 'PENDING');
-      return {
-        remainingDue: pending.filter((item) => item.nextRetryAt <= timestamp).length,
-        remainingScheduled: pending.filter((item) => item.nextRetryAt > timestamp).length,
-      };
-    };
+    const remaining = () => deps.operations.pendingSummary({ now: timestamp });
     const summary: TickSummary = {
       claimed: 0,
       succeeded: 0,
