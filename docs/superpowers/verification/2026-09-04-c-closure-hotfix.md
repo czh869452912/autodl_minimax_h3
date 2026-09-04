@@ -34,8 +34,9 @@ AutoDL 实测会从集群内动态可用存储节点分发，URL 不含稳定的
 
 ## 待完成发布门
 
-- [ ] JDK 21、x86_64 Debug APK 构建与 APK SHA-256。
-- [ ] fresh install 与 v1.4.8 数据保留覆盖升级。
+- [x] JBR 21.0.11、x86_64 Debug APK 构建：`BUILD SUCCESSFUL in 3m 34s`，358 actionable tasks；APK 114,347,622 bytes，SHA-256 `058F538FDCCE8B7C13594F11071B284A16F2AF9F4CA475913E473BD33093EB1F`。
+- [x] fresh install：`1.4.9 (19)` 冷启动成功，`MainActivity isOnScreen=true/isVisible=true`，数据库 `user_version=6`、15 张当前表齐全，fatal SQLite/ReactNative logcat 零命中。
+- [x] v1.4.8 数据保留覆盖升级：正式 v1.4.8 APK 与 Debug APK 证书不同，故从 tag `v1.4.8` 构建同一 debug 签名的 `1.4.8 (18)` 作为 Android 可接受升级基线，再覆盖安装 `1.4.9 (19)`。升级后 task、media asset、delivery URI、workflow operation、blob ref sentinel 均保持，4-byte 私有 CAS sentinel 文件保持；任务页 UI 树可见 `upgrade-sentinel` 与“已保存到相册”；fatal scan 零命中。正式 v1.4.8 Release 资产 SHA-256 另核对为 `1CEBB70CBF45B12986E4F34350D3693983C46D05DECAF6CBCA7D39C9886EFB0B`。
 - [ ] 七项媒体设备场景与 Prompt/Timeline 携带项。
 - [ ] 独立代码审查无 Critical/Important。
 - [ ] PR 检查、合并、`v1.4.9` annotated tag、Android Release workflow 与签名资产复核。

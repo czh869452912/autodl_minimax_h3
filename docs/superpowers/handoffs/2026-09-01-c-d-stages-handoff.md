@@ -200,4 +200,6 @@ M6 按已确认的产品现实记录为 Accepted Constraint：AutoDL 使用动�
 
 C 实现只有在 v1.4.9 的 Android fresh/upgrade/媒体与 Prompt/Timeline 设备矩阵、独立审查、PR 合并、tag 和发布资产复核全部完成后才是 release-complete。在此之前不得启动 D 实现。D Task 1 必须从最终 v1.4.9 merge/tag commit、schema v6 建立新 worktree；UNKNOWN UI 与低优先级 query/cursor 观察继续延期到 D。
 
+已完成的 Android 子门：JBR 21.0.11 x86_64 Debug 构建（358 tasks）通过；APK 114,347,622 bytes，SHA-256 `058F538FDCCE8B7C13594F11071B284A16F2AF9F4CA475913E473BD33093EB1F`。1.4.9 fresh install、schema v6、可见 MainActivity 与 fatal scan 通过；从 tag 构建的同 debug 签名 1.4.8(18) 覆盖到 1.4.9(19) 后，task/asset/delivery/operation/blob ref 与私有 CAS sentinel 保留，任务页实际可见。正式 v1.4.8 Release 与 Debug 证书不同，不能混用作 Android 覆盖升级链。
+
 交接结论：当前顺序为完成 v1.4.9 发布门 → 从已验证 tag 基线开始 D-Core Task 1 的 v7 migration 与 legacy projection。不得从未合并 hotfix 分支或旧 v6 提交提前启动 D。
