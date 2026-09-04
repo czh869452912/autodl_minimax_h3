@@ -64,6 +64,16 @@ test('stops when a pass claims nothing even if another writer reports due work',
   expect(runTick).toHaveBeenCalledTimes(1);
 });
 
+test('propagates the next durable wake time from the final pass', async () => {
+  const runTick = jest.fn(async () => summary({ remainingScheduled: 1, nextWakeAt: 60_000 }));
+  const cycle = createExecutorCycle({ runTick, now: () => 100 });
+
+  await expect(cycle.run({ reason: 'foreground' })).resolves.toMatchObject({
+    remainingScheduled: 1,
+    nextWakeAt: 60_000,
+  });
+});
+
 test('overlapping callers share one bounded cycle', async () => {
   let resolveTick!: (value: TickSummary) => void;
   const runTick = jest.fn(() => new Promise<TickSummary>((resolve) => { resolveTick = resolve; }));

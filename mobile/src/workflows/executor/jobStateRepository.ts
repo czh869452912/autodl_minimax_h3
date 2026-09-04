@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import type { ArtifactRecord, JobRecord, JobStatus, NormalizedError } from '../../jobs/types';
 import { assertAppDatabaseWritable } from '../../storage/database';
 import type { EnqueueOperation, JobEvent, ProviderHandle, TransitionResult } from './types';
+import type { TerminalTaskEvent, TerminalTaskStatus } from '../../tasks/terminalEvents';
 
 type JobRow = {
   id: string; revision: number; workflow_id: string; workflow_version: string; workflow_hash: string;
@@ -49,6 +50,16 @@ function mapEvent(row: EventRow): JobEvent {
 function changed(result: unknown): boolean {
   const value = (result as { changes?: number | bigint } | undefined)?.changes;
   return value != null && Number(value) === 1;
+}
+
+function terminalStatus(value: unknown): TerminalTaskStatus | undefined {
+  switch (value) {
+    case 'SUCCEEDED': return 'SUCCESS';
+    case 'PARTIAL_SUCCEEDED': return 'PARTIAL_SUCCESS';
+    case 'FAILED': return 'FAILED';
+    case 'CANCELLED': return 'CANCELLED';
+    default: return undefined;
+  }
 }
 
 function transaction<T>(db: SQLiteDatabase, work: () => T): T {
@@ -108,6 +119,22 @@ export function createJobStateRepository(db: SQLiteDatabase) {
     get,
     listEvents(jobId: string): JobEvent[] {
       return db.getAllSync<EventRow>('SELECT * FROM workflow_job_events WHERE job_id = ? ORDER BY sequence ASC', jobId).map(mapEvent);
+    },
+    listTerminalEvents(jobIds: string[]): TerminalTaskEvent[] {
+      const ids = [...new Set(jobIds.map((id) => id.trim()).filter(Boolean))];
+      if (ids.length === 0) return [];
+      const placeholders = ids.map(() => '?').join(',');
+      const rows = db.getAllSync<EventRow & { job_status: string }>(
+        `SELECT e.*,j.status AS job_status FROM workflow_job_events e JOIN workflow_jobs j ON j.id=e.job_id WHERE e.event_type='STATUS_RECONCILED' AND e.job_id IN (${placeholders}) AND j.status IN ('SUCCEEDED','PARTIAL_SUCCEEDED','FAILED','CANCELLED') ORDER BY e.created_at ASC,e.id ASC`,
+        ...ids,
+      );
+      return rows.flatMap((row) => {
+        const current = terminalStatus(row.job_status);
+        const payload = parseJson<{ status?: unknown }>(row.payload_json, {});
+        const eventStatus = terminalStatus(payload.status);
+        if (!current || !eventStatus || current !== eventStatus) return [];
+        return [{ eventId: row.id, taskId: row.job_id, status: current, createdAt: Number(row.created_at) }];
+      });
     },
     createWithEventAndOperation(job: JobRecord, event: NewEvent, operation: EnqueueOperation): JobRecord {
       assertAppDatabaseWritable(db);

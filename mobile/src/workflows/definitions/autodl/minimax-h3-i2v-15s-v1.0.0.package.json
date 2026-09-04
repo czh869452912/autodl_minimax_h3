@@ -1,0 +1,42 @@
+{
+  "apiVersion": "workflow.autodl/v1",
+  "kind": "Workflow",
+  "metadata": {
+    "id": "autodl.minimax-h3.i2v-15s",
+    "version": "1.0.0",
+    "title": "MiniMax H3 Image/Audio to Video",
+    "category": "video",
+    "description": "MiniMax H3 视频生成",
+    "channel": "stable",
+    "contentHash": "b3d2ac04b13f581527a580d49abea9d9cc079ee8c8a6681232cd2cdbfda8ce81"
+  },
+  "spec": {
+    "adapter": {
+      "id": "autodl-comfyui",
+      "version": "0.0.0",
+      "operation": "workflow.submit",
+      "workflowId": "minimax_h3_image_audio_to_video_v2_15s"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": ["prompt", "resolution", "duration"],
+      "properties": {
+        "prompt": { "type": "string", "title": "Prompt（视频描述）", "description": "描述你想生成的视频：主体、动作、场景、镜头运动、光影与音效…", "minLength": 1, "x-workflow.semantic": "prompt", "x-workflow.widget": "textarea" },
+        "resolution": { "type": "string", "title": "分辨率（Resolution）", "enum": ["768p竖", "480p竖", "768p横", "480p横"], "default": "768p竖", "x-workflow.semantic": "enum", "x-workflow.widget": "segmented" },
+        "duration": { "type": "integer", "title": "视频时长（Duration）", "minimum": 1, "maximum": 15, "default": 5, "x-workflow.semantic": "integer", "x-workflow.widget": "stepper" },
+        "seed": { "type": "string", "title": "随机种子 Seed（可选）", "description": "如 123456（留空则随机）", "x-workflow.semantic": "seed", "x-workflow.widget": "seed" },
+        "images": { "type": "array", "maxItems": 9, "items": { "type": "object" }, "x-workflow.semantic": "image[]", "x-workflow.widget": "asset-list" },
+        "audios": { "type": "array", "maxItems": 3, "items": { "type": "object" }, "x-workflow.semantic": "audio[]", "x-workflow.widget": "asset-list" }
+      }
+    },
+    "uiSchema": {
+      "sections": [
+        { "id": "prompt", "title": "提示词", "fields": ["/prompt"] },
+        { "id": "generation", "title": "生成参数", "fields": ["/resolution", "/duration", "/seed"] },
+        { "id": "references", "title": "参考素材", "fields": ["/images", "/audios"] }
+      ]
+    },
+    "bindings": { "prompt": "/prompt", "resolution": "/resolution", "duration": "/duration", "seed": "/seed", "images": "/images", "audios": "/audios" },
+    "outputs": { "artifacts": [{ "kind": "video", "from": "/result/video" }] }
+  }
+}

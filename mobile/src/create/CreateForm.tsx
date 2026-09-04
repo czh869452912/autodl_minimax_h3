@@ -35,6 +35,8 @@ import { createDurableExecutor } from '../workflows/executor/durableExecutor';
 import { queueCreateFormSubmission } from './submissionQueue';
 import { syncTaskRun } from '../tasks/sync';
 import { buildSubmissionInputSnapshot } from './submissionInput';
+import { formatSubmissionFieldError, type SubmissionFieldError, validateSubmissionBeforeQueue } from './submissionValidation';
+import { RegistryReleaseError, type RegistryReleaseErrorCode } from '../workflows/registry/releaseManifest';
 
 const database = getDatabase();
 const taskStore = createTaskRepository(database);
@@ -48,14 +50,84 @@ const promptDraftStore = createPromptDraftStore(
 );
 const workflowCatalog = createAppWorkflowCatalog();
 
+type CreateFormCatalog = {
+  bootstrap(): Promise<unknown>;
+  listActive(): Promise<RegistryRecord[]>;
+  getActive(workflowId: string): Promise<RegistryRecord | undefined>;
+};
+export type CreateFormSubmissionDependencies = {
+  catalog: CreateFormCatalog;
+  readSettings: typeof readSettings;
+  queue(input: {
+    definition: WorkflowDefinition;
+    activeRecord: RegistryRecord;
+    inputSnapshot: Record<string, unknown>;
+    images: TaskMediaInput[];
+    audios: TaskMediaInput[];
+    token: string;
+    foregroundTick: () => void | Promise<unknown>;
+  }): Promise<{ id: string }>;
+};
+
+const defaultSubmissionDependencies: CreateFormSubmissionDependencies = {
+  catalog: workflowCatalog,
+  readSettings,
+  async queue({ definition, activeRecord, inputSnapshot, images, audios, token, foregroundTick }) {
+    const adapters = createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? token : undefined });
+    const runtime = createWorkflowRuntime({ adapters, jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `job-${Date.now()}-${Math.random().toString(16).slice(2)}` });
+    const executor = createDurableExecutor({ jobs: jobStateStore, operations: operationStore, runtime, adapters, credentials: { get: async () => ({ ok: Boolean(token) }) } });
+    return queueCreateFormSubmission(
+      { queueSubmission: (input) => executor.queueSubmission(input), upsertTask: (value) => taskStore.upsert(value), foregroundTick },
+      {
+        submissionId: `submission-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        workflow: definition,
+        draft: { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord.contentHash, inputs: inputSnapshot, source: 'user', status: 'ready' },
+        provenance: { workflowId: activeRecord.workflowId, workflowVersion: activeRecord.version, contentHash: activeRecord.contentHash },
+      },
+      { images, audios },
+    );
+  },
+};
+
+const SAFE_EXISTING_CATALOG_CODES = new Set<RegistryReleaseErrorCode>([
+  'REGISTRY_RELEASE_MANIFEST_INVALID',
+  'REGISTRY_RELEASE_DUPLICATE_COORDINATE',
+  'REGISTRY_RELEASE_DIGEST_MISMATCH',
+  'REGISTRY_RELEASE_ID_REUSED',
+  'REGISTRY_IMMUTABLE_VERSION_CONFLICT',
+  'REGISTRY_RELEASE_BACKUP_FAILED',
+  'REGISTRY_RELEASE_TRANSACTION_ROLLED_BACK',
+]);
+
+export function workflowLoadMessage(error: unknown): string {
+  if (error instanceof RegistryReleaseError) {
+    if (error.code === 'REGISTRY_IMMUTABLE_VERSION_CONFLICT') {
+      return '工作流升级校验失败，已保留现有数据。请恢复备份或联系支持。';
+    }
+    if (error.code === 'REGISTRY_RELEASE_BACKUP_FAILED') {
+      return '工作流升级前备份失败，已保留当前版本。';
+    }
+    if (error.code === 'REGISTRY_STORED_DIGEST_INVALID' || error.code === 'REGISTRY_ACTIVE_POINTER_INVALID') {
+      return '工作流数据完整性校验失败，请从完整数据库备份恢复。';
+    }
+    if (error.code === 'REGISTRY_RELEASE_RECOVERY_REQUIRED') {
+      return '工作流升级恢复失败，数据库已进入只读保护模式。';
+    }
+    return '工作流升级失败，已保留当前版本。';
+  }
+  return '工作流加载失败';
+}
+
 export function CreateForm({
   initialPrompt = '',
   draftId,
-  foregroundTick = () => syncTaskRun('foreground'),
+  foregroundTick = () => syncTaskRun({ reason: 'foreground', mode: 'poll' }),
+  submissionDependencies = defaultSubmissionDependencies,
 }: {
   initialPrompt?: string;
   draftId?: string;
   foregroundTick?: () => void | Promise<unknown>;
+  submissionDependencies?: CreateFormSubmissionDependencies;
 }) {
   const router = useRouter();
   const [prompt, setPrompt] = useState(initialPrompt);
@@ -71,7 +143,49 @@ export function CreateForm({
   const [activeRecord, setActiveRecord] = useState<RegistryRecord | null>(null);
   const [workflowValues, setWorkflowValues] = useState<Record<string, unknown>>({ prompt: initialPrompt, resolution: RESOLUTION_OPTIONS[0], duration: 5, seed: '' });
   const [loadError, setLoadError] = useState<string | null>(null);
-  useEffect(() => { let cancelled = false; void workflowCatalog.bootstrap().then(() => workflowCatalog.listActive()).then((records) => { const record = records[0]; if (!record) throw new Error('没有可用工作流'); const next = registryRecordToDefinition(record); if (!cancelled) { setActiveRecord(record); setDefinition(next); const properties = (next.inputs.properties ?? {}) as Record<string, { default?: unknown }>; setWorkflowValues((current) => Object.fromEntries(Object.entries(properties).map(([key, schema]) => [key, current[key] ?? schema.default]))); } }).catch((error) => { if (!cancelled) setLoadError(error instanceof Error ? error.message : '工作流加载失败'); }); return () => { cancelled = true; }; }, []);
+  const [fieldErrors, setFieldErrors] = useState<SubmissionFieldError[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    const useRecord = (record: RegistryRecord, warning: string | null) => {
+      const next = registryRecordToDefinition(record);
+      if (cancelled) return;
+      setActiveRecord(record);
+      setDefinition(next);
+      setLoadError(warning);
+      const properties = (next.inputs.properties ?? {}) as Record<string, { default?: unknown }>;
+      setWorkflowValues((current) => Object.fromEntries(
+        Object.entries(properties).map(([key, schema]) => [key, current[key] ?? schema.default]),
+      ));
+    };
+    const load = async () => {
+      try {
+        await submissionDependencies.catalog.bootstrap();
+        const record = (await submissionDependencies.catalog.listActive())[0];
+        if (!record) throw new Error('没有可用工作流');
+        useRecord(record, null);
+      } catch (error) {
+        let presentationError = error;
+        if (error instanceof RegistryReleaseError && SAFE_EXISTING_CATALOG_CODES.has(error.code)) {
+          try {
+            const record = (await submissionDependencies.catalog.listActive())[0];
+            if (record) {
+              useRecord(record, workflowLoadMessage(error));
+              return;
+            }
+          } catch (fallbackError) {
+            presentationError = fallbackError;
+          }
+        }
+        if (!cancelled) {
+          setActiveRecord(null);
+          setDefinition(null);
+          setLoadError(workflowLoadMessage(presentationError));
+        }
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [submissionDependencies.catalog]);
   useEffect(() => {
     if (initialPrompt) { setPrompt(initialPrompt); setWorkflowValues((current) => ({ ...current, prompt: initialPrompt })); }
   }, [initialPrompt]);
@@ -112,37 +226,29 @@ export function CreateForm({
     ]);
   };
   const submit = async () => {
-    if (!String(workflowValues.prompt ?? prompt).trim()) {
-      Alert.alert('提示', '请输入 Prompt 描述');
-      return;
-    }
-    if (!submissionGate.tryAcquire()) return;
-    setSubmitting(true);
+    let acquired = false;
     try {
       if (!definition || !activeRecord) throw new Error('工作流尚未加载完成');
-      const settings = await readSettings();
-      if (!settings.token) throw new Error('请先在设置中保存 AutoDL Token');
       const inputSnapshot = buildSubmissionInputSnapshot({
         workflowValues,
         fallback: { prompt, resolution, duration, seed },
         images,
         audios,
       });
-      const adapters = createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? settings.token : undefined });
-      const runtime = createWorkflowRuntime({ adapters, jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `job-${Date.now()}-${Math.random().toString(16).slice(2)}` });
-      const executor = createDurableExecutor({ jobs: jobStateStore, operations: operationStore, runtime, adapters, credentials: { get: async () => ({ ok: Boolean(settings.token) }) } });
-      const currentActive = await workflowCatalog.getActive(definition.id);
-      if (!currentActive || currentActive.contentHash !== activeRecord.contentHash) throw new Error('工作流已更新，请重新打开创建页');
-      const task = await queueCreateFormSubmission(
-        { queueSubmission: (input) => executor.queueSubmission(input), upsertTask: (value) => taskStore.upsert(value), foregroundTick },
-        {
-          submissionId: `submission-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          workflow: definition,
-          draft: { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord.contentHash, inputs: inputSnapshot, source: 'user', status: 'ready' },
-          provenance: { workflowId: activeRecord.workflowId, workflowVersion: activeRecord.version, contentHash: activeRecord.contentHash },
-        },
-        { images, audios },
-      );
+      const currentActive = await submissionDependencies.catalog.getActive(definition.id);
+      const validation = validateSubmissionBeforeQueue({ definition, loaded: activeRecord, active: currentActive, inputs: inputSnapshot });
+      if (!validation.ok) {
+        setFieldErrors(validation.fieldErrors);
+        Alert.alert('参数设置不合法', validation.summary);
+        return;
+      }
+      setFieldErrors([]);
+      if (!submissionGate.tryAcquire()) return;
+      acquired = true;
+      setSubmitting(true);
+      const settings = await submissionDependencies.readSettings();
+      if (!settings.token) throw new Error('请先在设置中保存 AutoDL Token');
+      const task = await submissionDependencies.queue({ definition, activeRecord, inputSnapshot, images, audios, token: settings.token, foregroundTick });
       Alert.alert('提交成功', `任务 ${task.id} 已加入队列`, [
         { text: '查看任务', onPress: () => router.navigate('/(tabs)/tasks') },
       ]);
@@ -152,7 +258,7 @@ export function CreateForm({
         error instanceof Error ? error.message : '未知错误',
       );
     } finally {
-      submissionGate.release();
+      if (acquired) submissionGate.release();
       setSubmitting(false);
     }
   };
@@ -169,7 +275,9 @@ export function CreateForm({
       {definition ? <WorkflowForm
         definition={{ ...definition, ui: { sections: (definition.ui?.sections ?? []).slice(0, 2) } }}
         value={workflowValues}
+        errors={fieldErrors.filter((error) => error.field).map((error) => ({ path: error.field!, message: formatSubmissionFieldError(error, definition) }))}
         onChange={(next) => {
+          setFieldErrors((current) => current.filter((error) => !error.field || Object.is(next[error.field], workflowValues[error.field])));
           setWorkflowValues(next);
           setPrompt(String(next.prompt ?? ''));
           setResolution(String(next.resolution ?? RESOLUTION_OPTIONS[0]) as Resolution);
@@ -233,9 +341,11 @@ export function CreateForm({
         />
       </View>
       <Pressable
-        disabled={submitting}
+        accessibilityRole="button"
+        accessibilityLabel="提交 AutoDL 任务生成"
+        disabled={submitting || !definition || !activeRecord}
         onPress={() => void submit()}
-        style={[styles.submit, submitting && styles.disabled]}
+        style={[styles.submit, (submitting || !definition || !activeRecord) && styles.disabled]}
       >
         <AppIcon name="bolt" size={20} color={COLORS.text} />
         <Text style={styles.submitText}>

@@ -6,16 +6,20 @@ import { getDatabase, getDatabaseStartupState, type DatabaseStartupState } from 
 import { isLegacyAppDatabase, resetAppDatabase } from '../src/storage/database';
 import { DatabaseRecoveryScreen } from '../src/storage/DatabaseRecoveryScreen';
 import { registerBackgroundSync, syncTaskRun } from '../src/tasks/background';
-
-const startupDatabase = getDatabase();
+import { resumeTaskSyncAfterReconnect } from '../src/tasks/background';
+import * as Network from 'expo-network';
+import { createConnectivityEdgeDetector } from '../src/tasks/networkRecovery';
+import { listFullDatabaseBackups, restoreFullDatabaseBackup } from '../src/storage/backup';
 
 export default function RootLayout() {
+  const [startupDatabase] = useState(() => getDatabase());
   const [startupState, setStartupState] = useState<DatabaseStartupState>(() => {
     const state = getDatabaseStartupState();
     if (state.mode === 'writable' && isLegacyAppDatabase(startupDatabase)) return { mode: 'legacy' };
     return state;
   });
   const prompted = useRef(false);
+  const connectivity = useRef(createConnectivityEdgeDetector());
   useEffect(() => {
     if (startupState.mode === 'readonly') return;
     if (startupState.mode === 'legacy') {
@@ -33,19 +37,32 @@ export default function RootLayout() {
       return;
     }
     void registerBackgroundSync();
-    void syncTaskRun('foreground');
+    void syncTaskRun({ reason: 'foreground', mode: 'maintenance' });
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void syncTaskRun('foreground');
+      if (state === 'active') void syncTaskRun({ reason: 'foreground', mode: 'maintenance' });
     });
-    return () => subscription.remove();
+    const networkSubscription = Network.addNetworkStateListener((state) => {
+      const reachable = state.isInternetReachable ?? state.isConnected;
+      if (connectivity.current.observe(reachable)) void resumeTaskSyncAfterReconnect();
+    });
+    return () => { subscription.remove(); networkSubscription.remove(); };
   }, [startupState]);
   if (startupState.mode === 'readonly') {
+    let backupNames: string[] = [];
+    if (startupState.allowReset) {
+      try { backupNames = listFullDatabaseBackups(); } catch { backupNames = []; }
+    }
     return (
       <SafeAreaProvider>
         <DatabaseRecoveryScreen
           diagnostic={startupState.diagnostic}
           allowReset={startupState.allowReset}
           onReset={() => { resetAppDatabase(startupDatabase); setStartupState({ mode: 'writable' }); }}
+          backupNames={backupNames}
+          onRestore={async (backupName) => {
+            restoreFullDatabaseBackup(startupDatabase, backupName);
+            BackHandler.exitApp();
+          }}
         />
       </SafeAreaProvider>
     );

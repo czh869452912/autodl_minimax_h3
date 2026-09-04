@@ -8,7 +8,7 @@ import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
 import { createJobStateRepository } from '../workflows/executor/jobStateRepository';
 import { createOperationRepository } from '../workflows/executor/operationRepository';
 import { createDurableExecutor } from '../workflows/executor/durableExecutor';
-import { createExecutorTick, type TickOptions } from '../workflows/executor/tick';
+import { createExecutorTick } from '../workflows/executor/tick';
 import { createExecutorCycle, type CycleOptions, type CycleSummary } from '../workflows/executor/cycle';
 import { createArtifactCas } from '../media/cas';
 import { createCasRepository } from '../media/casRepository';
@@ -20,10 +20,15 @@ import { createSqliteMediaStore } from '../media/repository';
 import { materializeJobArtifacts } from '../media/materializer';
 import type { ArtifactRecord } from '../jobs/types';
 import { assertLocalExportSource, createSqliteExportStore, handleExport } from '../workflows/executor/exportOperation';
-import { exportVideo } from '../native/media';
+import { exportVideo, probeVideo } from '../native/media';
 import * as FileSystem from 'expo-file-system/legacy';
 import { removeCasPath } from '../media/cas';
-import { reconcileMediaState, type ReconciliationSummary } from '../media/reconciliation';
+import { EMPTY_RECONCILIATION_SUMMARY, reconcileMediaState, type ReconciliationSummary } from '../media/reconciliation';
+import { createMediaCommandService, type MediaCommandService } from '../workflows/executor/mediaCommandService';
+import { claimMaintenanceWindow, createExecutorSettingsCache, type SyncRequest } from './syncPolicy';
+import type { PendingSummary } from '../workflows/executor/operationRepository';
+import { resumeAfterConnectivityReturns } from './networkRecovery';
+import { projectTerminalNotifications, type TerminalNotification } from './terminalEvents';
 
 const database = getDatabase();
 export const taskStore = createTaskRepository(database);
@@ -36,8 +41,7 @@ const cas = createArtifactCas();
 const commitArtifact = createSqliteArtifactCommitter(database);
 const exportStore = createSqliteExportStore(database);
 
-async function executorForCurrentSettings() {
-  const settings = await readSettings();
+const executorSettingsCache = createExecutorSettingsCache((settings) => {
   const adapters = createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? settings.token : undefined });
   const runtime = createWorkflowRuntime({
     adapters,
@@ -50,7 +54,7 @@ async function executorForCurrentSettings() {
     adapters,
     durable: createDurableExecutor({ jobs, operations, runtime, adapters, credentials: { get: async () => ({ ok: Boolean(settings.token) }) } }),
   };
-}
+});
 
 const executor = {
   async recover(now: number) { await (await executorForCurrentSettings()).durable.recover(now); },
@@ -66,6 +70,7 @@ const executor = {
         commitSuccess: exportStore.commitSuccess,
         retry: exportStore.retry,
         finishFailure: exportStore.finishFailure,
+        removeLegacyPrivate: (sourceUri) => FileSystem.deleteAsync(sourceUri, { idempotent: true }),
       });
       return;
     }
@@ -80,6 +85,7 @@ const executor = {
         keepPrivateCopy: current.settings.keepPrivateCopy,
       },
       updateProjection: async () => undefined,
+      verifyVideo: probeVideo,
       async ensureProjection(jobId, artifact) {
         const job = jobs.get(jobId);
         const task = await taskStore.get(jobId);
@@ -131,8 +137,49 @@ const tick = createExecutorTick({
 });
 const cycle = createExecutorCycle({ runTick: (options) => tick.run(options) });
 
+export function createMediaCommandFacade(
+  commands: Pick<MediaCommandService, 'requestDownload' | 'requestRedownload' | 'requestExport'>,
+  runCycle: (options: CycleOptions) => Promise<CycleSummary>,
+) {
+  return {
+    async requestTaskDownload(taskId: string) {
+      const result = await commands.requestDownload(taskId);
+      if (result.status !== 'already-complete') await runCycle({ reason: 'foreground' });
+      return result;
+    },
+    async requestTaskExport(taskId: string, policy: { keepPrivateCopy: boolean }) {
+      const result = await commands.requestExport(taskId, policy);
+      if (result.status !== 'already-complete') await runCycle({ reason: 'foreground' });
+      return result;
+    },
+    async requestTaskRedownload(taskId: string) {
+      const result = await commands.requestRedownload(taskId);
+      if (result.status !== 'already-complete') await runCycle({ reason: 'foreground' });
+      return result;
+    },
+  };
+}
+
+async function executorForCurrentSettings() {
+  return executorSettingsCache.getOrCreate(await readSettings());
+}
+
+const mediaCommands = createMediaCommandService({
+  db: database,
+  fileExists: async (uri) => {
+    const info = await FileSystem.getInfoAsync(uri);
+    return info.exists && !info.isDirectory;
+  },
+  resolveCasUri: (relativePath) => `${FileSystem.documentDirectory ?? ''}${relativePath}`,
+});
+const mediaCommandFacade = createMediaCommandFacade(mediaCommands, (options) => cycle.run(options));
+
+export const requestTaskDownload = mediaCommandFacade.requestTaskDownload;
+export const requestTaskExport = mediaCommandFacade.requestTaskExport;
+export const requestTaskRedownload = mediaCommandFacade.requestTaskRedownload;
+
 async function repairTaskProjections(limit = 32): Promise<number> {
-  const persisted = (await compatibilityJobs.list()).slice(0, limit);
+  const persisted = await compatibilityJobs.listRecent(limit);
   let updated = 0;
   for (const job of persisted) {
     const previous = await taskStore.get(job.id);
@@ -154,6 +201,9 @@ export type SyncSummary = {
   lastSyncAt: number;
   operations: CycleSummary;
   reconciliation: ReconciliationSummary;
+  maintenanceRan: boolean;
+  terminalEvents: TerminalNotification[];
+  nextWakeAt?: number;
 };
 
 export function createSyncTaskRunner(deps: {
@@ -161,23 +211,39 @@ export function createSyncTaskRunner(deps: {
   repair(): Promise<number>;
   reconcile(): Promise<ReconciliationSummary>;
   listTasks(): ReturnType<typeof taskStore.listActive>;
+  pendingSummary(options: { now: number; jobIds?: string[] }): PendingSummary;
+  countOutstanding(jobIds: string[]): number;
+  claimMaintenance(force: boolean): boolean;
+  listTerminalEvents(jobIds: string[]): Parameters<typeof projectTerminalNotifications>[0];
   now(): number;
 }) {
-  return async (reason: TickOptions['reason'] = 'foreground') => {
-    const operationSummary = await deps.runCycle({ reason });
-    const updated = await deps.repair();
-    const reconciliation = await deps.reconcile();
+  return async (request: SyncRequest) => {
+    const timestamp = deps.now();
+    const operationSummary = await deps.runCycle({ reason: request.reason });
+    const maintenanceRan = request.mode === 'maintenance' && deps.claimMaintenance(Boolean(request.forceMaintenance));
+    const updated = maintenanceRan ? await deps.repair() : 0;
+    const reconciliation = maintenanceRan ? await deps.reconcile() : EMPTY_RECONCILIATION_SUMMARY;
     const tasks = await deps.listTasks();
+    const serviceIds = request.mode === 'service' ? request.taskIds ?? [] : [];
+    const pending = deps.pendingSummary({ now: timestamp, ...(request.mode === 'service' ? { jobIds: serviceIds } : {}) });
+    const serviceIdSet = request.mode === 'service' ? new Set(serviceIds) : undefined;
+    const remaining = request.mode === 'service'
+      ? tasks.filter((task) => serviceIdSet!.has(task.id)).length + deps.countOutstanding(serviceIds)
+      : pending.remainingDue + pending.remainingScheduled;
+    const terminalEvents = request.mode === 'service' ? projectTerminalNotifications(deps.listTerminalEvents(serviceIds)) : [];
     return {
       tasks,
       summary: {
         updated,
         failed: operationSummary.failed,
         skipped: operationSummary.blocked,
-        remaining: operationSummary.remainingDue + operationSummary.remainingScheduled,
-        lastSyncAt: deps.now(),
+        remaining,
+        lastSyncAt: timestamp,
         operations: operationSummary,
         reconciliation,
+        maintenanceRan,
+        terminalEvents,
+        ...(pending.nextWakeAt == null ? {} : { nextWakeAt: pending.nextWakeAt }),
       } satisfies SyncSummary,
     };
   };
@@ -195,11 +261,24 @@ const run = createSyncTaskRunner({
     removeCasPath,
   }),
   listTasks: () => taskStore.listActive(),
+  pendingSummary: (options) => operations.pendingSummary(options),
+  countOutstanding: (jobIds) => operations.countOutstanding(jobIds),
+  claimMaintenance: (force) => claimMaintenanceWindow(database, Date.now(), force),
+  listTerminalEvents: (jobIds) => jobs.listTerminalEvents(jobIds),
   now: Date.now,
 });
 
-export async function syncTaskRun(reason: TickOptions['reason'] = 'foreground', _taskIds?: string[]) {
-  return run(reason);
+export async function syncTaskRun(request: SyncRequest) {
+  return run(request);
 }
 
-export async function syncTasks() { return (await syncTaskRun()).tasks; }
+export async function resumeTaskSyncAfterReconnect() {
+  return resumeAfterConnectivityReturns({
+    listActiveJobIds: async () => (await compatibilityJobs.listActive!()).map((job) => job.id),
+    expediteRetryableNetwork: (jobIds, now) => operations.expediteRetryableNetwork(jobIds, now),
+    runPoll: run,
+    now: Date.now,
+  });
+}
+
+export async function syncTasks() { return (await syncTaskRun({ reason: 'foreground', mode: 'maintenance' })).tasks; }

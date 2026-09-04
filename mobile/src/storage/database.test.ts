@@ -1,5 +1,8 @@
 import { createRealSqliteTestDb } from '../test/realSqlite';
 import { createWorkflowRegistry } from '../workflows/registry/repository';
+import h3V100 from '../workflows/definitions/autodl/minimax-h3-i2v-15s.json';
+import { canonicalizeDefinition } from '../workflows/registry/canonicalize';
+import { LEGACY_DEFINITION_IDENTITY_V1 } from '../workflows/registry/identity';
 import { APP_SCHEMA_VERSION, ensureAppDatabase, getAppRecoveryState, isLegacyAppDatabase, readAppSchemaVersion, resetAppDatabase } from './database';
 
 test('initializes a fresh database with the complete current schema', () => {
@@ -10,9 +13,11 @@ test('initializes a fresh database with the complete current schema', () => {
     const names = db.getAllSync<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table'").map((row) => row.name);
     expect(names).toEqual(expect.arrayContaining([
       'workflow_artifacts', 'workflow_jobs', 'media_deliveries', 'media_assets', 'tasks',
-      'workflow_registry_active', 'workflow_registry', 'prompt_drafts', 'agent_threads',
+      'workflow_registry_releases', 'workflow_registry_active', 'workflow_registry', 'prompt_drafts', 'agent_threads',
       'app_scheduler_leases', 'app_database_recovery',
     ]));
+    expect(db.getAllSync<{ name: string }>('PRAGMA table_info("workflow_registry")').map((row) => row.name))
+      .toContain('hash_scheme');
   } finally {
     db.close();
   }
@@ -59,9 +64,13 @@ test('fresh initialization supports workflow registry activation', async () => {
     ensureAppDatabase(db as never);
     const registry = createWorkflowRegistry(db as never);
     await registry.installAndActivate!({
-      workflowId: 'demo', version: '1.0.0', contentHash: 'abc', source: 'builtin', trust: 'builtin', definitionJson: '{}', installedAt: 1,
+      workflowId: 'demo', version: '1.0.0', contentHash: 'abc', hashScheme: 'workflow-package/without-declared-hash+sorted-json@1', source: 'builtin', trust: 'builtin', definitionJson: '{}', installedAt: 1,
     });
-    await expect(registry.getActive('demo')).resolves.toMatchObject({ workflowId: 'demo', contentHash: 'abc' });
+    await expect(registry.getActive('demo')).resolves.toMatchObject({
+      workflowId: 'demo',
+      contentHash: 'abc',
+      hashScheme: 'workflow-package/without-declared-hash+sorted-json@1',
+    });
   } finally {
     db.close();
   }
@@ -73,12 +82,16 @@ test('migrates version four additively without deleting registry data', () => {
     resetAppDatabase(db as never);
     db.runSync(
       'INSERT INTO workflow_registry (workflow_id,version,content_hash,source,trust,definition_json,installed_at) VALUES (?,?,?,?,?,?,?)',
-      'demo', '1.0.0', 'abc', 'builtin', 'builtin', '{}', 1,
+      h3V100.id, h3V100.version,
+      '917cce0dca1a7a3cc178d46baee6c5dd16c2a586283bee2b7d426bda71705390',
+      'builtin', 'builtin', canonicalizeDefinition(h3V100), 1,
     );
     db.execSync('PRAGMA user_version = 4');
     ensureAppDatabase(db as never);
     expect(readAppSchemaVersion(db as never)).toBe(APP_SCHEMA_VERSION);
-    expect(db.getFirstSync<{ workflow_id: string }>("SELECT workflow_id FROM workflow_registry WHERE workflow_id='demo'")?.workflow_id).toBe('demo');
+    expect(db.getFirstSync<{ workflow_id: string }>('SELECT workflow_id FROM workflow_registry WHERE workflow_id = ?', h3V100.id)?.workflow_id).toBe(h3V100.id);
+    expect(db.getFirstSync<{ hash_scheme: string }>('SELECT hash_scheme FROM workflow_registry WHERE workflow_id = ?', h3V100.id)?.hash_scheme)
+      .toBe(LEGACY_DEFINITION_IDENTITY_V1);
   } finally {
     db.close();
   }

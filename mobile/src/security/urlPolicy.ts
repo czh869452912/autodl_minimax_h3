@@ -1,4 +1,12 @@
 export type UrlPolicy = { allowedHosts?: string[]; allowInsecureLocalhost?: boolean };
+export type UrlPolicyErrorCode = 'URL_INVALID' | 'HTTPS_REQUIRED' | 'URL_CREDENTIALS' | 'PRIVATE_NETWORK' | 'HOST_DENIED';
+
+export class UrlPolicyError extends Error {
+  constructor(readonly code: UrlPolicyErrorCode, message: string) {
+    super(message);
+    this.name = 'UrlPolicyError';
+  }
+}
 
 function isIpv4(host: string): boolean {
   return /^(?:\d{1,3}\.){3}\d{1,3}$/.test(host);
@@ -64,11 +72,11 @@ function isAllowedHost(host: string, entries: string[]): boolean {
 
 export function assertSafeHttpsUrl(raw: string, policy: UrlPolicy = {}): string {
   let url: URL;
-  try { url = new URL(raw); } catch { throw new Error('URL 格式无效'); }
+  try { url = new URL(raw); } catch { throw new UrlPolicyError('URL_INVALID', 'URL 格式无效'); }
   const localDebug = Boolean(policy.allowInsecureLocalhost && isLocalHost(url.hostname) && (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]'));
-  if (url.protocol !== 'https:' && !(localDebug && url.protocol === 'http:')) throw new Error('必须使用 HTTPS');
-  if (url.username || url.password) throw new Error('URL 不能包含凭据');
-  if (isLocalHost(url.hostname) && !localDebug) throw new Error('不允许访问本机或私有网络地址');
-  if (policy.allowedHosts?.length && !isAllowedHost(url.hostname, policy.allowedHosts)) throw new Error('域名不在允许列表');
+  if (url.protocol !== 'https:' && !(localDebug && url.protocol === 'http:')) throw new UrlPolicyError('HTTPS_REQUIRED', '必须使用 HTTPS');
+  if (url.username || url.password) throw new UrlPolicyError('URL_CREDENTIALS', 'URL 不能包含凭据');
+  if (isLocalHost(url.hostname) && !localDebug) throw new UrlPolicyError('PRIVATE_NETWORK', '不允许访问本机或私有网络地址');
+  if (policy.allowedHosts?.length && !isAllowedHost(url.hostname, policy.allowedHosts)) throw new UrlPolicyError('HOST_DENIED', '域名不在允许列表');
   return url.toString();
 }

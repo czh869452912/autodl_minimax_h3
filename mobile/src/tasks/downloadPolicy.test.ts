@@ -1,7 +1,7 @@
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
 import { fetch as expoFetch } from 'expo/fetch';
-import { downloadArtifact, resolveArtifactRedirects, validateArtifactUrl, validateDownloadResult, validateRedirectUrl } from './downloadPolicy';
+import { downloadArtifact, validateArtifactUrl, validateDownloadResult, validateRedirectUrl } from './downloadPolicy';
 
 test.each([
   'http://cdn.example.test/video.mp4',
@@ -31,6 +31,34 @@ test('rejects artifact URLs when the provider host allowlist is empty', () => {
   expect(() => validateArtifactUrl('https://public.example/video.mp4')).toThrow('允许列表');
 });
 
+test.each([
+  ['http://public.example/video.mp4', ['public.example'], false, 'ARTIFACT_HTTPS_REQUIRED'],
+  ['https://127.0.0.1/video.mp4', [], true, 'ARTIFACT_PRIVATE_NETWORK'],
+  ['https://other.example/video.mp4', ['public.example'], false, 'ARTIFACT_HOST_DENIED'],
+] as const)('exposes structured artifact URL failure for %s', (url, hosts, dynamic, code) => {
+  try {
+    validateArtifactUrl(url, [...hosts], dynamic);
+    throw new Error('expected artifact URL rejection');
+  } catch (error) {
+    expect(error).toMatchObject({ code, retryable: false });
+  }
+});
+
+test('classifies HTTP responses without matching localized text', () => {
+  for (const [status, code, retryable] of [
+    [503, 'ARTIFACT_HTTP_RETRYABLE', true],
+    [429, 'ARTIFACT_HTTP_RETRYABLE', true],
+    [404, 'ARTIFACT_HTTP_REJECTED', false],
+  ] as const) {
+    try {
+      validateDownloadResult({ status, headers: { 'content-type': 'video/mp4' }, size: 1 });
+      throw new Error('expected HTTP rejection');
+    } catch (error) {
+      expect(error).toMatchObject({ code, retryable });
+    }
+  }
+});
+
 test('rejects non-success, non-video, and oversized downloads', () => {
   expect(() => validateDownloadResult({ status: 500, headers: {}, size: 10 }, { maxBytes: 100 })).toThrow('HTTP 500');
   expect(() => validateDownloadResult({ status: 200, headers: { 'content-type': 'text/html' }, size: 10 }, { maxBytes: 100 })).toThrow('媒体类型');
@@ -47,10 +75,14 @@ test('rejects missing MIME and revalidates every redirect target', () => {
 test('follows only allowlisted HTTPS redirects and caps hops', async () => {
   const fetcher = jest.fn()
     .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: 'https://cdn.example.test/next' } }))
-    .mockResolvedValueOnce(new Response(null, { status: 200 }));
-  await expect(resolveArtifactRedirects('https://cdn.example.test/start', { allowedHosts: ['example.test'], fetcher })).resolves.toBe('https://cdn.example.test/next');
+    .mockResolvedValueOnce(new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'video/mp4' } }));
+  await expect(downloadArtifact('https://cdn.example.test/start', {
+    allowedHosts: ['example.test'], fetcher, writer: jest.fn(async () => undefined),
+  })).resolves.toMatchObject({ finalUrl: 'https://cdn.example.test/next' });
   const unsafe = jest.fn().mockResolvedValue(new Response(null, { status: 302, headers: { location: 'http://evil.test/file' } }));
-  await expect(resolveArtifactRedirects('https://cdn.example.test/start', { allowedHosts: ['example.test'], fetcher: unsafe })).rejects.toThrow('HTTPS');
+  await expect(downloadArtifact('https://cdn.example.test/start', {
+    allowedHosts: ['example.test'], fetcher: unsafe, writer: jest.fn(async () => undefined),
+  })).rejects.toThrow('HTTPS');
 });
 
 test('cancels discarded redirect and rejected response bodies', async () => {
@@ -77,8 +109,8 @@ test('cancels discarded redirect and rejected response bodies', async () => {
   const rejectedProbe = jest.fn().mockResolvedValue({
     status: 503, ok: false, headers: new Headers(), body: { cancel: probeCancel },
   });
-  await expect(resolveArtifactRedirects('https://cdn.example.test/unavailable', {
-    allowedHosts: ['example.test'], fetcher: rejectedProbe,
+  await expect(downloadArtifact('https://cdn.example.test/unavailable', {
+    allowedHosts: ['example.test'], fetcher: rejectedProbe, writer: jest.fn(async () => undefined),
   })).rejects.toThrow('HTTP 503');
   expect(probeCancel).toHaveBeenCalledTimes(1);
 });
@@ -88,11 +120,17 @@ test('dynamic provider redirects may change public nodes but never enter a priva
   const next = 'https://node-b.cdn.example/video.mp4';
   const publicRedirect = jest.fn()
     .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: next } }))
-    .mockResolvedValueOnce(new Response(null, { status: 200 }));
-  await expect(resolveArtifactRedirects(first, { allowedHosts: ['autodl.art'], allowProviderSuppliedPublicHosts: true, fetcher: publicRedirect })).resolves.toBe(next);
+    .mockResolvedValueOnce(new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'video/mp4' } }));
+  await expect(downloadArtifact(first, {
+    allowedHosts: ['autodl.art'], allowProviderSuppliedPublicHosts: true, fetcher: publicRedirect,
+    writer: jest.fn(async () => undefined),
+  })).resolves.toMatchObject({ finalUrl: next });
 
   const privateRedirect = jest.fn().mockResolvedValue(new Response(null, { status: 302, headers: { location: 'https://10.0.0.2/video.mp4' } }));
-  await expect(resolveArtifactRedirects(first, { allowedHosts: ['autodl.art'], allowProviderSuppliedPublicHosts: true, fetcher: privateRedirect })).rejects.toThrow('私有网络');
+  await expect(downloadArtifact(first, {
+    allowedHosts: ['autodl.art'], allowProviderSuppliedPublicHosts: true, fetcher: privateRedirect,
+    writer: jest.fn(async () => undefined),
+  })).rejects.toThrow('私有网络');
 });
 
 test('streams the final response through the same bounded redirect chain', async () => {

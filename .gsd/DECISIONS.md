@@ -11,3 +11,9 @@ This shape was chosen because it keeps the caller small, preserves reliable offl
 ## 2026-09-02 — Reserve schema versions after B.1
 
 B.1 already uses `APP_SCHEMA_VERSION=5` for the transactional Registry migration. Therefore C-Core must use v6 for durable executor tables and D-Core must use v7 for product-domain tables; plans and handoff were corrected to prevent migration-version reuse.
+
+## 2026-09-04 — Use immutable manifests for builtin workflow releases
+
+Builtin workflows use an immutable Release Manifest with pinned `WorkflowPackage` documents, named identity schemes, and exact historical representation declarations. Existing Registry rows and provenance hashes are never rewritten to normalize them. Future content releases such as `1.0.2+` append a new package and Manifest entry; they do not consume database schema versions. A same-version mismatch that is not explicitly declared remains an integrity error.
+
+Registry Release identity metadata uses schema v7 to add the persisted hash scheme and applied-Manifest ledger. This supersedes the 2026-09-02 reservation of v7 for D-Core; the not-yet-started D-Core schema moves to v8. This decision is necessary so upgrades from pre-package-hashing installations can be verified and reconciled without clearing tasks, settings, media, or historical workflow hashes.

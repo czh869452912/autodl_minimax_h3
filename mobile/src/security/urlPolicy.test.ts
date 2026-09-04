@@ -30,3 +30,26 @@ test('allows loopback HTTP only when explicitly enabled for debug tooling', () =
   expect(assertSafeHttpsUrl('http://localhost:11434/v1', { allowInsecureLocalhost: true })).toBe('http://localhost:11434/v1');
   expect(() => assertSafeHttpsUrl('http://192.168.1.8/v1', { allowInsecureLocalhost: true })).toThrow();
 });
+
+test.each([
+  ['not-a-url', 'URL_INVALID'],
+  ['http://api.example.test/v1', 'HTTPS_REQUIRED'],
+  ['https://user:password@example.test/v1', 'URL_CREDENTIALS'],
+  ['https://127.0.0.1/v1', 'PRIVATE_NETWORK'],
+] as const)('exposes a stable policy code for %s', (value, code) => {
+  try {
+    assertSafeHttpsUrl(value);
+    throw new Error('expected URL policy rejection');
+  } catch (error) {
+    expect(error).toMatchObject({ code });
+  }
+});
+
+test('exposes a stable host-denied code', () => {
+  try {
+    assertSafeHttpsUrl('https://other.example/file', { allowedHosts: ['cdn.example'] });
+    throw new Error('expected host rejection');
+  } catch (error) {
+    expect(error).toMatchObject({ code: 'HOST_DENIED' });
+  }
+});

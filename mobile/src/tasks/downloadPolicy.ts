@@ -1,15 +1,28 @@
-import { assertSafeHttpsUrl } from '../security/urlPolicy';
+import { assertSafeHttpsUrl, UrlPolicyError } from '../security/urlPolicy';
 import { fetch as expoFetch } from 'expo/fetch';
+import { ArtifactOperationError, artifactError, type ArtifactErrorCode } from '../workflows/executor/artifactErrors';
 
 export const DEFAULT_VIDEO_DOWNLOAD_BYTES = 2 * 1024 * 1024 * 1024;
 
 export function assertArtifactDownloadPolicy(allowedHosts?: string[], allowProviderSuppliedPublicHosts = false): void {
-  if (!allowProviderSuppliedPublicHosts && !allowedHosts?.some((host) => host.trim().length > 0)) throw new Error('域名不在允许列表');
+  if (!allowProviderSuppliedPublicHosts && !allowedHosts?.some((host) => host.trim().length > 0)) {
+    throw new ArtifactOperationError('ARTIFACT_POLICY_MISSING', '域名不在允许列表', false);
+  }
 }
 
 export function validateArtifactUrl(url: string, allowedHosts?: string[], allowProviderSuppliedPublicHosts = false): string {
   assertArtifactDownloadPolicy(allowedHosts, allowProviderSuppliedPublicHosts);
-  return assertSafeHttpsUrl(url, allowProviderSuppliedPublicHosts ? {} : { allowedHosts });
+  try {
+    return assertSafeHttpsUrl(url, allowProviderSuppliedPublicHosts ? {} : { allowedHosts });
+  } catch (cause) {
+    if (!(cause instanceof UrlPolicyError)) throw cause;
+    const codes: Record<UrlPolicyError['code'], ArtifactErrorCode> = {
+      URL_INVALID: 'ARTIFACT_URL_INVALID', HTTPS_REQUIRED: 'ARTIFACT_HTTPS_REQUIRED',
+      URL_CREDENTIALS: 'ARTIFACT_URL_CREDENTIALS', PRIVATE_NETWORK: 'ARTIFACT_PRIVATE_NETWORK',
+      HOST_DENIED: 'ARTIFACT_HOST_DENIED',
+    };
+    throw new ArtifactOperationError(codes[cause.code], cause.message, false, { cause });
+  }
 }
 
 function header(headers: Record<string, string> | undefined, name: string): string | undefined {
@@ -24,10 +37,13 @@ export function validateDownloadResult(
 ): void {
   const maxBytes = options.maxBytes ?? DEFAULT_VIDEO_DOWNLOAD_BYTES;
   const accepted = options.acceptedMimes ?? ['video/mp4'];
-  if (result.status < 200 || result.status >= 300) throw new Error(`下载失败（HTTP ${result.status}）`);
-  if (!Number.isFinite(result.size) || result.size < 0 || result.size > maxBytes) throw new Error('下载文件大小超过限制');
+  if (result.status < 200 || result.status >= 300) {
+    const retryable = result.status === 408 || result.status === 429 || result.status >= 500;
+    throw new ArtifactOperationError(retryable ? 'ARTIFACT_HTTP_RETRYABLE' : 'ARTIFACT_HTTP_REJECTED', `下载失败（HTTP ${result.status}）`, retryable);
+  }
+  if (!Number.isFinite(result.size) || result.size < 0 || result.size > maxBytes) throw new ArtifactOperationError('ARTIFACT_SIZE_REJECTED', '下载文件大小超过限制', false);
   const mime = header(result.headers, 'content-type')?.split(';', 1)[0].trim().toLowerCase();
-  if (!mime || !accepted.includes(mime)) throw new Error(`下载媒体类型不受支持：${mime ?? 'unknown'}`);
+  if (!mime || !accepted.includes(mime)) throw new ArtifactOperationError('ARTIFACT_MIME_REJECTED', `下载媒体类型不受支持：${mime ?? 'unknown'}`, false);
 }
 
 export function validateRedirectUrl(url: string, allowedHosts?: string[], allowProviderSuppliedPublicHosts = false): string {
@@ -74,10 +90,10 @@ function declaredBodyLength(response: Response): number | undefined {
   return Number.isSafeInteger(length) ? length : undefined;
 }
 
-async function readWithTimeout<T>(read: Promise<T>, timeoutMs: number, onTimeout: () => void): Promise<T> {
+async function readWithTimeout<T>(read: Promise<T>, timeoutMs: number, onTimeout: () => void, timeoutError: () => ArtifactOperationError): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => { onTimeout(); reject(new Error('下载超时')); }, timeoutMs); });
+    const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => { onTimeout(); reject(timeoutError()); }, timeoutMs); });
     return await Promise.race([read, timeout]);
   } finally {
     if (timer) clearTimeout(timer);
@@ -100,29 +116,34 @@ export async function openArtifactDownload(initialUrl: string, options: Omit<Art
         fetcher(current, { method: 'GET', redirect: 'manual', signal: controller.signal }),
         connectTimeoutMs,
         () => controller.abort(),
+        () => new ArtifactOperationError('ARTIFACT_CONNECT_TIMEOUT', '下载连接超时', true),
       );
     } catch (error) {
-      if (controller.signal.aborted) throw new Error('下载连接超时', { cause: error });
-      throw error;
+      if (controller.signal.aborted) throw new ArtifactOperationError('ARTIFACT_CONNECT_TIMEOUT', '下载连接超时', true, { cause: error });
+      throw artifactError(error);
     }
       if (response.status >= 300 && response.status < 400) {
         const location = responseHeader(response, 'location');
         await discardResponseBody(response);
-        if (hop === maxHops) throw new Error('下载重定向次数超过限制');
-        if (!location) throw new Error('下载重定向缺少目标地址');
+        if (hop === maxHops) throw new ArtifactOperationError('ARTIFACT_REDIRECT_LIMIT', '下载重定向次数超过限制', false);
+        if (!location) throw new ArtifactOperationError('ARTIFACT_REDIRECT_INVALID', '下载重定向缺少目标地址', false);
         current = validateRedirectUrl(new URL(location, current).toString(), options.allowedHosts, options.allowProviderSuppliedPublicHosts);
         continue;
       }
-      if (!response.ok) { await discardResponseBody(response); throw new Error(`下载失败（HTTP ${response.status}）`); }
+      if (!response.ok) {
+        await discardResponseBody(response);
+        const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
+        throw new ArtifactOperationError(retryable ? 'ARTIFACT_HTTP_RETRYABLE' : 'ARTIFACT_HTTP_REJECTED', `下载失败（HTTP ${response.status}）`, retryable);
+      }
       const responseMime = responseHeader(response, 'content-type')?.split(';', 1)[0].trim().toLowerCase();
       const mime = responseMime;
-      if (!mime || !acceptedMimes.includes(mime)) { await discardResponseBody(response); throw new Error(`下载媒体类型不受支持：${mime ?? 'unknown'}`); }
+      if (!mime || !acceptedMimes.includes(mime)) { await discardResponseBody(response); throw new ArtifactOperationError('ARTIFACT_MIME_REJECTED', `下载媒体类型不受支持：${mime ?? 'unknown'}`, false); }
       const expectedLength = declaredBodyLength(response);
-      if (expectedLength != null && expectedLength > maxBytes) { await discardResponseBody(response); throw new Error('下载文件大小超过限制'); }
+      if (expectedLength != null && expectedLength > maxBytes) { await discardResponseBody(response); throw new ArtifactOperationError('ARTIFACT_SIZE_REJECTED', '下载文件大小超过限制', false); }
       let consumed = false;
       const stream: AsyncIterable<Uint8Array> = {
         async *[Symbol.asyncIterator]() {
-          if (consumed) throw new Error('下载响应流已被读取');
+          if (consumed) throw new ArtifactOperationError('ARTIFACT_INTEGRITY_FAILED', '下载响应流已被读取', false);
           consumed = true;
           const reader = response.body?.getReader();
           let size = 0;
@@ -130,28 +151,35 @@ export async function openArtifactDownload(initialUrl: string, options: Omit<Art
             while (true) {
               let part: ReadableStreamReadResult<Uint8Array>;
               try {
-                part = await readWithTimeout(reader.read(), idleTimeoutMs, () => { controller.abort(); void reader.cancel().catch(() => undefined); });
+                part = await readWithTimeout(
+                  reader.read(), idleTimeoutMs,
+                  () => { controller.abort(); void reader.cancel().catch(() => undefined); },
+                  () => new ArtifactOperationError('ARTIFACT_IDLE_TIMEOUT', '下载读取空闲超时', true),
+                );
               } catch (error) {
-                if (controller.signal.aborted) throw new Error('下载读取空闲超时', { cause: error });
-                throw error;
+                if (controller.signal.aborted) throw new ArtifactOperationError('ARTIFACT_IDLE_TIMEOUT', '下载读取空闲超时', true, { cause: error });
+                throw artifactError(error);
               }
               if (part.done) break;
-              if (size + part.value.byteLength > maxBytes) { await reader.cancel().catch(() => undefined); throw new Error('下载文件大小超过限制'); }
+              if (size + part.value.byteLength > maxBytes) { await reader.cancel().catch(() => undefined); throw new ArtifactOperationError('ARTIFACT_SIZE_REJECTED', '下载文件大小超过限制', false); }
               size += part.value.byteLength;
               yield part.value;
             }
           } else {
-            const bytes = new Uint8Array(await readWithTimeout(response.arrayBuffer(), idleTimeoutMs, () => controller.abort()));
-            if (bytes.byteLength > maxBytes) throw new Error('下载文件大小超过限制');
+            const bytes = new Uint8Array(await readWithTimeout(
+              response.arrayBuffer(), idleTimeoutMs, () => controller.abort(),
+              () => new ArtifactOperationError('ARTIFACT_IDLE_TIMEOUT', '下载读取空闲超时', true),
+            ));
+            if (bytes.byteLength > maxBytes) throw new ArtifactOperationError('ARTIFACT_SIZE_REJECTED', '下载文件大小超过限制', false);
             size = bytes.byteLength;
             yield bytes;
           }
-          if (size <= 0 || (expectedLength != null && size !== expectedLength)) throw new Error('下载文件不完整');
+          if (size <= 0 || (expectedLength != null && size !== expectedLength)) throw new ArtifactOperationError('ARTIFACT_INTEGRITY_FAILED', '下载文件不完整', false);
         },
       };
       return { finalUrl: current, status: response.status, mime, declaredSize: expectedLength, stream };
   }
-  throw new Error('下载重定向次数超过限制');
+  throw new ArtifactOperationError('ARTIFACT_REDIRECT_LIMIT', '下载重定向次数超过限制', false);
 }
 
 export async function downloadArtifact(initialUrl: string, options: ArtifactDownloadOptions): Promise<ArtifactDownloadResult> {
@@ -162,27 +190,4 @@ export async function downloadArtifact(initialUrl: string, options: ArtifactDown
     size += chunk.byteLength;
   }
   return { finalUrl: opened.finalUrl, status: opened.status, mime: opened.mime, size };
-}
-
-export async function resolveArtifactRedirects(
-  initialUrl: string,
-  options: { allowedHosts?: string[]; allowProviderSuppliedPublicHosts?: boolean; fetcher?: typeof fetch; maxHops?: number } = {},
-): Promise<string> {
-  let current = validateRedirectUrl(initialUrl, options.allowedHosts, options.allowProviderSuppliedPublicHosts);
-  const fetcher = options.fetcher ?? fetch;
-  const maxHops = options.maxHops ?? 3;
-  for (let hop = 0; hop <= maxHops; hop += 1) {
-    const response = await fetcher(current, { method: 'GET', redirect: 'manual' });
-    if (response.status < 300 || response.status >= 400) {
-      await discardResponseBody(response);
-      if (!response.ok) throw new Error(`下载失败（HTTP ${response.status}）`);
-      return current;
-    }
-    const location = response.headers.get('location');
-    await discardResponseBody(response);
-    if (hop === maxHops) throw new Error('下载重定向次数超过限制');
-    if (!location) throw new Error('下载重定向缺少目标地址');
-    current = validateRedirectUrl(new URL(location, current).toString(), options.allowedHosts, options.allowProviderSuppliedPublicHosts);
-  }
-  throw new Error('下载重定向次数超过限制');
 }

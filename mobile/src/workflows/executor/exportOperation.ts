@@ -8,7 +8,8 @@ export type ExportPayload = {
   assetId: string;
   artifactId: string;
   sourceUri: string;
-  blobSha256: string;
+  sourceKind: 'cas' | 'legacy';
+  blobSha256?: string;
   keepPrivateCopy: boolean;
   displayName: string;
 };
@@ -30,9 +31,11 @@ type ExportDeps = {
   markExporting(operation: WorkflowOperation, owner: string, payload: ExportPayload, now: number): Promise<void> | void;
   canPublish?(operation: WorkflowOperation, owner: string, payload: ExportPayload): boolean;
   publish(sourceUri: string, options: { mediaId: string; displayName: string }): Promise<{ uri: string }>;
+  afterPublish?(input: { operationId: string; galleryUri: string }): Promise<void> | void;
   commitSuccess(input: ExportSuccessInput): Promise<void> | void;
   retry(operation: WorkflowOperation, owner: string, payload: ExportPayload, input: ExportFailureInput & { nextRetryAt: number }): Promise<void> | void;
   finishFailure(operation: WorkflowOperation, owner: string, payload: ExportPayload | undefined, now: number, error: NormalizedError): Promise<void> | void;
+  removeLegacyPrivate?(sourceUri: string): Promise<void>;
 };
 
 function transaction(db: SQLiteDatabase, work: () => void): void {
@@ -47,10 +50,12 @@ function changes(result: unknown): number {
 
 function payloadFrom(operation: WorkflowOperation): ExportPayload | undefined {
   const value = operation.payload as Partial<ExportPayload>;
+  const validSource = (value.sourceKind === 'cas' && typeof value.blobSha256 === 'string' && /^[a-f0-9]{64}$/.test(value.blobSha256))
+    || (value.sourceKind === 'legacy' && value.blobSha256 == null);
   return typeof value.assetId === 'string'
     && typeof value.artifactId === 'string'
     && typeof value.sourceUri === 'string'
-    && typeof value.blobSha256 === 'string'
+    && validSource
     && typeof value.keepPrivateCopy === 'boolean'
     && typeof value.displayName === 'string'
     ? value as ExportPayload
@@ -92,8 +97,22 @@ export async function handleExport(operation: WorkflowOperation, owner: string, 
 
   await deps.markExporting(operation, owner, payload, timestamp);
   if (deps.canPublish && !deps.canPublish(operation, owner, payload)) return;
+  let result: { uri: string };
   try {
-    const result = await deps.publish(payload.sourceUri, { mediaId: payload.assetId, displayName: payload.displayName });
+    result = await deps.publish(payload.sourceUri, { mediaId: payload.assetId, displayName: payload.displayName });
+  } catch (cause) {
+    if (transientNativeFailure(cause)) {
+      const retryError = failure('EXPORT_NATIVE_RETRY', true);
+      const nextRetryAt = timestamp + Math.min(60_000, 1_000 * (2 ** Math.max(0, operation.attempt - 1)));
+      await deps.retry(operation, owner, payload, { now: timestamp, nextRetryAt, error: retryError });
+      return;
+    }
+    await deps.finishFailure(operation, owner, payload, timestamp, failure('EXPORT_NATIVE_FAILED'));
+    return;
+  }
+
+  await deps.afterPublish?.({ operationId: operation.id, galleryUri: result.uri });
+  try {
     await deps.commitSuccess({
       operationId: operation.id,
       owner,
@@ -103,6 +122,11 @@ export async function handleExport(operation: WorkflowOperation, owner: string, 
       referenceOwnerId: `${operation.jobId}:${payload.artifactId}`,
       now: deps.now(),
     });
+    if (!payload.keepPrivateCopy && payload.sourceKind === 'legacy'
+      && payload.sourceUri.startsWith('file://') && !payload.sourceUri.includes('/cas/sha256/')
+      && deps.removeLegacyPrivate) {
+      await deps.removeLegacyPrivate(payload.sourceUri).catch(() => undefined);
+    }
   } catch (cause) {
     if (transientNativeFailure(cause)) {
       const retryError = failure('EXPORT_NATIVE_RETRY', true);
@@ -155,7 +179,7 @@ export function createSqliteExportStore(db: SQLiteDatabase) {
           input.keepPrivateCopy ? 1 : 0, input.galleryUri, input.now, input.now, input.jobId,
         );
         if (changes(taskResult) !== 1) throw new Error('task projection missing');
-        if (!input.keepPrivateCopy) {
+        if (!input.keepPrivateCopy && input.sourceKind === 'cas' && input.blobSha256) {
           db.runSync(
             "DELETE FROM artifact_blob_refs WHERE blob_sha256=? AND owner_type='workflow_artifact' AND owner_id=?",
             input.blobSha256, input.referenceOwnerId,

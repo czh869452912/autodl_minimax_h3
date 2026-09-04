@@ -1,4 +1,4 @@
-import { createWorkflowRegistryService } from './service';
+import { createWorkflowRegistryService, isWorkflowCompatible } from './service';
 import type { RegistryRecord } from './types';
 import { canonicalizeDefinition } from './canonicalize';
 import { sha256Hex } from './crypto';
@@ -6,7 +6,21 @@ import { sha256Hex } from './crypto';
 jest.mock('./trust', () => ({ verifySignedPayload: jest.fn(async () => true) }));
 
 const definition = { schemaVersion: '1.0', id: 'demo', version: '1.0.0', kind: 'atomic', platform: { adapter: 'demo', operation: 'workflow.submit' }, metadata: { title: 'Demo', category: 'video' }, inputs: { type: 'object', properties: {} }, request: { operation: 'workflow.submit', bindings: {} }, outputs: { artifacts: [] } };
-const record = (source: RegistryRecord['source']): RegistryRecord => ({ workflowId: 'demo', version: '1.0.0', contentHash: 'hash', source, trust: source === 'builtin' ? 'builtin' : 'trusted', definitionJson: JSON.stringify(definition), installedAt: 1 });
+const record = (source: RegistryRecord['source']): RegistryRecord => ({ workflowId: 'demo', version: '1.0.0', contentHash: 'hash', hashScheme: 'workflow-package/without-declared-hash+sorted-json@1', source, trust: source === 'builtin' ? 'builtin' : 'trusted', definitionJson: JSON.stringify(definition), installedAt: 1 });
+
+test('uses one compatibility predicate for adapter and version selection', () => {
+  const context = {
+    adapters: [{ id: 'demo', operations: ['workflow.submit'] }],
+    appVersion: '1.4.10',
+    adapterVersions: { demo: '1.2.0' },
+    adapterArtifactKinds: { demo: ['video'] },
+  };
+  expect(isWorkflowCompatible(definition as never, context)).toBe(true);
+  expect(isWorkflowCompatible({ ...definition, platform: { adapter: 'missing', operation: 'workflow.submit' } } as never, context)).toBe(false);
+  expect(isWorkflowCompatible({ ...definition, compatibility: { minAppVersion: '2.0.0' } } as never, context)).toBe(false);
+  expect(isWorkflowCompatible({ ...definition, compatibility: { requiredAdapterVersion: '^9.0.0' } } as never, context)).toBe(false);
+  expect(isWorkflowCompatible({ ...definition, compatibility: { artifactKinds: ['audio'] } } as never, context)).toBe(false);
+});
 
 test('discovers builtin, local, and remote records with builtin precedence', async () => {
   const records = [record('remote'), record('local-import'), record('builtin')];
@@ -51,6 +65,21 @@ test('discovers only active versions and activates a builtin during bootstrap', 
   expect(repository.setActive).toHaveBeenCalledWith('demo', '1.0.0', expect.any(String));
 });
 
+test('installs a builtin without changing the active version', async () => {
+  const repository = { upsert: jest.fn(), get: jest.fn(), list: jest.fn(async () => []), setActive: jest.fn(), getActive: jest.fn(), rollback: jest.fn(), removeUnreferenced: jest.fn() };
+  const service = createWorkflowRegistryService({ repository: repository as never, adapters: [{ id: 'demo', operations: ['workflow.submit'] }], appVersion: '1.0.0' });
+
+  await service.installBuiltin(definition as never);
+
+  expect(repository.upsert).toHaveBeenCalledWith(expect.objectContaining({
+    workflowId: 'demo',
+    version: '1.0.0',
+    source: 'builtin',
+    hashScheme: 'workflow-package/without-declared-hash+sorted-json@1',
+  }));
+  expect(repository.setActive).not.toHaveBeenCalled();
+});
+
 test('rejects incompatible app and adapter versions before installation', async () => {
   const incompatible = { ...definition, compatibility: { minAppVersion: '2.0.0', requiredAdapterVersion: '^9.0.0' } };
   const service = createWorkflowRegistryService({ repository: { upsert: jest.fn(), get: jest.fn(), list: jest.fn(async () => []), setActive: jest.fn(), getActive: jest.fn(), rollback: jest.fn(), removeUnreferenced: jest.fn() } as never, adapters: [{ id: 'demo', operations: ['workflow.submit'] }], appVersion: '1.0.0', adapterVersions: { demo: '1.0.0' } });
@@ -88,6 +117,7 @@ test('activates a verified remote package after installation', async () => {
   const record = await service.fetchAndActivate('remote-demo', '1.0.0', 'https://registry.example.test');
 
   expect(record.contentHash).toBe(contentHash);
+  expect(record.hashScheme).toBe('workflow-package/without-declared-hash+sorted-json@1');
   expect(repository.upsert).toHaveBeenCalledWith(record);
   expect(repository.setActive).toHaveBeenCalledWith('remote-demo', '1.0.0', contentHash);
 });

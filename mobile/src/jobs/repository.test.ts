@@ -15,6 +15,20 @@ test('round-trips generic job provenance and artifacts', async () => {
   expect(await store.listArtifacts('local-1')).toMatchObject([{ kind: 'image', uri: 'https://example.test/a.png' }]);
 });
 
+test('lists only the requested most recent jobs in memory and SQLite', async () => {
+  const memory = createJobRepository(undefined);
+  for (let index = 1; index <= 5; index += 1) await memory.upsert({ ...job, id: `memory-${index}`, createdAt: index, updatedAt: index });
+  expect((await memory.listRecent(2)).map((item) => item.id)).toEqual(['memory-5', 'memory-4']);
+
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const sqlite = createJobRepository(db as never);
+    for (let index = 1; index <= 5; index += 1) await sqlite.upsert({ ...job, id: `sqlite-${index}`, createdAt: index, updatedAt: index });
+    expect((await sqlite.listRecent(2)).map((item) => item.id)).toEqual(['sqlite-5', 'sqlite-4']);
+    expect(await sqlite.listRecent(0)).toEqual([]);
+  } finally { db.close(); }
+});
+
 test('round-trips revision, opaque provider handle, durable error, and next sync time', async () => {
   const db = createInitializedRealSqliteTestDb();
   try {

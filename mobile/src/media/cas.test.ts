@@ -3,9 +3,9 @@ import { collectGarbage, createArtifactCas, type CasFiles } from './cas';
 const streamOf = (...chunks: Uint8Array[]): AsyncIterable<Uint8Array> => ({ async *[Symbol.asyncIterator]() { yield* chunks; } });
 const bytes = (value: string) => new TextEncoder().encode(value);
 
-function memoryFiles(overrides: Partial<CasFiles> = {}) {
+function memoryFiles(overrides: Partial<CasFiles> & Record<string, unknown> = {}) {
   const entries = new Map<string, Uint8Array>();
-  const files: CasFiles = {
+  const files = {
     makeDirectory: jest.fn(async () => undefined),
     write: jest.fn(async (path, chunk, append) => {
       const previous = append ? entries.get(path) ?? new Uint8Array() : new Uint8Array();
@@ -16,9 +16,14 @@ function memoryFiles(overrides: Partial<CasFiles> = {}) {
     move: jest.fn(async (from, to) => { const value = entries.get(from); if (!value) throw new Error('missing'); entries.set(to, value); entries.delete(from); }),
     copy: jest.fn(async (from, to) => { const value = entries.get(from); if (!value) throw new Error('missing'); entries.set(to, value.slice()); }),
     remove: jest.fn(async (path) => { entries.delete(path); }),
+    async *readChunks(path: string) {
+      const value = entries.get(path);
+      if (!value) throw new Error('missing');
+      yield value.slice();
+    },
     ...overrides,
   };
-  return { files, entries };
+  return { files: files as CasFiles, entries };
 }
 
 test('publishes by computed sha256 and removes the part', async () => {
@@ -33,8 +38,8 @@ test('publishes by computed sha256 and removes the part', async () => {
 test('rejects expected hash mismatch and byte overflow without retaining a part', async () => {
   const { files, entries } = memoryFiles();
   const cas = createArtifactCas(files, { nonce: () => 'nonce' });
-  await expect(cas.put(streamOf(bytes('abc')), { mime: 'video/mp4', maxBytes: 10, expectedSha256: '0'.repeat(64) })).rejects.toThrow('hash');
-  await expect(cas.put(streamOf(bytes('abc')), { mime: 'video/mp4', maxBytes: 2 })).rejects.toThrow('大小');
+  await expect(cas.put(streamOf(bytes('abc')), { mime: 'video/mp4', maxBytes: 10, expectedSha256: '0'.repeat(64) })).rejects.toMatchObject({ code: 'ARTIFACT_INTEGRITY_FAILED', retryable: false });
+  await expect(cas.put(streamOf(bytes('abc')), { mime: 'video/mp4', maxBytes: 2 })).rejects.toMatchObject({ code: 'ARTIFACT_SIZE_REJECTED', retryable: false });
   expect([...entries.keys()].filter((path) => path.endsWith('.part'))).toEqual([]);
 });
 
@@ -45,6 +50,145 @@ test('uses a verified copy fallback when atomic rename is unavailable', async ()
   expect(base.files.copy).toHaveBeenCalled();
   expect(await base.files.stat(result.relativePath)).toEqual({ exists: true, size: 3 });
   expect([...base.entries.keys()].filter((path) => path.endsWith('.part'))).toEqual([]);
+});
+
+test('rejects a published blob when a durable reread does not match the streamed bytes', async () => {
+  const base = memoryFiles({
+    async *readChunks() { yield bytes('abd'); },
+  });
+  await expect(createArtifactCas(base.files, { nonce: () => 'nonce' }).put(
+    streamOf(bytes('abc')),
+    { mime: 'video/mp4', maxBytes: 10 },
+  )).rejects.toMatchObject({ code: 'ARTIFACT_INTEGRITY_FAILED', retryable: false });
+  expect([...base.entries.keys()].filter((path) => path.startsWith('cas/sha256/'))).toEqual([]);
+});
+
+test('removes a newly published destination when only its final durable reread is corrupt', async () => {
+  const base = memoryFiles();
+  const move = base.files.move;
+  base.files.move = jest.fn(async (from, to) => {
+    await move(from, to);
+    if (to.startsWith('cas/sha256/')) base.entries.set(to, bytes('abd'));
+  });
+
+  await expect(createArtifactCas(base.files, { nonce: () => 'corrupt-final' }).put(
+    streamOf(bytes('abc')),
+    { mime: 'video/mp4', maxBytes: 10 },
+  )).rejects.toMatchObject({ code: 'ARTIFACT_INTEGRITY_FAILED', retryable: false });
+  expect([...base.entries.keys()].filter((path) => path.startsWith('cas/sha256/'))).toEqual([]);
+  expect([...base.entries.keys()].filter((path) => path.startsWith('cas/parts/'))).toEqual([]);
+});
+
+test('durably rereads an existing matching blob before reusing it', async () => {
+  const base = memoryFiles();
+  const cas = createArtifactCas(base.files, { nonce: () => 'nonce' });
+  const first = await cas.put(streamOf(bytes('abc')), { mime: 'video/mp4', maxBytes: 10 });
+  const second = await cas.put(streamOf(bytes('abc')), { mime: 'video/mp4', maxBytes: 10 });
+  expect(second).toEqual(first);
+  expect((base.files as CasFiles & { readChunks: jest.Mock }).readChunks).toBeDefined();
+});
+
+test.each([
+  ['the wrong size', bytes('broken')],
+  ['the same size but wrong hash', bytes('abd')],
+])('repairs a pre-existing hash path containing %s', async (_description, poisoned) => {
+  const base = memoryFiles();
+  const sha256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+  const relativePath = `cas/sha256/ba/${sha256}`;
+  base.entries.set(relativePath, poisoned);
+
+  const result = await createArtifactCas(base.files, { nonce: () => 'repair' }).put(
+    streamOf(bytes('abc')),
+    { mime: 'video/mp4', maxBytes: 10 },
+  );
+
+  expect(result.relativePath).toBe(relativePath);
+  expect(base.entries.get(relativePath)).toEqual(bytes('abc'));
+  expect([...base.entries.keys()].filter((path) => path.startsWith('cas/parts/'))).toEqual([]);
+});
+
+test('repairs an invalid destination created by a racing publisher', async () => {
+  const base = memoryFiles();
+  const sha256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+  const relativePath = `cas/sha256/ba/${sha256}`;
+  const move = base.files.move;
+  let injectedRace = false;
+  base.files.move = jest.fn(async (from, to) => {
+    if (!injectedRace && from.startsWith('cas/parts/') && to === relativePath) {
+      injectedRace = true;
+      base.entries.set(relativePath, bytes('abd'));
+      throw new Error('destination appeared');
+    }
+    await move(from, to);
+  });
+
+  const result = await createArtifactCas(base.files, { nonce: () => 'race' }).put(
+    streamOf(bytes('abc')),
+    { mime: 'video/mp4', maxBytes: 10 },
+  );
+
+  expect(result.relativePath).toBe(relativePath);
+  expect(base.entries.get(relativePath)).toEqual(bytes('abc'));
+  expect([...base.entries.keys()].filter((path) => path.startsWith('cas/parts/'))).toEqual([]);
+});
+
+test('cleans an invalid quarantine when repairing the destination later fails', async () => {
+  const base = memoryFiles();
+  const sha256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+  const relativePath = `cas/sha256/ba/${sha256}`;
+  base.entries.set(relativePath, bytes('abd'));
+  const move = base.files.move;
+  base.files.move = jest.fn(async (from, to) => {
+    if (from.startsWith('cas/parts/') && !from.includes('quarantine-') && to === relativePath) throw new Error('publish unavailable');
+    await move(from, to);
+  });
+  base.files.copy = jest.fn(async () => { throw new Error('copy unavailable'); });
+
+  await expect(createArtifactCas(base.files, { nonce: () => 'failed-repair' }).put(
+    streamOf(bytes('abc')),
+    { mime: 'video/mp4', maxBytes: 10 },
+  )).rejects.toThrow('copy unavailable');
+  expect(base.entries.has(relativePath)).toBe(false);
+  expect([...base.entries.keys()].filter((path) => path.startsWith('cas/parts/'))).toEqual([]);
+});
+
+test('restores a valid blob quarantined by a race when publication fails', async () => {
+  const base = memoryFiles();
+  const sha256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+  const relativePath = `cas/sha256/ba/${sha256}`;
+  base.entries.set(relativePath, bytes('abd'));
+  const move = base.files.move;
+  base.files.move = jest.fn(async (from, to) => {
+    if (from === relativePath && to.includes('quarantine-')) base.entries.set(relativePath, bytes('abc'));
+    if (from.startsWith('cas/parts/') && !from.includes('quarantine-') && to === relativePath) throw new Error('publish unavailable');
+    await move(from, to);
+  });
+  base.files.copy = jest.fn(async (_from, to) => {
+    base.entries.set(to, bytes('abd'));
+    throw new Error('copy corrupted');
+  });
+
+  await expect(createArtifactCas(base.files, { nonce: () => 'restore-race' }).put(
+    streamOf(bytes('abc')),
+    { mime: 'video/mp4', maxBytes: 10 },
+  )).rejects.toThrow('copy corrupted');
+  expect(base.entries.get(relativePath)).toEqual(bytes('abc'));
+  expect([...base.entries.keys()].filter((path) => path.startsWith('cas/parts/'))).toEqual([]);
+});
+
+test('aborting a staged put removes only its owned part and preserves a concurrent valid destination', async () => {
+  const base = memoryFiles();
+  const sha256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+  const relativePath = `cas/sha256/ba/${sha256}`;
+  base.entries.set(relativePath, bytes('abc'));
+  const cas = createArtifactCas(base.files, { nonce: () => 'staged' });
+
+  const staged = await cas.stage(streamOf(bytes('abc')), { mime: 'video/mp4', maxBytes: 10 });
+  expect(base.entries.get(staged.stagedRelativePath)).toEqual(bytes('abc'));
+  await staged.abort();
+
+  expect(base.entries.get(relativePath)).toEqual(bytes('abc'));
+  expect(base.entries.has(staged.stagedRelativePath)).toBe(false);
 });
 
 test('concurrent publishers of the same hash converge on one verified destination', async () => {
@@ -70,6 +214,45 @@ test('keeps a part cleanup boundary when writing or publishing fails', async () 
   publishFailure.files.copy = jest.fn(async () => { throw new Error('copy'); });
   await expect(createArtifactCas(publishFailure.files).put(streamOf(bytes('abc')), { mime: 'video/mp4', maxBytes: 10 })).rejects.toThrow('copy');
   expect([...publishFailure.entries.keys()].filter((path) => path.endsWith('.part'))).toEqual([]);
+});
+
+test('quarantines and cleans a partially copied destination when copy throws', async () => {
+  const base = memoryFiles();
+  const move = base.files.move;
+  base.files.move = jest.fn(async (from, to) => {
+    if (from.startsWith('cas/parts/') && !from.includes('quarantine-') && to.startsWith('cas/sha256/')) throw new Error('rename unavailable');
+    await move(from, to);
+  });
+  base.files.copy = jest.fn(async (_from, to) => {
+    base.entries.set(to, bytes('abd'));
+    throw new Error('copy interrupted');
+  });
+
+  await expect(createArtifactCas(base.files, { nonce: () => 'partial-copy' }).put(
+    streamOf(bytes('abc')),
+    { mime: 'video/mp4', maxBytes: 10 },
+  )).rejects.toThrow('copy interrupted');
+  expect([...base.entries.keys()].filter((path) => path.startsWith('cas/sha256/'))).toEqual([]);
+  expect([...base.entries.keys()].filter((path) => path.startsWith('cas/parts/'))).toEqual([]);
+});
+
+test('quarantines and cleans a silently corrupted destination after copy reports success', async () => {
+  const base = memoryFiles();
+  const move = base.files.move;
+  base.files.move = jest.fn(async (from, to) => {
+    if (from.startsWith('cas/parts/') && !from.includes('quarantine-') && to.startsWith('cas/sha256/')) {
+      throw new Error('rename unavailable');
+    }
+    await move(from, to);
+  });
+  base.files.copy = jest.fn(async (_from, to) => { base.entries.set(to, bytes('abd')); });
+
+  await expect(createArtifactCas(base.files, { nonce: () => 'silent-copy-corruption' }).put(
+    streamOf(bytes('abc')),
+    { mime: 'video/mp4', maxBytes: 10 },
+  )).rejects.toMatchObject({ code: 'ARTIFACT_INTEGRITY_FAILED' });
+  expect([...base.entries.keys()].filter((path) => path.startsWith('cas/sha256/'))).toEqual([]);
+  expect([...base.entries.keys()].filter((path) => path.startsWith('cas/parts/'))).toEqual([]);
 });
 
 test('a restarted operation replaces its abandoned part and publishes one blob', async () => {

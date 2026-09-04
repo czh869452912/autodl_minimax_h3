@@ -12,6 +12,14 @@ export type ReconciliationSummary = {
   garbageFailed: number;
 };
 
+export const EMPTY_RECONCILIATION_SUMMARY: ReconciliationSummary = {
+  scanned: 0,
+  repaired: 0,
+  staleFiles: 0,
+  garbageDeleted: 0,
+  garbageFailed: 0,
+};
+
 type TaskRow = {
   id: string;
   prompt: string;

@@ -53,6 +53,7 @@ export function createExecutorCycle(deps: CycleDeps) {
       result.blocked += pass.blocked;
       result.remainingDue = pass.remainingDue;
       result.remainingScheduled = pass.remainingScheduled;
+      result.nextWakeAt = pass.nextWakeAt;
 
       if (
         pass.claimed === 0

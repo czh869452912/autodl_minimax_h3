@@ -19,6 +19,12 @@ type OperationRow = {
   updated_at: number;
 };
 
+export type PendingSummary = {
+  remainingDue: number;
+  remainingScheduled: number;
+  nextWakeAt?: number;
+};
+
 function parseRecord(source: string | null | undefined): Record<string, unknown> {
   if (!source) return {};
   try {
@@ -103,6 +109,68 @@ export function createOperationRepository(db: SQLiteDatabase) {
         ? db.getAllSync<OperationRow>('SELECT * FROM workflow_operations WHERE kind = ? ORDER BY created_at ASC, id ASC', kind)
         : db.getAllSync<OperationRow>('SELECT * FROM workflow_operations ORDER BY created_at ASC, id ASC');
       return rows.map(mapRow);
+    },
+    listDue(options: { kind: OperationKind; now: number; limit: number }): WorkflowOperation[] {
+      const limit = Math.max(0, Math.floor(options.limit));
+      if (limit === 0) return [];
+      return db.getAllSync<OperationRow>(
+        "SELECT * FROM workflow_operations WHERE kind = ? AND state = 'PENDING' AND next_retry_at <= ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?) ORDER BY next_retry_at ASC, created_at ASC, id ASC LIMIT ?",
+        options.kind, options.now, options.now, limit,
+      ).map(mapRow);
+    },
+    pendingSummary(options: { now: number; jobIds?: string[] }): PendingSummary {
+      if (options.jobIds && options.jobIds.length === 0) return { remainingDue: 0, remainingScheduled: 0 };
+      const scope = options.jobIds ? ` AND job_id IN (${options.jobIds.map(() => '?').join(',')})` : '';
+      const row = db.getFirstSync<{
+        remaining_due: number | null;
+        remaining_scheduled: number | null;
+        next_wake_at: number | null;
+      }>(
+        `SELECT
+          COALESCE(SUM(CASE WHEN next_retry_at <= ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?) THEN 1 ELSE 0 END), 0) AS remaining_due,
+          COALESCE(SUM(CASE WHEN NOT (next_retry_at <= ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?)) THEN 1 ELSE 0 END), 0) AS remaining_scheduled,
+          MIN(CASE WHEN NOT (next_retry_at <= ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?)) THEN
+            CASE WHEN lease_expires_at IS NOT NULL AND lease_expires_at > next_retry_at THEN lease_expires_at ELSE next_retry_at END
+          END) AS next_wake_at
+        FROM workflow_operations WHERE state = 'PENDING'${scope}`,
+        options.now, options.now, options.now, options.now, options.now, options.now, ...(options.jobIds ?? []),
+      );
+      const summary: PendingSummary = {
+        remainingDue: Number(row?.remaining_due ?? 0),
+        remainingScheduled: Number(row?.remaining_scheduled ?? 0),
+      };
+      if (row?.next_wake_at != null) summary.nextWakeAt = Number(row.next_wake_at);
+      return summary;
+    },
+    countOutstanding(jobIds: string[]): number {
+      if (jobIds.length === 0) return 0;
+      const placeholders = jobIds.map(() => '?').join(',');
+      const row = db.getFirstSync<{ count: number }>(
+        `SELECT COUNT(*) AS count FROM workflow_operations WHERE state IN ('PENDING','CLAIMED') AND job_id IN (${placeholders})`,
+        ...jobIds,
+      );
+      return Number(row?.count ?? 0);
+    },
+    expediteRetryableNetwork(jobIds: string[], now: number): number {
+      if (jobIds.length === 0) return 0;
+      assertAppDatabaseWritable(db);
+      const placeholders = jobIds.map(() => '?').join(',');
+      const result = db.runSync(
+        `UPDATE workflow_operations SET next_retry_at = ?, updated_at = ?
+        WHERE state = 'PENDING' AND next_retry_at > ? AND job_id IN (${placeholders})
+          AND json_extract(last_error_json, '$.retryable') = 1
+          AND (
+            (kind = 'STATUS_SYNC' AND (
+              json_extract(last_error_json, '$.code') LIKE '%_STATUS_NETWORK'
+              OR json_extract(last_error_json, '$.code') LIKE '%_STATUS_TIMEOUT'
+            ))
+            OR (kind = 'ARTIFACT_DOWNLOAD' AND json_extract(last_error_json, '$.code') IN (
+              'ARTIFACT_NETWORK', 'ARTIFACT_CONNECT_TIMEOUT', 'ARTIFACT_IDLE_TIMEOUT'
+            ))
+          )`,
+        now, now, now, ...jobIds,
+      );
+      return changes(result);
     },
     claimById(id: string, owner: string, now: number, leaseMs: number): WorkflowOperation | undefined {
       assertAppDatabaseWritable(db);

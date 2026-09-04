@@ -1,0 +1,36 @@
+{
+  "apiVersion": "autodl.workflow-release-set/v1",
+  "releaseId": "mobile-1.4.10",
+  "releases": [
+    {
+      "packageFile": "minimax-h3-i2v-15s-v1.0.0.package.json",
+      "identity": {
+        "scheme": "workflow-package/without-declared-hash+sorted-json@1",
+        "digest": "b3d2ac04b13f581527a580d49abea9d9cc079ee8c8a6681232cd2cdbfda8ce81"
+      },
+      "acceptedHistorical": [
+        {
+          "workflowId": "autodl.minimax-h3.i2v-15s",
+          "version": "1.0.0",
+          "format": "legacy-workflow-definition@1",
+          "identity": {
+            "scheme": "workflow-definition/sorted-json@1",
+            "digest": "917cce0dca1a7a3cc178d46baee6c5dd16c2a586283bee2b7d426bda71705390"
+          }
+        }
+      ]
+    },
+    {
+      "packageFile": "minimax-h3-i2v-15s-v1.0.1.package.json",
+      "identity": {
+        "scheme": "workflow-package/without-declared-hash+sorted-json@1",
+        "digest": "fe166625b82f953d23eac160ed509f468b2383b7d7c8be6383abca9096381897"
+      }
+    }
+  ],
+  "activation": {
+    "select": "highest-compatible-declared-version",
+    "replaceActiveSources": ["builtin"],
+    "preserveUnlistedVersions": true
+  }
+}

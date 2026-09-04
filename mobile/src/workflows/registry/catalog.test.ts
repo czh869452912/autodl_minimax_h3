@@ -1,31 +1,77 @@
+import h3V101Package from '../definitions/autodl/minimax-h3-i2v-15s-v1.0.1.package.json';
+import { canonicalizeDefinition } from './canonicalize';
 import { createWorkflowCatalog, registryRecordToDefinition } from './catalog';
-import type { WorkflowRegistry } from './types';
-import type { WorkflowDefinition } from '../schema/types';
+import { builtinWorkflowReleases } from './builtin';
+import { WORKFLOW_PACKAGE_IDENTITY_V1 } from './identity';
+import { RegistryReleaseError } from './releaseManifest';
+import { createWorkflowRegistry } from './repository';
+import type { RegistryRecord } from './types';
 
-const definition: WorkflowDefinition = { schemaVersion: '1.0', id: 'demo', version: '1.0.0', kind: 'atomic', platform: { adapter: 'demo', operation: 'workflow.submit' }, metadata: { title: 'Demo', category: 'video' }, inputs: { type: 'object', properties: {} }, request: { operation: 'workflow.submit', bindings: {} }, outputs: { artifacts: [] } };
-function memoryRegistry(): WorkflowRegistry { const data = new Map<string, any>(); const active = new Map<string, any>(); return { upsert: async (r) => { data.set(`${r.workflowId}:${r.version}`, r); }, get: async (id, v) => data.get(`${id}:${v}`), list: async () => [...data.values()], setActive: async (id, v, h) => { active.set(id, await data.get(`${id}:${v}`)); }, getActive: async (id) => active.get(id), rollback: async () => {}, removeUnreferenced: async () => {} }; }
+const activeRecord: RegistryRecord = {
+  workflowId: 'autodl.minimax-h3.i2v-15s',
+  version: '1.0.1',
+  contentHash: 'fe166625b82f953d23eac160ed509f468b2383b7d7c8be6383abca9096381897',
+  hashScheme: WORKFLOW_PACKAGE_IDENTITY_V1,
+  source: 'builtin',
+  trust: 'builtin',
+  definitionJson: canonicalizeDefinition(h3V101Package),
+  installedAt: 1,
+};
 
-test('bootstraps builtin definitions and exposes active catalog records', async () => {
-  const registry = memoryRegistry();
-  const catalog = createWorkflowCatalog({ registry, builtins: [definition], adapters: [{ id: 'demo', operations: ['workflow.submit'] }], appVersion: '1.0.0' });
-  await catalog.bootstrap();
-  expect((await catalog.listActive())[0]).toMatchObject({ workflowId: 'demo', source: 'builtin' });
-  expect((await catalog.getActive('demo'))?.definitionJson).toContain('"id":"demo"');
+test('delegates builtin releases once and lists the reconciled active workflow', async () => {
+  const registry = createWorkflowRegistry(undefined);
+  await registry.upsert(activeRecord);
+  await registry.setActive(activeRecord.workflowId, activeRecord.version, activeRecord.contentHash);
+  const coordinator = { reconcile: jest.fn(async () => ({ status: 'unchanged' as const })) };
+  const catalog = createWorkflowCatalog({ registry, coordinator, releaseSet: builtinWorkflowReleases });
+
+  await expect(catalog.bootstrap()).resolves.toEqual({ status: 'unchanged' });
+  expect(coordinator.reconcile).toHaveBeenCalledTimes(1);
+  expect(coordinator.reconcile).toHaveBeenCalledWith(builtinWorkflowReleases);
+  expect((await catalog.listActive())[0].version).toBe('1.0.1');
+  expect((await catalog.getActive(activeRecord.workflowId))?.contentHash).toBe(activeRecord.contentHash);
+});
+
+test('rejects a mismatched active pointer instead of silently using the previous record', async () => {
+  const registry = createWorkflowRegistry(undefined);
+  await registry.upsert(activeRecord);
+  await registry.setActive(activeRecord.workflowId, activeRecord.version, activeRecord.contentHash);
+  jest.spyOn(registry, 'getActivePointer').mockResolvedValue({
+    workflowId: activeRecord.workflowId,
+    version: activeRecord.version,
+    contentHash: 'tampered-pointer',
+  });
+  const catalog = createWorkflowCatalog({
+    registry,
+    coordinator: { reconcile: jest.fn(async () => ({ status: 'unchanged' as const })) },
+    releaseSet: builtinWorkflowReleases,
+  });
+
+  await expect(catalog.listActive()).rejects.toEqual(
+    expect.objectContaining<Partial<RegistryReleaseError>>({ code: 'REGISTRY_ACTIVE_POINTER_INVALID' }),
+  );
+});
+
+test('retains manual activation and rollback operations', async () => {
+  const registry = createWorkflowRegistry(undefined);
+  const older = { ...activeRecord, version: '1.0.0', contentHash: 'older-hash' };
+  await registry.upsert(older);
+  await registry.upsert(activeRecord);
+  await registry.setActive(older.workflowId, older.version, older.contentHash);
+  const catalog = createWorkflowCatalog({
+    registry,
+    coordinator: { reconcile: jest.fn(async () => ({ status: 'unchanged' as const })) },
+    releaseSet: builtinWorkflowReleases,
+  });
+
+  await catalog.activate(activeRecord.workflowId, activeRecord.version);
+  expect((await catalog.getActive(activeRecord.workflowId))?.version).toBe('1.0.1');
+  await catalog.rollback(activeRecord.workflowId);
+  expect((await catalog.getActive(activeRecord.workflowId))?.version).toBe('1.0.0');
 });
 
 test('converts package-backed registry records for form consumers', () => {
-  const pkg = {
-    apiVersion: 'workflow.autodl/v1' as const,
-    kind: 'Workflow' as const,
-    metadata: { id: 'demo', version: '1.0.0', title: 'Demo', category: 'video' as const },
-    spec: {
-      adapter: { id: 'demo', version: '1.0.0', operation: 'workflow.submit' },
-      inputSchema: { type: 'object' as const, properties: { prompt: { type: 'string' as const } } },
-      bindings: { prompt: '/prompt' },
-      outputs: { artifacts: [] },
-    },
-  };
-  const record = { workflowId: 'demo', version: '1.0.0', contentHash: 'hash', source: 'builtin' as const, trust: 'builtin' as const, definitionJson: JSON.stringify(pkg), installedAt: 1 };
-  expect(registryRecordToDefinition(record).id).toBe('demo');
-  expect((registryRecordToDefinition(record).inputs.properties as Record<string, unknown>)?.prompt).toEqual({ type: 'string' });
+  expect(registryRecordToDefinition(activeRecord).id).toBe(activeRecord.workflowId);
+  expect((registryRecordToDefinition(activeRecord).inputs.properties as Record<string, unknown>)?.prompt)
+    .toEqual(expect.objectContaining({ type: 'string' }));
 });

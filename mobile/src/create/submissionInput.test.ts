@@ -9,8 +9,8 @@ const baseInput = {
 };
 
 test.each([
-  ['', 0, '1'],
-  ['   ', 1 - Number.EPSILON, '999999999999999'],
+  ['', 0, 1],
+  ['   ', 1 - Number.EPSILON, 999999999999999],
 ])('turns a blank seed into one persisted in-range request value', (seed, randomValue, expected) => {
   const snapshot = buildSubmissionInputSnapshot({
     ...baseInput,
@@ -19,7 +19,7 @@ test.each([
   });
 
   expect(snapshot.seed).toBe(expected);
-  expect(buildAutodlSubmitRequest(snapshot as AutodlInput)).toMatchObject({ seed: Number(expected) });
+  expect(buildAutodlSubmitRequest(snapshot as AutodlInput)).toMatchObject({ seed: expected });
 });
 
 test('preserves a user-provided seed without consuming randomness', () => {
@@ -30,6 +30,15 @@ test('preserves a user-provided seed without consuming randomness', () => {
     random,
   });
 
-  expect(snapshot.seed).toBe('42');
+  expect(snapshot.seed).toBe(42);
   expect(random).not.toHaveBeenCalled();
+});
+
+test('preserves a non-decimal seed so schema validation can reject it', () => {
+  const snapshot = buildSubmissionInputSnapshot({
+    ...baseInput,
+    workflowValues: { ...baseInput.workflowValues, seed: 'abc' },
+  });
+
+  expect(snapshot.seed).toBe('abc');
 });

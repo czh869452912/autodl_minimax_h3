@@ -1,10 +1,10 @@
-export const APP_SCHEMA_VERSION = 6;
+export const APP_SCHEMA_VERSION = 7;
 export const RECOVERY_TABLE = 'app_database_recovery';
 
 export const APP_TABLES = [
   'workflow_artifacts', 'workflow_jobs', 'workflow_operations', 'workflow_job_events',
   'artifact_blob_refs', 'artifact_blobs', 'media_deliveries', 'media_assets', 'tasks',
-  'workflow_registry_active', 'workflow_registry', 'prompt_drafts', 'agent_threads',
+  'workflow_registry_releases', 'workflow_registry_active', 'workflow_registry', 'prompt_drafts', 'agent_threads',
   'app_scheduler_leases', RECOVERY_TABLE,
 ] as const;
 
@@ -38,4 +38,8 @@ export const V6_SCHEMA_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_artifact_blob_refs_owner ON artifact_blob_refs(owner_type, owner_id)',
 ] as const;
 
-export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS] as const;
+export const V7_SCHEMA_STATEMENTS = [
+  'CREATE TABLE IF NOT EXISTS workflow_registry_releases (release_id TEXT PRIMARY KEY NOT NULL, manifest_hash TEXT NOT NULL, applied_at INTEGER NOT NULL)',
+] as const;
+
+export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS] as const;

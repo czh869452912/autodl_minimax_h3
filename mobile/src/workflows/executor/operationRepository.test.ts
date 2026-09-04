@@ -1,5 +1,8 @@
 import { createInitializedRealSqliteTestDb } from '../../test/realSqlite';
 import { createOperationRepository } from './operationRepository';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 function setup() {
   const db = createInitializedRealSqliteTestDb();
@@ -96,5 +99,72 @@ test('expired safe work is requeued while expired submits require job-aware reco
     expect(repository.get('status')).not.toHaveProperty('leaseOwner');
     expect(repository.get('status')).not.toHaveProperty('leaseExpiresAt');
     expect(repository.get('submit')).toMatchObject({ state: 'CLAIMED', leaseOwner: 'dead' });
+  } finally { db.close(); }
+});
+
+test('countOutstanding observes claimed work from another database connection', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'operation-repository-'));
+  const path = join(directory, 'operations.db');
+  const claimantDb = createInitializedRealSqliteTestDb(path);
+  const observerDb = createInitializedRealSqliteTestDb(path);
+  const claimant = createOperationRepository(claimantDb as never);
+  const observer = createOperationRepository(observerDb as never);
+  try {
+    enqueue(claimant, { jobId: 'job-a' });
+    expect(claimant.claimDue({ kind: 'STATUS_SYNC', owner: 'worker-a', now: 100, leaseMs: 1_000, limit: 1 }))
+      .toMatchObject([{ id: 'op-1', state: 'CLAIMED' }]);
+
+    expect(observer.pendingSummary({ now: 100, jobIds: ['job-a'] })).toEqual({ remainingDue: 0, remainingScheduled: 0 });
+    expect(observer.countOutstanding(['job-a'])).toBe(1);
+  } finally {
+    observerDb.close();
+    claimantDb.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('queries bounded due work and aggregates pending state without scanning terminal history', () => {
+  const { db, repository } = setup();
+  try {
+    for (let index = 0; index < 100; index += 1) {
+      enqueue(repository, { id: `terminal-${index}`, idempotencyKey: `terminal-${index}`, jobId: 'old-job', now: index });
+      repository.claimById(`terminal-${index}`, 'worker', 1_000, 10);
+      repository.finish(`terminal-${index}`, 'worker', 'SUCCEEDED', 1_000);
+    }
+    enqueue(repository, { id: 'due-a', idempotencyKey: 'due-a', jobId: 'job-a', nextRetryAt: 900 });
+    enqueue(repository, { id: 'due-b', idempotencyKey: 'due-b', jobId: 'job-b', nextRetryAt: 950 });
+    enqueue(repository, { id: 'artifact-due', kind: 'ARTIFACT_DOWNLOAD', idempotencyKey: 'artifact-due', jobId: 'job-b', nextRetryAt: 700 });
+    enqueue(repository, { id: 'scheduled-a', idempotencyKey: 'scheduled-a', jobId: 'job-a', nextRetryAt: 1_200 });
+    enqueue(repository, { id: 'leased-a', idempotencyKey: 'leased-a', jobId: 'job-a', nextRetryAt: 800 });
+    db.runSync("UPDATE workflow_operations SET lease_owner='other', lease_expires_at=1100 WHERE id='leased-a'");
+
+    expect(repository.listDue({ kind: 'STATUS_SYNC', now: 1_000, limit: 1 })).toMatchObject([{ id: 'due-a' }]);
+    expect(repository.pendingSummary({ now: 1_000 })).toEqual({ remainingDue: 3, remainingScheduled: 2, nextWakeAt: 1_100 });
+    expect(repository.pendingSummary({ now: 1_000, jobIds: ['job-a'] })).toEqual({ remainingDue: 1, remainingScheduled: 2, nextWakeAt: 1_100 });
+    expect(repository.pendingSummary({ now: 1_000, jobIds: [] })).toEqual({ remainingDue: 0, remainingScheduled: 0 });
+    expect(repository.countOutstanding(['job-a'])).toBe(3);
+    expect(repository.countOutstanding([])).toBe(0);
+  } finally { db.close(); }
+});
+
+test('expedites only retryable network operations in the requested job scope', () => {
+  const { db, repository } = setup();
+  try {
+    const seed = (id: string, kind: 'SUBMIT' | 'STATUS_SYNC' | 'ARTIFACT_DOWNLOAD', jobId: string, error: object, state = 'PENDING') => {
+      enqueue(repository, { id, kind, jobId, idempotencyKey: id, nextRetryAt: 5_000 });
+      db.runSync('UPDATE workflow_operations SET state=?, last_error_json=? WHERE id=?', state, JSON.stringify(error), id);
+    };
+    seed('network', 'STATUS_SYNC', 'job-a', { code: 'AUTODL_STATUS_NETWORK', message: 'offline', retryable: true });
+    seed('timeout', 'STATUS_SYNC', 'job-a', { code: 'AUTODL_STATUS_TIMEOUT', message: 'timeout', retryable: true });
+    seed('artifact-network', 'ARTIFACT_DOWNLOAD', 'job-a', { code: 'ARTIFACT_NETWORK', message: 'offline', retryable: true });
+    seed('artifact-timeout', 'ARTIFACT_DOWNLOAD', 'job-a', { code: 'ARTIFACT_IDLE_TIMEOUT', message: 'timeout', retryable: true });
+    seed('unknown-submit', 'SUBMIT', 'job-a', { code: 'AUTODL_SUBMIT_TIMEOUT', message: 'unknown', retryable: true });
+    seed('auth', 'STATUS_SYNC', 'job-a', { code: 'AUTODL_STATUS_AUTH_401', message: 'auth', retryable: false });
+    seed('terminal', 'STATUS_SYNC', 'job-a', { code: 'AUTODL_STATUS_NETWORK', message: 'offline', retryable: true }, 'FAILED');
+    seed('other-job', 'STATUS_SYNC', 'job-b', { code: 'AUTODL_STATUS_NETWORK', message: 'offline', retryable: true });
+
+    expect(repository.expediteRetryableNetwork(['job-a'], 1_000)).toBe(4);
+    for (const id of ['network', 'timeout', 'artifact-network', 'artifact-timeout']) expect(repository.get(id)?.nextRetryAt).toBe(1_000);
+    for (const id of ['unknown-submit', 'auth', 'terminal', 'other-job']) expect(repository.get(id)?.nextRetryAt).toBe(5_000);
   } finally { db.close(); }
 });
