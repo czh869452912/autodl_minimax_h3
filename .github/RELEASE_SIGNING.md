@@ -35,3 +35,11 @@ $keystore = Join-Path $env:USERPROFILE ".autodl-h3\release-upload.jks"
 Release Notes 会按提交信息自动整理为“修复”和“改进”两部分，因此提交应继续使用 `fix:`、`feat:`、`refactor:`、`perf:` 等 Conventional Commit 前缀。
 
 不要在普通 PR、fork PR 或非 `main` 分支 tag 上暴露 `release` Environment Secrets。
+
+## 构建资源与失败恢复
+
+CI 的完整 universal 构建使用 6 GiB Java heap、1 GiB Metaspace、最多两个 Gradle worker，并关闭项目并行构建。Kotlin daemon 单独限制为 2 GiB heap / 512 MiB Metaspace，避免继承扩大的 Gradle 预算。JVM 遇到 OOM 立即退出；构建步骤限时 45 分钟，整个 job 限时 60 分钟。开发机的默认 Gradle 内存设置不受影响。
+
+若 tag 构建因 CI 配置失败，先通过 PR 修正 `main` 的工作流，再从 `main` 手动运行 Android Release，输入原来的 `release_tag`（例如 `v1.4.11`）。工作流检出原 tag，验证 tag 存在、指向 `main` 历史、源码 HEAD 和版本一致后才读取签名材料；不移动或覆盖既有 tag。单纯 Re-run 原运行不会使用新工作流配置。
+
+命令示例：`gh workflow run release.yml --ref main -f release_tag=v1.4.11`。该恢复入口用于尚未成功发布的版本，已有 Release/资产不会自动删除或替换。
