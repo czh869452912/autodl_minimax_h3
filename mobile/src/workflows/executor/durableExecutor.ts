@@ -43,7 +43,7 @@ function statusOperation(job: JobRecord, now: number): EnqueueOperation {
 export function createDurableExecutor(deps: DurableExecutorDeps) {
   const now = deps.now ?? Date.now;
 
-  const finishFailure = (operation: WorkflowOperation, owner: string, job: JobRecord, error: NormalizedError, disposition: 'TERMINAL' | 'UNKNOWN') => {
+  const finishFailure = async (operation: WorkflowOperation, owner: string, job: JobRecord, error: NormalizedError, disposition: 'TERMINAL' | 'UNKNOWN') => {
     const timestamp = now();
     deps.jobs.transition({
       jobId: job.id,
@@ -56,17 +56,17 @@ export function createDurableExecutor(deps: DurableExecutorDeps) {
         createdAt: timestamp,
       },
     });
-    deps.operations.finish(operation.id, owner, disposition === 'TERMINAL' ? 'FAILED' : 'BLOCKED', timestamp, error);
+    await deps.operations.finish(operation.id, owner, disposition === 'TERMINAL' ? 'FAILED' : 'BLOCKED', timestamp, error);
   };
 
   const handleSubmit = async (operation: WorkflowOperation, owner: string): Promise<void> => {
     if (!operation.jobId) {
-      deps.operations.finish(operation.id, owner, 'FAILED', now(), { code: 'JOB_ID_MISSING', message: 'Submit operation has no job.' });
+      await deps.operations.finish(operation.id, owner, 'FAILED', now(), { code: 'JOB_ID_MISSING', message: 'Submit operation has no job.' });
       return;
     }
     let job = deps.jobs.get(operation.jobId);
     if (!job) {
-      deps.operations.finish(operation.id, owner, 'FAILED', now(), { code: 'JOB_NOT_FOUND', message: 'Submit job was not found.' });
+      await deps.operations.finish(operation.id, owner, 'FAILED', now(), { code: 'JOB_NOT_FOUND', message: 'Submit job was not found.' });
       return;
     }
     if (job.providerHandle) {
@@ -79,13 +79,13 @@ export function createDurableExecutor(deps: DurableExecutorDeps) {
         });
         if (result.ok) job = result.current;
       }
-      deps.operations.finish(operation.id, owner, 'SUCCEEDED', timestamp);
+      await deps.operations.finish(operation.id, owner, 'SUCCEEDED', timestamp);
       return;
     }
     if (job.status !== 'READY_TO_SUBMIT') {
       const error = { code: 'SUBMIT_OUTCOME_UNKNOWN', message: 'Provider submit request outcome is unknown.' };
-      if (job.status !== 'UNKNOWN' && !terminal.has(job.status)) finishFailure(operation, owner, job, error, 'UNKNOWN');
-      else deps.operations.finish(operation.id, owner, job.status === 'FAILED' ? 'FAILED' : 'BLOCKED', now(), error);
+      if (job.status !== 'UNKNOWN' && !terminal.has(job.status)) await finishFailure(operation, owner, job, error, 'UNKNOWN');
+      else await deps.operations.finish(operation.id, owner, job.status === 'FAILED' ? 'FAILED' : 'BLOCKED', now(), error);
       return;
     }
     const startedAt = now();
@@ -95,21 +95,21 @@ export function createDurableExecutor(deps: DurableExecutorDeps) {
     });
     if (!started.ok) {
       const error = { code: 'SUBMIT_CAS_CONFLICT', message: 'Submit ownership changed before provider request.' };
-      deps.operations.finish(operation.id, owner, 'BLOCKED', startedAt, error);
+      await deps.operations.finish(operation.id, owner, 'BLOCKED', startedAt, error);
       return;
     }
     job = started.current;
     const prepared = (operation.payload as SubmitPayload).prepared;
     const adapter = prepared && deps.adapters.get(prepared.adapterId);
     if (!prepared || !adapter) {
-      finishFailure(operation, owner, job, { code: 'ADAPTER_UNAVAILABLE', message: 'Workflow adapter is unavailable.' }, 'TERMINAL');
+      await finishFailure(operation, owner, job, { code: 'ADAPTER_UNAVAILABLE', message: 'Workflow adapter is unavailable.' }, 'TERMINAL');
       return;
     }
     try {
       const credential = await deps.credentials.get(prepared.adapterId);
       const validated = credential.ok && (await adapter.validateCredentials()).ok;
       if (!validated) {
-        finishFailure(operation, owner, job, { code: 'CREDENTIALS_UNAVAILABLE', message: 'Provider credentials are unavailable.' }, 'TERMINAL');
+        await finishFailure(operation, owner, job, { code: 'CREDENTIALS_UNAVAILABLE', message: 'Provider credentials are unavailable.' }, 'TERMINAL');
         return;
       }
       const handle = await adapter.submit(prepared.requestInput, prepared.target);
@@ -133,27 +133,27 @@ export function createDurableExecutor(deps: DurableExecutorDeps) {
           nextOperations: [statusOperation(current, timestamp)],
         });
       }
-      deps.operations.finish(operation.id, owner, 'SUCCEEDED', timestamp);
+      await deps.operations.finish(operation.id, owner, 'SUCCEEDED', timestamp);
     } catch (cause) {
       const failure = classifyProviderFailure('SUBMIT', cause);
-      finishFailure(operation, owner, deps.jobs.get(job.id) ?? job, failure.error, failure.disposition === 'TERMINAL' ? 'TERMINAL' : 'UNKNOWN');
+      await finishFailure(operation, owner, deps.jobs.get(job.id) ?? job, failure.error, failure.disposition === 'TERMINAL' ? 'TERMINAL' : 'UNKNOWN');
     }
   };
 
   const handleStatus = async (operation: WorkflowOperation, owner: string): Promise<void> => {
     if (!operation.jobId) {
-      deps.operations.finish(operation.id, owner, 'FAILED', now(), { code: 'JOB_ID_MISSING', message: 'Status operation has no job.' });
+      await deps.operations.finish(operation.id, owner, 'FAILED', now(), { code: 'JOB_ID_MISSING', message: 'Status operation has no job.' });
       return;
     }
     const job = deps.jobs.get(operation.jobId);
     if (!job || !job.providerHandle) {
-      if (job) finishFailure(operation, owner, job, { code: 'PROVIDER_HANDLE_MISSING', message: 'Provider handle is unavailable.' }, 'UNKNOWN');
-      else deps.operations.finish(operation.id, owner, 'FAILED', now(), { code: 'JOB_NOT_FOUND', message: 'Status job was not found.' });
+      if (job) await finishFailure(operation, owner, job, { code: 'PROVIDER_HANDLE_MISSING', message: 'Provider handle is unavailable.' }, 'UNKNOWN');
+      else await deps.operations.finish(operation.id, owner, 'FAILED', now(), { code: 'JOB_NOT_FOUND', message: 'Status job was not found.' });
       return;
     }
     const adapter = deps.adapters.get(job.adapterId);
     if (!adapter) {
-      finishFailure(operation, owner, job, { code: 'ADAPTER_UNAVAILABLE', message: 'Workflow adapter is unavailable.' }, 'TERMINAL');
+      await finishFailure(operation, owner, job, { code: 'ADAPTER_UNAVAILABLE', message: 'Workflow adapter is unavailable.' }, 'TERMINAL');
       return;
     }
     try {
@@ -191,7 +191,7 @@ export function createDurableExecutor(deps: DurableExecutorDeps) {
         artifacts: update.status === 'SUCCEEDED' || update.status === 'PARTIAL_SUCCEEDED' ? mapped.artifacts : undefined,
         nextOperations,
       });
-      deps.operations.finish(operation.id, owner, 'SUCCEEDED', timestamp);
+      await deps.operations.finish(operation.id, owner, 'SUCCEEDED', timestamp);
       if (!result.ok) return;
     } catch (cause) {
       const timestamp = now();
@@ -203,8 +203,8 @@ export function createDurableExecutor(deps: DurableExecutorDeps) {
           patch: { lastError: failure.error, nextSyncAt: nextRetryAt, updatedAt: timestamp },
           event: { id: eventId(job, 'status-retry'), type: 'STATUS_RETRY_SCHEDULED', payload: { code: failure.error.code }, createdAt: timestamp },
         });
-        deps.operations.retry(operation.id, owner, { now: timestamp, nextRetryAt, error: failure.error });
-      } else finishFailure(operation, owner, deps.jobs.get(job.id) ?? job, failure.error, 'TERMINAL');
+        await deps.operations.retry(operation.id, owner, { now: timestamp, nextRetryAt, error: failure.error });
+      } else await finishFailure(operation, owner, deps.jobs.get(job.id) ?? job, failure.error, 'TERMINAL');
     }
   };
 
@@ -233,16 +233,16 @@ export function createDurableExecutor(deps: DurableExecutorDeps) {
       throw new Error(`unsupported operation kind: ${operation.kind}`);
     },
     async recover(timestamp: number): Promise<void> {
-      const uncertain = deps.operations.recoverExpired(timestamp);
-      for (const operation of uncertain) {
+      const recovery = await deps.operations.recoverExpired(timestamp, 32);
+      for (const operation of recovery.uncertainSubmits) {
         if (!operation.jobId || !operation.leaseOwner) continue;
         const job = deps.jobs.get(operation.jobId);
         if (!job) {
-          deps.operations.finish(operation.id, operation.leaseOwner, 'FAILED', timestamp, { code: 'JOB_NOT_FOUND', message: 'Submit job was not found.' });
+          await deps.operations.finish(operation.id, operation.leaseOwner, 'FAILED', timestamp, { code: 'JOB_NOT_FOUND', message: 'Submit job was not found.' });
           continue;
         }
         if (job.status === 'READY_TO_SUBMIT') {
-          deps.operations.release(operation.id, operation.leaseOwner, timestamp);
+          await deps.operations.release(operation.id, operation.leaseOwner, timestamp);
           continue;
         }
         if (job.providerHandle) {
@@ -251,14 +251,14 @@ export function createDurableExecutor(deps: DurableExecutorDeps) {
             event: { id: eventId(job, 'recovered-handle'), type: 'PROVIDER_HANDLE_RECOVERED', payload: {}, createdAt: timestamp },
             nextOperations: [statusOperation(job, timestamp)],
           });
-          deps.operations.finish(operation.id, operation.leaseOwner, 'SUCCEEDED', timestamp);
+          await deps.operations.finish(operation.id, operation.leaseOwner, 'SUCCEEDED', timestamp);
           if (!result.ok) continue;
           continue;
         }
         if (job.status === 'SUBMITTING') {
-          finishFailure(operation, operation.leaseOwner, job, { code: 'SUBMIT_OUTCOME_UNKNOWN', message: 'Provider submit request outcome is unknown.' }, 'UNKNOWN');
+          await finishFailure(operation, operation.leaseOwner, job, { code: 'SUBMIT_OUTCOME_UNKNOWN', message: 'Provider submit request outcome is unknown.' }, 'UNKNOWN');
         } else {
-          deps.operations.finish(operation.id, operation.leaseOwner, terminal.has(job.status) && job.status === 'FAILED' ? 'FAILED' : 'BLOCKED', timestamp);
+          await deps.operations.finish(operation.id, operation.leaseOwner, terminal.has(job.status) && job.status === 'FAILED' ? 'FAILED' : 'BLOCKED', timestamp);
         }
       }
     },

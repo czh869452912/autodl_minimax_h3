@@ -70,10 +70,8 @@ function reservationOwnerType(operationId: string): string {
   return `artifact_operation:${operationId}`;
 }
 
-function transaction(db: SQLiteDatabase, work: () => void): void {
-  if (typeof db.withTransactionSync === 'function') { db.withTransactionSync(work); return; }
-  db.execSync('BEGIN IMMEDIATE');
-  try { work(); db.execSync('COMMIT'); } catch (error) { try { db.execSync('ROLLBACK'); } catch { /* best effort */ } throw error; }
+async function transaction(db: SQLiteDatabase, work: (transaction: SQLiteDatabase) => Promise<void>): Promise<void> {
+  await db.withExclusiveTransactionAsync(work);
 }
 
 export function artifactExportDisplayName(jobId: string, artifactId: string): string {
@@ -83,37 +81,37 @@ export function artifactExportDisplayName(jobId: string, artifactId: string): st
 }
 
 export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => number = Date.now): ArtifactCommitter {
-  const assertGcIdle = () => {
-    const gcLease = db.getFirstSync<{ expires_at: number }>(
+  const assertGcIdle = async (transaction: SQLiteDatabase) => {
+    const gcLease = await transaction.getFirstAsync<{ expires_at: number }>(
       "SELECT expires_at FROM app_scheduler_leases WHERE lease_key='cas-gc' LIMIT 1",
     );
     if (gcLease && Number(gcLease.expires_at) > clock()) throw new ArtifactOperationError('ARTIFACT_CAS_BUSY', 'CAS_GC_IN_PROGRESS', true);
   };
-  const commit = (input: ArtifactCommitInput): void => {
+  const commit = async (input: ArtifactCommitInput): Promise<void> => {
     assertAppDatabaseWritable(db);
-    transaction(db, () => {
-      assertGcIdle();
-      db.runSync(
+    await transaction(db, async (transaction) => {
+      await assertGcIdle(transaction);
+      await transaction.runAsync(
         'INSERT INTO artifact_blobs (sha256,byte_size,mime,relative_path,created_at,verified_at) VALUES (?,?,?,?,?,?) ON CONFLICT(sha256) DO UPDATE SET verified_at=MAX(artifact_blobs.verified_at, excluded.verified_at)',
         input.blob.sha256, input.blob.byteSize, input.blob.mime, input.blob.relativePath, input.blob.createdAt, input.blob.verifiedAt,
       );
-      db.runSync('INSERT OR IGNORE INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)', input.blob.sha256, 'workflow_artifact', `${input.jobId}:${input.artifact.id}`, input.now);
-      db.runSync('DELETE FROM artifact_blob_refs WHERE blob_sha256=? AND owner_type=? AND owner_id=?', input.blob.sha256, reservationOwnerType(input.operationId), input.owner);
+      await transaction.runAsync('INSERT OR IGNORE INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)', input.blob.sha256, 'workflow_artifact', `${input.jobId}:${input.artifact.id}`, input.now);
+      await transaction.runAsync('DELETE FROM artifact_blob_refs WHERE blob_sha256=? AND owner_type=? AND owner_id=?', input.blob.sha256, reservationOwnerType(input.operationId), input.owner);
       const automaticIntent = input.artifact.kind === 'video' && input.deliveryPolicy.autoExportToGallery
         ? { target: 'system-gallery' as const, keepPrivateCopy: input.deliveryPolicy.keepPrivateCopy }
         : undefined;
       const deliveryIntent = input.deliveryIntent ?? automaticIntent;
       const exportStatus = deliveryIntent ? 'QUEUED' : 'NOT_REQUESTED';
-      const assetResult = db.runSync("UPDATE media_assets SET local_path = ?, mime_type = ?, status = 'downloaded', export_status = ?, updated_at = ? WHERE job_id = ? AND artifact_id = ?", input.localUri, input.blob.mime, exportStatus, input.now, input.jobId, input.artifact.id) as { changes?: number | bigint };
+      const assetResult = await transaction.runAsync("UPDATE media_assets SET local_path = ?, mime_type = ?, status = 'downloaded', export_status = ?, updated_at = ? WHERE job_id = ? AND artifact_id = ?", input.localUri, input.blob.mime, exportStatus, input.now, input.jobId, input.artifact.id);
       if (Number(assetResult.changes ?? 0) !== 1) throw new Error('media asset projection missing');
       if (input.artifact.kind === 'video') {
-        const taskResult = db.runSync("UPDATE tasks SET local_uri = ?, download_state = 'DOWNLOADED', download_error = NULL, download_progress = 1, export_state = ?, export_error = NULL, updated_at = MAX(updated_at, ?) WHERE id = ?", input.localUri, exportStatus, input.now, input.jobId) as { changes?: number | bigint };
+        const taskResult = await transaction.runAsync("UPDATE tasks SET local_uri = ?, download_state = 'DOWNLOADED', download_error = NULL, download_progress = 1, export_state = ?, export_error = NULL, updated_at = MAX(updated_at, ?) WHERE id = ?", input.localUri, exportStatus, input.now, input.jobId);
         if (Number(taskResult.changes ?? 0) !== 1) throw new Error('task projection missing');
       }
       if (deliveryIntent) {
         const assetId = `${input.jobId}:${input.artifact.id}`;
         const exportId = `${input.jobId}:export:${input.artifact.id}:system-gallery`;
-        db.runSync(
+        await transaction.runAsync(
           "INSERT OR IGNORE INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES (?,'EXPORT',?,?,?,'PENDING',0,?,?,?)",
           exportId,
           input.jobId,
@@ -132,47 +130,47 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => n
           input.now,
         );
       }
-      const result = db.runSync("UPDATE workflow_operations SET state = 'SUCCEEDED', lease_owner = NULL, lease_expires_at = NULL, last_error_json = NULL, updated_at = ? WHERE id = ? AND state = 'CLAIMED' AND lease_owner = ?", input.now, input.operationId, input.owner) as { changes?: number | bigint };
+      const result = await transaction.runAsync("UPDATE workflow_operations SET state = 'SUCCEEDED', lease_owner = NULL, lease_expires_at = NULL, last_error_json = NULL, updated_at = ? WHERE id = ? AND state = 'CLAIMED' AND lease_owner = ?", input.now, input.operationId, input.owner);
       if (Number(result.changes ?? 0) !== 1) throw new Error('artifact operation lease lost');
     });
   };
   return Object.assign(commit, {
-    clearStale(input: { operationId: string; owner: string }): void {
+    async clearStale(input: { operationId: string; owner: string }): Promise<void> {
       assertAppDatabaseWritable(db);
-      transaction(db, () => {
-        const claim = db.getFirstSync<{ present: number }>(
+      await transaction(db, async (transaction) => {
+        const claim = await transaction.getFirstAsync<{ present: number }>(
           "SELECT 1 AS present FROM workflow_operations WHERE id=? AND state='CLAIMED' AND lease_owner=? LIMIT 1",
           input.operationId, input.owner,
         );
         if (!claim) throw new Error('artifact operation lease lost');
-        db.runSync('DELETE FROM artifact_blob_refs WHERE owner_type=?', reservationOwnerType(input.operationId));
+        await transaction.runAsync('DELETE FROM artifact_blob_refs WHERE owner_type=?', reservationOwnerType(input.operationId));
       });
     },
-    reserve(input: ArtifactReservationInput): void {
+    async reserve(input: ArtifactReservationInput): Promise<void> {
       assertAppDatabaseWritable(db);
-      transaction(db, () => {
-        assertGcIdle();
-        const claim = db.getFirstSync<{ present: number }>(
+      await transaction(db, async (transaction) => {
+        await assertGcIdle(transaction);
+        const claim = await transaction.getFirstAsync<{ present: number }>(
           "SELECT 1 AS present FROM workflow_operations WHERE id=? AND state='CLAIMED' AND lease_owner=? LIMIT 1",
           input.operationId, input.owner,
         );
         if (!claim) throw new Error('artifact operation lease lost');
         const ownerType = reservationOwnerType(input.operationId);
-        db.runSync('DELETE FROM artifact_blob_refs WHERE owner_type=?', ownerType);
-        db.runSync(
+        await transaction.runAsync('DELETE FROM artifact_blob_refs WHERE owner_type=?', ownerType);
+        await transaction.runAsync(
           'INSERT INTO artifact_blobs (sha256,byte_size,mime,relative_path,created_at,verified_at) VALUES (?,?,?,?,?,?) ON CONFLICT(sha256) DO UPDATE SET verified_at=MAX(artifact_blobs.verified_at, excluded.verified_at)',
           input.blob.sha256, input.blob.byteSize, input.blob.mime, input.blob.relativePath, input.blob.createdAt, input.blob.verifiedAt,
         );
-        db.runSync(
+        await transaction.runAsync(
           'INSERT OR IGNORE INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)',
           input.blob.sha256, ownerType, input.owner, input.now,
         );
       });
     },
-    release(input: { operationId: string; owner: string }): void {
+    async release(input: { operationId: string; owner: string }): Promise<void> {
       assertAppDatabaseWritable(db);
-      transaction(db, () => {
-        db.runSync(
+      await transaction(db, async (transaction) => {
+        await transaction.runAsync(
           'DELETE FROM artifact_blob_refs WHERE owner_type=? AND owner_id=?',
           reservationOwnerType(input.operationId), input.owner,
         );
@@ -219,18 +217,16 @@ type LeaseHeartbeatOutcome<T> =
 
 function withLeaseHeartbeat<T>(options: {
   work(): Promise<T>;
-  assertLease(): void;
+  assertLease(): Promise<void>;
   onLeaseLost(): Promise<void>;
   leaseMs: number;
 }): Promise<LeaseHeartbeatOutcome<T>> {
   return new Promise<LeaseHeartbeatOutcome<T>>((resolve, reject) => {
     let leaseLoss: { cause: unknown; cancellation: Promise<void> } | undefined;
+    let pendingLeaseCheck: Promise<void> | undefined;
     const intervalMs = Math.max(1, Math.min(30_000, Math.floor(options.leaseMs / 3)));
-    const timer = setInterval(() => {
-      if (leaseLoss) return;
-      try {
-        options.assertLease();
-      } catch (cause) {
+    const recordLeaseLoss = (cause: unknown) => {
+      if (!leaseLoss) {
         clearInterval(timer);
         const cancellation = Promise.resolve().then(options.onLeaseLost).then(
           () => undefined,
@@ -238,9 +234,17 @@ function withLeaseHeartbeat<T>(options: {
         );
         leaseLoss = { cause, cancellation };
       }
+    };
+    const timer = setInterval(() => {
+      if (leaseLoss || pendingLeaseCheck) return;
+      const check = options.assertLease().catch(recordLeaseLoss).finally(() => {
+        if (pendingLeaseCheck === check) pendingLeaseCheck = undefined;
+      });
+      pendingLeaseCheck = check;
     }, intervalMs);
     void Promise.resolve().then(options.work).then(async (value) => {
       clearInterval(timer);
+      await pendingLeaseCheck;
       if (!leaseLoss) {
         resolve({ status: 'completed', value });
         return;
@@ -249,6 +253,7 @@ function withLeaseHeartbeat<T>(options: {
       resolve({ status: 'lease-lost', value, cause: leaseLoss.cause });
     }, async (cause) => {
       clearInterval(timer);
+      await pendingLeaseCheck;
       if (leaseLoss) {
         await leaseLoss.cancellation;
         reject(leaseLoss.cause);
@@ -266,7 +271,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
   const artifact = payload?.artifact;
   const url = artifact?.uri?.trim();
   if (!operation.jobId || !artifact || !url) {
-    deps.operations.finish(operation.id, owner, 'FAILED', timestamp, normalized('ARTIFACT_INPUT_INVALID', false));
+    await deps.operations.finish(operation.id, owner, 'FAILED', timestamp, normalized('ARTIFACT_INPUT_INVALID', false));
     return;
   }
   let staged: Awaited<ReturnType<ArtifactCas['stage']>> | undefined;
@@ -276,15 +281,15 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     await deps.ensureProjection(operation.jobId, artifact);
     await deps.updateDownloadState('DOWNLOADING');
     const policy = deps.policy(operation.jobId, artifact);
-    const assertLease = () => {
-      if (!deps.operations.renew(operation.id, owner, clock(), deps.leaseMs ?? 120_000)) {
+    const assertLease = async () => {
+      if (!await deps.operations.renew(operation.id, owner, clock(), deps.leaseMs ?? 120_000)) {
         throw new Error('artifact operation lease lost');
       }
     };
     const providerSha256 = typeof artifact.metadata?.sha256 === 'string' && artifact.metadata.sha256.trim()
       ? artifact.metadata.sha256.trim()
       : undefined;
-    assertLease();
+    await assertLease();
     const transferOutcome = await withLeaseHeartbeat({
       leaseMs: deps.leaseMs ?? 120_000,
       assertLease,
@@ -341,7 +346,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     const blob: ArtifactBlob = { ...stored, createdAt: timestamp, verifiedAt: timestamp };
     const localUri = resolveUri(blob.relativePath);
     if (deps.commit) {
-      const latestPayload = payloadFrom(deps.operations.get(operation.id) ?? operation);
+      const latestPayload = payloadFrom((await deps.operations.get(operation.id)) ?? operation);
       await deps.commit({
         operationId: operation.id,
         owner,
@@ -358,7 +363,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
       deps.blobs.upsertBlob(blob);
       deps.blobs.retain(blob.sha256, 'workflow_artifact', `${operation.jobId}:${artifact.id}`, timestamp);
       await deps.updateProjection({ jobId: operation.jobId, artifactId: artifact.id, localUri, mime: blob.mime, sha256: blob.sha256, byteSize: blob.byteSize });
-      deps.operations.finish(operation.id, owner, 'SUCCEEDED', timestamp);
+      await deps.operations.finish(operation.id, owner, 'SUCCEEDED', timestamp);
     }
   } catch (cause) {
     await staged?.abort().catch(() => undefined);
@@ -370,10 +375,10 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     if (failure.retryable) {
       const nextRetryAt = timestamp + Math.min(60_000, 1_000 * (2 ** Math.max(0, operation.attempt - 1)));
       await deps.updateDownloadState('ENQUEUED', failure.code);
-      deps.operations.retry(operation.id, owner, { now: timestamp, nextRetryAt, error: normalizedFailure });
+      await deps.operations.retry(operation.id, owner, { now: timestamp, nextRetryAt, error: normalizedFailure });
       return;
     }
     try { await deps.updateDownloadState('DOWNLOAD_FAILED', failure.code); } catch { /* operation failure remains authoritative */ }
-    deps.operations.finish(operation.id, owner, 'FAILED', timestamp, normalizedFailure);
+    await deps.operations.finish(operation.id, owner, 'FAILED', timestamp, normalizedFailure);
   }
 }

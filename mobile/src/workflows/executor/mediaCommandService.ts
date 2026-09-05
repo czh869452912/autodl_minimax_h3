@@ -166,10 +166,10 @@ export function createMediaCommandService(options: {
       }
       return { id: identity.id, status: 'queued' as const };
     });
-    return { status: outcome.status, operation: operations.get(outcome.id) };
+    return { status: outcome.status, operation: await operations.get(outcome.id) };
   };
 
-  const enqueueExport = (context: Context, payload: ExportPayload): MediaCommandResult => {
+  const enqueueExport = async (context: Context, payload: ExportPayload): Promise<MediaCommandResult> => {
     const outcome = transaction(db, () => {
       assertAppDatabaseWritable(db);
       const canonicalKey = `export:${context.task.id}:${context.artifact.id}:system-gallery`;
@@ -192,7 +192,7 @@ export function createMediaCommandService(options: {
       );
       return { id: identity.id, status: 'queued' as const };
     });
-    return { status: outcome.status, operation: operations.get(outcome.id) };
+    return { status: outcome.status, operation: await operations.get(outcome.id) };
   };
 
   return {
@@ -230,7 +230,7 @@ export function createMediaCommandService(options: {
         );
         return { id: identity.id, status: 'queued' as const };
       });
-      return { status: outcome.status, operation: operations.get(outcome.id) };
+      return { status: outcome.status, operation: await operations.get(outcome.id) };
     },
     async requestExport(taskId, policy) {
       assertAppDatabaseWritable(db);
@@ -238,7 +238,7 @@ export function createMediaCommandService(options: {
       const delivery = db.getFirstSync<{ status: string }>('SELECT status FROM media_deliveries WHERE id=? LIMIT 1', `${context.asset.id}:system-gallery`);
       if (delivery?.status === 'EXPORTED') return { status: 'already-complete' };
       const active = activeOperation(db, taskId, 'EXPORT', `export:${taskId}:${context.artifact.id}:system-gallery`);
-      if (active) return { status: 'in-flight', operation: operations.get(active.id) };
+      if (active) return { status: 'in-flight', operation: await operations.get(active.id) };
       const cas = await casSource(context);
       if (cas) return enqueueExport(context, {
         assetId: context.asset.id, artifactId: context.artifact.id, sourceUri: cas.uri,

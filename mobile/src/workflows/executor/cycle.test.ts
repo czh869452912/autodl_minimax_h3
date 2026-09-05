@@ -55,6 +55,54 @@ test('stops at both budgets without draining indefinitely', async () => {
   expect(runTick).toHaveBeenNthCalledWith(2, expect.objectContaining({ maxOperations: 1 }));
 });
 
+test('caps a cycle at 32 operations by default', async () => {
+  const runTick = jest.fn(async () => summary({ claimed: 8, succeeded: 8, remainingDue: 1 }));
+  const cycle = createExecutorCycle({ runTick, now: () => 100 });
+
+  await expect(cycle.run({ reason: 'service', maxPasses: 99, maxOperationsTotal: 99 })).resolves.toMatchObject({
+    passes: 4,
+    claimed: 32,
+    succeeded: 32,
+    remainingDue: 1,
+    budgetExhausted: true,
+  });
+  expect(runTick).toHaveBeenCalledTimes(4);
+  expect(runTick).toHaveBeenLastCalledWith(expect.objectContaining({ maxOperations: 8 }));
+});
+
+test('stops a cycle after its 2,000 millisecond time budget', async () => {
+  const runTick = jest.fn(async () => summary({ claimed: 1, succeeded: 1, remainingDue: 1 }));
+  const now = jest.fn()
+    .mockReturnValueOnce(100)
+    .mockReturnValueOnce(2_100);
+  const cycle = createExecutorCycle({ runTick, now });
+
+  await expect(cycle.run({ reason: 'background' })).resolves.toMatchObject({
+    passes: 1,
+    claimed: 1,
+    remainingDue: 1,
+    budgetExhausted: true,
+  });
+  expect(runTick).toHaveBeenCalledTimes(1);
+});
+
+test('enforces its elapsed-time budget when a caller fixes the tick timestamp', async () => {
+  const runTick = jest.fn(async () => summary({ claimed: 1, succeeded: 1, remainingDue: 1 }));
+  const now = jest.fn()
+    .mockReturnValueOnce(100)
+    .mockReturnValueOnce(2_100);
+  const cycle = createExecutorCycle({ runTick, now });
+
+  await expect(cycle.run({ reason: 'background', now: 100 })).resolves.toMatchObject({
+    passes: 1,
+    claimed: 1,
+    remainingDue: 1,
+    budgetExhausted: true,
+  });
+  expect(runTick).toHaveBeenCalledTimes(1);
+  expect(runTick).toHaveBeenCalledWith(expect.objectContaining({ now: 100 }));
+});
+
 test('stops when a pass claims nothing even if another writer reports due work', async () => {
   const runTick = jest.fn(async () => summary({ claimed: 0, remainingDue: 1 }));
   const cycle = createExecutorCycle({ runTick, now: () => 100 });

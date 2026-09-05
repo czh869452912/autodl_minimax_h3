@@ -32,12 +32,12 @@ function setup() {
   return { db, jobs, operations };
 }
 
-test('creates the initial snapshot, sequence-zero event, and submit operation atomically', () => {
+test('creates the initial snapshot, sequence-zero event, and submit operation atomically', async () => {
   const { db, jobs, operations } = setup();
   try {
     expect(jobs.createWithEventAndOperation(job, initialEvent, submitOperation)).toMatchObject({ id: 'job-1', revision: 0 });
     expect(jobs.listEvents('job-1')).toMatchObject([{ sequence: 0, type: 'VALIDATED' }]);
-    expect(operations.get('submit-1')).toMatchObject({ kind: 'SUBMIT', state: 'PENDING' });
+    expect(await operations.get('submit-1')).toMatchObject({ kind: 'SUBMIT', state: 'PENDING' });
     expect(jobs.createWithEventAndOperation({ ...job, status: 'FAILED' }, { ...initialEvent, id: 'other-event' }, { ...submitOperation, id: 'other-submit' }))
       .toMatchObject({ id: 'job-1', status: 'READY_TO_SUBMIT' });
     expect(jobs.listEvents('job-1')).toHaveLength(1);
@@ -45,7 +45,7 @@ test('creates the initial snapshot, sequence-zero event, and submit operation at
   } finally { db.close(); }
 });
 
-test('updates snapshot, appends event, and enqueues next work atomically', () => {
+test('updates snapshot, appends event, and enqueues next work atomically', async () => {
   const { db, jobs, operations } = setup();
   try {
     jobs.createWithEventAndOperation(job, initialEvent, submitOperation);
@@ -56,11 +56,11 @@ test('updates snapshot, appends event, and enqueues next work atomically', () =>
       { sequence: 0, type: 'VALIDATED' },
       { sequence: 1, type: 'SUBMIT_ACCEPTED' },
     ]);
-    expect(operations.get('status-1')).toMatchObject({ kind: 'STATUS_SYNC' });
+    expect(await operations.get('status-1')).toMatchObject({ kind: 'STATUS_SYNC' });
   } finally { db.close(); }
 });
 
-test('replaces artifacts with the job transition, event, and next operation', () => {
+test('replaces artifacts with the job transition, event, and next operation', async () => {
   const { db, jobs, operations } = setup();
   try {
     jobs.createWithEventAndOperation(job, initialEvent, submitOperation);
@@ -83,11 +83,11 @@ test('replaces artifacts with the job transition, event, and next operation', ()
     expect(db.getAllSync(
       'SELECT id, kind, uri FROM workflow_artifacts WHERE job_id = ?', job.id,
     )).toEqual([{ id: 'video-1', kind: 'video', uri: 'https://cdn.test/video.mp4' }]);
-    expect(operations.get('download-1')).toMatchObject({ state: 'PENDING' });
+    expect(await operations.get('download-1')).toMatchObject({ state: 'PENDING' });
   } finally { db.close(); }
 });
 
-test('rolls back job, event, artifacts, and operations when artifact replacement fails', () => {
+test('rolls back job, event, artifacts, and operations when artifact replacement fails', async () => {
   const { db, jobs, operations } = setup();
   try {
     jobs.createWithEventAndOperation(job, initialEvent, submitOperation);
@@ -109,7 +109,7 @@ test('rolls back job, event, artifacts, and operations when artifact replacement
     expect(jobs.get(job.id)).toMatchObject({ revision: 0, status: 'READY_TO_SUBMIT' });
     expect(jobs.listEvents(job.id)).toHaveLength(1);
     expect(db.getAllSync('SELECT * FROM workflow_artifacts WHERE job_id = ?', job.id)).toEqual([]);
-    expect(operations.get('download-1')).toBeUndefined();
+    expect(await operations.get('download-1')).toBeUndefined();
   } finally { db.close(); }
 });
 
@@ -125,7 +125,7 @@ test('returns current snapshot on CAS conflict without duplicate effects', () =>
   } finally { db.close(); }
 });
 
-test('rolls back the snapshot when event insertion fails', () => {
+test('rolls back the snapshot when event insertion fails', async () => {
   const { db, jobs, operations } = setup();
   jobs.createWithEventAndOperation(job, initialEvent, submitOperation);
   const runSync = db.runSync.bind(db);
@@ -137,11 +137,11 @@ test('rolls back the snapshot when event insertion fails', () => {
     expect(() => jobs.transition(acceptedTransition)).toThrow('event insert failed');
     expect(jobs.get('job-1')).toMatchObject({ revision: 0, status: 'READY_TO_SUBMIT' });
     expect(jobs.listEvents('job-1')).toHaveLength(1);
-    expect(operations.get('status-1')).toBeUndefined();
+    expect(await operations.get('status-1')).toBeUndefined();
   } finally { db.close(); }
 });
 
-test('rolls back snapshot and event when next-operation insertion fails', () => {
+test('rolls back snapshot and event when next-operation insertion fails', async () => {
   const { db, jobs, operations } = setup();
   jobs.createWithEventAndOperation(job, initialEvent, submitOperation);
   const runSync = db.runSync.bind(db);
@@ -153,7 +153,7 @@ test('rolls back snapshot and event when next-operation insertion fails', () => 
     expect(() => jobs.transition(acceptedTransition)).toThrow('operation insert failed');
     expect(jobs.get('job-1')).toMatchObject({ revision: 0, status: 'READY_TO_SUBMIT' });
     expect(jobs.listEvents('job-1')).toHaveLength(1);
-    expect(operations.get('status-1')).toBeUndefined();
+    expect(await operations.get('status-1')).toBeUndefined();
   } finally { db.close(); }
 });
 

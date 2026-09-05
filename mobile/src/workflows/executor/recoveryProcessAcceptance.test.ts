@@ -152,7 +152,7 @@ acceptanceTest(`process recovery ${acceptanceCase ?? 'disabled'} ${acceptancePha
     if (acceptancePhase === 'seed') {
       const job = await value.service.queueSubmission(submission(`${acceptanceCase}-process`));
       if (acceptanceCase === 'unknown' || acceptanceCase === 'handle') {
-        value.operations.claimDue({ kind: 'SUBMIT', owner: 'dead-process', now: 100, leaseMs: 50, limit: 1 });
+        await value.operations.claimDue({ kind: 'SUBMIT', owner: 'dead-process', now: 100, leaseMs: 50, limit: 1 });
         const started = value.jobs.transition({
           jobId: job.id, expectedRevision: job.revision, patch: { status: 'SUBMITTING', updatedAt: 100 },
           event: { id: `${job.id}:process:started`, type: 'SUBMIT_STARTED', payload: {}, createdAt: 100 },

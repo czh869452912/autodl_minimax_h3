@@ -62,7 +62,7 @@ test('manual save joins a claimed download and publication recovery commits one 
     });
     let interruptOnce = true;
     const executor = {
-      async recover(now: number) { operations.recoverExpired(now); },
+      async recover(now: number) { await operations.recoverExpired(now, 32); },
       async handle(operation: WorkflowOperation, owner: string) {
         if (operation.kind === 'ARTIFACT_DOWNLOAD') {
           await handleArtifactDownload(operation, owner, {
@@ -162,7 +162,7 @@ test('task removal remains fenced while a manual media command is claimed', asyn
       now: () => 100,
     });
     const queued = await commands.requestDownload('job-1');
-    createOperationRepository(db as never).claimById(queued.operation?.id ?? '', 'worker', 100, 1_000);
+    await createOperationRepository(db as never).claimById(queued.operation?.id ?? '', 'worker', 100, 1_000);
     await expect(createTaskRepository(db as never).remove('job-1')).rejects.toThrow('TASK_OPERATION_IN_PROGRESS');
   } finally {
     db.close();

@@ -29,7 +29,7 @@ type ExportDeps = {
   now(): number;
   assertSource(sourceUri: string): Promise<void>;
   markExporting(operation: WorkflowOperation, owner: string, payload: ExportPayload, now: number): Promise<void> | void;
-  canPublish?(operation: WorkflowOperation, owner: string, payload: ExportPayload): boolean;
+  canPublish?(operation: WorkflowOperation, owner: string, payload: ExportPayload): Promise<boolean> | boolean;
   publish(sourceUri: string, options: { mediaId: string; displayName: string }): Promise<{ uri: string }>;
   afterPublish?(input: { operationId: string; galleryUri: string }): Promise<void> | void;
   commitSuccess(input: ExportSuccessInput): Promise<void> | void;
@@ -38,10 +38,8 @@ type ExportDeps = {
   removeLegacyPrivate?(sourceUri: string): Promise<void>;
 };
 
-function transaction(db: SQLiteDatabase, work: () => void): void {
-  if (typeof db.withTransactionSync === 'function') { db.withTransactionSync(work); return; }
-  db.execSync('BEGIN IMMEDIATE');
-  try { work(); db.execSync('COMMIT'); } catch (error) { try { db.execSync('ROLLBACK'); } catch { /* best effort */ } throw error; }
+async function transaction(db: SQLiteDatabase, work: (transaction: SQLiteDatabase) => Promise<void>): Promise<void> {
+  await db.withExclusiveTransactionAsync(work);
 }
 
 function changes(result: unknown): number {
@@ -96,7 +94,7 @@ export async function handleExport(operation: WorkflowOperation, owner: string, 
   }
 
   await deps.markExporting(operation, owner, payload, timestamp);
-  if (deps.canPublish && !deps.canPublish(operation, owner, payload)) return;
+  if (deps.canPublish && !await deps.canPublish(operation, owner, payload)) return;
   let result: { uri: string };
   try {
     result = await deps.publish(payload.sourceUri, { mediaId: payload.assetId, displayName: payload.displayName });
@@ -141,81 +139,81 @@ export async function handleExport(operation: WorkflowOperation, owner: string, 
 export function createSqliteExportStore(db: SQLiteDatabase) {
   const deliveryId = (payload: ExportPayload) => `${payload.assetId}:system-gallery`;
   return {
-    canPublish(operation: WorkflowOperation, owner: string, payload: ExportPayload): boolean {
-      return Boolean(db.getFirstSync(
+    async canPublish(operation: WorkflowOperation, owner: string, payload: ExportPayload): Promise<boolean> {
+      return Boolean(await db.getFirstAsync(
         "SELECT 1 AS present FROM workflow_operations o WHERE o.id=? AND o.state='CLAIMED' AND o.lease_owner=? AND EXISTS (SELECT 1 FROM tasks t WHERE t.id=o.job_id) AND EXISTS (SELECT 1 FROM media_assets m WHERE m.id=? AND m.task_id=o.job_id) LIMIT 1",
         operation.id, owner, payload.assetId,
       ));
     },
-    markExporting(operation: WorkflowOperation, owner: string, payload: ExportPayload, now: number): void {
+    async markExporting(operation: WorkflowOperation, owner: string, payload: ExportPayload, now: number): Promise<void> {
       assertAppDatabaseWritable(db);
       if (!operation.jobId) throw new Error('export job id missing');
       const jobId = operation.jobId;
-      transaction(db, () => {
-        const operationResult = db.runSync("UPDATE workflow_operations SET updated_at = ? WHERE id = ? AND state = 'CLAIMED' AND lease_owner = ?", now, operation.id, owner);
+      await transaction(db, async (transaction) => {
+        const operationResult = await transaction.runAsync("UPDATE workflow_operations SET updated_at = ? WHERE id = ? AND state = 'CLAIMED' AND lease_owner = ?", now, operation.id, owner);
         if (changes(operationResult) !== 1) throw new Error('export operation lease lost');
-        db.runSync("UPDATE tasks SET export_state='EXPORTING', export_error=NULL, updated_at=MAX(updated_at, ?) WHERE id=?", now, jobId);
-        db.runSync("UPDATE media_assets SET export_status='EXPORTING', updated_at=? WHERE id=?", now, payload.assetId);
-        db.runSync(
+        await transaction.runAsync("UPDATE tasks SET export_state='EXPORTING', export_error=NULL, updated_at=MAX(updated_at, ?) WHERE id=?", now, jobId);
+        await transaction.runAsync("UPDATE media_assets SET export_status='EXPORTING', updated_at=? WHERE id=?", now, payload.assetId);
+        await transaction.runAsync(
           "INSERT INTO media_deliveries (id,asset_id,target,status,error,created_at,updated_at) VALUES (?,?,'system-gallery','EXPORTING',NULL,?,?) ON CONFLICT(id) DO UPDATE SET status='EXPORTING',error=NULL,updated_at=excluded.updated_at",
           deliveryId(payload), payload.assetId, now, now,
         );
       });
     },
-    commitSuccess(input: ExportSuccessInput): void {
+    async commitSuccess(input: ExportSuccessInput): Promise<void> {
       assertAppDatabaseWritable(db);
-      transaction(db, () => {
-        db.runSync(
+      await transaction(db, async (transaction) => {
+        await transaction.runAsync(
           "INSERT INTO media_deliveries (id,asset_id,target,uri,status,error,created_at,updated_at) VALUES (?,?,'system-gallery',?,'EXPORTED',NULL,?,?) ON CONFLICT(id) DO UPDATE SET uri=excluded.uri,status='EXPORTED',error=NULL,updated_at=excluded.updated_at",
           `${input.assetId}:system-gallery`, input.assetId, input.galleryUri, input.now, input.now,
         );
-        const assetResult = db.runSync(
+        const assetResult = await transaction.runAsync(
           "UPDATE media_assets SET local_path=CASE WHEN ? THEN local_path ELSE NULL END,status=CASE WHEN ? THEN status ELSE 'queued' END,export_status='EXPORTED',updated_at=? WHERE id=?",
           input.keepPrivateCopy ? 1 : 0, input.keepPrivateCopy ? 1 : 0, input.now, input.assetId,
         );
         if (changes(assetResult) !== 1) throw new Error('media asset projection missing');
-        const taskResult = db.runSync(
+        const taskResult = await transaction.runAsync(
           "UPDATE tasks SET local_uri=CASE WHEN ? THEN local_uri ELSE NULL END,gallery_uri=?,export_state='EXPORTED',export_error=NULL,exported_at=?,updated_at=MAX(updated_at, ?) WHERE id=?",
           input.keepPrivateCopy ? 1 : 0, input.galleryUri, input.now, input.now, input.jobId,
         );
         if (changes(taskResult) !== 1) throw new Error('task projection missing');
         if (!input.keepPrivateCopy && input.sourceKind === 'cas' && input.blobSha256) {
-          db.runSync(
+          await transaction.runAsync(
             "DELETE FROM artifact_blob_refs WHERE blob_sha256=? AND owner_type='workflow_artifact' AND owner_id=?",
             input.blobSha256, input.referenceOwnerId,
           );
         }
-        const operationResult = db.runSync(
+        const operationResult = await transaction.runAsync(
           "UPDATE workflow_operations SET state='SUCCEEDED',lease_owner=NULL,lease_expires_at=NULL,last_error_json=NULL,updated_at=? WHERE id=? AND state='CLAIMED' AND lease_owner=?",
           input.now, input.operationId, input.owner,
         );
         if (changes(operationResult) !== 1) throw new Error('export operation lease lost');
       });
     },
-    retry(operation: WorkflowOperation, owner: string, payload: ExportPayload, input: ExportFailureInput & { nextRetryAt: number }): void {
+    async retry(operation: WorkflowOperation, owner: string, payload: ExportPayload, input: ExportFailureInput & { nextRetryAt: number }): Promise<void> {
       assertAppDatabaseWritable(db);
       if (!operation.jobId) throw new Error('export job id missing');
       const jobId = operation.jobId;
-      transaction(db, () => {
-        db.runSync("UPDATE tasks SET export_state='QUEUED',export_error=?,updated_at=MAX(updated_at, ?) WHERE id=?", input.error.code, input.now, jobId);
-        db.runSync("UPDATE media_assets SET export_status='QUEUED',updated_at=? WHERE id=?", input.now, payload.assetId);
-        db.runSync("UPDATE media_deliveries SET status='QUEUED',error=?,updated_at=? WHERE id=?", input.error.code, input.now, deliveryId(payload));
-        const result = db.runSync("UPDATE workflow_operations SET state='PENDING',next_retry_at=?,lease_owner=NULL,lease_expires_at=NULL,last_error_json=?,updated_at=? WHERE id=? AND state='CLAIMED' AND lease_owner=?", input.nextRetryAt, JSON.stringify(input.error), input.now, operation.id, owner);
+      await transaction(db, async (transaction) => {
+        await transaction.runAsync("UPDATE tasks SET export_state='QUEUED',export_error=?,updated_at=MAX(updated_at, ?) WHERE id=?", input.error.code, input.now, jobId);
+        await transaction.runAsync("UPDATE media_assets SET export_status='QUEUED',updated_at=? WHERE id=?", input.now, payload.assetId);
+        await transaction.runAsync("UPDATE media_deliveries SET status='QUEUED',error=?,updated_at=? WHERE id=?", input.error.code, input.now, deliveryId(payload));
+        const result = await transaction.runAsync("UPDATE workflow_operations SET state='PENDING',next_retry_at=?,lease_owner=NULL,lease_expires_at=NULL,last_error_json=?,updated_at=? WHERE id=? AND state='CLAIMED' AND lease_owner=?", input.nextRetryAt, JSON.stringify(input.error), input.now, operation.id, owner);
         if (changes(result) !== 1) throw new Error('export operation lease lost');
       });
     },
-    finishFailure(operation: WorkflowOperation, owner: string, payload: ExportPayload | undefined, now: number, error: NormalizedError): void {
+    async finishFailure(operation: WorkflowOperation, owner: string, payload: ExportPayload | undefined, now: number, error: NormalizedError): Promise<void> {
       assertAppDatabaseWritable(db);
-      transaction(db, () => {
-        if (operation.jobId) db.runSync("UPDATE tasks SET export_state='EXPORT_FAILED',export_error=?,updated_at=MAX(updated_at, ?) WHERE id=?", error.code, now, operation.jobId);
+      await transaction(db, async (transaction) => {
+        if (operation.jobId) await transaction.runAsync("UPDATE tasks SET export_state='EXPORT_FAILED',export_error=?,updated_at=MAX(updated_at, ?) WHERE id=?", error.code, now, operation.jobId);
         if (payload) {
-          db.runSync("UPDATE media_assets SET export_status='EXPORT_FAILED',updated_at=? WHERE id=?", now, payload.assetId);
-          db.runSync(
+          await transaction.runAsync("UPDATE media_assets SET export_status='EXPORT_FAILED',updated_at=? WHERE id=?", now, payload.assetId);
+          await transaction.runAsync(
             "INSERT INTO media_deliveries (id,asset_id,target,status,error,created_at,updated_at) VALUES (?,?,'system-gallery','FAILED',?,?,?) ON CONFLICT(id) DO UPDATE SET status='FAILED',error=excluded.error,updated_at=excluded.updated_at",
             deliveryId(payload), payload.assetId, error.code, now, now,
           );
         }
-        const result = db.runSync("UPDATE workflow_operations SET state='FAILED',lease_owner=NULL,lease_expires_at=NULL,last_error_json=?,updated_at=? WHERE id=? AND state='CLAIMED' AND lease_owner=?", JSON.stringify(error), now, operation.id, owner);
+        const result = await transaction.runAsync("UPDATE workflow_operations SET state='FAILED',lease_owner=NULL,lease_expires_at=NULL,last_error_json=?,updated_at=? WHERE id=? AND state='CLAIMED' AND lease_owner=?", JSON.stringify(error), now, operation.id, owner);
         if (changes(result) !== 1) throw new Error('export operation lease lost');
       });
     },

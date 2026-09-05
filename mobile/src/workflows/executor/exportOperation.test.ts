@@ -22,7 +22,7 @@ function setupExport() {
     now: () => 50,
     assertSource: jest.fn(async () => undefined),
     markExporting: jest.fn(async () => undefined),
-    canPublish: jest.fn(() => true),
+    canPublish: jest.fn(async () => true),
     publish: jest.fn(async () => ({ uri: 'content://media/external/video/7' })),
     commitSuccess: jest.fn(async () => undefined),
     retry: jest.fn(async () => undefined),
@@ -43,7 +43,7 @@ test('publishes with a stable name and commits all delivery projections', async 
 
 test('does not publish after the durable operation or task projection is deleted', async () => {
   const deps = setupExport();
-  deps.canPublish.mockReturnValueOnce(false);
+  deps.canPublish.mockResolvedValueOnce(false);
   await handleExport(operation, 'worker', deps);
   expect(deps.publish).not.toHaveBeenCalled();
   expect(deps.commitSuccess).not.toHaveBeenCalled();
@@ -147,7 +147,7 @@ test('commits every export projection and private-copy release in one SQLite tra
     cas.retain('a'.repeat(64), 'workflow_artifact', 'job-1:video-1', 1);
     cas.retain('a'.repeat(64), 'workflow_artifact', 'job-1:other', 1);
     operations.enqueue({ id: operation.id, kind: 'EXPORT', jobId: 'job-1', idempotencyKey: operation.idempotencyKey, payload: operation.payload, now: 1 });
-    const claimed = operations.claimById(operation.id, 'worker', 1, 100);
+    const claimed = await operations.claimById(operation.id, 'worker', 1, 100);
     if (!claimed) throw new Error('claim failed');
 
     const store = createSqliteExportStore(db as never);
@@ -161,7 +161,7 @@ test('commits every export projection and private-copy release in one SQLite tra
     expect(db.getFirstSync("SELECT status, uri FROM media_deliveries WHERE asset_id='job-1:video-1'")).toEqual({ status: 'EXPORTED', uri: 'content://media/external/video/7' });
     await expect(media.get('job-1:video-1')).resolves.toMatchObject({ exportStatus: 'EXPORTED', localPath: undefined, status: 'queued' });
     await expect(tasks.get('job-1')).resolves.toMatchObject({ exportState: 'EXPORTED', galleryUri: 'content://media/external/video/7', localUri: undefined });
-    expect(operations.get(operation.id)).toMatchObject({ state: 'SUCCEEDED' });
+    expect(await operations.get(operation.id)).toMatchObject({ state: 'SUCCEEDED' });
     expect(cas.hasReference('a'.repeat(64), 'workflow_artifact', 'job-1:video-1')).toBe(false);
     expect(cas.hasReference('a'.repeat(64), 'workflow_artifact', 'job-1:other')).toBe(true);
   } finally { db.close(); }

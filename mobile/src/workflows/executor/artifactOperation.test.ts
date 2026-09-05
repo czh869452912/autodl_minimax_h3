@@ -56,7 +56,7 @@ function memoryCas(entries: Map<string, Uint8Array>): ArtifactCas {
 }
 
 function setup() {
-  const operations = { finish: jest.fn(() => true), retry: jest.fn(() => true), renew: jest.fn(() => true), get: jest.fn(() => operation) };
+  const operations = { finish: jest.fn(async () => true), retry: jest.fn(async () => true), renew: jest.fn(async () => true), get: jest.fn(async () => operation) };
   const blobs = { upsertBlob: jest.fn(), retain: jest.fn() };
   const stored = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}` };
   const staged = {
@@ -126,7 +126,7 @@ test('transfers natively, adopts into CAS, retains the blob, updates projection,
   expect(putOptions.operationAttempt).toBe(1);
   expect(putOptions.assertLease).toEqual(expect.any(Function));
   if (!putOptions.assertLease) throw new Error('lease fence missing');
-  expect(putOptions.assertLease()).toBeUndefined();
+  await expect(putOptions.assertLease()).resolves.toBeUndefined();
   expect(deps.operations.renew).toHaveBeenCalledWith('download-1', 'worker', 50, 120_000);
   expect(deps.verifyVideo).toHaveBeenCalledWith(expect.stringContaining('cas/parts/'));
   expect(deps.staged.publish).toHaveBeenCalledTimes(1);
@@ -171,7 +171,7 @@ test('normalizes a provider hash for native transfer while retaining case-insens
 
 test('does not cancel a replacement transfer after the native part has been handed to CAS', async () => {
   const deps = setup();
-  deps.operations.renew.mockReturnValueOnce(true).mockReturnValue(false);
+  deps.operations.renew.mockResolvedValueOnce(true).mockResolvedValue(false);
   deps.cas.adoptNativePart.mockImplementationOnce(async (_input, options) => {
     await options.assertLease?.();
     return deps.staged;
@@ -191,7 +191,7 @@ test('renews the lease while native transfer is pending and cancels immediately 
     try {
       const deps = setup();
       const transfer = deferred<Awaited<ReturnType<typeof deps.transferArtifact>>>();
-      deps.operations.renew.mockReturnValueOnce(true).mockReturnValue(false);
+      deps.operations.renew.mockResolvedValueOnce(true).mockResolvedValue(false);
       deps.transferArtifact.mockImplementationOnce(() => transfer.promise);
       deps.cancelArtifactTransfer.mockImplementationOnce(async () => {
         transfer.reject(Object.assign(new Error('cancelled'), { code: 'ARTIFACT_CANCELLED' }));
@@ -217,6 +217,39 @@ test('renews the lease while native transfer is pending and cancels immediately 
   }
 });
 
+test('waits for an in-flight lease renewal before accepting a completed transfer', async () => {
+  jest.useFakeTimers();
+  try {
+    const deps = setup();
+    const transfer = deferred<Awaited<ReturnType<typeof deps.transferArtifact>>>();
+    const renewal = deferred<boolean>();
+    deps.operations.renew.mockResolvedValueOnce(true).mockImplementationOnce(() => renewal.promise);
+    deps.transferArtifact.mockImplementationOnce(() => transfer.promise);
+    const running = handleArtifactDownload(operation, 'worker', {
+      ...deps, now: () => 50, leaseMs: 90,
+      policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    await jest.advanceTimersByTimeAsync(30);
+    transfer.resolve({
+      partUri: 'file:///cas/parts/download-1.part', finalUrl: 'https://cdn.example/video.mp4',
+      mime: 'video/mp4', byteSize: 3, sha256: 'a'.repeat(64),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(deps.staged.publish).not.toHaveBeenCalled();
+
+    renewal.resolve(false);
+    await running;
+    expect(deps.cancelArtifactTransfer).toHaveBeenCalledWith('download-1', 1);
+    expect(deps.operations.retry).toHaveBeenCalled();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 test.each(['false', 'error'] as const)(
   'adopts and aborts a raced successful transfer when attempt-specific cancellation returns %s',
   async (cancellationOutcome) => {
@@ -233,7 +266,7 @@ test.each(['false', 'error'] as const)(
       ]);
       deps.transferArtifact.mockImplementationOnce(() => transfer.promise);
       deps.cancelArtifactTransfer.mockImplementationOnce(() => cancellation.promise);
-      deps.operations.renew.mockReturnValueOnce(true).mockReturnValue(false);
+      deps.operations.renew.mockResolvedValueOnce(true).mockResolvedValue(false);
 
       const handled = handleArtifactDownload(operation, 'worker', {
         ...deps, cas: memoryCas(entries), now: () => 50, leaseMs: 300,
@@ -385,7 +418,7 @@ test('uses the latest persisted delivery intent when save joins a claimed downlo
     reserve: jest.fn(async () => undefined),
     release: jest.fn(async () => undefined),
   });
-  deps.operations.get.mockReturnValue({
+  deps.operations.get.mockResolvedValue({
     ...operation,
     payload: { ...operation.payload, deliveryIntent: { target: 'system-gallery', keepPrivateCopy: false } },
   });
@@ -433,19 +466,19 @@ test('rejects unknown structured artifact codes and caller-controlled retryabili
   expect(canonical.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50, expect.objectContaining({ code: 'ARTIFACT_HOST_DENIED', retryable: false }));
 });
 
-test('rolls back blob and reference metadata when the operation lease is lost', () => {
+test('rolls back blob and reference metadata when the operation lease is lost', async () => {
   const db = createInitializedRealSqliteTestDb();
   try {
     db.runSync("INSERT INTO tasks (id,prompt,status,resolution,duration,created_at,updated_at) VALUES ('job-1','result','SUCCESS','768p竖',5,1,2)");
     db.runSync("INSERT INTO media_assets (id,task_id,title,prompt,source_url,mime_type,status,created_at,updated_at,artifact_id,job_id,kind) VALUES ('job-1:video-1','job-1','result','result','https://cdn.example/video.mp4','video/mp4','downloading',1,2,'video-1','job-1','video')");
     const commit = createSqliteArtifactCommitter(db as never);
-    expect(() => commit({
+    await expect(commit({
       operationId: 'missing-operation', owner: 'worker', jobId: 'job-1',
       artifact: { id: 'video-1', jobId: 'job-1', kind: 'video' },
       blob: { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 50, verifiedAt: 50 },
       localUri: 'file:///cas/sha256/aa/blob', now: 50,
       deliveryPolicy: { autoExportToGallery: true, keepPrivateCopy: false },
-    })).toThrow('lease lost');
+    })).rejects.toThrow('lease lost');
     expect(db.getFirstSync('SELECT sha256 FROM artifact_blobs LIMIT 1')).toBeUndefined();
     expect(db.getFirstSync('SELECT blob_sha256 FROM artifact_blob_refs LIMIT 1')).toBeUndefined();
   } finally { db.close(); }
@@ -468,7 +501,7 @@ async function seedArtifactCommit(db: ReturnType<typeof createInitializedRealSql
     id: 'download-1', kind: 'ARTIFACT_DOWNLOAD', jobId: 'job-1', idempotencyKey: 'artifact:job-1:video-1',
     payload: operation.payload, now: 1,
   });
-  operationStore.claimById('download-1', 'worker', 1, 100);
+  await operationStore.claimById('download-1', 'worker', 1, 100);
   return { taskStore, mediaStore, operationStore };
 }
 
@@ -476,7 +509,7 @@ test('commits the download and enqueues enabled gallery export atomically', asyn
   const db = createInitializedRealSqliteTestDb();
   try {
     const { taskStore, mediaStore, operationStore } = await seedArtifactCommit(db);
-    createSqliteArtifactCommitter(db as never)({
+    await createSqliteArtifactCommitter(db as never)({
       operationId: 'download-1', owner: 'worker', jobId: 'job-1',
       artifact: operation.payload.artifact as never,
       blob: { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 50, verifiedAt: 50 },
@@ -510,14 +543,14 @@ test('rejects a blob commit while another executor owns the CAS GC lease', async
   try {
     const { operationStore } = await seedArtifactCommit(db);
     db.runSync("INSERT INTO app_scheduler_leases (lease_key,owner,expires_at) VALUES ('cas-gc','collector',200)");
-    expect(() => createSqliteArtifactCommitter(db as never, () => 100)({
+    await expect(createSqliteArtifactCommitter(db as never, () => 100)({
       operationId: 'download-1', owner: 'worker', jobId: 'job-1',
       artifact: operation.payload.artifact as never,
       blob: { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 50, verifiedAt: 50 },
       localUri: 'file:///cas/video', now: 50,
       deliveryPolicy: { autoExportToGallery: true, keepPrivateCopy: false },
-    })).toThrow('CAS_GC_IN_PROGRESS');
-    expect(operationStore.get('download-1')).toMatchObject({ state: 'CLAIMED' });
+    })).rejects.toThrow('CAS_GC_IN_PROGRESS');
+    expect(await operationStore.get('download-1')).toMatchObject({ state: 'CLAIMED' });
   } finally { db.close(); }
 });
 
@@ -525,7 +558,7 @@ test('commits a private download without export when auto export is disabled', a
   const db = createInitializedRealSqliteTestDb();
   try {
     const { taskStore, mediaStore, operationStore } = await seedArtifactCommit(db);
-    createSqliteArtifactCommitter(db as never)({
+    await createSqliteArtifactCommitter(db as never)({
       operationId: 'download-1', owner: 'worker', jobId: 'job-1',
       artifact: operation.payload.artifact as never,
       blob: { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 50, verifiedAt: 50 },
@@ -545,17 +578,17 @@ test('failed post-publication commit leaves a database-visible unreferenced blob
     const { operationStore } = await seedArtifactCommit(db);
     const commit = createSqliteArtifactCommitter(db as never);
     const blob = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 50, verifiedAt: 50 };
-    commit.reserve({ operationId: 'download-1', owner: 'worker', blob, now: 50 });
+    await commit.reserve({ operationId: 'download-1', owner: 'worker', blob, now: 50 });
     expect(db.getFirstSync("SELECT owner_type FROM artifact_blob_refs WHERE blob_sha256=?", blob.sha256))
       .toMatchObject({ owner_type: 'artifact_operation:download-1' });
 
-    operationStore.retry('download-1', 'worker', { now: 50, nextRetryAt: 60, error: { code: 'TEST', message: 'test', retryable: true } });
-    expect(() => commit({
+    await operationStore.retry('download-1', 'worker', { now: 50, nextRetryAt: 60, error: { code: 'TEST', message: 'test', retryable: true } });
+    await expect(commit({
       operationId: 'download-1', owner: 'worker', jobId: 'job-1', artifact: operation.payload.artifact as never,
       blob, localUri: 'file:///cas/sha256/aa/blob', now: 50,
       deliveryPolicy: { autoExportToGallery: false, keepPrivateCopy: true },
-    })).toThrow('lease lost');
-    commit.release({ operationId: 'download-1', owner: 'worker' });
+    })).rejects.toThrow('lease lost');
+    await commit.release({ operationId: 'download-1', owner: 'worker' });
 
     expect(db.getFirstSync('SELECT sha256 FROM artifact_blobs WHERE sha256=?', blob.sha256)).toMatchObject({ sha256: blob.sha256 });
     expect(db.getFirstSync('SELECT blob_sha256 FROM artifact_blob_refs WHERE blob_sha256=?', blob.sha256)).toBeUndefined();
@@ -570,8 +603,8 @@ test('a replacement reservation releases the previous attempt hash for GC', asyn
     const first = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/first', createdAt: 40, verifiedAt: 40 };
     const second = { sha256: 'b'.repeat(64), byteSize: 4, mime: 'video/mp4', relativePath: 'cas/sha256/bb/second', createdAt: 50, verifiedAt: 50 };
 
-    commit.reserve({ operationId: 'download-1', owner: 'worker', blob: first, now: 40 });
-    commit.reserve({ operationId: 'download-1', owner: 'worker', blob: second, now: 50 });
+    await commit.reserve({ operationId: 'download-1', owner: 'worker', blob: first, now: 40 });
+    await commit.reserve({ operationId: 'download-1', owner: 'worker', blob: second, now: 50 });
 
     expect(db.getFirstSync('SELECT 1 AS present FROM artifact_blob_refs WHERE blob_sha256=?', first.sha256)).toBeUndefined();
     expect(db.getFirstSync('SELECT owner_id FROM artifact_blob_refs WHERE blob_sha256=?', second.sha256))
@@ -591,11 +624,11 @@ test('a late expired owner cannot release the replacement owner reservation', as
     const secondCommit = createSqliteArtifactCommitter(secondDb as never);
     const first = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/first', createdAt: 40, verifiedAt: 40 };
     const second = { sha256: 'b'.repeat(64), byteSize: 4, mime: 'video/mp4', relativePath: 'cas/sha256/bb/second', createdAt: 50, verifiedAt: 50 };
-    firstCommit.reserve({ operationId: 'download-1', owner: 'worker', blob: first, now: 40 });
+    await firstCommit.reserve({ operationId: 'download-1', owner: 'worker', blob: first, now: 40 });
 
     secondDb.runSync("UPDATE workflow_operations SET lease_owner='worker-b', lease_expires_at=200 WHERE id='download-1'");
-    secondCommit.reserve({ operationId: 'download-1', owner: 'worker-b', blob: second, now: 50 });
-    firstCommit.release({ operationId: 'download-1', owner: 'worker' });
+    await secondCommit.reserve({ operationId: 'download-1', owner: 'worker-b', blob: second, now: 50 });
+    await firstCommit.release({ operationId: 'download-1', owner: 'worker' });
 
     expect(secondDb.getFirstSync('SELECT owner_type,owner_id FROM artifact_blob_refs WHERE blob_sha256=?', second.sha256))
       .toMatchObject({ owner_type: 'artifact_operation:download-1', owner_id: 'worker-b' });
@@ -611,7 +644,7 @@ test('explicit delivery intent overrides disabled auto export and freezes privat
   const db = createInitializedRealSqliteTestDb();
   try {
     const { operationStore } = await seedArtifactCommit(db);
-    createSqliteArtifactCommitter(db as never)({
+    await createSqliteArtifactCommitter(db as never)({
       operationId: 'download-1', owner: 'worker', jobId: 'job-1',
       artifact: operation.payload.artifact as never,
       blob: { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/blob', createdAt: 50, verifiedAt: 50 },

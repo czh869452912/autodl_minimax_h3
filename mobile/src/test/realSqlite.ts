@@ -1,18 +1,40 @@
 import { DatabaseSync } from 'node:sqlite';
 
+let exclusiveTestTransactionTail = Promise.resolve();
+
 export function createRealSqliteTestDb(path = ':memory:') {
   const database = new DatabaseSync(path);
   const values = (params: unknown[]) => params as Parameters<ReturnType<DatabaseSync['prepare']>['run']>;
-  return {
+  let transactionTarget: unknown;
+  const api = {
     execSync(source: string) { database.exec(source); },
+    async execAsync(source: string) { database.exec(source); },
     runSync(source: string, ...params: unknown[]) { return database.prepare(source).run(...values(params)); },
     async runAsync(source: string, ...params: unknown[]) { return database.prepare(source).run(...values(params)); },
     getFirstSync<T>(source: string, ...params: unknown[]) { return database.prepare(source).get(...values(params)) as T | undefined; },
     async getFirstAsync<T>(source: string, ...params: unknown[]) { return database.prepare(source).get(...values(params)) as T | undefined; },
     getAllSync<T>(source: string, ...params: unknown[]) { return database.prepare(source).all(...values(params)) as T[]; },
     async getAllAsync<T>(source: string, ...params: unknown[]) { return database.prepare(source).all(...values(params)) as T[]; },
+    async withExclusiveTransactionAsync(task: (txn: unknown) => Promise<void>) {
+      let release!: () => void;
+      const previous = exclusiveTestTransactionTail;
+      exclusiveTestTransactionTail = new Promise<void>((resolve) => { release = resolve; });
+      await previous;
+      database.exec('BEGIN');
+      try {
+        await task(transactionTarget);
+        database.exec('COMMIT');
+      } catch (error) {
+        try { database.exec('ROLLBACK'); } catch { /* best effort */ }
+        throw error;
+      } finally {
+        release();
+      }
+    },
     close() { database.close(); },
   };
+  transactionTarget = api;
+  return api;
 }
 
 export function createInitializedRealSqliteTestDb(path = ':memory:') {

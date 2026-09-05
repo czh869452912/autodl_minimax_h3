@@ -211,8 +211,8 @@ export function createSyncTaskRunner(deps: {
   repair(): Promise<number>;
   reconcile(): Promise<ReconciliationSummary>;
   listTasks(): ReturnType<typeof taskStore.listActive>;
-  pendingSummary(options: { now: number; jobIds?: string[] }): PendingSummary;
-  countOutstanding(jobIds: string[]): number;
+  pendingSummary(options: { now: number; jobIds?: string[] }): Promise<PendingSummary>;
+  countOutstanding(jobIds: string[]): Promise<number>;
   claimMaintenance(force: boolean): boolean;
   listTerminalEvents(jobIds: string[]): Parameters<typeof projectTerminalNotifications>[0];
   now(): number;
@@ -225,10 +225,10 @@ export function createSyncTaskRunner(deps: {
     const reconciliation = maintenanceRan ? await deps.reconcile() : EMPTY_RECONCILIATION_SUMMARY;
     const tasks = await deps.listTasks();
     const serviceIds = request.mode === 'service' ? request.taskIds ?? [] : [];
-    const pending = deps.pendingSummary({ now: timestamp, ...(request.mode === 'service' ? { jobIds: serviceIds } : {}) });
+    const pending = await deps.pendingSummary({ now: timestamp, ...(request.mode === 'service' ? { jobIds: serviceIds } : {}) });
     const serviceIdSet = request.mode === 'service' ? new Set(serviceIds) : undefined;
     const remaining = request.mode === 'service'
-      ? tasks.filter((task) => serviceIdSet!.has(task.id)).length + deps.countOutstanding(serviceIds)
+      ? tasks.filter((task) => serviceIdSet!.has(task.id)).length + await deps.countOutstanding(serviceIds)
       : pending.remainingDue + pending.remainingScheduled;
     const terminalEvents = request.mode === 'service' ? projectTerminalNotifications(deps.listTerminalEvents(serviceIds)) : [];
     return {
