@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Execution status (2026-09-05):** Tasks 1–10 complete, reviewed inline at the user's request. Automated verification passes; Task 11's full HTTPS transfer/release performance gate remains open. See the [verification report](../../verification/2026-09-05-task-refresh-architecture-decoupling.md) and [PERF-1](../../verification/2026-09-05-task-refresh-follow-ups.md#perf-1-full-transfer-and-release-performance-acceptance). Checked test-first steps summarize the recorded regression work; exact implementation and test names evolved during review.
+
 **Goal:** Make task-list refresh a fast SQLite projection read, while durable executor work, media transfer, hashing, maintenance, and retries run independently without freezing the React Native UI or losing refresh requests.
 
 **Architecture:** SQLite task projections remain authoritative. A `TaskListSession` owns consistent revision-fenced reads, pagination, trailing refreshes, and structural sharing. `TaskCommandService` persists intent and signals a durable wake; a foreground scheduler, BackgroundTask, and Headless JS call `ExecutorRunner` separately. Android performs artifact network streaming and both full-file SHA-256 passes on a native executor.
@@ -48,11 +50,11 @@
 - Modify: `mobile/src/native/media.ts`
 - Modify: `mobile/src/native/media.test.ts`
 
-- [ ] **Step 1: Add failing native policy and transfer tests**
+- [x] **Step 1: Add failing native policy and transfer tests**
 
   Cover HTTPS-only URLs, embedded credentials, host allowlist, DNS results containing loopback/private/link-local addresses, safe redirects, unsafe redirect rejection, MIME mismatch, declared and streamed size overflow, connect/read timeout, cancellation, provider SHA mismatch, and durable reread mismatch. Inject DNS, clock, validator, and an HTTP client so `MockWebServer` can exercise redirects without weakening production localhost rejection.
 
-- [ ] **Step 2: Run the focused tests and confirm red**
+- [x] **Step 2: Run the focused tests and confirm red**
 
   Run:
 
@@ -63,7 +65,7 @@
 
   Expected: compilation fails because `ArtifactTransferPolicy` and `ArtifactTransfer` do not exist.
 
-- [ ] **Step 3: Add explicit HTTP test/runtime dependencies**
+- [x] **Step 3: Add explicit HTTP test/runtime dependencies**
 
   Add to `dependencies` in `mobile/android/app/build.gradle`:
 
@@ -72,7 +74,7 @@
   testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
   ```
 
-- [ ] **Step 4: Implement the native security policy**
+- [x] **Step 4: Implement the native security policy**
 
   `ArtifactTransferPolicy` must normalize the provider host allowlist, reject non-HTTPS URLs and user-info, resolve every candidate host, reject any non-public address result, and repeat the checks for every redirect. Use `InetAddress` properties plus explicit carrier-grade NAT, benchmark, documentation, multicast, unspecified, IPv4-mapped IPv6, and unique-local IPv6 ranges. Limit redirects to five.
 
@@ -101,11 +103,11 @@
   )
   ```
 
-- [ ] **Step 5: Implement streaming, cancellation, and durable reread**
+- [x] **Step 5: Implement streaming, cancellation, and durable reread**
 
   Configure OkHttp with redirects disabled and per-request connect/read timeouts. Follow redirects manually through the policy. Stream 64 KiB chunks directly to `filesDir/cas/parts/{sha256(operationId + "\u0000" + operationAttempt)}.part`, update `MessageDigest` during the write, enforce the actual byte limit, flush and close, then call the existing `MediaIntegrity.sha256()` for a second native reread. Remove the part on all failures and cancellation. Throttle progress to at most one callback per second or each additional 5 MiB.
 
-- [ ] **Step 6: Expose the React Native bridge**
+- [x] **Step 6: Expose the React Native bridge**
 
   Add `transferArtifact(options, promise)` and `cancelArtifactTransfer(operationId, promise)` to `MediaModule`; execute both through the module's dedicated executor and track active OkHttp calls by operation ID. Add validated TypeScript wrappers:
 
@@ -134,7 +136,7 @@
 
   The wrapper must reject malformed hashes, non-positive byte sizes, unexpected URI schemes, or a missing Android module as `MediaIntegrityError` with stable diagnostic codes.
 
-- [ ] **Step 7: Run focused tests and commit**
+- [x] **Step 7: Run focused tests and commit**
 
   ```powershell
   Set-Location mobile/android
@@ -157,11 +159,11 @@
 - Modify: `mobile/src/workflows/executor/artifactOperation.test.ts`
 - Modify: `mobile/src/workflows/executor/mediaDeliveryAcceptance.test.ts`
 
-- [ ] **Step 1: Write failing CAS adoption tests**
+- [x] **Step 1: Write failing CAS adoption tests**
 
   Add tests proving a native part is accepted only when its URI is below `documentDirectory/cas/parts`, its size and native reread hash match the native result, provider hash matches case-insensitively, publication keeps the existing quarantine/race behavior, lease loss aborts, and abort removes only the owned part. Add an artifact-operation test that fails if `openArtifactDownload`, `CasFiles.write`, or CryptoJS full-file hashing is reached.
 
-- [ ] **Step 2: Run the focused tests and confirm red**
+- [x] **Step 2: Run the focused tests and confirm red**
 
   ```powershell
   Set-Location mobile
@@ -170,7 +172,7 @@
 
   Expected: tests fail because `ArtifactCas.adoptNativePart` and the native transfer dependency do not exist.
 
-- [ ] **Step 3: Add native-part adoption without weakening CAS publication**
+- [x] **Step 3: Add native-part adoption without weakening CAS publication**
 
   Extend `ArtifactCas` with:
 
@@ -191,11 +193,11 @@
 
   Reuse the current destination inspection, quarantine, move/copy race, and abort state machine. Production adoption must use injected native `sha256File`; it must not call `readChunks` or `wordArray`. Keep stream staging only for compatibility-focused unit tests and non-production callers until Task 10 removes unused code.
 
-- [ ] **Step 4: Switch artifact execution to native transfer**
+- [x] **Step 4: Switch artifact execution to native transfer**
 
   Replace `openDownload` in `ArtifactOperationDeps` with `transferArtifact`. Pass the current policy and expected provider hash, adopt the returned part, then preserve the existing sequence: video probe, blob reservation, CAS publish, atomic projection/operation commit. On lease loss call native cancellation and abort the part. Map native diagnostics through `artifactError()` to the existing retry/terminal policy.
 
-- [ ] **Step 5: Verify focused behavior and commit**
+- [x] **Step 5: Verify focused behavior and commit**
 
   ```powershell
   Set-Location mobile
@@ -217,11 +219,11 @@
 - Modify: `mobile/src/storage/migrations/runner.test.ts`
 - Modify: `mobile/src/storage/schemaOwnership.test.ts`
 
-- [ ] **Step 1: Write failing v8 migration tests**
+- [x] **Step 1: Write failing v8 migration tests**
 
   Cover fresh creation, v7-to-v8 upgrade, idempotent rerun, backup failure recovery, and preservation of representative rows in `workflow_jobs`, `tasks`, `workflow_operations`, `workflow_artifacts`, `artifact_blobs`, `artifact_blob_refs`, `media_assets`, and `media_deliveries`. Verify each task insert, update, and delete increments revision exactly once. Verify an expired-claim query uses the new index with `EXPLAIN QUERY PLAN`.
 
-- [ ] **Step 2: Run the migration tests and confirm red**
+- [x] **Step 2: Run the migration tests and confirm red**
 
   ```powershell
   Set-Location mobile
@@ -230,7 +232,7 @@
 
   Expected: assertions expecting schema version 8 and the new tables/triggers fail.
 
-- [ ] **Step 3: Implement the v8 migration**
+- [x] **Step 3: Implement the v8 migration**
 
   Set `APP_SCHEMA_VERSION = 8`, add both tables to `APP_TABLES`, and apply exactly these durable shapes:
 
@@ -271,7 +273,7 @@
 
   Register `v8TaskRefresh` after `v7RegistryRelease`, and call it from `applyCurrentSchema`. Keep the reserved D-Core migration at v9.
 
-- [ ] **Step 4: Run migration tests and commit**
+- [x] **Step 4: Run migration tests and commit**
 
   ```powershell
   Set-Location mobile
@@ -291,11 +293,11 @@
 - Create: `mobile/src/tasks/projectionRepository.test.ts`
 - Modify: `mobile/src/tasks/repository.ts`
 
-- [ ] **Step 1: Write failing projection tests**
+- [x] **Step 1: Write failing projection tests**
 
   Seed 1,000 tasks including large invalid `input_json`, `images_json`, and `audios_json` values. Assert the first 40 `TaskCard` values still load, proving the query neither selects nor parses those columns. Cover keyset pagination, a 120-row cap, task status/download/export activity outside page one, operation due/scheduled counts, revision reads, and a revision change between the two fences.
 
-- [ ] **Step 2: Run the focused test and confirm red**
+- [x] **Step 2: Run the focused test and confirm red**
 
   ```powershell
   Set-Location mobile
@@ -304,7 +306,7 @@
 
   Expected: Jest cannot resolve `projectionRepository`.
 
-- [ ] **Step 3: Define the displayed DTO**
+- [x] **Step 3: Define the displayed DTO**
 
   `TaskCard` contains only fields rendered or used for task-row actions:
 
@@ -333,13 +335,13 @@
   }>;
   ```
 
-- [ ] **Step 4: Implement async lightweight reads**
+- [x] **Step 4: Implement async lightweight reads**
 
   Add `readRevision()`, `readWindow(limit)`, `readActivity(now)`, and `readConsistentWindow(limit, maxAttempts = 2)`. Use only `getFirstAsync`/`getAllAsync`; list the DTO columns explicitly. `readConsistentWindow` reads revision before and after page plus activity; if the fence changes twice, return a typed `ProjectionChangedDuringRead` so the session schedules a trailing read instead of publishing mixed data.
 
   Global activity is based on the entire database, not the visible page. Count active task states and pending/claimed workflow operations; return `remainingDue`, `remainingScheduled`, and the earliest effective `nextWakeAt`.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
   ```powershell
   Set-Location mobile
@@ -372,11 +374,11 @@
 - Modify: `mobile/src/tasks/sync.ts`
 - Modify: `mobile/src/tasks/sync.test.ts`
 
-- [ ] **Step 1: Change tests to the asynchronous contract**
+- [x] **Step 1: Change tests to the asynchronous contract**
 
   Update repository consumers in tests to await reads and writes. Add a regression proving `recoverExpired(now, limit)` repairs no more than 32 rows and reports `hasMore`; add a tick test proving work inserted during a running tick is left as due work for the next slice.
 
-- [ ] **Step 2: Run focused tests and confirm red**
+- [x] **Step 2: Run focused tests and confirm red**
 
   ```powershell
   Set-Location mobile
@@ -385,7 +387,7 @@
 
   Expected: tests fail because repository methods are synchronous and `recoverExpired` has no bound.
 
-- [ ] **Step 3: Convert executor hot paths to expo-sqlite async methods**
+- [x] **Step 3: Convert executor hot paths to expo-sqlite async methods**
 
   Make `get`, `listDue`, `pendingSummary`, `countOutstanding`, `claimById`, `renew`, `release`, `retry`, `finish`, and `recoverExpired` return promises. Use `withExclusiveTransactionAsync` for claim and recovery compare-and-set groups. Update artifact, export, durable-executor, cycle, temporary sync-runner, and media-command consumers to await the new contract. Keep the durable command enqueue transaction synchronous only until Task 7 replaces it with an async exclusive transaction.
 
@@ -399,11 +401,11 @@
   }>;
   ```
 
-- [ ] **Step 4: Bound tick/cycle work**
+- [x] **Step 4: Bound tick/cycle work**
 
   Await every operation repository call. Keep lane limits `{ SUBMIT: 1, STATUS_SYNC: 4, ARTIFACT_DOWNLOAD: 1, EXPORT: 1 }`, cap one tick at eight operations and one cycle at 32 operations or 2,000 ms, whichever occurs first. Remove the `inFlight` coalescer from `tick`; concurrency belongs to the scheduler lease in Task 6.
 
-- [ ] **Step 5: Verify executor acceptance and commit**
+- [x] **Step 5: Verify executor acceptance and commit**
 
   ```powershell
   Set-Location mobile
@@ -429,11 +431,11 @@
 - Modify: `mobile/src/tasks/scheduler.ts`
 - Modify: `mobile/src/tasks/scheduler.test.ts`
 
-- [ ] **Step 1: Write failing wake and scheduler tests**
+- [x] **Step 1: Write failing wake and scheduler tests**
 
   Cover atomic generation increments, maintenance coalescing, acknowledge-through generation without consuming a newer wake, two runtimes competing for the scheduler lease, a wake arriving during a slice, exact persisted wake time, one-second minimum continuation, bounded exponential backoff with deterministic jitter, and clean stop/dispose.
 
-- [ ] **Step 2: Run focused tests and confirm red**
+- [x] **Step 2: Run focused tests and confirm red**
 
   ```powershell
   Set-Location mobile
@@ -442,7 +444,7 @@
 
   Expected: new modules cannot be resolved.
 
-- [ ] **Step 3: Implement the generation protocol**
+- [x] **Step 3: Implement the generation protocol**
 
   `requestWake()` increments `generation` and sets `maintenance_generation` to the new generation only for `force-next-slice`. A runner captures generation `N`, performs work, and advances `handled_generation` only through `N`. Therefore a command committed during that slice leaves `generation > handled_generation` and forces a trailing slice.
 
@@ -461,11 +463,11 @@
   }>;
   ```
 
-- [ ] **Step 4: Implement scheduler ownership**
+- [x] **Step 4: Implement scheduler ownership**
 
   `ExecutorRunner.runSlice()` acquires the existing cross-runtime scheduler lease, runs the bounded cycle, claims a maintenance window only when its captured generation includes an unhandled maintenance request, performs bounded repair/reconciliation/GC, and acknowledges only the captured generation. `startForegroundExecutorScheduler()` subscribes to in-memory wake events, owns timers, publishes `idle/scheduled/running/backoff` events, and invokes the runner. UI modules can subscribe to events but cannot import the runner.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
   ```powershell
   Set-Location mobile
@@ -488,11 +490,11 @@
 - Modify: `mobile/src/tasks/sync.ts`
 - Modify: `mobile/src/tasks/sync.test.ts`
 
-- [ ] **Step 1: Write failing command boundary tests**
+- [x] **Step 1: Write failing command boundary tests**
 
   Use a never-resolving runner and prove download/export/redownload/manual-refresh promises still settle after the SQLite transaction. Verify immediate task projection state, stable idempotency keys, duplicate receipts, wake generation increments, and same-runtime invalidation after commit. Assert `taskCommandService.ts` has no executor import.
 
-- [ ] **Step 2: Run focused tests and confirm red**
+- [x] **Step 2: Run focused tests and confirm red**
 
   ```powershell
   Set-Location mobile
@@ -501,7 +503,7 @@
 
   Expected: `TaskCommandService` is missing and the existing facade waits for `runCycle`.
 
-- [ ] **Step 3: Implement command receipts and atomic wake persistence**
+- [x] **Step 3: Implement command receipts and atomic wake persistence**
 
   Define:
 
@@ -515,11 +517,11 @@
 
   Each command uses `withExclusiveTransactionAsync` to update/enqueue the operation, update the immediate task projection, and increment wake generation atomically. Emit projection invalidation and the in-memory executor signal only after commit. `requestRefresh({ maintenance: 'force-next-slice' })` writes only the coalesced maintenance generation; it does not mutate task rows.
 
-- [ ] **Step 4: Remove executor waiting from the public command facade**
+- [x] **Step 4: Remove executor waiting from the public command facade**
 
   Replace `createMediaCommandFacade(commands, runCycle)` with `createTaskCommandService`. Keep temporary command, `syncTaskRun`, and `syncTasks` re-exports in `sync.ts` so callers and route tests can migrate in Tasks 9-10, but make command re-exports acknowledge persistence without running a cycle. Mark compound sync exports as migration-only and do not add new callers.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
   ```powershell
   Set-Location mobile
@@ -540,11 +542,11 @@
 - Create: `mobile/src/tasks/taskListSession.test.ts`
 - Create: `mobile/src/tasks/useTaskListSession.ts`
 
-- [ ] **Step 1: Write the session state-machine tests**
+- [x] **Step 1: Write the session state-machine tests**
 
   With fake timers, cover cold hydration, single-flight plus dirty trailing read, ten refresh requests coalescing into at most two reads, revision change during read, stale-result rejection, cross-runtime revision discovery without a memory event, automatic error retaining items with `phase: 'stale'`, manual error propagation, unchanged-card object reuse, changed-card replacement, load-more merge/reorder/delete, a 120-row refresh cap, second-page activity, timer policy, visibility changes, and disposal.
 
-- [ ] **Step 2: Run the focused test and confirm red**
+- [x] **Step 2: Run the focused test and confirm red**
 
   ```powershell
   Set-Location mobile
@@ -553,7 +555,7 @@
 
   Expected: Jest cannot resolve `taskListSession`.
 
-- [ ] **Step 3: Implement stable snapshots and trailing reads**
+- [x] **Step 3: Implement stable snapshots and trailing reads**
 
   Implement the approved `TaskListSnapshot`/`TaskListSession` interfaces from `docs/superpowers/specs/2026-09-05-task-refresh-architecture-design.md`. The core refresh loop must have these semantics:
 
@@ -579,11 +581,11 @@
 
   Publish immutable snapshots only when observable state changes. Reuse card objects after comparing every `TaskCard` field. Use a monotonically increasing request sequence to discard older completions.
 
-- [ ] **Step 4: Implement bounded checking policy**
+- [x] **Step 4: Implement bounded checking policy**
 
   A visible session checks revision no faster than once per second when due/running work exists; uses `nextWakeAt` capped at ten seconds for active tasks; sleeps until exact wake for inactive scheduled work; and owns no timer when there is no active task or outstanding operation. A revision-only check performs no full card reconstruction. Same-runtime projection events request an immediate check.
 
-- [ ] **Step 5: Add the React hook and verify**
+- [x] **Step 5: Add the React hook and verify**
 
   `useTaskListSession()` must use `useSyncExternalStore`, set visibility from focus state, and dispose only sessions it created.
 
@@ -608,11 +610,11 @@
 - Delete: `mobile/src/tasks/pollSchedule.ts`
 - Delete: `mobile/src/tasks/pollSchedule.test.ts`
 
-- [ ] **Step 1: Rewrite route tests around observable behavior**
+- [x] **Step 1: Rewrite route tests around observable behavior**
 
   Cover immediate first projection, pull-to-refresh ending after the projection read rather than worker completion, overlapping focus/manual/invalidation producing a trailing read, retry and export returning after durable acknowledgement, scrolling/navigation while `work.phase === 'running'`, non-modal stale status, manual read alert, pagination, monitor controls using full-database activity, and no 250 ms executor loop.
 
-- [ ] **Step 2: Run route tests and confirm red**
+- [x] **Step 2: Run route tests and confirm red**
 
   ```powershell
   Set-Location mobile
@@ -621,17 +623,17 @@
 
   Expected: tests fail because the route still imports and awaits `syncTaskRun`.
 
-- [ ] **Step 3: Replace route-local orchestration**
+- [x] **Step 3: Replace route-local orchestration**
 
   Remove `loadInFlight`, `pollState`, `pollGeneration`, `load()`, `syncTaskRun`, `taskStore.listPage`, and inline `renderItem`. Subscribe to one `TaskListSession`; manual refresh concurrently calls `session.refresh('manual')` and `taskCommandService.requestRefresh({ maintenance: 'force-next-slice' })`, with the spinner tied only to `snapshot.read.pending`.
 
   Render `snapshot.work.phase` as independent background activity. Keep valid items during stale reads. Derive monitor task IDs from a repository query by active status, not the loaded cards.
 
-- [ ] **Step 4: Memoize the row boundary**
+- [x] **Step 4: Memoize the row boundary**
 
   `TaskCardRow` accepts one structurally shared `TaskCard`, navigation/action callbacks, and no parent snapshot. Export `React.memo(TaskCardRow)`; keep timing calculation memoized and do not parse serialized task input.
 
-- [ ] **Step 5: Remove the UI executor polling utility and verify**
+- [x] **Step 5: Remove the UI executor polling utility and verify**
 
   ```powershell
   Set-Location mobile
@@ -662,11 +664,11 @@
 - Modify: `mobile/src/tasks/sync.ts`
 - Delete: `mobile/src/tasks/sync.test.ts`
 
-- [ ] **Step 1: Update tests to enforce role-specific ports**
+- [x] **Step 1: Update tests to enforce role-specific ports**
 
   Root layout starts/stops the foreground scheduler and signals `foreground`. Video detail reads task/media projections first, then issues commands without an executor wait. Create submission signals a command wake. Connectivity recovery expedites eligible operations and signals `connectivity`. BackgroundTask and Headless JS call `ExecutorRunner.runSlice` directly and use its remaining counts to decide rescheduling/monitor shutdown.
 
-- [ ] **Step 2: Run the focused tests and confirm red**
+- [x] **Step 2: Run the focused tests and confirm red**
 
   ```powershell
   Set-Location mobile
@@ -675,7 +677,7 @@
 
   Expected: tests fail while callers still mock or await `syncTaskRun`.
 
-- [ ] **Step 3: Migrate callers by responsibility**
+- [x] **Step 3: Migrate callers by responsibility**
 
   Use this exact mapping:
 
@@ -688,23 +690,23 @@
   | `background.ts` | dynamic import of `ExecutorRunner.runSlice` |
   | `taskMonitor.ts` / `index.js` | service-scoped `ExecutorRunner.runSlice` |
 
-- [ ] **Step 4: Delete the compound boundary and dead JS transfer code**
+- [x] **Step 4: Delete the compound boundary and dead JS transfer code**
 
   Remove `createSyncTaskRunner`, `syncTaskRun`, `syncTasks`, `createMediaCommandFacade`, and their obsolete tests. Remove `openArtifactDownload` from the production artifact path. If `cas.ts` has no remaining production stream-staging caller, move the stream implementation into a test helper and remove `File.write`, `readChunks`, `wordArray`, and CryptoJS full-file hashing from `cas.ts`. Keep CryptoJS only where small identifiers still need SHA-256.
 
-- [ ] **Step 5: Prove forbidden imports and calls are gone**
+- [x] **Step 5: Prove forbidden imports and calls are gone**
 
   ```powershell
   Set-Location mobile
   rg -n "syncTaskRun|syncTasks|createSyncTaskRunner|createMediaCommandFacade" app src index.js
-  rg -n "new File\([^\r\n]*\)\.write|readChunks\(|wordArray\(" src/media src/workflows/executor
+  rg -n "new File\([^\r\n]*\)\.write|readChunks\(|wordArray\(" src/media src/workflows/executor -g '!*.test.ts'
   npm test -- --runInBand src/route-tests/root-layout.test.tsx src/route-tests/video-detail.test.tsx src/create/createForm.test.ts src/tasks/networkRecovery.test.ts src/native/taskMonitor.test.ts
   npm run typecheck
   ```
 
   Expected: both `rg` commands return exit code 1 with no matches; tests and typecheck pass.
 
-- [ ] **Step 6: Commit the caller migration**
+- [x] **Step 6: Commit the caller migration**
 
   ```powershell
   Set-Location mobile
@@ -719,11 +721,11 @@
 - Create: `mobile/scripts/seed-task-refresh-benchmark.mjs`
 - Create: `docs/verification/2026-09-05-task-refresh-architecture-decoupling.md`
 
-- [ ] **Step 1: Add a deterministic benchmark data generator**
+- [x] **Step 1: Add a deterministic benchmark data generator**
 
   Generate an upgradeable SQLite fixture containing exactly 1,000 task rows: 50 active, 950 terminal, 20 pending operations with mixed due times, and realistic large task input/media JSON. Generate or select a deterministic 128 MiB video fixture for a local HTTPS test endpoint. The script must print the database path, row counts, and SHA-256.
 
-- [ ] **Step 2: Run the complete JavaScript verification matrix**
+- [x] **Step 2: Run the complete JavaScript verification matrix**
 
   ```powershell
   Set-Location mobile
@@ -734,7 +736,7 @@
 
   Expected: all commands exit 0 with no failed suites.
 
-- [ ] **Step 3: Run the complete Android verification matrix**
+- [x] **Step 3: Run the complete Android verification matrix**
 
   ```powershell
   Set-Location mobile/android
@@ -759,7 +761,7 @@
 
   Put the commands, raw samples, computed p95/max, logcat ANR search, and pass/fail conclusion in `docs/verification/2026-09-05-task-refresh-architecture-decoupling.md`. Do not substitute subjective smoothness for numbers.
 
-- [ ] **Step 5: Run final static boundary checks**
+- [x] **Step 5: Run final static boundary checks**
 
   ```powershell
   Set-Location mobile
@@ -770,7 +772,7 @@
 
   Expected: all three commands return exit code 1 with no matches.
 
-- [ ] **Step 6: Commit verification artifacts**
+- [x] **Step 6: Commit verification artifacts**
 
   ```powershell
   Set-Location ..
@@ -784,12 +786,12 @@
 
 ## Final review gate
 
-- [ ] Compare the resulting diff with `docs/superpowers/specs/2026-09-05-task-refresh-architecture-design.md` and the original review findings.
-- [ ] Confirm every UI read is projection-only and every command promise ends at durable acknowledgement.
-- [ ] Confirm native transfer revalidates every redirect and performs both hashes outside the JS thread.
-- [ ] Confirm persistent revision and wake generations provide correctness across foreground, BackgroundTask, and Headless JS runtimes.
+- [x] Compare the resulting diff with `docs/superpowers/specs/2026-09-05-task-refresh-architecture-design.md` and the original review findings.
+- [x] Confirm every UI read is projection-only and every command promise ends at durable acknowledgement.
+- [x] Confirm native transfer revalidates every redirect and performs both hashes outside the JS thread.
+- [x] Confirm persistent revision and wake generations provide correctness across foreground, BackgroundTask, and Headless JS runtimes.
 - [ ] Confirm the full automated matrix and recorded Android measurements are fresh and passing.
-- [ ] Use `superpowers:requesting-code-review`, address accepted findings, then use `superpowers:verification-before-completion` before claiming completion.
+- [x] Use `superpowers:requesting-code-review`, address accepted findings, then use `superpowers:verification-before-completion` before claiming completion.
 
 ## Execution handoff
 
