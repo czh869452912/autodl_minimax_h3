@@ -103,12 +103,14 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   }
 
   @ReactMethod
-  fun cancelArtifactTransfer(operationId: String, promise: Promise) {
+  fun cancelArtifactTransfer(operationId: String, operationAttempt: Double, promise: Promise) {
     executors.executeCancellation {
-      if (operationId.isBlank()) {
-        promise.reject("ARTIFACT_TRANSFER_REQUEST_INVALID", "operationId is required")
+      if (operationId.isBlank() || !operationAttempt.isFinite() || operationAttempt < 0 ||
+        operationAttempt > Int.MAX_VALUE || operationAttempt % 1.0 != 0.0
+      ) {
+        promise.reject("ARTIFACT_TRANSFER_REQUEST_INVALID", "operation identity is invalid")
       } else {
-        promise.resolve(artifactTransfer.cancel(operationId.trim()))
+        promise.resolve(artifactTransfer.cancel(operationId.trim(), operationAttempt.toInt()))
       }
     }
   }

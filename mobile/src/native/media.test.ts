@@ -94,15 +94,17 @@ describe('native artifact transfer', () => {
   it('uses stable diagnostics when the Android module is unavailable', async () => {
     await expect(transferArtifact(request, {} as never))
       .rejects.toMatchObject({ code: 'ARTIFACT_TRANSFER_UNAVAILABLE' });
-    await expect(cancelArtifactTransfer('operation-1', {} as never))
+    await expect(cancelArtifactTransfer('operation-1', 2, {} as never))
       .rejects.toMatchObject({ code: 'ARTIFACT_TRANSFER_UNAVAILABLE' });
   });
 
-  it('cancels by non-empty operation id', async () => {
+  it('cancels only a validated operation attempt identity', async () => {
     const native = { cancelArtifactTransfer: jest.fn(async () => true) };
-    await expect(cancelArtifactTransfer(' operation-1 ', native as never)).resolves.toBe(true);
-    expect(native.cancelArtifactTransfer).toHaveBeenCalledWith('operation-1');
-    await expect(cancelArtifactTransfer(' ', native as never))
+    await expect(cancelArtifactTransfer(' operation-1 ', 2, native as never)).resolves.toBe(true);
+    expect(native.cancelArtifactTransfer).toHaveBeenCalledWith('operation-1', 2);
+    await expect(cancelArtifactTransfer(' ', 2, native as never))
+      .rejects.toMatchObject({ code: 'ARTIFACT_TRANSFER_REQUEST_INVALID' });
+    await expect(cancelArtifactTransfer('operation-1', -1, native as never))
       .rejects.toMatchObject({ code: 'ARTIFACT_TRANSFER_REQUEST_INVALID' });
   });
 
@@ -113,9 +115,9 @@ describe('native artifact transfer', () => {
     };
 
     await transferArtifact({ ...request, operationId: ' operation-1 ' }, native as never);
-    await cancelArtifactTransfer(' operation-1 ', native as never);
+    await cancelArtifactTransfer(' operation-1 ', 2, native as never);
 
     expect(native.transferArtifact).toHaveBeenCalledWith({ ...request, operationId: 'operation-1' });
-    expect(native.cancelArtifactTransfer).toHaveBeenCalledWith('operation-1');
+    expect(native.cancelArtifactTransfer).toHaveBeenCalledWith('operation-1', 2);
   });
 });

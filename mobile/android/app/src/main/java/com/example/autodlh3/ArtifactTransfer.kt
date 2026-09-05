@@ -22,6 +22,8 @@ class ArtifactTransfer(
   private val durableSha256: (String, () -> Unit) -> String,
   private val clock: () -> Long = System::currentTimeMillis,
 ) {
+  private data class TransferIdentity(val operationId: String, val operationAttempt: Int)
+
   private class ActiveTransfer {
     @Volatile private var cancelled = false
     private var currentCall: Call? = null
@@ -71,7 +73,7 @@ class ArtifactTransfer(
       .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
   }
 
-  private val activeTransfers = ConcurrentHashMap<String, ActiveTransfer>()
+  private val activeTransfers = ConcurrentHashMap<TransferIdentity, ActiveTransfer>()
 
   private fun fail(code: String, retryable: Boolean = false, cause: Throwable? = null): Nothing =
     throw ArtifactTransferException(code, retryable, cause)
@@ -88,8 +90,8 @@ class ArtifactTransfer(
 
   private fun isRedirect(status: Int) = status in 300..399
 
-  fun cancel(operationId: String): Boolean {
-    val active = activeTransfers[operationId] ?: return false
+  fun cancel(operationId: String, operationAttempt: Int): Boolean {
+    val active = activeTransfers[TransferIdentity(operationId, operationAttempt)] ?: return false
     return active.cancel()
   }
 
@@ -103,7 +105,8 @@ class ArtifactTransfer(
   ): ArtifactTransferResult {
     validateRequest(request)
     val active = ActiveTransfer()
-    if (activeTransfers.putIfAbsent(request.operationId, active) != null) {
+    val identity = TransferIdentity(request.operationId, request.operationAttempt)
+    if (activeTransfers.putIfAbsent(identity, active) != null) {
       fail("ARTIFACT_TRANSFER_ACTIVE")
     }
     val part = File(partsDir, "${hashText(request.operationId + "\u0000" + request.operationAttempt)}.part")
@@ -235,7 +238,7 @@ class ArtifactTransfer(
       fail("ARTIFACT_TRANSFER_FAILED", cause = error)
     } finally {
       active.terminate()
-      activeTransfers.remove(request.operationId, active)
+      activeTransfers.remove(identity, active)
     }
   }
 }

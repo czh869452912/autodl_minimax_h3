@@ -45,6 +45,7 @@ class ArtifactTransferTest {
     connectTimeoutMs: Long = 1_000,
     idleTimeoutMs: Long = 1_000,
     operationId: String = "operation-1",
+    operationAttempt: Int = 3,
   ) = ArtifactTransferRequest(
     url = url,
     allowedHosts = setOf("example.test"),
@@ -55,7 +56,7 @@ class ArtifactTransferTest {
     idleTimeoutMs = idleTimeoutMs,
     expectedSha256 = expectedSha256,
     operationId = operationId,
-    operationAttempt = 3,
+    operationAttempt = operationAttempt,
   )
 
   private fun transfer(
@@ -199,11 +200,54 @@ class ArtifactTransferTest {
     }
     assertTrue(streamed.await(2, TimeUnit.SECONDS))
 
-    assertTrue(artifactTransfer.cancel("cancel-me"))
+    assertTrue(artifactTransfer.cancel("cancel-me", 3))
     assertEquals("ARTIFACT_CANCELLED", future.get(2, TimeUnit.SECONDS)?.diagnosticCode)
-    assertFalse(artifactTransfer.cancel("cancel-me"))
+    assertFalse(artifactTransfer.cancel("cancel-me", 3))
     assertTrue(partsDir.listFiles().isNullOrEmpty())
     worker.shutdownNow()
+  }
+
+  @Test fun `cancelling an expired attempt leaves its replacement transfer untouched`() {
+    repeat(2) {
+      server.enqueue(
+        MockResponse().setHeader("Content-Type", "video/mp4")
+          .setChunkedBody("a long response body for attempt $it", 1)
+          .throttleBody(1, 500, TimeUnit.MILLISECONDS),
+      )
+    }
+    val clock = AtomicLong()
+    val firstStreamed = CountDownLatch(1)
+    val secondStreamed = CountDownLatch(1)
+    val artifactTransfer = transfer(clock = { clock.addAndGet(1_000) })
+    val workers = Executors.newFixedThreadPool(2)
+    val first = workers.submit<ArtifactTransferException?> {
+      runCatching {
+        artifactTransfer.transfer(request(operationId = "shared", operationAttempt = 1, idleTimeoutMs = 5_000)) {
+          firstStreamed.countDown()
+        }
+      }.exceptionOrNull() as? ArtifactTransferException
+    }
+    assertTrue(firstStreamed.await(2, TimeUnit.SECONDS))
+    val second = workers.submit<ArtifactTransferException?> {
+      runCatching {
+        artifactTransfer.transfer(request(operationId = "shared", operationAttempt = 2, idleTimeoutMs = 5_000)) {
+          secondStreamed.countDown()
+        }
+      }.exceptionOrNull() as? ArtifactTransferException
+    }
+
+    try {
+      assertTrue(secondStreamed.await(2, TimeUnit.SECONDS))
+      assertTrue(artifactTransfer.cancel("shared", 1))
+      assertEquals("ARTIFACT_CANCELLED", first.get(2, TimeUnit.SECONDS)?.diagnosticCode)
+      assertFalse("replacement attempt must remain active", second.isDone)
+      assertTrue(artifactTransfer.cancel("shared", 2))
+      assertEquals("ARTIFACT_CANCELLED", second.get(2, TimeUnit.SECONDS)?.diagnosticCode)
+    } finally {
+      artifactTransfer.cancel("shared", 1)
+      artifactTransfer.cancel("shared", 2)
+      workers.shutdownNow()
+    }
   }
 
   @Test fun `a duplicate operation cannot dismantle the writable cancellable first transfer`() {
@@ -226,7 +270,7 @@ class ArtifactTransferTest {
     expectCode("ARTIFACT_TRANSFER_ACTIVE") {
       artifactTransfer.transfer(request(operationId = "duplicate", idleTimeoutMs = 5_000))
     }
-    assertTrue("the first transfer must remain registered for cancellation", artifactTransfer.cancel("duplicate"))
+    assertTrue("the first transfer must remain registered for cancellation", artifactTransfer.cancel("duplicate", 3))
     assertEquals("ARTIFACT_CANCELLED", first.get(2, TimeUnit.SECONDS)?.diagnosticCode)
     assertTrue(partsDir.listFiles().isNullOrEmpty())
     worker.shutdownNow()
@@ -247,7 +291,7 @@ class ArtifactTransferTest {
     }
     assertTrue(validating.await(2, TimeUnit.SECONDS))
 
-    val cancelled = artifactTransfer.cancel("cancel-validation")
+    val cancelled = artifactTransfer.cancel("cancel-validation", 3)
     releaseValidation.countDown()
 
     assertTrue(cancelled)
@@ -276,7 +320,7 @@ class ArtifactTransferTest {
     }
     assertTrue(validatingRedirect.await(2, TimeUnit.SECONDS))
 
-    val cancelled = artifactTransfer.cancel("cancel-redirect")
+    val cancelled = artifactTransfer.cancel("cancel-redirect", 3)
     releaseRedirect.countDown()
 
     assertTrue(cancelled)
@@ -302,7 +346,7 @@ class ArtifactTransferTest {
     }
     assertTrue(rereading.await(2, TimeUnit.SECONDS))
 
-    val cancelled = artifactTransfer.cancel("cancel-reread")
+    val cancelled = artifactTransfer.cancel("cancel-reread", 3)
     releaseReread.countDown()
 
     assertTrue(cancelled)

@@ -245,6 +245,28 @@ test('rejects a native part outside the owned operation path without deleting it
 });
 
 test.each([
+  ['missing ownership', {}],
+  ['blank operation id', { operationId: ' ', operationAttempt: 1 }],
+  ['incorrect operation attempt', { operationId: 'download-1', operationAttempt: 2 }],
+])('rejects %s before touching the claimed native part', async (_case, ownership) => {
+  const base = memoryFiles();
+  base.entries.set(DOWNLOAD_PART, bytes('abc'));
+  const sha256File = nativeSha256(base.entries);
+  const cas = createArtifactCas(base.files, { sha256File, documentDirectory: DOCUMENT_DIRECTORY });
+
+  await expect(cas.adoptNativePart({
+    partUri: `${DOCUMENT_DIRECTORY}${DOWNLOAD_PART}`, mime: 'video/mp4', byteSize: 3, sha256: ABC_SHA256,
+  }, {
+    mime: 'video/mp4', maxBytes: 10, ...ownership,
+  } as never)).rejects.toMatchObject({ code: 'ARTIFACT_INTEGRITY_FAILED' });
+
+  expect(base.entries.get(DOWNLOAD_PART)).toEqual(bytes('abc'));
+  expect(base.files.stat).not.toHaveBeenCalled();
+  expect(base.files.remove).not.toHaveBeenCalled();
+  expect(sha256File).not.toHaveBeenCalled();
+});
+
+test.each([
   ['reported size differs from disk', 4, ABC_SHA256],
   ['native durable hash differs from the transfer hash', 3, ABD_SHA256],
 ])('rejects a native part when %s and removes only the owned part', async (_case, byteSize, durableSha256) => {

@@ -40,6 +40,11 @@ export type ArtifactCasPutOptions = {
   assertLease?: () => void | Promise<void>;
 };
 
+export type NativeArtifactCasPutOptions = Omit<ArtifactCasPutOptions, 'operationId' | 'operationAttempt'> & Readonly<{
+  operationId: string;
+  operationAttempt: number;
+}>;
+
 export type StagedArtifact = ArtifactCasBlob & {
   stagedRelativePath: string;
   publish(): Promise<ArtifactCasBlob>;
@@ -47,7 +52,7 @@ export type StagedArtifact = ArtifactCasBlob & {
 };
 
 export type ArtifactCas = {
-  adoptNativePart(input: NativeStagedArtifact, options: ArtifactCasPutOptions): Promise<StagedArtifact>;
+  adoptNativePart(input: NativeStagedArtifact, options: NativeArtifactCasPutOptions): Promise<StagedArtifact>;
   stage(stream: AsyncIterable<Uint8Array>, options: ArtifactCasPutOptions): Promise<StagedArtifact>;
   put(stream: AsyncIterable<Uint8Array>, options: ArtifactCasPutOptions): Promise<ArtifactCasBlob>;
 };
@@ -333,8 +338,12 @@ export function createArtifactCas(
     }
   };
 
-  const nativePartPath = (partUri: string, options: ArtifactCasPutOptions): string => {
+  const nativePartPath = (partUri: string, options: NativeArtifactCasPutOptions): string => {
     try {
+      if (typeof options.operationId !== 'string' || !options.operationId.trim() ||
+          !Number.isSafeInteger(options.operationAttempt) || options.operationAttempt < 0) {
+        throw new Error('native part ownership is invalid');
+      }
       if (!documentDirectory) throw new Error('document directory unavailable');
       const root = new URL('cas/parts/', documentDirectory.endsWith('/') ? documentDirectory : `${documentDirectory}/`);
       const candidate = new URL(partUri);
@@ -345,11 +354,8 @@ export function createArtifactCas(
       const name = candidate.href.slice(root.href.length);
       if (!/^[a-f0-9]{64}\.part$/.test(name)) throw new Error('native part name is invalid');
       const part = `cas/parts/${name}`;
-      if (options.operationId) {
-        const attempt = options.operationAttempt ?? 1;
-        if (!Number.isSafeInteger(attempt) || attempt < 0 || operationPart(options.operationId, attempt) !== part) {
-          throw new Error('native part is not owned by this operation attempt');
-        }
+      if (operationPart(options.operationId, options.operationAttempt) !== part) {
+        throw new Error('native part is not owned by this operation attempt');
       }
       return part;
     } catch (cause) {

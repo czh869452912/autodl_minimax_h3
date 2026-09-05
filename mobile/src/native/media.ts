@@ -7,7 +7,7 @@ type AutoDLMediaModule = {
   sha256File?(source: string): Promise<string>;
   probeVideo?(source: string): Promise<VideoProbeResult & { hasVideoTrack?: boolean }>;
   transferArtifact?(options: NativeArtifactTransferRequest): Promise<NativeArtifactTransferResult>;
-  cancelArtifactTransfer?(operationId: string): Promise<boolean>;
+  cancelArtifactTransfer?(operationId: string, operationAttempt: number): Promise<boolean>;
 };
 
 export type NativeArtifactTransferRequest = Readonly<{
@@ -173,10 +173,13 @@ export async function transferArtifact(
 
 export async function cancelArtifactTransfer(
   operationId: string,
+  operationAttempt: number,
   module: AutoDLMediaModule | undefined = NativeModules.AutoDLMedia,
 ): Promise<boolean> {
   const value = operationId.trim();
-  if (!value) artifactError('ARTIFACT_TRANSFER_REQUEST_INVALID', 'operationId 不能为空');
+  if (!value || !Number.isSafeInteger(operationAttempt) || operationAttempt < 0 || operationAttempt > 2_147_483_647) {
+    artifactError('ARTIFACT_TRANSFER_REQUEST_INVALID', '原生制品取消参数不合法');
+  }
   const native = requireArtifactModule(module, 'cancelArtifactTransfer');
-  return native.cancelArtifactTransfer!(value);
+  return native.cancelArtifactTransfer!(value, operationAttempt);
 }

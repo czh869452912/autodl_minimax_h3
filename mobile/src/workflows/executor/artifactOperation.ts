@@ -213,38 +213,49 @@ function canonicalNativeTransferCause(cause: unknown): unknown {
   return cause;
 }
 
+type LeaseHeartbeatOutcome<T> =
+  | { status: 'completed'; value: T }
+  | { status: 'lease-lost'; value: T; cause: unknown };
+
 function withLeaseHeartbeat<T>(options: {
   work(): Promise<T>;
   assertLease(): void;
   onLeaseLost(): Promise<void>;
   leaseMs: number;
-}): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    let settled = false;
-    const finish = (callback: () => void) => {
-      if (settled) return;
-      settled = true;
-      clearInterval(timer);
-      callback();
-    };
+}): Promise<LeaseHeartbeatOutcome<T>> {
+  return new Promise<LeaseHeartbeatOutcome<T>>((resolve, reject) => {
+    let leaseLoss: { cause: unknown; cancellation: Promise<void> } | undefined;
     const intervalMs = Math.max(1, Math.min(30_000, Math.floor(options.leaseMs / 3)));
     const timer = setInterval(() => {
-      if (settled) return;
+      if (leaseLoss) return;
       try {
         options.assertLease();
       } catch (cause) {
-        finish(() => {
-          void options.onLeaseLost().then(
-            () => reject(cause),
-            () => reject(cause),
-          );
-        });
+        clearInterval(timer);
+        const cancellation = Promise.resolve().then(options.onLeaseLost).then(
+          () => undefined,
+          () => undefined,
+        );
+        leaseLoss = { cause, cancellation };
       }
     }, intervalMs);
-    void Promise.resolve().then(options.work).then(
-      (value) => finish(() => resolve(value)),
-      (cause) => finish(() => reject(cause)),
-    );
+    void Promise.resolve().then(options.work).then(async (value) => {
+      clearInterval(timer);
+      if (!leaseLoss) {
+        resolve({ status: 'completed', value });
+        return;
+      }
+      await leaseLoss.cancellation;
+      resolve({ status: 'lease-lost', value, cause: leaseLoss.cause });
+    }, async (cause) => {
+      clearInterval(timer);
+      if (leaseLoss) {
+        await leaseLoss.cancellation;
+        reject(leaseLoss.cause);
+        return;
+      }
+      reject(cause);
+    });
   });
 }
 
@@ -260,13 +271,6 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
   }
   let staged: Awaited<ReturnType<ArtifactCas['stage']>> | undefined;
   let reservation: { operationId: string; owner: string } | undefined;
-  let transferInFlight = false;
-  let cancellationRequested = false;
-  const cancelCurrentTransfer = async () => {
-    if (!transferInFlight || cancellationRequested) return;
-    cancellationRequested = true;
-    await (deps.cancelArtifactTransfer ?? cancelArtifactTransfer)(operation.id).catch(() => undefined);
-  };
   try {
     if (deps.commit) await deps.commit.clearStale({ operationId: operation.id, owner });
     await deps.ensureProjection(operation.jobId, artifact);
@@ -281,35 +285,42 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
       ? artifact.metadata.sha256.trim()
       : undefined;
     assertLease();
-    transferInFlight = true;
-    let transferred: Awaited<ReturnType<typeof transferArtifact>>;
-    try {
-      transferred = await withLeaseHeartbeat({
-        leaseMs: deps.leaseMs ?? 120_000,
-        assertLease,
-        onLeaseLost: cancelCurrentTransfer,
-        work: () => (deps.transferArtifact ?? transferArtifact)({
-          url,
-          allowedHosts: policy.allowedHosts,
-          allowProviderSuppliedPublicHosts: policy.allowProviderSuppliedPublicHosts ?? false,
-          maxBytes: policy.maxBytes,
-          acceptedMimes: policy.acceptedMimes ?? ['video/mp4'],
-          connectTimeoutMs: policy.connectTimeoutMs ?? 30_000,
-          idleTimeoutMs: policy.idleTimeoutMs ?? 30_000,
-          expectedSha256: providerSha256?.toLowerCase(),
-          operationId: operation.id,
-          operationAttempt: operation.attempt,
-        }),
-      });
-    } finally {
-      transferInFlight = false;
-    }
-    staged = await deps.cas.adoptNativePart(transferred, {
+    const transferOutcome = await withLeaseHeartbeat({
+      leaseMs: deps.leaseMs ?? 120_000,
+      assertLease,
+      onLeaseLost: async () => {
+        await (deps.cancelArtifactTransfer ?? cancelArtifactTransfer)(operation.id, operation.attempt);
+      },
+      work: () => (deps.transferArtifact ?? transferArtifact)({
+        url,
+        allowedHosts: policy.allowedHosts,
+        allowProviderSuppliedPublicHosts: policy.allowProviderSuppliedPublicHosts ?? false,
+        maxBytes: policy.maxBytes,
+        acceptedMimes: policy.acceptedMimes ?? ['video/mp4'],
+        connectTimeoutMs: policy.connectTimeoutMs ?? 30_000,
+        idleTimeoutMs: policy.idleTimeoutMs ?? 30_000,
+        expectedSha256: providerSha256?.toLowerCase(),
+        operationId: operation.id,
+        operationAttempt: operation.attempt,
+      }),
+    });
+    const transferred = transferOutcome.value;
+    const adoptionOptions = {
       mime: transferred.mime,
       maxBytes: policy.maxBytes,
       expectedSha256: providerSha256,
       operationId: operation.id,
       operationAttempt: operation.attempt,
+    };
+    if (transferOutcome.status === 'lease-lost') {
+      try {
+        const abandoned = await deps.cas.adoptNativePart(transferred, adoptionOptions);
+        await abandoned.abort();
+      } catch { /* adoption deletes only the validated owned attempt part on failure */ }
+      throw transferOutcome.cause;
+    }
+    staged = await deps.cas.adoptNativePart(transferred, {
+      ...adoptionOptions,
       assertLease,
     });
     const resolveUri = deps.resolveUri ?? ((relativePath: string) => `${FileSystem.documentDirectory ?? ''}${relativePath}`);

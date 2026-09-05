@@ -1,5 +1,5 @@
 import { createInitializedRealSqliteTestDb } from '../../test/realSqlite';
-import type { ArtifactCas } from '../../media/cas';
+import { createArtifactCas, type ArtifactCas, type CasFiles } from '../../media/cas';
 import { artifactExportDisplayName, createSqliteArtifactCommitter, handleArtifactDownload } from './artifactOperation';
 import type { WorkflowOperation } from './types';
 import { createOperationRepository } from './operationRepository';
@@ -15,6 +15,45 @@ const operation: WorkflowOperation = {
   state: 'CLAIMED', attempt: 1, nextRetryAt: 1, leaseOwner: 'worker', leaseExpiresAt: 100,
   createdAt: 1, updatedAt: 1,
 };
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (cause: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+function memoryCas(entries: Map<string, Uint8Array>): ArtifactCas {
+  const files: CasFiles = {
+    makeDirectory: jest.fn(async () => undefined),
+    write: jest.fn(async () => { throw new Error('legacy write reached'); }),
+    stat: jest.fn(async (path) => entries.has(path) ? { exists: true, size: entries.get(path)!.byteLength } : { exists: false }),
+    move: jest.fn(async (from, to) => {
+      const value = entries.get(from);
+      if (!value) throw new Error('missing');
+      entries.set(to, value);
+      entries.delete(from);
+    }),
+    copy: jest.fn(async (from, to) => {
+      const value = entries.get(from);
+      if (!value) throw new Error('missing');
+      entries.set(to, value.slice());
+    }),
+    remove: jest.fn(async (path) => { entries.delete(path); }),
+    readChunks: jest.fn(async function* () { throw new Error('legacy reread reached'); }),
+  };
+  return createArtifactCas(files, {
+    documentDirectory: 'file:///documents/',
+    sha256File: async (uri) => {
+      const value = entries.get(uri.slice('file:///documents/'.length));
+      if (!value || new TextDecoder().decode(value) !== 'abc') throw new Error('unexpected native reread');
+      return 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+    },
+  });
+}
 
 function setup() {
   const operations = { finish: jest.fn(() => true), retry: jest.fn(() => true), renew: jest.fn(() => true), get: jest.fn(() => operation) };
@@ -148,11 +187,16 @@ test('does not cancel a replacement transfer after the native part has been hand
 });
 
 test('renews the lease while native transfer is pending and cancels immediately when ownership is lost', async () => {
-  jest.useFakeTimers();
-  try {
-    const deps = setup();
-    deps.operations.renew.mockReturnValueOnce(true).mockReturnValue(false);
-    deps.transferArtifact.mockImplementationOnce(() => new Promise(() => undefined));
+    jest.useFakeTimers();
+    try {
+      const deps = setup();
+      const transfer = deferred<Awaited<ReturnType<typeof deps.transferArtifact>>>();
+      deps.operations.renew.mockReturnValueOnce(true).mockReturnValue(false);
+      deps.transferArtifact.mockImplementationOnce(() => transfer.promise);
+      deps.cancelArtifactTransfer.mockImplementationOnce(async () => {
+        transfer.reject(Object.assign(new Error('cancelled'), { code: 'ARTIFACT_CANCELLED' }));
+        return true;
+      });
 
     const handled = handleArtifactDownload(operation, 'worker', {
       ...deps, now: () => 50, leaseMs: 100,
@@ -163,7 +207,7 @@ test('renews the lease while native transfer is pending and cancels immediately 
     await jest.advanceTimersByTimeAsync(1_000);
     await handled;
 
-    expect(deps.cancelArtifactTransfer).toHaveBeenCalledWith('download-1');
+    expect(deps.cancelArtifactTransfer).toHaveBeenCalledWith('download-1', 1);
     expect(deps.operations.retry).toHaveBeenCalledWith('download-1', 'worker', expect.objectContaining({
       error: expect.objectContaining({ code: 'ARTIFACT_NETWORK', retryable: true }),
     }));
@@ -172,6 +216,50 @@ test('renews the lease while native transfer is pending and cancels immediately 
     jest.useRealTimers();
   }
 });
+
+test.each(['false', 'error'] as const)(
+  'adopts and aborts a raced successful transfer when attempt-specific cancellation returns %s',
+  async (cancellationOutcome) => {
+    jest.useFakeTimers();
+    try {
+      const deps = setup();
+      const transfer = deferred<Awaited<ReturnType<typeof deps.transferArtifact>>>();
+      const cancellation = deferred<boolean>();
+      const attemptOnePart = 'cas/parts/898f18c03e478384b0617b16a607c3935b0b555652951873aecc88ab0850a3c3.part';
+      const attemptTwoPart = 'cas/parts/3c9e11e917ac081e95ddac7d89eb5685ff4985c02065038f48a2ce956c40c01c.part';
+      const entries = new Map<string, Uint8Array>([
+        [attemptOnePart, new TextEncoder().encode('abc')],
+        [attemptTwoPart, new TextEncoder().encode('replacement')],
+      ]);
+      deps.transferArtifact.mockImplementationOnce(() => transfer.promise);
+      deps.cancelArtifactTransfer.mockImplementationOnce(() => cancellation.promise);
+      deps.operations.renew.mockReturnValueOnce(true).mockReturnValue(false);
+
+      const handled = handleArtifactDownload(operation, 'worker', {
+        ...deps, cas: memoryCas(entries), now: () => 50, leaseMs: 300,
+        policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(100);
+      transfer.resolve({
+        partUri: `file:///documents/${attemptOnePart}`,
+        finalUrl: 'https://cdn.example/video.mp4', mime: 'video/mp4', byteSize: 3,
+        sha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+      });
+      if (cancellationOutcome === 'false') cancellation.resolve(false);
+      else cancellation.reject(new Error('cancellation bridge failed'));
+      await handled;
+
+      expect(deps.cancelArtifactTransfer).toHaveBeenCalledWith('download-1', 1);
+      expect(entries.has(attemptOnePart)).toBe(false);
+      expect(entries.get(attemptTwoPart)).toEqual(new TextEncoder().encode('replacement'));
+      expect(deps.operations.retry).toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  },
+);
 
 test('retries connection and idle timeouts with bounded backoff', async () => {
   const deps = setup();
