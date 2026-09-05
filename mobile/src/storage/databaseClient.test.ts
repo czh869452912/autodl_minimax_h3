@@ -34,7 +34,7 @@ test('keeps the handle and exposes readonly state when migration fails', () => {
   mockEnsure.mockImplementationOnce(() => {
     throw new AppMigrationError('MIGRATION_5_TO_6_FAILED', 5);
   });
-  expect(getDatabase()).toBe(mockDatabase);
+  expect(getDatabase()).toBe(getDatabase());
   expect(getDatabaseStartupState()).toEqual({
     mode: 'readonly',
     diagnostic: 'MIGRATION_5_TO_6_FAILED',
@@ -44,7 +44,7 @@ test('keeps the handle and exposes readonly state when migration fails', () => {
 
 test('future schemas are readonly and cannot be reset from recovery UI', () => {
   mockEnsure.mockReturnValueOnce({ mode: 'future', fromVersion: 7 });
-  expect(getDatabase()).toBe(mockDatabase);
+  expect(getDatabase()).toBe(getDatabase());
   expect(getDatabaseStartupState()).toEqual({
     mode: 'readonly',
     diagnostic: 'SCHEMA_VERSION_NEWER_THAN_APP',

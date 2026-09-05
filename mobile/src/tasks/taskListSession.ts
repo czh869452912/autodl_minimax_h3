@@ -38,6 +38,8 @@ export function createTaskListSession(deps: {
   let disposed = false;
   let dirty = false;
   let readPromise: Promise<RefreshReceipt> | undefined;
+  let pagePromise: Promise<void> | undefined;
+  let retryPage = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let sequence = 0;
   let appendCursor: TaskCursor | undefined;
@@ -76,7 +78,8 @@ export function createTaskListSession(deps: {
           const page = await repository.readWindow(pageSize, cursor);
           if (disposed || currentSequence !== sequence) break;
           if (revision !== snapshot.revision || revision !== await repository.readRevision()) {
-            dirty = true; causes.add('focus'); continue;
+            if (++conflicts >= 4) throw new Error('任务状态持续变化，请稍后重试');
+            retryPage = true; dirty = true; causes.add('focus'); continue;
           }
           const known = new Set(snapshot.items.map(item => item.id));
           receipt = { revision, checkedAt: now() };
@@ -104,6 +107,10 @@ export function createTaskListSession(deps: {
           publish({ ...snapshot, revision: result.revision, phase: 'ready', items, nextCursor: result.nextCursor,
             activity, read: { pending: true, lastCheckedAt: receipt.checkedAt,
               lastChangedAt: result.revision !== snapshot.revision || snapshot.phase === 'cold' ? receipt.checkedAt : snapshot.read.lastChangedAt } });
+          if (retryPage) {
+            retryPage = false;
+            if (result.nextCursor) { appendCursor = result.nextCursor; dirty = true; causes.add('page'); }
+          }
         } else {
           const nextActivity = await repository.readActivity(now());
           if (disposed || currentSequence !== sequence) break;
@@ -163,11 +170,17 @@ export function createTaskListSession(deps: {
       else if (timer) { clearTimeout(timer); timer = undefined; }
     },
     refresh: requestRead,
-    async loadMore() {
-      if (!snapshot.nextCursor || readPromise) return;
-      if (limit >= 120) appendCursor = snapshot.nextCursor;
-      else limit = Math.min(120, limit + pageSize);
-      await requestRead('page');
+    loadMore() {
+      if (!pagePromise) {
+        pagePromise = Promise.resolve().then(async () => {
+          if (readPromise) await readPromise;
+          if (disposed || !snapshot.nextCursor) return;
+          if (limit >= 120) appendCursor = snapshot.nextCursor;
+          else limit = Math.min(120, limit + pageSize);
+          await requestRead('page');
+        }).finally(() => { pagePromise = undefined; });
+      }
+      return pagePromise;
     },
     dispose() {
       disposed = true; sequence++;

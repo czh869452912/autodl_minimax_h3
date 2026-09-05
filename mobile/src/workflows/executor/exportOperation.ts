@@ -1,3 +1,4 @@
+import { withWriteTransaction } from '../../storage/sqliteBusy';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { NormalizedError } from '../../jobs/types';
@@ -39,7 +40,7 @@ type ExportDeps = {
 };
 
 async function transaction(db: SQLiteDatabase, work: (transaction: SQLiteDatabase) => Promise<void>): Promise<void> {
-  await db.withExclusiveTransactionAsync(work);
+  await withWriteTransaction(db, work);
 }
 
 function changes(result: unknown): number {

@@ -1,3 +1,4 @@
+import { withWriteTransaction } from '../storage/sqliteBusy';
 import { getDatabase } from '../storage/databaseClient';
 import { createOperationRepository } from '../workflows/executor/operationRepository';
 import { createExecutorWakeRepository } from './executorWakeRepository';
@@ -12,7 +13,7 @@ export async function resumeConnectivityWork() {
       UNION SELECT job_id AS id FROM workflow_operations WHERE state='PENDING' AND job_id IS NOT NULL`)).map(row => row.id),
     async expediteRetryableNetwork(ids, now) {
       let count = 0;
-      await db.withExclusiveTransactionAsync(async txn => {
+      await withWriteTransaction(db, async txn => {
         count = await createOperationRepository(txn).expediteRetryableNetwork(ids, now);
         if (ids.length) await createExecutorWakeRepository(txn).requestWake(now);
       });

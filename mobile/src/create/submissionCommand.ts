@@ -1,3 +1,4 @@
+import { withWriteTransaction } from '../storage/sqliteBusy';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { PreparedWorkflowSubmission } from '../workflows/runtime/runtime';
 import type { JobRecord } from '../jobs/types';
@@ -14,7 +15,7 @@ export async function persistSubmissionCommand(database: SQLiteDatabase, submiss
     workflowContentHash: prepared.workflowContentHash, adapterId: prepared.adapterId, adapterVersion: prepared.adapterVersion,
     inputSnapshot: prepared.inputSnapshot, outputMapping: prepared.outputMapping, status: 'READY_TO_SUBMIT', createdAt: now, updatedAt: now };
   const task = { ...jobToTaskProjection(job, []), ...media };
-  await database.withExclusiveTransactionAsync(async db => {
+  await withWriteTransaction(database, async db => {
     await assertAppDatabaseWritableAsync(db);
     const inserted = await db.runAsync(`INSERT OR IGNORE INTO workflow_jobs
       (id,revision,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,output_mapping_json,status,created_at,updated_at)

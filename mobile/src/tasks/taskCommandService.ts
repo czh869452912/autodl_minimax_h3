@@ -1,3 +1,4 @@
+import { withWriteTransaction } from '../storage/sqliteBusy';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { createMediaCommandService, type MediaCommandService } from '../workflows/executor/mediaCommandService';
 import { createExecutorWakeRepository } from './executorWakeRepository';
@@ -13,7 +14,7 @@ export function createTaskCommandService(options: {
   const now = options.now ?? Date.now;
   const execute = async (command?: (media: MediaCommandService) => ReturnType<MediaCommandService['requestDownload']>): Promise<CommandReceipt> => {
     let receipt!: CommandReceipt;
-    await options.db.withExclusiveTransactionAsync(async db => {
+    await withWriteTransaction(options.db, async db => {
       const result = command ? await command(createMediaCommandService({ ...options, db, insideTransaction: true })) : undefined;
       const acceptedAt = now();
       const wake = await createExecutorWakeRepository(db).requestWake(acceptedAt, command ? undefined : 'force-next-slice');

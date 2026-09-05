@@ -28,6 +28,7 @@ import { createExecutorRunner } from './executorRunner';
 import { createExecutorWakeRepository } from './executorWakeRepository';
 import { createExecutorSettingsCache } from './syncPolicy';
 import { projectTerminalNotifications } from './terminalEvents';
+import { repairStaleTaskStatuses } from './taskProjectionRepair';
 
 const database = getDatabase();
 export const taskStore = createTaskRepository(database);
@@ -86,7 +87,7 @@ const executor = {
       updateProjection: async () => undefined,
       verifyVideo: probeVideo,
       async ensureProjection(jobId, artifact) {
-        const job = jobs.get(jobId);
+        const job = (await jobs.get(jobId));
         const task = await taskStore.get(jobId);
         if (!job) throw new Error('JOB_NOT_FOUND');
         if (!task) throw new Error('TASK_NOT_FOUND');
@@ -112,8 +113,8 @@ const executor = {
           updatedAt: timestamp,
         });
       },
-      policy(jobId) {
-        const job = jobs.get(jobId);
+      async policy(jobId) {
+        const job = (await jobs.get(jobId));
         const policy = job ? current.adapters.get(job.adapterId)?.manifest().artifactDownloadPolicy : undefined;
         return {
           allowedHosts: policy?.allowedHosts ?? [],
@@ -158,11 +159,15 @@ async function repairTaskProjections(limit = 32): Promise<number> {
 
 export const executorRunner = createExecutorRunner({
   db: database, wakes: createExecutorWakeRepository(database),
-  runCycle: request => cycle.run({ reason: request.trigger === 'background' ? 'background' : request.trigger === 'service' ? 'service' : 'foreground' }),
+  runCycle: async request => {
+    const repair = await repairStaleTaskStatuses(database);
+    const result = await cycle.run({ reason: request.trigger === 'background' ? 'background' : request.trigger === 'service' ? 'service' : 'foreground' });
+    return { ...result, budgetExhausted: result.budgetExhausted || repair.hasMore };
+  },
   pendingSummary: request => operations.pendingSummary({ now: Date.now(), ...(request.taskIds ? { jobIds: [...request.taskIds] } : {}) }),
   maintain: async () => {
     await repairTaskProjections(32);
     await reconcileMediaState({ db: database, fileExists: async uri => { const info = await FileSystem.getInfoAsync(uri); return info.exists && !info.isDirectory; }, removeCasPath });
   },
 });
-export function readTerminalNotifications(taskIds: string[]) { return projectTerminalNotifications(jobs.listTerminalEvents(taskIds)); }
+export async function readTerminalNotifications(taskIds: string[]) { return projectTerminalNotifications((await jobs.listTerminalEvents(taskIds))); }

@@ -1,7 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { TaskMediaPatch, TaskRecord } from './types';
 import * as FileSystem from 'expo-file-system/legacy';
-import { assertAppDatabaseWritable } from '../storage/database';
+import { assertAppDatabaseWritable, assertAppDatabaseWritableAsync } from '../storage/database';
 
 export type TaskPageCursor = { createdAt: number; id: string };
 export type { TaskCard, TaskCursor } from './taskCard';
@@ -19,7 +19,8 @@ export function createTaskRepository(db: SQLiteDatabase) {
   const parseJson = <T>(source: string | null | undefined, fallback: T): T => { if (!source) return fallback; try { return JSON.parse(source) as T; } catch { return fallback; } };
   const map = (r: any): TaskRecord => ({ id: r.id, prompt: r.prompt, status: r.status, resolution: r.resolution, duration: Number(r.duration), seed: r.seed || undefined, workflowId: r.workflow_id || undefined, workflowVersion: r.workflow_version || undefined, workflowContentHash: r.workflow_hash || undefined, adapterId: r.adapter_id || undefined, adapterVersion: r.adapter_version || undefined, inputSnapshot: parseJson(r.input_json, undefined), images: parseJson(r.images_json, undefined), audios: parseJson(r.audios_json, undefined), videoUrl: r.video_url || undefined, localUri: r.local_uri || undefined, thumbnailUrl: r.thumbnail_url || undefined, downloadState: r.download_state || (r.local_uri ? 'DOWNLOADED' : 'IDLE'), downloadError: r.download_error || undefined, downloadProgress: r.download_progress == null ? undefined : Number(r.download_progress), galleryUri: r.gallery_uri || undefined, exportState: r.export_state || 'NOT_REQUESTED', exportError: r.export_error || undefined, exportedAt: r.exported_at == null ? undefined : Number(r.exported_at), createdAt: Number(r.created_at), updatedAt: Number(r.updated_at), startedAt: r.started_at == null ? undefined : Number(r.started_at), executionDuration: r.execution_duration == null ? undefined : Number(r.execution_duration), syncError: r.sync_error || undefined, lastSyncAt: r.last_sync_at == null ? undefined : Number(r.last_sync_at) });
   const run = async (sql: string, ...params: any[]) => {
-    assertAppDatabaseWritable(db);
+    if (typeof db.getFirstAsync === 'function') await assertAppDatabaseWritableAsync(db);
+    else assertAppDatabaseWritable(db);
     return typeof (db as any).runAsync === 'function' ? (db as any).runAsync(sql, ...params) : db.runSync(sql, ...params);
   };
   const all = async <T>(sql: string, ...params: any[]): Promise<T[]> => typeof (db as any).getAllAsync === 'function' ? ((await (db as any).getAllAsync(sql, ...params)) ?? []) : (db.getAllSync<T>(sql, ...params) ?? []);

@@ -1,0 +1,34 @@
+{
+  "database": "refresh-contention-1788600373917.db",
+  "independentConnections": true,
+  "rounds": 10,
+  "signals": 30,
+  "taskStatuses": [
+    {
+      "task": "SUCCESS",
+      "job": "SUCCEEDED"
+    },
+    {
+      "task": "SUCCESS",
+      "job": "SUCCEEDED"
+    },
+    {
+      "task": "SUCCESS",
+      "job": "SUCCEEDED"
+    },
+    {
+      "task": "SUCCESS",
+      "job": "SUCCEEDED"
+    }
+  ],
+  "maxStallMs": 21.99820000026375,
+  "transactionAttempts": 2,
+  "repair": {
+    "repaired": 1,
+    "hasMore": false
+  },
+  "wake": {
+    "generation": 30
+  },
+  "ok": true
+}

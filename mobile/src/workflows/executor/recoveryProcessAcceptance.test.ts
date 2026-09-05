@@ -153,17 +153,17 @@ acceptanceTest(`process recovery ${acceptanceCase ?? 'disabled'} ${acceptancePha
       const job = await value.service.queueSubmission(submission(`${acceptanceCase}-process`));
       if (acceptanceCase === 'unknown' || acceptanceCase === 'handle') {
         await value.operations.claimDue({ kind: 'SUBMIT', owner: 'dead-process', now: 100, leaseMs: 50, limit: 1 });
-        const started = value.jobs.transition({
+        const started = (await value.jobs.transition({
           jobId: job.id, expectedRevision: job.revision, patch: { status: 'SUBMITTING', updatedAt: 100 },
           event: { id: `${job.id}:process:started`, type: 'SUBMIT_STARTED', payload: {}, createdAt: 100 },
-        });
+        }));
         if (!started.ok) throw new Error('failed to create process fixture');
         if (acceptanceCase === 'handle') {
-          value.jobs.transition({
+          (await value.jobs.transition({
             jobId: job.id, expectedRevision: started.current.revision,
             patch: { status: 'QUEUED', providerHandle: { providerJobId: 'remote-original', opaque: 'opaque-original' }, updatedAt: 101 },
             event: { id: `${job.id}:process:handle`, type: 'SUBMIT_HANDLE_PERSISTED', payload: {}, createdAt: 101 },
-          });
+          }));
         }
       }
       expect(calls()).toEqual([]);
@@ -176,10 +176,10 @@ acceptanceTest(`process recovery ${acceptanceCase ?? 'disabled'} ${acceptancePha
     const persisted = capture(value.db);
     if (acceptanceCase === 'pending') {
       expect(calls()).toEqual([{ operation: 'submit' }]);
-      expect(value.jobs.get(jobId)).toMatchObject({ status: 'QUEUED', providerHandle: { providerJobId: 'remote-process' } });
+      expect((await value.jobs.get(jobId))).toMatchObject({ status: 'QUEUED', providerHandle: { providerJobId: 'remote-process' } });
     } else if (acceptanceCase === 'unknown') {
       expect(calls()).toEqual([]);
-      expect(value.jobs.get(jobId)).toMatchObject({ status: 'UNKNOWN' });
+      expect((await value.jobs.get(jobId))).toMatchObject({ status: 'UNKNOWN' });
       expect(value.operations.list('SUBMIT')).toMatchObject([{ state: 'BLOCKED', attempt: 1 }]);
     } else if (acceptanceCase === 'handle') {
       expect(calls()).toEqual([{ operation: 'status', handle: { providerJobId: 'remote-original', opaque: 'opaque-original' } }]);
@@ -187,7 +187,7 @@ acceptanceTest(`process recovery ${acceptanceCase ?? 'disabled'} ${acceptancePha
     } else if (acceptanceCase === 'redaction') {
       expect(calls()).toEqual([{ operation: 'submit' }]);
       expect(JSON.stringify(persisted)).not.toContain('C_CORE_CANARY');
-      expect(value.jobs.get(jobId)).toMatchObject({ status: 'UNKNOWN', lastError: { code: 'AUTODL_SUBMIT_TIMEOUT' } });
+      expect((await value.jobs.get(jobId))).toMatchObject({ status: 'UNKNOWN', lastError: { code: 'AUTODL_SUBMIT_TIMEOUT' } });
     } else {
       throw new Error(`unsupported C_CORE_RECOVERY_CASE: ${acceptanceCase}`);
     }

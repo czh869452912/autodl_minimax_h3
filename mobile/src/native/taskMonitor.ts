@@ -49,7 +49,7 @@ export async function publishTerminalEvents(events: TerminalNotification[]): Pro
 export async function runTaskMonitorHeadless(taskIds: string[]) {
   const result = await runTaskMonitorTick(taskIds);
   const { readTerminalNotifications } = require('../tasks/executorRuntime') as typeof import('../tasks/executorRuntime');
-  await publishTerminalEvents(readTerminalNotifications(taskIds));
+  await publishTerminalEvents(await readTerminalNotifications(taskIds));
   if (result.remainingDue + result.remainingScheduled === 0 && result.nextWakeAt == null) await stopTaskMonitor();
   return result;
 }

@@ -1,5 +1,7 @@
 # Task refresh decoupling verification — 2026-09-05
 
+Follow-up: a real-device stale task projection and SQLite contention regression was subsequently found and fixed. See the [regression report](2026-09-05-task-refresh-regression-fix.md); the earlier in-process tests below did not establish independent-connection write correctness.
+
 Implementation and inline review are complete through Tasks 1–10. Task 11 remains **partially complete**: there is no public HTTPS endpoint for the generated video, and the measurements below use a self-contained debug APK rather than a release-equivalent build. These measurements do not establish full transfer/UI performance acceptance. Integration remains subject to [PERF-1](2026-09-05-task-refresh-follow-ups.md#perf-1-full-transfer-and-release-performance-acceptance).
 
 ## Source and automated checks

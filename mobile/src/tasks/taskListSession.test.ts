@@ -118,6 +118,38 @@ test('invalidation requested by a completion subscriber is not lost', async () =
   unsubscribe(); s.session.dispose();
 });
 
+test('pagination requested during a refresh waits and loads one additional window', async () => {
+  const s = setup();
+  await s.session.refresh('focus');
+  const read = s.repository.readConsistentWindow;
+  let release!: () => void;
+  s.repository.readConsistentWindow = async limit => {
+    await new Promise<void>(resolve => { release = resolve; });
+    s.repository.readConsistentWindow = read;
+    return read(limit);
+  };
+  const refreshing = s.session.refresh('manual');
+  const pages = [s.session.loadMore(), s.session.loadMore()];
+  release();
+  await Promise.all([refreshing, ...pages]);
+  expect(s.limits).toEqual([40, 40, 80]);
+  s.session.dispose();
+});
+
+test('a page fence conflict refreshes the cursor and retries the requested page', async () => {
+  const s = setup();
+  await s.session.refresh('focus'); await s.session.loadMore(); await s.session.loadMore();
+  let pages = 0;
+  s.repository.readWindow = async () => {
+    if (++pages === 1) s.change([card('new')]);
+    return { items: [card('older')], nextCursor: undefined };
+  };
+  await s.session.loadMore();
+  expect(pages).toBe(2);
+  expect(s.session.getSnapshot().items.map(item => item.id)).toEqual(['new', 'older']);
+  s.session.dispose();
+});
+
 test('a refresh requested synchronously by a pending subscriber stays single-flight', async () => {
   const s = setup();
   let once = false;

@@ -59,7 +59,7 @@ test('a PENDING submit survives a database reopen and calls the provider once', 
       await restarted.service.handle(submit, 'restart');
       expect(provider.submit).toHaveBeenCalledTimes(1);
       expect(await restarted.operations.get(submit.id)).toMatchObject({ state: 'SUCCEEDED' });
-      expect(restarted.jobs.get(submit.jobId!)).toMatchObject({
+      expect((await restarted.jobs.get(submit.jobId!))).toMatchObject({
         status: 'QUEUED', providerHandle: { providerJobId: 'remote-acceptance', opaque: 'preserved' },
       });
     } finally { restarted.db.close(); }
@@ -73,17 +73,17 @@ test('an expired SUBMITTING submit without a handle reopens UNKNOWN/BLOCKED with
     const first = openRuntime(file, provider, () => 100);
     const job = await first.service.queueSubmission(input('unknown-restart'));
     const [submit] = await first.operations.claimDue({ kind: 'SUBMIT', owner: 'dead', now: 100, leaseMs: 50, limit: 1 });
-    first.jobs.transition({
+    (await first.jobs.transition({
       jobId: job.id, expectedRevision: job.revision, patch: { status: 'SUBMITTING', updatedAt: 100 },
       event: { id: `${job.id}:acceptance:started`, type: 'SUBMIT_STARTED', payload: {}, createdAt: 100 },
-    });
+    }));
     first.db.close();
 
     const restarted = openRuntime(file, provider, () => 151);
     try {
       await restarted.service.recover(151);
       expect(provider.submit).not.toHaveBeenCalled();
-      expect(restarted.jobs.get(job.id)).toMatchObject({ status: 'UNKNOWN' });
+      expect((await restarted.jobs.get(job.id))).toMatchObject({ status: 'UNKNOWN' });
       expect(await restarted.operations.get(submit.id)).toMatchObject({ state: 'BLOCKED' });
       expect(await restarted.operations.claimDue({ kind: 'SUBMIT', owner: 'other', now: 1_000, leaseMs: 50, limit: 1 })).toEqual([]);
     } finally { restarted.db.close(); }
@@ -97,16 +97,16 @@ test('a persisted provider handle reopens into status-only recovery with the ori
     const first = openRuntime(file, provider, () => 100);
     const job = await first.service.queueSubmission(input('handle-restart'));
     const [submit] = await first.operations.claimDue({ kind: 'SUBMIT', owner: 'dead', now: 100, leaseMs: 50, limit: 1 });
-    const started = first.jobs.transition({
+    const started = (await first.jobs.transition({
       jobId: job.id, expectedRevision: job.revision, patch: { status: 'SUBMITTING', updatedAt: 100 },
       event: { id: `${job.id}:acceptance:started`, type: 'SUBMIT_STARTED', payload: {}, createdAt: 100 },
-    });
+    }));
     if (!started.ok) throw new Error('failed to create acceptance fixture');
-    first.jobs.transition({
+    (await first.jobs.transition({
       jobId: job.id, expectedRevision: started.current.revision,
       patch: { status: 'QUEUED', providerHandle: { providerJobId: 'remote-original', opaque: 'opaque-original' }, updatedAt: 101 },
       event: { id: `${job.id}:acceptance:handle`, type: 'SUBMIT_HANDLE_PERSISTED', payload: {}, createdAt: 101 },
-    });
+    }));
     first.db.close();
 
     const restarted = openRuntime(file, provider, () => 151);

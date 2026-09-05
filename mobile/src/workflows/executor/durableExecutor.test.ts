@@ -57,7 +57,7 @@ test('pending work survives restart and persists the opaque handle before status
     const [claimed] = await value.operations.claimDue({ kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
     await value.service.handle(claimed, 'worker');
     expect(value.adapter.submit).toHaveBeenCalledTimes(1);
-    expect(value.jobs.get(queued.id)).toMatchObject({ status: 'QUEUED', providerHandle: { providerJobId: 'remote-1', opaque: 'kept' } });
+    expect((await value.jobs.get(queued.id))).toMatchObject({ status: 'QUEUED', providerHandle: { providerJobId: 'remote-1', opaque: 'kept' } });
     expect(await value.operations.get(claimed.id)).toMatchObject({ state: 'SUCCEEDED' });
     expect(value.operations.list('STATUS_SYNC')).toHaveLength(1);
   } finally { value.db.close(); }
@@ -68,14 +68,14 @@ test('expired SUBMITTING without handle becomes UNKNOWN and never resubmits', as
   try {
     const queued = await value.service.queueSubmission(input('submission-3'));
     const [claimed] = await value.operations.claimDue({ kind: 'SUBMIT', owner: 'dead-process', now: 100, leaseMs: 50, limit: 1 });
-    value.jobs.transition({
+    (await value.jobs.transition({
       jobId: queued.id, expectedRevision: queued.revision, patch: { status: 'SUBMITTING' },
       event: { id: 'submit-started', type: 'SUBMIT_STARTED', payload: {}, createdAt: 100 },
-    });
+    }));
     expect(claimed.leaseExpiresAt).toBe(150);
     await value.service.recover(151);
     expect(value.adapter.submit).not.toHaveBeenCalled();
-    expect(value.jobs.get(queued.id)).toMatchObject({ status: 'UNKNOWN' });
+    expect((await value.jobs.get(queued.id))).toMatchObject({ status: 'UNKNOWN' });
     expect(await value.operations.get(claimed.id)).toMatchObject({ state: 'BLOCKED' });
   } finally { value.db.close(); }
 });
@@ -87,7 +87,7 @@ test.each([401, 422])('deterministic submit HTTP %s fails terminally', async (st
     const queued = await value.service.queueSubmission(input(`terminal-${status}`));
     const [claimed] = await value.operations.claimDue({ kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
     await value.service.handle(claimed, 'worker');
-    expect(value.jobs.get(queued.id)).toMatchObject({ status: 'FAILED', lastError: { code: expect.stringContaining(String(status)) } });
+    expect((await value.jobs.get(queued.id))).toMatchObject({ status: 'FAILED', lastError: { code: expect.stringContaining(String(status)) } });
     expect(await value.operations.get(claimed.id)).toMatchObject({ state: 'FAILED' });
   } finally { value.db.close(); }
 });
@@ -99,7 +99,7 @@ test('submit timeout becomes UNKNOWN and blocks automatic resubmission', async (
     const queued = await value.service.queueSubmission(input('timeout'));
     const [claimed] = await value.operations.claimDue({ kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
     await value.service.handle(claimed, 'worker');
-    expect(value.jobs.get(queued.id)).toMatchObject({ status: 'UNKNOWN' });
+    expect((await value.jobs.get(queued.id))).toMatchObject({ status: 'UNKNOWN' });
     expect(await value.operations.get(claimed.id)).toMatchObject({ state: 'BLOCKED' });
     expect(value.adapter.submit).toHaveBeenCalledTimes(1);
     expect(await value.operations.claimDue({ kind: 'SUBMIT', owner: 'other', now: 1000, leaseMs: 50, limit: 1 })).toEqual([]);
@@ -113,7 +113,7 @@ test('a CAS conflict before SUBMIT blocks the operation without a provider call'
     const [claimed] = await value.operations.claimDue({ kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
     const jobs = {
       ...value.jobs,
-      transition: jest.fn(() => ({ ok: false as const, current: { ...queued, revision: 1, status: 'SUBMITTING' as const } })),
+      transition: jest.fn(async () => ({ ok: false as const, current: { ...queued, revision: 1, status: 'SUBMITTING' as const } })),
     };
     const service = createDurableExecutor({
       jobs, operations: value.operations, runtime: value.runtime,
@@ -140,7 +140,7 @@ test('status reconciliation uses only the persisted handle and maps artifacts to
     await value.service.handle(status, 'worker');
     expect(value.adapter.getStatus).toHaveBeenCalledWith({ providerJobId: 'remote-1', opaque: 'kept' });
     expect(value.adapter.submit).toHaveBeenCalledTimes(1);
-    expect(value.jobs.get(queued.id)).toMatchObject({ status: 'SUCCEEDED' });
+    expect((await value.jobs.get(queued.id))).toMatchObject({ status: 'SUCCEEDED' });
     expect(value.operations.list('ARTIFACT_DOWNLOAD')).toMatchObject([
       { payload: { artifact: expect.objectContaining({ id: 'artifact-1', kind: 'video' }) } },
     ]);
@@ -172,12 +172,12 @@ test('explicit replacement preserves the original UNKNOWN snapshot and audit', a
     const original = await value.service.queueSubmission(input('original'));
     const [submit] = await value.operations.claimDue({ kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
     await value.service.handle(submit, 'worker');
-    const auditLength = value.jobs.listEvents(original.id).length;
+    const auditLength = (await value.jobs.listEvents(original.id)).length;
     const replacement = await value.service.createReplacementAttemptAfterConfirmation(original.id, 'replacement');
     expect(replacement.id).not.toBe(original.id);
     expect(replacement).toMatchObject({ status: 'READY_TO_SUBMIT', revision: 0 });
-    expect(value.jobs.get(original.id)).toMatchObject({ status: 'UNKNOWN' });
-    expect(value.jobs.listEvents(original.id)).toHaveLength(auditLength);
+    expect((await value.jobs.get(original.id))).toMatchObject({ status: 'UNKNOWN' });
+    expect((await value.jobs.listEvents(original.id))).toHaveLength(auditLength);
     expect(value.operations.list('SUBMIT')).toHaveLength(2);
   } finally { value.db.close(); }
 });

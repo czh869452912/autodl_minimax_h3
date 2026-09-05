@@ -1,3 +1,4 @@
+import { withWriteTransaction } from '../../storage/sqliteBusy';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { assertAppDatabaseWritableAsync } from '../../storage/database';
 import type { ArtifactRecord } from '../../jobs/types';
@@ -34,7 +35,7 @@ function manualFamilyPattern(canonicalKey: string): string {
 async function transaction<T>(db: SQLiteDatabase, work: (transaction: SQLiteDatabase) => Promise<T>, inside = false): Promise<T> {
   if (inside) return work(db);
   let result!: T;
-  await db.withExclusiveTransactionAsync(async txn => { result = await work(txn); });
+  await withWriteTransaction(db, async txn => { result = await work(txn); });
   return result;
 }
 

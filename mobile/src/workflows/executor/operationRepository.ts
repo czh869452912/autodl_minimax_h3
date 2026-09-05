@@ -1,3 +1,4 @@
+import { withWriteTransaction } from '../../storage/sqliteBusy';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { NormalizedError } from '../../jobs/types';
 import { assertAppDatabaseWritable, assertAppDatabaseWritableAsync } from '../../storage/database';
@@ -66,7 +67,7 @@ function changes(result: unknown): number {
 
 async function exclusiveTransaction<T>(db: SQLiteDatabase, work: (transaction: SQLiteDatabase) => Promise<T>): Promise<T> {
   let result!: T;
-  await db.withExclusiveTransactionAsync(async (transaction) => {
+  await withWriteTransaction(db, async (transaction) => {
     result = await work(transaction);
   });
   return result;

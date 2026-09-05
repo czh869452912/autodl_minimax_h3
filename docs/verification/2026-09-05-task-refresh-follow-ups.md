@@ -18,6 +18,6 @@ Schema v8 is unshipped. Branch users who ran intermediate v8 commits may lack la
 
 ## TEST-1: Node SQLite contention harness fidelity
 
-Status: deferred test-infrastructure improvement.
+Status: addressed for the reported refresh regression; exhaustive multiprocess coverage remains separate.
 
-`src/test/realSqlite.ts` serializes exclusive transactions through a module-global promise queue. Existing lease/claim tests cover competing runner behavior, but this helper cannot fully reproduce independent-runtime SQLite lock contention. Extend device or multiprocess coverage before asserting exhaustive lock-contention behavior; do not treat the in-process queue as proof of that property.
+`src/test/realSqlite.ts` now offers an independent-connection transaction mode. A real file-backed writer-lock regression and a ten-round Expo SQLite device regression cover the reported command contention. The legacy in-process queue remains the default for older tests; it still is not proof of exhaustive independent-runtime contention behavior. See [regression verification](2026-09-05-task-refresh-regression-fix.md).

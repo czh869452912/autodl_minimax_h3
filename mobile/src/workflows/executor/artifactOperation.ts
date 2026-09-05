@@ -1,3 +1,4 @@
+import { withWriteTransaction } from '../../storage/sqliteBusy';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { ArtifactRecord, NormalizedError } from '../../jobs/types';
 import type { ArtifactCas, ArtifactBlob } from '../../media/cas';
@@ -29,7 +30,7 @@ type ArtifactOperationDeps = {
   cas: ArtifactCas;
   transferArtifact?: typeof transferArtifact;
   cancelArtifactTransfer?: typeof cancelArtifactTransfer;
-  policy(jobId: string, artifact: ArtifactRecord): ArtifactPolicy;
+  policy(jobId: string, artifact: ArtifactRecord): ArtifactPolicy | Promise<ArtifactPolicy>;
   ensureProjection(jobId: string, artifact: ArtifactRecord): Promise<void>;
   updateDownloadState(state: 'ENQUEUED' | 'DOWNLOADING' | 'DOWNLOAD_FAILED', errorCode?: string): Promise<void>;
   deliveryPolicy: { autoExportToGallery: boolean; keepPrivateCopy: boolean };
@@ -72,7 +73,7 @@ function reservationOwnerType(operationId: string): string {
 }
 
 async function transaction(db: SQLiteDatabase, work: (transaction: SQLiteDatabase) => Promise<void>): Promise<void> {
-  await db.withExclusiveTransactionAsync(work);
+  await withWriteTransaction(db, work);
 }
 
 
@@ -276,7 +277,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     if (deps.commit) await deps.commit.clearStale({ operationId: operation.id, owner });
     await deps.ensureProjection(operation.jobId, artifact);
     await deps.updateDownloadState('DOWNLOADING');
-    const policy = deps.policy(operation.jobId, artifact);
+    const policy = await deps.policy(operation.jobId, artifact);
     const assertLease = async () => {
       if (!await deps.operations.renew(operation.id, owner, clock(), deps.leaseMs ?? 120_000)) {
         throw new Error('artifact operation lease lost');

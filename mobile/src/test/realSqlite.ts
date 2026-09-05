@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 let exclusiveTestTransactionTail = Promise.resolve();
 
-export function createRealSqliteTestDb(path = ':memory:') {
+export function createRealSqliteTestDb(path = ':memory:', options: { independentTransactions?: boolean } = {}) {
   const database = new DatabaseSync(path);
   const values = (params: unknown[]) => params as Parameters<ReturnType<DatabaseSync['prepare']>['run']>;
   let transactionTarget: unknown;
@@ -16,6 +16,19 @@ export function createRealSqliteTestDb(path = ':memory:') {
     getAllSync<T>(source: string, ...params: unknown[]) { return database.prepare(source).all(...values(params)) as T[]; },
     async getAllAsync<T>(source: string, ...params: unknown[]) { return database.prepare(source).all(...values(params)) as T[]; },
     async withExclusiveTransactionAsync(task: (txn: unknown) => Promise<void>) {
+      if (options.independentTransactions) {
+        if (path === ':memory:') throw new Error('independent transactions require a file database');
+        const txn = createRealSqliteTestDb(path);
+        try {
+          txn.execSync('BEGIN');
+          await task(txn);
+          txn.execSync('COMMIT');
+        } catch (error) {
+          try { txn.execSync('ROLLBACK'); } catch { /* preserve the original error */ }
+          throw error;
+        } finally { txn.close(); }
+        return;
+      }
       let release!: () => void;
       const previous = exclusiveTestTransactionTail;
       exclusiveTestTransactionTail = new Promise<void>((resolve) => { release = resolve; });
