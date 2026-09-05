@@ -40,6 +40,6 @@ Release Notes 会按提交信息自动整理为“修复”和“改进”两部
 
 CI 的完整 universal 构建使用 6 GiB Java heap、1 GiB Metaspace、最多两个 Gradle worker，并关闭项目并行构建。Kotlin daemon 单独限制为 2 GiB heap / 512 MiB Metaspace，避免继承扩大的 Gradle 预算。JVM 遇到 OOM 立即退出；构建步骤限时 45 分钟，整个 job 限时 60 分钟。开发机的默认 Gradle 内存设置不受影响。
 
-若 tag 构建因 CI 配置失败，先通过 PR 修正 `main` 的工作流，再从 `main` 手动运行 Android Release，输入原来的 `release_tag`（例如 `v1.4.11`）。工作流检出原 tag，验证 tag 存在、指向 `main` 历史、源码 HEAD 和版本一致后才读取签名材料；不移动或覆盖既有 tag。单纯 Re-run 原运行不会使用新工作流配置。
+`release` Environment 的部署规则仅允许 `v*` tag。若 tag 构建因 CI 配置失败，先通过 PR 修正工作流并递增补丁版本，再在合并提交上推送新 tag。单纯 Re-run 原运行不会使用新工作流配置；从 `main` 手动部署也会被环境规则拒绝。
 
-命令示例：`gh workflow run release.yml --ref main -f release_tag=v1.4.11`。该恢复入口用于尚未成功发布的版本，已有 Release/资产不会自动删除或替换。
+失败 tag 保留，已有 Release/资产不自动删除或替换。Release Notes 对比上一个成功发布的正式版本，避免失败 tag 导致遗漏应用改动。工作流仍在读取签名材料前验证 tag 存在、指向 `main` 历史、源码 HEAD 与版本一致。
