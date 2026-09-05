@@ -1,8 +1,8 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { CasFiles } from '../../media/cas';
-import { createArtifactCas } from '../../media/cas';
+import type { CasFiles } from '../../test/streamCas';
+import { createArtifactCas } from '../../test/streamCas';
 import { createInitializedRealSqliteTestDb } from '../../test/realSqlite';
 import { ProviderError } from '../providers/autodl/client';
 import type { QueueSubmissionInput } from '../runtime/runtime';

@@ -72,8 +72,6 @@ test('drives terminal status through download and system-gallery export exactly 
                   abort: async () => undefined,
                 };
               },
-              stage: async () => { throw new Error('legacy stream staging reached'); },
-              put: async () => ({ sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}` }),
             },
             transferArtifact: async () => ({
               partUri: 'file:///cas/parts/download.part', finalUrl: 'https://cdn.test/video.mp4',

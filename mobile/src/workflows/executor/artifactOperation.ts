@@ -6,7 +6,8 @@ import type { OperationRepository } from './operationRepository';
 import type { WorkflowOperation } from './types';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { assertAppDatabaseWritable } from '../../storage/database';
-import CryptoJS from 'crypto-js';
+import { artifactExportDisplayName } from '../../media/artifactDisplayName';
+export { artifactExportDisplayName } from '../../media/artifactDisplayName';
 import { ArtifactOperationError, artifactError } from './artifactErrors';
 import { classifyMediaValidationFailure, mediaValidationMessage } from '../../media/mediaValidation';
 
@@ -74,11 +75,6 @@ async function transaction(db: SQLiteDatabase, work: (transaction: SQLiteDatabas
   await db.withExclusiveTransactionAsync(work);
 }
 
-export function artifactExportDisplayName(jobId: string, artifactId: string): string {
-  const safeJobId = jobId.replace(/[^A-Za-z0-9._-]/g, '_').replace(/^[_\.]+|[_\.]+$/g, '').slice(0, 48) || 'job';
-  const identity = CryptoJS.SHA256(`${jobId}\u0000${artifactId}`).toString(CryptoJS.enc.Hex).slice(0, 16);
-  return `${safeJobId}-${identity}.mp4`;
-}
 
 export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => number = Date.now): ArtifactCommitter {
   const assertGcIdle = async (transaction: SQLiteDatabase) => {
@@ -274,7 +270,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     await deps.operations.finish(operation.id, owner, 'FAILED', timestamp, normalized('ARTIFACT_INPUT_INVALID', false));
     return;
   }
-  let staged: Awaited<ReturnType<ArtifactCas['stage']>> | undefined;
+  let staged: Awaited<ReturnType<ArtifactCas['adoptNativePart']>> | undefined;
   let reservation: { operationId: string; owner: string } | undefined;
   try {
     if (deps.commit) await deps.commit.clearStale({ operationId: operation.id, owner });

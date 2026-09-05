@@ -11,7 +11,6 @@ import {
 import { useRouter } from 'expo-router';
 import { getDatabase } from '../storage/databaseClient';
 import { readSettings } from '../settings/storage';
-import { createTaskRepository } from '../tasks/repository';
 import type { TaskMediaInput } from '../tasks/types';
 import { AppIcon } from '../ui/icons';
 import { COLORS, SPACING } from '../ui/theme';
@@ -29,20 +28,14 @@ import { createSubmissionGate } from './submissionGate';
 import { createAppWorkflowCatalog } from '../workflows/registry/builtin';
 import type { RegistryRecord } from '../workflows/registry/types';
 import { registryRecordToDefinition } from '../workflows/registry/catalog';
-import { createJobStateRepository } from '../workflows/executor/jobStateRepository';
-import { createOperationRepository } from '../workflows/executor/operationRepository';
-import { createDurableExecutor } from '../workflows/executor/durableExecutor';
-import { queueCreateFormSubmission } from './submissionQueue';
-import { syncTaskRun } from '../tasks/sync';
+import { persistSubmissionCommand } from './submissionCommand';
+import { executorWakePort } from '../tasks/executorEvents';
 import { buildSubmissionInputSnapshot } from './submissionInput';
 import { formatSubmissionFieldError, type SubmissionFieldError, validateSubmissionBeforeQueue } from './submissionValidation';
 import { RegistryReleaseError, type RegistryReleaseErrorCode } from '../workflows/registry/releaseManifest';
 
 const database = getDatabase();
-const taskStore = createTaskRepository(database);
 const jobStore = createJobRepository(database);
-const jobStateStore = createJobStateRepository(database);
-const operationStore = createOperationRepository(database);
 const submissionGate = createSubmissionGate();
 
 const promptDraftStore = createPromptDraftStore(
@@ -75,17 +68,12 @@ const defaultSubmissionDependencies: CreateFormSubmissionDependencies = {
   async queue({ definition, activeRecord, inputSnapshot, images, audios, token, foregroundTick }) {
     const adapters = createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? token : undefined });
     const runtime = createWorkflowRuntime({ adapters, jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `job-${Date.now()}-${Math.random().toString(16).slice(2)}` });
-    const executor = createDurableExecutor({ jobs: jobStateStore, operations: operationStore, runtime, adapters, credentials: { get: async () => ({ ok: Boolean(token) }) } });
-    return queueCreateFormSubmission(
-      { queueSubmission: (input) => executor.queueSubmission(input), upsertTask: (value) => taskStore.upsert(value), foregroundTick },
-      {
-        submissionId: `submission-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        workflow: definition,
-        draft: { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord.contentHash, inputs: inputSnapshot, source: 'user', status: 'ready' },
-        provenance: { workflowId: activeRecord.workflowId, workflowVersion: activeRecord.version, contentHash: activeRecord.contentHash },
-      },
-      { images, audios },
-    );
+    const prepared = runtime.prepareSubmission(definition,
+      { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord.contentHash, inputs: inputSnapshot, source: 'user', status: 'ready' },
+      { workflowId: activeRecord.workflowId, workflowVersion: activeRecord.version, contentHash: activeRecord.contentHash });
+    const task = await persistSubmissionCommand(database, 'submission-' + Date.now() + '-' + Math.random().toString(16).slice(2), prepared, { images, audios });
+    void foregroundTick();
+    return task;
   },
 };
 
@@ -121,7 +109,7 @@ export function workflowLoadMessage(error: unknown): string {
 export function CreateForm({
   initialPrompt = '',
   draftId,
-  foregroundTick = () => syncTaskRun({ reason: 'foreground', mode: 'poll' }),
+  foregroundTick = () => executorWakePort.signal('command'),
   submissionDependencies = defaultSubmissionDependencies,
 }: {
   initialPrompt?: string;

@@ -29,7 +29,6 @@ function deferred<T>() {
 function memoryCas(entries: Map<string, Uint8Array>): ArtifactCas {
   const files: CasFiles = {
     makeDirectory: jest.fn(async () => undefined),
-    write: jest.fn(async () => { throw new Error('legacy write reached'); }),
     stat: jest.fn(async (path) => entries.has(path) ? { exists: true, size: entries.get(path)!.byteLength } : { exists: false }),
     move: jest.fn(async (from, to) => {
       const value = entries.get(from);
@@ -43,7 +42,6 @@ function memoryCas(entries: Map<string, Uint8Array>): ArtifactCas {
       entries.set(to, value.slice());
     }),
     remove: jest.fn(async (path) => { entries.delete(path); }),
-    readChunks: jest.fn(async function* () { throw new Error('legacy reread reached'); }),
   };
   return createArtifactCas(files, {
     documentDirectory: 'file:///documents/',
@@ -67,8 +65,6 @@ function setup() {
   };
   const cas = {
     adoptNativePart: jest.fn(async (..._args: Parameters<ArtifactCas['adoptNativePart']>) => staged),
-    stage: jest.fn(async (..._args: Parameters<ArtifactCas['stage']>) => staged),
-    put: jest.fn(async (..._args: Parameters<ArtifactCas['put']>) => stored),
   };
   const transferArtifact = jest.fn(async () => ({
     partUri: 'file:///cas/parts/download-1.part', finalUrl: 'https://cdn.example/video.mp4',
@@ -121,7 +117,6 @@ test('transfers natively, adopts into CAS, retains the blob, updates projection,
   expect(deps.cas.adoptNativePart).toHaveBeenCalledWith(expect.objectContaining({
     partUri: 'file:///cas/parts/download-1.part', sha256: 'a'.repeat(64),
   }), expect.objectContaining({ mime: 'video/mp4', maxBytes: 10, operationId: 'download-1' }));
-  expect(deps.cas.stage).not.toHaveBeenCalled();
   const putOptions = deps.cas.adoptNativePart.mock.calls[0][1];
   expect(putOptions.operationAttempt).toBe(1);
   expect(putOptions.assertLease).toEqual(expect.any(Function));
@@ -140,7 +135,6 @@ test('transfers natively, adopts into CAS, retains the blob, updates projection,
 test('never reaches the legacy stream staging path when native transfer is available', async () => {
   const deps = setup();
   const legacyOpenDownload = jest.fn(async () => { throw new Error('legacy JavaScript download reached'); });
-  deps.cas.stage.mockRejectedValueOnce(new Error('JavaScript full-file hashing reached'));
 
   await handleArtifactDownload(operation, 'worker', {
     ...deps,
@@ -150,7 +144,6 @@ test('never reaches the legacy stream staging path when native transfer is avail
   } as never);
 
   expect(legacyOpenDownload).not.toHaveBeenCalled();
-  expect(deps.cas.stage).not.toHaveBeenCalled();
   expect(deps.cas.adoptNativePart).toHaveBeenCalledTimes(1);
   expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'SUCCEEDED', 50);
 });

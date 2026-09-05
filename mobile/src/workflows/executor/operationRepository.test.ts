@@ -167,7 +167,7 @@ test('expedites only retryable network operations in the requested job scope', a
     seed('terminal', 'STATUS_SYNC', 'job-a', { code: 'AUTODL_STATUS_NETWORK', message: 'offline', retryable: true }, 'FAILED');
     seed('other-job', 'STATUS_SYNC', 'job-b', { code: 'AUTODL_STATUS_NETWORK', message: 'offline', retryable: true });
 
-    expect(repository.expediteRetryableNetwork(['job-a'], 1_000)).toBe(4);
+    expect(await repository.expediteRetryableNetwork(['job-a'], 1_000)).toBe(4);
     for (const id of ['network', 'timeout', 'artifact-network', 'artifact-timeout']) expect((await repository.get(id))?.nextRetryAt).toBe(1_000);
     for (const id of ['unknown-submit', 'auth', 'terminal', 'other-job']) expect((await repository.get(id))?.nextRetryAt).toBe(5_000);
   } finally { db.close(); }
@@ -281,3 +281,4 @@ test('rejects a claim when its post-CAS row no longer has the owner fence', asyn
     await expect(repository.get('op-1')).resolves.toMatchObject({ state: 'PENDING', attempt: 0 });
   } finally { db.close(); }
 });
+

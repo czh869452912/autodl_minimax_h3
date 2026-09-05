@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 import { getDatabase, getDatabaseStartupState, type DatabaseStartupState } from '../src/storage/databaseClient';
 import { isLegacyAppDatabase, resetAppDatabase } from '../src/storage/database';
 import { DatabaseRecoveryScreen } from '../src/storage/DatabaseRecoveryScreen';
-import { registerBackgroundSync, syncTaskRun } from '../src/tasks/background';
+import { registerBackgroundSync } from '../src/tasks/background';
+import { startForegroundTaskExecution } from '../src/tasks/foregroundRuntime';
 import { resumeTaskSyncAfterReconnect } from '../src/tasks/background';
 import * as Network from 'expo-network';
 import { createConnectivityEdgeDetector } from '../src/tasks/networkRecovery';
@@ -37,15 +38,16 @@ export default function RootLayout() {
       return;
     }
     void registerBackgroundSync();
-    void syncTaskRun({ reason: 'foreground', mode: 'maintenance' });
+    let foreground = startForegroundTaskExecution();
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void syncTaskRun({ reason: 'foreground', mode: 'maintenance' });
+      foreground.stop();
+      if (state === 'active') foreground = startForegroundTaskExecution();
     });
     const networkSubscription = Network.addNetworkStateListener((state) => {
       const reachable = state.isInternetReachable ?? state.isConnected;
       if (connectivity.current.observe(reachable)) void resumeTaskSyncAfterReconnect();
     });
-    return () => { subscription.remove(); networkSubscription.remove(); };
+    return () => { foreground.stop(); subscription.remove(); networkSubscription.remove(); };
   }, [startupState]);
   if (startupState.mode === 'readonly') {
     let backupNames: string[] = [];

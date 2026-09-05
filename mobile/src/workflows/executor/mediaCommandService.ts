@@ -1,7 +1,8 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { assertAppDatabaseWritableAsync } from '../../storage/database';
 import type { ArtifactRecord } from '../../jobs/types';
-import { artifactExportDisplayName, type SystemGalleryIntent } from './artifactOperation';
+import { artifactExportDisplayName } from '../../media/artifactDisplayName';
+import type { SystemGalleryIntent } from './artifactOperation';
 import { createOperationRepository } from './operationRepository';
 import type { ExportPayload } from './exportOperation';
 import type { OperationKind, WorkflowOperation } from './types';

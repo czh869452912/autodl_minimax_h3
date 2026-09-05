@@ -17,7 +17,7 @@ const mockNetworkRemove = jest.fn();
 jest.mock('../storage/databaseClient', () => ({ getDatabase: jest.fn(() => mockDatabase), getDatabaseStartupState: () => mockStartupState() }));
 jest.mock('expo-router', () => ({ Stack: (props: { children?: React.ReactNode }) => <>{props.children}</> }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: (props: { children?: React.ReactNode }) => <>{props.children}</> }));
-jest.mock('../tasks/background', () => ({ registerBackgroundSync: jest.fn(async () => undefined), syncTaskRun: jest.fn(async () => undefined), resumeTaskSyncAfterReconnect: jest.fn(async () => undefined) }));
+jest.mock('../tasks/background', () => ({ registerBackgroundSync: jest.fn(async () => undefined), unusedOldSync: jest.fn(async () => undefined), resumeTaskSyncAfterReconnect: jest.fn(async () => undefined) }));
 jest.mock('expo-network', () => ({ addNetworkStateListener: jest.fn((listener) => { mockNetworkListener = listener; return { remove: mockNetworkRemove }; }) }));
 jest.mock('../storage/database', () => ({ ensureAppDatabase: jest.fn(), isLegacyAppDatabase: jest.fn(() => true), resetAppDatabase: jest.fn() }));
 jest.mock('../storage/DatabaseRecoveryScreen', () => ({ DatabaseRecoveryScreen: (props: { diagnostic: string }) => mockRecoveryScreen(props) }));
@@ -55,7 +55,7 @@ test('blocks old databases until the user explicitly clears or exits', async () 
 test('renders readonly recovery without registering background work', async () => {
   mockStartupState.mockReturnValue({ mode: 'readonly', diagnostic: 'MIGRATION_5_TO_6_FAILED', allowReset: true });
   const register = require('../tasks/background').registerBackgroundSync;
-  const sync = require('../tasks/background').syncTaskRun;
+  const sync = require('../tasks/background').unusedOldSync;
   register.mockClear();
   sync.mockClear();
   mockRecoveryScreen.mockClear();
@@ -98,3 +98,5 @@ test('resumes once after an observed offline-to-online edge and removes the list
   act(() => tree.unmount());
   expect(mockNetworkRemove).toHaveBeenCalledTimes(1);
 });
+
+jest.mock('../tasks/foregroundRuntime', () => ({ startForegroundTaskExecution: jest.fn(() => ({ stop: jest.fn() })) }));

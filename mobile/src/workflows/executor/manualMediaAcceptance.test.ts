@@ -79,12 +79,6 @@ test('manual save joins a claimed download and publication recovery commits one 
                   abort: async () => undefined,
                 };
               },
-              stage: async () => { throw new Error('legacy stream staging reached'); },
-              put: async () => {
-                const relativePath = `cas/sha256/aa/${'a'.repeat(64)}`;
-                existing.add(`file:///documents/${relativePath}`);
-                return { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath };
-              },
             },
             transferArtifact: async () => {
               await commands.requestExport('job-1', { keepPrivateCopy: false });

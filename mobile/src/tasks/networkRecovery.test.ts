@@ -13,29 +13,29 @@ test('fires only on the first explicit offline-to-online edge', () => {
 
 test('expedites scoped retryable work before polling active tasks', async () => {
   const order: string[] = [];
-  const runPoll = jest.fn(async () => { order.push('poll'); });
-  const expediteRetryableNetwork = jest.fn(() => { order.push('expedite'); return 2; });
+  const signal = jest.fn(async () => { order.push('signal'); });
+  const expediteRetryableNetwork = jest.fn(async () => { await Promise.resolve(); order.push('expedite'); return 2; });
   const result = await resumeAfterConnectivityReturns({
     listActiveJobIds: async () => ['job-a'],
     expediteRetryableNetwork,
-    runPoll,
+    signal,
     now: () => 1_000,
   });
 
-  expect(result).toEqual({ activeJobIds: ['job-a'], expedited: 2, polled: true });
+  expect(result).toEqual({ activeJobIds: ['job-a'], expedited: 2, signaled: true });
   expect(expediteRetryableNetwork).toHaveBeenCalledWith(['job-a'], 1_000);
-  expect(runPoll).toHaveBeenCalledWith({ reason: 'foreground', mode: 'poll', taskIds: ['job-a'] });
-  expect(order).toEqual(['expedite', 'poll']);
+  expect(signal).toHaveBeenCalledWith('connectivity');
+  expect(order).toEqual(['expedite', 'signal']);
 });
 
 test('does nothing when no active task or retryable operation exists', async () => {
-  const runPoll = jest.fn(async () => undefined);
+  const signal = jest.fn(async () => undefined);
   const result = await resumeAfterConnectivityReturns({
     listActiveJobIds: async () => [],
-    expediteRetryableNetwork: jest.fn(() => 0),
-    runPoll,
+    expediteRetryableNetwork: jest.fn(async () => 0),
+    signal,
     now: () => 1_000,
   });
-  expect(result.polled).toBe(false);
-  expect(runPoll).not.toHaveBeenCalled();
+  expect(result.signaled).toBe(false);
+  expect(signal).not.toHaveBeenCalled();
 });

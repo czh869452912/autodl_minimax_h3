@@ -1,4 +1,4 @@
-import { collectGarbage, createArtifactCas, type CasFiles } from './cas';
+import { collectGarbage, createArtifactCas, type CasFiles } from '../test/streamCas';
 
 const streamOf = (...chunks: Uint8Array[]): AsyncIterable<Uint8Array> => ({ async *[Symbol.asyncIterator]() { yield* chunks; } });
 const bytes = (value: string) => new TextEncoder().encode(value);

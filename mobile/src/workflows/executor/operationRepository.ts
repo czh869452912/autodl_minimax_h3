@@ -175,11 +175,11 @@ export function createOperationRepository(db: SQLiteDatabase) {
       );
       return Number(row?.count ?? 0);
     },
-    expediteRetryableNetwork(jobIds: string[], now: number): number {
+    async expediteRetryableNetwork(jobIds: string[], now: number): Promise<number> {
       if (jobIds.length === 0) return 0;
-      assertAppDatabaseWritable(db);
+      await assertAppDatabaseWritableAsync(db);
       const placeholders = jobIds.map(() => '?').join(',');
-      const result = db.runSync(
+      const result = await db.runAsync(
         `UPDATE workflow_operations SET next_retry_at = ?, updated_at = ?
         WHERE state = 'PENDING' AND next_retry_at > ? AND job_id IN (${placeholders})
           AND json_extract(last_error_json, '$.retryable') = 1
