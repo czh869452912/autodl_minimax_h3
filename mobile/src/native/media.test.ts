@@ -1,4 +1,4 @@
-import { exportVideo, probeVideo, sha256File } from './media';
+import { cancelArtifactTransfer, exportVideo, probeVideo, sha256File, transferArtifact } from './media';
 
 describe('native gallery publisher', () => {
   it('passes a stable media id and file name to Android', async () => {
@@ -42,5 +42,82 @@ describe('native media integrity', () => {
     await expect(probeVideo('file:///video.mp4', { probeVideo: async () => ({ ...valid, videoTrackCount: 0, hasVideoTrack: false }) } as never)).rejects.toMatchObject({ code: 'MEDIA_INVALID' });
     await expect(probeVideo('file:///video.mp4', { probeVideo: async () => ({ ...valid, durationMs: 0 }) } as never)).rejects.toMatchObject({ code: 'MEDIA_INVALID' });
     await expect(probeVideo('file:///video.mp4', { probeVideo: async () => ({ ...valid, decodedFrames: 2 }) } as never)).rejects.toMatchObject({ code: 'MEDIA_INVALID' });
+  });
+});
+
+describe('native artifact transfer', () => {
+  const request = {
+    url: 'https://cdn.example.test/video.mp4',
+    allowedHosts: ['example.test'],
+    allowProviderSuppliedPublicHosts: false,
+    acceptedMimes: ['video/mp4'],
+    maxBytes: 1024,
+    connectTimeoutMs: 1_000,
+    idleTimeoutMs: 1_000,
+    expectedSha256: 'a'.repeat(64),
+    operationId: 'operation-1',
+    operationAttempt: 2,
+  } as const;
+  const result = {
+    partUri: 'file:///data/user/0/com.example.autodlh3/files/cas/parts/hash.part',
+    finalUrl: request.url,
+    mime: 'video/mp4',
+    byteSize: 12,
+    sha256: 'a'.repeat(64),
+  };
+
+  it('passes a validated request to Android and accepts a valid native result', async () => {
+    const native = { transferArtifact: jest.fn(async () => result) };
+    await expect(transferArtifact(request, native as never)).resolves.toEqual(result);
+    expect(native.transferArtifact).toHaveBeenCalledWith(request);
+  });
+
+  it.each([
+    ['malformed hash', { ...result, sha256: 'ABC' }],
+    ['non-positive byte size', { ...result, byteSize: 0 }],
+    ['unexpected part URI scheme', { ...result, partUri: 'content://downloads/hash.part' }],
+    ['non-HTTPS final URL', { ...result, finalUrl: 'http://cdn.example.test/video.mp4' }],
+  ])('rejects a %s returned by Android', async (_case, invalid) => {
+    await expect(transferArtifact(request, { transferArtifact: async () => invalid } as never))
+      .rejects.toMatchObject({ code: 'ARTIFACT_TRANSFER_INVALID' });
+  });
+
+  it('rejects malformed requests before invoking Android', async () => {
+    const native = { transferArtifact: jest.fn(async () => result) };
+    await expect(transferArtifact({ ...request, expectedSha256: 'bad' }, native as never))
+      .rejects.toMatchObject({ code: 'ARTIFACT_TRANSFER_REQUEST_INVALID' });
+    await expect(transferArtifact({ ...request, maxBytes: 0 }, native as never))
+      .rejects.toMatchObject({ code: 'ARTIFACT_TRANSFER_REQUEST_INVALID' });
+    expect(native.transferArtifact).not.toHaveBeenCalled();
+  });
+
+  it('uses stable diagnostics when the Android module is unavailable', async () => {
+    await expect(transferArtifact(request, {} as never))
+      .rejects.toMatchObject({ code: 'ARTIFACT_TRANSFER_UNAVAILABLE' });
+    await expect(cancelArtifactTransfer('operation-1', 2, {} as never))
+      .rejects.toMatchObject({ code: 'ARTIFACT_TRANSFER_UNAVAILABLE' });
+  });
+
+  it('cancels only a validated operation attempt identity', async () => {
+    const native = { cancelArtifactTransfer: jest.fn(async () => true) };
+    await expect(cancelArtifactTransfer(' operation-1 ', 2, native as never)).resolves.toBe(true);
+    expect(native.cancelArtifactTransfer).toHaveBeenCalledWith('operation-1', 2);
+    await expect(cancelArtifactTransfer(' ', 2, native as never))
+      .rejects.toMatchObject({ code: 'ARTIFACT_TRANSFER_REQUEST_INVALID' });
+    await expect(cancelArtifactTransfer('operation-1', -1, native as never))
+      .rejects.toMatchObject({ code: 'ARTIFACT_TRANSFER_REQUEST_INVALID' });
+  });
+
+  it('normalizes the operation id identically for transfer and cancellation', async () => {
+    const native = {
+      transferArtifact: jest.fn(async () => result),
+      cancelArtifactTransfer: jest.fn(async () => true),
+    };
+
+    await transferArtifact({ ...request, operationId: ' operation-1 ' }, native as never);
+    await cancelArtifactTransfer(' operation-1 ', 2, native as never);
+
+    expect(native.transferArtifact).toHaveBeenCalledWith({ ...request, operationId: 'operation-1' });
+    expect(native.cancelArtifactTransfer).toHaveBeenCalledWith('operation-1', 2);
   });
 });

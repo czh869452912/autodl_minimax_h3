@@ -29,6 +29,18 @@ export function getRecoveryState(db: SQLiteDatabase | undefined): AppRecoverySta
   }
 }
 
+export async function getRecoveryStateAsync(db: SQLiteDatabase | undefined): Promise<AppRecoveryState | undefined> {
+  if (!db) return undefined;
+  if (typeof db.getFirstAsync !== 'function') throw new Error('APP_DATABASE_ASYNC_RECOVERY_UNAVAILABLE');
+  const row = await db.getFirstAsync<{ diagnostic: string; created_at: number }>(
+    `SELECT diagnostic, created_at FROM ${RECOVERY_TABLE} WHERE id = 1 LIMIT 1`,
+  );
+  if (!row || typeof row.diagnostic !== 'string' || row.diagnostic.length === 0) return undefined;
+  const createdAt = Number(row.created_at);
+  if (!Number.isFinite(createdAt)) return undefined;
+  return { readonly: true, diagnostic: row.diagnostic, createdAt };
+}
+
 export function markRecovery(db: SQLiteDatabase, diagnostic: string, createdAt: number): void {
   try {
     db.execSync(`CREATE TABLE IF NOT EXISTS ${RECOVERY_TABLE} (id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1), diagnostic TEXT NOT NULL, created_at INTEGER NOT NULL)`);

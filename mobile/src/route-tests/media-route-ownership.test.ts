@@ -20,7 +20,7 @@ test('legacy media queues and production references are removed', () => {
   const files = [...productionFiles(resolve(process.cwd(), 'app')), ...productionFiles(resolve(process.cwd(), 'src'))];
   const forbiddenImports = [/tasks\/media['"]/, /tasks\/coordinator['"]/, /tasks\/mediaQueue['"]/];
   const directExecutionOwners: Record<string, string[]> = {
-    exportVideo: ['src/native/media.ts', 'src/tasks/sync.ts'],
+    exportVideo: ['src/native/media.ts', 'src/tasks/executorRuntime.ts'],
     downloadTask: ['src/tasks/download.ts'],
   };
   for (const file of files) {

@@ -81,10 +81,13 @@ class MediaIntegrity(private val context: Context) {
   companion object {
     private const val MAX_VIDEO_SAMPLE_BYTES = 64L * 1024L * 1024L
 
-    fun sha256(input: InputStream): String {
+    fun sha256(input: InputStream): String = sha256(input) {}
+
+    fun sha256(input: InputStream, checkCancelled: () -> Unit): String {
       val digest = MessageDigest.getInstance("SHA-256")
       val buffer = ByteArray(64 * 1024)
       while (true) {
+        checkCancelled()
         val count = input.read(buffer)
         if (count < 0) break
         if (count > 0) digest.update(buffer, 0, count)
@@ -109,8 +112,12 @@ class MediaIntegrity(private val context: Context) {
   }
 
   fun sha256(source: String): String {
+    return sha256(source) {}
+  }
+
+  fun sha256(source: String, checkCancelled: () -> Unit): String {
     if (source.isBlank()) throw MediaIntegrityException("MEDIA_SOURCE_INVALID")
-    return openInput(source).use(::sha256)
+    return openInput(source).use { input -> sha256(input, checkCancelled) }
   }
 
   private fun <T> withExtractor(source: String, block: (MediaExtractor) -> T): T {

@@ -1,4 +1,5 @@
 import { NativeModules, Platform } from 'react-native';
+import { executorWakePort } from '../tasks/executorEvents';
 
 export type TaskMonitorStatus = { running: boolean; taskIds: string[] };
 export type StartTaskMonitorResult = { started: true } | { started: false; reason: 'permission-denied' | 'no-active-tasks' | 'native-unavailable' | 'start-failed' };
@@ -14,8 +15,8 @@ type NativeMonitor = {
 function native(): NativeMonitor | undefined { return Platform.OS === 'android' ? (NativeModules.AutoDLTaskMonitor as NativeMonitor | undefined) : undefined; }
 
 export async function runTaskMonitorTick(taskIds: string[]) {
-  const { syncTaskRun } = require('../tasks/background') as typeof import('../tasks/background');
-  return syncTaskRun({ reason: 'service', mode: 'service', taskIds });
+  const { executorRunner } = require('../tasks/executorRuntime') as typeof import('../tasks/executorRuntime');
+  return executorRunner.runSlice({ trigger: 'service', taskIds });
 }
 
 export async function startTaskMonitor(taskIds: string[]): Promise<StartTaskMonitorResult> {
@@ -28,7 +29,7 @@ export async function startTaskMonitor(taskIds: string[]): Promise<StartTaskMoni
     if (!await module.requestNotificationPermission()) return { started: false, reason: 'permission-denied' };
     startAttempted = true;
     await module.start(ids);
-    await runTaskMonitorTick(ids);
+    executorWakePort.signal('service');
     return { started: true };
   } catch {
     if (startAttempted) {
@@ -47,9 +48,10 @@ export async function publishTerminalEvents(events: TerminalNotification[]): Pro
 
 export async function runTaskMonitorHeadless(taskIds: string[]) {
   const result = await runTaskMonitorTick(taskIds);
-  await publishTerminalEvents(result.summary.terminalEvents);
-  if (result.summary.remaining === 0) await stopTaskMonitor();
-  return result.summary;
+  const { readTerminalNotifications } = require('../tasks/executorRuntime') as typeof import('../tasks/executorRuntime');
+  await publishTerminalEvents(await readTerminalNotifications(taskIds));
+  if (result.remainingDue + result.remainingScheduled === 0 && result.nextWakeAt == null) await stopTaskMonitor();
+  return result;
 }
 
 export async function stopTaskMonitor(): Promise<boolean> {
@@ -65,3 +67,4 @@ export async function getTaskMonitorStatus(): Promise<TaskMonitorStatus> {
   const value = await module.getStatus();
   return { running: Boolean(value?.running), taskIds: Array.isArray(value?.taskIds) ? value.taskIds.map(String) : [] };
 }
+

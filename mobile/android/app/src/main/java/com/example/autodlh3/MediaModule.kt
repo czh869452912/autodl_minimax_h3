@@ -5,18 +5,115 @@ import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.ReadableMap
+import okhttp3.OkHttpClient
+
+internal class MediaWorkExecutors(
+  private val mediaExecutor: ExecutorService = Executors.newFixedThreadPool(2),
+  private val cancellationExecutor: ExecutorService = Executors.newSingleThreadExecutor(),
+) {
+  fun executeMedia(work: () -> Unit) = mediaExecutor.execute(work)
+  fun executeCancellation(work: () -> Unit) = cancellationExecutor.execute(work)
+
+  fun shutdown() {
+    mediaExecutor.shutdownNow()
+    cancellationExecutor.shutdownNow()
+  }
+}
 
 class MediaModule(private val context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
-  private val executor = Executors.newSingleThreadExecutor()
+  private val executors = MediaWorkExecutors()
   private val publisher = MediaStorePublisher(context.contentResolver)
   private val integrity = MediaIntegrity(context)
+  private val transferPolicy = ArtifactTransferPolicy()
+  private val artifactTransfer = ArtifactTransfer(
+    partsDir = File(context.filesDir, "cas/parts"),
+    httpClient = OkHttpClient(),
+    validator = transferPolicy::validate,
+    dns = { host, _ -> transferPolicy.resolvePublic(host) },
+    durableSha256 = { source, checkCancelled -> integrity.sha256(source, checkCancelled) },
+  )
   override fun getName() = "AutoDLMedia"
+
+  override fun invalidate() {
+    executors.shutdown()
+    super.invalidate()
+  }
+
+  private fun transferRequest(options: ReadableMap): ArtifactTransferRequest = try {
+    fun text(name: String): String = options.getString(name)?.takeIf { it.isNotBlank() }
+      ?: throw ArtifactTransferException("ARTIFACT_TRANSFER_REQUEST_INVALID", false)
+    fun stringSet(name: String): Set<String> = options.getArray(name)?.toArrayList()?.map { value ->
+      value as? String ?: throw ArtifactTransferException("ARTIFACT_TRANSFER_REQUEST_INVALID", false)
+    }?.toSet() ?: throw ArtifactTransferException("ARTIFACT_TRANSFER_REQUEST_INVALID", false)
+    fun positiveLong(name: String): Long {
+      val value = options.getDouble(name)
+      if (!value.isFinite() || value <= 0 || value > Long.MAX_VALUE || value % 1.0 != 0.0) {
+        throw ArtifactTransferException("ARTIFACT_TRANSFER_REQUEST_INVALID", false)
+      }
+      return value.toLong()
+    }
+    val operationAttempt = options.getDouble("operationAttempt")
+    if (!operationAttempt.isFinite() || operationAttempt < 0 || operationAttempt > Int.MAX_VALUE || operationAttempt % 1.0 != 0.0) {
+      throw ArtifactTransferException("ARTIFACT_TRANSFER_REQUEST_INVALID", false)
+    }
+    ArtifactTransferRequest(
+      url = text("url"),
+      allowedHosts = stringSet("allowedHosts"),
+      allowProviderSuppliedPublicHosts = options.getBoolean("allowProviderSuppliedPublicHosts"),
+      acceptedMimes = stringSet("acceptedMimes"),
+      maxBytes = positiveLong("maxBytes"),
+      connectTimeoutMs = positiveLong("connectTimeoutMs"),
+      idleTimeoutMs = positiveLong("idleTimeoutMs"),
+      expectedSha256 = if (options.hasKey("expectedSha256") && !options.isNull("expectedSha256")) options.getString("expectedSha256") else null,
+      operationId = text("operationId").trim(),
+      operationAttempt = operationAttempt.toInt(),
+    )
+  } catch (error: ArtifactTransferException) {
+    throw error
+  } catch (error: Exception) {
+    throw ArtifactTransferException("ARTIFACT_TRANSFER_REQUEST_INVALID", false, error)
+  }
+
+  @ReactMethod
+  fun transferArtifact(options: ReadableMap, promise: Promise) {
+    executors.executeMedia {
+      try {
+        val result = artifactTransfer.transfer(transferRequest(options))
+        promise.resolve(Arguments.createMap().apply {
+          putString("partUri", result.partUri)
+          putString("finalUrl", result.finalUrl)
+          putString("mime", result.mime)
+          putDouble("byteSize", result.byteSize.toDouble())
+          putString("sha256", result.sha256)
+        })
+      } catch (error: ArtifactTransferException) {
+        promise.reject(error.diagnosticCode, error.message, error)
+      } catch (error: Exception) {
+        promise.reject("ARTIFACT_TRANSFER_FAILED", error.message, error)
+      }
+    }
+  }
+
+  @ReactMethod
+  fun cancelArtifactTransfer(operationId: String, operationAttempt: Double, promise: Promise) {
+    executors.executeCancellation {
+      if (operationId.isBlank() || !operationAttempt.isFinite() || operationAttempt < 0 ||
+        operationAttempt > Int.MAX_VALUE || operationAttempt % 1.0 != 0.0
+      ) {
+        promise.reject("ARTIFACT_TRANSFER_REQUEST_INVALID", "operation identity is invalid")
+      } else {
+        promise.resolve(artifactTransfer.cancel(operationId.trim(), operationAttempt.toInt()))
+      }
+    }
+  }
 
   @ReactMethod
   fun openVideo(source: String) {
@@ -31,7 +128,7 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   @ReactMethod
   fun extractPoster(source: String, key: String, promise: Promise) {
     if (source.isBlank()) { promise.reject("INVALID_SOURCE", "视频地址为空"); return }
-    executor.execute {
+    executors.executeMedia {
       val retriever = MediaMetadataRetriever()
       try {
         if (source.startsWith("http://") || source.startsWith("https://")) retriever.setDataSource(source, emptyMap()) else retriever.setDataSource(source)
@@ -46,7 +143,7 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
 
   @ReactMethod
   fun exportVideo(source: String, mediaId: String, displayName: String, promise: Promise) {
-    executor.execute {
+    executors.executeMedia {
       try {
         val result = publisher.publish(source, mediaId, displayName)
         promise.resolve(Arguments.createMap().apply {
@@ -64,7 +161,7 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   @ReactMethod
   fun sha256File(source: String, promise: Promise) {
     if (source.isBlank()) { promise.reject("MEDIA_SOURCE_INVALID", "媒体 URI 为空"); return }
-    executor.execute {
+    executors.executeMedia {
       try { promise.resolve(integrity.sha256(source)) }
       catch (error: Exception) { promise.reject("MEDIA_INTEGRITY_FAILED", error.message, error) }
     }
@@ -73,7 +170,7 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   @ReactMethod
   fun probeVideo(source: String, promise: Promise) {
     if (source.isBlank()) { promise.reject("MEDIA_SOURCE_INVALID", "媒体 URI 为空"); return }
-    executor.execute {
+    executors.executeMedia {
       try {
         val result = integrity.probeVideo(source)
         promise.resolve(Arguments.createMap().apply {

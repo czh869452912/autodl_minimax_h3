@@ -12,7 +12,7 @@ function setup() {
   const handled: string[] = [];
   const executor = {
     recover: jest.fn(async () => undefined),
-    handle: jest.fn(async (operation, owner) => { handled.push(operation.id); operations.finish(operation.id, owner, 'SUCCEEDED', 100); }),
+    handle: jest.fn(async (operation, owner) => { handled.push(operation.id); await operations.finish(operation.id, owner, 'SUCCEEDED', 100); }),
   };
   const tick = createExecutorTick({ operations, executor, owner: () => 'worker', isReadonly: () => false });
   return { db, operations, executor, tick, handled };
@@ -29,7 +29,7 @@ test('never exceeds maxOperations, is lane-fair, and defers newly-created work',
     value.executor.handle.mockImplementation(async (operation, owner) => {
       value.handled.push(operation.id);
       value.operations.enqueue({ id: 'created-during-tick', kind: 'STATUS_SYNC', idempotencyKey: 'created:during', payload: {}, now: 100 });
-      value.operations.finish(operation.id, owner, 'SUCCEEDED', 100);
+      await value.operations.finish(operation.id, owner, 'SUCCEEDED', 100);
     });
     const summary = await value.tick.run({ reason: 'foreground', maxOperations: 4, now: 100 });
     expect(summary.claimed).toBe(4);
@@ -58,7 +58,54 @@ test('uses bounded due and summary queries instead of the audit list API', async
   } finally { value.db.close(); }
 });
 
-test('overlapping entrypoints share one pass and thrown handlers release claims', async () => {
+test('work inserted during a running tick remains due for the next slice', async () => {
+  const value = setup();
+  let releaseHandler!: () => void;
+  const handlerStarted = new Promise<void>((resolve) => {
+    value.executor.handle.mockImplementationOnce(async (operation, owner) => {
+      resolve();
+      await new Promise<void>((release) => { releaseHandler = release; });
+      await value.operations.finish(operation.id, owner, 'SUCCEEDED', 100);
+    });
+  });
+  try {
+    enqueue(value.operations, 'STATUS_SYNC', 0);
+    const running = value.tick.run({ reason: 'foreground', now: 100 });
+    await handlerStarted;
+    enqueue(value.operations, 'STATUS_SYNC', 1);
+    releaseHandler();
+
+    await expect(running).resolves.toMatchObject({ claimed: 1, succeeded: 1, remainingDue: 1 });
+    expect(value.handled).not.toContain('STATUS_SYNC-1');
+
+    await expect(value.tick.run({ reason: 'foreground', now: 100 })).resolves.toMatchObject({ claimed: 1, succeeded: 1, remainingDue: 0 });
+  } finally { value.db.close(); }
+});
+
+test('work inserted between the former lane reads remains due for the next slice', async () => {
+  const value = setup();
+  try {
+    enqueue(value.operations, 'SUBMIT', 0);
+    const getAllAsync = value.db.getAllAsync.bind(value.db);
+    let inserted = false;
+    jest.spyOn(value.db, 'getAllAsync').mockImplementation(async (source: string, ...params: unknown[]) => {
+      const rows = await getAllAsync(source, ...params);
+      if (!inserted && source.includes('FROM workflow_operations')) {
+        inserted = true;
+        enqueue(value.operations, 'STATUS_SYNC', 0);
+      }
+      return rows;
+    });
+
+    await expect(value.tick.run({ reason: 'foreground', maxOperations: 2, now: 100 })).resolves.toMatchObject({
+      claimed: 1, succeeded: 1, remainingDue: 1,
+    });
+    expect(value.handled).toEqual(['SUBMIT-0']);
+    await expect(value.operations.get('STATUS_SYNC-0')).resolves.toMatchObject({ state: 'PENDING' });
+  } finally { value.db.close(); }
+});
+
+test('overlapping entrypoints execute independent passes and thrown handlers release claims', async () => {
   const value = setup();
   try {
     enqueue(value.operations, 'STATUS_SYNC', 0);
@@ -66,9 +113,22 @@ test('overlapping entrypoints share one pass and thrown handlers release claims'
     const first = value.tick.run({ reason: 'foreground', now: 100 });
     const second = value.tick.run({ reason: 'service', now: 100 });
     await Promise.all([first, second]);
-    expect(value.executor.recover).toHaveBeenCalledTimes(1);
+    expect(value.executor.recover).toHaveBeenCalledTimes(2);
     expect(value.executor.handle).toHaveBeenCalledTimes(1);
-    expect(value.operations.get('STATUS_SYNC-0')).toMatchObject({ state: 'PENDING' });
+    expect(await value.operations.get('STATUS_SYNC-0')).toMatchObject({ state: 'PENDING' });
+  } finally { value.db.close(); }
+});
+
+test('caps a tick at eight operations even when a larger limit is requested', async () => {
+  const value = setup();
+  try {
+    for (let index = 0; index < 10; index += 1) enqueue(value.operations, 'STATUS_SYNC', index);
+
+    await expect(value.tick.run({ reason: 'foreground', maxOperations: 99, now: 100 })).resolves.toMatchObject({
+      claimed: 8,
+      succeeded: 8,
+      remainingDue: 2,
+    });
   } finally { value.db.close(); }
 });
 
@@ -91,6 +151,40 @@ test('readonly mode skips recovery, claims, and handlers', async () => {
   } finally { value.db.close(); }
 });
 
+test('awaits an asynchronous writable gate before claiming work', async () => {
+  const value = setup();
+  try {
+    enqueue(value.operations, 'STATUS_SYNC', 0);
+    const tick = createExecutorTick({
+      operations: value.operations,
+      executor: value.executor,
+      owner: () => 'worker',
+      isReadonly: async () => false,
+    });
+
+    await expect(tick.run({ reason: 'foreground', now: 100 })).resolves.toMatchObject({ claimed: 1, succeeded: 1 });
+  } finally { value.db.close(); }
+});
+
+test('propagates an asynchronous readonly-gate failure before recovery or claims', async () => {
+  const value = setup();
+  try {
+    enqueue(value.operations, 'STATUS_SYNC', 0);
+    const unavailable = Promise.reject(new Error('recovery-state unavailable'));
+    void unavailable.catch(() => undefined);
+    const tick = createExecutorTick({
+      operations: value.operations,
+      executor: value.executor,
+      owner: () => 'worker',
+      isReadonly: () => unavailable,
+    });
+
+    await expect(tick.run({ reason: 'foreground', now: 100 })).rejects.toThrow('recovery-state unavailable');
+    expect(value.executor.recover).not.toHaveBeenCalled();
+    await expect(value.operations.get('STATUS_SYNC-0')).resolves.toMatchObject({ state: 'PENDING' });
+  } finally { value.db.close(); }
+});
+
 test('expired leases and retry timestamps survive a real database reopen', async () => {
   const file = path.join(os.tmpdir(), `autodl-h3-tick-${process.pid}-${Date.now()}.db`);
   try {
@@ -98,7 +192,7 @@ test('expired leases and retry timestamps survive a real database reopen', async
     const first = createOperationRepository(firstDb as never);
     enqueue(first, 'STATUS_SYNC', 0);
     enqueue(first, 'STATUS_SYNC', 1, 500);
-    first.claimDue({ kind: 'STATUS_SYNC', owner: 'dead', now: 100, leaseMs: 50, limit: 1 });
+    await first.claimDue({ kind: 'STATUS_SYNC', owner: 'dead', now: 100, leaseMs: 50, limit: 1 });
     firstDb.close();
 
     const secondDb = createInitializedRealSqliteTestDb(file);
@@ -106,13 +200,13 @@ test('expired leases and retry timestamps survive a real database reopen', async
       const reopened = createOperationRepository(secondDb as never);
       const handled: string[] = [];
       const executor = {
-        recover: jest.fn(async (now: number) => { reopened.recoverExpired(now); }),
-        handle: jest.fn(async (operation, owner) => { handled.push(operation.id); reopened.finish(operation.id, owner, 'SUCCEEDED', 151); }),
+        recover: jest.fn(async (now: number) => { await reopened.recoverExpired(now, 32); }),
+        handle: jest.fn(async (operation, owner) => { handled.push(operation.id); await reopened.finish(operation.id, owner, 'SUCCEEDED', 151); }),
       };
       const tick = createExecutorTick({ operations: reopened, executor, owner: () => 'restart', isReadonly: () => false });
       await tick.run({ reason: 'background', now: 151 });
       expect(handled).toEqual(['STATUS_SYNC-0']);
-      expect(reopened.get('STATUS_SYNC-1')).toMatchObject({ state: 'PENDING', nextRetryAt: 500 });
+      expect(await reopened.get('STATUS_SYNC-1')).toMatchObject({ state: 'PENDING', nextRetryAt: 500 });
     } finally { secondDb.close(); }
   } finally {
     fs.rmSync(file, { force: true });

@@ -24,14 +24,14 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ back: mockBack }),
 }));
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
-jest.mock('../tasks/sync', () => ({
+jest.mock('../tasks/taskServices', () => ({
   taskStore: { list: () => mockList(), get: (id: string) => mockGet(id) },
   mediaStore: {
     get: (id: string) => mockMediaGet(id),
   },
-  syncTaskRun: (...args: unknown[]) => mockSync(...args),
-  requestTaskExport: (taskId: string, policy: { keepPrivateCopy: boolean }) => mockRequestExport(taskId, policy),
-  requestTaskRedownload: (taskId: string) => mockRequestRedownload(taskId),
+
+  taskCommandService: { requestExport: (taskId: string, policy: { keepPrivateCopy: boolean }) => mockRequestExport(taskId, policy),
+  requestRedownload: (taskId: string) => mockRequestRedownload(taskId) },
 }));
 jest.mock('../native/media', () => ({ probeVideo: (source: string) => mockProbeVideo(source) }));
 jest.mock('../tasks/localMedia', () => ({ resolveLocalVideoSource: (...args: unknown[]) => mockResolveLocal(...args) }));
@@ -98,7 +98,7 @@ describe('video detail screen', () => {
     await act(async () => { tree = create(<VideoDetailScreen />); });
     await act(async () => tree!.root.findByProps({ accessibilityLabel: '保存到系统相册' }).props.onPress());
     expect(mockRequestExport).toHaveBeenCalledWith('task-1', { keepPrivateCopy: true });
-    expect(mockSync).toHaveBeenCalledWith({ reason: 'foreground', mode: 'poll', taskIds: ['task-1'] });
+    expect(mockSync).not.toHaveBeenCalled();
   });
 
   it('uses a verified private file for playback without writing projections in the route', async () => {
@@ -165,3 +165,4 @@ describe('video detail screen', () => {
     expect(tree!.root.findByProps({ testID: 'bottom-prompt-card' })).toBeTruthy();
   });
 });
+

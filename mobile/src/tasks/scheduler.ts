@@ -1,4 +1,43 @@
-import { assertAppDatabaseWritable } from '../storage/database';
+import { assertAppDatabaseWritable, assertAppDatabaseWritableAsync } from '../storage/database';
+import type { SQLiteDatabase } from 'expo-sqlite';
+
+export async function withAsyncSchedulerLease<T>(
+  key: string,
+  work: (lease: { assertOwned(): Promise<void> }) => Promise<T>,
+  options: { db: SQLiteDatabase; now?: () => number; ttlMs?: number },
+): Promise<T | undefined> {
+  const { db } = options;
+  const now = options.now ?? Date.now;
+  const ttl = Math.max(5000, options.ttlMs ?? 120000);
+  const owner = `${now()}-${Math.random()}`;
+  await assertAppDatabaseWritableAsync(db);
+  if (changes(await db.runAsync(`INSERT INTO app_scheduler_leases(lease_key,owner,expires_at) VALUES(?,?,?)
+    ON CONFLICT(lease_key) DO UPDATE SET owner=excluded.owner,expires_at=excluded.expires_at WHERE app_scheduler_leases.expires_at<=?`,
+  key, owner, now() + ttl, now())) !== 1) return undefined;
+  let renewal: Promise<void> | undefined;
+  let failure: unknown;
+  const assertOwned = async () => {
+    if (renewal) await renewal;
+    if (failure) throw failure;
+    const row = await db.getFirstAsync('SELECT 1 FROM app_scheduler_leases WHERE lease_key=? AND owner=? AND expires_at>?', key, owner, now());
+    if (!row) throw new Error('SCHEDULER_LEASE_LOST');
+  };
+  const timer = setInterval(() => {
+    if (renewal) return;
+    renewal = (async () => {
+      if (changes(await db.runAsync('UPDATE app_scheduler_leases SET expires_at=? WHERE lease_key=? AND owner=? AND expires_at>?', now() + ttl, key, owner, now())) !== 1) throw new Error('SCHEDULER_LEASE_LOST');
+    })().catch(error => { failure = error; }).finally(() => { renewal = undefined; });
+  }, Math.floor(ttl / 3));
+  try {
+    const result = await work({ assertOwned });
+    await assertOwned();
+    return result;
+  } finally {
+    clearInterval(timer);
+    if (renewal) await renewal;
+    await db.runAsync('DELETE FROM app_scheduler_leases WHERE lease_key=? AND owner=?', key, owner);
+  }
+}
 
 type LeaseDb = {
   runSync?: (sql: string, ...params: any[]) => unknown;

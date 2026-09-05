@@ -1,4 +1,4 @@
-import type { SyncRequest } from './syncPolicy';
+import type { ExecutorTrigger } from './executorEvents';
 
 export function createConnectivityEdgeDetector() {
   let previous: boolean | undefined;
@@ -14,13 +14,13 @@ export function createConnectivityEdgeDetector() {
 
 export async function resumeAfterConnectivityReturns(deps: {
   listActiveJobIds(): Promise<string[]>;
-  expediteRetryableNetwork(jobIds: string[], now: number): number;
-  runPoll(request: SyncRequest): Promise<unknown>;
+  expediteRetryableNetwork(jobIds: string[], now: number): Promise<number>;
+  signal(trigger: ExecutorTrigger): void;
   now(): number;
 }) {
   const activeJobIds = await deps.listActiveJobIds();
-  const expedited = deps.expediteRetryableNetwork(activeJobIds, deps.now());
-  const polled = expedited > 0 || activeJobIds.length > 0;
-  if (polled) await deps.runPoll({ reason: 'foreground', mode: 'poll', taskIds: activeJobIds });
-  return { activeJobIds, expedited, polled };
+  const expedited = await deps.expediteRetryableNetwork(activeJobIds, deps.now());
+  const signaled = expedited > 0 || activeJobIds.length > 0;
+  if (signaled) deps.signal('connectivity');
+  return { activeJobIds, expedited, signaled };
 }

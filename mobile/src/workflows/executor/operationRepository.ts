@@ -1,6 +1,7 @@
+import { withWriteTransaction } from '../../storage/sqliteBusy';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { NormalizedError } from '../../jobs/types';
-import { assertAppDatabaseWritable } from '../../storage/database';
+import { assertAppDatabaseWritable, assertAppDatabaseWritableAsync } from '../../storage/database';
 import type { EnqueueOperation, OperationKind, OperationState, WorkflowOperation } from './types';
 
 type OperationRow = {
@@ -64,26 +65,23 @@ function changes(result: unknown): number {
   return value == null ? 0 : Number(value);
 }
 
-function transaction<T>(db: SQLiteDatabase, work: () => T): T {
-  if (typeof db.withTransactionSync === 'function') {
-    let result!: T;
-    db.withTransactionSync(() => { result = work(); });
-    return result;
-  }
-  db.execSync('BEGIN IMMEDIATE');
-  try {
-    const result = work();
-    db.execSync('COMMIT');
-    return result;
-  } catch (error) {
-    try { db.execSync('ROLLBACK'); } catch { /* best effort */ }
-    throw error;
-  }
+async function exclusiveTransaction<T>(db: SQLiteDatabase, work: (transaction: SQLiteDatabase) => Promise<T>): Promise<T> {
+  let result!: T;
+  await withWriteTransaction(db, async (transaction) => {
+    result = await work(transaction);
+  });
+  return result;
 }
 
+export type ExpiredRecovery = Readonly<{
+  uncertainSubmits: readonly WorkflowOperation[];
+  reopened: number;
+  hasMore: boolean;
+}>;
+
 export function createOperationRepository(db: SQLiteDatabase) {
-  const get = (id: string): WorkflowOperation | undefined => {
-    const row = db.getFirstSync<OperationRow>('SELECT * FROM workflow_operations WHERE id = ? LIMIT 1', id);
+  const get = async (id: string): Promise<WorkflowOperation | undefined> => {
+    const row = await db.getFirstAsync<OperationRow>('SELECT * FROM workflow_operations WHERE id = ? LIMIT 1', id);
     return row ? mapRow(row) : undefined;
   };
   const enqueue = (input: EnqueueOperation): WorkflowOperation => {
@@ -110,18 +108,45 @@ export function createOperationRepository(db: SQLiteDatabase) {
         : db.getAllSync<OperationRow>('SELECT * FROM workflow_operations ORDER BY created_at ASC, id ASC');
       return rows.map(mapRow);
     },
-    listDue(options: { kind: OperationKind; now: number; limit: number }): WorkflowOperation[] {
+    async listDue(options: { kind: OperationKind; now: number; limit: number }): Promise<WorkflowOperation[]> {
       const limit = Math.max(0, Math.floor(options.limit));
       if (limit === 0) return [];
-      return db.getAllSync<OperationRow>(
+      return (await db.getAllAsync<OperationRow>(
         "SELECT * FROM workflow_operations WHERE kind = ? AND state = 'PENDING' AND next_retry_at <= ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?) ORDER BY next_retry_at ASC, created_at ASC, id ASC LIMIT ?",
         options.kind, options.now, options.now, limit,
-      ).map(mapRow);
+      )).map(mapRow);
     },
-    pendingSummary(options: { now: number; jobIds?: string[] }): PendingSummary {
+    async listDueSnapshot(options: { now: number; perLaneLimit: number }): Promise<WorkflowOperation[]> {
+      const perLaneLimit = Math.max(0, Math.floor(options.perLaneLimit));
+      if (perLaneLimit === 0) return [];
+      const rows = await db.getAllAsync<OperationRow>(
+        `WITH ranked_due_operations AS (
+          SELECT *, ROW_NUMBER() OVER (
+            PARTITION BY kind
+            ORDER BY next_retry_at ASC, created_at ASC, id ASC
+          ) AS lane_rank
+          FROM workflow_operations
+          WHERE kind IN ('SUBMIT','STATUS_SYNC','ARTIFACT_DOWNLOAD','EXPORT')
+            AND state = 'PENDING'
+            AND next_retry_at <= ?
+            AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
+        )
+        SELECT * FROM ranked_due_operations
+        WHERE lane_rank <= ?
+        ORDER BY CASE kind
+          WHEN 'SUBMIT' THEN 0
+          WHEN 'STATUS_SYNC' THEN 1
+          WHEN 'ARTIFACT_DOWNLOAD' THEN 2
+          WHEN 'EXPORT' THEN 3
+        END, next_retry_at ASC, created_at ASC, id ASC`,
+        options.now, options.now, perLaneLimit,
+      );
+      return rows.map(mapRow);
+    },
+    async pendingSummary(options: { now: number; jobIds?: string[] }): Promise<PendingSummary> {
       if (options.jobIds && options.jobIds.length === 0) return { remainingDue: 0, remainingScheduled: 0 };
       const scope = options.jobIds ? ` AND job_id IN (${options.jobIds.map(() => '?').join(',')})` : '';
-      const row = db.getFirstSync<{
+      const row = await db.getFirstAsync<{
         remaining_due: number | null;
         remaining_scheduled: number | null;
         next_wake_at: number | null;
@@ -142,20 +167,20 @@ export function createOperationRepository(db: SQLiteDatabase) {
       if (row?.next_wake_at != null) summary.nextWakeAt = Number(row.next_wake_at);
       return summary;
     },
-    countOutstanding(jobIds: string[]): number {
+    async countOutstanding(jobIds: string[]): Promise<number> {
       if (jobIds.length === 0) return 0;
       const placeholders = jobIds.map(() => '?').join(',');
-      const row = db.getFirstSync<{ count: number }>(
+      const row = await db.getFirstAsync<{ count: number }>(
         `SELECT COUNT(*) AS count FROM workflow_operations WHERE state IN ('PENDING','CLAIMED') AND job_id IN (${placeholders})`,
         ...jobIds,
       );
       return Number(row?.count ?? 0);
     },
-    expediteRetryableNetwork(jobIds: string[], now: number): number {
+    async expediteRetryableNetwork(jobIds: string[], now: number): Promise<number> {
       if (jobIds.length === 0) return 0;
-      assertAppDatabaseWritable(db);
+      await assertAppDatabaseWritableAsync(db);
       const placeholders = jobIds.map(() => '?').join(',');
-      const result = db.runSync(
+      const result = await db.runAsync(
         `UPDATE workflow_operations SET next_retry_at = ?, updated_at = ?
         WHERE state = 'PENDING' AND next_retry_at > ? AND job_id IN (${placeholders})
           AND json_extract(last_error_json, '$.retryable') = 1
@@ -172,80 +197,118 @@ export function createOperationRepository(db: SQLiteDatabase) {
       );
       return changes(result);
     },
-    claimById(id: string, owner: string, now: number, leaseMs: number): WorkflowOperation | undefined {
-      assertAppDatabaseWritable(db);
-      const result = db.runSync(
-        "UPDATE workflow_operations SET state = 'CLAIMED', lease_owner = ?, lease_expires_at = ?, attempt = attempt + 1, updated_at = ? WHERE id = ? AND state = 'PENDING' AND next_retry_at <= ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?)",
-        owner, now + Math.max(1, leaseMs), now, id, now, now,
-      );
-      return changes(result) === 1 ? get(id) : undefined;
+    async claimById(id: string, owner: string, now: number, leaseMs: number): Promise<WorkflowOperation | undefined> {
+      await assertAppDatabaseWritableAsync(db);
+      const leaseExpiresAt = now + Math.max(1, leaseMs);
+      const claimed = await exclusiveTransaction(db, async (transaction) => {
+        const row = await transaction.getFirstAsync<OperationRow & { claimed_from_attempt: number }>(
+          `UPDATE workflow_operations
+          SET state = 'CLAIMED', lease_owner = ?, lease_expires_at = ?, attempt = attempt + 1, updated_at = ?
+          WHERE id = ? AND state = 'PENDING' AND next_retry_at <= ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
+          RETURNING *, attempt - 1 AS claimed_from_attempt`,
+          owner, leaseExpiresAt, now, id, now, now,
+        );
+        if (!row) return undefined;
+        const expectedAttempt = Number(row.claimed_from_attempt) + 1;
+        if (row.state !== 'CLAIMED'
+          || row.lease_owner !== owner
+          || Number(row.lease_expires_at) !== leaseExpiresAt
+          || Number(row.attempt) !== expectedAttempt) {
+          throw new Error('OPERATION_CLAIM_FENCE_MISMATCH');
+        }
+        return mapRow(row);
+      });
+      if (!claimed) return undefined;
+      const current = await get(id);
+      if (!current
+        || current.state !== 'CLAIMED'
+        || current.leaseOwner !== owner
+        || current.leaseExpiresAt !== leaseExpiresAt
+        || current.attempt !== claimed.attempt) {
+        throw new Error('OPERATION_CLAIM_FENCE_MISMATCH');
+      }
+      return claimed;
     },
-    claimDue(options: { kind: OperationKind; owner: string; now: number; leaseMs: number; limit: number }): WorkflowOperation[] {
-      assertAppDatabaseWritable(db);
-      return transaction(db, () => {
+    async claimDue(options: { kind: OperationKind; owner: string; now: number; leaseMs: number; limit: number }): Promise<WorkflowOperation[]> {
+      await assertAppDatabaseWritableAsync(db);
+      return exclusiveTransaction(db, async (transaction) => {
         const limit = Math.max(0, Math.floor(options.limit));
         if (limit === 0) return [];
-        const candidates = db.getAllSync<{ id: string }>(
+        const candidates = await transaction.getAllAsync<{ id: string }>(
           "SELECT id FROM workflow_operations WHERE kind = ? AND state = 'PENDING' AND next_retry_at <= ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?) ORDER BY next_retry_at ASC, created_at ASC, id ASC LIMIT ?",
           options.kind, options.now, options.now, limit,
         );
         const claimed: WorkflowOperation[] = [];
         for (const candidate of candidates) {
-          const result = db.runSync(
+          const result = await transaction.runAsync(
             "UPDATE workflow_operations SET state = 'CLAIMED', lease_owner = ?, lease_expires_at = ?, attempt = attempt + 1, updated_at = ? WHERE id = ? AND state = 'PENDING' AND next_retry_at <= ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?)",
             options.owner, options.now + Math.max(1, options.leaseMs), options.now,
             candidate.id, options.now, options.now,
           );
           if (changes(result) !== 1) continue;
-          const operation = get(candidate.id);
-          if (operation) claimed.push(operation);
+          const row = await transaction.getFirstAsync<OperationRow>('SELECT * FROM workflow_operations WHERE id = ? LIMIT 1', candidate.id);
+          if (row) claimed.push(mapRow(row));
         }
         return claimed;
       });
     },
-    renew(id: string, owner: string, now: number, leaseMs: number): boolean {
-      assertAppDatabaseWritable(db);
-      return changes(db.runSync(
+    async renew(id: string, owner: string, now: number, leaseMs: number): Promise<boolean> {
+      await assertAppDatabaseWritableAsync(db);
+      return changes(await db.runAsync(
         "UPDATE workflow_operations SET lease_expires_at = ?, updated_at = ? WHERE id = ? AND state = 'CLAIMED' AND lease_owner = ?",
         now + Math.max(1, leaseMs), now, id, owner,
       )) === 1;
     },
-    release(id: string, owner: string, now: number): boolean {
-      assertAppDatabaseWritable(db);
-      return changes(db.runSync(
+    async release(id: string, owner: string, now: number): Promise<boolean> {
+      await assertAppDatabaseWritableAsync(db);
+      return changes(await db.runAsync(
         "UPDATE workflow_operations SET state = 'PENDING', lease_owner = NULL, lease_expires_at = NULL, updated_at = ? WHERE id = ? AND state = 'CLAIMED' AND lease_owner = ?",
         now, id, owner,
       )) === 1;
     },
-    retry(id: string, owner: string, input: { now: number; nextRetryAt: number; error?: NormalizedError }): boolean {
-      assertAppDatabaseWritable(db);
-      return changes(db.runSync(
+    async retry(id: string, owner: string, input: { now: number; nextRetryAt: number; error?: NormalizedError }): Promise<boolean> {
+      await assertAppDatabaseWritableAsync(db);
+      return changes(await db.runAsync(
         "UPDATE workflow_operations SET state = 'PENDING', next_retry_at = ?, lease_owner = NULL, lease_expires_at = NULL, last_error_json = ?, updated_at = ? WHERE id = ? AND state = 'CLAIMED' AND lease_owner = ?",
         input.nextRetryAt, input.error ? JSON.stringify(input.error) : null, input.now, id, owner,
       )) === 1;
     },
-    finish(id: string, owner: string, state: Extract<OperationState, 'SUCCEEDED' | 'FAILED' | 'BLOCKED'>, now: number, error?: NormalizedError): boolean {
-      assertAppDatabaseWritable(db);
-      return changes(db.runSync(
+    async finish(id: string, owner: string, state: Extract<OperationState, 'SUCCEEDED' | 'FAILED' | 'BLOCKED'>, now: number, error?: NormalizedError): Promise<boolean> {
+      await assertAppDatabaseWritableAsync(db);
+      return changes(await db.runAsync(
         "UPDATE workflow_operations SET state = ?, lease_owner = NULL, lease_expires_at = NULL, last_error_json = ?, updated_at = ? WHERE id = ? AND state = 'CLAIMED' AND lease_owner = ?",
         state, error ? JSON.stringify(error) : null, now, id, owner,
       )) === 1;
     },
-    recoverExpired(now: number): WorkflowOperation[] {
-      assertAppDatabaseWritable(db);
-      return transaction(db, () => {
-        const expired = db.getAllSync<OperationRow>(
-          "SELECT * FROM workflow_operations WHERE state = 'CLAIMED' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ? ORDER BY created_at ASC, id ASC",
-          now,
+    async recoverExpired(now: number, requestedLimit: number): Promise<ExpiredRecovery> {
+      await assertAppDatabaseWritableAsync(db);
+      const limit = Math.max(0, Math.floor(requestedLimit));
+      if (limit === 0) return { uncertainSubmits: [], reopened: 0, hasMore: false };
+      const candidate = await db.getFirstAsync<{ present: number }>(
+        "SELECT 1 AS present FROM workflow_operations WHERE state = 'CLAIMED' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ? LIMIT 1",
+        now,
+      );
+      if (!candidate) return { uncertainSubmits: [], reopened: 0, hasMore: false };
+      return exclusiveTransaction(db, async (transaction) => {
+        const expired = await transaction.getAllAsync<OperationRow>(
+          "SELECT * FROM workflow_operations WHERE state = 'CLAIMED' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ? ORDER BY created_at ASC, id ASC LIMIT ?",
+          now, limit + 1,
         );
-        for (const row of expired) {
+        const batch = expired.slice(0, limit);
+        let reopened = 0;
+        for (const row of batch) {
           if (row.kind === 'SUBMIT') continue;
-          db.runSync(
+          const result = await transaction.runAsync(
             "UPDATE workflow_operations SET state = 'PENDING', lease_owner = NULL, lease_expires_at = NULL, updated_at = ? WHERE id = ? AND state = 'CLAIMED' AND lease_expires_at <= ?",
             now, row.id, now,
           );
+          reopened += changes(result);
         }
-        return expired.filter((row) => row.kind === 'SUBMIT').map(mapRow);
+        return {
+          uncertainSubmits: batch.filter((row) => row.kind === 'SUBMIT').map(mapRow),
+          reopened,
+          hasMore: expired.length > limit,
+        };
       });
     },
   };

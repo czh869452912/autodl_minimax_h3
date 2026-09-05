@@ -6,7 +6,30 @@ type AutoDLMediaModule = {
   exportVideo?(source: string, mediaId: string, displayName: string): Promise<ExportVideoResult>;
   sha256File?(source: string): Promise<string>;
   probeVideo?(source: string): Promise<VideoProbeResult & { hasVideoTrack?: boolean }>;
+  transferArtifact?(options: NativeArtifactTransferRequest): Promise<NativeArtifactTransferResult>;
+  cancelArtifactTransfer?(operationId: string, operationAttempt: number): Promise<boolean>;
 };
+
+export type NativeArtifactTransferRequest = Readonly<{
+  url: string;
+  allowedHosts: readonly string[];
+  allowProviderSuppliedPublicHosts: boolean;
+  acceptedMimes: readonly string[];
+  maxBytes: number;
+  connectTimeoutMs: number;
+  idleTimeoutMs: number;
+  expectedSha256?: string;
+  operationId: string;
+  operationAttempt: number;
+}>;
+
+export type NativeArtifactTransferResult = Readonly<{
+  partUri: string;
+  finalUrl: string;
+  mime: string;
+  byteSize: number;
+  sha256: string;
+}>;
 
 export type VideoProbeResult = {
   durationMs: number;
@@ -90,4 +113,73 @@ export async function probeVideo(
     throw new MediaIntegrityError('MEDIA_INVALID', '视频文件不可播放');
   }
   return result;
+}
+
+function artifactError(code: string, message: string): never {
+  throw new MediaIntegrityError(code, message);
+}
+
+function requireArtifactModule(
+  module: AutoDLMediaModule | undefined,
+  method: 'transferArtifact' | 'cancelArtifactTransfer',
+): AutoDLMediaModule {
+  if (!module?.[method] || (module === NativeModules.AutoDLMedia && Platform.OS !== 'android')) {
+    artifactError('ARTIFACT_TRANSFER_UNAVAILABLE', '当前设备不支持原生制品传输');
+  }
+  return module;
+}
+
+function validPositiveInteger(value: number): boolean {
+  return Number.isSafeInteger(value) && value > 0;
+}
+
+function validateTransferRequest(request: NativeArtifactTransferRequest): void {
+  const validHash = request.expectedSha256 == null || /^[a-f0-9]{64}$/.test(request.expectedSha256);
+  const validStrings = request.url.trim() && request.operationId.trim() &&
+    request.acceptedMimes.length > 0 && request.acceptedMimes.every((value) => value.trim()) &&
+    request.allowedHosts.every((value) => typeof value === 'string');
+  if (!validStrings || !validHash || !validPositiveInteger(request.maxBytes) ||
+      !validPositiveInteger(request.connectTimeoutMs) || !validPositiveInteger(request.idleTimeoutMs) ||
+      !Number.isSafeInteger(request.operationAttempt) || request.operationAttempt < 0) {
+    artifactError('ARTIFACT_TRANSFER_REQUEST_INVALID', '原生制品传输参数不合法');
+  }
+}
+
+function validateTransferResult(result: NativeArtifactTransferResult): NativeArtifactTransferResult {
+  let partScheme: string;
+  let finalScheme: string;
+  try {
+    partScheme = new URL(result.partUri).protocol;
+    finalScheme = new URL(result.finalUrl).protocol;
+  } catch {
+    artifactError('ARTIFACT_TRANSFER_INVALID', '原生制品传输结果不合法');
+  }
+  if (partScheme !== 'file:' || finalScheme !== 'https:' || !result.mime?.trim() ||
+      !validPositiveInteger(result.byteSize) || !/^[a-f0-9]{64}$/.test(result.sha256)) {
+    artifactError('ARTIFACT_TRANSFER_INVALID', '原生制品传输结果不合法');
+  }
+  return result;
+}
+
+export async function transferArtifact(
+  request: NativeArtifactTransferRequest,
+  module: AutoDLMediaModule | undefined = NativeModules.AutoDLMedia,
+): Promise<NativeArtifactTransferResult> {
+  const normalizedRequest = { ...request, operationId: request.operationId.trim() };
+  validateTransferRequest(normalizedRequest);
+  const native = requireArtifactModule(module, 'transferArtifact');
+  return validateTransferResult(await native.transferArtifact!(normalizedRequest));
+}
+
+export async function cancelArtifactTransfer(
+  operationId: string,
+  operationAttempt: number,
+  module: AutoDLMediaModule | undefined = NativeModules.AutoDLMedia,
+): Promise<boolean> {
+  const value = operationId.trim();
+  if (!value || !Number.isSafeInteger(operationAttempt) || operationAttempt < 0 || operationAttempt > 2_147_483_647) {
+    artifactError('ARTIFACT_TRANSFER_REQUEST_INVALID', '原生制品取消参数不合法');
+  }
+  const native = requireArtifactModule(module, 'cancelArtifactTransfer');
+  return native.cancelArtifactTransfer!(value, operationAttempt);
 }

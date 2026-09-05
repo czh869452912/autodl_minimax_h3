@@ -36,7 +36,7 @@ test('drives terminal status through download and system-gallery export exactly 
         workflowId: 'demo', workflowVersion: '1', workflowContentHash: 'hash', adapterId: 'demo', adapterVersion: '1',
         inputSnapshot: { prompt: 'hello' }, requestInput: { prompt: 'hello' }, target: { operation: 'workflow.submit' },
       }),
-      mapStatus: (job: NonNullable<ReturnType<typeof jobs.get>>, update: Awaited<ReturnType<typeof adapter.getStatus>>) => ({
+      mapStatus: (job: NonNullable<Awaited<ReturnType<typeof jobs.get>>>, update: Awaited<ReturnType<typeof adapter.getStatus>>) => ({
         job: { ...job, status: update.status, updatedAt: 100 },
         artifacts: update.artifacts.map((artifact) => ({ ...artifact, jobId: job.id })),
       }),
@@ -63,7 +63,7 @@ test('drives terminal status through download and system-gallery export exactly 
             operations,
             blobs,
             cas: {
-              stage: async () => {
+              adoptNativePart: async () => {
                 const blob = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}` };
                 return {
                   ...blob,
@@ -72,14 +72,17 @@ test('drives terminal status through download and system-gallery export exactly 
                   abort: async () => undefined,
                 };
               },
-              put: async () => ({ sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}` }),
             },
-            openDownload: async () => ({ finalUrl: 'https://cdn.test/video.mp4', status: 200, mime: 'video/mp4', stream: { async *[Symbol.asyncIterator]() { yield new Uint8Array([1]); } } }),
+            transferArtifact: async () => ({
+              partUri: 'file:///cas/parts/download.part', finalUrl: 'https://cdn.test/video.mp4',
+              mime: 'video/mp4', byteSize: 3, sha256: 'a'.repeat(64),
+            }),
+            cancelArtifactTransfer: async () => false,
             policy: () => ({ allowedHosts: ['cdn.test'], maxBytes: 10 }),
             deliveryPolicy: { autoExportToGallery: true, keepPrivateCopy: true },
             verifyVideo: async () => undefined,
             ensureProjection: async (jobId, artifact) => {
-              const current = jobs.get(jobId);
+              const current = (await jobs.get(jobId));
               const task = await tasks.get(jobId);
               if (!current || !task) throw new Error('projection source missing');
               await materializeJobArtifacts(current, [artifact], media, task);
@@ -118,7 +121,7 @@ test('drives terminal status through download and system-gallery export exactly 
     await expect(cycle.run({ reason: 'foreground', maxPasses: 4, maxOperationsTotal: 8 })).resolves.toMatchObject({
       passes: 4, remainingDue: 0, budgetExhausted: false,
     });
-    expect(jobs.get(job.id)).toMatchObject({ status: 'SUCCEEDED' });
+    expect((await jobs.get(job.id))).toMatchObject({ status: 'SUCCEEDED' });
     expect(db.getAllSync('SELECT id FROM workflow_artifacts WHERE job_id=?', job.id)).toHaveLength(1);
     await expect(media.get(`${job.id}:video-1`)).resolves.toMatchObject({ status: 'downloaded', exportStatus: 'EXPORTED' });
     await expect(tasks.get(job.id)).resolves.toMatchObject({

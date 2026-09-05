@@ -3,7 +3,7 @@ import { createWorkflowRegistry } from '../workflows/registry/repository';
 import h3V100 from '../workflows/definitions/autodl/minimax-h3-i2v-15s.json';
 import { canonicalizeDefinition } from '../workflows/registry/canonicalize';
 import { LEGACY_DEFINITION_IDENTITY_V1 } from '../workflows/registry/identity';
-import { APP_SCHEMA_VERSION, ensureAppDatabase, getAppRecoveryState, isLegacyAppDatabase, readAppSchemaVersion, resetAppDatabase } from './database';
+import { APP_SCHEMA_VERSION, ensureAppDatabase, getAppRecoveryState, getAppRecoveryStateAsync, isLegacyAppDatabase, readAppSchemaVersion, resetAppDatabase } from './database';
 
 test('initializes a fresh database with the complete current schema', () => {
   const db = createRealSqliteTestDb();
@@ -103,6 +103,22 @@ test('reset clears a persisted recovery marker', () => {
     db.execSync("CREATE TABLE app_database_recovery (id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1), diagnostic TEXT NOT NULL, created_at INTEGER NOT NULL); INSERT INTO app_database_recovery VALUES (1, 'failed', 1)");
     resetAppDatabase(db as never);
     expect(getAppRecoveryState(db as never)).toBeUndefined();
+  } finally {
+    db.close();
+  }
+});
+
+test('reads recovery state asynchronously without swallowing database failures', async () => {
+  const db = createRealSqliteTestDb();
+  try {
+    ensureAppDatabase(db as never);
+    const syncRead = jest.spyOn(db, 'getFirstSync').mockImplementation(() => { throw new Error('sync database access is unavailable'); });
+    await expect(getAppRecoveryStateAsync(db as never)).resolves.toBeUndefined();
+    expect(syncRead).not.toHaveBeenCalled();
+
+    const readRecovery = jest.spyOn(db, 'getFirstAsync').mockRejectedValueOnce(new Error('recovery-state unavailable'));
+    await expect(getAppRecoveryStateAsync(db as never)).rejects.toThrow('recovery-state unavailable');
+    readRecovery.mockRestore();
   } finally {
     db.close();
   }

@@ -2,6 +2,7 @@ import { openDatabaseSync, type SQLiteDatabase } from 'expo-sqlite';
 import { ensureAppDatabase } from './database';
 import { createPreMigrationBackup } from './backup';
 import { AppMigrationError } from './recovery';
+import { withRetryingQueries } from './sqliteBusy';
 
 let sharedDatabase: SQLiteDatabase | undefined;
 export type DatabaseStartupState =
@@ -26,6 +27,7 @@ export function getDatabase(): SQLiteDatabase {
       if (!(error instanceof AppMigrationError)) throw error;
       startupState = { mode: 'readonly', diagnostic: error.diagnostic, allowReset: true };
     }
+    sharedDatabase = withRetryingQueries(sharedDatabase);
   }
   return sharedDatabase;
 }

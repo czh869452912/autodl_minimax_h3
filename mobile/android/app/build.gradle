@@ -104,8 +104,8 @@ android {
         applicationId 'com.example.autodlh3'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 20
-        versionName "1.4.10"
+        versionCode 21
+        versionName "1.4.11"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
@@ -175,7 +175,9 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation("androidx.media3:media3-exoplayer:1.8.1")
     implementation("androidx.media3:media3-ui:1.8.1")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
 

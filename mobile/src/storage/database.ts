@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { APP_SCHEMA_VERSION, APP_TABLES } from './schema';
-import { getRecoveryState, type AppRecoveryState } from './recovery';
+import { getRecoveryState, getRecoveryStateAsync, type AppRecoveryState } from './recovery';
 import { applyCurrentSchema, runAppMigrations, type AppDatabaseMigrationOptions } from './migrations/runner';
 
 export { APP_SCHEMA_VERSION };
@@ -58,8 +58,17 @@ export function getAppRecoveryState(db: SQLiteDatabase | undefined): AppRecovery
   return getRecoveryState(db);
 }
 
+export async function getAppRecoveryStateAsync(db: SQLiteDatabase | undefined): Promise<AppRecoveryState | undefined> {
+  return getRecoveryStateAsync(db);
+}
+
 export function assertAppDatabaseWritable(db: SQLiteDatabase | undefined): void {
   const recovery = getRecoveryState(db);
+  if (recovery) throw new Error(`APP_DATABASE_READ_ONLY: ${recovery.diagnostic}`);
+}
+
+export async function assertAppDatabaseWritableAsync(db: SQLiteDatabase | undefined): Promise<void> {
+  const recovery = await getRecoveryStateAsync(db);
   if (recovery) throw new Error(`APP_DATABASE_READ_ONLY: ${recovery.diagnostic}`);
 }
 
