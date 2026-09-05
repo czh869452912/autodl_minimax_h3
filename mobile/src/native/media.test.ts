@@ -105,4 +105,17 @@ describe('native artifact transfer', () => {
     await expect(cancelArtifactTransfer(' ', native as never))
       .rejects.toMatchObject({ code: 'ARTIFACT_TRANSFER_REQUEST_INVALID' });
   });
+
+  it('normalizes the operation id identically for transfer and cancellation', async () => {
+    const native = {
+      transferArtifact: jest.fn(async () => result),
+      cancelArtifactTransfer: jest.fn(async () => true),
+    };
+
+    await transferArtifact({ ...request, operationId: ' operation-1 ' }, native as never);
+    await cancelArtifactTransfer(' operation-1 ', native as never);
+
+    expect(native.transferArtifact).toHaveBeenCalledWith({ ...request, operationId: 'operation-1' });
+    expect(native.cancelArtifactTransfer).toHaveBeenCalledWith('operation-1');
+  });
 });

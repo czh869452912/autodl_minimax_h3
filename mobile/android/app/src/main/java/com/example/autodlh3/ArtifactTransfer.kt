@@ -19,9 +19,49 @@ class ArtifactTransfer(
   private val httpClient: OkHttpClient,
   private val validator: (String, ArtifactTransferRequest) -> String,
   private val dns: (String, ArtifactTransferRequest) -> List<InetAddress> = { host, _ -> httpClient.dns.lookup(host) },
-  private val durableSha256: (String) -> String,
+  private val durableSha256: (String, () -> Unit) -> String,
   private val clock: () -> Long = System::currentTimeMillis,
 ) {
+  private class ActiveTransfer {
+    @Volatile private var cancelled = false
+    private var currentCall: Call? = null
+    private var terminal = false
+
+    fun isCancelled(): Boolean = cancelled
+
+    @Synchronized fun attach(call: Call): Boolean {
+      if (cancelled || terminal) {
+        call.cancel()
+        return false
+      }
+      currentCall = call
+      return true
+    }
+
+    @Synchronized fun detach(call: Call) {
+      if (currentCall === call) currentCall = null
+    }
+
+    @Synchronized fun cancel(): Boolean {
+      if (terminal) return false
+      cancelled = true
+      currentCall?.cancel()
+      return true
+    }
+
+    @Synchronized fun finish(): Boolean {
+      if (cancelled) return false
+      terminal = true
+      currentCall = null
+      return true
+    }
+
+    @Synchronized fun terminate() {
+      terminal = true
+      currentCall = null
+    }
+  }
+
   companion object {
     private const val MAX_REDIRECTS = 5
     private const val BUFFER_BYTES = 64 * 1024
@@ -31,8 +71,7 @@ class ArtifactTransfer(
       .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
   }
 
-  private val activeCalls = ConcurrentHashMap<String, Call>()
-  private val cancelledOperations = ConcurrentHashMap.newKeySet<String>()
+  private val activeTransfers = ConcurrentHashMap<String, ActiveTransfer>()
 
   private fun fail(code: String, retryable: Boolean = false, cause: Throwable? = null): Nothing =
     throw ArtifactTransferException(code, retryable, cause)
@@ -50,10 +89,12 @@ class ArtifactTransfer(
   private fun isRedirect(status: Int) = status in 300..399
 
   fun cancel(operationId: String): Boolean {
-    val call = activeCalls[operationId] ?: return false
-    cancelledOperations += operationId
-    call.cancel()
-    return true
+    val active = activeTransfers[operationId] ?: return false
+    return active.cancel()
+  }
+
+  private fun checkCancelled(active: ActiveTransfer) {
+    if (active.isCancelled()) fail("ARTIFACT_CANCELLED")
   }
 
   fun transfer(
@@ -61,14 +102,22 @@ class ArtifactTransfer(
     onProgress: (Long) -> Unit = {},
   ): ArtifactTransferResult {
     validateRequest(request)
-    partsDir.mkdirs()
-    if (!partsDir.isDirectory) fail("ARTIFACT_STORAGE_FAILED")
+    val active = ActiveTransfer()
+    if (activeTransfers.putIfAbsent(request.operationId, active) != null) {
+      fail("ARTIFACT_TRANSFER_ACTIVE")
+    }
     val part = File(partsDir, "${hashText(request.operationId + "\u0000" + request.operationAttempt)}.part")
+    var ownsPart = false
     try {
+      checkCancelled(active)
+      partsDir.mkdirs()
+      if (!partsDir.isDirectory) fail("ARTIFACT_STORAGE_FAILED")
+      checkCancelled(active)
       var current = validator(request.url, request)
+      checkCancelled(active)
       var redirects = 0
       while (true) {
-        if (cancelledOperations.contains(request.operationId)) fail("ARTIFACT_CANCELLED")
+        checkCancelled(active)
         val requestClient = httpClient.newBuilder()
           .followRedirects(false)
           .followSslRedirects(false)
@@ -79,22 +128,21 @@ class ArtifactTransfer(
           .readTimeout(request.connectTimeoutMs, TimeUnit.MILLISECONDS)
           .build()
         val call = requestClient.newCall(Request.Builder().url(current).get().build())
-        if (activeCalls.putIfAbsent(request.operationId, call) != null) {
-          fail("ARTIFACT_TRANSFER_ACTIVE")
-        }
+        if (!active.attach(call)) fail("ARTIFACT_CANCELLED")
         val response = try {
           call.execute()
         } catch (error: SocketTimeoutException) {
-          if (call.isCanceled() || cancelledOperations.contains(request.operationId)) fail("ARTIFACT_CANCELLED", cause = error)
+          if (call.isCanceled() || active.isCancelled()) fail("ARTIFACT_CANCELLED", cause = error)
           fail("ARTIFACT_CONNECT_TIMEOUT", true, error)
         } catch (error: IOException) {
-          if (call.isCanceled() || cancelledOperations.contains(request.operationId)) fail("ARTIFACT_CANCELLED", cause = error)
+          if (call.isCanceled() || active.isCancelled()) fail("ARTIFACT_CANCELLED", cause = error)
           fail("ARTIFACT_HTTP_RETRYABLE", true, error)
         }
         if (isRedirect(response.code)) {
           val location = response.header("Location")
           response.close()
-          activeCalls.remove(request.operationId, call)
+          active.detach(call)
+          checkCancelled(active)
           if (redirects >= MAX_REDIRECTS) fail("ARTIFACT_REDIRECT_LIMIT")
           if (location == null) fail("ARTIFACT_REDIRECT_INVALID")
           val redirected = try {
@@ -103,6 +151,7 @@ class ArtifactTransfer(
             fail("ARTIFACT_REDIRECT_INVALID", cause = error)
           }
           current = validator(redirected, request)
+          checkCancelled(active)
           redirects += 1
           continue
         }
@@ -125,18 +174,20 @@ class ArtifactTransfer(
           var lastProgressBytes = 0L
           try {
             body.byteStream().use { input ->
+              ownsPart = true
               part.outputStream().buffered(BUFFER_BYTES).use { output ->
                 val buffer = ByteArray(BUFFER_BYTES)
                 while (true) {
+                  checkCancelled(active)
                   val count = try {
                     input.read(buffer)
                   } catch (error: SocketTimeoutException) {
-                    if (call.isCanceled() || cancelledOperations.contains(request.operationId)) {
+                    if (call.isCanceled() || active.isCancelled()) {
                       fail("ARTIFACT_CANCELLED", cause = error)
                     }
                     fail("ARTIFACT_IDLE_TIMEOUT", true, error)
                   } catch (error: IOException) {
-                    if (call.isCanceled() || cancelledOperations.contains(request.operationId)) {
+                    if (call.isCanceled() || active.isCancelled()) {
                       fail("ARTIFACT_CANCELLED", cause = error)
                     }
                     fail("ARTIFACT_HTTP_RETRYABLE", true, error)
@@ -158,28 +209,33 @@ class ArtifactTransfer(
               }
             }
           } finally {
-            activeCalls.remove(request.operationId, call)
+            active.detach(call)
           }
+          checkCancelled(active)
           if (byteSize <= 0 || (declaredSize >= 0 && byteSize != declaredSize)) fail("ARTIFACT_INTEGRITY_FAILED")
           val streamedSha = digest.digest().joinToString("") { "%02x".format(it) }
           if (request.expectedSha256 != null && streamedSha != request.expectedSha256) {
             fail("ARTIFACT_SHA_MISMATCH")
           }
+          checkCancelled(active)
           val partUri = part.toURI().toString()
-          val durableSha = durableSha256(partUri)
+          val durableSha = durableSha256(partUri) { checkCancelled(active) }
+          checkCancelled(active)
           if (durableSha != streamedSha) fail("ARTIFACT_DURABLE_SHA_MISMATCH")
-          return ArtifactTransferResult(partUri, current, responseMime, byteSize, streamedSha)
+          val result = ArtifactTransferResult(partUri, current, responseMime, byteSize, streamedSha)
+          if (!active.finish()) fail("ARTIFACT_CANCELLED")
+          return result
         }
       }
     } catch (error: ArtifactTransferException) {
-      part.delete()
+      if (ownsPart) part.delete()
       throw error
     } catch (error: Exception) {
-      part.delete()
+      if (ownsPart) part.delete()
       fail("ARTIFACT_TRANSFER_FAILED", cause = error)
     } finally {
-      activeCalls.remove(request.operationId)
-      cancelledOperations.remove(request.operationId)
+      active.terminate()
+      activeTransfers.remove(request.operationId, active)
     }
   }
 }

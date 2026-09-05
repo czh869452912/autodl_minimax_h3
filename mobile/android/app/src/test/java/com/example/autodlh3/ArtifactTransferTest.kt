@@ -7,6 +7,7 @@ import java.security.MessageDigest
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -60,7 +61,10 @@ class ArtifactTransferTest {
   private fun transfer(
     validator: (String, ArtifactTransferRequest) -> String = { url, _ -> url },
     dns: (String, ArtifactTransferRequest) -> List<InetAddress> = { host, _ -> OkHttpClient().dns.lookup(host) },
-    durableSha256: (String) -> String = { source -> MediaIntegrity.sha256(File(java.net.URI(source)).inputStream()) },
+    durableSha256: (String, () -> Unit) -> String = { source, checkCancelled ->
+      checkCancelled()
+      File(java.net.URI(source)).inputStream().use(MediaIntegrity::sha256)
+    },
     clock: () -> Long = System::currentTimeMillis,
   ) = ArtifactTransfer(
     partsDir = partsDir,
@@ -202,6 +206,111 @@ class ArtifactTransferTest {
     worker.shutdownNow()
   }
 
+  @Test fun `a duplicate operation cannot dismantle the writable cancellable first transfer`() {
+    server.enqueue(
+      MockResponse().setHeader("Content-Type", "video/mp4")
+        .setChunkedBody("a long response body", 1).throttleBody(1, 100, TimeUnit.MILLISECONDS),
+    )
+    val streamed = CountDownLatch(1)
+    val artifactTransfer = transfer(clock = { System.currentTimeMillis() + 10_000 })
+    val worker = Executors.newSingleThreadExecutor()
+    val first = worker.submit<ArtifactTransferException?> {
+      runCatching {
+        artifactTransfer.transfer(request(operationId = "duplicate", idleTimeoutMs = 5_000)) {
+          streamed.countDown()
+        }
+      }.exceptionOrNull() as? ArtifactTransferException
+    }
+    assertTrue(streamed.await(2, TimeUnit.SECONDS))
+
+    expectCode("ARTIFACT_TRANSFER_ACTIVE") {
+      artifactTransfer.transfer(request(operationId = "duplicate", idleTimeoutMs = 5_000))
+    }
+    assertTrue("the first transfer must remain registered for cancellation", artifactTransfer.cancel("duplicate"))
+    assertEquals("ARTIFACT_CANCELLED", first.get(2, TimeUnit.SECONDS)?.diagnosticCode)
+    assertTrue(partsDir.listFiles().isNullOrEmpty())
+    worker.shutdownNow()
+  }
+
+  @Test fun `cancellation before the first HTTP call covers initial validation`() {
+    val validating = CountDownLatch(1)
+    val releaseValidation = CountDownLatch(1)
+    val artifactTransfer = transfer(validator = { url, _ ->
+      validating.countDown()
+      releaseValidation.await(2, TimeUnit.SECONDS)
+      url
+    })
+    val worker = Executors.newSingleThreadExecutor()
+    val future = worker.submit<ArtifactTransferException?> {
+      runCatching { artifactTransfer.transfer(request(operationId = "cancel-validation")) }
+        .exceptionOrNull() as? ArtifactTransferException
+    }
+    assertTrue(validating.await(2, TimeUnit.SECONDS))
+
+    val cancelled = artifactTransfer.cancel("cancel-validation")
+    releaseValidation.countDown()
+
+    assertTrue(cancelled)
+    assertEquals("ARTIFACT_CANCELLED", future.get(2, TimeUnit.SECONDS)?.diagnosticCode)
+    assertEquals(0, server.requestCount)
+    worker.shutdownNow()
+  }
+
+  @Test fun `cancellation between redirect calls covers redirect validation`() {
+    server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", "/final.mp4"))
+    server.enqueue(MockResponse().setHeader("Content-Type", "video/mp4").setBody("must not download"))
+    val validations = AtomicInteger()
+    val validatingRedirect = CountDownLatch(1)
+    val releaseRedirect = CountDownLatch(1)
+    val artifactTransfer = transfer(validator = { url, _ ->
+      if (validations.incrementAndGet() == 2) {
+        validatingRedirect.countDown()
+        releaseRedirect.await(2, TimeUnit.SECONDS)
+      }
+      url
+    })
+    val worker = Executors.newSingleThreadExecutor()
+    val future = worker.submit<ArtifactTransferException?> {
+      runCatching { artifactTransfer.transfer(request(operationId = "cancel-redirect")) }
+        .exceptionOrNull() as? ArtifactTransferException
+    }
+    assertTrue(validatingRedirect.await(2, TimeUnit.SECONDS))
+
+    val cancelled = artifactTransfer.cancel("cancel-redirect")
+    releaseRedirect.countDown()
+
+    assertTrue(cancelled)
+    assertEquals("ARTIFACT_CANCELLED", future.get(2, TimeUnit.SECONDS)?.diagnosticCode)
+    assertEquals(1, server.requestCount)
+    worker.shutdownNow()
+  }
+
+  @Test fun `cancellation during the durable reread fails the complete transfer`() {
+    server.enqueue(MockResponse().setHeader("Content-Type", "video/mp4").setBody("durable"))
+    val rereading = CountDownLatch(1)
+    val releaseReread = CountDownLatch(1)
+    val artifactTransfer = transfer(durableSha256 = { source, checkCancelled ->
+      rereading.countDown()
+      releaseReread.await(2, TimeUnit.SECONDS)
+      checkCancelled()
+      File(java.net.URI(source)).inputStream().use(MediaIntegrity::sha256)
+    })
+    val worker = Executors.newSingleThreadExecutor()
+    val future = worker.submit<ArtifactTransferException?> {
+      runCatching { artifactTransfer.transfer(request(operationId = "cancel-reread")) }
+        .exceptionOrNull() as? ArtifactTransferException
+    }
+    assertTrue(rereading.await(2, TimeUnit.SECONDS))
+
+    val cancelled = artifactTransfer.cancel("cancel-reread")
+    releaseReread.countDown()
+
+    assertTrue(cancelled)
+    assertEquals("ARTIFACT_CANCELLED", future.get(2, TimeUnit.SECONDS)?.diagnosticCode)
+    assertTrue(partsDir.listFiles().isNullOrEmpty())
+    worker.shutdownNow()
+  }
+
   @Test fun `rejects provider hash mismatch and durable reread mismatch`() {
     val body = "hash me".toByteArray()
     server.enqueue(MockResponse().setHeader("Content-Type", "video/mp4").setBody(body.toString(Charsets.UTF_8)))
@@ -212,7 +321,7 @@ class ArtifactTransferTest {
 
     server.enqueue(MockResponse().setHeader("Content-Type", "video/mp4").setBody(body.toString(Charsets.UTF_8)))
     expectCode("ARTIFACT_DURABLE_SHA_MISMATCH") {
-      transfer(durableSha256 = { "f".repeat(64) }).transfer(request(expectedSha256 = sha256(body)))
+      transfer(durableSha256 = { _, _ -> "f".repeat(64) }).transfer(request(expectedSha256 = sha256(body)))
     }
     assertTrue(partsDir.listFiles().isNullOrEmpty())
   }
@@ -228,5 +337,28 @@ class ArtifactTransferTest {
 
     assertEquals(listOf(5L * 1024 * 1024), progress)
     now += 1_000
+  }
+
+  @Test fun `cancellation work remains runnable while both transfer workers are occupied`() {
+    val executors = MediaWorkExecutors()
+    val workersStarted = CountDownLatch(2)
+    val releaseWorkers = CountDownLatch(1)
+    val cancellationRan = CountDownLatch(1)
+    try {
+      repeat(2) {
+        executors.executeMedia {
+          workersStarted.countDown()
+          releaseWorkers.await(2, TimeUnit.SECONDS)
+        }
+      }
+      assertTrue(workersStarted.await(2, TimeUnit.SECONDS))
+
+      executors.executeCancellation { cancellationRan.countDown() }
+
+      assertTrue("cancellation must not queue behind transfers", cancellationRan.await(1, TimeUnit.SECONDS))
+    } finally {
+      releaseWorkers.countDown()
+      executors.shutdown()
+    }
   }
 }

@@ -165,9 +165,10 @@ export async function transferArtifact(
   request: NativeArtifactTransferRequest,
   module: AutoDLMediaModule | undefined = NativeModules.AutoDLMedia,
 ): Promise<NativeArtifactTransferResult> {
-  validateTransferRequest(request);
+  const normalizedRequest = { ...request, operationId: request.operationId.trim() };
+  validateTransferRequest(normalizedRequest);
   const native = requireArtifactModule(module, 'transferArtifact');
-  return validateTransferResult(await native.transferArtifact!(request));
+  return validateTransferResult(await native.transferArtifact!(normalizedRequest));
 }
 
 export async function cancelArtifactTransfer(

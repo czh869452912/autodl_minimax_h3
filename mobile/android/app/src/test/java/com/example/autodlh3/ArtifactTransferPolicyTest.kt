@@ -80,6 +80,50 @@ class ArtifactTransferPolicyTest {
     )
   }
 
+  @Test fun `rejects every non globally reachable IPv6 special purpose range`() {
+    val nonGloballyReachable = listOf(
+      "64:ff9b:1::1", // local-use IPv4-IPv6 translation
+      "64:ff9b::7f00:1", // well-known translation of loopback IPv4
+      "100::1", // discard-only
+      "100:0:0:1::1", // dummy prefix
+      "2001::1", // IETF protocol assignments (no globally reachable exception)
+      "2001:2::1", // benchmarking
+      "2001:db8::1", // original documentation prefix
+      "2002::1", // 6to4 has no unconditional global-reachability guarantee
+      "3fff::1", // current documentation prefix
+      "5f00::1", // segment-routing SIDs
+    )
+
+    nonGloballyReachable.forEach { value ->
+      val policy = ArtifactTransferPolicy { listOf(address(value)) }
+      expectCode("ARTIFACT_PRIVATE_NETWORK") {
+        policy.validate("https://provider-cdn.test/video.mp4", request(allowPublicHosts = true))
+      }
+    }
+  }
+
+  @Test fun `permits globally reachable IPv6 special purpose exceptions`() {
+    val globallyReachable = listOf(
+      "64:ff9b::5db8:d822",
+      "2001:1::1",
+      "2001:1::2",
+      "2001:1::3",
+      "2001:3::1",
+      "2001:4:112::1",
+      "2001:20::1",
+      "2001:30::1",
+      "2620:4f:8000::1",
+    )
+
+    globallyReachable.forEach { value ->
+      val policy = ArtifactTransferPolicy { listOf(address(value)) }
+      assertEquals(
+        "https://provider-cdn.test/video.mp4",
+        policy.validate("https://provider-cdn.test/video.mp4", request(allowPublicHosts = true)),
+      )
+    }
+  }
+
   @Test fun `rejects unresolved hosts and malformed URLs`() {
     val unresolved = ArtifactTransferPolicy { emptyList() }
     expectCode("ARTIFACT_PRIVATE_NETWORK") { unresolved.validate(request().url, request()) }

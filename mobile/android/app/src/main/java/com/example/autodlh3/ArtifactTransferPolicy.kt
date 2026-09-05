@@ -65,18 +65,46 @@ class ArtifactTransferPolicy(
     return InetAddress.getByAddress(bytes.copyOfRange(12, 16)) as Inet4Address
   }
 
+  private fun hasPrefix(address: ByteArray, prefix: ByteArray, prefixBits: Int): Boolean {
+    val completeBytes = prefixBits / 8
+    if (!(0 until completeBytes).all { address[it] == prefix[it] }) return false
+    val remainingBits = prefixBits % 8
+    if (remainingBits == 0) return true
+    val mask = (0xff shl (8 - remainingBits)) and 0xff
+    return unsigned(address[completeBytes]) and mask == unsigned(prefix[completeBytes]) and mask
+  }
+
+  private fun hasPrefix(address: Inet6Address, prefix: String, prefixBits: Int): Boolean =
+    hasPrefix(address.address, InetAddress.getByName(prefix).address, prefixBits)
+
+  private fun translatedV4(address: Inet6Address): Inet4Address =
+    InetAddress.getByAddress(address.address.copyOfRange(12, 16)) as Inet4Address
+
   private fun isExplicitlyNonPublicV6(address: Inet6Address): Boolean {
     mappedV4(address)?.let { return !isPublic(it) }
-    val bytes = address.address
-    val first = unsigned(bytes[0])
-    val second = unsigned(bytes[1])
-    val uniqueLocal = first and 0xfe == 0xfc
-    val documentation = first == 0x20 && second == 0x01 &&
-      unsigned(bytes[2]) == 0x0d && unsigned(bytes[3]) == 0xb8
-    val benchmark = first == 0x20 && second == 0x01 &&
-      unsigned(bytes[2]) == 0x00 && unsigned(bytes[3]) == 0x02 &&
-      unsigned(bytes[4]) == 0x00 && unsigned(bytes[5]) == 0x00
-    return uniqueLocal || documentation || benchmark
+    // IANA marks the well-known NAT64 prefix globally reachable, but its embedded
+    // IPv4 destination must independently pass the same public-address policy.
+    if (hasPrefix(address, "64:ff9b::", 96)) return !isPublic(translatedV4(address))
+
+    // Fail closed outside IPv6 global unicast. This covers local-use translation,
+    // discard-only, dummy, unique-local, link-local, multicast, and reserved space.
+    if (!hasPrefix(address, "2000::", 3)) return true
+
+    // More-specific globally reachable exceptions inside 2001::/23 come first.
+    val globallyReachableIetfException =
+      hasPrefix(address, "2001:1::1", 128) ||
+        hasPrefix(address, "2001:1::2", 128) ||
+        hasPrefix(address, "2001:1::3", 128) ||
+        hasPrefix(address, "2001:3::", 32) ||
+        hasPrefix(address, "2001:4:112::", 48) ||
+        hasPrefix(address, "2001:20::", 28) ||
+        hasPrefix(address, "2001:30::", 28)
+    if (globallyReachableIetfException) return false
+
+    return hasPrefix(address, "2001::", 23) ||
+      hasPrefix(address, "2001:db8::", 32) ||
+      hasPrefix(address, "2002::", 16) ||
+      hasPrefix(address, "3fff::", 20)
   }
 
   private fun isPublic(address: InetAddress): Boolean {
