@@ -16,11 +16,11 @@ function memoryFiles(overrides: Partial<CasFiles> & Record<string, unknown> = {}
     move: jest.fn(async (from, to) => { const value = entries.get(from); if (!value) throw new Error('missing'); entries.set(to, value); entries.delete(from); }),
     copy: jest.fn(async (from, to) => { const value = entries.get(from); if (!value) throw new Error('missing'); entries.set(to, value.slice()); }),
     remove: jest.fn(async (path) => { entries.delete(path); }),
-    async *readChunks(path: string) {
+    readChunks: jest.fn(async function* (path: string) {
       const value = entries.get(path);
       if (!value) throw new Error('missing');
       yield value.slice();
-    },
+    }),
     ...overrides,
   };
   return { files: files as CasFiles, entries };
@@ -189,6 +189,123 @@ test('aborting a staged put removes only its owned part and preserves a concurre
 
   expect(base.entries.get(relativePath)).toEqual(bytes('abc'));
   expect(base.entries.has(staged.stagedRelativePath)).toBe(false);
+});
+
+const ABC_SHA256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+const ABD_SHA256 = 'a52d159f262b2c6ddb724a61840befc36eb30c88877a4030b65cbe86298449c9';
+const DOWNLOAD_PART = 'cas/parts/898f18c03e478384b0617b16a607c3935b0b555652951873aecc88ab0850a3c3.part';
+const DOCUMENT_DIRECTORY = 'file:///documents/';
+
+function nativeSha256(entries: Map<string, Uint8Array>) {
+  return jest.fn(async (uri: string) => {
+    const relativePath = uri.startsWith(DOCUMENT_DIRECTORY) ? uri.slice(DOCUMENT_DIRECTORY.length) : '';
+    const value = entries.get(relativePath);
+    if (!value) throw new Error('missing');
+    return new TextDecoder().decode(value) === 'abc' ? ABC_SHA256 : ABD_SHA256;
+  });
+}
+
+test('adopts the owned native part with native rereads and case-insensitive provider hash matching', async () => {
+  const base = memoryFiles();
+  base.entries.set(DOWNLOAD_PART, bytes('abc'));
+  const sha256File = nativeSha256(base.entries);
+  const staged = await createArtifactCas(base.files, { sha256File, documentDirectory: DOCUMENT_DIRECTORY }).adoptNativePart({
+    partUri: `${DOCUMENT_DIRECTORY}${DOWNLOAD_PART}`,
+    mime: 'video/mp4',
+    byteSize: 3,
+    sha256: ABC_SHA256,
+  }, {
+    mime: 'video/mp4', maxBytes: 10, expectedSha256: ABC_SHA256.toUpperCase(),
+    operationId: 'download-1', operationAttempt: 1,
+  });
+
+  expect(staged.stagedRelativePath).toBe(DOWNLOAD_PART);
+  await expect(staged.publish()).resolves.toMatchObject({ sha256: ABC_SHA256, byteSize: 3 });
+  expect(base.entries.get(`cas/sha256/ba/${ABC_SHA256}`)).toEqual(bytes('abc'));
+  expect(sha256File).toHaveBeenCalledWith(`${DOCUMENT_DIRECTORY}${DOWNLOAD_PART}`);
+  expect(base.files.write).not.toHaveBeenCalled();
+  expect(base.files.readChunks).not.toHaveBeenCalled();
+});
+
+test('rejects a native part outside the owned operation path without deleting it', async () => {
+  const base = memoryFiles();
+  base.entries.set('outside.part', bytes('abc'));
+  const cas = createArtifactCas(base.files, {
+    sha256File: nativeSha256(base.entries), documentDirectory: DOCUMENT_DIRECTORY,
+  });
+
+  await expect(cas.adoptNativePart({
+    partUri: `${DOCUMENT_DIRECTORY}outside.part`, mime: 'video/mp4', byteSize: 3, sha256: ABC_SHA256,
+  }, {
+    mime: 'video/mp4', maxBytes: 10, operationId: 'download-1', operationAttempt: 1,
+  })).rejects.toMatchObject({ code: 'ARTIFACT_INTEGRITY_FAILED' });
+
+  expect(base.entries.get('outside.part')).toEqual(bytes('abc'));
+  expect(base.files.remove).not.toHaveBeenCalledWith('outside.part');
+});
+
+test.each([
+  ['reported size differs from disk', 4, ABC_SHA256],
+  ['native durable hash differs from the transfer hash', 3, ABD_SHA256],
+])('rejects a native part when %s and removes only the owned part', async (_case, byteSize, durableSha256) => {
+  const base = memoryFiles();
+  base.entries.set(DOWNLOAD_PART, bytes('abc'));
+  base.entries.set('cas/parts/other-operation.part', bytes('other'));
+  const cas = createArtifactCas(base.files, {
+    sha256File: jest.fn(async () => durableSha256), documentDirectory: DOCUMENT_DIRECTORY,
+  });
+
+  await expect(cas.adoptNativePart({
+    partUri: `${DOCUMENT_DIRECTORY}${DOWNLOAD_PART}`, mime: 'video/mp4', byteSize, sha256: ABC_SHA256,
+  }, {
+    mime: 'video/mp4', maxBytes: 10, operationId: 'download-1', operationAttempt: 1,
+  })).rejects.toMatchObject({ code: 'ARTIFACT_INTEGRITY_FAILED' });
+
+  expect(base.entries.has(DOWNLOAD_PART)).toBe(false);
+  expect(base.entries.get('cas/parts/other-operation.part')).toEqual(bytes('other'));
+});
+
+test('native adoption preserves destination quarantine repair without JavaScript rereads', async () => {
+  const base = memoryFiles();
+  const destination = `cas/sha256/ba/${ABC_SHA256}`;
+  base.entries.set(DOWNLOAD_PART, bytes('abc'));
+  base.entries.set(destination, bytes('abd'));
+  const sha256File = nativeSha256(base.entries);
+
+  const staged = await createArtifactCas(base.files, { sha256File, documentDirectory: DOCUMENT_DIRECTORY, nonce: () => 'native' }).adoptNativePart({
+    partUri: `${DOCUMENT_DIRECTORY}${DOWNLOAD_PART}`, mime: 'video/mp4', byteSize: 3, sha256: ABC_SHA256,
+  }, {
+    mime: 'video/mp4', maxBytes: 10, operationId: 'download-1', operationAttempt: 1,
+  });
+  await staged.publish();
+
+  expect(base.entries.get(destination)).toEqual(bytes('abc'));
+  expect([...base.entries.keys()].filter((path) => path.startsWith('cas/parts/'))).toEqual([]);
+  expect(base.files.readChunks).not.toHaveBeenCalled();
+});
+
+test('lease loss aborts native publication and preserves published and foreign parts', async () => {
+  const base = memoryFiles();
+  const destination = `cas/sha256/ba/${ABC_SHA256}`;
+  base.entries.set(DOWNLOAD_PART, bytes('abc'));
+  base.entries.set(destination, bytes('abc'));
+  base.entries.set('cas/parts/foreign.part', bytes('foreign'));
+  let leaseChecks = 0;
+  const staged = await createArtifactCas(base.files, {
+    sha256File: nativeSha256(base.entries), documentDirectory: DOCUMENT_DIRECTORY,
+  }).adoptNativePart({
+    partUri: `${DOCUMENT_DIRECTORY}${DOWNLOAD_PART}`, mime: 'video/mp4', byteSize: 3, sha256: ABC_SHA256,
+  }, {
+    mime: 'video/mp4', maxBytes: 10, operationId: 'download-1', operationAttempt: 1,
+    assertLease: () => { leaseChecks += 1; if (leaseChecks >= 3) throw new Error('lease lost'); },
+  });
+
+  await expect(staged.publish()).rejects.toThrow('lease lost');
+  await staged.abort();
+
+  expect(base.entries.get(destination)).toEqual(bytes('abc'));
+  expect(base.entries.get('cas/parts/foreign.part')).toEqual(bytes('foreign'));
+  expect(base.entries.has(DOWNLOAD_PART)).toBe(false);
 });
 
 test('concurrent publishers of the same hash converge on one verified destination', async () => {

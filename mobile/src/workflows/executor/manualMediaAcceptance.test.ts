@@ -69,7 +69,7 @@ test('manual save joins a claimed download and publication recovery commits one 
             operations,
             blobs,
             cas: {
-              stage: async () => {
+              adoptNativePart: async () => {
                 const relativePath = `cas/sha256/aa/${'a'.repeat(64)}`;
                 const blob = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath };
                 return {
@@ -79,19 +79,21 @@ test('manual save joins a claimed download and publication recovery commits one 
                   abort: async () => undefined,
                 };
               },
+              stage: async () => { throw new Error('legacy stream staging reached'); },
               put: async () => {
                 const relativePath = `cas/sha256/aa/${'a'.repeat(64)}`;
                 existing.add(`file:///documents/${relativePath}`);
                 return { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath };
               },
             },
-            openDownload: async () => {
+            transferArtifact: async () => {
               await commands.requestExport('job-1', { keepPrivateCopy: false });
               return {
-                finalUrl: 'https://cdn.example/video.mp4', status: 200, mime: 'video/mp4',
-                stream: { async *[Symbol.asyncIterator]() { yield new Uint8Array([1]); } },
+                partUri: 'file:///documents/cas/parts/download.part', finalUrl: 'https://cdn.example/video.mp4',
+                mime: 'video/mp4', byteSize: 3, sha256: 'a'.repeat(64),
               };
             },
+            cancelArtifactTransfer: async () => false,
             policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
             ensureProjection: async () => undefined,
             updateDownloadState: async () => undefined,

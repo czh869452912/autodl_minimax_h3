@@ -17,7 +17,6 @@ const operation: WorkflowOperation = {
 };
 
 function setup() {
-  const stream = { async *[Symbol.asyncIterator]() { yield new Uint8Array([1, 2, 3]); } };
   const operations = { finish: jest.fn(() => true), retry: jest.fn(() => true), renew: jest.fn(() => true), get: jest.fn(() => operation) };
   const blobs = { upsertBlob: jest.fn(), retain: jest.fn() };
   const stored = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: `cas/sha256/aa/${'a'.repeat(64)}` };
@@ -28,25 +27,30 @@ function setup() {
     abort: jest.fn(async () => undefined),
   };
   const cas = {
+    adoptNativePart: jest.fn(async (..._args: Parameters<ArtifactCas['adoptNativePart']>) => staged),
     stage: jest.fn(async (..._args: Parameters<ArtifactCas['stage']>) => staged),
     put: jest.fn(async (..._args: Parameters<ArtifactCas['put']>) => stored),
   };
-  const openDownload = jest.fn(async () => ({ finalUrl: 'https://cdn.example/video.mp4', status: 200, mime: 'video/mp4', stream }));
+  const transferArtifact = jest.fn(async () => ({
+    partUri: 'file:///cas/parts/download-1.part', finalUrl: 'https://cdn.example/video.mp4',
+    mime: 'video/mp4', byteSize: 3, sha256: 'a'.repeat(64),
+  }));
+  const cancelArtifactTransfer = jest.fn(async () => false);
   const updateProjection = jest.fn(async () => undefined);
   const ensureProjection = jest.fn(async () => undefined);
   const updateDownloadState = jest.fn(async () => undefined);
   const verifyVideo = jest.fn(async () => undefined);
   const deliveryPolicy = { autoExportToGallery: true, keepPrivateCopy: true };
-  return { operations, blobs, cas, staged, openDownload, updateProjection, ensureProjection, updateDownloadState, verifyVideo, deliveryPolicy };
+  return { operations, blobs, cas, staged, transferArtifact, cancelArtifactTransfer, updateProjection, ensureProjection, updateDownloadState, verifyVideo, deliveryPolicy };
 }
 
-test('ensures the media row and marks downloading before opening the network stream', async () => {
+test('ensures the media row and marks downloading before starting native transfer', async () => {
   const order: string[] = [];
   await handleArtifactDownload(operation, 'worker', {
     ...setup(),
     ensureProjection: jest.fn(async () => { order.push('projection'); }),
     updateDownloadState: jest.fn(async (state) => { order.push(state); }),
-    openDownload: jest.fn(async () => { order.push('network'); throw new Error('域名不在允许列表'); }),
+    transferArtifact: jest.fn(async () => { order.push('network'); throw new Error('域名不在允许列表'); }),
     policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
   });
   expect(order.slice(0, 3)).toEqual(['projection', 'DOWNLOADING', 'network']);
@@ -54,7 +58,7 @@ test('ensures the media row and marks downloading before opening the network str
 
 test('writes a terminal failed projection when validation fails', async () => {
   const deps = setup();
-  deps.openDownload.mockRejectedValueOnce(Object.assign(new Error('opaque integrity failure'), {
+  deps.transferArtifact.mockRejectedValueOnce(Object.assign(new Error('opaque integrity failure'), {
     code: 'ARTIFACT_INTEGRITY_FAILED', retryable: false,
   }));
   await handleArtifactDownload(operation, 'worker', {
@@ -65,14 +69,21 @@ test('writes a terminal failed projection when validation fails', async () => {
   expect(deps.updateDownloadState).toHaveBeenLastCalledWith('DOWNLOAD_FAILED', 'ARTIFACT_INTEGRITY_FAILED');
 });
 
-test('streams into CAS, retains the blob, updates projection, and finishes', async () => {
+test('transfers natively, adopts into CAS, retains the blob, updates projection, and finishes', async () => {
   const deps = setup();
   await handleArtifactDownload(operation, 'worker', {
     ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10, acceptedMimes: ['video/mp4'] }),
   });
-  expect(deps.openDownload).toHaveBeenCalledWith('https://cdn.example/video.mp4', expect.objectContaining({ allowedHosts: ['cdn.example'] }));
-  expect(deps.cas.stage).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ mime: 'video/mp4', maxBytes: 10, operationId: 'download-1' }));
-  const putOptions = deps.cas.stage.mock.calls[0][1];
+  expect(deps.transferArtifact).toHaveBeenCalledWith(expect.objectContaining({
+    url: 'https://cdn.example/video.mp4', allowedHosts: ['cdn.example'], acceptedMimes: ['video/mp4'],
+    maxBytes: 10, connectTimeoutMs: 30_000, idleTimeoutMs: 30_000,
+    operationId: 'download-1', operationAttempt: 1,
+  }));
+  expect(deps.cas.adoptNativePart).toHaveBeenCalledWith(expect.objectContaining({
+    partUri: 'file:///cas/parts/download-1.part', sha256: 'a'.repeat(64),
+  }), expect.objectContaining({ mime: 'video/mp4', maxBytes: 10, operationId: 'download-1' }));
+  expect(deps.cas.stage).not.toHaveBeenCalled();
+  const putOptions = deps.cas.adoptNativePart.mock.calls[0][1];
   expect(putOptions.operationAttempt).toBe(1);
   expect(putOptions.assertLease).toEqual(expect.any(Function));
   if (!putOptions.assertLease) throw new Error('lease fence missing');
@@ -87,9 +98,84 @@ test('streams into CAS, retains the blob, updates projection, and finishes', asy
   expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'SUCCEEDED', 50);
 });
 
+test('never reaches the legacy stream staging path when native transfer is available', async () => {
+  const deps = setup();
+  const legacyOpenDownload = jest.fn(async () => { throw new Error('legacy JavaScript download reached'); });
+  deps.cas.stage.mockRejectedValueOnce(new Error('JavaScript full-file hashing reached'));
+
+  await handleArtifactDownload(operation, 'worker', {
+    ...deps,
+    openDownload: legacyOpenDownload,
+    now: () => 50,
+    policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  } as never);
+
+  expect(legacyOpenDownload).not.toHaveBeenCalled();
+  expect(deps.cas.stage).not.toHaveBeenCalled();
+  expect(deps.cas.adoptNativePart).toHaveBeenCalledTimes(1);
+  expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'SUCCEEDED', 50);
+});
+
+test('normalizes a provider hash for native transfer while retaining case-insensitive CAS validation', async () => {
+  const deps = setup();
+  const providerSha = 'A'.repeat(64);
+  await handleArtifactDownload({
+    ...operation,
+    payload: { artifact: { ...(operation.payload.artifact as object), metadata: { sha256: providerSha } } },
+  }, 'worker', {
+    ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+
+  expect(deps.transferArtifact).toHaveBeenCalledWith(expect.objectContaining({ expectedSha256: 'a'.repeat(64) }));
+  expect(deps.cas.adoptNativePart).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ expectedSha256: providerSha }));
+});
+
+test('does not cancel a replacement transfer after the native part has been handed to CAS', async () => {
+  const deps = setup();
+  deps.operations.renew.mockReturnValueOnce(true).mockReturnValue(false);
+  deps.cas.adoptNativePart.mockImplementationOnce(async (_input, options) => {
+    await options.assertLease?.();
+    return deps.staged;
+  });
+
+  await handleArtifactDownload(operation, 'worker', {
+    ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+
+  expect(deps.cancelArtifactTransfer).not.toHaveBeenCalled();
+  expect(deps.operations.retry).toHaveBeenCalled();
+  expect(deps.staged.publish).not.toHaveBeenCalled();
+});
+
+test('renews the lease while native transfer is pending and cancels immediately when ownership is lost', async () => {
+  jest.useFakeTimers();
+  try {
+    const deps = setup();
+    deps.operations.renew.mockReturnValueOnce(true).mockReturnValue(false);
+    deps.transferArtifact.mockImplementationOnce(() => new Promise(() => undefined));
+
+    const handled = handleArtifactDownload(operation, 'worker', {
+      ...deps, now: () => 50, leaseMs: 100,
+      policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    await jest.advanceTimersByTimeAsync(1_000);
+    await handled;
+
+    expect(deps.cancelArtifactTransfer).toHaveBeenCalledWith('download-1');
+    expect(deps.operations.retry).toHaveBeenCalledWith('download-1', 'worker', expect.objectContaining({
+      error: expect.objectContaining({ code: 'ARTIFACT_NETWORK', retryable: true }),
+    }));
+    expect(deps.cas.adoptNativePart).not.toHaveBeenCalled();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 test('retries connection and idle timeouts with bounded backoff', async () => {
   const deps = setup();
-  deps.openDownload.mockRejectedValueOnce(Object.assign(new Error('opaque transfer failure'), {
+  deps.transferArtifact.mockRejectedValueOnce(Object.assign(new Error('opaque transfer failure'), {
     code: 'ARTIFACT_CONNECT_TIMEOUT', retryable: true,
   }));
   await handleArtifactDownload(operation, 'worker', { ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
@@ -160,7 +246,7 @@ test('reserves blob metadata before publication and releases it for GC when comm
 
 test('clears a crashed prior reservation even when the next attempt fails before staging', async () => {
   const deps = setup();
-  deps.openDownload.mockRejectedValueOnce(Object.assign(new Error('offline'), { code: 'ARTIFACT_NETWORK', retryable: true }));
+  deps.transferArtifact.mockRejectedValueOnce(Object.assign(new Error('offline'), { code: 'ARTIFACT_NETWORK', retryable: true }));
   const commit = Object.assign(jest.fn(), {
     clearStale: jest.fn(),
     reserve: jest.fn(),
@@ -191,6 +277,7 @@ test('probe failure aborts the staged part before publication', async () => {
   expect(stagedPartExists).toBe(false);
   expect(deps.staged.publish).not.toHaveBeenCalled();
   expect(deps.blobs.retain).not.toHaveBeenCalled();
+  expect(deps.cancelArtifactTransfer).not.toHaveBeenCalled();
 });
 
 test('does not run the video decoder probe for non-video artifacts', async () => {
@@ -225,21 +312,35 @@ test('uses the latest persisted delivery intent when save joins a claimed downlo
 test('treats structured policy and integrity failures as terminal', async () => {
   for (const code of ['ARTIFACT_HOST_DENIED', 'ARTIFACT_MIME_REJECTED', 'ARTIFACT_SIZE_REJECTED', 'ARTIFACT_INTEGRITY_FAILED']) {
     const deps = setup();
-    deps.openDownload.mockRejectedValueOnce(Object.assign(new Error('opaque terminal failure'), { code, retryable: false }));
+    deps.transferArtifact.mockRejectedValueOnce(Object.assign(new Error('opaque terminal failure'), { code, retryable: false }));
     await handleArtifactDownload(operation, 'worker', { ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
     expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50, expect.objectContaining({ code, retryable: false }));
     expect(deps.operations.retry).not.toHaveBeenCalled();
   }
 });
 
+test('maps native hash diagnostics to the terminal integrity policy', async () => {
+  for (const code of ['ARTIFACT_SHA_MISMATCH', 'ARTIFACT_DURABLE_SHA_MISMATCH']) {
+    const deps = setup();
+    deps.transferArtifact.mockRejectedValueOnce(Object.assign(new Error('native diagnostic'), { code }));
+    await handleArtifactDownload(operation, 'worker', {
+      ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+    });
+    expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50, expect.objectContaining({
+      code: 'ARTIFACT_INTEGRITY_FAILED', retryable: false,
+    }));
+    expect(deps.operations.retry).not.toHaveBeenCalled();
+  }
+});
+
 test('rejects unknown structured artifact codes and caller-controlled retryability', async () => {
   const deps = setup();
-  deps.openDownload.mockRejectedValueOnce({ code: 'ARTIFACT_SECRET_FROM_URL', retryable: false, message: 'secret' });
+  deps.transferArtifact.mockRejectedValueOnce({ code: 'ARTIFACT_SECRET_FROM_URL', retryable: false, message: 'secret' });
   await handleArtifactDownload(operation, 'worker', { ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
   expect(deps.operations.retry).toHaveBeenCalledWith('download-1', 'worker', expect.objectContaining({ error: expect.objectContaining({ code: 'ARTIFACT_NETWORK' }) }));
 
   const canonical = setup();
-  canonical.openDownload.mockRejectedValueOnce({ code: 'ARTIFACT_HOST_DENIED', retryable: true, message: 'secret' });
+  canonical.transferArtifact.mockRejectedValueOnce({ code: 'ARTIFACT_HOST_DENIED', retryable: true, message: 'secret' });
   await handleArtifactDownload(operation, 'worker', { ...canonical, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
   expect(canonical.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50, expect.objectContaining({ code: 'ARTIFACT_HOST_DENIED', retryable: false }));
 });

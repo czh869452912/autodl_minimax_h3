@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import type { ArtifactRecord, NormalizedError } from '../../jobs/types';
 import type { ArtifactCas, ArtifactBlob } from '../../media/cas';
-import { openArtifactDownload } from '../../tasks/downloadPolicy';
+import { cancelArtifactTransfer, transferArtifact } from '../../native/media';
 import type { OperationRepository } from './operationRepository';
 import type { WorkflowOperation } from './types';
 import type { SQLiteDatabase } from 'expo-sqlite';
@@ -26,7 +26,8 @@ type ArtifactOperationDeps = {
   operations: Pick<OperationRepository, 'get' | 'retry' | 'finish' | 'renew'>;
   blobs: { upsertBlob(blob: ArtifactBlob): void; retain(sha256: string, ownerType: string, ownerId: string, now: number): void };
   cas: ArtifactCas;
-  openDownload?: typeof openArtifactDownload;
+  transferArtifact?: typeof transferArtifact;
+  cancelArtifactTransfer?: typeof cancelArtifactTransfer;
   policy(jobId: string, artifact: ArtifactRecord): ArtifactPolicy;
   ensureProjection(jobId: string, artifact: ArtifactRecord): Promise<void>;
   updateDownloadState(state: 'ENQUEUED' | 'DOWNLOADING' | 'DOWNLOAD_FAILED', errorCode?: string): Promise<void>;
@@ -202,6 +203,51 @@ function normalized(code: string, retryable: boolean): NormalizedError {
   return { code, message: retryable ? 'Artifact transfer will be retried.' : 'Artifact transfer failed policy or integrity validation.', retryable };
 }
 
+function canonicalNativeTransferCause(cause: unknown): unknown {
+  if (!cause || typeof cause !== 'object') return cause;
+  const code = (cause as { code?: unknown }).code;
+  if (code === 'ARTIFACT_SHA_MISMATCH' || code === 'ARTIFACT_DURABLE_SHA_MISMATCH' ||
+      code === 'ARTIFACT_TRANSFER_INVALID' || code === 'ARTIFACT_TRANSFER_REQUEST_INVALID') {
+    return { code: 'ARTIFACT_INTEGRITY_FAILED' };
+  }
+  return cause;
+}
+
+function withLeaseHeartbeat<T>(options: {
+  work(): Promise<T>;
+  assertLease(): void;
+  onLeaseLost(): Promise<void>;
+  leaseMs: number;
+}): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(timer);
+      callback();
+    };
+    const intervalMs = Math.max(1, Math.min(30_000, Math.floor(options.leaseMs / 3)));
+    const timer = setInterval(() => {
+      if (settled) return;
+      try {
+        options.assertLease();
+      } catch (cause) {
+        finish(() => {
+          void options.onLeaseLost().then(
+            () => reject(cause),
+            () => reject(cause),
+          );
+        });
+      }
+    }, intervalMs);
+    void Promise.resolve().then(options.work).then(
+      (value) => finish(() => resolve(value)),
+      (cause) => finish(() => reject(cause)),
+    );
+  });
+}
+
 export async function handleArtifactDownload(operation: WorkflowOperation, owner: string, deps: ArtifactOperationDeps): Promise<void> {
   const clock = deps.now ?? Date.now;
   const timestamp = clock();
@@ -214,30 +260,57 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
   }
   let staged: Awaited<ReturnType<ArtifactCas['stage']>> | undefined;
   let reservation: { operationId: string; owner: string } | undefined;
+  let transferInFlight = false;
+  let cancellationRequested = false;
+  const cancelCurrentTransfer = async () => {
+    if (!transferInFlight || cancellationRequested) return;
+    cancellationRequested = true;
+    await (deps.cancelArtifactTransfer ?? cancelArtifactTransfer)(operation.id).catch(() => undefined);
+  };
   try {
     if (deps.commit) await deps.commit.clearStale({ operationId: operation.id, owner });
     await deps.ensureProjection(operation.jobId, artifact);
     await deps.updateDownloadState('DOWNLOADING');
     const policy = deps.policy(operation.jobId, artifact);
-    const opened = await (deps.openDownload ?? openArtifactDownload)(url, {
-      allowedHosts: policy.allowedHosts,
-      allowProviderSuppliedPublicHosts: policy.allowProviderSuppliedPublicHosts,
+    const assertLease = () => {
+      if (!deps.operations.renew(operation.id, owner, clock(), deps.leaseMs ?? 120_000)) {
+        throw new Error('artifact operation lease lost');
+      }
+    };
+    const providerSha256 = typeof artifact.metadata?.sha256 === 'string' && artifact.metadata.sha256.trim()
+      ? artifact.metadata.sha256.trim()
+      : undefined;
+    assertLease();
+    transferInFlight = true;
+    let transferred: Awaited<ReturnType<typeof transferArtifact>>;
+    try {
+      transferred = await withLeaseHeartbeat({
+        leaseMs: deps.leaseMs ?? 120_000,
+        assertLease,
+        onLeaseLost: cancelCurrentTransfer,
+        work: () => (deps.transferArtifact ?? transferArtifact)({
+          url,
+          allowedHosts: policy.allowedHosts,
+          allowProviderSuppliedPublicHosts: policy.allowProviderSuppliedPublicHosts ?? false,
+          maxBytes: policy.maxBytes,
+          acceptedMimes: policy.acceptedMimes ?? ['video/mp4'],
+          connectTimeoutMs: policy.connectTimeoutMs ?? 30_000,
+          idleTimeoutMs: policy.idleTimeoutMs ?? 30_000,
+          expectedSha256: providerSha256?.toLowerCase(),
+          operationId: operation.id,
+          operationAttempt: operation.attempt,
+        }),
+      });
+    } finally {
+      transferInFlight = false;
+    }
+    staged = await deps.cas.adoptNativePart(transferred, {
+      mime: transferred.mime,
       maxBytes: policy.maxBytes,
-      acceptedMimes: policy.acceptedMimes,
-      connectTimeoutMs: policy.connectTimeoutMs,
-      idleTimeoutMs: policy.idleTimeoutMs,
-    });
-    staged = await deps.cas.stage(opened.stream, {
-      mime: opened.mime,
-      maxBytes: policy.maxBytes,
-      expectedSha256: typeof artifact.metadata?.sha256 === 'string' ? artifact.metadata.sha256 : undefined,
+      expectedSha256: providerSha256,
       operationId: operation.id,
       operationAttempt: operation.attempt,
-      assertLease: () => {
-        if (!deps.operations.renew(operation.id, owner, clock(), deps.leaseMs ?? 120_000)) {
-          throw new Error('artifact operation lease lost');
-        }
-      },
+      assertLease,
     });
     const resolveUri = deps.resolveUri ?? ((relativePath: string) => `${FileSystem.documentDirectory ?? ''}${relativePath}`);
     if (artifact.kind === 'video') {
@@ -281,7 +354,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     if (reservation && deps.commit) {
       await Promise.resolve(deps.commit.release(reservation)).catch(() => undefined);
     }
-    const failure = artifactError(cause);
+    const failure = artifactError(canonicalNativeTransferCause(cause));
     const normalizedFailure = normalized(failure.code, failure.retryable);
     if (failure.retryable) {
       const nextRetryAt = timestamp + Math.min(60_000, 1_000 * (2 ** Math.max(0, operation.attempt - 1)));
