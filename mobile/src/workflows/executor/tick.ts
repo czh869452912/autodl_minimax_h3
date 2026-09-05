@@ -20,14 +20,14 @@ type TickDeps = {
   operations: OperationRepository;
   executor: { recover(now: number): Promise<void>; handle(operation: WorkflowOperation, owner: string): Promise<void> };
   owner(): string;
-  isReadonly(): boolean;
+  isReadonly(): boolean | Promise<boolean>;
   leaseMs?: number;
 };
 
 async function dueSnapshot(operations: OperationRepository, now: number, maxOperations: number): Promise<WorkflowOperation[]> {
-  const byKind = new Map<OperationKind, WorkflowOperation[]>();
-  for (const kind of laneOrder) {
-    byKind.set(kind, await operations.listDue({ kind, now, limit: maxOperations }));
+  const byKind = new Map<OperationKind, WorkflowOperation[]>(laneOrder.map((kind) => [kind, []]));
+  for (const operation of await operations.listDueSnapshot({ now, perLaneLimit: maxOperations })) {
+    byKind.get(operation.kind)?.push(operation);
   }
   const snapshot: WorkflowOperation[] = [];
   while (snapshot.length < maxOperations) {
@@ -58,7 +58,7 @@ export function createExecutorTick(deps: TickDeps) {
       remainingDue: 0,
       remainingScheduled: 0,
     };
-    if (deps.isReadonly()) return { ...summary, ...(await remaining()) };
+    if (await deps.isReadonly()) return { ...summary, ...(await remaining()) };
     await deps.executor.recover(timestamp);
     const snapshot = await dueSnapshot(deps.operations, timestamp, maxOperations);
     const owner = deps.owner();

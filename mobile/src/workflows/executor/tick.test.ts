@@ -82,6 +82,29 @@ test('work inserted during a running tick remains due for the next slice', async
   } finally { value.db.close(); }
 });
 
+test('work inserted between the former lane reads remains due for the next slice', async () => {
+  const value = setup();
+  try {
+    enqueue(value.operations, 'SUBMIT', 0);
+    const getAllAsync = value.db.getAllAsync.bind(value.db);
+    let inserted = false;
+    jest.spyOn(value.db, 'getAllAsync').mockImplementation(async (source: string, ...params: unknown[]) => {
+      const rows = await getAllAsync(source, ...params);
+      if (!inserted && source.includes('FROM workflow_operations')) {
+        inserted = true;
+        enqueue(value.operations, 'STATUS_SYNC', 0);
+      }
+      return rows;
+    });
+
+    await expect(value.tick.run({ reason: 'foreground', maxOperations: 2, now: 100 })).resolves.toMatchObject({
+      claimed: 1, succeeded: 1, remainingDue: 1,
+    });
+    expect(value.handled).toEqual(['SUBMIT-0']);
+    await expect(value.operations.get('STATUS_SYNC-0')).resolves.toMatchObject({ state: 'PENDING' });
+  } finally { value.db.close(); }
+});
+
 test('overlapping entrypoints execute independent passes and thrown handlers release claims', async () => {
   const value = setup();
   try {
@@ -125,6 +148,40 @@ test('readonly mode skips recovery, claims, and handlers', async () => {
     });
     expect(value.executor.recover).not.toHaveBeenCalled();
     expect(value.executor.handle).not.toHaveBeenCalled();
+  } finally { value.db.close(); }
+});
+
+test('awaits an asynchronous writable gate before claiming work', async () => {
+  const value = setup();
+  try {
+    enqueue(value.operations, 'STATUS_SYNC', 0);
+    const tick = createExecutorTick({
+      operations: value.operations,
+      executor: value.executor,
+      owner: () => 'worker',
+      isReadonly: async () => false,
+    });
+
+    await expect(tick.run({ reason: 'foreground', now: 100 })).resolves.toMatchObject({ claimed: 1, succeeded: 1 });
+  } finally { value.db.close(); }
+});
+
+test('propagates an asynchronous readonly-gate failure before recovery or claims', async () => {
+  const value = setup();
+  try {
+    enqueue(value.operations, 'STATUS_SYNC', 0);
+    const unavailable = Promise.reject(new Error('recovery-state unavailable'));
+    void unavailable.catch(() => undefined);
+    const tick = createExecutorTick({
+      operations: value.operations,
+      executor: value.executor,
+      owner: () => 'worker',
+      isReadonly: () => unavailable,
+    });
+
+    await expect(tick.run({ reason: 'foreground', now: 100 })).rejects.toThrow('recovery-state unavailable');
+    expect(value.executor.recover).not.toHaveBeenCalled();
+    await expect(value.operations.get('STATUS_SYNC-0')).resolves.toMatchObject({ state: 'PENDING' });
   } finally { value.db.close(); }
 });
 

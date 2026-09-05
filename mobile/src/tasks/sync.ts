@@ -1,6 +1,6 @@
 import { readSettings } from '../settings/storage';
 import { getDatabase } from '../storage/databaseClient';
-import { getAppRecoveryState } from '../storage/database';
+import { getAppRecoveryStateAsync } from '../storage/database';
 import { createTaskRepository } from './repository';
 import { createJobRepository } from '../jobs/repository';
 import { createWorkflowRuntime } from '../workflows/runtime/runtime';
@@ -133,7 +133,7 @@ const tick = createExecutorTick({
   operations,
   executor,
   owner: () => `app-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-  isReadonly: () => Boolean(getAppRecoveryState(database)),
+  isReadonly: async () => Boolean(await getAppRecoveryStateAsync(database)),
 });
 const cycle = createExecutorCycle({ runTick: (options) => tick.run(options) });
 

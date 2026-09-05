@@ -195,3 +195,89 @@ test('hot-path reads do not require synchronous database APIs', async () => {
     await expect(repository.get('op-1')).resolves.toMatchObject({ id: 'op-1' });
   } finally { db.close(); }
 });
+
+test('executor hot writes work when synchronous recovery reads are unavailable', async () => {
+  const { db, repository } = setup();
+  try {
+    enqueue(repository, { id: 'due-claim', idempotencyKey: 'due-claim' });
+    enqueue(repository, { id: 'by-id', idempotencyKey: 'by-id', now: 101, nextRetryAt: 100 });
+    enqueue(repository, { id: 'expired', idempotencyKey: 'expired', now: 102, nextRetryAt: 100 });
+    const syncRecoveryRead = jest.spyOn(db, 'getFirstSync').mockImplementation(() => { throw new Error('sync database access is unavailable'); });
+
+    expect(await repository.claimDue({ kind: 'STATUS_SYNC', owner: 'worker', now: 100, leaseMs: 50, limit: 1 })).toHaveLength(1);
+    expect(await repository.release('due-claim', 'worker', 101)).toBe(true);
+
+    expect(await repository.claimById('by-id', 'worker', 100, 50)).toMatchObject({ leaseOwner: 'worker' });
+    expect(await repository.renew('by-id', 'worker', 110, 50)).toBe(true);
+    expect(await repository.retry('by-id', 'worker', { now: 111, nextRetryAt: 120 })).toBe(true);
+    expect(await repository.claimById('by-id', 'worker', 120, 50)).toMatchObject({ attempt: 2 });
+    expect(await repository.finish('by-id', 'worker', 'SUCCEEDED', 121)).toBe(true);
+
+    expect(await repository.claimById('expired', 'worker', 100, 50)).toMatchObject({ state: 'CLAIMED' });
+    expect(await repository.recoverExpired(151, 32)).toEqual({ uncertainSubmits: [], reopened: 1, hasMore: false });
+    expect(syncRecoveryRead).not.toHaveBeenCalled();
+  } finally { db.close(); }
+});
+
+test('does not claim when an asynchronous recovery-state read fails', async () => {
+  const { db, repository } = setup();
+  try {
+    enqueue(repository);
+    const originalGetFirstAsync = db.getFirstAsync.bind(db);
+    const readRecovery = jest.spyOn(db, 'getFirstAsync').mockImplementation(async (source: string, ...params: unknown[]) => {
+      if (source.includes('app_database_recovery')) throw new Error('recovery-state unavailable');
+      return originalGetFirstAsync(source, ...params);
+    });
+
+    await expect(repository.claimById('op-1', 'worker', 100, 50)).rejects.toThrow('recovery-state unavailable');
+    readRecovery.mockRestore();
+    await expect(repository.get('op-1')).resolves.toMatchObject({ state: 'PENDING', attempt: 0 });
+  } finally { db.close(); }
+});
+
+test('rejects a claim when a contender changes its row after the claim transaction', async () => {
+  const { db, repository } = setup();
+  try {
+    enqueue(repository);
+    const runExclusive = db.withExclusiveTransactionAsync.bind(db);
+    jest.spyOn(db, 'withExclusiveTransactionAsync').mockImplementation(async (work) => {
+      await runExclusive(work);
+      db.runSync(
+        "UPDATE workflow_operations SET lease_owner = 'contender', lease_expires_at = 999 WHERE id = 'op-1'",
+      );
+    });
+
+    await expect(repository.claimById('op-1', 'worker', 100, 50)).rejects.toThrow('OPERATION_CLAIM_FENCE_MISMATCH');
+    await expect(repository.get('op-1')).resolves.toMatchObject({ leaseOwner: 'contender', leaseExpiresAt: 999 });
+  } finally { db.close(); }
+});
+
+test('rejects a claim when its post-CAS row no longer has the owner fence', async () => {
+  const { db, repository } = setup();
+  try {
+    enqueue(repository);
+    const runExclusive = db.withExclusiveTransactionAsync.bind(db);
+    const getFirstAsync = db.getFirstAsync.bind(db);
+    let insideExclusive = false;
+    jest.spyOn(db, 'withExclusiveTransactionAsync').mockImplementation(async (work) => {
+      await runExclusive(async (transaction) => {
+        insideExclusive = true;
+        try {
+          await work(transaction);
+        } finally {
+          insideExclusive = false;
+        }
+      });
+    });
+    jest.spyOn(db, 'getFirstAsync').mockImplementation(async (source: string, ...params: unknown[]) => {
+      const row = await getFirstAsync(source, ...params);
+      if (insideExclusive && source.includes('RETURNING') && row) {
+        return { ...row, lease_owner: 'contender' };
+      }
+      return row;
+    });
+
+    await expect(repository.claimById('op-1', 'worker', 100, 50)).rejects.toThrow('OPERATION_CLAIM_FENCE_MISMATCH');
+    await expect(repository.get('op-1')).resolves.toMatchObject({ state: 'PENDING', attempt: 0 });
+  } finally { db.close(); }
+});
