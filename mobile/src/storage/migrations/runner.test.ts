@@ -206,6 +206,14 @@ test('upgrades v7 projections, wake state, and expired claims without rewriting 
     expect(db.getFirstSync('SELECT revision FROM task_projection_state')).toEqual({ revision: 2 });
     db.runSync("DELETE FROM tasks WHERE id = 'task-new'");
     expect(db.getFirstSync('SELECT revision FROM task_projection_state')).toEqual({ revision: 3 });
+    db.runSync(
+      "INSERT INTO workflow_operations (id,kind,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES ('operation-new','STATUS_SYNC','status:task-new','{}','PENDING',0,5,3,3)",
+    );
+    expect(db.getFirstSync('SELECT revision FROM task_projection_state')).toEqual({ revision: 4 });
+    db.runSync("UPDATE workflow_operations SET state = 'CLAIMED' WHERE id = 'operation-new'");
+    expect(db.getFirstSync('SELECT revision FROM task_projection_state')).toEqual({ revision: 5 });
+    db.runSync("DELETE FROM workflow_operations WHERE id = 'operation-new'");
+    expect(db.getFirstSync('SELECT revision FROM task_projection_state')).toEqual({ revision: 6 });
     const plan = db.getAllSync<{ detail: string }>(
       "EXPLAIN QUERY PLAN SELECT id FROM workflow_operations WHERE state = 'RUNNING' AND lease_expires_at < 5 ORDER BY lease_expires_at, id",
     );

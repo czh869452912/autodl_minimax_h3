@@ -100,6 +100,34 @@ test('summarizes active tasks and pending or claimed work outside the visible pa
   } finally { db.close(); }
 });
 
+test('retries instead of publishing activity changed by an operation write between revision fences', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    insertTask(db, 1, { imagesJson: '{', audiosJson: '[', inputJson: '{' });
+    insertOperation(db, { id: 'scheduled', state: 'PENDING', nextRetryAt: Number.MAX_SAFE_INTEGER });
+    let activityReads = 0;
+    const getFirstAsync = db.getFirstAsync.bind(db);
+    const racingDb = {
+      ...db,
+      async getFirstAsync<T>(sql: string, ...params: unknown[]): Promise<T | undefined> {
+        const isActivityRead = sql.includes('active_task_count');
+        const row = await getFirstAsync<T>(sql, ...params);
+        activityReads += Number(isActivityRead);
+        if (isActivityRead && activityReads === 1) {
+          db.runSync("UPDATE workflow_operations SET next_retry_at=0 WHERE id='scheduled'");
+        }
+        return row;
+      },
+    };
+
+    const result = await createTaskProjectionRepository(racingDb as never).readConsistentWindow(40);
+
+    expect(result).not.toBeInstanceOf(ProjectionChangedDuringRead);
+    if (result instanceof ProjectionChangedDuringRead) throw result;
+    expect(result.activity).toMatchObject({ remainingDue: 1, remainingScheduled: 0 });
+  } finally { db.close(); }
+});
+
 test('returns a revision-fenced page after retrying a projection change between fences', async () => {
   const db = createInitializedRealSqliteTestDb();
   try {

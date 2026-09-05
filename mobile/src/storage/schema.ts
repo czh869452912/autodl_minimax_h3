@@ -50,6 +50,9 @@ export const V8_SCHEMA_STATEMENTS = [
   'CREATE TRIGGER IF NOT EXISTS tasks_projection_revision_insert AFTER INSERT ON tasks BEGIN UPDATE task_projection_state SET revision = revision + 1 WHERE singleton = 1; END',
   'CREATE TRIGGER IF NOT EXISTS tasks_projection_revision_update AFTER UPDATE ON tasks BEGIN UPDATE task_projection_state SET revision = revision + 1 WHERE singleton = 1; END',
   'CREATE TRIGGER IF NOT EXISTS tasks_projection_revision_delete AFTER DELETE ON tasks BEGIN UPDATE task_projection_state SET revision = revision + 1 WHERE singleton = 1; END',
+  'CREATE TRIGGER IF NOT EXISTS workflow_operations_projection_revision_insert AFTER INSERT ON workflow_operations BEGIN UPDATE task_projection_state SET revision = revision + 1 WHERE singleton = 1; END',
+  'CREATE TRIGGER IF NOT EXISTS workflow_operations_projection_revision_update AFTER UPDATE ON workflow_operations BEGIN UPDATE task_projection_state SET revision = revision + 1 WHERE singleton = 1; END',
+  'CREATE TRIGGER IF NOT EXISTS workflow_operations_projection_revision_delete AFTER DELETE ON workflow_operations BEGIN UPDATE task_projection_state SET revision = revision + 1 WHERE singleton = 1; END',
   'CREATE INDEX IF NOT EXISTS idx_workflow_operations_expired_claim ON workflow_operations(state, lease_expires_at, id)',
 ] as const;
 
