@@ -24,7 +24,7 @@ import { exportVideo, probeVideo } from '../native/media';
 import * as FileSystem from 'expo-file-system/legacy';
 import { removeCasPath } from '../media/cas';
 import { EMPTY_RECONCILIATION_SUMMARY, reconcileMediaState, type ReconciliationSummary } from '../media/reconciliation';
-import { createMediaCommandService, type MediaCommandService } from '../workflows/executor/mediaCommandService';
+import { taskCommandService } from './taskServices';
 import { claimMaintenanceWindow, createExecutorSettingsCache, type SyncRequest } from './syncPolicy';
 import type { PendingSummary } from '../workflows/executor/operationRepository';
 import { resumeAfterConnectivityReturns } from './networkRecovery';
@@ -137,46 +137,13 @@ const tick = createExecutorTick({
 });
 const cycle = createExecutorCycle({ runTick: (options) => tick.run(options) });
 
-export function createMediaCommandFacade(
-  commands: Pick<MediaCommandService, 'requestDownload' | 'requestRedownload' | 'requestExport'>,
-  runCycle: (options: CycleOptions) => Promise<CycleSummary>,
-) {
-  return {
-    async requestTaskDownload(taskId: string) {
-      const result = await commands.requestDownload(taskId);
-      if (result.status !== 'already-complete') await runCycle({ reason: 'foreground' });
-      return result;
-    },
-    async requestTaskExport(taskId: string, policy: { keepPrivateCopy: boolean }) {
-      const result = await commands.requestExport(taskId, policy);
-      if (result.status !== 'already-complete') await runCycle({ reason: 'foreground' });
-      return result;
-    },
-    async requestTaskRedownload(taskId: string) {
-      const result = await commands.requestRedownload(taskId);
-      if (result.status !== 'already-complete') await runCycle({ reason: 'foreground' });
-      return result;
-    },
-  };
-}
-
 async function executorForCurrentSettings() {
   return executorSettingsCache.getOrCreate(await readSettings());
 }
 
-const mediaCommands = createMediaCommandService({
-  db: database,
-  fileExists: async (uri) => {
-    const info = await FileSystem.getInfoAsync(uri);
-    return info.exists && !info.isDirectory;
-  },
-  resolveCasUri: (relativePath) => `${FileSystem.documentDirectory ?? ''}${relativePath}`,
-});
-const mediaCommandFacade = createMediaCommandFacade(mediaCommands, (options) => cycle.run(options));
-
-export const requestTaskDownload = mediaCommandFacade.requestTaskDownload;
-export const requestTaskExport = mediaCommandFacade.requestTaskExport;
-export const requestTaskRedownload = mediaCommandFacade.requestTaskRedownload;
+export const requestTaskDownload = taskCommandService.requestDownload;
+export const requestTaskExport = taskCommandService.requestExport;
+export const requestTaskRedownload = taskCommandService.requestRedownload;
 
 async function repairTaskProjections(limit = 32): Promise<number> {
   const persisted = await compatibilityJobs.listRecent(limit);
