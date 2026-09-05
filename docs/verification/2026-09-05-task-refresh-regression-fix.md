@@ -66,3 +66,13 @@
 本轮第一次 Gradle connected 测试后发现模拟器应用私有数据被重新初始化。这不是业务修复步骤，且该流程不应再次用于有用户数据的设备。测试前保留了业务 SQLite 副本，已恢复原任务、操作、媒体与引用记录；从仍保留的系统相册复制回私有 CAS，SHA-256 为 `be8e70cc7aa2e01a154bd77d882af2b0bbd130bb1465a70becf4bde8c1ae504e`，与原记录一致，并重新生成海报。
 
 测试前未备份 SecureStore 私有设置，Token/API Key 等不能从数据库副本恢复，需要重新设置。已向用户说明。恢复后另存完整私有目录备份；此后只使用 `adb install -r` 和独立 fixture，避免再次触发 Gradle 安装/清理流程。
+
+## 追加：N4 异常收尾 quick fix
+
+第三轮复核通过故障注入确认：`tick` 内同通道 worker 和跨通道两层 `Promise.all` 都可能在某个认领失败后提前拒绝，触发 runner 释放 `task-executor` 租约，而其他已启动的处理器仍在运行。另一个 runner 此时可以进入；BUSY 重试不能覆盖这个收尾缺口。
+
+两层并发等待现改为先等待全部工作 settled，再传播原始错误。等待期间沿用现有调度租约及续期机制；不吞掉错误，也不确认失败轮次的 wake generation。操作所有权、认领恢复与并发上限保持原有规则。
+
+`executorRunner.test.ts` 增加同通道、跨通道两项集成回归，使用真实 SQLite、operation repository、tick 和 runner，仅注入认领错误并控制处理器完成时机。两个测试在修改前均因 slice 提前返回失败，修改后确认：在途工作未完成时竞争 runner 不进入；收尾后错误原样传出、操作成功落库、租约释放、未确认唤醒保留，后续 runner 可以进入。
+
+本次验证：定向 15 项测试通过；全量 123 suites / **703 tests passed**，2 项 skipped；类型检查、工作流发布校验和 `git diff --check` 通过。此次仅修改 TypeScript 执行器收尾逻辑，未进行设备安装或数据操作。128 MiB HTTPS / release 性能验收 PERF-1 仍未关闭。

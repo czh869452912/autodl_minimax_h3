@@ -16,6 +16,13 @@ export type TickOptions = { reason: 'foreground' | 'background' | 'service'; max
 const laneOrder: OperationKind[] = ['SUBMIT', 'STATUS_SYNC', 'ARTIFACT_DOWNLOAD', 'EXPORT'];
 const concurrency: Record<OperationKind, number> = { SUBMIT: 1, STATUS_SYNC: 4, ARTIFACT_DOWNLOAD: 1, EXPORT: 1 };
 
+async function waitForAll(work: Promise<void>[]): Promise<void> {
+  // Keep the scheduler lease until all started work settles, even on failure.
+  const results = await Promise.allSettled(work);
+  const rejected = results.find(result => result.status === 'rejected');
+  if (rejected) throw rejected.reason;
+}
+
 type TickDeps = {
   operations: OperationRepository;
   executor: { recover(now: number): Promise<void>; handle(operation: WorkflowOperation, owner: string): Promise<void> };
@@ -85,9 +92,9 @@ export function createExecutorTick(deps: TickDeps) {
           else if (current?.state === 'PENDING') summary.retried += 1;
         }
       };
-      await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+      await waitForAll(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
     };
-    await Promise.all(laneOrder.map((kind) => runLane(snapshot.filter((item) => item.kind === kind), concurrency[kind])));
+    await waitForAll(laneOrder.map((kind) => runLane(snapshot.filter((item) => item.kind === kind), concurrency[kind])));
     Object.assign(summary, await remaining());
     return summary;
   };

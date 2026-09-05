@@ -1,6 +1,89 @@
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { createExecutorWakeRepository } from './executorWakeRepository';
 import { createExecutorRunner } from './executorRunner';
+import { createOperationRepository } from '../workflows/executor/operationRepository';
+import { createExecutorTick } from '../workflows/executor/tick';
+
+function gate() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { promise, resolve };
+}
+
+test.each(['cross-lane', 'same-lane'] as const)('%s claim failure holds the scheduler lease until active work settles', async mode => {
+  const db = createInitializedRealSqliteTestDb();
+  const operations = createOperationRepository(db as never);
+  const wakes = createExecutorWakeRepository(db as never);
+  const started = gate();
+  const release = gate();
+  const drained = gate();
+  const failure = new Error('OPERATION_CLAIM_FENCE_MISMATCH');
+  let active = false;
+  let settled = false;
+  const kinds = mode === 'cross-lane' ? ['SUBMIT', 'ARTIFACT_DOWNLOAD'] as const : ['STATUS_SYNC', 'STATUS_SYNC'] as const;
+  for (const [index, kind] of kinds.entries()) {
+    await operations.enqueue({ id: `op-${index}`, kind, idempotencyKey: `key-${index}`, payload: {}, now: 100 });
+  }
+  const claim = operations.claimById.bind(operations);
+  jest.spyOn(operations, 'claimById').mockImplementation(async (id, ...args) => {
+    if (id === 'op-0') {
+      await started.promise;
+      throw failure;
+    }
+    return claim(id, ...args);
+  });
+  const get = operations.get.bind(operations);
+  jest.spyOn(operations, 'get').mockImplementation(async id => {
+    try { return await get(id); }
+    finally { if (id === 'op-1' && !active) drained.resolve(); }
+  });
+  const tick = createExecutorTick({ operations, owner: () => 'first-worker', isReadonly: () => false,
+    executor: { recover: async () => undefined, handle: async (operation, owner) => {
+      active = true;
+      started.resolve();
+      await release.promise;
+      await operations.finish(operation.id, owner, 'SUCCEEDED', 100);
+      active = false;
+    } },
+  });
+  const deps = { db: db as never, wakes, now: () => 100,
+    maintain: async () => undefined,
+    pendingSummary: async () => ({ remainingDue: 0, remainingScheduled: 0 }),
+    runCycle: async () => { await tick.run({ reason: 'foreground', now: 100 }); return { budgetExhausted: false }; },
+  };
+  await wakes.requestWake(100);
+  const outcome = createExecutorRunner(deps).runSlice({ trigger: 'foreground' }).then(
+    result => { settled = true; return result; },
+    error => { settled = true; return error; },
+  );
+  try {
+    await started.promise;
+    // Allow the failed claim and its rejection handlers to drain without releasing active work.
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(settled).toBe(false);
+    expect(active).toBe(true);
+    expect(db.getFirstSync('SELECT owner FROM app_scheduler_leases WHERE lease_key=?', 'task-executor')).toBeDefined();
+    let competingCycles = 0;
+    const contender = createExecutorRunner({ ...deps, runCycle: async () => {
+      competingCycles++;
+      return { budgetExhausted: false };
+    } });
+    await contender.runSlice({ trigger: 'background' });
+    expect(competingCycles).toBe(0);
+    release.resolve();
+    expect(await outcome).toBe(failure);
+    expect(await operations.get('op-1')).toMatchObject({ state: 'SUCCEEDED' });
+    expect(db.getFirstSync('SELECT owner FROM app_scheduler_leases WHERE lease_key=?', 'task-executor')).toBeUndefined();
+    expect(await wakes.read()).toMatchObject({ generation: 1, handledGeneration: 0 });
+    await contender.runSlice({ trigger: 'background' });
+    expect(competingCycles).toBe(1);
+  } finally {
+    release.resolve();
+    await outcome;
+    await drained.promise;
+    db.close();
+  }
+});
 
 test('maintenance cooldown persists across runners and an explicit refresh bypasses it once', async () => {
   const db = createInitializedRealSqliteTestDb();
