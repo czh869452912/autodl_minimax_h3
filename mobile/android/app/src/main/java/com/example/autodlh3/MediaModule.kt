@@ -11,12 +11,88 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.ReadableMap
+import okhttp3.OkHttpClient
 
 class MediaModule(private val context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
-  private val executor = Executors.newSingleThreadExecutor()
+  private val executor = Executors.newFixedThreadPool(2)
   private val publisher = MediaStorePublisher(context.contentResolver)
   private val integrity = MediaIntegrity(context)
+  private val transferPolicy = ArtifactTransferPolicy()
+  private val artifactTransfer = ArtifactTransfer(
+    partsDir = File(context.filesDir, "cas/parts"),
+    httpClient = OkHttpClient(),
+    validator = transferPolicy::validate,
+    dns = { host, _ -> transferPolicy.resolvePublic(host) },
+    durableSha256 = integrity::sha256,
+  )
   override fun getName() = "AutoDLMedia"
+
+  private fun transferRequest(options: ReadableMap): ArtifactTransferRequest = try {
+    fun text(name: String): String = options.getString(name)?.takeIf { it.isNotBlank() }
+      ?: throw ArtifactTransferException("ARTIFACT_TRANSFER_REQUEST_INVALID", false)
+    fun stringSet(name: String): Set<String> = options.getArray(name)?.toArrayList()?.map { value ->
+      value as? String ?: throw ArtifactTransferException("ARTIFACT_TRANSFER_REQUEST_INVALID", false)
+    }?.toSet() ?: throw ArtifactTransferException("ARTIFACT_TRANSFER_REQUEST_INVALID", false)
+    fun positiveLong(name: String): Long {
+      val value = options.getDouble(name)
+      if (!value.isFinite() || value <= 0 || value > Long.MAX_VALUE || value % 1.0 != 0.0) {
+        throw ArtifactTransferException("ARTIFACT_TRANSFER_REQUEST_INVALID", false)
+      }
+      return value.toLong()
+    }
+    val operationAttempt = options.getDouble("operationAttempt")
+    if (!operationAttempt.isFinite() || operationAttempt < 0 || operationAttempt > Int.MAX_VALUE || operationAttempt % 1.0 != 0.0) {
+      throw ArtifactTransferException("ARTIFACT_TRANSFER_REQUEST_INVALID", false)
+    }
+    ArtifactTransferRequest(
+      url = text("url"),
+      allowedHosts = stringSet("allowedHosts"),
+      allowProviderSuppliedPublicHosts = options.getBoolean("allowProviderSuppliedPublicHosts"),
+      acceptedMimes = stringSet("acceptedMimes"),
+      maxBytes = positiveLong("maxBytes"),
+      connectTimeoutMs = positiveLong("connectTimeoutMs"),
+      idleTimeoutMs = positiveLong("idleTimeoutMs"),
+      expectedSha256 = if (options.hasKey("expectedSha256") && !options.isNull("expectedSha256")) options.getString("expectedSha256") else null,
+      operationId = text("operationId"),
+      operationAttempt = operationAttempt.toInt(),
+    )
+  } catch (error: ArtifactTransferException) {
+    throw error
+  } catch (error: Exception) {
+    throw ArtifactTransferException("ARTIFACT_TRANSFER_REQUEST_INVALID", false, error)
+  }
+
+  @ReactMethod
+  fun transferArtifact(options: ReadableMap, promise: Promise) {
+    executor.execute {
+      try {
+        val result = artifactTransfer.transfer(transferRequest(options))
+        promise.resolve(Arguments.createMap().apply {
+          putString("partUri", result.partUri)
+          putString("finalUrl", result.finalUrl)
+          putString("mime", result.mime)
+          putDouble("byteSize", result.byteSize.toDouble())
+          putString("sha256", result.sha256)
+        })
+      } catch (error: ArtifactTransferException) {
+        promise.reject(error.diagnosticCode, error.message, error)
+      } catch (error: Exception) {
+        promise.reject("ARTIFACT_TRANSFER_FAILED", error.message, error)
+      }
+    }
+  }
+
+  @ReactMethod
+  fun cancelArtifactTransfer(operationId: String, promise: Promise) {
+    executor.execute {
+      if (operationId.isBlank()) {
+        promise.reject("ARTIFACT_TRANSFER_REQUEST_INVALID", "operationId is required")
+      } else {
+        promise.resolve(artifactTransfer.cancel(operationId.trim()))
+      }
+    }
+  }
 
   @ReactMethod
   fun openVideo(source: String) {
