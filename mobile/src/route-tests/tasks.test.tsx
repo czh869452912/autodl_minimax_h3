@@ -27,6 +27,13 @@ let tree: ReturnType<typeof create>;
 const texts = () => tree.root.findAllByType(Text).map(node => [node.props.children].flat(Infinity).join(''));
 afterEach(() => { if (tree) act(() => tree.unmount()); jest.restoreAllMocks(); jest.clearAllMocks(); executorEvents.publish({ phase: 'idle' }); });
 
+test('owned session survives React strict effect replay and still refreshes', async () => {
+  await act(async () => { tree = create(<React.StrictMode><TasksScreen /></React.StrictMode>); });
+  mockRead.mockResolvedValueOnce({ revision: 2, items: [{ ...mockCard, prompt: 'strict updated' }], activity: mockActivity, nextCursor: { id: 'task-1', createdAt: 1000 } });
+  await act(async () => tree.root.findByProps({ accessibilityLabel: '刷新任务' }).props.onPress());
+  expect(texts()).toContain('strict updated');
+});
+
 test('first projection and manual refresh finish while worker and maintenance remain unresolved', async () => {
   executorEvents.publish({ phase: 'running' });
   mockRefresh.mockReturnValueOnce(new Promise(() => {}));

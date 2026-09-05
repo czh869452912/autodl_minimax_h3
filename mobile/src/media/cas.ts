@@ -317,25 +317,25 @@ export function createArtifactCas(
 
 export async function collectGarbage(options: {
   repository: {
-    listUnreferenced(limit: number): ArtifactBlob[];
-    removeBlobIfUnreferenced(sha256: string): boolean;
-    restoreBlob(blob: ArtifactBlob): void;
+    listUnreferenced(limit: number): ArtifactBlob[] | Promise<ArtifactBlob[]>;
+    removeBlobIfUnreferenced(sha256: string): boolean | Promise<boolean>;
+    restoreBlob(blob: ArtifactBlob): void | Promise<void>;
   };
   files: Pick<CasFiles, 'remove'>;
   limit: number;
-  assertLease?: () => void;
+  assertLease?: () => void | Promise<void>;
 }): Promise<{ deleted: number; failed: number }> {
   let deleted = 0;
   let failed = 0;
-  for (const blob of options.repository.listUnreferenced(Math.max(0, options.limit))) {
-    options.assertLease?.();
-    if (!options.repository.removeBlobIfUnreferenced(blob.sha256)) continue;
+  for (const blob of await options.repository.listUnreferenced(Math.max(0, options.limit))) {
+    await options.assertLease?.();
+    if (!await options.repository.removeBlobIfUnreferenced(blob.sha256)) continue;
     try {
-      options.assertLease?.();
+      await options.assertLease?.();
       await options.files.remove(blob.relativePath);
       deleted += 1;
     } catch {
-      options.repository.restoreBlob(blob);
+      await options.repository.restoreBlob(blob);
       failed += 1;
     }
   }

@@ -16,6 +16,7 @@ function setup(initialActivity = activity) {
   const repository = {
     readRevision: async () => { if (fail) throw new Error('read failed'); return revision; },
     readActivity: async () => initialActivity,
+    readWindow: async () => ({ items: [card('older')], nextCursor: undefined }),
     readConsistentWindow: async (limit = 40): Promise<ConsistentTaskProjectionWindow | ProjectionChangedDuringRead> => {
       reads++; limits.push(limit);
       if (fail) throw new Error('read failed');
@@ -100,6 +101,43 @@ test('refreshes a bounded loaded window after pagination, merging reorder and de
   await s.session.loadMore();
   await s.session.loadMore();
   expect(s.limits).toEqual([40, 80, 80, 120]);
+  expect(s.session.getSnapshot().items.map(item => item.id)).toEqual(['b', 'older']);
+  s.session.dispose();
+});
+
+test('invalidation requested by a completion subscriber is not lost', async () => {
+  const s = setup();
+  let once = false;
+  const unsubscribe = s.session.subscribe(() => {
+    if (!s.session.getSnapshot().read.pending && !once) {
+      once = true; s.change([card('new')]); void s.session.refresh('manual');
+    }
+  });
+  await s.session.refresh('manual');
+  expect(s.session.getSnapshot().items[0].id).toBe('new');
+  unsubscribe(); s.session.dispose();
+});
+
+test('a refresh requested synchronously by a pending subscriber stays single-flight', async () => {
+  const s = setup();
+  let once = false;
+  let active = 0;
+  let maximum = 0;
+  const read = s.repository.readConsistentWindow;
+  s.repository.readConsistentWindow = async limit => {
+    maximum = Math.max(maximum, ++active);
+    await Promise.resolve();
+    active--;
+    return read(limit);
+  };
+  s.session.subscribe(() => {
+    if (s.session.getSnapshot().read.pending && !once) {
+      once = true; void s.session.refresh('manual');
+    }
+  });
+  await s.session.refresh('focus');
+  expect(maximum).toBe(1);
+  expect(s.reads()).toBe(2);
   s.session.dispose();
 });
 

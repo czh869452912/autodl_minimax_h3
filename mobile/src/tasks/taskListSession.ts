@@ -26,7 +26,7 @@ function equalCard(a: TaskCard, b: TaskCard): boolean {
 }
 
 export function createTaskListSession(deps: {
-  repository: Pick<TaskProjectionRepository, 'readRevision' | 'readActivity' | 'readConsistentWindow'>;
+  repository: Pick<TaskProjectionRepository, 'readRevision' | 'readActivity' | 'readConsistentWindow'> & Partial<Pick<TaskProjectionRepository, 'readWindow'>>;
   projections?: typeof taskProjectionEvents; work?: typeof executorEvents; now?: () => number; pageSize?: number;
 }): TaskListSession {
   const repository = deps.repository;
@@ -40,6 +40,7 @@ export function createTaskListSession(deps: {
   let readPromise: Promise<RefreshReceipt> | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let sequence = 0;
+  let appendCursor: TaskCursor | undefined;
   let activity: TaskProjectionActivity = { activeTaskCount: 0, pendingOperationCount: 0, claimedOperationCount: 0, remainingDue: 0, remainingScheduled: 0 };
   let snapshot: TaskListSnapshot = Object.freeze({ revision: 0, phase: 'cold', items: Object.freeze([]), read: Object.freeze({ pending: false }), work: events.getSnapshot(), activity });
   const listeners = new Set<() => void>();
@@ -69,6 +70,20 @@ export function createTaskListSession(deps: {
       const currentSequence = ++sequence;
       publish({ ...snapshot, read: { ...snapshot.read, pending: true } });
       try {
+        if (requested.has('page') && appendCursor && repository.readWindow) {
+          const cursor = appendCursor; appendCursor = undefined;
+          const revision = await repository.readRevision();
+          const page = await repository.readWindow(pageSize, cursor);
+          if (disposed || currentSequence !== sequence) break;
+          if (revision !== snapshot.revision || revision !== await repository.readRevision()) {
+            dirty = true; causes.add('focus'); continue;
+          }
+          const known = new Set(snapshot.items.map(item => item.id));
+          receipt = { revision, checkedAt: now() };
+          publish({ ...snapshot, items: Object.freeze([...snapshot.items, ...page.items.filter(item => !known.has(item.id)).map(item => Object.freeze(item))]),
+            nextCursor: page.nextCursor, read: { ...snapshot.read, lastCheckedAt: receipt.checkedAt } });
+          continue;
+        }
         const full = snapshot.phase === 'cold' || requested.has('focus') || requested.has('manual') || requested.has('page');
         const revision = full ? undefined : await repository.readRevision();
         if (full || revision !== snapshot.revision) {
@@ -86,7 +101,7 @@ export function createTaskListSession(deps: {
           const items = cards.length === snapshot.items.length && cards.every((item, index) => item === snapshot.items[index]) ? snapshot.items : Object.freeze(cards);
           activity = result.activity;
           receipt = { revision: result.revision, checkedAt: now() };
-          publish({ ...snapshot, revision: result.revision, phase: 'ready', items, nextCursor: limit < 120 ? result.nextCursor : undefined,
+          publish({ ...snapshot, revision: result.revision, phase: 'ready', items, nextCursor: result.nextCursor,
             activity, read: { pending: true, lastCheckedAt: receipt.checkedAt,
               lastChangedAt: result.revision !== snapshot.revision || snapshot.phase === 'cold' ? receipt.checkedAt : snapshot.read.lastChangedAt } });
         } else {
@@ -104,6 +119,7 @@ export function createTaskListSession(deps: {
       }
     }
     publish({ ...snapshot, read: { ...snapshot.read, pending: false } });
+    if (dirty && !disposed) return drain();
     if (lastError) throw lastError;
     return receipt;
   };
@@ -111,35 +127,52 @@ export function createTaskListSession(deps: {
     if (disposed) return Promise.resolve({ revision: snapshot.revision, checkedAt: now() });
     dirty = true; causes.add(cause);
     if (timer) { clearTimeout(timer); timer = undefined; }
-    if (!readPromise) readPromise = drain().finally(() => { readPromise = undefined; schedule(); });
+    if (!readPromise) {
+      let resolve!: (receipt: RefreshReceipt) => void;
+      let reject!: (error: unknown) => void;
+      const pending = new Promise<RefreshReceipt>((accept, fail) => { resolve = accept; reject = fail; });
+      // Install the flight before publishing: subscribers may request a refresh synchronously.
+      readPromise = pending.finally(async () => {
+        readPromise = undefined;
+        if (dirty && !disposed) await requestRead('event');
+        else schedule();
+      });
+      void drain().then(resolve, reject);
+    }
     return readPromise;
   };
-  const unsubscribeProjection = (deps.projections ?? taskProjectionEvents).subscribe(() => {
-    if (visible) void requestRead('event').catch(() => undefined);
-  });
-  const unsubscribeWork = events.subscribe(() => {
-    publish({ ...snapshot, work: events.getSnapshot() });
-    if (visible && events.getSnapshot().phase !== 'running') void requestRead('event').catch(() => undefined);
-  });
+  let unsubscribeProjection: (() => void) | undefined;
+  let unsubscribeWork: (() => void) | undefined;
+  const connect = () => {
+    if (disposed || unsubscribeProjection) return;
+    unsubscribeProjection = (deps.projections ?? taskProjectionEvents).subscribe(() => {
+      if (visible) void requestRead('event').catch(() => undefined);
+    });
+    unsubscribeWork = events.subscribe(() => {
+      publish({ ...snapshot, work: events.getSnapshot() });
+      if (visible && events.getSnapshot().phase !== 'running') void requestRead('event').catch(() => undefined);
+    });
+  };
   return {
     getSnapshot: () => snapshot,
-    subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
+    subscribe(listener) { connect(); listeners.add(listener); return () => { listeners.delete(listener); }; },
     setVisible(next) {
       if (disposed || next === visible) return;
       visible = next;
-      if (visible) void requestRead('focus').catch(() => undefined);
+      if (visible) { connect(); void requestRead('focus').catch(() => undefined); }
       else if (timer) { clearTimeout(timer); timer = undefined; }
     },
     refresh: requestRead,
     async loadMore() {
-      if (!snapshot.nextCursor || limit >= 120 || readPromise) return;
-      limit = Math.min(120, limit + pageSize);
+      if (!snapshot.nextCursor || readPromise) return;
+      if (limit >= 120) appendCursor = snapshot.nextCursor;
+      else limit = Math.min(120, limit + pageSize);
       await requestRead('page');
     },
     dispose() {
       disposed = true; sequence++;
       if (timer) clearTimeout(timer);
-      unsubscribeProjection(); unsubscribeWork(); listeners.clear();
+      unsubscribeProjection?.(); unsubscribeWork?.(); listeners.clear();
     },
   };
 }

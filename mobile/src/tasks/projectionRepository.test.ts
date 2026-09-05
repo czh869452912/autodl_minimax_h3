@@ -100,6 +100,27 @@ test('summarizes active tasks and pending or claimed work outside the visible pa
   } finally { db.close(); }
 });
 
+test('counts task activity through a covering index without reading large task payloads', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    insertTask(db, 1, { status: 'RUNNING' });
+    const plans: string[] = [];
+    const getFirstAsync = db.getFirstAsync.bind(db);
+    const measuredDb = {
+      ...db,
+      async getFirstAsync<T>(sql: string, ...params: unknown[]): Promise<T | undefined> {
+        if (sql.includes('active_task_count')) {
+          plans.push(...db.getAllSync<{ detail: string }>(`EXPLAIN QUERY PLAN ${sql}`, ...params).map(row => row.detail));
+        }
+        return getFirstAsync<T>(sql, ...params);
+      },
+    };
+    expect(await createTaskProjectionRepository(measuredDb as never).readActivity(1_000)).toMatchObject({ activeTaskCount: 1 });
+    expect(plans.some(detail => /SCAN tasks USING COVERING INDEX/.test(detail))).toBe(true);
+    expect(plans).not.toContain('SCAN tasks');
+  } finally { db.close(); }
+});
+
 test('retries instead of publishing activity changed by an operation write between revision fences', async () => {
   const db = createInitializedRealSqliteTestDb();
   try {

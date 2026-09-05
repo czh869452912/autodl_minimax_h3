@@ -5,7 +5,7 @@ import { cancelArtifactTransfer, transferArtifact } from '../../native/media';
 import type { OperationRepository } from './operationRepository';
 import type { WorkflowOperation } from './types';
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { assertAppDatabaseWritable } from '../../storage/database';
+import { assertAppDatabaseWritableAsync } from '../../storage/database';
 import { artifactExportDisplayName } from '../../media/artifactDisplayName';
 export { artifactExportDisplayName } from '../../media/artifactDisplayName';
 import { ArtifactOperationError, artifactError } from './artifactErrors';
@@ -84,7 +84,7 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => n
     if (gcLease && Number(gcLease.expires_at) > clock()) throw new ArtifactOperationError('ARTIFACT_CAS_BUSY', 'CAS_GC_IN_PROGRESS', true);
   };
   const commit = async (input: ArtifactCommitInput): Promise<void> => {
-    assertAppDatabaseWritable(db);
+    await assertAppDatabaseWritableAsync(db);
     await transaction(db, async (transaction) => {
       await assertGcIdle(transaction);
       await transaction.runAsync(
@@ -132,7 +132,7 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => n
   };
   return Object.assign(commit, {
     async clearStale(input: { operationId: string; owner: string }): Promise<void> {
-      assertAppDatabaseWritable(db);
+      await assertAppDatabaseWritableAsync(db);
       await transaction(db, async (transaction) => {
         const claim = await transaction.getFirstAsync<{ present: number }>(
           "SELECT 1 AS present FROM workflow_operations WHERE id=? AND state='CLAIMED' AND lease_owner=? LIMIT 1",
@@ -143,7 +143,7 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => n
       });
     },
     async reserve(input: ArtifactReservationInput): Promise<void> {
-      assertAppDatabaseWritable(db);
+      await assertAppDatabaseWritableAsync(db);
       await transaction(db, async (transaction) => {
         await assertGcIdle(transaction);
         const claim = await transaction.getFirstAsync<{ present: number }>(
@@ -164,7 +164,7 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => n
       });
     },
     async release(input: { operationId: string; owner: string }): Promise<void> {
-      assertAppDatabaseWritable(db);
+      await assertAppDatabaseWritableAsync(db);
       await transaction(db, async (transaction) => {
         await transaction.runAsync(
           'DELETE FROM artifact_blob_refs WHERE owner_type=? AND owner_id=?',

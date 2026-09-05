@@ -20,6 +20,18 @@ const deps = (db: ReturnType<typeof createInitializedRealSqliteTestDb>, fileExis
   now: () => 100,
 });
 
+test('bounded maintenance uses asynchronous database calls throughout repair and garbage collection', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    await seedCompletedTask(db, 'async-job');
+    const asyncOnly = { ...db,
+      getFirstSync: () => { throw new Error('sync read'); }, getAllSync: () => { throw new Error('sync scan'); },
+      runSync: () => { throw new Error('sync write'); }, execSync: () => { throw new Error('sync exec'); },
+    };
+    expect((await reconcileMediaState(deps(asyncOnly as never))).scanned).toBe(1);
+  } finally { db.close(); }
+});
+
 test('materializes an artifact that has no media asset idempotently', async () => {
   const db = createInitializedRealSqliteTestDb();
   try {

@@ -1,5 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { assertAppDatabaseWritable } from '../storage/database';
+import { assertAppDatabaseWritable, assertAppDatabaseWritableAsync } from '../storage/database';
 import type { ArtifactBlob } from './cas';
 
 type BlobRow = { sha256: string; byte_size: number; mime: string; relative_path: string; created_at: number; verified_at: number };
@@ -56,3 +56,19 @@ export function createCasRepository(db: SQLiteDatabase) {
 }
 
 export type CasRepository = ReturnType<typeof createCasRepository>;
+
+export function createAsyncCasGarbageRepository(db: SQLiteDatabase) {
+  return {
+    async listUnreferenced(limit: number): Promise<ArtifactBlob[]> {
+      return (await db.getAllAsync<BlobRow>('SELECT b.* FROM artifact_blobs b WHERE NOT EXISTS (SELECT 1 FROM artifact_blob_refs r WHERE r.blob_sha256=b.sha256) ORDER BY b.created_at,b.sha256 LIMIT ?', Math.max(0, Math.floor(limit)))).map(mapBlob);
+    },
+    async removeBlobIfUnreferenced(sha256: string): Promise<boolean> {
+      await assertAppDatabaseWritableAsync(db);
+      return changes(await db.runAsync('DELETE FROM artifact_blobs WHERE sha256=? AND NOT EXISTS (SELECT 1 FROM artifact_blob_refs WHERE blob_sha256=?)', sha256, sha256)) === 1;
+    },
+    async restoreBlob(blob: ArtifactBlob): Promise<void> {
+      await assertAppDatabaseWritableAsync(db);
+      await db.runAsync('INSERT OR IGNORE INTO artifact_blobs(sha256,byte_size,mime,relative_path,created_at,verified_at) VALUES(?,?,?,?,?,?)', blob.sha256, blob.byteSize, blob.mime, blob.relativePath, blob.createdAt, blob.verifiedAt);
+    },
+  };
+}

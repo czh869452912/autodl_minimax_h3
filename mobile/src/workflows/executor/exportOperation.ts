@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { NormalizedError } from '../../jobs/types';
-import { assertAppDatabaseWritable } from '../../storage/database';
+import { assertAppDatabaseWritableAsync } from '../../storage/database';
 import type { WorkflowOperation } from './types';
 
 export type ExportPayload = {
@@ -146,7 +146,7 @@ export function createSqliteExportStore(db: SQLiteDatabase) {
       ));
     },
     async markExporting(operation: WorkflowOperation, owner: string, payload: ExportPayload, now: number): Promise<void> {
-      assertAppDatabaseWritable(db);
+      await assertAppDatabaseWritableAsync(db);
       if (!operation.jobId) throw new Error('export job id missing');
       const jobId = operation.jobId;
       await transaction(db, async (transaction) => {
@@ -161,7 +161,7 @@ export function createSqliteExportStore(db: SQLiteDatabase) {
       });
     },
     async commitSuccess(input: ExportSuccessInput): Promise<void> {
-      assertAppDatabaseWritable(db);
+      await assertAppDatabaseWritableAsync(db);
       await transaction(db, async (transaction) => {
         await transaction.runAsync(
           "INSERT INTO media_deliveries (id,asset_id,target,uri,status,error,created_at,updated_at) VALUES (?,?,'system-gallery',?,'EXPORTED',NULL,?,?) ON CONFLICT(id) DO UPDATE SET uri=excluded.uri,status='EXPORTED',error=NULL,updated_at=excluded.updated_at",
@@ -191,7 +191,7 @@ export function createSqliteExportStore(db: SQLiteDatabase) {
       });
     },
     async retry(operation: WorkflowOperation, owner: string, payload: ExportPayload, input: ExportFailureInput & { nextRetryAt: number }): Promise<void> {
-      assertAppDatabaseWritable(db);
+      await assertAppDatabaseWritableAsync(db);
       if (!operation.jobId) throw new Error('export job id missing');
       const jobId = operation.jobId;
       await transaction(db, async (transaction) => {
@@ -203,7 +203,7 @@ export function createSqliteExportStore(db: SQLiteDatabase) {
       });
     },
     async finishFailure(operation: WorkflowOperation, owner: string, payload: ExportPayload | undefined, now: number, error: NormalizedError): Promise<void> {
-      assertAppDatabaseWritable(db);
+      await assertAppDatabaseWritableAsync(db);
       await transaction(db, async (transaction) => {
         if (operation.jobId) await transaction.runAsync("UPDATE tasks SET export_state='EXPORT_FAILED',export_error=?,updated_at=MAX(updated_at, ?) WHERE id=?", error.code, now, operation.jobId);
         if (payload) {

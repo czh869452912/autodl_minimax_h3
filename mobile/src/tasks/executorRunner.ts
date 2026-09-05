@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import type { ExecutorTrigger } from './executorEvents';
 import type { ExecutorWakeRepository } from './executorWakeRepository';
 import { withAsyncSchedulerLease } from './scheduler';
+import { claimMaintenanceWindowAsync } from './syncPolicy';
 
 export type WorkerRequest = Readonly<{ trigger: ExecutorTrigger; taskIds?: readonly string[] }>;
 export type WorkerResult = Readonly<{ capturedGeneration: number; handledGeneration: number; remainingDue: number; remainingScheduled: number; nextWakeAt?: number; budgetExhausted: boolean }>;
@@ -21,7 +22,8 @@ export function createExecutorRunner(deps: {
       const captured = await deps.wakes.read();
       const cycle = await deps.runCycle(request);
       await lease.assertOwned();
-      if (captured.maintenanceGeneration > captured.handledGeneration && captured.maintenanceGeneration <= captured.generation) {
+      const forceMaintenance = captured.maintenanceGeneration > captured.handledGeneration && captured.maintenanceGeneration <= captured.generation;
+      if (await claimMaintenanceWindowAsync(deps.db, now(), forceMaintenance)) {
         await deps.maintain();
       }
       await lease.assertOwned();

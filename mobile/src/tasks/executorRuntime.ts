@@ -9,7 +9,7 @@ import { createJobStateRepository } from '../workflows/executor/jobStateReposito
 import { createOperationRepository } from '../workflows/executor/operationRepository';
 import { createDurableExecutor } from '../workflows/executor/durableExecutor';
 import { createExecutorTick } from '../workflows/executor/tick';
-import { createExecutorCycle, type CycleOptions, type CycleSummary } from '../workflows/executor/cycle';
+import { createExecutorCycle } from '../workflows/executor/cycle';
 import { createArtifactCas } from '../media/cas';
 import { createCasRepository } from '../media/casRepository';
 import { createSqliteArtifactCommitter, handleArtifactDownload } from '../workflows/executor/artifactOperation';
@@ -23,12 +23,11 @@ import { assertLocalExportSource, createSqliteExportStore, handleExport } from '
 import { exportVideo, probeVideo } from '../native/media';
 import * as FileSystem from 'expo-file-system/legacy';
 import { removeCasPath } from '../media/cas';
-import { EMPTY_RECONCILIATION_SUMMARY, reconcileMediaState, type ReconciliationSummary } from '../media/reconciliation';
+import { reconcileMediaState } from '../media/reconciliation';
 import { createExecutorRunner } from './executorRunner';
 import { createExecutorWakeRepository } from './executorWakeRepository';
 import { createExecutorSettingsCache } from './syncPolicy';
-import type { PendingSummary } from '../workflows/executor/operationRepository';
-import { projectTerminalNotifications, type TerminalNotification } from './terminalEvents';
+import { projectTerminalNotifications } from './terminalEvents';
 
 const database = getDatabase();
 export const taskStore = createTaskRepository(database);

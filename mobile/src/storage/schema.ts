@@ -43,6 +43,7 @@ export const V7_SCHEMA_STATEMENTS = [
 ] as const;
 
 export const V8_SCHEMA_STATEMENTS = [
+  'CREATE INDEX IF NOT EXISTS idx_tasks_activity ON tasks(status, download_state, export_state)',
   'CREATE TABLE IF NOT EXISTS task_projection_state (singleton INTEGER PRIMARY KEY NOT NULL CHECK(singleton = 1), revision INTEGER NOT NULL)',
   'INSERT OR IGNORE INTO task_projection_state(singleton, revision) VALUES (1, 0)',
   'CREATE TABLE IF NOT EXISTS executor_wake_state (singleton INTEGER PRIMARY KEY NOT NULL CHECK(singleton = 1), generation INTEGER NOT NULL, handled_generation INTEGER NOT NULL, maintenance_generation INTEGER NOT NULL, requested_at INTEGER NOT NULL)',
