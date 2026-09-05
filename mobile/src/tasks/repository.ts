@@ -4,6 +4,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { assertAppDatabaseWritable } from '../storage/database';
 
 export type TaskPageCursor = { createdAt: number; id: string };
+export type { TaskCard, TaskCursor } from './taskCard';
 export type TaskPageOptions = { limit?: number; cursor?: TaskPageCursor; status?: TaskRecord['status']; query?: string };
 function transaction<T>(db: SQLiteDatabase, work: () => T): T {
   if (typeof db.withTransactionSync === 'function') {
