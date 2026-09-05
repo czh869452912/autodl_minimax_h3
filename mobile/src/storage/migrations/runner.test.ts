@@ -3,6 +3,7 @@ import { APP_SCHEMA_VERSION, V5_SCHEMA_STATEMENTS } from '../schema';
 import { AppMigrationError, getRecoveryState, markRecovery } from '../recovery';
 import { runAppMigrations } from './runner';
 import { v6DurableExecutor } from './v6DurableExecutor';
+import { v7RegistryRelease } from './v7RegistryRelease';
 import h3V100 from '../../workflows/definitions/autodl/minimax-h3-i2v-15s.json';
 import h3V101 from '../../workflows/definitions/autodl/minimax-h3-i2v-15s-v1.0.1.json';
 import { canonicalizeDefinition } from '../../workflows/registry/canonicalize';
@@ -30,6 +31,13 @@ function columnNames(db: ReturnType<typeof createRealSqliteTestDb>, table: strin
 
 function indexNames(db: ReturnType<typeof createRealSqliteTestDb>): string[] {
   return db.getAllSync<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'index'").map((row) => row.name);
+}
+
+function createHistoricalV7Fixture() {
+  const db = createHistoricalV6Fixture();
+  v7RegistryRelease.apply(migrationContext(db));
+  db.execSync('PRAGMA user_version = 7');
+  return db;
 }
 
 function createV5Fixture() {
@@ -92,7 +100,7 @@ function createHistoricalV6Fixture() {
   return db;
 }
 
-test('migrates historical workflow identities to v7 without rewriting provenance', () => {
+test('migrates historical workflow identities through v8 without rewriting provenance', () => {
   const db = createHistoricalV6Fixture();
   const beforeRegistry = db.getFirstSync<any>('SELECT * FROM workflow_registry WHERE version = ?', h3V100.version);
   const beforeActive = db.getFirstSync<any>('SELECT * FROM workflow_registry_active WHERE workflow_id = ?', h3V100.id);
@@ -102,7 +110,7 @@ test('migrates historical workflow identities to v7 without rewriting provenance
   const backup = jest.fn();
   try {
     expect(runAppMigrations(db as never, { backup, now: () => 10 })).toEqual({
-      mode: 'writable', fromVersion: 6, toVersion: 7, migrated: true,
+      mode: 'writable', fromVersion: 6, toVersion: 8, migrated: true,
     });
     expect(backup).toHaveBeenCalledTimes(1);
     expect(db.getFirstSync<any>('SELECT * FROM workflow_registry WHERE version = ?', h3V100.version))
@@ -117,7 +125,7 @@ test('migrates historical workflow identities to v7 without rewriting provenance
   }
 });
 
-test('backfills package identities and is idempotent at v7', () => {
+test('backfills package identities and is idempotent at v8', () => {
   const db = createHistoricalV6Fixture();
   const pkg = legacyDefinitionToPackage(h3V101 as WorkflowDefinition);
   db.runSync(
@@ -132,9 +140,76 @@ test('backfills package identities and is idempotent at v7', () => {
       .toEqual({ hash_scheme: WORKFLOW_PACKAGE_IDENTITY_V1 });
     backup.mockClear();
     expect(runAppMigrations(db as never, { backup, now: () => 11 })).toEqual({
-      mode: 'writable', fromVersion: 7, toVersion: 7, migrated: false,
+      mode: 'writable', fromVersion: 8, toVersion: 8, migrated: false,
     });
     expect(backup).not.toHaveBeenCalled();
+  } finally {
+    db.close();
+  }
+});
+
+test('upgrades v7 projections, wake state, and expired claims without rewriting representative rows', () => {
+  const db = createHistoricalV7Fixture();
+  db.runSync(
+    'INSERT INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,lease_owner,lease_expires_at,last_error_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    'operation-old', 'SYNC', 'job-old', 'sync:job-old', '{"keep":true}', 'RUNNING', 2, 3, 'worker-old', 4, '{"reason":"keep"}', 1, 2,
+  );
+  db.runSync(
+    'INSERT INTO artifact_blobs (sha256,byte_size,mime,relative_path,created_at,verified_at) VALUES (?,?,?,?,?,?)',
+    'a'.repeat(64), 42, 'video/mp4', 'blobs/old.mp4', 1, 2,
+  );
+  db.runSync(
+    'INSERT INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)',
+    'a'.repeat(64), 'workflow_artifact', 'artifact-old', 3,
+  );
+  db.runSync(
+    'INSERT INTO media_assets (id,task_id,title,prompt,source_url,mime_type,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
+    'asset-old', 'task-old', 'Kept asset', 'keep this', 'file:///kept.mp4', 'video/mp4', 'READY', 1, 2,
+  );
+  db.runSync(
+    'INSERT INTO media_deliveries (id,asset_id,target,uri,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?)',
+    'delivery-old', 'asset-old', 'gallery', 'content://kept', 'DELIVERED', 1, 2,
+  );
+  const preserved = {
+    job: db.getFirstSync<any>("SELECT * FROM workflow_jobs WHERE id='job-old'"),
+    task: db.getFirstSync<any>("SELECT * FROM tasks WHERE id='task-old'"),
+    operation: db.getFirstSync<any>("SELECT * FROM workflow_operations WHERE id='operation-old'"),
+    artifact: db.getFirstSync<any>("SELECT * FROM workflow_artifacts WHERE id='artifact-old'"),
+    blob: db.getFirstSync<any>("SELECT * FROM artifact_blobs WHERE sha256 = ?", 'a'.repeat(64)),
+    blobRef: db.getFirstSync<any>("SELECT * FROM artifact_blob_refs WHERE owner_id='artifact-old'"),
+    asset: db.getFirstSync<any>("SELECT * FROM media_assets WHERE id='asset-old'"),
+    delivery: db.getFirstSync<any>("SELECT * FROM media_deliveries WHERE id='delivery-old'"),
+  };
+  try {
+    expect(runAppMigrations(db as never, { backup: jest.fn(), now: () => 10 })).toEqual({
+      mode: 'writable', fromVersion: 7, toVersion: 8, migrated: true,
+    });
+    expect(userVersion(db)).toBe(8);
+    expect(db.getFirstSync('SELECT * FROM workflow_jobs WHERE id = ?', 'job-old')).toEqual(preserved.job);
+    expect(db.getFirstSync('SELECT * FROM tasks WHERE id = ?', 'task-old')).toEqual(preserved.task);
+    expect(db.getFirstSync('SELECT * FROM workflow_operations WHERE id = ?', 'operation-old')).toEqual(preserved.operation);
+    expect(db.getFirstSync('SELECT * FROM workflow_artifacts WHERE id = ?', 'artifact-old')).toEqual(preserved.artifact);
+    expect(db.getFirstSync('SELECT * FROM artifact_blobs WHERE sha256 = ?', 'a'.repeat(64))).toEqual(preserved.blob);
+    expect(db.getFirstSync("SELECT * FROM artifact_blob_refs WHERE owner_id='artifact-old'")).toEqual(preserved.blobRef);
+    expect(db.getFirstSync("SELECT * FROM media_assets WHERE id='asset-old'")).toEqual(preserved.asset);
+    expect(db.getFirstSync("SELECT * FROM media_deliveries WHERE id='delivery-old'")).toEqual(preserved.delivery);
+    expect(db.getFirstSync('SELECT * FROM task_projection_state')).toEqual({ singleton: 1, revision: 0 });
+    expect(db.getFirstSync('SELECT * FROM executor_wake_state')).toEqual({
+      singleton: 1, generation: 0, handled_generation: 0, maintenance_generation: 0, requested_at: 0,
+    });
+    db.runSync(
+      'INSERT INTO tasks (id,prompt,status,resolution,duration,created_at,updated_at) VALUES (?,?,?,?,?,?,?)',
+      'task-new', 'new task', 'QUEUED', '768p', 5, 3, 3,
+    );
+    expect(db.getFirstSync('SELECT revision FROM task_projection_state')).toEqual({ revision: 1 });
+    db.runSync("UPDATE tasks SET status = 'RUNNING' WHERE id = 'task-new'");
+    expect(db.getFirstSync('SELECT revision FROM task_projection_state')).toEqual({ revision: 2 });
+    db.runSync("DELETE FROM tasks WHERE id = 'task-new'");
+    expect(db.getFirstSync('SELECT revision FROM task_projection_state')).toEqual({ revision: 3 });
+    const plan = db.getAllSync<{ detail: string }>(
+      "EXPLAIN QUERY PLAN SELECT id FROM workflow_operations WHERE state = 'RUNNING' AND lease_expires_at < 5 ORDER BY lease_expires_at, id",
+    );
+    expect(plan.map((row) => row.detail).join('\n')).toContain('idx_workflow_operations_expired_claim');
   } finally {
     db.close();
   }
@@ -143,7 +218,7 @@ test('backfills package identities and is idempotent at v7', () => {
 test.each([
   ['unknown representation', '{}', H3_V100_LEGACY_HASH],
   ['bad stored digest', canonicalizeDefinition(h3V100), '0'.repeat(64)],
-])('rejects %s before stamping schema v7', (_name, definitionJson, contentHash) => {
+])('rejects %s before stamping schema v8', (_name, definitionJson, contentHash) => {
   const db = createHistoricalV6Fixture();
   db.runSync(
     'UPDATE workflow_registry SET definition_json = ?, content_hash = ? WHERE workflow_id = ? AND version = ?',
@@ -151,7 +226,7 @@ test.each([
   );
   try {
     expect(() => runAppMigrations(db as never, { backup: jest.fn(), now: () => 12 }))
-      .toThrow('MIGRATION_6_TO_7_FAILED');
+      .toThrow('MIGRATION_6_TO_8_FAILED');
     expect(userVersion(db)).toBe(6);
     expect(columnNames(db, 'workflow_registry')).not.toContain('hash_scheme');
     expect(tableNames(db)).not.toContain('workflow_registry_releases');
@@ -166,17 +241,18 @@ function createVersionedFixture(version: 4 | 5) {
   return db;
 }
 
-test('initializes a truly empty v0 directly at v7 without backup', () => {
+test('initializes a truly empty v0 directly at v8 without backup', () => {
   const db = createRealSqliteTestDb();
   const backup = jest.fn();
   try {
     expect(runAppMigrations(db as never, { backup, now: () => 10 })).toEqual({
-      mode: 'writable', fromVersion: 0, toVersion: 7, migrated: true,
+      mode: 'writable', fromVersion: 0, toVersion: 8, migrated: true,
     });
     expect(backup).not.toHaveBeenCalled();
     expect(userVersion(db)).toBe(APP_SCHEMA_VERSION);
     expect(tableNames(db)).toEqual(expect.arrayContaining([
       'workflow_operations', 'workflow_job_events', 'artifact_blobs', 'artifact_blob_refs',
+      'task_projection_state', 'executor_wake_state',
     ]));
     expect(columnNames(db, 'workflow_jobs')).toEqual(expect.arrayContaining([
       'revision', 'provider_handle_json', 'last_error_json', 'next_sync_at',
@@ -200,12 +276,12 @@ test('does not stamp a legacy v0 database', () => {
   }
 });
 
-test.each([4, 5] as const)('migrates v%s to v7 with columns, indexes, backfill, and preserved rows', (fromVersion) => {
+test.each([4, 5] as const)('migrates v%s to v8 with columns, indexes, backfill, and preserved rows', (fromVersion) => {
   const db = createVersionedFixture(fromVersion);
   const backup = jest.fn();
   try {
     expect(runAppMigrations(db as never, { backup, now: () => 10 })).toEqual({
-      mode: 'writable', fromVersion, toVersion: 7, migrated: true,
+      mode: 'writable', fromVersion, toVersion: 8, migrated: true,
     });
     expect(backup).toHaveBeenCalledTimes(1);
     expect(columnNames(db, 'workflow_jobs')).toEqual(expect.arrayContaining([
@@ -225,6 +301,7 @@ test.each([4, 5] as const)('migrates v%s to v7 with columns, indexes, backfill, 
       'idx_workflow_operations_due',
       'idx_workflow_job_events_job_sequence',
       'idx_artifact_blob_refs_owner',
+      'idx_workflow_operations_expired_claim',
     ]));
   } finally {
     db.close();
@@ -250,14 +327,14 @@ test('runs the v4 to v5 step before the v5 to v6 and v6 to v7 steps', () => {
   }
 });
 
-test('is idempotent when invoked again at v7', () => {
+test('is idempotent when invoked again at v8', () => {
   const db = createRealSqliteTestDb();
   const backup = jest.fn();
   try {
     runAppMigrations(db as never, { backup, now: () => 10 });
     backup.mockClear();
     expect(runAppMigrations(db as never, { backup, now: () => 11 })).toEqual({
-      mode: 'writable', fromVersion: 7, toVersion: 7, migrated: false,
+      mode: 'writable', fromVersion: 8, toVersion: 8, migrated: false,
     });
     expect(backup).not.toHaveBeenCalled();
   } finally {
@@ -280,10 +357,30 @@ test('opens a future schema readonly without mutating it', () => {
   const db = createRealSqliteTestDb();
   const backup = jest.fn();
   try {
-    db.execSync('PRAGMA user_version = 8');
-    expect(runAppMigrations(db as never, { backup })).toEqual({ mode: 'future', fromVersion: 8 });
-    expect(userVersion(db)).toBe(8);
+    db.execSync('PRAGMA user_version = 9');
+    expect(runAppMigrations(db as never, { backup })).toEqual({ mode: 'future', fromVersion: 9 });
+    expect(userVersion(db)).toBe(9);
     expect(backup).not.toHaveBeenCalled();
+  } finally {
+    db.close();
+  }
+});
+
+test('records v7 backup failure without applying the v8 projection migration', () => {
+  const db = createHistoricalV7Fixture();
+  try {
+    expect(() => runAppMigrations(db as never, {
+      backup: () => { throw new Error('private backup path must not escape'); },
+      now: () => 71,
+    })).toThrow('BACKUP_7_TO_8_FAILED');
+    expect(userVersion(db)).toBe(7);
+    expect(tableNames(db)).not.toContain('task_projection_state');
+    expect(tableNames(db)).not.toContain('executor_wake_state');
+    expect(getRecoveryState(db as never)).toEqual({
+      readonly: true,
+      diagnostic: 'BACKUP_7_TO_8_FAILED',
+      createdAt: 71,
+    });
   } finally {
     db.close();
   }
@@ -295,12 +392,12 @@ test('records backup failure before migration starts', () => {
     expect(() => runAppMigrations(db as never, {
       backup: () => { throw new Error('private path and token must not escape'); },
       now: () => 41,
-    })).toThrow('BACKUP_5_TO_7_FAILED');
+    })).toThrow('BACKUP_5_TO_8_FAILED');
     expect(userVersion(db)).toBe(5);
     expect(tableNames(db)).not.toContain('workflow_operations');
     expect(getRecoveryState(db as never)).toEqual({
       readonly: true,
-      diagnostic: 'BACKUP_5_TO_7_FAILED',
+      diagnostic: 'BACKUP_5_TO_8_FAILED',
       createdAt: 41,
     });
   } finally {
@@ -315,12 +412,12 @@ test('rolls back migration DDL and records a redacted recovery marker', () => {
     if (sql.includes('artifact_blobs')) throw new Error('Authorization: Bearer secret');
     return execSync(sql);
   });
-  expect(() => runAppMigrations(db as never, { backup: jest.fn(), now: () => 99 })).toThrow('MIGRATION_5_TO_7_FAILED');
+  expect(() => runAppMigrations(db as never, { backup: jest.fn(), now: () => 99 })).toThrow('MIGRATION_5_TO_8_FAILED');
   expect(userVersion(db)).toBe(5);
   expect(tableNames(db)).not.toContain('workflow_operations');
   expect(getRecoveryState(db as never)).toEqual({
     readonly: true,
-    diagnostic: 'MIGRATION_5_TO_7_FAILED',
+    diagnostic: 'MIGRATION_5_TO_8_FAILED',
     createdAt: 99,
   });
   db.close();
@@ -335,10 +432,10 @@ test('a failed fresh v0 remains readonly on the next cold start', () => {
     return execSync(sql);
   });
   try {
-    expect(() => runAppMigrations(db as never, { now: () => 52 })).toThrow('MIGRATION_0_TO_7_FAILED');
+    expect(() => runAppMigrations(db as never, { now: () => 52 })).toThrow('MIGRATION_0_TO_8_FAILED');
     expect(userVersion(db)).toBe(0);
     expect(() => runAppMigrations(db as never, { now: () => 53 })).toThrow(
-      new AppMigrationError('MIGRATION_0_TO_7_FAILED', 0),
+      new AppMigrationError('MIGRATION_0_TO_8_FAILED', 0),
     );
     expect(getRecoveryState(db as never)?.createdAt).toBe(52);
   } finally {
@@ -349,8 +446,8 @@ test('a failed fresh v0 remains readonly on the next cold start', () => {
 test('a recovery-only v0 reopens readonly instead of as legacy', () => {
   const db = createRealSqliteTestDb();
   try {
-    markRecovery(db as never, 'MIGRATION_0_TO_7_FAILED', 61);
-    expect(() => runAppMigrations(db as never)).toThrow('MIGRATION_0_TO_7_FAILED');
+    markRecovery(db as never, 'MIGRATION_0_TO_8_FAILED', 61);
+    expect(() => runAppMigrations(db as never)).toThrow('MIGRATION_0_TO_8_FAILED');
     expect(userVersion(db)).toBe(0);
   } finally {
     db.close();

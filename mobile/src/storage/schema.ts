@@ -1,11 +1,11 @@
-export const APP_SCHEMA_VERSION = 7;
+export const APP_SCHEMA_VERSION = 8;
 export const RECOVERY_TABLE = 'app_database_recovery';
 
 export const APP_TABLES = [
   'workflow_artifacts', 'workflow_jobs', 'workflow_operations', 'workflow_job_events',
   'artifact_blob_refs', 'artifact_blobs', 'media_deliveries', 'media_assets', 'tasks',
   'workflow_registry_releases', 'workflow_registry_active', 'workflow_registry', 'prompt_drafts', 'agent_threads',
-  'app_scheduler_leases', RECOVERY_TABLE,
+  'app_scheduler_leases', 'task_projection_state', 'executor_wake_state', RECOVERY_TABLE,
 ] as const;
 
 export const V5_SCHEMA_STATEMENTS = [
@@ -42,4 +42,15 @@ export const V7_SCHEMA_STATEMENTS = [
   'CREATE TABLE IF NOT EXISTS workflow_registry_releases (release_id TEXT PRIMARY KEY NOT NULL, manifest_hash TEXT NOT NULL, applied_at INTEGER NOT NULL)',
 ] as const;
 
-export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS] as const;
+export const V8_SCHEMA_STATEMENTS = [
+  'CREATE TABLE IF NOT EXISTS task_projection_state (singleton INTEGER PRIMARY KEY NOT NULL CHECK(singleton = 1), revision INTEGER NOT NULL)',
+  'INSERT OR IGNORE INTO task_projection_state(singleton, revision) VALUES (1, 0)',
+  'CREATE TABLE IF NOT EXISTS executor_wake_state (singleton INTEGER PRIMARY KEY NOT NULL CHECK(singleton = 1), generation INTEGER NOT NULL, handled_generation INTEGER NOT NULL, maintenance_generation INTEGER NOT NULL, requested_at INTEGER NOT NULL)',
+  'INSERT OR IGNORE INTO executor_wake_state(singleton, generation, handled_generation, maintenance_generation, requested_at) VALUES (1, 0, 0, 0, 0)',
+  'CREATE TRIGGER IF NOT EXISTS tasks_projection_revision_insert AFTER INSERT ON tasks BEGIN UPDATE task_projection_state SET revision = revision + 1 WHERE singleton = 1; END',
+  'CREATE TRIGGER IF NOT EXISTS tasks_projection_revision_update AFTER UPDATE ON tasks BEGIN UPDATE task_projection_state SET revision = revision + 1 WHERE singleton = 1; END',
+  'CREATE TRIGGER IF NOT EXISTS tasks_projection_revision_delete AFTER DELETE ON tasks BEGIN UPDATE task_projection_state SET revision = revision + 1 WHERE singleton = 1; END',
+  'CREATE INDEX IF NOT EXISTS idx_workflow_operations_expired_claim ON workflow_operations(state, lease_expires_at, id)',
+] as const;
+
+export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS] as const;
