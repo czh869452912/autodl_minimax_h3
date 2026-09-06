@@ -14,13 +14,15 @@ export type PromptVersionPanelProps = {
   onExport: (handoff: PromptHandoff) => Promise<void>;
   threadId: string;
   disabled?: boolean;
+  inSheet?: boolean;
+  onExpand?: () => void;
 };
 
 function Action({ label, onPress, disabled = false, primary = false }: { label: string; onPress: () => void; disabled?: boolean; primary?: boolean }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={[styles.action, primary && styles.primary, disabled && styles.disabled]}><Text style={[styles.actionText, primary && styles.primaryText]}>{label}</Text></Pressable>;
 }
 
-export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRestore, onExport, threadId, disabled = false }: PromptVersionPanelProps) {
+export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRestore, onExport, threadId, disabled = false, inSheet = false, onExpand }: PromptVersionPanelProps) {
   const selected = versions.find((version) => version.id === selectedVersionId) ?? versions[versions.length - 1];
   const selectedIndex = versions.findIndex((version) => version.id === selected?.id);
   const prior = versions[selectedIndex - 1];
@@ -79,15 +81,20 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
     catch { setCopyStatus('复制失败，请重试'); }
   }
   if (!selected) return null;
-  return <View style={styles.panel}>
-    <View style={styles.heading}><Text style={styles.title}>Prompt 版本</Text><Text style={styles.muted}>版本 {selectedIndex + 1}{selectedIndex === versions.length - 1 ? ' · 最新' : ''}</Text></View>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+  return <View style={[styles.panel, inSheet && styles.sheetPanel]}>
+    <View style={styles.heading}>{!inSheet && <Text style={styles.title}>Prompt 版本</Text>}<Text style={styles.muted}>版本 {selectedIndex + 1}{selectedIndex === versions.length - 1 ? ' · 最新' : ' · 历史'}</Text></View>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={styles.row}>
       {versions.map((version, index) => <Pressable key={version.id} accessibilityRole="button" accessibilityLabel={`选择版本 ${index + 1}`} accessibilityState={{ selected: version.id === selected.id }} onPress={() => onSelect(version.id)} style={[styles.version, version.id === selected.id && styles.activeVersion]}><Text style={styles.actionText}>V{index + 1}{version.restoredFrom ? ' · 恢复' : ''}</Text></Pressable>)}
     </ScrollView>
-    <Text selectable numberOfLines={expanded ? undefined : 7} style={styles.prompt}>{selected.promptText}</Text>
-    <View style={styles.row}><Action label={expanded ? '收起 Prompt' : '展开 Prompt'} onPress={() => setExpanded(!expanded)} />{prior && <Action label={compare ? '关闭版本比较' : '比较上一版本'} onPress={() => setCompare(!compare)} />}</View>
+    <ScrollView style={inSheet ? { flex: 1 } : { flexGrow: 0 }} contentContainerStyle={{ gap: 12, paddingBottom: 12 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+    <Text selectable numberOfLines={expanded ? undefined : inSheet ? 3 : 7} style={styles.prompt}>{selected.promptText}</Text>
+    <View style={styles.row}><Action label={expanded ? '收起 Prompt' : '展开 Prompt'} onPress={() => { if (!expanded) onExpand?.(); setExpanded(!expanded); }} />{prior && <Action label={compare ? '关闭版本比较' : '比较上一版本'} onPress={() => { if (!compare) onExpand?.(); setCompare(!compare); }} />}</View>
     {compare && prior && <View style={styles.diff}><Text style={styles.muted}>V{selectedIndex} → V{selectedIndex + 1} · − 删除 / + 新增</Text><ScrollView style={styles.diffScroll} nestedScrollEnabled>{diff.map((line, index) => <Text key={index} selectable style={[styles.diffLine, line.kind === 'removed' && styles.removed, line.kind === 'added' && styles.added]}>{line.kind === 'added' ? '+ ' : line.kind === 'removed' ? '− ' : '  '}{line.text}</Text>)}</ScrollView></View>}
-    <View style={styles.row}><Action label="复制版本 Prompt" onPress={copyPrompt} /><Action label="恢复此版本" disabled={disabled} onPress={() => { if (!disabled) onRestore(selected.id); }} /><Action label="预览并带入创建页" primary disabled={disabled} onPress={openPreview} /></View>
+    </ScrollView>
+    <View style={[{ gap: 10 }, inSheet && styles.sheetFooter]}>
+      <View style={styles.row}><Action label="复制版本 Prompt" onPress={copyPrompt} /><Action label="恢复此版本" disabled={disabled} onPress={() => { if (!disabled) onRestore(selected.id); }} /></View>
+      <Action label="预览并带入创建页" primary disabled={disabled} onPress={openPreview} />
+    </View>
     {copyStatus ? <Text accessibilityLiveRegion="polite" style={styles.muted}>{copyStatus}</Text> : null}
     {activePreview && <Modal visible transparent animationType="slide" onRequestClose={() => { if (!busy) setPreview(null); }}>
       <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -120,6 +127,8 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
 
 const styles = StyleSheet.create({
   panel: { backgroundColor: colors.surface, borderColor: colors.line, borderWidth: 1, borderRadius: 16, padding: 14, gap: 12, marginVertical: 10 },
+  sheetPanel: { flex: 1, backgroundColor: 'transparent', borderWidth: 0, borderRadius: 0, padding: 0, marginVertical: 0 },
+  sheetFooter: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, paddingTop: 12 },
   heading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   title: { fontSize: 16, fontWeight: '600', color: colors.ink },
   muted: { fontSize: 12, lineHeight: 19, color: colors.muted },
@@ -129,7 +138,7 @@ const styles = StyleSheet.create({
   prompt: { fontSize: 13, lineHeight: 21, color: colors.ink },
   action: { minHeight: 44, paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center', borderWidth: 1, borderColor: colors.line, borderRadius: 10 },
   actionText: { fontSize: 12, color: colors.ink },
-  primary: { backgroundColor: colors.accent, borderColor: colors.accent },
+  primary: { backgroundColor: colors.accent, borderColor: colors.accent, alignItems: 'center', minHeight: 48 },
   primaryText: { color: colors.surface },
   disabled: { opacity: 0.4 },
   diff: { borderWidth: 1, borderColor: colors.line, borderRadius: 8, padding: 10, gap: 8 },

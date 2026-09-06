@@ -42,7 +42,7 @@ import {
 } from './agentPresentation';
 import { type PromptParseResult } from './promptParser';
 import type { LocalThreadSnapshot } from './threadStore';
-import { DraggableBottomSheet } from '../ui/DraggableSheet';
+import { DraggableBottomSheet, type DraggableBottomSheetHandle } from '../ui/DraggableSheet';
 import { nextFollowState, type TimelineMetrics } from './timelineScroll';
 import { readComposerDraft, insertRunRows, sessionRunLabel } from './assistantWorkspace';
 import { readPromptRuns, type PromptRun } from './runState';
@@ -123,6 +123,8 @@ export function PromptAssistantUi({
   const [galleryAttachments, setGalleryAttachments] = useState<AssistantImageAttachment[]>(initialComposer.attachments);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [briefOpen, setBriefOpen] = useState(false);
+  const versionSheet = useRef<DraggableBottomSheetHandle>(null);
+  const briefSheet = useRef<DraggableBottomSheetHandle>(null);
   const [brief, setBrief] = useState({ subject: '', camera: '', style: '', duration: '' });
   const runs = readPromptRuns(state);
   const completedMessageIds: string[] = Array.isArray(state.h3CompletedMessageIds) ? state.h3CompletedMessageIds.filter((id: unknown): id is string => typeof id === 'string') : [];
@@ -465,31 +467,28 @@ export function PromptAssistantUi({
           void handleOpenPicker();
         }}
       />
-      <Modal visible={versionsOpen} animationType="slide" onRequestClose={() => setVersionsOpen(false)}>
-        <View style={{ flex: 1, paddingTop: Math.max(insets.top, 16), paddingBottom: Math.max(insets.bottom, 16) }}>
-          <Pressable accessibilityLabel="关闭 Prompt 版本" onPress={() => setVersionsOpen(false)} style={{ padding: 16 }}><Text>返回对话</Text></Pressable>
-          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-          {versionsOpen ? <PromptVersionPanel versions={versions} selectedVersionId={typeof state.h3SelectedVersionId === 'string' ? state.h3SelectedVersionId : undefined} threadId={activeThreadId} onSelect={id => onClientStateChange?.({ h3SelectedVersionId: id })} onRestore={id => {
+      <DraggableBottomSheet ref={versionSheet} visible={versionsOpen} title="Prompt 版本" onClose={() => setVersionsOpen(false)}>
+          {versionsOpen ? <PromptVersionPanel inSheet onExpand={() => versionSheet.current?.expand()} versions={versions} selectedVersionId={typeof state.h3SelectedVersionId === 'string' ? state.h3SelectedVersionId : undefined} threadId={activeThreadId} onSelect={id => onClientStateChange?.({ h3SelectedVersionId: id })} onRestore={id => {
             const next = restorePromptVersion(versions, id, Date.now());
             onClientStateChange?.({ h3Versions: next, h3SelectedVersionId: next[next.length - 1]?.id });
           }} onExport={async handoff => { if (onExportHandoff) await onExportHandoff(handoff); else await onExportPrompt(handoff.prompt); setVersionsOpen(false); }} /> : null}
-          </ScrollView>
-        </View>
-      </Modal>
-      <Modal visible={briefOpen} animationType="slide" onRequestClose={() => setBriefOpen(false)}>
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 24, paddingTop: Math.max(insets.top, 24), gap: 16 }}>
-          <Text style={{ fontSize: 20 }}>补充创作信息</Text>
-          <Text>填写你已确定的内容；留空的部分由助手继续讨论。</Text>
-          {([['subject', '主体与动作'], ['camera', '镜头与运动'], ['style', '风格与氛围'], ['duration', '期望时长']] as const).map(([key, label]) => <TextInput key={key} accessibilityLabel={label} placeholder={label} value={brief[key]} onChangeText={value => setBrief(current => ({ ...current, [key]: value }))} style={{ borderWidth: 1, borderColor: '#ddd', borderRadius: 10, padding: 12 }} />)}
-          <Pressable accessibilityLabel="加入创作草稿" onPress={() => {
+      </DraggableBottomSheet>
+      <DraggableBottomSheet ref={briefSheet} visible={briefOpen} title="补充创作信息" onClose={() => setBriefOpen(false)} footer={
+          <Pressable accessibilityRole="button" accessibilityLabel="加入创作草稿" style={briefStyles.submit} onPress={() => {
             const labels = { subject: '主体与动作', camera: '镜头与运动', style: '风格与氛围', duration: '期望时长' };
             const extra = (Object.keys(brief) as Array<keyof typeof brief>).filter(key => brief[key].trim()).map(key => `${labels[key]}：${brief[key].trim()}`).join('\n');
             if (extra) applySuggestion([draft.trim(), extra].filter(Boolean).join('\n'));
             setBriefOpen(false);
-          }}><Text>加入草稿</Text></Pressable>
-          <Pressable accessibilityLabel="取消补充创作信息" onPress={() => setBriefOpen(false)}><Text>取消</Text></Pressable>
+          }}><Text style={briefStyles.submitText}>加入草稿</Text></Pressable>
+      }>
+        <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={briefStyles.fields}>
+          <Text style={briefStyles.hint}>填写已确定的内容，其余可以和助手继续讨论。</Text>
+          {([['subject', '主体与动作', '谁在做什么，例如：一位少女穿过雨巷'], ['camera', '镜头与运动', '例如：近景起镜，缓慢后拉'], ['style', '风格与氛围', '例如：电影感、暖色、安静'], ['duration', '期望时长', '例如：8 秒']] as const).map(([key, label, placeholder]) => <View key={key} style={{ gap: 6 }}>
+            <Text style={briefStyles.label}>{label}</Text>
+            <TextInput accessibilityLabel={label} placeholder={placeholder} placeholderTextColor={LIGHT_PROMPT_COLORS.muted} value={brief[key]} onFocus={() => briefSheet.current?.expand()} onChangeText={value => setBrief(current => ({ ...current, [key]: value }))} style={briefStyles.input} />
+          </View>)}
         </ScrollView>
-      </Modal>
+      </DraggableBottomSheet>
     </KeyboardAvoidingView>
   );
 }
@@ -686,6 +685,15 @@ export function ConversationTimeline({
       </View>
   );
 }
+
+const briefStyles = StyleSheet.create({
+  fields: { gap: 16, paddingTop: 8, paddingBottom: 20 },
+  hint: { fontSize: 13, lineHeight: 20, color: LIGHT_PROMPT_COLORS.muted },
+  label: { fontSize: 13, fontWeight: '600', color: LIGHT_PROMPT_COLORS.ink },
+  input: { minHeight: 48, borderWidth: 1, borderColor: LIGHT_PROMPT_COLORS.line, backgroundColor: LIGHT_PROMPT_COLORS.surface, color: LIGHT_PROMPT_COLORS.ink, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
+  submit: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: LIGHT_PROMPT_COLORS.ink },
+  submitText: { color: LIGHT_PROMPT_COLORS.surface, fontSize: 15, fontWeight: '600' },
+});
 
 function RunIssueRow({
   issue,

@@ -146,6 +146,17 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
+  it('opens creative information in a two-stop bottom drawer with a fixed submit action', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} />); });
+    act(() => tree.root.findByProps({ accessibilityLabel: '补充创作信息' }).props.onPress());
+    const sheet = tree.root.findAllByType(DraggableBottomSheet).find(node => node.props.title === '补充创作信息');
+    expect(sheet?.props.visible).toBe(true);
+    expect(sheet?.props.footer).toBeTruthy();
+    expect(tree.root.findAllByType(Text).some(node => node.props.children === '返回对话')).toBe(false);
+    act(() => tree.unmount());
+  });
+
   it('exports only successfully completed message IDs, including after restoring a session', () => {
     const rows = normalizeMessages([{ id: 'm', role: 'assistant', content: '```h3-prompt\nintegrated_multimodal_description: Cat runs.\noverall_soundscape: Wind.\nnon_diegetic_music: None.\n```' }]);
     let tree!: ReturnType<typeof create>;
