@@ -43,7 +43,7 @@ it('reruns an existing agent without appending a user message', async () => {
   expect(agent.messages).toHaveLength(1);
 });
 
-it('drops a failed partial assistant tail before rerunning the last user round', async () => {
+it('preserves all displayed attempts and prepares the requested original input for retry', async () => {
   const setMessages = jest.fn(function(this: { messages: unknown[] }, messages: unknown[]) {
     this.messages = messages;
   });
@@ -56,14 +56,15 @@ it('drops a failed partial assistant tail before rerunning the last user round',
       { id: 'tool-1', role: 'tool', content: 'partial result' },
     ],
     setMessages,
+    prepareRetry: jest.fn(),
   };
   const core = createLocalCopilotKitCore(agent as never) as unknown as { runAgent: jest.Mock };
 
-  await rerunLocalAgent(agent as never);
+  await rerunLocalAgent(agent as never, 'failed-run');
 
-  expect(setMessages).toHaveBeenCalledWith([
-    { id: 'a0', role: 'assistant', content: 'earlier' },
-    { id: 'u1', role: 'user', content: 'same', attachments: [{ id: 'image-1' }] },
-  ]);
+  expect(agent.prepareRetry).toHaveBeenCalledWith('failed-run');
+  expect(agent.messages).toHaveLength(4);
+  expect(setMessages).not.toHaveBeenCalled();
+
   expect(core.runAgent).toHaveBeenCalledWith({ agent });
 });

@@ -1,6 +1,6 @@
 import { CopilotChat } from '@copilotkit/react-native';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import { getDatabase } from '../storage/databaseClient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { readSettings } from '../settings/storage';
@@ -19,10 +19,17 @@ import { getH3AgentConfigError } from './modelAdapter';
 import { PromptAssistantUi, type RunIssue } from './PromptAssistantUi';
 import { createPromptDraftStore } from './promptDraft';
 import { sortSessionSnapshots } from './agentPresentation';
+import type { PromptHandoff } from './promptHandoff';
 
 type AgentConfig = H3AgentConfig;
 
 export default function AgentScreen() {
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', state => {
+      if (state !== 'active') void promptRuntimeRegistry.flushAll();
+    });
+    return () => subscription.remove();
+  }, []);
   useEffect(() => () => { void promptRuntimeRegistry.disposeAll(); }, []);
   const [config, setConfig] = useState<AgentConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -236,6 +243,10 @@ function ReadyAgent({
           params: { draftId: draft.id },
         });
       }}
+      onExportHandoff={async (handoff) => {
+        const draft = await draftStore.save({ prompt: handoff.prompt, attachmentIds: handoff.images.map(image => image.id), handoff });
+        router.navigate({ pathname: '/(tabs)/create', params: { draftId: draft.id } });
+      }}
     />
   );
 }
@@ -245,6 +256,7 @@ function AgentSession({
   snapshot,
   threadStore,
   onExportPrompt,
+  onExportHandoff,
   ...uiProps
 }: {
   config: AgentConfig;
@@ -257,6 +269,7 @@ function AgentSession({
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => void;
   onExportPrompt: (prompt: string) => Promise<void>;
+  onExportHandoff: (handoff: PromptHandoff) => Promise<void>;
 }) {
   const [notice, setNotice] = useState<string | undefined>();
   const [runIssue, setRunIssue] = useState<RunIssue | null>(null);
@@ -265,6 +278,14 @@ function AgentSession({
     [config, snapshot.threadId, threadStore],
   );
   const agent = runtime.agent;
+  const subscribeSnapshot = useCallback((listener: () => void) => runtime.subscribe(event => { if (event.type === 'snapshot') listener(); }), [runtime]);
+  const liveSnapshot = useSyncExternalStore(subscribeSnapshot, runtime.getSnapshot, runtime.getSnapshot);
+  const [isVisible, setVisible] = useState(false);
+  useFocusEffect(useCallback(() => {
+    setVisible(AppState.currentState === 'active');
+    const subscription = AppState.addEventListener('change', state => setVisible(state === 'active'));
+    return () => { subscription.remove(); setVisible(false); };
+  }, []));
   useEffect(() => {
     const unsubscribe = runtime.subscribe((event) => {
       if (event.type === 'error') setNotice(event.message);
@@ -289,13 +310,17 @@ function AgentSession({
         <PromptAssistantUi
           {...uiProps}
           onExportPrompt={onExportPrompt}
+          onExportHandoff={onExportHandoff}
+          clientState={liveSnapshot.state as Record<string, unknown>}
+          onClientStateChange={runtime.patchClientState}
+          isVisible={isVisible}
           notice={notice}
           runIssue={runIssue}
           onRunIssueChange={setRunIssue}
-          onRetry={async () => {
+          onRetry={async (runId) => {
             setRunIssue(null);
             try {
-              await rerunLocalAgent(agent);
+              await rerunLocalAgent(agent, runId);
             } catch (reason) {
               setRunIssue({
                 kind: 'error',

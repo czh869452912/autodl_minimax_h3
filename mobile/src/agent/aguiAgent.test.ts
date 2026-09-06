@@ -1,5 +1,5 @@
 jest.mock('@ag-ui/client', () => ({ AbstractAgent: class { agentId = 'test'; description = 'test'; messages: any[] = []; addMessage(message: any) { this.messages.push(message); } }, }));
-jest.mock('@ag-ui/core', () => ({ EventType: { STATE_SNAPSHOT: 'STATE_SNAPSHOT', RUN_STARTED: 'RUN_STARTED', TOOL_CALL_START: 'TOOL_CALL_START', TOOL_CALL_ARGS: 'TOOL_CALL_ARGS', TOOL_CALL_END: 'TOOL_CALL_END', TEXT_MESSAGE_START: 'TEXT_MESSAGE_START', TEXT_MESSAGE_CONTENT: 'TEXT_MESSAGE_CONTENT', TEXT_MESSAGE_END: 'TEXT_MESSAGE_END', RUN_FINISHED: 'RUN_FINISHED', RUN_ERROR: 'RUN_ERROR', TOOL_CALL_RESULT: 'TOOL_CALL_RESULT' } }));
+jest.mock('@ag-ui/core', () => ({ EventType: { CUSTOM: 'CUSTOM', STATE_SNAPSHOT: 'STATE_SNAPSHOT', RUN_STARTED: 'RUN_STARTED', TOOL_CALL_START: 'TOOL_CALL_START', TOOL_CALL_ARGS: 'TOOL_CALL_ARGS', TOOL_CALL_END: 'TOOL_CALL_END', TEXT_MESSAGE_START: 'TEXT_MESSAGE_START', TEXT_MESSAGE_CONTENT: 'TEXT_MESSAGE_CONTENT', TEXT_MESSAGE_END: 'TEXT_MESSAGE_END', RUN_FINISHED: 'RUN_FINISHED', RUN_ERROR: 'RUN_ERROR', TOOL_CALL_RESULT: 'TOOL_CALL_RESULT' } }));
 import { EventType } from '@ag-ui/core';
 import type { RunAgentInput } from '@ag-ui/client';
 import { H3AgUiAgent } from './aguiAgent';
@@ -129,6 +129,7 @@ it('completes the AG-UI stream when an in-flight run is aborted', async () => {
   release();
   await expect(completion).resolves.toEqual([
     { type: EventType.RUN_STARTED, threadId: 't1', runId: 'r-abort' },
+    { type: EventType.CUSTOM, name: 'h3.run.cancelled', value: { runId: 'r-abort' } },
   ]);
 });
 
@@ -349,4 +350,46 @@ it('allows a new follow-up after cancelled raw arguments while preserving valid 
   expect(received[2].tool_calls).toEqual([]);
   expect(received[2].content).toBe('interrupted planning');
   expect(received[3].content).toBe('new follow-up');
+});
+
+it('retries an identified original user input without deleting any displayed attempts', async () => {
+  let graphInput: any;
+  const agent = new H3AgUiAgent({ stream: async function* (input: any) { graphInput = input; } });
+  const history = [
+    { id: 'u1', role: 'user', content: 'original', attachments: [{ id: 'img', type: 'image', source: { type: 'url', value: 'https://example.test/img.png' } }] },
+    { id: 'a1', role: 'assistant', content: 'failed partial' },
+    { id: 'u2', role: 'user', content: 'later input' },
+  ];
+  (agent as any).messages = history;
+  (agent as any).state = { h3Runs: [{ id: 'failed-1', userMessageId: 'u1', status: 'failed', startedAt: 1, messageIds: ['a1'], tools: [] }] };
+  agent.prepareRetry('failed-1');
+  expect(agent.getPreparedRetry()).toMatchObject({ retryOf: 'failed-1', userMessageId: 'u1' });
+  await collect(agent, { ...runInput as any, state: (agent as any).state, messages: history });
+  expect(graphInput.messages).toHaveLength(1);
+  expect(graphInput.messages[0].content[0].text).toBe('original');
+  expect(graphInput.messages[0].content[1].image_url.url).toBe('https://example.test/img.png');
+  expect(agent.messages).toEqual(history);
+  expect(agent.getPreparedRetry()).toBeUndefined();
+});
+
+it('removes valid but unexecuted tool calls from future model history', async () => {
+  let graphInput: any;
+  const agent = new H3AgUiAgent({ stream: async function* (input: any) { graphInput = input; } });
+  await collect(agent, { ...runInput as any, messages: [
+    { id: 'a', role: 'assistant', content: 'partial', toolCalls: [{ id: 'abandoned', function: { name: 'read_file', arguments: '{}' } }] },
+    { id: 'u', role: 'user', content: 'follow up' },
+  ] });
+  expect(graphInput.messages[0].tool_calls).toEqual([]);
+});
+
+it('uses ToolMessage status for tool failure without interpreting text', async () => {
+  const graph = { stream: async function* () {
+    yield [new ToolMessage({ id: 'result-1', tool_call_id: 't1', content: 'Error is a word in this successful file', status: 'success' }), {}];
+    yield [new ToolMessage({ id: 'result-2', tool_call_id: 't2', content: 'cannot open', status: 'error' }), {}];
+  } };
+  const events = await collect(new H3AgUiAgent(graph), runInput);
+  expect(events.filter(event => event.type === 'CUSTOM').map(event => event.value)).toEqual([
+    { toolCallId: 't1', status: 'complete', summary: 'Error is a word in this successful file' },
+    { toolCallId: 't2', status: 'failed', summary: 'cannot open' },
+  ]);
 });

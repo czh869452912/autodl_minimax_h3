@@ -102,6 +102,50 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
+  it('restores a session draft and keeps the composer editable during generation', () => {
+    mockChatContext.isRunning = true;
+    const onClientStateChange = jest.fn();
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} clientState={{ h3Composer: { text: '下一轮的修改', attachments: [] } }} onClientStateChange={onClientStateChange} />); });
+    const composer = tree.root.findByType(Composer);
+    expect(composer.props.value).toBe('下一轮的修改');
+    const input = tree.root.findAll(node => node.props.placeholder === '描述你的视频创意，或继续修改 Prompt…')[0];
+    if (input) expect(input.props.editable).not.toBe(false);
+    act(() => composer.props.onChangeText('再加雨景'));
+    expect(onClientStateChange).toHaveBeenLastCalledWith(expect.objectContaining({ h3Composer: expect.objectContaining({ text: '再加雨景' }) }));
+    act(() => tree.unmount());
+  });
+
+  it('renders persisted failed attempts and retries the selected run', async () => {
+    const onRetry = jest.fn(async () => undefined);
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<ConversationTimeline rows={normalizeMessages([{ id: 'u1', role: 'user', content: 'first' }])} isRunning={false} onExportPrompt={async () => undefined} runs={[{ id: 'run1', userMessageId: 'u1', status: 'failed', startedAt: 1, endedAt: 1001, error: '网络中断', messageIds: [], tools: [] }]} onRetry={onRetry} />); });
+    expect(renderedText(tree)).toContain('网络中断');
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '重试运行 run1' }).props.onPress());
+    expect(onRetry).toHaveBeenCalledWith('run1');
+    act(() => tree.unmount());
+  });
+
+  it('keeps hidden completed runs unread until the user returns', () => {
+    const onClientStateChange = jest.fn();
+    const props = { ...basePromptProps, clientState: { h3Runs: [{ id: 'r', userMessageId: 'u', status: 'completed', startedAt: 1, endedAt: 2, messageIds: [], tools: [] }] }, onClientStateChange };
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...props} isVisible={false} />); });
+    expect(onClientStateChange.mock.calls.some(([patch]) => 'h3ReadAt' in patch)).toBe(false);
+    act(() => tree.update(<PromptAssistantUi {...props} isVisible />));
+    expect(onClientStateChange.mock.calls.some(([patch]) => patch.h3ReadAt >= 2)).toBe(true);
+    act(() => tree.unmount());
+  });
+
+  it('opens a historical reference image for inspection', () => {
+    let tree!: ReturnType<typeof create>;
+    const rows = normalizeMessages([{ id: 'u', role: 'user', content: [{ type: 'text', text: '@图片1' }, { type: 'image_url', image_url: { url: 'file:///reference.png' } }] }]);
+    act(() => { tree = create(<ConversationTimeline rows={rows} isRunning={false} onExportPrompt={async () => undefined} />); });
+    act(() => tree.root.findByProps({ accessibilityLabel: '查看参考图片 u 图片1' }).props.onPress());
+    expect(tree.root.findByProps({ testID: 'reference-image-preview' }).props.source.uri).toBe('file:///reference.png');
+    act(() => tree.unmount());
+  });
+
   it('exports only successfully completed message IDs, including after restoring a session', () => {
     const rows = normalizeMessages([{ id: 'm', role: 'assistant', content: '```h3-prompt\nintegrated_multimodal_description: Cat runs.\noverall_soundscape: Wind.\nnon_diegetic_music: None.\n```' }]);
     let tree!: ReturnType<typeof create>;

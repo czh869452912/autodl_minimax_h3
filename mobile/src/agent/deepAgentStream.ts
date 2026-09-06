@@ -3,6 +3,7 @@ import { AIMessageChunk } from '@langchain/core/messages';
 type RecordValue = Record<string, any>;
 const rec = (value: unknown): RecordValue => value && typeof value === 'object' ? value as RecordValue : {};
 export type StreamEvent =
+  | { type: 'CUSTOM'; name: 'h3.tool.status'; value: { toolCallId: string; status: 'complete' | 'failed'; summary: string } }
   | { type: 'TEXT_MESSAGE_START'; messageId: string; role: 'assistant' }
   | { type: 'TEXT_MESSAGE_CONTENT'; messageId: string; delta: string }
   | { type: 'TEXT_MESSAGE_END'; messageId: string }
@@ -66,6 +67,7 @@ export async function* adaptDeepAgentStream(
         if (!results.has(toolCallId)) {
           results.add(toolCallId);
           yield { type: 'TOOL_CALL_RESULT', messageId: id, toolCallId, content: textOf(message.content), role: 'tool' };
+          yield { type: 'CUSTOM', name: 'h3.tool.status', value: { toolCallId, status: message.status === 'error' ? 'failed' : 'complete', summary: textOf(message.content).slice(0, 240) } };
         }
         continue;
       }

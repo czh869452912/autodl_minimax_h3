@@ -44,6 +44,12 @@ import { type PromptParseResult } from './promptParser';
 import type { LocalThreadSnapshot } from './threadStore';
 import { DraggableBottomSheet } from '../ui/DraggableSheet';
 import { nextFollowState, type TimelineMetrics } from './timelineScroll';
+import { readComposerDraft, insertRunRows, sessionRunLabel } from './assistantWorkspace';
+import { readPromptRuns, type PromptRun } from './runState';
+import { RunTimelineRow } from './RunTimelineRow';
+import { readPromptVersions, reconcilePromptVersions, restorePromptVersion } from './promptVersions';
+import { PromptVersionPanel } from './PromptVersionPanel';
+import type { PromptHandoff } from './promptHandoff';
 
 type AttachmentLike = {
   id: string;
@@ -83,16 +89,24 @@ export function PromptAssistantUi({
   onDelete: onDeleteThread,
   onRename: onRenameThread,
   onExportPrompt,
+  onExportHandoff,
+  clientState,
+  onClientStateChange,
+  isVisible = true,
   notice,
   runIssue = null,
   onRunIssueChange = () => undefined,
   onRetry = async () => undefined,
 }: HistoryProps & {
   onExportPrompt: (prompt: string) => Promise<void>;
+  onExportHandoff?: (handoff: PromptHandoff) => Promise<void>;
+  clientState?: Record<string, unknown>;
+  onClientStateChange?: (patch: Record<string, unknown>) => void;
+  isVisible?: boolean;
   notice?: string;
   runIssue?: RunIssue | null;
   onRunIssueChange?: (issue: RunIssue | null) => void;
-  onRetry?: () => Promise<void>;
+  onRetry?: (runId?: string) => Promise<void>;
 }) {
   const {
     messages,
@@ -103,16 +117,32 @@ export function PromptAssistantUi({
     removeAttachment,
     agent,
   } = useCopilotChatContext();
-  const [draft, setDraft] = useState('');
-  const [galleryAttachments, setGalleryAttachments] = useState<AssistantImageAttachment[]>([]);
-  const [inputSelection, setInputSelection] = useState({ start: 0, end: 0 });
+  const state = clientState ?? agent.state ?? {};
+  const initialComposer = useRef(readComposerDraft(state)).current;
+  const [draft, setDraft] = useState(initialComposer.text);
+  const [galleryAttachments, setGalleryAttachments] = useState<AssistantImageAttachment[]>(initialComposer.attachments);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [briefOpen, setBriefOpen] = useState(false);
+  const [brief, setBrief] = useState({ subject: '', camera: '', style: '', duration: '' });
+  const runs = readPromptRuns(state);
+  const completedMessageIds: string[] = Array.isArray(state.h3CompletedMessageIds) ? state.h3CompletedMessageIds.filter((id: unknown): id is string => typeof id === 'string') : [];
+  const savedVersions = useMemo(() => readPromptVersions(state), [state.h3Versions]);
+  const completedSignature = completedMessageIds.join('|');
+  const versions = useMemo(() => reconcilePromptVersions(messages, completedMessageIds, savedVersions, Date.now(), runs), [completedSignature, savedVersions]);
+  const versionSignature = versions.map(version => version.id).join('|');
+  useEffect(() => {
+    if (versions.length !== savedVersions.length) onClientStateChange?.({ h3Versions: versions });
+  }, [versionSignature, onClientStateChange]);
+  const latestEnd = runs.reduce((time, run) => Math.max(time, run.endedAt ?? 0), 0);
+  useEffect(() => { if (isVisible) onClientStateChange?.({ h3ReadAt: Date.now() }); }, [activeThreadId, latestEnd, isVisible, onClientStateChange]);
+  const [inputSelection, setInputSelection] = useState({ start: initialComposer.text.length, end: initialComposer.text.length });
   const [mentionSheetOpen, setMentionSheetOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const submitLock = useRef(false);
   const inputRef = useRef<TextInput>(null);
-  const attachmentNames = useRef(new Map<string, string>());
-  const nextAttachmentNumber = useRef(1);
+  const attachmentNames = useRef(new Map(initialComposer.attachments.map(item => [item.id, item.displayName ?? '图片1'])));
+  const nextAttachmentNumber = useRef(1 + Math.max(0, ...initialComposer.attachments.map(item => Number(item.displayName?.replace('图片', '')) || 0)));
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const [keyboardHeight, setKeyboardHeight] = useState<number | null>(null);
@@ -151,6 +181,8 @@ export function PromptAssistantUi({
   // not memoize by array identity or the first user bubble waits for the next
   // streamed event before becoming visible.
   const persistedRows = normalizeMessages(messages);
+  const runTools = new Map(runs.flatMap(run => run.tools).map(tool => [tool.id, tool]));
+  for (const row of persistedRows) if (row.kind === 'assistant') row.tools = row.tools.map(tool => runTools.get(tool.id) ?? tool);
   const [pendingRow, setPendingRow] = useState<Extract<ReturnType<typeof normalizeMessages>[number], { kind: 'user' }> | null>(null);
   const rows = useMemo(() => {
     if (!pendingRow) return persistedRows;
@@ -258,6 +290,11 @@ export function PromptAssistantUi({
     nextAttachmentNumber.current = named.nextNumber;
     return named.attachments;
   })();
+  // Depend on identities rather than image bytes or streamed assistant state.
+  const composerSignature = composerAttachments.map(item => `${item.id}:${item.status}:${item.displayName}`).join('|');
+  useEffect(() => {
+    onClientStateChange?.({ h3Composer: { text: draft, attachments: composerAttachments.filter(item => item.status === 'ready') } });
+  }, [draft, composerSignature, onClientStateChange]);
   const handleDraftChange = (value: string) => {
     const atomicRemoval = removeImageMentionOnBackspace(
       draft,
@@ -366,14 +403,24 @@ export function PromptAssistantUi({
           <ConversationTimeline
             rows={rows}
             isRunning={isRunning || submitting}
-            onExportPrompt={onExportPrompt}
-            runIssue={runIssue}
-            completedMessageIds={Array.isArray(agent.state?.h3CompletedMessageIds)
-              ? agent.state.h3CompletedMessageIds.filter((id: unknown): id is string => typeof id === 'string') : []}
+            onExportPrompt={async (prompt) => {
+              if (!onExportHandoff) return onExportPrompt(prompt);
+              const version = [...versions].reverse().find(item => item.promptText === prompt);
+              if (version) onClientStateChange?.({ h3SelectedVersionId: version.id });
+              setVersionsOpen(true);
+            }}
+            runIssue={runs.length ? null : runIssue}
+            runs={runs}
+            completedMessageIds={completedMessageIds}
+            latestVersionMessageId={versions.at(-1)?.sourceMessageId}
             onRetry={onRetry}
             onSelectSuggestion={applySuggestion}
           />
           <View style={styles.composerDock}>
+            <View style={{ flexDirection: 'row', gap: 16, paddingHorizontal: 12, paddingVertical: 6 }}>
+              <Pressable accessibilityRole="button" accessibilityLabel="补充创作信息" onPress={() => setBriefOpen(true)}><Text>补充创作信息</Text></Pressable>
+              {versions.length ? <Pressable accessibilityRole="button" accessibilityLabel="打开 Prompt 版本" onPress={() => setVersionsOpen(true)}><Text>Prompt 版本 · {versions.length}</Text></Pressable> : null}
+            </View>
             <Composer
               value={draft}
               onChangeText={handleDraftChange}
@@ -418,6 +465,31 @@ export function PromptAssistantUi({
           void handleOpenPicker();
         }}
       />
+      <Modal visible={versionsOpen} animationType="slide" onRequestClose={() => setVersionsOpen(false)}>
+        <View style={{ flex: 1, paddingTop: Math.max(insets.top, 16), paddingBottom: Math.max(insets.bottom, 16) }}>
+          <Pressable accessibilityLabel="关闭 Prompt 版本" onPress={() => setVersionsOpen(false)} style={{ padding: 16 }}><Text>返回对话</Text></Pressable>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+          {versionsOpen ? <PromptVersionPanel versions={versions} selectedVersionId={typeof state.h3SelectedVersionId === 'string' ? state.h3SelectedVersionId : undefined} threadId={activeThreadId} onSelect={id => onClientStateChange?.({ h3SelectedVersionId: id })} onRestore={id => {
+            const next = restorePromptVersion(versions, id, Date.now());
+            onClientStateChange?.({ h3Versions: next, h3SelectedVersionId: next[next.length - 1]?.id });
+          }} onExport={async handoff => { if (onExportHandoff) await onExportHandoff(handoff); else await onExportPrompt(handoff.prompt); setVersionsOpen(false); }} /> : null}
+          </ScrollView>
+        </View>
+      </Modal>
+      <Modal visible={briefOpen} animationType="slide" onRequestClose={() => setBriefOpen(false)}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 24, paddingTop: Math.max(insets.top, 24), gap: 16 }}>
+          <Text style={{ fontSize: 20 }}>补充创作信息</Text>
+          <Text>填写你已确定的内容；留空的部分由助手继续讨论。</Text>
+          {([['subject', '主体与动作'], ['camera', '镜头与运动'], ['style', '风格与氛围'], ['duration', '期望时长']] as const).map(([key, label]) => <TextInput key={key} accessibilityLabel={label} placeholder={label} value={brief[key]} onChangeText={value => setBrief(current => ({ ...current, [key]: value }))} style={{ borderWidth: 1, borderColor: '#ddd', borderRadius: 10, padding: 12 }} />)}
+          <Pressable accessibilityLabel="加入创作草稿" onPress={() => {
+            const labels = { subject: '主体与动作', camera: '镜头与运动', style: '风格与氛围', duration: '期望时长' };
+            const extra = (Object.keys(brief) as Array<keyof typeof brief>).filter(key => brief[key].trim()).map(key => `${labels[key]}：${brief[key].trim()}`).join('\n');
+            if (extra) applySuggestion([draft.trim(), extra].filter(Boolean).join('\n'));
+            setBriefOpen(false);
+          }}><Text>加入草稿</Text></Pressable>
+          <Pressable accessibilityLabel="取消补充创作信息" onPress={() => setBriefOpen(false)}><Text>取消</Text></Pressable>
+        </ScrollView>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -440,21 +512,27 @@ export function ConversationTimeline({
   onRetry = async () => undefined,
   onSelectSuggestion = () => undefined,
   completedMessageIds = [],
+  runs = [],
+  latestVersionMessageId,
 }: {
   rows: ReturnType<typeof normalizeMessages>;
   isRunning: boolean;
   onExportPrompt: (prompt: string) => Promise<void>;
   runIssue?: RunIssue | null;
-  onRetry?: () => Promise<void>;
+  onRetry?: (runId?: string) => Promise<void>;
   onSelectSuggestion?: (suggestion: string) => void;
   completedMessageIds?: readonly string[];
+  runs?: PromptRun[];
+  latestVersionMessageId?: string;
 }) {
-  const listRef = useRef<FlatList<ReturnType<typeof normalizeMessages>[number]>>(null);
+  const listRef = useRef<FlatList<ReturnType<typeof insertRunRows>[number]>>(null);
+  const timelineRows = insertRunRows(rows, runs);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [followingLatest, setFollowingLatest] = useState(true);
   const followingLatestRef = useRef(true);
   const setFollow = useCallback((value: boolean) => { followingLatestRef.current = value; setFollowingLatest(value); }, []);
   const timelineSignature = rows
-    .map((row) =>
+      .map((row) =>
       row.kind === 'assistant'
         ? `${row.id}:${row.text}:${row.tools.map((step) => `${step.id}:${step.status}:${step.summary ?? ''}`).join(',')}`
         : `${row.id}:${row.text}`,
@@ -473,7 +551,7 @@ export function ConversationTimeline({
       <View style={{ flex: 1 }}>
         <FlatList
           ref={listRef}
-          data={rows}
+          data={timelineRows}
           keyExtractor={(item) => item.id}
           style={styles.timeline}
           contentContainerStyle={styles.timelineContent}
@@ -499,14 +577,14 @@ export function ConversationTimeline({
             )
           }
           ListFooterComponent={
-            rows.length && isRunning ? (
+            runs.length ? null : rows.length && isRunning ? (
               <RunningIndicator compact />
             ) : runIssue ? (
               <RunIssueRow issue={runIssue} onRetry={onRetry} />
             ) : null
           }
           renderItem={({ item }) =>
-        item.kind === 'user' ? (
+        item.kind === 'run' ? <RunTimelineRow run={item.run} disabled={isRunning} onRetry={onRetry} /> : item.kind === 'user' ? (
           <View style={styles.userRow}>
             {item.attachments.length ? (
               <ScrollView
@@ -514,11 +592,11 @@ export function ConversationTimeline({
                 contentContainerStyle={sentStyles.sentAttachments}
               >
                 {item.attachments.map((attachment, index) => (
-                  <Image
+                  <Pressable accessibilityRole="button" accessibilityLabel={`查看参考图片 ${item.id} ${attachment.displayName ?? `图片${index + 1}`}`} key={`${attachment.uri}-${index}`} onPress={() => setPreviewImage(attachment.uri)}><Image
                     key={`${attachment.uri}-${index}`}
                     source={{ uri: attachment.uri }}
                     style={sentStyles.sentAttachment}
-                  />
+                  /></Pressable>
                 ))}
               </ScrollView>
             ) : null}
@@ -526,6 +604,7 @@ export function ConversationTimeline({
               <UserMessageText
                 text={item.text || '（已添加参考图）'}
                 attachments={item.attachments}
+                onPreview={setPreviewImage}
               />
             </View>
           </View>
@@ -539,11 +618,11 @@ export function ConversationTimeline({
               />
             </View>
             <View style={styles.assistantContent}>
-              {item.text ? (
+              {item.text && !(item.prompt && completedMessageIds.includes(item.id) && /^\s*```h3-prompt\s*\n[\s\S]*\n```\s*$/.test(item.text)) ? (
                 <>
                   <CopilotMarkdown
                     content={item.text}
-                    streamingAnimation={isRunning}
+                    streamingAnimation={isRunning && (runs.length ? runs.some(run => run.status === 'running' && run.messageIds.at(-1) === item.id) : item.id === rows.at(-1)?.id)}
                     style={markdownStyles}
                   />
                   <Pressable
@@ -561,11 +640,12 @@ export function ConversationTimeline({
                   </Pressable>
                 </>
               ) : null}
-              {item.tools.length ? <ToolTimeline steps={item.tools} /> : null}
+              {item.tools.length && !runs.some(run => run.tools.some(tool => item.tools.some(step => step.id === tool.id))) ? <ToolTimeline steps={item.tools} /> : null}
               {item.prompt ? (
                 <PromptResultCard
                   result={item.prompt}
                   ready={!isRunning && completedMessageIds.includes(item.id)}
+                  latest={latestVersionMessageId ? item.id === latestVersionMessageId : undefined}
                   onExport={onExportPrompt}
                 />
               ) : null}
@@ -597,6 +677,12 @@ export function ConversationTimeline({
             <Text>回到最新</Text>
           </Pressable>
         ) : null}
+        <Modal visible={previewImage !== null} transparent animationType="fade" onRequestClose={() => setPreviewImage(null)}>
+          <View style={{ flex: 1, backgroundColor: '#111e', padding: 24, justifyContent: 'center' }}>
+            {previewImage ? <Image testID="reference-image-preview" source={{ uri: previewImage }} resizeMode="contain" style={{ flex: 1 }} /> : null}
+            <Pressable accessibilityLabel="关闭图片预览" onPress={() => setPreviewImage(null)} style={{ padding: 20, alignSelf: 'center' }}><Text style={{ color: '#fff' }}>关闭图片预览</Text></Pressable>
+          </View>
+        </Modal>
       </View>
   );
 }
@@ -732,13 +818,16 @@ export function PromptResultCard({
   result,
   onExport,
   ready = false,
+  latest,
 }: {
   result: PromptParseResult;
   onExport: (prompt: string) => Promise<void>;
   ready?: boolean;
+  latest?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const exportLock = useRef(false);
   const exportPrompt = async () => {
     if (!ready || exportLock.current) return;
@@ -758,7 +847,7 @@ export function PromptResultCard({
       <View style={styles.promptCardHeader}>
         <View>
           <Text style={styles.promptCardEyebrow}>{ready ? 'FINAL H3 PROMPT' : 'H3 PROMPT 草稿'}</Text>
-          <Text style={styles.promptCardTitle}>{ready ? '已完成，可导出到创建页' : '尚未确认生成完成，可复制保留'}</Text>
+          <Text style={styles.promptCardTitle}>{ready ? `${latest === undefined ? '' : latest ? '最新版本 · ' : '历史版本 · '}已完成，可导出` : '尚未确认生成完成，可复制保留'}</Text>
         </View>
         <AppIcon
           name="auto_awesome"
@@ -766,9 +855,10 @@ export function PromptResultCard({
           color={LIGHT_PROMPT_COLORS.muted}
         />
       </View>
-      <Text selectable style={styles.promptText}>
+      <Text selectable numberOfLines={expanded ? undefined : 5} style={styles.promptText}>
         {result.promptText}
       </Text>
+      <Pressable accessibilityLabel={expanded ? '收起卡片 Prompt' : '展开卡片 Prompt'} onPress={() => setExpanded(value => !value)}><Text style={styles.secondaryActionText}>{expanded ? '收起' : '展开全文'}</Text></Pressable>
       <View style={styles.promptActions}>
         <Pressable
           accessibilityLabel="复制 Prompt"
@@ -978,7 +1068,7 @@ export function Composer({
           multiline
           maxLength={4000}
           style={styles.input}
-          editable={!isRunning}
+          editable
           scrollEnabled
           textAlignVertical="top"
           selection={selection}
@@ -1038,9 +1128,11 @@ export function Composer({
 function UserMessageText({
   text,
   attachments,
+  onPreview,
 }: {
   text: string;
   attachments: Array<{ uri: string; filename?: string; displayName?: string }>;
+  onPreview?: (uri: string) => void;
 }) {
   if (!attachments.length) {
     return <Text testID="user-message-text" selectable style={styles.userText}>{text}</Text>;
@@ -1062,7 +1154,7 @@ function UserMessageText({
     }
     if (match.start > cursor) parts.push(<Text key={`text-${cursor}`}>{text.slice(cursor, match.start)}</Text>);
     parts.push(
-      <Text key={`mention-${match.start}`} testID="user-image-mention" style={styles.userMention}>
+      <Text key={`mention-${match.start}`} testID="user-image-mention" style={styles.userMention} onPress={() => onPreview?.(match.attachment.uri)}>
         <Image testID="user-image-mention-thumbnail" source={{ uri: match.attachment.uri }} style={styles.userMentionImage} />
         {match.label}
       </Text>,
@@ -1122,7 +1214,7 @@ function HistoryList({
           >
             <View style={styles.historyItemMain}>
               <Text numberOfLines={1} style={styles.historyTitle}>{sessionDisplayTitle(thread, threads)}</Text>
-              <Text style={styles.historyMeta}>{sessionMessageCount(thread)} 条消息 · {new Date(thread.updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</Text>
+              <Text style={styles.historyMeta}>{sessionMessageCount(thread)} 条消息 · {sessionRunLabel(thread.state) || new Date(thread.updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</Text>
             </View>
             <Pressable accessibilityLabel={`管理会话 ${thread.threadId}`} onPress={() => { setRenameTarget(thread); setRenameValue(sessionTitle(thread)); }}>
               <Text style={styles.more}>•••</Text>

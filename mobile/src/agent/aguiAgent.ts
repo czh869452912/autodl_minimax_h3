@@ -1,3 +1,4 @@
+import { readPromptRuns } from './runState';
 import { AbstractAgent, type AgentConfig, type RunAgentInput } from '@ag-ui/client';
 import { EventType, type BaseEvent } from '@ag-ui/core';
 import { Observable } from 'rxjs';
@@ -47,6 +48,7 @@ const messagesForDeepAgent = (messages: RunAgentInput['messages']): unknown[] =>
     const { toolCalls, ...rest } = record;
     return [{ ...rest, role: 'assistant', content: record.content ?? '', tool_calls: toolCalls.flatMap((value: unknown) => {
       const call = rec(value);
+      if (!resultIds.has(String(call.id))) return [];
       const rawArgs = call.args ?? call.function?.arguments ?? {};
       let args: unknown = rawArgs;
       if (typeof rawArgs === 'string') {
@@ -103,6 +105,8 @@ const messagesForDeepAgent = (messages: RunAgentInput['messages']): unknown[] =>
 export class H3AgUiAgent extends AbstractAgent {
   private readonly graph: DeepAgentGraph;
   private abortController: AbortController | null = null;
+  private cancelCurrentRun: (() => void) | undefined;
+  private preparedRetry: { retryOf?: string; userMessageId: string; messages: RunAgentInput['messages'] } | undefined;
   private pendingAttachments: Attachment[] = [];
   private pendingImageIdentities: ImageIdentity[] = [];
   private consumePendingAttachments: (() => void) | undefined;
@@ -116,6 +120,12 @@ export class H3AgUiAgent extends AbstractAgent {
     return new Observable((subscriber) => {
       const controller = new AbortController();
       this.abortController = controller;
+      this.cancelCurrentRun = () => {
+        if (controller.signal.aborted) return;
+        subscriber.next({ type: EventType.CUSTOM, name: 'h3.run.cancelled', value: { runId: input.runId } } as never);
+        controller.abort();
+        subscriber.complete();
+      };
       void this.runStream(input, controller.signal, subscriber).catch((error) => {
         if (!controller.signal.aborted) {
           const normalized = error instanceof Error ? error : new Error(String(error));
@@ -123,16 +133,30 @@ export class H3AgUiAgent extends AbstractAgent {
           subscriber.next({ type: EventType.RUN_ERROR, message: normalized.message, rawEvent: normalized } as never);
         }
       }).finally(() => {
-        if (this.abortController === controller) this.abortController = null;
+        if (this.abortController === controller) { this.abortController = null; this.cancelCurrentRun = undefined; }
         subscriber.complete();
       });
       return () => controller.abort();
     });
   }
 
-  abortRun(): void { this.abortController?.abort(); }
+  abortRun(): void { this.cancelCurrentRun?.(); }
+
+  getPreparedRetry() { return this.preparedRetry; }
+
+  prepareRetry(runId?: string): void {
+    if (this.isRunning) throw new Error('请先停止当前运行');
+    const runs = readPromptRuns(this.state);
+    const run = runId ? runs.find(candidate => candidate.id === runId) : runs.at(-1);
+    if (runId && !run) throw new Error('找不到可重试的运行');
+    const userId = run?.userMessageId ?? [...this.messages].reverse().find(message => message.role === 'user')?.id;
+    const index = this.messages.findIndex(message => message.id === userId);
+    if (index < 0) throw new Error('没有可重试的用户消息');
+    this.preparedRetry = { retryOf: run?.id, userMessageId: userId!, messages: this.messages.slice(0, index + 1) };
+  }
   dispose(): void {
     this.abortRun();
+    this.preparedRetry = undefined;
     this.pendingAttachments = [];
     this.pendingImageIdentities = [];
     this.consumePendingAttachments = undefined;
@@ -167,7 +191,11 @@ export class H3AgUiAgent extends AbstractAgent {
 
   private async runStream(input: RunAgentInput, signal: AbortSignal, subscriber: { next: (event: BaseEvent) => void }) {
     subscriber.next({ type: EventType.RUN_STARTED, threadId: input.threadId, runId: input.runId });
-    const stream = await this.graph.stream({ messages: messagesForDeepAgent(input.messages), files: getOfficialH3SkillFiles() }, { configurable: { thread_id: input.threadId }, signal, streamMode: 'messages' });
+    const retry = this.preparedRetry;
+    this.preparedRetry = undefined;
+    const abandonedIds = new Set(readPromptRuns(input.state).filter(run => run.status !== 'completed' && run.status !== 'running').flatMap(run => run.messageIds));
+    const modelMessages = (retry?.messages ?? input.messages).filter(message => !abandonedIds.has(message.id));
+    const stream = await this.graph.stream({ messages: messagesForDeepAgent(modelMessages), files: getOfficialH3SkillFiles() }, { configurable: { thread_id: input.threadId }, signal, streamMode: 'messages' });
     let lastAssistantId: string | undefined;
     const incompleteIds = new Set<string>();
     const observeMessage = (id: string, incomplete: boolean) => {

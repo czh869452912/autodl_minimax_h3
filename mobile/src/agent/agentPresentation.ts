@@ -4,7 +4,7 @@ import { parsePromptResult, type PromptParseResult } from './promptParser';
 export type ToolTimelineStep = {
   id: string;
   name: string;
-  status: 'running' | 'complete' | 'failed';
+  status: 'running' | 'complete' | 'failed' | 'cancelled';
   summary?: string;
 };
 export type PresentationAttachment = { uri: string; filename?: string; displayName?: string; attachmentId?: string };
@@ -49,6 +49,7 @@ function attachmentsContent(
   ];
   const items: Array<PresentationAttachment | null> = parts.map(
     (part) => {
+      if (!part || typeof part !== 'object') return null;
       const item = part as {
         type?: string;
         source?: { type?: string; value?: string; url?: string; mimeType?: string };
@@ -93,6 +94,7 @@ export function normalizeMessages(
     const message = raw as {
       role?: string;
       toolCallId?: string;
+      status?: string;
       content?: unknown;
     };
     if (
@@ -102,7 +104,7 @@ export function normalizeMessages(
       const summary = safeSummary(textContent(message.content));
       toolResults.set(message.toolCallId, {
         summary,
-        failed: /error|fail|失败/i.test(summary ?? ''),
+        failed: message.status === 'error' || message.status === 'failed',
       });
     }
   }
@@ -179,7 +181,7 @@ export function sortSessionSnapshots(values: readonly LocalThreadSnapshot[]): Lo
 }
 
 export function sessionMessageCount(snapshot: LocalThreadSnapshot): number {
-  return normalizeMessages(snapshot.messages).length;
+  return snapshot.messages.filter(message => ['user', 'assistant'].includes((message as { role?: string }).role ?? '')).length;
 }
 
 export function sessionDisplayTitle(snapshot: LocalThreadSnapshot, siblings: readonly LocalThreadSnapshot[]): string {
