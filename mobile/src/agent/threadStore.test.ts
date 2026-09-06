@@ -31,6 +31,14 @@ function memoryDatabase() {
           updated_at: updatedAt,
           custom_title: customTitle,
         });
+      } else if (sql.startsWith('UPDATE agent_threads SET custom_title')) {
+        const [title, updatedAt, threadId] = params;
+        const current = rows.get(String(threadId));
+        if (current) rows.set(String(threadId), {
+          ...current,
+          custom_title: title,
+          updated_at: sql.includes('MAX(updated_at, ?)') ? Math.max(Number(current.updated_at), Number(updatedAt)) : updatedAt,
+        });
       } else if (sql.startsWith('DELETE')) {
         rows.delete(String(params[0]));
       }
@@ -43,6 +51,23 @@ function memoryDatabase() {
 }
 
 describe('local agent thread store', () => {
+  it('keeps later stream activity when an earlier rename timestamp is persisted afterward', async () => {
+    const store = createLocalThreadStore(memoryDatabase() as never);
+    await store.save({ threadId: 'a', messages: [], state: {}, createdAt: 1, updatedAt: 40 });
+    await store.rename('a', 'Renamed', 30);
+    expect(await store.load('a')).toMatchObject({ customTitle: 'Renamed', updatedAt: 40 });
+  });
+
+  it('renames only metadata without rewriting a newer transcript or inserting deleted sessions', async () => {
+    const store = createLocalThreadStore(memoryDatabase() as never);
+    await store.save({ threadId: 'a', messages: [{ id: 'reply', role: 'assistant', content: 'complete reply' }], state: { done: true }, createdAt: 1, updatedAt: 2 });
+    await store.rename('a', 'Custom title', 3);
+    expect(await store.load('a')).toEqual({ threadId: 'a', messages: [{ id: 'reply', role: 'assistant', content: 'complete reply' }], state: { done: true }, createdAt: 1, updatedAt: 3, customTitle: 'Custom title' });
+    await store.remove('a');
+    await store.rename('a', 'Late rename', 4);
+    expect(await store.load('a')).toBeNull();
+  });
+
   it('removes credentials and transport metadata recursively', () => {
     expect(sanitizePersistedValue({
       content: 'safe',

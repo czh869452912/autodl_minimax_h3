@@ -81,13 +81,92 @@ describe('Prompt assistant UI primitives', () => {
     jest.useFakeTimers();
     const onExport = jest.fn(() => Promise.resolve());
     let tree!: ReturnType<typeof create>;
-    act(() => { tree = create(<PromptResultCard result={{ promptText: 'A crane shot.', sourceMessageId: 'm1', confidence: 'high' }} onExport={onExport} />); });
+    act(() => { tree = create(<PromptResultCard ready result={{ promptText: 'A crane shot.', sourceMessageId: 'm1', confidence: 'high' }} onExport={onExport} />); });
     await act(async () => { tree.root.findByProps({ accessibilityLabel: '复制 Prompt' }).props.onPress(); });
     expect(Clipboard.setStringAsync).toHaveBeenCalledWith('A crane shot.');
     await act(async () => { tree.root.findByProps({ accessibilityLabel: '导出 Prompt 到生成' }).props.onPress(); });
     expect(onExport).toHaveBeenCalledWith('A crane shot.');
     act(() => { jest.runAllTimers(); tree.unmount(); });
     jest.useRealTimers();
+  });
+
+  it('does not export unconfirmed or interrupted prompt output', async () => {
+    const onExport = jest.fn(async () => undefined);
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptResultCard result={{ promptText: 'integrated_multimodal_description: Partial', sourceMessageId: 'm', confidence: 'high' }} onExport={onExport} />); });
+    const button = tree.root.findByProps({ accessibilityLabel: '导出 Prompt 到生成' });
+    expect(button.props.disabled).toBe(true);
+    await act(async () => { button.props.onPress(); });
+    expect(onExport).not.toHaveBeenCalled();
+    expect(renderedText(tree)).not.toContain('FINAL H3 PROMPT');
+    act(() => tree.unmount());
+  });
+
+  it('restores a session draft and keeps the composer editable during generation', () => {
+    mockChatContext.isRunning = true;
+    const onClientStateChange = jest.fn();
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} clientState={{ h3Composer: { text: '下一轮的修改', attachments: [] } }} onClientStateChange={onClientStateChange} />); });
+    const composer = tree.root.findByType(Composer);
+    expect(composer.props.value).toBe('下一轮的修改');
+    const input = tree.root.findAll(node => node.props.placeholder === '描述你的视频创意，或继续修改 Prompt…')[0];
+    if (input) expect(input.props.editable).not.toBe(false);
+    act(() => composer.props.onChangeText('再加雨景'));
+    expect(onClientStateChange).toHaveBeenLastCalledWith(expect.objectContaining({ h3Composer: expect.objectContaining({ text: '再加雨景' }) }));
+    act(() => tree.unmount());
+  });
+
+  it('renders persisted failed attempts and retries the selected run', async () => {
+    const onRetry = jest.fn(async () => undefined);
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<ConversationTimeline rows={normalizeMessages([{ id: 'u1', role: 'user', content: 'first' }])} isRunning={false} onExportPrompt={async () => undefined} runs={[{ id: 'run1', userMessageId: 'u1', status: 'failed', startedAt: 1, endedAt: 1001, error: '网络中断', messageIds: [], tools: [] }]} onRetry={onRetry} />); });
+    expect(renderedText(tree)).toContain('网络中断');
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '重试运行 run1' }).props.onPress());
+    expect(onRetry).toHaveBeenCalledWith('run1');
+    act(() => tree.unmount());
+  });
+
+  it('keeps hidden completed runs unread until the user returns', () => {
+    const onClientStateChange = jest.fn();
+    const props = { ...basePromptProps, clientState: { h3Runs: [{ id: 'r', userMessageId: 'u', status: 'completed', startedAt: 1, endedAt: 2, messageIds: [], tools: [] }] }, onClientStateChange };
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...props} isVisible={false} />); });
+    expect(onClientStateChange.mock.calls.some(([patch]) => 'h3ReadAt' in patch)).toBe(false);
+    act(() => tree.update(<PromptAssistantUi {...props} isVisible />));
+    expect(onClientStateChange.mock.calls.some(([patch]) => patch.h3ReadAt >= 2)).toBe(true);
+    act(() => tree.unmount());
+  });
+
+  it('opens a historical reference image for inspection', () => {
+    let tree!: ReturnType<typeof create>;
+    const rows = normalizeMessages([{ id: 'u', role: 'user', content: [{ type: 'text', text: '@图片1' }, { type: 'image_url', image_url: { url: 'file:///reference.png' } }] }]);
+    act(() => { tree = create(<ConversationTimeline rows={rows} isRunning={false} onExportPrompt={async () => undefined} />); });
+    act(() => tree.root.findByProps({ accessibilityLabel: '查看参考图片 u 图片1' }).props.onPress());
+    expect(tree.root.findByProps({ testID: 'reference-image-preview' }).props.source.uri).toBe('file:///reference.png');
+    act(() => tree.unmount());
+  });
+
+  it('opens creative information in a two-stop bottom drawer with a fixed submit action', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} />); });
+    act(() => tree.root.findByProps({ accessibilityLabel: '补充创作信息' }).props.onPress());
+    const sheet = tree.root.findAllByType(DraggableBottomSheet).find(node => node.props.title === '补充创作信息');
+    expect(sheet?.props.visible).toBe(true);
+    expect(sheet?.props.footer).toBeTruthy();
+    expect(tree.root.findAllByType(Text).some(node => node.props.children === '返回对话')).toBe(false);
+    act(() => tree.unmount());
+  });
+
+  it('exports only successfully completed message IDs, including after restoring a session', () => {
+    const rows = normalizeMessages([{ id: 'm', role: 'assistant', content: '```h3-prompt\nintegrated_multimodal_description: Cat runs.\noverall_soundscape: Wind.\nnon_diegetic_music: None.\n```' }]);
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<ConversationTimeline rows={rows} isRunning={false} onExportPrompt={async () => undefined} />); });
+    expect(tree.root.findByProps({ accessibilityLabel: '导出 Prompt 到生成' }).props.disabled).toBe(true);
+    act(() => tree.update(<ConversationTimeline rows={rows} isRunning={false} completedMessageIds={['m']} onExportPrompt={async () => undefined} />));
+    expect(tree.root.findByProps({ accessibilityLabel: '导出 Prompt 到生成' }).props.disabled).toBe(false);
+    act(() => tree.update(<ConversationTimeline rows={rows} isRunning completedMessageIds={['m']} onExportPrompt={async () => undefined} />));
+    expect(tree.root.findByProps({ accessibilityLabel: '导出 Prompt 到生成' }).props.disabled).toBe(true);
+    act(() => tree.unmount());
   });
 
   it('disables send while attachments are uploading', () => {
@@ -222,13 +301,14 @@ describe('Prompt assistant UI primitives', () => {
 
   it('sends every ready provider and gallery attachment even when only one is mentioned', async () => {
     const setPendingAttachments = jest.fn();
+    const setPendingImageIdentities = jest.fn();
     mockChatContext = {
       ...mockChatContext,
       submitMessage: jest.fn(() => Promise.resolve()),
       attachments: [
         { id: 'provider-1', status: 'ready', filename: '场景.png', source: { value: 'file://provider-1' } },
       ],
-      agent: { setPendingAttachments },
+      agent: { setPendingAttachments, setPendingImageIdentities },
     };
     (pickAssistantImages as jest.Mock).mockResolvedValueOnce([
       { id: 'gallery-1', type: 'image', status: 'ready', filename: '角色.png', size: 10, source: { type: 'data', value: 'data:image/png;base64,abc', mimeType: 'image/png' } },
@@ -260,6 +340,10 @@ describe('Prompt assistant UI primitives', () => {
       expect.any(Function),
     );
     expect(mockChatContext.submitMessage).toHaveBeenCalledWith('使用角色');
+    expect(setPendingImageIdentities).toHaveBeenCalledWith([
+      { attachmentId: 'provider-1', displayName: '图片1' },
+      { attachmentId: 'gallery-1', displayName: '图片2' },
+    ]);
     const imageUris = tree.root.findAllByType(Image).map((node) => node.props.source?.uri);
     expect(imageUris).toEqual(expect.arrayContaining(['file://provider-1', 'data:image/png;base64,abc']));
     alert.mockRestore();

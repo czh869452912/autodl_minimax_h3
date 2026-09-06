@@ -1,11 +1,13 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { assertAppDatabaseWritable, getAppRecoveryState } from '../storage/database';
+import { decodePromptHandoff, type PromptHandoff } from './promptHandoff';
 
 const MAX_AGE = 60 * 60 * 1000;
 export type PromptDraft = {
   id: string;
   prompt: string;
   attachmentIds: string[];
+  handoff?: PromptHandoff;
   createdAt: number;
 };
 
@@ -19,19 +21,30 @@ function parse(
 ): PromptDraft | null {
   if (!row) return null;
   let attachmentIds: string[] = [];
+  let value: unknown;
+  let handoff: PromptHandoff | undefined;
   try {
-    const value = JSON.parse(row.attachment_ids_json);
+    value = JSON.parse(row.attachment_ids_json);
     if (Array.isArray(value))
       attachmentIds = value.filter(
         (item): item is string => typeof item === 'string',
       );
   } catch {
-    /* keep empty */
+    throw new Error('提示词交接数据损坏，请重新导出');
+  }
+  if (!value || typeof value !== 'object') throw new Error('提示词交接数据损坏，请重新导出');
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const envelope = value as Record<string, unknown>;
+    if (envelope.version !== 1 || !Array.isArray(envelope.attachmentIds) || envelope.attachmentIds.some((id) => typeof id !== 'string')) throw new Error('提示词交接数据损坏，请重新导出');
+    attachmentIds = envelope.attachmentIds;
+    handoff = decodePromptHandoff(envelope.handoff);
+    if (handoff.prompt !== row.prompt) throw new Error('提示词交接内容不一致，请重新导出');
   }
   return {
     id: row.id,
     prompt: row.prompt,
     attachmentIds,
+    ...(handoff ? { handoff } : {}),
     createdAt: Number(row.created_at),
   };
 }
@@ -49,20 +62,25 @@ export function createPromptDraftStore(
   };
   return {
     async save(
-      input: Pick<PromptDraft, 'prompt' | 'attachmentIds'>,
+      input: Pick<PromptDraft, 'prompt' | 'attachmentIds' | 'handoff'>,
     ): Promise<PromptDraft> {
       assertAppDatabaseWritable(db);
+      if (input.handoff) {
+        decodePromptHandoff(input.handoff);
+        if (input.handoff.prompt !== input.prompt) throw new Error('提示词交接内容不一致，请重新导出');
+      }
       const draft: PromptDraft = {
         id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         prompt: input.prompt,
         attachmentIds: input.attachmentIds,
+        ...(input.handoff ? { handoff: input.handoff } : {}),
         createdAt: now(),
       };
       db.runSync(
         'INSERT OR REPLACE INTO prompt_drafts (id,prompt,attachment_ids_json,created_at) VALUES (?,?,?,?)',
         draft.id,
         draft.prompt,
-        JSON.stringify(draft.attachmentIds),
+        JSON.stringify(draft.handoff ? { version: 1, attachmentIds: draft.attachmentIds, handoff: draft.handoff } : draft.attachmentIds),
         draft.createdAt,
       );
       return draft;

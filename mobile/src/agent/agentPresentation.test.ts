@@ -9,12 +9,12 @@ describe('agent presentation helpers', () => {
   it('normalizes user, assistant and tool messages with stable tool steps', () => {
     const rows = normalizeMessages([
       { id: 'u1', role: 'user', content: '拍一只猫' },
-      { id: 'a1', role: 'assistant', content: '### H3 Prompt\nA cat runs.', toolCalls: [{ id: 'tc1', function: { name: 'skill', arguments: '{}' } }] },
+      { id: 'a1', role: 'assistant', content: '### H3 Prompt\nintegrated_multimodal_description: A cat runs.\noverall_soundscape: Wind.\nnon_diegetic_music: None.', toolCalls: [{ id: 'tc1', function: { name: 'skill', arguments: '{}' } }] },
       { id: 'tool1', role: 'tool', toolCallId: 'tc1', content: 'done' },
     ]);
     expect(rows[0]).toMatchObject({ kind: 'user', text: '拍一只猫' });
     expect(rows[1]).toMatchObject({ kind: 'assistant', tools: [{ id: 'tc1', name: 'skill', status: 'complete' }] });
-    expect(rows[1]).toMatchObject({ prompt: { promptText: 'A cat runs.' } });
+    expect(rows[1]).toMatchObject({ prompt: { promptText: 'integrated_multimodal_description: A cat runs.\noverall_soundscape: Wind.\nnon_diegetic_music: None.' } });
   });
 
   it('keeps sent image attachments visible in the user row', () => {

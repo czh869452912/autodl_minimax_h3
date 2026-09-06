@@ -110,6 +110,15 @@ export function createLocalThreadStore(db: SQLiteDatabase) {
         snapshot.customTitle ?? null,
       );
     },
+    async rename(threadId: string, title: string, updatedAt: number): Promise<void> {
+      assertAppDatabaseWritable(db);
+      await db.runAsync(
+        'UPDATE agent_threads SET custom_title = ?, updated_at = MAX(updated_at, ?) WHERE thread_id = ?',
+        title,
+        updatedAt,
+        threadId,
+      );
+    },
     async remove(threadId: string): Promise<void> {
       assertAppDatabaseWritable(db);
       await db.runAsync('DELETE FROM agent_threads WHERE thread_id = ?', threadId);
