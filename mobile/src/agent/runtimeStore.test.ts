@@ -31,6 +31,53 @@ const store = { save: jest.fn(async () => undefined) } as unknown as LocalThread
 const saveMock = store.save as jest.Mock;
 
 describe('prompt runtime registry', () => {
+  it('renames metadata after an in-flight save and preserves later pending output on disposal', async () => {
+    let release!: () => void;
+    let saved = snapshot('thread-1');
+    let block = true;
+    const persistence = {
+      save: async (next: LocalThreadSnapshot) => {
+        if (block) { block = false; await new Promise<void>((resolve) => { release = resolve; }); }
+        saved = next;
+      },
+      rename: async (_id: string, title: string, updatedAt: number) => {
+        saved = { ...saved, customTitle: title, updatedAt };
+      },
+    } as unknown as LocalThreadStore;
+    const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
+    const runtime = registry.ensure(config, snapshot('thread-1'), persistence);
+    const agent = runtime.agent as never as ReturnType<typeof fakeAgent>;
+    agent.emitMessages([{ id: 'reply', role: 'assistant', content: 'partial' }], {});
+    const saving = runtime.flush();
+    await Promise.resolve();
+    agent.emitMessages([{ id: 'reply', role: 'assistant', content: 'complete reply' }], {});
+    const renaming = registry.renameThread('thread-1', 'My title', persistence);
+    release();
+    await Promise.all([saving, renaming]);
+    registry.ensure(config, snapshot('thread-1'), persistence);
+    agent.emitState(runtime.getSnapshot().messages, { phase: 'complete' });
+    await registry.disposeAll();
+    expect(saved.customTitle).toBe('My title');
+    expect(saved.messages).toEqual([{ id: 'reply', role: 'assistant', content: 'complete reply' }]);
+    expect(runtime.getSnapshot().customTitle).toBe('My title');
+  });
+
+  it('publishes background snapshots and stops publishing an evicted thread', async () => {
+    const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
+    const seen: LocalThreadSnapshot[] = [];
+    registry.subscribe((next) => seen.push(next));
+    const first = registry.ensure(config, snapshot('thread-1'), store);
+    registry.ensure(config, snapshot('thread-2'), store);
+    const agent = first.agent as never as ReturnType<typeof fakeAgent>;
+    agent.emitMessages([{ id: 'reply', role: 'assistant', content: 'background complete' }], {});
+    expect(seen).toHaveLength(1);
+    expect(seen[0].messages).toEqual([{ id: 'reply', role: 'assistant', content: 'background complete' }]);
+    await registry.evictThread('thread-1');
+    agent.emitMessages([{ id: 'late', role: 'assistant', content: 'late' }], {});
+    expect(seen).toHaveLength(1);
+    await registry.disposeAll();
+  });
+
   it('reuses a hydrated agent for the same config and thread', () => {
     const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
     const first = registry.ensure(config, snapshot('thread-1'), store);

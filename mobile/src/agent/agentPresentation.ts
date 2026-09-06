@@ -7,12 +7,13 @@ export type ToolTimelineStep = {
   status: 'running' | 'complete' | 'failed';
   summary?: string;
 };
+export type PresentationAttachment = { uri: string; filename?: string; displayName?: string; attachmentId?: string };
 export type PresentationMessage =
   | {
       id: string;
       kind: 'user';
       text: string;
-      attachments: Array<{ uri: string; filename?: string; displayName?: string }>;
+      attachments: PresentationAttachment[];
     }
   | {
       id: string;
@@ -41,23 +42,28 @@ function textContent(content: unknown): string {
 function attachmentsContent(
   content: unknown,
   attached?: unknown,
-): Array<{ uri: string; filename?: string; displayName?: string }> {
+): PresentationAttachment[] {
   const parts = [
     ...(Array.isArray(content) ? content : []),
     ...(Array.isArray(attached) ? attached : []),
   ];
-  const items: Array<{ uri: string; filename?: string } | null> = parts.map(
+  const items: Array<PresentationAttachment | null> = parts.map(
     (part) => {
       const item = part as {
         type?: string;
         source?: { type?: string; value?: string; url?: string; mimeType?: string };
         image_url?: { url?: string };
-        metadata?: { filename?: string };
+        metadata?: { filename?: string; attachmentId?: string; displayName?: string };
       };
       const filename =
         item.metadata?.filename ?? (part as { filename?: string }).filename;
+      const identity = {
+        filename,
+        ...(typeof item.metadata?.attachmentId === 'string' ? { attachmentId: item.metadata.attachmentId } : {}),
+        ...(typeof item.metadata?.displayName === 'string' ? { displayName: item.metadata.displayName } : {}),
+      };
       if (item.type === 'image_url' && item.image_url?.url)
-        return { uri: item.image_url.url, filename };
+        return { uri: item.image_url.url, ...identity };
       if (item.type !== 'image') return null;
       const sourceValue = item.source?.value ?? item.source?.url;
       if (!sourceValue) return null;
@@ -65,12 +71,12 @@ function attachmentsContent(
         item.source?.type === 'data' && !sourceValue.startsWith('data:')
           ? `data:${item.source.mimeType ?? 'image/png'};base64,${sourceValue}`
           : sourceValue;
-      return { uri, filename };
+      return { uri, ...identity };
     },
   );
   return items
-    .filter((item): item is { uri: string; filename?: string } => Boolean(item))
-    .map((item, index) => ({ ...item, displayName: `图片${index + 1}` }));
+    .filter((item): item is PresentationAttachment => Boolean(item))
+    .map((item, index) => ({ ...item, displayName: item.displayName || `图片${index + 1}` }));
 }
 
 function safeSummary(value: unknown): string | undefined {

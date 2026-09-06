@@ -1,5 +1,5 @@
 jest.mock('@ag-ui/client', () => ({ AbstractAgent: class { agentId = 'test'; description = 'test'; messages: any[] = []; addMessage(message: any) { this.messages.push(message); } }, }));
-jest.mock('@ag-ui/core', () => ({ EventType: { RUN_STARTED: 'RUN_STARTED', TOOL_CALL_START: 'TOOL_CALL_START', TOOL_CALL_ARGS: 'TOOL_CALL_ARGS', TOOL_CALL_END: 'TOOL_CALL_END', TEXT_MESSAGE_START: 'TEXT_MESSAGE_START', TEXT_MESSAGE_CONTENT: 'TEXT_MESSAGE_CONTENT', TEXT_MESSAGE_END: 'TEXT_MESSAGE_END', RUN_FINISHED: 'RUN_FINISHED', RUN_ERROR: 'RUN_ERROR', TOOL_CALL_RESULT: 'TOOL_CALL_RESULT' } }));
+jest.mock('@ag-ui/core', () => ({ EventType: { STATE_SNAPSHOT: 'STATE_SNAPSHOT', RUN_STARTED: 'RUN_STARTED', TOOL_CALL_START: 'TOOL_CALL_START', TOOL_CALL_ARGS: 'TOOL_CALL_ARGS', TOOL_CALL_END: 'TOOL_CALL_END', TEXT_MESSAGE_START: 'TEXT_MESSAGE_START', TEXT_MESSAGE_CONTENT: 'TEXT_MESSAGE_CONTENT', TEXT_MESSAGE_END: 'TEXT_MESSAGE_END', RUN_FINISHED: 'RUN_FINISHED', RUN_ERROR: 'RUN_ERROR', TOOL_CALL_RESULT: 'TOOL_CALL_RESULT' } }));
 import { EventType } from '@ag-ui/core';
 import type { RunAgentInput } from '@ag-ui/client';
 import { H3AgUiAgent } from './aguiAgent';
@@ -22,7 +22,7 @@ it('bridges DeepAgents stream into official AG-UI lifecycle events', async () =>
   expect(events.map((event) => event.type)).toEqual([
     EventType.RUN_STARTED, EventType.TOOL_CALL_START, EventType.TOOL_CALL_ARGS,
     EventType.TOOL_CALL_END, EventType.TEXT_MESSAGE_START, EventType.TEXT_MESSAGE_CONTENT,
-    EventType.TEXT_MESSAGE_END, EventType.RUN_FINISHED,
+    EventType.TEXT_MESSAGE_END, EventType.STATE_SNAPSHOT, EventType.RUN_FINISHED,
   ]);
   expect(Object.keys(graphInput.files).some((path) => path.startsWith('/skills/'))).toBe(true);
 });
@@ -130,4 +130,223 @@ it('completes the AG-UI stream when an in-flight run is aborted', async () => {
   await expect(completion).resolves.toEqual([
     { type: EventType.RUN_STARTED, threadId: 't1', runId: 'r-abort' },
   ]);
+});
+
+const { AIMessage, AIMessageChunk, ToolMessage, coerceMessageLikeToMessage } = require('@langchain/core/messages');
+const runInput = { threadId: 't1', runId: 'r-regression', state: {}, messages: [] } as never;
+
+it('appends repeated real LangChain chunks verbatim and reconciles a full message', async () => {
+  const graph = { stream: async function* () {
+    for (const content of ['ha', 'ha', '!', '\n', '\n', '尾']) {
+      yield [new AIMessageChunk({ id: 'answer', content }), {}];
+    }
+    yield [new AIMessage({ id: 'answer', content: 'haha!\n\n尾' }), {}];
+  } };
+  const events = await collect(new H3AgUiAgent(graph), runInput);
+  expect(events.filter(e => e.type === 'TEXT_MESSAGE_CONTENT').map(e => e.delta).join('')).toBe('haha!\n\n尾');
+});
+
+it('streams parallel raw tool arguments until finish, then emits results separately', async () => {
+  const observed: any[] = [];
+  const graph = { stream: async function* () {
+    yield [new AIMessageChunk({ id: 'model-1', content: '', tool_call_chunks: [
+      { id: 'read-a', name: 'read_file', index: 0, args: '{"file_' },
+      { id: 'read-b', name: 'read_file', index: 1, args: '{"file_path":"/b' },
+    ] }), {}];
+    expect(observed.filter(e => e.type === 'TOOL_CALL_END')).toHaveLength(0);
+    yield [new AIMessageChunk({ id: 'model-1', content: '', tool_call_chunks: [
+      { index: 1, args: '.md"}' }, { index: 0, args: 'path":"/a.md"}' },
+    ] }), {}];
+    expect(observed.filter(e => e.type === 'TOOL_CALL_END')).toHaveLength(0);
+    yield [new AIMessageChunk({ id: 'model-1', content: '', response_metadata: { finish_reason: 'tool_calls' } }), {}];
+    expect(observed.filter(e => e.type === 'TOOL_CALL_END')).toHaveLength(2);
+    yield [new ToolMessage({ id: 'result-a', tool_call_id: 'read-a', content: 'A' }), {}];
+  } };
+  await new Promise<void>((resolve, reject) => new H3AgUiAgent(graph).run(runInput).subscribe({ next: e => observed.push(e), error: reject, complete: resolve }));
+  expect(observed.some(e => e.type === 'RUN_ERROR')).toBe(false);
+  for (const [id, args] of [['read-a', '{"file_path":"/a.md"}'], ['read-b', '{"file_path":"/b.md"}']]) {
+    const events = observed.filter(e => e.toolCallId === id);
+    expect(events.filter(e => e.type === 'TOOL_CALL_ARGS').map(e => e.delta).join('')).toBe(args);
+    expect(events.filter(e => e.type === 'TOOL_CALL_START')).toHaveLength(1);
+    expect(events.filter(e => e.type === 'TOOL_CALL_END')).toHaveLength(1);
+  }
+  expect(observed.findIndex(e => e.type === 'TOOL_CALL_RESULT')).toBeGreaterThan(observed.findIndex(e => e.type === 'TOOL_CALL_END'));
+});
+
+it.each(['message boundary', 'tool result', 'stream end'])('ends chunk arguments at %s without finish metadata', async (boundary) => {
+  const graph = { stream: async function* () {
+    yield [new AIMessageChunk({ id: 'model-1', content: '', tool_call_chunks: [{ id: 'call-1', name: 'read_file', index: 0, args: '{"path":' }] }), {}];
+    yield [new AIMessageChunk({ id: 'model-1', content: '', tool_call_chunks: [{ index: 0, args: '"/a"}' }] }), {}];
+    if (boundary === 'message boundary') yield [new AIMessageChunk({ id: 'model-2', content: 'done' }), {}];
+    if (boundary === 'tool result') yield [new ToolMessage({ id: 'result', tool_call_id: 'call-1', content: 'ok' }), {}];
+  } };
+  const events = await collect(new H3AgUiAgent(graph), runInput);
+  const args = events.filter(e => e.type === 'TOOL_CALL_ARGS');
+  expect(args.map(e => e.delta).join('')).toBe('{"path":"/a"}');
+  expect(events.filter(e => e.type === 'TOOL_CALL_END')).toHaveLength(1);
+  expect(events.findIndex(e => e.type === 'TOOL_CALL_END')).toBeGreaterThan(events.indexOf(args.at(-1)));
+});
+
+it('replays persisted AG-UI calls and paired results into actual LangChain messages', async () => {
+  let received: any[] = [];
+  const graph = { stream: async function* (input: any) { received = input.messages.map(coerceMessageLikeToMessage); } };
+  const history = JSON.parse(JSON.stringify([
+    { id: 'assistant-tools', role: 'assistant', content: '', toolCalls: [
+      { id: 'read-a', type: 'function', function: { name: 'read_file', arguments: '{"path":"/a"}' } },
+      { id: 'read-b', type: 'function', function: { name: 'read_file', arguments: '{"path":"/b"}' } },
+    ] },
+    { id: 'result-a', role: 'tool', toolCallId: 'read-a', content: 'A' },
+    { id: 'result-b', tool: 'tool', toolCallId: 'read-b', content: 'B' },
+    { id: 'follow-up', role: 'user', content: 'revise it' },
+  ]));
+  await collect(new H3AgUiAgent(graph), { ...runInput as any, messages: history });
+  expect(received[0].tool_calls).toEqual([
+    { id: 'read-a', name: 'read_file', args: { path: '/a' }, type: 'tool_call' },
+    { id: 'read-b', name: 'read_file', args: { path: '/b' }, type: 'tool_call' },
+  ]);
+  expect(received.slice(1, 3).map(m => [m.getType(), m.tool_call_id, m.content])).toEqual([['tool', 'read-a', 'A'], ['tool', 'read-b', 'B']]);
+});
+
+it('marks only the last tool-free assistant text complete after successful execution', async () => {
+  const graph = { stream: async function* () {
+    yield [new AIMessageChunk({ id: 'thinking', content: 'looking', tool_call_chunks: [{ id: 'call', name: 'read_file', index: 0, args: '{}' }] }), {}];
+    yield [new ToolMessage({ id: 'result', tool_call_id: 'call', content: 'ok' }), {}];
+    yield [new AIMessageChunk({ id: 'draft', content: 'draft' }), {}];
+    yield [new AIMessageChunk({ id: 'final', content: 'final answer' }), {}];
+  } };
+  const events = await collect(new H3AgUiAgent(graph), { ...runInput as any, state: { keep: 'state', h3CompletedMessageIds: ['old'] } });
+  expect(events.at(-2)).toEqual({ type: 'STATE_SNAPSHOT', snapshot: { keep: 'state', h3CompletedMessageIds: ['old', 'final'] } });
+  expect(events.at(-1).type).toBe('RUN_FINISHED');
+});
+
+it.each(['error', 'cancel'])('does not certify partial output on %s', async (outcome) => {
+  let agent: H3AgUiAgent;
+  const graph = { stream: async function* () {
+    yield [new AIMessageChunk({ id: 'partial', content: 'partial' }), {}];
+    if (outcome === 'error') throw new Error('expected failure');
+    agent.abortRun();
+  } };
+  agent = new H3AgUiAgent(graph);
+  const events = await collect(agent, runInput);
+  expect(events.some(e => e.type === 'STATE_SNAPSHOT' || e.type === 'RUN_FINISHED')).toBe(false);
+});
+
+it.each(['empty', 'tools only', 'tool after text'])('does not add completion IDs for %s runs', async (kind) => {
+  const graph = { stream: async function* () {
+    if (kind === 'tool after text') yield [new AIMessageChunk({ id: 'answer', content: 'planning' }), {}];
+    if (kind !== 'empty') yield [new AIMessageChunk({ id: 'answer', content: '', tool_call_chunks: [{ id: 'call', name: 'read_file', index: 0, args: '{}' }] }), {}];
+  } };
+  const events = await collect(new H3AgUiAgent(graph), { ...runInput as any, state: { h3CompletedMessageIds: ['old'] } });
+  expect(events.at(-2)).toEqual({ type: 'STATE_SNAPSHOT', snapshot: { h3CompletedMessageIds: ['old'] } });
+});
+
+it('keeps parallel tool calls separate when fragments are identified by ID without index', async () => {
+  const graph = { stream: async function* () {
+    yield [new AIMessageChunk({ id: 'model', content: '', tool_call_chunks: [{ id: 'a', name: 'read_file', args: '{"path":' }] }), {}];
+    yield [new AIMessageChunk({ id: 'model', content: '', tool_call_chunks: [{ id: 'b', name: 'read_file', args: '{"path":' }] }), {}];
+    yield [new AIMessageChunk({ id: 'model', content: '', tool_call_chunks: [{ id: 'a', args: '"/a"}' }, { id: 'b', args: '"/b"}' }] }), {}];
+  } };
+  const events = await collect(new H3AgUiAgent(graph), runInput);
+  expect(events.filter(e => e.type === 'TOOL_CALL_START').map(e => e.toolCallId)).toEqual(['a', 'b']);
+  expect(events.filter(e => e.type === 'TOOL_CALL_ARGS' && e.toolCallId === 'a').map(e => e.delta).join('')).toBe('{"path":"/a"}');
+  expect(events.filter(e => e.type === 'TOOL_CALL_ARGS' && e.toolCallId === 'b').map(e => e.delta).join('')).toBe('{"path":"/b"}');
+});
+
+it('labels persisted image identities immediately before their model image parts', async () => {
+  let received: any;
+  const graph = { stream: async function* (input: any) { received = input.messages[0].content; } };
+  await collect(new H3AgUiAgent(graph), { ...runInput as any, messages: [{
+    role: 'user', content: [
+      { type: 'text', text: 'compare @图片2 and @图片3' },
+      { type: 'image', source: { type: 'url', value: 'https://example.test/b.png' }, metadata: { attachmentId: 'b', displayName: '图片2' } },
+    ], attachments: [{ id: 'c', type: 'image', source: { type: 'data', value: 'image-c', mimeType: 'image/png' }, metadata: { attachmentId: 'c', displayName: '图片3' } }],
+  }] });
+  expect(received).toEqual([
+    { type: 'text', text: 'compare @图片2 and @图片3' },
+    { type: 'text', text: '参考图 @图片2' },
+    { type: 'image_url', image_url: { url: 'https://example.test/b.png' } },
+    { type: 'text', text: '参考图 @图片3' },
+    { type: 'image_url', image_url: { url: 'data:image/png;base64,image-c' } },
+  ]);
+});
+
+it('consumes pending image identities once for provider and gallery images', () => {
+  const agent = new H3AgUiAgent({ stream: async function* () {} });
+  agent.setPendingImageIdentities([{ attachmentId: 'b', displayName: '图片2' }, { attachmentId: 'c', displayName: '图片3' }]);
+  agent.setPendingAttachments([{ id: 'c', type: 'image', source: { type: 'data', value: 'c', mimeType: 'image/png' }, status: 'ready' }] as never);
+  agent.addMessage({ id: 'user', role: 'user', content: [
+    { type: 'text', text: 'use @图片2 and @图片3' },
+    { type: 'image', source: { type: 'data', value: 'b', mimeType: 'image/png' } },
+  ] } as never);
+  const message = (agent as any).messages[0];
+  expect(message.content[1].metadata).toMatchObject({ attachmentId: 'b', displayName: '图片2' });
+  expect(message.attachments[0].metadata).toMatchObject({ attachmentId: 'c', displayName: '图片3' });
+  agent.addMessage({ id: 'next', role: 'user', content: [{ type: 'image', source: { type: 'data', value: 'd' } }] } as never);
+  expect((agent as any).messages[1].content[0].metadata?.attachmentId).not.toBe('b');
+});
+
+it('consumes image identities when there are no gallery attachments, and clears pending identities on dispose', () => {
+  const agent = new H3AgUiAgent({ stream: async function* () {} });
+  const message = { id: 'provider', role: 'user', content: [{ type: 'image', source: { type: 'url', value: 'https://example.test/b.png' } }] };
+  agent.setPendingImageIdentities([{ attachmentId: 'b', displayName: '图片2' }]);
+  agent.addMessage(message as never);
+  expect((agent as any).messages[0].content[0].metadata).toMatchObject({ attachmentId: 'b', displayName: '图片2' });
+  agent.setPendingImageIdentities([{ attachmentId: 'stale', displayName: '图片9' }]);
+  agent.dispose();
+  agent.addMessage({ ...message, id: 'after-dispose' } as never);
+  expect((agent as any).messages[1].content[0].metadata?.attachmentId).not.toBe('stale');
+});
+
+it('does not append a parsed full tool snapshot after complete raw JSON with whitespace', async () => {
+  const graph = { stream: async function* () {
+    yield [new AIMessageChunk({ id: 'model', content: '', tool_call_chunks: [{ id: 'a', name: 'read_file', index: 0, args: '{ "path": "/a" }' }] }), {}];
+    yield [new AIMessage({ id: 'model', content: '', tool_calls: [{ id: 'a', name: 'read_file', args: { path: '/a' } }] }), {}];
+  } };
+  const events = await collect(new H3AgUiAgent(graph), runInput);
+  expect(events.filter(e => e.type === 'TOOL_CALL_ARGS').map(e => e.delta).join('')).toBe('{ "path": "/a" }');
+  expect(events.filter(e => e.type === 'TOOL_CALL_END')).toHaveLength(1);
+});
+
+it.each(['length', 'content_filter', 'max_tokens'])('does not certify model output cut short by %s', async (reason) => {
+  const graph = { stream: async function* () {
+    yield [new AIMessageChunk({ id: 'partial', content: 'cut off output' }), {}];
+    yield [new AIMessageChunk({ id: 'partial', content: '', response_metadata: { finish_reason: reason } }), {}];
+  } };
+  const events = await collect(new H3AgUiAgent(graph), runInput);
+  expect(events.find(e => e.type === 'STATE_SNAPSHOT').snapshot.h3CompletedMessageIds).toEqual([]);
+});
+
+it('does not certify earlier text when the final model message has no text', async () => {
+  const graph = { stream: async function* () {
+    yield [new AIMessageChunk({ id: 'intermediate', content: 'thinking' }), {}];
+    yield [new AIMessage({ id: 'final', content: '' }), {}];
+  } };
+  const events = await collect(new H3AgUiAgent(graph), runInput);
+  expect(events.find(e => e.type === 'STATE_SNAPSHOT').snapshot.h3CompletedMessageIds).toEqual([]);
+});
+
+it('allows a new follow-up after cancelled raw arguments while preserving valid paired history', async () => {
+  let cancelledAgent: H3AgUiAgent;
+  const cancelled = { stream: async function* () {
+    yield [new AIMessageChunk({ id: 'cancelled-model', content: '', tool_call_chunks: [{ id: 'partial-call', name: 'read_file', index: 0, args: '{"path":' }] }), {}];
+    cancelledAgent.abortRun();
+  } };
+  cancelledAgent = new H3AgUiAgent(cancelled);
+  const partialEvents = await collect(cancelledAgent, runInput);
+  const partialArgs = partialEvents.filter(e => e.type === 'TOOL_CALL_ARGS').map(e => e.delta).join('');
+  let received: any[] = [];
+  const nextGraph = { stream: async function* (input: any) { received = input.messages.map(coerceMessageLikeToMessage); } };
+  const events = await collect(new H3AgUiAgent(nextGraph), { ...runInput as any, messages: [
+    { role: 'assistant', content: 'read a skill', toolCalls: [{ id: 'valid-call', type: 'function', function: { name: 'read_file', arguments: '{"path":"/skill"}' } }] },
+    { role: 'tool', toolCallId: 'valid-call', content: 'skill contents' },
+    { role: 'assistant', content: 'interrupted planning', toolCalls: [{ id: 'partial-call', type: 'function', function: { name: 'read_file', arguments: partialArgs } }] },
+    { role: 'user', content: 'new follow-up' },
+  ] });
+  expect(events.some(e => e.type === 'RUN_ERROR')).toBe(false);
+  expect(received[0].tool_calls).toEqual([{ id: 'valid-call', name: 'read_file', args: { path: '/skill' }, type: 'tool_call' }]);
+  expect(received[1].tool_call_id).toBe('valid-call');
+  expect(received[1].content).toBe('skill contents');
+  expect(received[2].tool_calls).toEqual([]);
+  expect(received[2].content).toBe('interrupted planning');
+  expect(received[3].content).toBe('new follow-up');
 });

@@ -202,6 +202,10 @@ export function PromptAssistantUi({
     });
     setDraft('');
     setInputSelection({ start: 0, end: 0 });
+    agent.setPendingImageIdentities?.(ready.map((attachment) => ({
+      attachmentId: attachment.id,
+      displayName: composerAttachments.find((item) => item.id === attachment.id)!.displayName!,
+    })));
     if (galleryAttachments.length) {
       agent.setPendingAttachments?.(
         galleryAttachments,
@@ -364,6 +368,8 @@ export function PromptAssistantUi({
             isRunning={isRunning || submitting}
             onExportPrompt={onExportPrompt}
             runIssue={runIssue}
+            completedMessageIds={Array.isArray(agent.state?.h3CompletedMessageIds)
+              ? agent.state.h3CompletedMessageIds.filter((id: unknown): id is string => typeof id === 'string') : []}
             onRetry={onRetry}
             onSelectSuggestion={applySuggestion}
           />
@@ -433,6 +439,7 @@ export function ConversationTimeline({
   runIssue = null,
   onRetry = async () => undefined,
   onSelectSuggestion = () => undefined,
+  completedMessageIds = [],
 }: {
   rows: ReturnType<typeof normalizeMessages>;
   isRunning: boolean;
@@ -440,6 +447,7 @@ export function ConversationTimeline({
   runIssue?: RunIssue | null;
   onRetry?: () => Promise<void>;
   onSelectSuggestion?: (suggestion: string) => void;
+  completedMessageIds?: readonly string[];
 }) {
   const listRef = useRef<FlatList<ReturnType<typeof normalizeMessages>[number]>>(null);
   const [followingLatest, setFollowingLatest] = useState(true);
@@ -557,6 +565,7 @@ export function ConversationTimeline({
               {item.prompt ? (
                 <PromptResultCard
                   result={item.prompt}
+                  ready={!isRunning && completedMessageIds.includes(item.id)}
                   onExport={onExportPrompt}
                 />
               ) : null}
@@ -722,11 +731,23 @@ export function ToolTimeline({ steps }: { steps: ToolTimelineStep[] }) {
 export function PromptResultCard({
   result,
   onExport,
+  ready = false,
 }: {
   result: PromptParseResult;
   onExport: (prompt: string) => Promise<void>;
+  ready?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportLock = useRef(false);
+  const exportPrompt = async () => {
+    if (!ready || exportLock.current) return;
+    exportLock.current = true;
+    setExporting(true);
+    try { await onExport(result.promptText); }
+    catch (error) { Alert.alert('导出失败', error instanceof Error ? error.message : '无法保存 Prompt，请重试'); }
+    finally { exportLock.current = false; setExporting(false); }
+  };
   const copy = async () => {
     await Clipboard.setStringAsync(result.promptText);
     setCopied(true);
@@ -736,8 +757,8 @@ export function PromptResultCard({
     <View style={styles.promptCard}>
       <View style={styles.promptCardHeader}>
         <View>
-          <Text style={styles.promptCardEyebrow}>FINAL H3 PROMPT</Text>
-          <Text style={styles.promptCardTitle}>可直接用于生成</Text>
+          <Text style={styles.promptCardEyebrow}>{ready ? 'FINAL H3 PROMPT' : 'H3 PROMPT 草稿'}</Text>
+          <Text style={styles.promptCardTitle}>{ready ? '已完成，可导出到创建页' : '尚未确认生成完成，可复制保留'}</Text>
         </View>
         <AppIcon
           name="auto_awesome"
@@ -765,10 +786,12 @@ export function PromptResultCard({
         </Pressable>
         <Pressable
           accessibilityLabel="导出 Prompt 到生成"
-          onPress={() => void onExport(result.promptText)}
-          style={styles.primaryAction}
+          accessibilityState={{ disabled: !ready || exporting }}
+          disabled={!ready || exporting}
+          onPress={() => void exportPrompt()}
+          style={[styles.primaryAction, (!ready || exporting) && { opacity: 0.45 }]}
         >
-          <Text style={styles.primaryActionText}>导出到生成</Text>
+          <Text style={styles.primaryActionText}>{exporting ? '正在导出…' : '导出到生成'}</Text>
           <Text style={styles.primaryActionArrow}>↗</Text>
         </Pressable>
       </View>

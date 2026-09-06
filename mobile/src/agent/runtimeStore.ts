@@ -11,7 +11,7 @@ export type RuntimeEvent =
 export type PromptRuntime = {
   agent: H3AgUiAgent;
   getSnapshot: () => LocalThreadSnapshot;
-  updateMetadata: (snapshot: LocalThreadSnapshot) => void;
+  updateMetadata: (metadata: Pick<LocalThreadSnapshot, 'customTitle' | 'updatedAt'>) => void;
   flush: () => Promise<void>;
   dispose: () => Promise<void>;
   disposed: () => boolean;
@@ -39,6 +39,7 @@ export function createPromptRuntimeRegistry(
 ) {
   const runtimes = new Map<string, { configKey: string; runtime: PromptRuntime }>();
   const saveTails = new Map<string, Promise<void>>();
+  const snapshotListeners = new Set<(snapshot: LocalThreadSnapshot) => void>();
 
   const enqueueSave = (threadId: string, work: () => Promise<void>): Promise<void> => {
     const tail = (saveTails.get(threadId) ?? Promise.resolve()).then(work);
@@ -55,15 +56,12 @@ export function createPromptRuntimeRegistry(
       const key = configKey(config);
       const existing = runtimes.get(initial.threadId);
       if (existing?.configKey === key) {
-        existing.runtime.updateMetadata(initial);
         return existing.runtime;
       }
       const seed = existing
         ? {
             ...initial,
             ...existing.runtime.getSnapshot(),
-            customTitle: initial.customTitle ?? existing.runtime.getSnapshot().customTitle,
-            createdAt: initial.createdAt,
           }
         : initial;
       if (existing) void existing.runtime.dispose();
@@ -80,6 +78,9 @@ export function createPromptRuntimeRegistry(
       const listeners = new Set<(event: RuntimeEvent) => void>();
       const emit = (event: RuntimeEvent) => {
         if (!active) return;
+        if (event.type === 'snapshot') {
+          for (const listener of snapshotListeners) listener(event.snapshot);
+        }
         for (const listener of listeners) listener(event);
       };
       const persist = (messages: readonly unknown[], state: unknown) => {
@@ -138,8 +139,10 @@ export function createPromptRuntimeRegistry(
           snapshot = {
             ...snapshot,
             customTitle: next.customTitle,
-            createdAt: next.createdAt,
+            updatedAt: Math.max(snapshot.updatedAt, next.updatedAt),
           };
+          if (pendingSave) pendingSave = snapshot;
+          emit({ type: 'snapshot', snapshot });
         },
         flush,
         dispose,
@@ -151,6 +154,21 @@ export function createPromptRuntimeRegistry(
       };
       runtimes.set(initial.threadId, { configKey: key, runtime });
       return runtime;
+    },
+    subscribe(listener: (snapshot: LocalThreadSnapshot) => void): () => void {
+      snapshotListeners.add(listener);
+      return () => { snapshotListeners.delete(listener); };
+    },
+    async renameThread(threadId: string, title: string, threadStore: LocalThreadStore) {
+      const metadata = { customTitle: title, updatedAt: Date.now() };
+      const runtime = runtimes.get(threadId)?.runtime;
+      // Refresh pending and future stream saves before queuing the metadata write.
+      // An already in-flight transcript save completes before this UPDATE.
+      runtime?.updateMetadata(metadata);
+      const flushing = runtime?.flush();
+      const renaming = enqueueSave(threadId, () => threadStore.rename(threadId, title, metadata.updatedAt));
+      await Promise.all([flushing, renaming]);
+      return metadata;
     },
     async evictThread(threadId: string): Promise<void> {
       const entry = runtimes.get(threadId);

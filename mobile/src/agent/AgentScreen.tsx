@@ -1,5 +1,5 @@
 import { CopilotChat } from '@copilotkit/react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { getDatabase } from '../storage/databaseClient';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -106,6 +106,8 @@ function ReadyAgent({
   );
   const [threads, setThreads] = useState<LocalThreadSnapshot[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const renameSequence = useRef(0);
+  const appliedRenames = useRef(new Map<string, number>());
   useEffect(() => {
     let active = true;
     void threadStore
@@ -130,7 +132,7 @@ function ReadyAgent({
           createdAt: now,
           updatedAt: now,
         };
-        void threadStore.save(initial).then(() => {
+        return threadStore.save(initial).then(() => {
           if (active) {
             setThreads([initial]);
             setActiveThreadId(initial.threadId);
@@ -170,31 +172,38 @@ function ReadyAgent({
         await promptRuntimeRegistry.evictThread(threadId);
         await threadStore.remove(threadId);
         const next = sortSessionSnapshots(await threadStore.list());
-        setThreads(next);
+        setThreads((current) => sortSessionSnapshots(next.map((snapshot) =>
+          current.find((item) => item.threadId === snapshot.threadId) ?? snapshot,
+        )));
         setActiveThreadId((current) =>
           current === threadId ? (next[0]?.threadId ?? null) : current,
         );
+        if (!next.length) await createSession();
       } catch (reason) {
         onError(reason instanceof Error ? reason.message : '删除会话失败');
       }
     },
-    [onError, threadStore],
+    [createSession, onError, threadStore],
   );
   const renameSession = useCallback(
     async (threadId: string, title: string) => {
-      const current = threads.find((item) => item.threadId === threadId);
-      if (!current) return;
-      const next = { ...current, customTitle: title, updatedAt: Date.now() };
+      const sequence = ++renameSequence.current;
       try {
-        await threadStore.save(next);
+        const metadata = await promptRuntimeRegistry.renameThread(threadId, title, threadStore);
+        // A later successful rename wins even when an earlier flush finishes last.
+        // Failed requests do not prevent a prior successful rename from applying.
+        if (sequence < (appliedRenames.current.get(threadId) ?? 0)) return;
+        appliedRenames.current.set(threadId, sequence);
         setThreads((items) => sortSessionSnapshots(
-          items.map((item) => (item.threadId === threadId ? next : item)),
+          items.map((item) => (item.threadId === threadId
+            ? { ...item, ...metadata, updatedAt: Math.max(item.updatedAt, metadata.updatedAt) }
+            : item)),
         ));
       } catch (reason) {
         onError(reason instanceof Error ? reason.message : '重命名会话失败');
       }
     },
-    [onError, threadStore, threads],
+    [onError, threadStore],
   );
   const handleSnapshotChange = useCallback(
     (next: LocalThreadSnapshot) =>
@@ -203,6 +212,7 @@ function ReadyAgent({
       )),
     [],
   );
+  useEffect(() => promptRuntimeRegistry.subscribe(handleSnapshotChange), [handleSnapshotChange]);
   const activeSnapshot = threads.find(
     (item) => item.threadId === activeThreadId,
   );
@@ -213,7 +223,6 @@ function ReadyAgent({
       config={config}
       snapshot={activeSnapshot}
       threadStore={threadStore}
-      onSnapshotChange={handleSnapshotChange}
       threads={threads}
       activeThreadId={activeSnapshot.threadId}
       onSelect={(id) => setActiveThreadId(id)}
@@ -235,14 +244,12 @@ function AgentSession({
   config,
   snapshot,
   threadStore,
-  onSnapshotChange,
   onExportPrompt,
   ...uiProps
 }: {
   config: AgentConfig;
   snapshot: LocalThreadSnapshot;
   threadStore: LocalThreadStore;
-  onSnapshotChange: (snapshot: LocalThreadSnapshot) => void;
   threads: LocalThreadSnapshot[];
   activeThreadId: string;
   onSelect: (id: string) => void;
@@ -260,11 +267,10 @@ function AgentSession({
   const agent = runtime.agent;
   useEffect(() => {
     const unsubscribe = runtime.subscribe((event) => {
-      if (event.type === 'snapshot') onSnapshotChange(event.snapshot);
-      else setNotice(event.message);
+      if (event.type === 'error') setNotice(event.message);
     });
     return unsubscribe;
-  }, [runtime, onSnapshotChange]);
+  }, [runtime]);
   return (
     <LocalCopilotKitProvider
       agent={agent}
