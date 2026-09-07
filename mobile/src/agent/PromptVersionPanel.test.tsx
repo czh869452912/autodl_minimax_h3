@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Text } from 'react-native';
+import { KeyboardAvoidingView, Platform, Text } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { PromptVersionPanel } from './PromptVersionPanel';
 import type { PromptVersion } from './promptVersions';
@@ -14,6 +14,33 @@ const versions: PromptVersion[] = [
 ];
 const text = (tree: ReturnType<typeof create>) => tree.root.findAllByType(Text).map((node) => [node.props.children].flat(Infinity).join('')).join('\n');
 const press = (tree: ReturnType<typeof create>, label: string) => tree.root.findByProps({ accessibilityLabel: label }).props.onPress();
+
+it('leaves Android modal keyboard resizing to the native window while editing parameters', () => {
+  const original = Platform.OS;
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+  let tree!: ReturnType<typeof create>;
+  try {
+    act(() => { tree = create(<PromptVersionPanel versions={versions} threadId="t" onSelect={() => undefined} onRestore={() => undefined} onExport={async () => undefined} />); });
+    act(() => press(tree, '预览并带入创建页'));
+    expect(tree.root.findByType(KeyboardAvoidingView).props.enabled).toBe(false);
+    const stopPropagation = jest.fn();
+    const modalSurface = tree.root.findByProps({ accessibilityViewIsModal: true });
+    act(() => {
+      modalSurface.props.onFocus({ stopPropagation });
+      modalSurface.props.onBlur({ stopPropagation });
+    });
+    expect(stopPropagation).toHaveBeenCalledTimes(2);
+    const input = tree.root.findByProps({ accessibilityLabel: '时长秒数（可选）' });
+    for (const value of ['1', '16', '6']) {
+      act(() => input.props.onChangeText(value));
+      expect(tree.root.findByProps({ accessibilityLabel: '时长秒数（可选）' })).toBe(input);
+      expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBeUndefined();
+    }
+  } finally {
+    if (tree) act(() => tree.unmount());
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: original });
+  }
+});
 
 it('selects a compact old version, shows real changes, restores, and copies only the selected prompt', async () => {
   const onSelect = jest.fn(); const onRestore = jest.fn();

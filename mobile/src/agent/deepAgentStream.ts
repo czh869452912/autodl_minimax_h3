@@ -3,6 +3,7 @@ import { AIMessageChunk } from '@langchain/core/messages';
 type RecordValue = Record<string, any>;
 const rec = (value: unknown): RecordValue => value && typeof value === 'object' ? value as RecordValue : {};
 export type StreamEvent =
+  | { type: 'CUSTOM'; name: 'h3.reasoning'; value: { messageId: string; delta: string } }
   | { type: 'CUSTOM'; name: 'h3.tool.status'; value: { toolCallId: string; status: 'complete' | 'failed'; summary: string } }
   | { type: 'TEXT_MESSAGE_START'; messageId: string; role: 'assistant' }
   | { type: 'TEXT_MESSAGE_CONTENT'; messageId: string; delta: string }
@@ -24,11 +25,21 @@ function messagesOf(item: unknown): RecordValue[] {
 }
 function textOf(content: unknown): string {
   if (typeof content === 'string') return content;
-  return Array.isArray(content) ? content.map(part => typeof part === 'string' ? part : String(rec(part).text ?? '')).join('') : '';
+  return Array.isArray(content) ? content.map(part => typeof part === 'string' ? part : ['thinking', 'reasoning'].includes(rec(part).type) ? '' : String(rec(part).text ?? '')).join('') : '';
+}
+
+function reasoningOf(message: RecordValue): string {
+  const extra = message.additional_kwargs;
+  if (typeof extra?.reasoning_content === 'string') return extra.reasoning_content;
+  if (typeof extra?.reasoning === 'string') return extra.reasoning;
+  return Array.isArray(message.content) ? message.content.map((part: unknown) => {
+    const block = rec(part);
+    return ['thinking', 'reasoning'].includes(block.type) ? String(block.thinking ?? block.reasoning ?? block.text ?? '') : '';
+  }).join('') : '';
 }
 
 type ToolState = { id: string; name: string; args: string; started: boolean; ended: boolean };
-type MessageState = { text: string; opened: boolean; ended: boolean; tools: Map<string, ToolState> };
+type MessageState = { text: string; reasoning: string; opened: boolean; ended: boolean; tools: Map<string, ToolState> };
 
 function nextOrAbort(iterator: AsyncIterator<unknown>, signal: AbortSignal): Promise<IteratorResult<unknown>> {
   if (signal.aborted) return Promise.resolve({ done: true, value: undefined });
@@ -102,10 +113,16 @@ export async function* adaptDeepAgentStream(
         onAssistantMessage?.(id, ['length', 'max_tokens', 'content_filter', 'error', 'cancelled'].includes(String(finishReason)));
         let state = messages.get(id);
         if (!state) {
-          state = { text: '', opened: false, ended: false, tools: new Map() };
+          state = { text: '', reasoning: '', opened: false, ended: false, tools: new Map() };
           messages.set(id, state);
         }
         const chunk = AIMessageChunk.isInstance(original) || serializedType === 'AIMessageChunk' || 'tool_call_chunks' in message || ['aimessagechunk', 'ai_chunk'].includes(role);
+        const reasoning = reasoningOf(message);
+        const reasoningDelta = chunk ? reasoning : reasoning.startsWith(state.reasoning) ? reasoning.slice(state.reasoning.length) : '';
+        if (reasoningDelta) {
+          state.reasoning += reasoningDelta;
+          yield { type: 'CUSTOM', name: 'h3.reasoning', value: { messageId: id, delta: reasoningDelta } };
+        }
         const chunks = message.tool_call_chunks;
         const rawChunks = chunk && Array.isArray(chunks) && chunks.length > 0;
         const calls = rawChunks ? chunks : message.tool_calls ?? message.additional_kwargs?.tool_calls ?? [];

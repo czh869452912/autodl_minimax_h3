@@ -21,6 +21,7 @@ jest.mock('./assistantImagePicker', () => ({
 import { applyComposerSuggestion, getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline, AttachmentStrip, ReferenceImagePreview, type RunIssue } from './PromptAssistantUi';
 import { normalizeMessages } from './agentPresentation';
 import { PromptVersionPanel } from './PromptVersionPanel';
+import { RunTimelineRow } from './RunTimelineRow';
 import * as timelineProjection from './timelineProjection';
 import type { WorkflowDefinition } from '../workflows/schema/types';
 import { officialH3SkillManifest } from './skillBundle';
@@ -60,6 +61,38 @@ function renderedText(tree: ReturnType<typeof create>): string[] {
 }
 
 describe('Prompt assistant UI primitives', () => {
+  it('folds process messages together and expands complete tool output on demand', () => {
+    const run = { id: 'r', userMessageId: 'u', messageIds: [], status: 'completed' as const, startedAt: 1, endedAt: 2, tools: [] };
+    const output = 'Tool detail '.repeat(100) + 'END OF OUTPUT';
+    const entries = [{ id: 'reason', kind: 'reasoning' as const, text: 'Inspect reference' }, { id: 'tool', kind: 'tool' as const, tool: { id: 'tool', name: 'read_file', status: 'complete' as const, startedAt: 1, endedAt: 2, arguments: '{"path":"/guide.md"}', output } }];
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<RunTimelineRow run={run} entries={entries} disabled={false} onRetry={async () => undefined} />); });
+    expect(renderedText(tree).join('')).not.toContain('Inspect reference');
+    act(() => tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.onPress());
+    expect(renderedText(tree).join('')).toContain('Inspect reference');
+    expect(renderedText(tree).join('')).toContain('/guide.md');
+    expect(renderedText(tree).join('')).not.toContain('END OF OUTPUT');
+    act(() => tree.root.findByProps({ accessibilityLabel: '展开过程项 tool' }).props.onPress());
+    expect(renderedText(tree).join('')).toContain('END OF OUTPUT');
+    act(() => tree.root.findByProps({ accessibilityLabel: '展开过程项 tool' }).props.onPress());
+    expect(renderedText(tree).join('')).not.toContain('END OF OUTPUT');
+    act(() => tree.unmount());
+  });
+  it('omits empty assistant rows while retaining their anchored run and uncovered tools', () => {
+    const rows = normalizeMessages([
+      { id: 'u', role: 'user', content: 'Create a video' },
+      { id: 'thinking', role: 'assistant', content: '' },
+      { id: 'tools', role: 'assistant', content: '', toolCalls: [{ id: 't1', function: { name: 'read_file' } }] },
+      { id: 'mixed', role: 'assistant', content: '', toolCalls: [{ id: 't1', function: { name: 'read_file' } }, { id: 't2', function: { name: 'ls' } }] },
+    ]);
+    const run = { id: 'r', userMessageId: 'u', messageIds: ['thinking', 'tools'], status: 'completed' as const, startedAt: 1, endedAt: 2, tools: [{ id: 't1', name: 'read_file', status: 'complete' as const, startedAt: 1, endedAt: 2 }] };
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<ConversationTimeline rows={rows} runs={[run]} isRunning={false} onExportPrompt={async () => undefined} />); });
+    expect(tree.root.findByType(FlatList).props.data.map((row: { id: string }) => row.id)).toEqual(['u', 'run-r', 'mixed']);
+    expect(tree.root.findByType(ToolTimeline).props.steps.map((step: { id: string }) => step.id)).toEqual(['t2']);
+    act(() => tree.unmount());
+  });
+
   it('does not render a completed Markdown row again while the tail streams', () => {
     const project = timelineProjection.createTimelineProjection();
     const older = { id: 'old', role: 'assistant', content: 'completed answer' };
@@ -501,6 +534,14 @@ describe('Prompt assistant UI primitives', () => {
     let tree!: ReturnType<typeof create>;
     act(() => { tree = create(<ConversationTimeline rows={[]} isRunning onExportPrompt={() => Promise.resolve()} />); });
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === '正在生成 Prompt…')).toBe(true);
+    act(() => tree.unmount());
+  });
+
+  it('shows only one progress indicator before the first visible response', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<ConversationTimeline rows={normalizeMessages([{ id: 'thinking', role: 'assistant', content: '' }])} isRunning onExportPrompt={async () => undefined} />); });
+    expect(renderedText(tree).filter(text => text === '正在生成 Prompt…')).toHaveLength(1);
+    expect(tree.root.findByType(FlatList).props.data).toHaveLength(0);
     act(() => tree.unmount());
   });
 

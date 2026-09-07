@@ -236,7 +236,7 @@ export function createPromptRuntimeRegistry(
           const updated = runs.map(run => run.id === input.runId ? reducePromptRunEvent(run, event, Date.now()) : run);
           if (updated.some((run, index) => run !== runs[index])) {
             runs = updated;
-            persist(messages, state, ['RUN_ERROR', 'RUN_FINISHED', 'CUSTOM'].includes(event.type));
+            persist(messages, state, ['RUN_ERROR', 'RUN_FINISHED', 'CUSTOM'].includes(event.type) && (event as any).name !== 'h3.reasoning');
           }
           return { state: mergeState(state) as never };
         },

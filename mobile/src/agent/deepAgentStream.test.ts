@@ -10,6 +10,26 @@ async function collect(items: unknown[]) {
   return { events, error };
 }
 
+it('streams provider reasoning separately and does not duplicate the final snapshot', async () => {
+  const { events, error } = await collect([
+    new AIMessageChunk({ id: 'a', content: '', additional_kwargs: { reasoning_content: 'Inspect ' } }),
+    new AIMessageChunk({ id: 'a', content: 'Answer', additional_kwargs: { reasoning_content: 'image' } }),
+    new AIMessage({ id: 'a', content: 'Answer', additional_kwargs: { reasoning_content: 'Inspect image' } }),
+  ]);
+  expect(error).toBeUndefined();
+  expect(events.filter(event => event.type === 'CUSTOM')).toEqual([
+    { type: 'CUSTOM', name: 'h3.reasoning', value: { messageId: 'a', delta: 'Inspect ' } },
+    { type: 'CUSTOM', name: 'h3.reasoning', value: { messageId: 'a', delta: 'image' } },
+  ]);
+  expect(events.filter(event => event.type === 'TEXT_MESSAGE_CONTENT')).toEqual([{ type: 'TEXT_MESSAGE_CONTENT', messageId: 'a', delta: 'Answer' }]);
+});
+
+it('keeps structured thinking blocks out of the final answer', async () => {
+  const { events } = await collect([new AIMessageChunk({ id: 'a', content: [{ type: 'thinking', thinking: 'Inspect reference' }, { type: 'text', text: 'Answer' }] })]);
+  expect(events).toContainEqual({ type: 'CUSTOM', name: 'h3.reasoning', value: { messageId: 'a', delta: 'Inspect reference' } });
+  expect(events).toContainEqual({ type: 'TEXT_MESSAGE_CONTENT', messageId: 'a', delta: 'Answer' });
+});
+
 it('retains interleaved A/B/A chunks with one lifecycle per message', async () => {
   const { events, error } = await collect([
     new AIMessageChunk({ id: 'a', content: 'A' }),

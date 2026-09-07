@@ -106,10 +106,11 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
     </View>
     {copyStatus ? <Text accessibilityLiveRegion="polite" style={styles.muted}>{copyStatus}</Text> : null}
     {activePreview && <Modal visible transparent animationType="slide" onRequestClose={() => { if (!busy) setPreview(null); }}>
-      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <View style={styles.modal} accessibilityViewIsModal>
+      {/* Android Modal already uses adjustResize; a second height correction oscillates with IME layout. */}
+      <KeyboardAvoidingView style={styles.overlay} enabled={Platform.OS === 'ios'} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.modal} accessibilityViewIsModal onFocus={event => event.stopPropagation()} onBlur={event => event.stopPropagation()}>
           <Text style={styles.title}>带入创建页前确认</Text>
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.previewContent}>
+          <ScrollView style={styles.previewScroll} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.previewContent}>
             <Text style={styles.muted}>Prompt</Text><Text selectable style={styles.prompt}>{activePreview.version.promptText}</Text>
             <Text style={styles.title}>绑定图片 · {images.length} / {activePreview.version.images.length}</Text>
             <Text style={styles.muted}>默认列出生成此版本前最近一次上传的图片；请核对引用和标签。点击图片可取消或恢复绑定。</Text>
@@ -154,7 +155,8 @@ const styles = StyleSheet.create({
   removed: { color: '#8D3F36', backgroundColor: '#FAEDE9' },
   added: { color: '#315F3B', backgroundColor: '#EAF4EC' },
   overlay: { flex: 1, justifyContent: 'center', padding: 18, backgroundColor: 'rgba(0,0,0,0.35)' },
-  modal: { width: '100%', maxWidth: 720, maxHeight: '92%', alignSelf: 'center', padding: 18, borderRadius: 18, backgroundColor: colors.surface, gap: 16 },
+  modal: { width: '100%', maxWidth: 720, height: '92%', alignSelf: 'center', padding: 18, borderRadius: 18, backgroundColor: colors.surface, gap: 16 },
+  previewScroll: { flex: 1, minHeight: 0 },
   previewContent: { gap: 12, paddingBottom: 8 },
   imageCard: { width: 108, minHeight: 122, borderWidth: 1, borderColor: colors.line, padding: 8, borderRadius: 10, gap: 4 },
   thumbnail: { width: 90, height: 72, borderRadius: 6 },

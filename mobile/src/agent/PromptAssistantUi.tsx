@@ -47,9 +47,10 @@ import { type PromptParseResult } from './promptParser';
 import type { LocalThreadSnapshot } from './threadStore';
 import { DraggableBottomSheet, type DraggableBottomSheetHandle } from '../ui/DraggableSheet';
 import { nextFollowState, type TimelineMetrics } from './timelineScroll';
-import { readComposerDraft, insertRunRows, sessionRunLabel } from './assistantWorkspace';
+import { readComposerDraft, sessionRunLabel } from './assistantWorkspace';
 import { readPromptRuns, type PromptRun } from './runState';
 import { RunTimelineRow } from './RunTimelineRow';
+import { enrichRunTools, projectRunTimeline } from './runTimeline';
 import { readPromptVersions, restorePromptVersion } from './promptVersions';
 import { PromptVersionPanel } from './PromptVersionPanel';
 import type { PromptHandoff } from './promptHandoff';
@@ -148,7 +149,7 @@ export function PromptAssistantUi({
   const versionSheet = useRef<DraggableBottomSheetHandle>(null);
   const briefSheet = useRef<DraggableBottomSheetHandle>(null);
   const [brief, setBrief] = useState({ subject: '', camera: '', style: '', duration: '' });
-  const runs = readPromptRuns(state);
+  const runs = enrichRunTools(readPromptRuns(state), transcript ?? messages);
   const completedMessageIds: string[] = Array.isArray(state.h3CompletedMessageIds) ? state.h3CompletedMessageIds.filter((id: unknown): id is string => typeof id === 'string') : [];
   const savedVersions = useMemo(() => readPromptVersions(state), [state.h3Versions]);
   const versions = savedVersions;
@@ -395,9 +396,18 @@ export function PromptAssistantUi({
             onSelectSuggestion={applySuggestion}
           />
           <View style={styles.composerDock}>
-            <View style={{ flexDirection: 'row', gap: 16, paddingHorizontal: 12, paddingVertical: 6 }}>
-              <Pressable accessibilityRole="button" accessibilityLabel="补充创作信息" onPress={() => setBriefOpen(true)}><Text>补充创作信息</Text></Pressable>
-              {versions.length ? <Pressable accessibilityRole="button" accessibilityLabel="打开 Prompt 版本" onPress={() => setVersionsOpen(true)}><Text>Prompt 版本 · {versions.length}</Text></Pressable> : null}
+            <View style={styles.composerActions}>
+              <Pressable accessibilityRole="button" accessibilityLabel="补充创作信息" accessibilityState={{ expanded: briefOpen }} onPress={() => setBriefOpen(true)} style={({ pressed }) => [styles.composerAction, pressed && styles.composerActionPressed]}>
+                <AppIcon name="filter_list" size={18} color={LIGHT_PROMPT_COLORS.muted} />
+                <Text style={styles.composerActionText}>补充创作信息</Text>
+                <AppIcon name="expand_more" size={16} color={LIGHT_PROMPT_COLORS.muted} />
+              </Pressable>
+              {versions.length ? <Pressable accessibilityRole="button" accessibilityLabel="打开 Prompt 版本" accessibilityState={{ expanded: versionsOpen }} onPress={() => setVersionsOpen(true)} style={({ pressed }) => [styles.composerAction, pressed && styles.composerActionPressed]}>
+                <AppIcon name="list_alt" size={18} color={LIGHT_PROMPT_COLORS.muted} />
+                <Text style={styles.composerActionText}>Prompt 版本</Text>
+                <Text style={styles.versionCount}>{versions.length}</Text>
+                <AppIcon name="expand_more" size={16} color={LIGHT_PROMPT_COLORS.muted} />
+              </Pressable> : null}
             </View>
             <Composer
               value={draft}
@@ -503,9 +513,15 @@ export function ConversationTimeline({
   runs?: PromptRun[];
   latestVersionMessageId?: string;
 }) {
-  const listRef = useRef<FlatList<ReturnType<typeof insertRunRows>[number]>>(null);
+  const listRef = useRef<FlatList<ReturnType<typeof projectRunTimeline>[number]>>(null);
   const [visibleCount, setVisibleCount] = useState(50);
-  const allRows = insertRunRows(rows, runs);
+  const runToolIds = new Set(runs.flatMap(run => run.tools.map(tool => tool.id)));
+  const allRows = projectRunTimeline(rows, runs, completedMessageIds).map(row => row.kind === 'assistant'
+    ? { ...row, tools: row.tools.filter(tool => !runToolIds.has(tool.id)) }
+    : row).filter(row => row.kind !== 'assistant'
+      || (completedMessageIds.includes(row.id) ? row.prose ?? row.text : row.text).trim()
+      || (row.candidates ?? (row.prompt ? [row.prompt] : [])).length > 0
+      || row.tools.length > 0);
   const timelineRows = allRows.slice(-visibleCount);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const exportRef = useRef(onExportPrompt); exportRef.current = onExportPrompt;
@@ -513,6 +529,7 @@ export function ConversationTimeline({
   const [followingLatest, setFollowingLatest] = useState(true);
   const followingLatestRef = useRef(true);
   const setFollow = useCallback((value: boolean) => { followingLatestRef.current = value; setFollowingLatest(value); }, []);
+  const inspectProcess = useCallback(() => setFollow(false), [setFollow]);
   const scrollToLatest = useCallback((animated = !isRunning) => {
     if (followingLatestRef.current) listRef.current?.scrollToEnd({ animated });
   }, [isRunning]);
@@ -554,18 +571,18 @@ export function ConversationTimeline({
             )
           }
           ListFooterComponent={
-            runIssue ? <RunIssueRow issue={runIssue} onRetry={onRetry} /> : !runs.length && rows.length && isRunning ? (
+            runIssue ? <RunIssueRow issue={runIssue} onRetry={onRetry} /> : !runs.length && allRows.length > 0 && isRunning ? (
               <RunningIndicator compact />
             ) : null
           }
           renderItem={({ item }) =>
-        item.kind === 'run' ? <RunTimelineRow run={item.run} disabled={isRunning} onRetry={onRetry} /> : <TimelineMessageRow
+        item.kind === 'run' ? <RunTimelineRow run={item.run} entries={item.entries} disabled={isRunning} onRetry={onRetry} onInspect={inspectProcess} /> : <TimelineMessageRow
           item={item}
           completed={completedMessageIds.includes(item.id)}
           streaming={isRunning && (runs.length ? runs.some(run => run.status === 'running' && run.messageIds.at(-1) === item.id) : item.id === rows.at(-1)?.id)}
           ready={!isRunning && completedMessageIds.includes(item.id)}
           latest={latestVersionMessageId ? item.id === latestVersionMessageId : undefined}
-          showTools={item.kind === 'assistant' && !runs.some(run => run.tools.some(tool => item.tools.some(step => step.id === tool.id)))}
+          showTools={item.kind === 'assistant'}
           onPreview={setPreviewImage}
           onExportPrompt={exportPrompt}
         />
@@ -1023,11 +1040,14 @@ export function AttachmentStrip({
               )}
             </Pressable>
             <Pressable
+              accessibilityRole="button"
               accessibilityLabel={`移除附件 ${attachment.displayName || '图片'}`}
               onPress={() => onRemoveAttachment?.(attachment.id)}
               style={styles.removeAttachment}
             >
-              <Text style={styles.removeText}>×</Text>
+              <View style={styles.removeAttachmentBadge}>
+                <AppIcon name="close" size={14} color="#FFFFFF" />
+              </View>
             </Pressable>
           </View>
         ))}
@@ -1599,6 +1619,11 @@ const styles = StyleSheet.create({
   primaryActionText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
   primaryActionArrow: { color: '#FFFFFF', fontSize: 16 },
   composerDock: { paddingHorizontal: 12, paddingTop: 6, paddingBottom: 7 },
+  composerActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingBottom: 8 },
+  composerAction: { minHeight: 44, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: LIGHT_PROMPT_COLORS.line, backgroundColor: LIGHT_PROMPT_COLORS.surface },
+  composerActionPressed: { backgroundColor: COLORS.primarySoft },
+  composerActionText: { flexShrink: 1, fontSize: 13, lineHeight: 18, fontWeight: '600', color: LIGHT_PROMPT_COLORS.ink },
+  versionCount: { minWidth: 20, textAlign: 'center', paddingHorizontal: 5, borderRadius: 5, backgroundColor: COLORS.primarySoft, color: COLORS.primary, fontSize: 12, lineHeight: 20, fontWeight: '700' },
   composer: {
     padding: 8,
     borderRadius: 22,
@@ -1647,17 +1672,17 @@ const styles = StyleSheet.create({
   },
   sendDisabled: { backgroundColor: '#ECEBE6' },
   attachments: { paddingHorizontal: 2, paddingBottom: 8, gap: 8 },
-  attachment: { width: 64, height: 103, borderRadius: 8, overflow: 'hidden' },
+  attachment: { width: 72, height: 72, paddingTop: 8, paddingRight: 8 },
   attachmentImage: {
-    width: 55,
-    height: 55,
-    borderRadius: 12,
+    width: 64,
+    height: 64,
+    borderRadius: 8,
     backgroundColor: '#ECEBE6',
   },
   attachmentLoading: {
-    width: 55,
-    height: 55,
-    borderRadius: 12,
+    width: 64,
+    height: 64,
+    borderRadius: 8,
     backgroundColor: '#ECEBE6',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1665,16 +1690,23 @@ const styles = StyleSheet.create({
   loadingText: { color: LIGHT_PROMPT_COLORS.muted, fontSize: 9 },
   removeAttachment: {
     position: 'absolute',
-    bottom: 0,
+    top: 0,
     right: 0,
-    width: 64,
-    height: 48,
-    borderRadius: 8,
+    width: 44,
+    height: 44,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+  },
+  removeAttachmentBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: LIGHT_PROMPT_COLORS.surface,
     backgroundColor: LIGHT_PROMPT_COLORS.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  removeText: { color: '#FFFFFF', fontSize: 15, lineHeight: 18 },
   previewBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,.78)',
