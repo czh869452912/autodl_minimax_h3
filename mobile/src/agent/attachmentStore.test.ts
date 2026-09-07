@@ -1,6 +1,28 @@
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { createAttachmentStore, releaseExpiredAttachmentImports, validateImageBudget } from './attachmentStore';
 import { createCasRepository } from '../media/casRepository';
+import CryptoJS from 'crypto-js';
+
+it('externalizes long run traces in bounded chunks and hydrates exact Unicode content', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  const files = new Map<string, string>();
+  const importText = jest.fn(async (text: string) => {
+    const hash = CryptoJS.SHA256(text).toString(); files.set(hash, text);
+    return { sha256: hash, byteSize: CryptoJS.enc.Utf8.parse(text).sigBytes, mime: 'text/plain', relativePath: `cas/sha256/${hash.slice(0, 2)}/${hash}` };
+  });
+  try {
+    const assets = createAttachmentStore(db as never, { importText, readText: async uri => files.get(uri.split('/').at(-1)!)! });
+    const text = 'x'.repeat(65535) + String.fromCodePoint(0x1F600) + 'z'.repeat(100000);
+    const input = { tools: [{ id: 'tool', name: 'read_file', startedAt: 1, output: text, arguments: 'a'.repeat(6000) }], activities: [{ id: 'r', kind: 'reasoning', messageId: 'm', text }] };
+    const stored = await assets.externalize(input);
+    expect(JSON.stringify(stored.value).length).toBeLessThan(2000);
+    expect(importText.mock.calls.every(([chunk]) => chunk.length <= 65536)).toBe(true);
+    expect(await assets.hydrate(stored.value)).toEqual(input);
+    await assets.retain(db as never, 'agent_record', 'run', stored.hashes);
+    await stored.releaseStaging();
+    expect(createCasRepository(db as never).listUnreferenced(Date.now() + 1)).toHaveLength(0);
+  } finally { db.close(); }
+});
 
 it('reimports mutable local paths and rejects oversized workspace references before reading', async () => {
   const db = createInitializedRealSqliteTestDb();

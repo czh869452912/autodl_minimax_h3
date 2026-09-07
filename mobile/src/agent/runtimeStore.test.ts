@@ -35,6 +35,27 @@ function fakeAgent() {
 const store = { save: jest.fn(async () => undefined) } as unknown as LocalThreadStore;
 const saveMock = store.save as jest.Mock;
 
+it('batches reasoning bursts and flushes the tail before terminal persistence', async () => {
+  jest.useFakeTimers();
+  const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
+  const runtime = registry.ensure(config, snapshot('reasoning-batch'), store);
+  const agent = runtime.agent as any;
+  agent.isRunning = true;
+  agent.emit('onRunInitialized', { input: { runId: 'r' } });
+  const views = jest.fn(); runtime.subscribeView(views);
+  try {
+    for (let n = 0; n < 1000; n++) agent.emit('onEvent', { input: { runId: 'r' }, event: { type: 'CUSTOM', name: 'h3.reasoning', value: { messageId: 'a', delta: 'x' } } });
+    expect(views).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(100);
+    expect(views).toHaveBeenCalledTimes(1);
+    expect((runtime.getSnapshot().state as any).h3Runs[0].activities[0].text).toBe('x'.repeat(1000));
+    agent.emit('onEvent', { input: { runId: 'r' }, event: { type: 'CUSTOM', name: 'h3.reasoning', value: { messageId: 'a', delta: 'tail' } } });
+    agent.emit('onEvent', { input: { runId: 'r' }, event: { type: 'RUN_FINISHED' } });
+    await runtime.flush();
+    expect((runtime.getSnapshot().state as any).h3Runs[0]).toMatchObject({ status: 'completed', activities: [{ text: 'x'.repeat(1000) + 'tail' }] });
+  } finally { await registry.disposeAll(); jest.useRealTimers(); }
+});
+
 it('isolates 1999 completed rows across 1000 deltas in ten seconds and composer edits from summaries', async () => {
   jest.useFakeTimers();
   const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);

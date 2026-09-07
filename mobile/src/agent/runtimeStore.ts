@@ -15,7 +15,7 @@ export type RuntimeEvent =
 export type PromptRuntime = {
   agent: H3AgUiAgent;
   getSnapshot: () => LocalThreadSnapshot;
-  getViewSnapshot: () => LocalThreadSnapshot;
+  getViewSnapshot: () => LocalThreadSnapshot & { transcriptRevision: number };
   subscribeView: (listener: () => void) => () => void;
   updateMetadata: (metadata: Pick<LocalThreadSnapshot, 'customTitle' | 'updatedAt'>) => void;
   patchClientState: (patch: Record<string, unknown>) => void;
@@ -93,11 +93,23 @@ export function createPromptRuntimeRegistry(
       const clientState: Record<string, unknown> = {};
       for (const key of clientKeys) if (key in (seed.state ?? {})) clientState[key] = (seed.state as Record<string, unknown>)[key];
       const mergeState = (state: unknown) => ({ ...(state as Record<string, unknown>), ...clientState, ...(runs.length ? { h3Runs: runs } : {}) });
+      let reasoningBuffer: { runId: string; messageId: string; chunks: string[]; at: number } | undefined;
+      let reasoningTimer: ReturnType<typeof setTimeout> | undefined;
+      const flushReasoning = () => {
+        if (reasoningTimer) clearTimeout(reasoningTimer);
+        reasoningTimer = undefined;
+        const pending = reasoningBuffer;
+        reasoningBuffer = undefined;
+        if (!pending) return false;
+        runs = runs.map(run => run.id === pending.runId ? reducePromptRunEvent(run, { type: 'CUSTOM', name: 'h3.reasoning', value: { messageId: pending.messageId, delta: pending.chunks.join('') } }, pending.at) : run);
+        return true;
+      };
       let snapshot = { ...seed, state: mergeState(seed.state) } as LocalThreadSnapshot;
-      let viewSnapshot = snapshot;
+      let transcriptRevision = 0;
+      let viewSnapshot = { ...snapshot, transcriptRevision };
       let viewTimer: ReturnType<typeof setTimeout> | undefined;
       const viewListeners = new Set<() => void>();
-      const publishView = () => { if (viewTimer) clearTimeout(viewTimer); viewTimer = undefined; viewSnapshot = snapshot; for (const listener of viewListeners) listener(); };
+      const publishView = () => { if (viewTimer) clearTimeout(viewTimer); viewTimer = undefined; viewSnapshot = { ...snapshot, transcriptRevision }; for (const listener of viewListeners) listener(); };
       let versionCompletionKey = '';
       agent.threadId = seed.threadId;
       agent.setMessages(seed.messages);
@@ -160,6 +172,7 @@ export function createPromptRuntimeRegistry(
         if (boundary) void flush(); else schedule();
       };
       const flush = async (): Promise<FlushResult> => {
+        if (flushReasoning()) { snapshot = { ...snapshot, state: mergeState(snapshot.state) }; pendingSave = snapshot; }
         clearSaveTimers();
         if (needsReload) {
           pendingSave = undefined;
@@ -202,12 +215,14 @@ export function createPromptRuntimeRegistry(
         return { kind: 'saved' };
       };
       const transition = (runId: string, state: unknown, messages: readonly unknown[], status: 'failed' | 'cancelled', error?: string) => {
+        flushReasoning();
         runs = runs.map(run => run.id === runId ? endPromptRun(run, status, Date.now(), error) : run);
         persist(messages, state, true);
         return { state: mergeState(state) as never };
       };
       const subscription = agent.subscribe({
         onMessagesChanged: ({ messages, state }) => {
+          transcriptRevision++;
           const prior = new Set(snapshot.messages.map(message => message.id));
           const boundary = messages.some(message => !prior.has(message.id) && (message.role === 'user' || message.role === 'tool' || 'toolCallId' in message));
           persist(messages, state, boundary);
@@ -227,6 +242,18 @@ export function createPromptRuntimeRegistry(
           return { state: mergeState(state) as never };
         },
         onEvent: ({ input, event, state, messages }) => {
+          if (event.type === 'CUSTOM' && (event as any).name === 'h3.reasoning') {
+            const value = (event as any).value;
+            if (typeof value?.messageId !== 'string' || typeof value.delta !== 'string') return;
+            if (reasoningBuffer && (reasoningBuffer.runId !== input.runId || reasoningBuffer.messageId !== value.messageId)) flushReasoning();
+            reasoningBuffer ??= { runId: input.runId, messageId: value.messageId, chunks: [], at: Date.now() };
+            reasoningBuffer.chunks.push(value.delta);
+            if (!reasoningTimer) reasoningTimer = setTimeout(() => {
+              if (flushReasoning()) { persist(snapshot.messages, snapshot.state); agent.setState(mergeState(snapshot.state) as never); }
+            }, 50);
+            return;
+          }
+          const hadReasoning = flushReasoning();
           if (event.type === 'CUSTOM' && (event as any).name === 'h3.workspace' && runs.some(run => run.id === input.runId && run.status === 'running')) {
             const workspace = (event as any).value.workspace;
             clientState.h3Workspace = workspace;
@@ -234,17 +261,18 @@ export function createPromptRuntimeRegistry(
             persist(messages, state, true);
           }
           const updated = runs.map(run => run.id === input.runId ? reducePromptRunEvent(run, event, Date.now()) : run);
-          if (updated.some((run, index) => run !== runs[index])) {
+          if (hadReasoning || updated.some((run, index) => run !== runs[index])) {
             runs = updated;
             persist(messages, state, ['RUN_ERROR', 'RUN_FINISHED', 'CUSTOM'].includes(event.type) && (event as any).name !== 'h3.reasoning');
+            return { state: mergeState(state) as never };
           }
-          return { state: mergeState(state) as never };
         },
         onRunFailed: ({ input, state, messages, error }) => transition(input.runId, state, messages, 'failed', error.message),
         onRunFinalized: ({ input, state, messages }) => transition(input.runId, state, messages, 'cancelled'),
       });
       const dispose = (): Promise<void> => {
         if (disposePromise) return disposePromise;
+        flushReasoning();
         if (!needsReload) {
           runs = runs.map(run => endPromptRun(run, 'cancelled', Date.now()));
           if (runs.length) persist(snapshot.messages, snapshot.state);
@@ -294,6 +322,7 @@ export function createPromptRuntimeRegistry(
             if (currentComposer?.revision > command.draftRevision) clientState.h3Composer = currentComposer;
             runs = readPromptRuns(saved.state);
             snapshot = { ...saved, state: mergeState(saved.state) };
+            transcriptRevision++;
             agent.setMessages(saved.messages);
             agent.setState(snapshot.state);
             persist(snapshot.messages, snapshot.state);

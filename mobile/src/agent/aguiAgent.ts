@@ -11,6 +11,7 @@ import { hydrateModelImages } from './attachmentStore';
 
 type DeepAgentGraph = { stream(input: unknown, options?: unknown): Promise<AsyncIterable<unknown>> | AsyncIterable<unknown> };
 type AgentExecutionOptions = {
+  reasoningMode?: 'delta' | 'snapshot';
   deadlineMs?: number;
   workspace?: Pick<typeof import('./agentWorkspace'), 'prepareWorkspaceRun' | 'captureWorkspaceState'>;
   budget?: import('./agentTypes').H3ContextBudget;
@@ -232,7 +233,7 @@ export class H3AgUiAgent extends AbstractAgent {
     };
     const textIds = new Set<string>();
     const toolMessageIds = new Set<string>();
-    for await (const event of adaptDeepAgentStream(stream, `assistant-${input.runId}`, signal, observeMessage)) {
+    for await (const event of adaptDeepAgentStream(stream, `assistant-${input.runId}`, signal, observeMessage, this.execution.reasoningMode)) {
       if (signal.aborted) return;
       if (event.type === 'TEXT_MESSAGE_START') {
         textIds.add(event.messageId);

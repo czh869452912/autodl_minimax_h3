@@ -61,6 +61,44 @@ function renderedText(tree: ReturnType<typeof create>): string[] {
 }
 
 describe('Prompt assistant UI primitives', () => {
+  it('does not reproject a stable transcript for reasoning-only or composer updates', () => {
+    const project = jest.fn(() => []);
+    const factory = jest.spyOn(timelineProjection, 'createTimelineProjection').mockReturnValue(project);
+    let tree!: ReturnType<typeof create>;
+    try {
+      const transcript = Array.from({ length: 2000 }, (_, index) => ({ id: `m${index}`, role: 'assistant', content: 'saved' }));
+      act(() => { tree = create(<PromptAssistantUi {...basePromptProps} transcript={transcript} transcriptRevision={1} clientState={{}} />); });
+      project.mockClear();
+      for (let n = 0; n < 20; n++) act(() => tree.update(<PromptAssistantUi {...basePromptProps} transcript={[...transcript]} transcriptRevision={1} clientState={{ h3ReadAt: n }} />));
+      expect(project).not.toHaveBeenCalled();
+      act(() => tree.update(<PromptAssistantUi {...basePromptProps} transcript={transcript} transcriptRevision={2} clientState={{}} />));
+      expect(project).toHaveBeenCalledTimes(1);
+    } finally { if (tree) act(() => tree.unmount()); factory.mockRestore(); }
+  });
+  it('opens a queued run on start, preserves manual collapse, and bounds expanded text', () => {
+    const run = { id: 'r', userMessageId: 'u', messageIds: [], status: 'queued' as const, startedAt: 1, tools: [] };
+    const onInspect = jest.fn();
+    const entries = [{ id: 'private-id', kind: 'reasoning' as const, text: 'x'.repeat(9000) + 'END' }];
+    let tree!: ReturnType<typeof create>;
+    const render = (status: 'queued' | 'running') => <RunTimelineRow run={{ ...run, status }} entries={entries} disabled onRetry={async () => undefined} onInspect={onInspect} />;
+    act(() => { tree = create(render('queued')); });
+    expect(tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.accessibilityState.expanded).toBe(false);
+    act(() => tree.update(render('running')));
+    expect(tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.accessibilityState.expanded).toBe(true);
+    const item = tree.root.findByProps({ testID: 'process-item-private-id' });
+    expect(item.props.accessibilityLabel).toBe('思考');
+    act(() => item.props.onPress());
+    expect(renderedText(tree).join('')).not.toContain('END');
+    act(() => tree.root.findByProps({ accessibilityLabel: '下一段' }).props.onPress());
+    act(() => tree.root.findByProps({ accessibilityLabel: '下一段' }).props.onPress());
+    expect(renderedText(tree).join('')).toContain('END');
+    onInspect.mockClear();
+    act(() => tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.onPress());
+    expect(onInspect).not.toHaveBeenCalled();
+    act(() => tree.update(render('running')));
+    expect(tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.accessibilityState.expanded).toBe(false);
+    act(() => tree.unmount());
+  });
   it('folds process messages together and expands complete tool output on demand', () => {
     const run = { id: 'r', userMessageId: 'u', messageIds: [], status: 'completed' as const, startedAt: 1, endedAt: 2, tools: [] };
     const output = 'Tool detail '.repeat(100) + 'END OF OUTPUT';
@@ -72,9 +110,9 @@ describe('Prompt assistant UI primitives', () => {
     expect(renderedText(tree).join('')).toContain('Inspect reference');
     expect(renderedText(tree).join('')).toContain('/guide.md');
     expect(renderedText(tree).join('')).not.toContain('END OF OUTPUT');
-    act(() => tree.root.findByProps({ accessibilityLabel: '展开过程项 tool' }).props.onPress());
+    act(() => tree.root.findByProps({ testID: 'process-item-tool' }).props.onPress());
     expect(renderedText(tree).join('')).toContain('END OF OUTPUT');
-    act(() => tree.root.findByProps({ accessibilityLabel: '展开过程项 tool' }).props.onPress());
+    act(() => tree.root.findByProps({ testID: 'process-item-tool' }).props.onPress());
     expect(renderedText(tree).join('')).not.toContain('END OF OUTPUT');
     act(() => tree.unmount());
   });
@@ -173,7 +211,8 @@ describe('Prompt assistant UI primitives', () => {
     let tree!: ReturnType<typeof create>;
     try {
       act(() => { tree = create(<PromptAssistantUi {...basePromptProps} clientState={{ h3Runs: [{ id: 'r', userMessageId: 'u', status: 'completed', startedAt: 1, messageIds: ['a'], tools: [{ id: 'tool', name: 'read_file', status: 'complete' }] }] }} />); });
-      expect(tree.root.findByType(ConversationTimeline).props.rows[0].tools[0].status).toBe('complete');
+      expect(tree.root.findByType(RunTimelineRow).props.run.tools[0].status).toBe('complete');
+      expect(tree.root.findByType(ConversationTimeline).props.rows[0].tools[0].status).toBe('running');
       act(() => tree.update(<PromptAssistantUi {...basePromptProps} clientState={{}} />));
       expect(tree.root.findByType(ConversationTimeline).props.rows[0].tools[0].status).toBe('running');
       expect(row.tools[0].status).toBe('running');

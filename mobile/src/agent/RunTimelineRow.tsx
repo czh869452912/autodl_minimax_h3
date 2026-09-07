@@ -11,7 +11,7 @@ export function RunTimelineRow({ run, entries = [], disabled, onRetry, onInspect
   const [now, setNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  useEffect(() => { if (run.status === 'failed' || run.status === 'interrupted') setExpanded(true); }, [run.status]);
+  useEffect(() => { if (run.status === 'running' || run.status === 'failed' || run.status === 'interrupted') setExpanded(true); }, [run.status]);
   useEffect(() => {
     if (run.status !== 'running') return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -20,7 +20,7 @@ export function RunTimelineRow({ run, entries = [], disabled, onRetry, onInspect
   const active = run.tools.find(tool => tool.status === 'running');
   const seconds = Math.max(0, Math.floor(((run.endedAt ?? now) - run.startedAt) / 1000));
   return <View style={styles.container}>
-    <Pressable accessibilityRole="button" accessibilityLabel={`查看运行 ${run.id}`} accessibilityState={{ expanded }} onPress={() => { onInspect?.(); setExpanded(value => !value); }} style={({ pressed }) => [styles.toggle, pressed && styles.pressed]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`查看运行 ${run.id}`} accessibilityState={{ expanded }} onPress={() => { if (!expanded) onInspect?.(); setExpanded(value => !value); }} style={({ pressed }) => [styles.toggle, pressed && styles.pressed]}>
       {run.status === 'running' ? <ActivityIndicator size="small" color={COLORS.primary} /> : <AppIcon name={run.status === 'failed' || run.status === 'interrupted' ? 'info' : 'list_alt'} size={18} color={COLORS.textMuted} />}
       <Text style={styles.label}>{run.status === 'running' && active ? toolActivity(active.name) : `执行过程 · ${RUN_LABELS[run.status]}`}{run.retryOf ? ' · 重试' : ''}</Text>
       <Text style={styles.meta}>{entries.length} 项 · {seconds} 秒</Text>
@@ -57,17 +57,31 @@ function ProcessItem({ entry, now, onInspect }: { entry: ProcessEntry; now: numb
   const status = tool ? ({ complete: '完成', running: '执行中', failed: '失败', cancelled: '已停止' } as const)[tool.status] : '';
   const target = toolTarget(tool?.arguments);
   return <View style={styles.step}>
-    <Pressable accessibilityRole="button" accessibilityLabel={`展开过程项 ${entry.id}`} accessibilityState={{ expanded }} onPress={() => { onInspect?.(); setExpanded(value => !value); }} style={({ pressed }) => [styles.itemToggle, pressed && styles.pressed]}>
+    <Pressable testID={`process-item-${entry.id}`} accessibilityRole="button" accessibilityLabel={`${title}${target ? `，${target}` : ''}${status ? `，${status}` : ''}`} accessibilityState={{ expanded }} onPress={() => { if (!expanded) onInspect?.(); setExpanded(value => !value); }} style={({ pressed }) => [styles.itemToggle, pressed && styles.pressed]}>
       {tool?.status === 'running' ? <ActivityIndicator size="small" color={COLORS.primary} /> : <AppIcon name={tool ? tool.status === 'failed' ? 'info' : 'list_alt' : entry.kind === 'reasoning' ? 'auto_awesome' : 'smart_toy'} size={16} color={tool?.status === 'failed' ? COLORS.danger : COLORS.textMuted} />}
       <Text style={styles.itemLabel}>{title}</Text>
       {tool ? <Text style={[styles.meta, tool.status === 'failed' && styles.failure]}>{status} · {Math.max(0, Math.floor(((tool.endedAt ?? now) - tool.startedAt) / 1000))} 秒</Text> : null}
       <AppIcon name={expanded ? 'expand_less' : 'expand_more'} size={16} color={COLORS.textMuted} />
     </Pressable>
     {target ? <Text style={styles.target} numberOfLines={expanded ? undefined : 1} selectable={expanded}>{target}</Text> : null}
-    {expanded && tool?.arguments ? <View style={styles.payload}><Text style={styles.meta}>输入 · {tool.name}</Text><Text selectable style={styles.code}>{tool.arguments}</Text></View> : null}
+    {expanded && tool?.arguments ? <View style={styles.payload}><Text style={styles.meta}>输入 · {tool.name}</Text><PagedText text={tool.arguments} onInspect={onInspect} /></View> : null}
     {text ? <View style={expanded ? styles.payload : styles.preview}>
       {expanded && tool ? <Text style={styles.meta}>输出</Text> : null}
-      <Text selectable={expanded} numberOfLines={expanded ? undefined : 2} style={tool ? styles.code : styles.stepText}>{expanded ? text : text.slice(0, 240)}</Text>
+      {expanded ? <PagedText text={text} onInspect={onInspect} /> : <Text numberOfLines={2} style={tool ? styles.code : styles.stepText}>{text.slice(0, 240)}</Text>}
+    </View> : null}
+  </View>;
+}
+
+function PagedText({ text, onInspect }: { text: string; onInspect?: () => void }) {
+  const [page, setPage] = useState(0);
+  const pages = Math.max(1, Math.ceil(text.length / 4000));
+  const current = Math.min(page, pages - 1);
+  return <View style={{ gap: 8 }}>
+    <Text selectable style={styles.code}>{text.slice(current * 4000, (current + 1) * 4000)}</Text>
+    {pages > 1 ? <View style={styles.itemToggle}>
+      <Pressable accessibilityRole="button" accessibilityLabel="上一段" disabled={current === 0} onPress={() => { onInspect?.(); setPage(current - 1); }} style={styles.toggle}><AppIcon name="expand_less" size={20} /></Pressable>
+      <Text style={styles.meta}>{current + 1} / {pages}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="下一段" disabled={current === pages - 1} onPress={() => { onInspect?.(); setPage(current + 1); }} style={styles.toggle}><AppIcon name="expand_more" size={20} /></Pressable>
     </View> : null}
   </View>;
 }

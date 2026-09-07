@@ -384,6 +384,7 @@ function AgentSession({
           onExportHandoff={onExportHandoff}
           clientState={liveSnapshot.state as Record<string, unknown>}
           transcript={liveSnapshot.messages}
+          transcriptRevision={liveSnapshot.transcriptRevision}
           onClientStateChange={runtime.patchClientState}
           isVisible={isVisible}
           notice={persistenceIssue ?? notice}

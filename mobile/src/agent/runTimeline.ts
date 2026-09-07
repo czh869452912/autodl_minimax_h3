@@ -4,7 +4,7 @@ import type { PromptRun, PromptRunTool } from './runState';
 export type ProcessEntry = { id: string; kind: 'text' | 'reasoning'; text: string } | { id: string; kind: 'tool'; tool: PromptRunTool };
 export type ProcessRow = { id: string; kind: 'run'; run: PromptRun; entries: ProcessEntry[] };
 
-export function enrichRunTools(runs: PromptRun[], transcript: readonly unknown[]): PromptRun[] {
+export function indexRunTools(transcript: readonly unknown[]) {
   const args = new Map<string, string>();
   const outputs = new Map<string, string>();
   for (const raw of transcript) {
@@ -16,7 +16,18 @@ export function enrichRunTools(runs: PromptRun[], transcript: readonly unknown[]
       if (text) outputs.set(message.toolCallId, text);
     }
   }
-  return runs.map(run => ({ ...run, tools: run.tools.map(tool => ({ ...tool, arguments: tool.arguments ?? args.get(tool.id), output: tool.output ?? outputs.get(tool.id) })) }));
+  return { args, outputs };
+}
+
+export function enrichRunTools(runs: PromptRun[], transcript: readonly unknown[], index = indexRunTools(transcript)): PromptRun[] {
+  const { args, outputs } = index;
+  return runs.map(run => {
+    const tools = run.tools.map(tool => {
+      const argumentsValue = tool.arguments ?? args.get(tool.id), output = tool.output ?? outputs.get(tool.id);
+      return argumentsValue === tool.arguments && output === tool.output ? tool : { ...tool, arguments: argumentsValue, output };
+    });
+    return tools.every((tool, index) => tool === run.tools[index]) ? run : { ...run, tools };
+  });
 }
 
 export function projectRunTimeline(rows: PresentationMessage[], runs: PromptRun[], completedIds: readonly string[]): Array<PresentationMessage | ProcessRow> {
@@ -28,8 +39,15 @@ export function projectRunTimeline(rows: PresentationMessage[], runs: PromptRun[
   const after = new Map<string, ProcessRow[]>();
   const unanchored: ProcessRow[] = [];
   const rowIds = new Set(rows.map(row => row.id));
+  const messagesByRun = new Map<string, Array<Extract<PresentationMessage, { kind: 'assistant' }>>>();
+  for (const row of rows) {
+    const owner = owners.get(row.id);
+    if (row.kind !== 'assistant' || !owner) continue;
+    const group = messagesByRun.get(owner) ?? [];
+    group.push(row); messagesByRun.set(owner, group);
+  }
   for (const run of runs) {
-    const messages = rows.filter((row): row is Extract<PresentationMessage, { kind: 'assistant' }> => row.kind === 'assistant' && owners.get(row.id) === run.id);
+    const messages = messagesByRun.get(run.id) ?? [];
     const entries: ProcessEntry[] = [];
     const byId = new Map<string, ProcessEntry>();
     for (const message of messages) {
@@ -63,5 +81,5 @@ export function projectRunTimeline(rows: PresentationMessage[], runs: PromptRun[
     else if (rowIds.has(run.userMessageId)) after.set(run.userMessageId, [...(after.get(run.userMessageId) ?? []), process]);
     else unanchored.push(process);
   }
-  return rows.flatMap(row => [...(before.get(row.id) ?? []), ...(consumed.has(row.id) ? [] : [row]), ...(after.get(row.id) ?? [])]).concat(unanchored);
+  return [...unanchored.sort((a, b) => a.run.startedAt - b.run.startedAt), ...rows.flatMap(row => [...(before.get(row.id) ?? []), ...(consumed.has(row.id) ? [] : [row]), ...(after.get(row.id) ?? [])])];
 }

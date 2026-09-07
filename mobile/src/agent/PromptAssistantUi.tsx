@@ -50,7 +50,7 @@ import { nextFollowState, type TimelineMetrics } from './timelineScroll';
 import { readComposerDraft, sessionRunLabel } from './assistantWorkspace';
 import { readPromptRuns, type PromptRun } from './runState';
 import { RunTimelineRow } from './RunTimelineRow';
-import { enrichRunTools, projectRunTimeline } from './runTimeline';
+import { enrichRunTools, indexRunTools, projectRunTimeline } from './runTimeline';
 import { readPromptVersions, restorePromptVersion } from './promptVersions';
 import { PromptVersionPanel } from './PromptVersionPanel';
 import type { PromptHandoff } from './promptHandoff';
@@ -112,6 +112,7 @@ export function PromptAssistantUi({
   onSearchHistory,
   onLoadMoreHistory,
   transcript,
+  transcriptRevision,
   workflowDefinition,
   workflowLoadIssue,
   onReloadWorkflow,
@@ -127,6 +128,7 @@ export function PromptAssistantUi({
   onRetry?: (runId?: string) => Promise<void>;
   onAccept?: (input: { id: string; text: string; attachments: unknown[]; draftRevision: number }) => Promise<void>;
   transcript?: readonly unknown[];
+  transcriptRevision?: number;
   workflowDefinition?: WorkflowDefinition;
   workflowLoadIssue?: string;
   onReloadWorkflow?: () => void;
@@ -149,8 +151,14 @@ export function PromptAssistantUi({
   const versionSheet = useRef<DraggableBottomSheetHandle>(null);
   const briefSheet = useRef<DraggableBottomSheetHandle>(null);
   const [brief, setBrief] = useState({ subject: '', camera: '', style: '', duration: '' });
-  const runs = enrichRunTools(readPromptRuns(state), transcript ?? messages);
-  const completedMessageIds: string[] = Array.isArray(state.h3CompletedMessageIds) ? state.h3CompletedMessageIds.filter((id: unknown): id is string => typeof id === 'string') : [];
+  // Runtime snapshots are published at a bounded rate. The SDK-only fallback
+  // remains uncached because the SDK can mutate its message array in place.
+  const projectionRevision = transcriptRevision ?? clientState;
+  const transcriptKey = transcriptRevision === undefined ? transcript : activeThreadId;
+  const toolIndex = useMemo(() => transcript ? indexRunTools(transcript) : undefined, [transcriptKey, projectionRevision]);
+  const cachedRuns = useMemo(() => transcript ? enrichRunTools(readPromptRuns(state), transcript, toolIndex) : null, [transcriptKey, toolIndex, state.h3Runs]);
+  const runs = cachedRuns ?? enrichRunTools(readPromptRuns(state), messages);
+  const completedMessageIds = useMemo(() => Array.isArray(state.h3CompletedMessageIds) ? state.h3CompletedMessageIds.filter((id: unknown): id is string => typeof id === 'string') : [], [state.h3CompletedMessageIds]);
   const savedVersions = useMemo(() => readPromptVersions(state), [state.h3Versions]);
   const versions = savedVersions;
   const latestEnd = runs.reduce((time, run) => Math.max(time, run.endedAt ?? 0), 0);
@@ -202,11 +210,8 @@ export function PromptAssistantUi({
   // not memoize by array identity or the first user bubble waits for the next
   // streamed event before becoming visible.
   const projectTimeline = useRef(createTimelineProjection()).current;
-  const persistedRows = projectTimeline(transcript ?? messages);
-  const runTools = new Map(runs.flatMap(run => run.tools).map(tool => [tool.id, tool]));
-  const rows = persistedRows.map(row => row.kind === 'assistant'
-    ? { ...row, tools: row.tools.map(tool => runTools.get(tool.id) ?? tool) }
-    : row);
+  const cachedRows = useMemo(() => transcript ? projectTimeline(transcript) : null, [transcriptKey, projectionRevision, projectTimeline]);
+  const rows = cachedRows ?? projectTimeline(messages);
   const handleSubmit = async (value: string) => {
     if (submitLock.current || isRunning) return;
     const ready = [...attachments.filter((item) => item.status === 'ready'), ...galleryAttachments];
@@ -515,13 +520,14 @@ export function ConversationTimeline({
 }) {
   const listRef = useRef<FlatList<ReturnType<typeof projectRunTimeline>[number]>>(null);
   const [visibleCount, setVisibleCount] = useState(50);
-  const runToolIds = new Set(runs.flatMap(run => run.tools.map(tool => tool.id)));
-  const allRows = projectRunTimeline(rows, runs, completedMessageIds).map(row => row.kind === 'assistant'
-    ? { ...row, tools: row.tools.filter(tool => !runToolIds.has(tool.id)) }
-    : row).filter(row => row.kind !== 'assistant'
+  const allRows = useMemo(() => {
+    const runToolIds = new Set(runs.flatMap(run => run.tools.map(tool => tool.id)));
+    return projectRunTimeline(rows, runs, completedMessageIds).map(row => row.kind === 'assistant' && row.tools.some(tool => runToolIds.has(tool.id))
+      ? { ...row, tools: row.tools.filter(tool => !runToolIds.has(tool.id)) } : row).filter(row => row.kind !== 'assistant'
       || (completedMessageIds.includes(row.id) ? row.prose ?? row.text : row.text).trim()
       || (row.candidates ?? (row.prompt ? [row.prompt] : [])).length > 0
       || row.tools.length > 0);
+  }, [rows, runs, completedMessageIds]);
   const timelineRows = allRows.slice(-visibleCount);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const exportRef = useRef(onExportPrompt); exportRef.current = onExportPrompt;

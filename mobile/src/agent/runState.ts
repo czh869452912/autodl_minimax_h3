@@ -41,6 +41,7 @@ export function reducePromptRunEvent(run: PromptRun, event: Record<string, any>,
     if (typeof messageId === 'string' && typeof delta === 'string' && delta) {
       const id = `${kind}:${messageId}`;
       const activities = next.activities ?? [];
+      if (!reasoning && activities.some(item => item.id === id)) return next;
       next = { ...next, activities: activities.some(item => item.id === id)
         ? activities.map(item => item.id === id && reasoning ? { ...item, text: (item.text ?? '') + delta } : item)
         : [...activities, { id, kind, messageId, ...(reasoning ? { text: delta } : {}) }] };

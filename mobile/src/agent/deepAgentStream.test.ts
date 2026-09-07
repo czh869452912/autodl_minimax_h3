@@ -10,6 +10,14 @@ async function collect(items: unknown[]) {
   return { events, error };
 }
 
+it('reconciles explicitly cumulative reasoning chunks and rejects conflicting snapshots', async () => {
+  const chunk = (text: string) => new AIMessageChunk({ id: 'a', content: '', additional_kwargs: { reasoning_content: text, reasoning_content_mode: 'snapshot' } });
+  const result = await collect([chunk('Check'), chunk('Check image'), chunk('Check image')]);
+  expect(result.error).toBeUndefined();
+  expect(result.events.filter(event => event.type === 'CUSTOM').map(event => (event as any).value.delta)).toEqual(['Check', ' image']);
+  expect((await collect([chunk('Check'), chunk('Different')])).error).toEqual(expect.objectContaining({ message: expect.stringContaining('Reasoning snapshot conflicts') }));
+});
+
 it('streams provider reasoning separately and does not duplicate the final snapshot', async () => {
   const { events, error } = await collect([
     new AIMessageChunk({ id: 'a', content: '', additional_kwargs: { reasoning_content: 'Inspect ' } }),

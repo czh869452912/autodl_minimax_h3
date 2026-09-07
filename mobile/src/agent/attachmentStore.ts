@@ -150,6 +150,27 @@ export function createAttachmentStore(db: SQLiteDatabase, deps: { importImage?: 
         }
         if (!value || typeof value !== 'object') return value;
         if (Array.isArray(value)) { const result = []; for (const item of value) result.push(await visit(item)); return result; }
+        const traceKeys = value.kind === 'reasoning' && typeof value.messageId === 'string' ? ['text']
+          : typeof value.startedAt === 'number' && typeof value.name === 'string' && typeof value.id === 'string' ? ['arguments', 'output'] : [];
+        if (traceKeys.some(field => typeof value[field] === 'string' && value[field].length > 4096)) {
+          const result = { ...value };
+          const traceTextAssets: Record<string, string[]> = {};
+          for (const field of traceKeys) {
+            const text = value[field];
+            if (typeof text !== 'string' || text.length <= 4096) continue;
+            const parts: string[] = [];
+            for (let offset = 0; offset < text.length;) {
+              let end = Math.min(text.length, offset + 65536);
+              // Keep UTF-16 surrogate pairs intact before UTF-8 encoding.
+              if (end < text.length && /[\uD800-\uDBFF]/.test(text[end - 1])) end--;
+              parts.push(await storeImage(text.slice(offset, end), 'text/plain', true));
+              offset = end;
+            }
+            traceTextAssets[field] = parts;
+            delete result[field];
+          }
+          return { ...result, traceTextAssets };
+        }
         if (value.schemaVersion === 1 && typeof value.graphVersion === 'string' && value.files && typeof value.files === 'object') {
           const files: Record<string, unknown> = {};
           for (const [path, raw] of Object.entries(value.files)) {
@@ -186,6 +207,17 @@ export function createAttachmentStore(db: SQLiteDatabase, deps: { importImage?: 
         if (typeof value === 'string') { const hash = /^asset:\/\/([a-f0-9]{64})$/.exec(value)?.[1]; return hash ? uriFor(blobPath(hash)) : value; }
         if (Array.isArray(value)) return Promise.all(value.map(visit));
         if (value && typeof value === 'object') {
+          if (value.traceTextAssets && typeof value.traceTextAssets === 'object') {
+            const { traceTextAssets, ...rest } = value;
+            const result = await visit(rest);
+            for (const [field, assets] of Object.entries(traceTextAssets)) {
+              if (!['text', 'arguments', 'output'].includes(field) || !Array.isArray(assets) || assets.some(asset => typeof asset !== 'string' || !hashOf(asset))) throw new Error('执行记录文本引用无效');
+              const chunks: string[] = [];
+              for (const asset of assets) chunks.push((await visit({ contentAsset: asset })).content);
+              result[field] = chunks.join('');
+            }
+            return result;
+          }
           if (typeof value.contentAsset === 'string' && hashOf(value.contentAsset)) {
             const hash = hashOf(value.contentAsset)!;
             if (!contents.has(hash)) contents.set(hash, (async () => {

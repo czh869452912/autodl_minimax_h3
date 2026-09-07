@@ -3,6 +3,14 @@ import { enrichRunTools, projectRunTimeline } from './runTimeline';
 import { reducePromptRunEvent, type PromptRun } from './runState';
 
 const run: PromptRun = { id: 'r', userMessageId: 'u', status: 'completed', startedAt: 1, endedAt: 9, messageIds: ['a', 'b'], tools: [{ id: 't', name: 'read_file', status: 'complete', startedAt: 2, endedAt: 3 }] };
+it('does not allocate a run for repeated text deltas after its activity is recorded', () => {
+  const first = reducePromptRunEvent({ ...run, status: 'running' }, { type: 'TEXT_MESSAGE_CONTENT', messageId: 'a', delta: 'A' }, 2);
+  expect(reducePromptRunEvent(first, { type: 'TEXT_MESSAGE_CONTENT', messageId: 'a', delta: 'B' }, 3)).toBe(first);
+});
+it('places orphaned historical runs before the retained transcript', () => {
+  const rows = normalizeMessages([{ id: 'new-user', role: 'user', content: 'Latest' }]);
+  expect(projectRunTimeline(rows, [run], []).map(row => row.id)).toEqual(['run-r', 'new-user']);
+});
 it('recovers old tool arguments and full results without changing persisted records', () => {
   const result = enrichRunTools([run], [{ role: 'assistant', toolCalls: [{ id: 't', function: { arguments: '{"path":"/guide.md"}' } }] }, { role: 'tool', toolCallId: 't', content: 'full output' }]);
   expect(result[0].tools[0]).toMatchObject({ arguments: '{"path":"/guide.md"}', output: 'full output' });
