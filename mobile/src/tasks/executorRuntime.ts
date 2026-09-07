@@ -1,4 +1,5 @@
 import { readSettings } from '../settings/storage';
+import { artifactNetworkMessage } from '../workflows/executor/artifactErrors';
 import { getDatabase } from '../storage/databaseClient';
 import { getAppRecoveryStateAsync } from '../storage/database';
 import { createTaskRepository } from './repository';
@@ -100,7 +101,7 @@ const executor = {
         const timestamp = Date.now();
         const taskUpdated = await taskStore.updateMediaProjection(operation.jobId, {
           downloadState: state,
-          downloadError: errorCode,
+          downloadError: artifactNetworkMessage(errorCode) ?? errorCode,
           downloadProgress: state === 'ENQUEUED' || state === 'DOWNLOADING' ? 0 : undefined,
           updatedAt: timestamp,
         });

@@ -1,5 +1,7 @@
 # ARTIFACT_PRIVATE_NETWORK 下载失败静态审查
 
+> **修复复核（2026-09-07）：以下第 1–8 节为原始审查记录，根因确定性与选项 A 的安全论证已被第 9 节修正。当前实现采用选项 B，不无条件放行基准测试地址段。**
+
 > 审查时间：2026-09-07（同日补充用户实证，见第 8 节：根因已确认为 VPN Fake-IP 与保留段黑名单碰撞）
 > 审查对象：任务成功后下载报 `ARTIFACT_PRIVATE_NETWORK`（真机任务队列截图：job `submission-1788748457837-…` 状态"成功"、下载错误 `ARTIFACT_PRIVATE_NETWORK`、非重试类永久失败）。审查起因是用户怀疑"最终结果的下载 CDN 是 AutoDL 上的随机节点，URL 不稳定被拦截"。
 > 审查方法：纯静态审查。追踪该错误码的定义、触发点与调用链：`tasks/downloadPolicy.ts` → `security/urlPolicy.ts`（TS 路径）；`native/media.ts` → Android `ArtifactTransferPolicy.kt`（原生路径）；下载入口 `workflows/executor/artifactOperation.ts` 与 `tasks/executorRuntime.ts`；产物 URL 来源 `workflows/providers/autodl/{adapter,mapping,client,manifest}.ts`。
@@ -113,3 +115,34 @@ fake-ip 模式下，应用后续对 `198.18.x.x` 的 TCP 连接会被 VPN 的 TU
 - 第 1 节原"最可能根因：DNS 瞬时抖动（触发点 ①）"降级为次因；主因是触发点 ② 的 fake-ip 碰撞（确定性、可复现、与 VPN 开关强相关）。
 - 第 3 节"CDN 随机解析混合记录"假设不再必要——单段 `198.18/15` 的碰撞已足以解释全部现象。
 - 第 5 节问题 1/2（错误码混淆、根因被吞）维持有效：若当时透出了 cause 或解析地址，本根因可提前定位。
+
+## 9. 修复复核与处置（2026-09-07）
+
+### 证据修正
+
+- VPN 开关与故障相关是用户提供的实证，但文档没有现场 DNS 应答或异常类型，尚不能排除 DNS 解析异常。Fake-IP 碰撞是有代码依据的首要假设，不能仅凭相关性断言根因已确认。
+- [IANA IPv4 特殊用途地址表](https://www.iana.org/assignments/iana-ipv4-special-registry/)将 `198.18.0.0/15` 标为 Destination=true、Forwardable=true、Globally Reachable=false。因此“不具有公网可达性”不等于“不会在本地网络路由”；不采纳选项 A 的无条件放行。
+- [Mihomo DNS 配置](https://wiki.metacubex.one/config/dns/)分别配置 Fake-IP 解析与过滤规则。仅配置流量 DIRECT 不保证应用获得真实 IP；用户提示应要求真实 DNS 解析，而非笼统要求直连。自定义 Fake-IP 地址池不在本次特判范围内。
+- 第 6 节所说的既有 DNS 异常单测实际上只返回空列表，原先没有覆盖抛异常路径。本次补齐。
+
+### 问题处置
+
+| 项目 | 处置 |
+|---|---|
+| DNS 失败误报且不可重试 | 已修复：异常和空结果统一为 `ARTIFACT_DNS_FAILED`，原生及 TS 均认定可重试，复用 executor 的指数退避（上限 60 秒）。 |
+| 根因丢失 | 已修复：原生经 `userInfo.reason` 传递 `DNS_UNKNOWN_HOST` / `DNS_TIMEOUT` / `DNS_EXCEPTION` / `DNS_EMPTY`，JS 白名单验证后保存到操作错误消息。任务投影显示中文网络提示。 |
+| Fake-IP 候选误报 | 实施选项 B：域名解析的非公网答案全部属于 `198.18/15` 时，返回不可自动重试的 `ARTIFACT_VIRTUAL_DNS`，提示调整真实 DNS 后手动重试。该段的 IP 字面量、混有其他非公网地址的答案仍报 `ARTIFACT_PRIVATE_NETWORK`。这提供诊断与恢复指引，不意味着透明兼容 Fake-IP。 |
+| 混合 DNS 答案容错建议 | 不采纳：保留任一不安全地址即整体拒绝，避免降低 SSRF 防护。校验发生在 URL 验证和实际连接 DNS 两处，重定向继续复检。瞬时解析失败由操作级重试处理。 |
+| 双端策略差异 | 显式记录：TS 回退仅检查 URL 字面量，不能提供 DNS 及连接级 SSRF 保证；Android 原生对解析答案和连接做校验。两者都不放行私网 IP 字面量。 |
+| Provider 任意公网主机能力 | 保留已有显式 opt-in；这是支持动态 CDN 的权限选择，不是本次下载故障的根因。不能在没有完整 CDN 清单时直接收紧为 autodl.art。 |
+
+诊断采用固定原因分类，不传递异常原文、完整堆栈、主机名或解析地址列表，避免将签名 URL 或用户网络拓扑带入持久化记录。真实设备 VPN 开关对照下载尚需验证，不能以单测替代。
+
+### 验证结果
+
+- RED：新增 JS 错误分类测试 3 项失败；Android 策略测试 3 项失败，均复现旧分类行为。
+- GREEN：`npm test -- --runInBand src/workflows/executor/artifactErrors.test.ts src/workflows/executor/artifactOperation.test.ts src/tasks/downloadPolicy.test.ts src/security/urlPolicy.test.ts src/tasks/executorRunner.test.ts src/tasks/networkRecovery.test.ts`，6 个套件、90 项通过。
+- `npm run typecheck` 通过。
+- `gradlew.bat :app:testDebugUnitTest --tests "com.example.autodlh3.ArtifactTransfer*" --console=plain --max-workers=2` 通过，包含 DNS 空答案、解析异常、地址段边界、私网混合记录、连接阶段错误分类及临时文件清理。
+- `git diff --check` 通过。构建仍输出既有 Metro 包 exports、实验性 SQLite 及 Gradle 弃用提示。
+- 尚未构建发布 APK 或执行真机 VPN 下载验收；旧任务需手动重试后才会得到新分类。

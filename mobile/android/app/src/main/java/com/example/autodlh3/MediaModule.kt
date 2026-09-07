@@ -95,7 +95,11 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
           putString("sha256", result.sha256)
         })
       } catch (error: ArtifactTransferException) {
-        promise.reject(error.diagnosticCode, error.message, error)
+        // Only bounded policy diagnostics cross the bridge; resolver messages
+        // and stack traces can contain signed URLs or local network details.
+        promise.reject(error.diagnosticCode, error.diagnosticCode, Arguments.createMap().apply {
+          error.reason?.let { putString("reason", it) }
+        })
       } catch (error: Exception) {
         promise.reject("ARTIFACT_TRANSFER_FAILED", error.message, error)
       }

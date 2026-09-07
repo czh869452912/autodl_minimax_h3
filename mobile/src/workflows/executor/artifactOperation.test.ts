@@ -287,16 +287,38 @@ test.each(['false', 'error'] as const)(
   },
 );
 
-test('retries connection and idle timeouts with bounded backoff', async () => {
+test('persists safe DNS diagnostics through the retry path', async () => {
+  const deps = setup();
+  deps.transferArtifact.mockRejectedValueOnce({ code: 'ARTIFACT_DNS_FAILED',
+    message: 'https://secret.example/?token=secret', userInfo: { reason: 'DNS_TIMEOUT' } });
+  await handleArtifactDownload(operation, 'worker', { ...deps, now: () => 50,
+    policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
+  const stored = (deps.operations.retry.mock.calls as unknown[][])[0][2] as { error: { message: string } };
+  expect(stored.error.message).toContain('DNS_TIMEOUT');
+  expect(stored.error.message).not.toContain('secret');
+});
+
+test('finishes virtual DNS failure with actionable diagnostics and permits manual retry', async () => {
+  const deps = setup();
+  deps.transferArtifact.mockRejectedValueOnce({ code: 'ARTIFACT_VIRTUAL_DNS' });
+  await handleArtifactDownload(operation, 'worker', { ...deps, now: () => 50,
+    policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
+  expect(deps.operations.retry).not.toHaveBeenCalled();
+  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('DOWNLOAD_FAILED', 'ARTIFACT_VIRTUAL_DNS');
+  expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50,
+    expect.objectContaining({ code: 'ARTIFACT_VIRTUAL_DNS', retryable: false, message: expect.stringContaining('Fake-IP') }));
+});
+
+test.each(['ARTIFACT_CONNECT_TIMEOUT', 'ARTIFACT_IDLE_TIMEOUT', 'ARTIFACT_DNS_FAILED'])('retries %s with bounded backoff', async (code) => {
   const deps = setup();
   deps.transferArtifact.mockRejectedValueOnce(Object.assign(new Error('opaque transfer failure'), {
-    code: 'ARTIFACT_CONNECT_TIMEOUT', retryable: true,
+    code, retryable: true,
   }));
   await handleArtifactDownload(operation, 'worker', { ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
   expect(deps.operations.retry).toHaveBeenCalledWith('download-1', 'worker', expect.objectContaining({
-    now: 50, nextRetryAt: 1050, error: expect.objectContaining({ code: 'ARTIFACT_CONNECT_TIMEOUT' }),
+    now: 50, nextRetryAt: 1050, error: expect.objectContaining({ code }),
   }));
-  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('ENQUEUED', 'ARTIFACT_CONNECT_TIMEOUT');
+  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('ENQUEUED', code);
   expect(deps.operations.finish).not.toHaveBeenCalled();
 });
 
