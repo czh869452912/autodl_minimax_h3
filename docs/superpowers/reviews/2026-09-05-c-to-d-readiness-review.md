@@ -40,7 +40,7 @@
 
 ### A. 迁移与状态所有权：v8 → v9，保留 C 的投影机制
 
-证据：旧 [D-Core 计划](../plans/2026-09-01-d-core.md) 第 7、23 行仍要求 v7；`mobile/src/storage/schema.ts:1` 已为 v8；v7 属于 registry release，v8 属于刷新投影和持久唤醒。
+证据：旧 [D-Core 计划](../archive/plans/2026-09-01-d-core.md) 第 7、23 行仍要求 v7；`mobile/src/storage/schema.ts:1` 已为 v8；v7 属于 registry release，v8 属于刷新投影和持久唤醒。
 
 调整建议：
 
