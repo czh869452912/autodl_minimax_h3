@@ -10,12 +10,28 @@ async function collect(items: unknown[]) {
   return { events, error };
 }
 
-it('reconciles explicitly cumulative reasoning chunks and rejects conflicting snapshots', async () => {
+it('reconciles explicitly cumulative reasoning chunks and skips conflicting snapshots', async () => {
   const chunk = (text: string) => new AIMessageChunk({ id: 'a', content: '', additional_kwargs: { reasoning_content: text, reasoning_content_mode: 'snapshot' } });
   const result = await collect([chunk('Check'), chunk('Check image'), chunk('Check image')]);
   expect(result.error).toBeUndefined();
   expect(result.events.filter(event => event.type === 'CUSTOM').map(event => (event as any).value.delta)).toEqual(['Check', ' image']);
-  expect((await collect([chunk('Check'), chunk('Different')])).error).toEqual(expect.objectContaining({ message: expect.stringContaining('Reasoning snapshot conflicts') }));
+  const conflict = await collect([chunk('Check'), chunk('Different'), chunk('Check image')]);
+  expect(conflict.error).toBeUndefined();
+  expect(conflict.events.filter(event => event.type === 'CUSTOM').map(event => (event as any).value.delta)).toEqual(['Check', ' image']);
+});
+
+it('continues tools and final text when reasoning changes representation in a full snapshot', async () => {
+  const { events, error } = await collect([
+    new AIMessageChunk({ id: 'a', content: '', additional_kwargs: { reasoning_content: 'Inspect image' } }),
+    new AIMessage({ id: 'a', content: [{ type: 'thinking', thinking: 'Different representation' }], tool_calls: [{ id: 'call', name: 'read_file', args: {} }] }),
+    new ToolMessage({ tool_call_id: 'call', content: 'guide' }),
+    new AIMessage({ id: 'final', content: 'Answer' }),
+  ]);
+  expect(error).toBeUndefined();
+  expect(events.filter(event => event.type === 'CUSTOM' && event.name === 'h3.reasoning')).toHaveLength(1);
+  expect(events).toContainEqual({ type: 'TOOL_CALL_START', toolCallId: 'call', toolCallName: 'read_file', parentMessageId: 'a' });
+  expect(events).toContainEqual({ type: 'TEXT_MESSAGE_CONTENT', messageId: 'final', delta: 'Answer' });
+  expect(events.at(-1)).toEqual({ type: 'TEXT_MESSAGE_END', messageId: 'final' });
 });
 
 it('streams provider reasoning separately and does not duplicate the final snapshot', async () => {

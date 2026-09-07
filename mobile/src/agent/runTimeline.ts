@@ -19,8 +19,8 @@ export function indexRunTools(transcript: readonly unknown[]) {
   return { args, outputs };
 }
 
-export function enrichRunTools(runs: PromptRun[], transcript: readonly unknown[], index = indexRunTools(transcript)): PromptRun[] {
-  const { args, outputs } = index;
+export function enrichRunTools(runs: PromptRun[], transcript: readonly unknown[], toolIndex = indexRunTools(transcript)): PromptRun[] {
+  const { args, outputs } = toolIndex;
   return runs.map(run => {
     const tools = run.tools.map(tool => {
       const argumentsValue = tool.arguments ?? args.get(tool.id), output = tool.output ?? outputs.get(tool.id);

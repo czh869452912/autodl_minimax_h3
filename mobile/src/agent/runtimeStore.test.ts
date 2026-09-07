@@ -56,6 +56,24 @@ it('batches reasoning bursts and flushes the tail before terminal persistence', 
   } finally { await registry.disposeAll(); jest.useRealTimers(); }
 });
 
+it('publishes buffered reasoning on explicit flush without another stream event', async () => {
+  jest.useFakeTimers();
+  const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
+  const runtime = registry.ensure(config, snapshot('reasoning-flush'), store);
+  const agent = runtime.agent as any;
+  agent.isRunning = true;
+  agent.emit('onRunInitialized', { input: { runId: 'r' } });
+  const views = jest.fn(); runtime.subscribeView(views);
+  try {
+    agent.emit('onEvent', { input: { runId: 'r' }, event: { type: 'CUSTOM', name: 'h3.reasoning', value: { messageId: 'a', delta: 'tail' } } });
+    await runtime.flush();
+    expect(views).toHaveBeenCalledTimes(1);
+    expect((runtime.getViewSnapshot().state as any).h3Runs[0].activities[0].text).toBe('tail');
+    await jest.advanceTimersByTimeAsync(100);
+    expect(views).toHaveBeenCalledTimes(1);
+  } finally { await registry.disposeAll(); jest.useRealTimers(); }
+});
+
 it('isolates 1999 completed rows across 1000 deltas in ten seconds and composer edits from summaries', async () => {
   jest.useFakeTimers();
   const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);

@@ -172,7 +172,11 @@ export function createPromptRuntimeRegistry(
         if (boundary) void flush(); else schedule();
       };
       const flush = async (): Promise<FlushResult> => {
-        if (flushReasoning()) { snapshot = { ...snapshot, state: mergeState(snapshot.state) }; pendingSave = snapshot; }
+        if (flushReasoning()) {
+          snapshot = { ...snapshot, state: mergeState(snapshot.state) };
+          pendingSave = snapshot;
+          publishView();
+        }
         clearSaveTimers();
         if (needsReload) {
           pendingSave = undefined;

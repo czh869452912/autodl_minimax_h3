@@ -57,7 +57,6 @@ function nextOrAbort(iterator: AsyncIterator<unknown>, signal: AbortSignal): Pro
 export async function* adaptDeepAgentStream(
   stream: AsyncIterable<unknown>, fallbackId: string, signal: AbortSignal,
   onAssistantMessage?: (id: string, incomplete: boolean) => void,
-  reasoningMode: 'delta' | 'snapshot' = 'delta',
 ): AsyncGenerator<StreamEvent> {
   const messages = new Map<string, MessageState>();
   const results = new Set<string>();
@@ -119,9 +118,9 @@ export async function* adaptDeepAgentStream(
         }
         const chunk = AIMessageChunk.isInstance(original) || serializedType === 'AIMessageChunk' || 'tool_call_chunks' in message || ['aimessagechunk', 'ai_chunk'].includes(role);
         const reasoning = reasoningOf(message);
-        const snapshotReasoning = !chunk || reasoningMode === 'snapshot' || message.additional_kwargs?.reasoning_content_mode === 'snapshot';
-        if (snapshotReasoning && reasoning && state.reasoning && !reasoning.startsWith(state.reasoning)) throw new Error(`Reasoning snapshot conflicts with streamed reasoning for ${id}`);
-        const reasoningDelta = snapshotReasoning ? reasoning.slice(state.reasoning.length) : reasoning;
+        const snapshotReasoning = !chunk || message.additional_kwargs?.reasoning_content_mode === 'snapshot';
+        // Reasoning is display-only: incompatible snapshots must not discard text or tools.
+        const reasoningDelta = snapshotReasoning ? (reasoning.startsWith(state.reasoning) ? reasoning.slice(state.reasoning.length) : '') : reasoning;
         if (reasoningDelta) {
           state.reasoning += reasoningDelta;
           yield { type: 'CUSTOM', name: 'h3.reasoning', value: { messageId: id, delta: reasoningDelta } };
