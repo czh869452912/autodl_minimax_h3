@@ -1,16 +1,19 @@
-import { Directory, File, Paths } from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
+import type { SQLiteDatabase } from 'expo-sqlite';
+import { getDatabase } from '../storage/databaseClient';
+import { attachmentHashes, validateImageBudget } from './attachmentStore';
 import type { TaskMediaInput } from '../tasks/types';
 import { compileWorkflow } from '../workflows/compiler/compiler';
 import type { WorkflowDefinition } from '../workflows/schema/types';
+import { validatePromptBindings, type PromptBindingImage } from './promptBindings';
 
 export type PromptHandoff = {
   prompt: string;
-  images: Array<{ id: string; displayName: string; filename?: string; uri: string }>;
+  images: PromptBindingImage[];
   parameters: { resolution?: string; durationSeconds?: number; seed?: string };
-  source: { threadId: string; messageId: string; versionId: string };
+  source: { threadId: string; messageId: string; versionId: string; artifactId?: string; sourceRevision?: number };
 };
 
-const MAX_BYTES = 50 * 1024 * 1024;
 const IMAGE_EXTENSIONS: Record<string, string> = {
   'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp',
   'image/gif': 'gif', 'image/heic': 'heic', 'image/heif': 'heif', 'image/avif': 'avif',
@@ -23,11 +26,15 @@ export function decodePromptHandoff(value: unknown): PromptHandoff {
     || !isObject(value.parameters) || !isObject(value.source)) throw new Error('提示词交接数据损坏，请重新导出');
   const { parameters, source } = value;
   if (value.images.some((image) => !isObject(image) || typeof image.id !== 'string' || typeof image.displayName !== 'string'
-    || typeof image.uri !== 'string' || (image.filename !== undefined && typeof image.filename !== 'string'))
+    || typeof image.uri !== 'string' || (image.filename !== undefined && typeof image.filename !== 'string')
+    || (image.ordinal !== undefined && (typeof image.ordinal !== 'number' || !Number.isSafeInteger(image.ordinal) || image.ordinal < 1))
+    || (image.identityKnown !== undefined && typeof image.identityKnown !== 'boolean'))
     || Object.keys(parameters).some((key) => !['resolution', 'durationSeconds', 'seed'].includes(key))
     || (parameters.resolution !== undefined && typeof parameters.resolution !== 'string')
     || (parameters.durationSeconds !== undefined && (typeof parameters.durationSeconds !== 'number' || !Number.isFinite(parameters.durationSeconds)))
     || (parameters.seed !== undefined && typeof parameters.seed !== 'string')
+    || (source.artifactId !== undefined && (typeof source.artifactId !== 'string' || !source.artifactId.trim()))
+    || (source.sourceRevision !== undefined && (typeof source.sourceRevision !== 'number' || !Number.isSafeInteger(source.sourceRevision) || source.sourceRevision < 0))
     || ['threadId', 'messageId', 'versionId'].some((key) => typeof source[key] !== 'string' || !source[key].trim())) {
     throw new Error('提示词交接数据损坏，请重新导出');
   }
@@ -36,6 +43,7 @@ export function decodePromptHandoff(value: unknown): PromptHandoff {
 
 export function resolvePromptHandoffValues(handoff: PromptHandoff, definition: WorkflowDefinition): Record<string, unknown> {
   decodePromptHandoff(handoff);
+  if (!validatePromptBindings(handoff.prompt, handoff.images).ok) throw new Error('参考图片绑定缺失或不唯一，请重新绑定');
   const properties = (definition.inputs.properties ?? {}) as Record<string, Record<string, unknown>>;
   const values: Record<string, unknown> = { prompt: handoff.prompt };
   const mapping = { resolution: 'resolution', durationSeconds: 'duration', seed: 'seed' };
@@ -63,6 +71,15 @@ export function resolvePromptHandoffValues(handoff: PromptHandoff, definition: W
   return values;
 }
 
+export function normalizePromptHandoffParameters(parameters: PromptHandoff['parameters'], definition: WorkflowDefinition): PromptHandoff['parameters'] {
+  const values = resolvePromptHandoffValues({ prompt: 'preview', images: [], parameters, source: { threadId: 'preview', messageId: 'preview', versionId: 'preview' } }, definition);
+  return {
+    ...(parameters.resolution !== undefined ? { resolution: String(values.resolution) } : {}),
+    ...(parameters.durationSeconds !== undefined ? { durationSeconds: Number(values.duration) } : {}),
+    ...(parameters.seed !== undefined ? { seed: String(values.seed) } : {}),
+  };
+}
+
 function imageMime(value: string): string {
   if (!IMAGE_EXTENSIONS[value]) throw new Error('不支持的图片类型，请重新添加 PNG、JPEG、WebP 等图片');
   return value;
@@ -74,60 +91,25 @@ function safeName(value: string, extension: string): string {
   return name || `reference.${extension}`;
 }
 
-/** No network access: sources must be embedded data or already accessible local files. */
-export async function materializePromptHandoff(handoff: PromptHandoff): Promise<TaskMediaInput[]> {
+/** Resolve already-owned CAS inputs. Applying a draft never creates a second file. */
+export async function materializePromptHandoff(handoff: PromptHandoff, db: SQLiteDatabase = getDatabase()): Promise<TaskMediaInput[]> {
   decodePromptHandoff(handoff);
   if (handoff.images.length > 9) throw new Error('参考图片最多 9 张，请返回预览调整');
-  handoff.images.forEach((image, index) => {
-    const label = /^图片\s*(\d+)$/.exec(image.displayName);
-    if (label && Number(label[1]) !== index + 1) throw new Error('参考图片必须从图片1开始连续选择并按编号排序，以保持提示词引用一致');
-  });
-  let total = 0;
-  const prepared = handoff.images.map((image) => {
-    let mime: string;
-    let size: number;
-    let base64: string | undefined;
-    let source: File | undefined;
-    if (image.uri.startsWith('data:')) {
-      const comma = image.uri.indexOf(',');
-      const header = image.uri.slice(0, comma);
-      const match = /^data:([^;,]+);base64$/.exec(header);
-      if (!match) throw new Error('图片编码无效，请重新添加');
-      mime = imageMime(match[1].toLowerCase());
-      base64 = image.uri.slice(comma + 1);
-      // Check length before regex/decoding to keep oversized inputs bounded.
-      if (base64.length > Math.ceil(MAX_BYTES / 3) * 4) throw new Error('参考素材总计不能超过 50MB');
-      if (!base64.length || base64.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) throw new Error('图片编码无效，请重新添加');
-      size = base64.length / 4 * 3 - (base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0);
-    } else {
-      if (!/^(file|content):\/\//.test(image.uri)) throw new Error('图片链接尚未保存在本地，请重新添加参考图片');
-      source = new File(image.uri);
-      if (!source.exists || !source.size) throw new Error('参考图片已失效，请重新添加');
-      const extension = (image.filename ?? image.uri).split('.').pop()?.toLowerCase();
-      mime = imageMime(source.type || Object.keys(IMAGE_EXTENSIONS).find((key) => IMAGE_EXTENSIONS[key] === extension || (key === 'image/jpeg' && extension === 'jpeg')) || '');
-      size = source.size;
-    }
-    total += size;
-    if (!Number.isFinite(size) || size <= 0 || total > MAX_BYTES) throw new Error('参考素材总计不能超过 50MB');
-    return { mime, size, base64, source, name: safeName(image.displayName || image.filename || '', IMAGE_EXTENSIONS[mime]) };
-  });
-  if (!prepared.length) return [];
-  const directory = new Directory(Paths.document, 'prompt-handoffs');
-  directory.create({ intermediates: true, idempotent: true });
-  const created: File[] = [];
-  try {
-    const result: TaskMediaInput[] = [];
-    for (const [index, item] of prepared.entries()) {
-      const target = new File(directory, `reference-${Date.now()}-${Math.random().toString(36).slice(2)}-${index}.${IMAGE_EXTENSIONS[item.mime]}`);
-      created.push(target);
-      if (item.base64 !== undefined) target.write(item.base64, { encoding: 'base64' });
-      else await item.source!.copy(target);
-      if (!target.exists || target.size !== item.size) throw new Error('参考图片保存失败，请重新添加');
-      result.push({ uri: target.uri, name: item.name, mime: item.mime, size: item.size });
-    }
-    return result;
-  } catch (error) {
-    for (const file of created) { try { if (file.exists) file.delete(); } catch { /* keep original error */ } }
-    throw error;
+  const bindings = validatePromptBindings(handoff.prompt, handoff.images);
+  if (!bindings.ok) throw new Error('参考图片绑定缺失或不唯一，编号必须从图片1开始连续排列，请重新绑定');
+  const prepared: TaskMediaInput[] = [];
+  for (const image of bindings.images) {
+    const hash = attachmentHashes(image.uri)[0];
+    if (!hash) throw new Error('图片尚未保存为参考素材，请重新添加并导出');
+    const blob = await db.getFirstAsync<{ mime: string; byte_size: number; relative_path: string }>('SELECT mime,byte_size,relative_path FROM artifact_blobs WHERE sha256=?', hash);
+    if (!blob || blob.relative_path !== `cas/sha256/${hash.slice(0, 2)}/${hash}`) throw new Error('参考图片记录已失效，请重新添加');
+    const mime = imageMime(blob.mime);
+    prepared.push({ uri: new File(Paths.document, blob.relative_path).uri, name: safeName(image.displayName || image.filename || '', IMAGE_EXTENSIONS[mime]), mime, size: blob.byte_size });
   }
+  validateImageBudget(prepared);
+  for (const item of prepared) {
+    const file = new File(item.uri!);
+    if (!file.exists || file.size !== item.size) throw new Error('参考图片已失效，请重新添加');
+  }
+  return prepared;
 }

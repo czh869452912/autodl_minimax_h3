@@ -1,8 +1,10 @@
-jest.mock('@ag-ui/client', () => ({ AbstractAgent: class { agentId = 'test'; description = 'test'; messages: any[] = []; addMessage(message: any) { this.messages.push(message); } }, }));
-jest.mock('@ag-ui/core', () => ({ EventType: { CUSTOM: 'CUSTOM', STATE_SNAPSHOT: 'STATE_SNAPSHOT', RUN_STARTED: 'RUN_STARTED', TOOL_CALL_START: 'TOOL_CALL_START', TOOL_CALL_ARGS: 'TOOL_CALL_ARGS', TOOL_CALL_END: 'TOOL_CALL_END', TEXT_MESSAGE_START: 'TEXT_MESSAGE_START', TEXT_MESSAGE_CONTENT: 'TEXT_MESSAGE_CONTENT', TEXT_MESSAGE_END: 'TEXT_MESSAGE_END', RUN_FINISHED: 'RUN_FINISHED', RUN_ERROR: 'RUN_ERROR', TOOL_CALL_RESULT: 'TOOL_CALL_RESULT' } }));
+jest.mock(require.resolve('uuid', { paths: [require.resolve('@ag-ui/client')] }), () => ({ v4: () => 'test-generated-id' }));
 import { EventType } from '@ag-ui/core';
 import type { RunAgentInput } from '@ag-ui/client';
 import { H3AgUiAgent } from './aguiAgent';
+
+beforeEach(() => { jest.spyOn(console, 'error').mockImplementation(() => undefined); });
+afterEach(() => { jest.restoreAllMocks(); });
 
 function collect(agent: H3AgUiAgent, input: RunAgentInput): Promise<any[]> {
   return new Promise((resolve, reject) => {
@@ -88,7 +90,7 @@ it('normalizes CopilotKit image parts stored directly in message content', async
   ]);
 });
 
-it('normalizes CopilotKit tool result messages before sending history to DeepAgents', async () => {
+it('removes orphan CopilotKit tool results before sending history to DeepAgents', async () => {
   let graphInput: any;
   const graph = { stream: async function* (input: any) { graphInput = input; } };
   const toolResult = {
@@ -102,9 +104,7 @@ it('normalizes CopilotKit tool result messages before sending history to DeepAge
     threadId: 't1', runId: 'r2', state: {}, messages: [toolResult],
   } as never);
 
-  expect(graphInput.messages).toEqual([{
-    role: 'tool', content: '/skills/README.md', tool_call_id: 'call_123',
-  }]);
+  expect(graphInput.messages).toEqual([]);
 });
 
 it('normalizes DeepAgents failures into an Error-backed RUN_ERROR event', async () => {
@@ -115,21 +115,25 @@ it('normalizes DeepAgents failures into an Error-backed RUN_ERROR event', async 
 
 it('completes the AG-UI stream when an in-flight run is aborted', async () => {
   let release!: () => void;
+  let started!: () => void;
+  const began = new Promise<void>(resolve => { started = resolve; });
   const graph = {
     stream: async function* () {
       await new Promise<void>((resolve) => {
         release = resolve;
+        started();
       });
     },
   };
   const agent = new H3AgUiAgent(graph as never);
   const completion = collect(agent, { threadId: 't1', runId: 'r-abort', state: {}, messages: [] } as never);
-  await Promise.resolve();
+  await began;
   agent.abortRun();
   release();
   await expect(completion).resolves.toEqual([
     { type: EventType.RUN_STARTED, threadId: 't1', runId: 'r-abort' },
     { type: EventType.CUSTOM, name: 'h3.run.cancelled', value: { runId: 'r-abort' } },
+    { type: EventType.RUN_ERROR, code: 'abort', message: 'Run cancelled' },
   ]);
 });
 
@@ -216,7 +220,7 @@ it('marks only the last tool-free assistant text complete after successful execu
     yield [new AIMessageChunk({ id: 'final', content: 'final answer' }), {}];
   } };
   const events = await collect(new H3AgUiAgent(graph), { ...runInput as any, state: { keep: 'state', h3CompletedMessageIds: ['old'] } });
-  expect(events.at(-2)).toEqual({ type: 'STATE_SNAPSHOT', snapshot: { keep: 'state', h3CompletedMessageIds: ['old', 'final'] } });
+  expect(events.at(-2)).toEqual({ type: 'STATE_SNAPSHOT', snapshot: { h3CompletedMessageIds: ['old', 'final'] } });
   expect(events.at(-1).type).toBe('RUN_FINISHED');
 });
 

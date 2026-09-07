@@ -8,6 +8,8 @@ export function toH3AgentConfig(settings: AppSettings): H3AgentConfig {
     model: settings.llmModel,
     timeoutMs: Number(settings.llmTimeoutSeconds) * 1000,
     maxRetries: Number(settings.llmMaxRetries),
+    ...(settings.llmContextWindowTokens ? { contextWindowTokens: Number(settings.llmContextWindowTokens) } : {}),
+    ...(settings.llmMaxOutputTokens ? { maxOutputTokens: Number(settings.llmMaxOutputTokens) } : {}),
   };
 }
 

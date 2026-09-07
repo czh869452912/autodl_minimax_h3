@@ -6,9 +6,10 @@ import { pickAssistantImages } from './assistantImagePicker';
 import { DraggableBottomSheet } from '../ui/DraggableSheet';
 
 let mockChatContext: Record<string, unknown>;
+const mockMarkdownRender = jest.fn();
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resolve()) }));
 jest.mock('@copilotkit/react-native', () => ({ useCopilotChatContext: () => mockChatContext }));
-jest.mock('@copilotkit/react-native/components', () => ({ CopilotMarkdown: ({ content }: { content: string }) => <>{content}</> }));
+jest.mock('@copilotkit/react-native/components', () => ({ CopilotMarkdown: ({ content }: { content: string }) => { mockMarkdownRender(content); return <>{content}</>; } }));
 jest.mock('@copilotkit/shared', () => ({ getSourceUrl: (source: { value?: string }) => source.value || '' }));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
@@ -17,8 +18,13 @@ jest.mock('./assistantImagePicker', () => ({
   pickAssistantImages: jest.fn(() => Promise.resolve([])),
 }));
 
-import { applyComposerSuggestion, getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline, type RunIssue } from './PromptAssistantUi';
+import { applyComposerSuggestion, getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline, AttachmentStrip, ReferenceImagePreview, type RunIssue } from './PromptAssistantUi';
 import { normalizeMessages } from './agentPresentation';
+import { PromptVersionPanel } from './PromptVersionPanel';
+import { RunTimelineRow } from './RunTimelineRow';
+import * as timelineProjection from './timelineProjection';
+import type { WorkflowDefinition } from '../workflows/schema/types';
+import { officialH3SkillManifest } from './skillBundle';
 
 const basePromptProps = {
   threads: [{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }],
@@ -55,6 +61,198 @@ function renderedText(tree: ReturnType<typeof create>): string[] {
 }
 
 describe('Prompt assistant UI primitives', () => {
+  it('does not reproject a stable transcript for reasoning-only or composer updates', () => {
+    const project = jest.fn(() => []);
+    const factory = jest.spyOn(timelineProjection, 'createTimelineProjection').mockReturnValue(project);
+    let tree!: ReturnType<typeof create>;
+    try {
+      const transcript = Array.from({ length: 2000 }, (_, index) => ({ id: `m${index}`, role: 'assistant', content: 'saved' }));
+      act(() => { tree = create(<PromptAssistantUi {...basePromptProps} transcript={transcript} transcriptRevision={1} clientState={{}} />); });
+      project.mockClear();
+      for (let n = 0; n < 20; n++) act(() => tree.update(<PromptAssistantUi {...basePromptProps} transcript={[...transcript]} transcriptRevision={1} clientState={{ h3ReadAt: n }} />));
+      expect(project).not.toHaveBeenCalled();
+      act(() => tree.update(<PromptAssistantUi {...basePromptProps} transcript={transcript} transcriptRevision={2} clientState={{}} />));
+      expect(project).toHaveBeenCalledTimes(1);
+    } finally { if (tree) act(() => tree.unmount()); factory.mockRestore(); }
+  });
+  it('opens a queued run on start, preserves manual collapse, and bounds expanded text', () => {
+    const run = { id: 'r', userMessageId: 'u', messageIds: [], status: 'queued' as const, startedAt: 1, tools: [] };
+    const onInspect = jest.fn();
+    const entries = [{ id: 'private-id', kind: 'reasoning' as const, text: 'x'.repeat(9000) + 'END' }];
+    let tree!: ReturnType<typeof create>;
+    const render = (status: 'queued' | 'running') => <RunTimelineRow run={{ ...run, status }} entries={entries} disabled onRetry={async () => undefined} onInspect={onInspect} />;
+    act(() => { tree = create(render('queued')); });
+    expect(tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.accessibilityState.expanded).toBe(false);
+    act(() => tree.update(render('running')));
+    expect(tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.accessibilityState.expanded).toBe(true);
+    const item = tree.root.findByProps({ testID: 'process-item-private-id' });
+    expect(item.props.accessibilityLabel).toBe('思考');
+    act(() => item.props.onPress());
+    expect(renderedText(tree).join('')).not.toContain('END');
+    act(() => tree.root.findByProps({ accessibilityLabel: '下一段' }).props.onPress());
+    act(() => tree.root.findByProps({ accessibilityLabel: '下一段' }).props.onPress());
+    expect(renderedText(tree).join('')).toContain('END');
+    onInspect.mockClear();
+    act(() => tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.onPress());
+    expect(onInspect).not.toHaveBeenCalled();
+    act(() => tree.update(render('running')));
+    expect(tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.accessibilityState.expanded).toBe(false);
+    act(() => tree.unmount());
+  });
+  it('folds process messages together and expands complete tool output on demand', () => {
+    const run = { id: 'r', userMessageId: 'u', messageIds: [], status: 'completed' as const, startedAt: 1, endedAt: 2, tools: [] };
+    const output = 'Tool detail '.repeat(100) + 'END OF OUTPUT';
+    const entries = [{ id: 'reason', kind: 'reasoning' as const, text: 'Inspect reference' }, { id: 'tool', kind: 'tool' as const, tool: { id: 'tool', name: 'read_file', status: 'complete' as const, startedAt: 1, endedAt: 2, arguments: '{"path":"/guide.md"}', output } }];
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<RunTimelineRow run={run} entries={entries} disabled={false} onRetry={async () => undefined} />); });
+    expect(renderedText(tree).join('')).not.toContain('Inspect reference');
+    act(() => tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.onPress());
+    expect(renderedText(tree).join('')).toContain('Inspect reference');
+    expect(renderedText(tree).join('')).toContain('/guide.md');
+    expect(renderedText(tree).join('')).not.toContain('END OF OUTPUT');
+    act(() => tree.root.findByProps({ testID: 'process-item-tool' }).props.onPress());
+    expect(renderedText(tree).join('')).toContain('END OF OUTPUT');
+    act(() => tree.root.findByProps({ testID: 'process-item-tool' }).props.onPress());
+    expect(renderedText(tree).join('')).not.toContain('END OF OUTPUT');
+    act(() => tree.unmount());
+  });
+  it('omits empty assistant rows while retaining their anchored run and uncovered tools', () => {
+    const rows = normalizeMessages([
+      { id: 'u', role: 'user', content: 'Create a video' },
+      { id: 'thinking', role: 'assistant', content: '' },
+      { id: 'tools', role: 'assistant', content: '', toolCalls: [{ id: 't1', function: { name: 'read_file' } }] },
+      { id: 'mixed', role: 'assistant', content: '', toolCalls: [{ id: 't1', function: { name: 'read_file' } }, { id: 't2', function: { name: 'ls' } }] },
+    ]);
+    const run = { id: 'r', userMessageId: 'u', messageIds: ['thinking', 'tools'], status: 'completed' as const, startedAt: 1, endedAt: 2, tools: [{ id: 't1', name: 'read_file', status: 'complete' as const, startedAt: 1, endedAt: 2 }] };
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<ConversationTimeline rows={rows} runs={[run]} isRunning={false} onExportPrompt={async () => undefined} />); });
+    expect(tree.root.findByType(FlatList).props.data.map((row: { id: string }) => row.id)).toEqual(['u', 'run-r', 'mixed']);
+    expect(tree.root.findByType(ToolTimeline).props.steps.map((step: { id: string }) => step.id)).toEqual(['t2']);
+    act(() => tree.unmount());
+  });
+
+  it('does not render a completed Markdown row again while the tail streams', () => {
+    const project = timelineProjection.createTimelineProjection();
+    const older = { id: 'old', role: 'assistant', content: 'completed answer' };
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<ConversationTimeline rows={project([older, { id: 'tail', role: 'assistant', content: 'A' }])} completedMessageIds={['old']} isRunning onExportPrompt={async () => undefined} />); });
+    mockMarkdownRender.mockClear();
+    act(() => tree.update(<ConversationTimeline rows={project([older, { id: 'tail', role: 'assistant', content: 'AB' }])} completedMessageIds={['old']} isRunning onExportPrompt={async () => undefined} />));
+    expect(mockMarkdownRender).toHaveBeenCalledWith('AB');
+    expect(mockMarkdownRender).not.toHaveBeenCalledWith('completed answer');
+    act(() => tree.unmount());
+  });
+
+  it('shares accessible image-preview ownership between composer and timeline', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<AttachmentStrip attachments={[{ id: 'image', status: 'ready', displayName: '图片1', source: { value: 'file:///image.png' } }]} onOpenPicker={async () => undefined} />); });
+    act(() => tree.root.findByProps({ accessibilityLabel: '查看附件 图片1' }).props.onPress());
+    expect(tree.root.findByType(ReferenceImagePreview).props.uri).toBe('file:///image.png');
+    expect(tree.root.findByType(Modal).props.animationType).toBe('none');
+    const close = tree.root.findByProps({ accessibilityLabel: '关闭图片预览' });
+    expect(close.props.accessibilityRole).toBe('button');
+    expect(close.props.style).toMatchObject({ width: 48, height: 48 });
+    act(() => close.props.onPress());
+    expect(tree.root.findByType(ReferenceImagePreview).props.uri).toBeNull();
+    act(() => tree.unmount());
+  });
+
+  it('offers examples only for installed skill capabilities', () => {
+    expect(officialH3SkillManifest['/skills/h3-prompt-writing/SKILL.md']).toBeTruthy();
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} />); });
+    expect(tree.root.findByProps({ accessibilityLabel: '使用建议 一镜到底的城市夜跑' })).toBeTruthy();
+    expect(tree.root.findByProps({ accessibilityLabel: '使用建议 极简风格的香水广告' })).toBeTruthy();
+    act(() => tree.unmount());
+  });
+
+  it('shows clipboard failures and clears copy feedback timers on unmount', async () => {
+    jest.useFakeTimers();
+    const schedule = jest.spyOn(global, 'setTimeout');
+    const cancel = jest.spyOn(global, 'clearTimeout');
+    let tree!: ReturnType<typeof create>;
+    try {
+      jest.mocked(Clipboard.setStringAsync).mockRejectedValueOnce(new Error('clipboard unavailable'));
+      act(() => { tree = create(<PromptResultCard result={{ promptText: 'Prompt', sourceMessageId: 'm', confidence: 'high' }} onExport={async () => undefined} />); });
+      await act(async () => tree.root.findByProps({ accessibilityLabel: '复制 Prompt' }).props.onPress());
+      expect(renderedText(tree)).toContain('复制失败，请重试');
+      await act(async () => tree.root.findByProps({ accessibilityLabel: '复制 Prompt' }).props.onPress());
+      expect(renderedText(tree)).toContain('已复制');
+      const feedbackTimers = schedule.mock.calls.flatMap((call, index) => call[1] === 1600 ? [schedule.mock.results[index].value] : []);
+      act(() => tree.unmount());
+      expect(feedbackTimers).toHaveLength(2);
+      feedbackTimers.forEach(timer => expect(cancel).toHaveBeenCalledWith(timer));
+    } finally { schedule.mockRestore(); cancel.mockRestore(); jest.useRealTimers(); }
+  });
+
+  it('reports response copy failures without leaking a late clipboard completion', async () => {
+    jest.useFakeTimers();
+    const schedule = jest.spyOn(global, 'setTimeout');
+    let tree!: ReturnType<typeof create>;
+    try {
+      const rows = normalizeMessages([{ id: 'a', role: 'assistant', content: 'Answer' }]);
+      act(() => { tree = create(<ConversationTimeline rows={rows} isRunning={false} onExportPrompt={async () => undefined} />); });
+      jest.mocked(Clipboard.setStringAsync).mockRejectedValueOnce(new Error('clipboard unavailable'));
+      await act(async () => tree.root.findByProps({ accessibilityLabel: '复制回答 a' }).props.onPress());
+      expect(renderedText(tree)).toContain('复制失败，请重试');
+      let resolve!: (value: boolean) => void;
+      jest.mocked(Clipboard.setStringAsync).mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+      act(() => tree.root.findByProps({ accessibilityLabel: '复制回答 a' }).props.onPress());
+      act(() => tree.unmount());
+      schedule.mockClear();
+      await act(async () => resolve(true));
+      expect(schedule.mock.calls.some(call => call[1] === 1600)).toBe(false);
+    } finally { schedule.mockRestore(); jest.useRealTimers(); }
+  });
+
+  it('keeps cached timeline rows immutable when applying run tool status', () => {
+    const row = Object.freeze({ id: 'a', kind: 'assistant' as const, text: 'Answer', tools: [{ id: 'tool', name: 'read_file', status: 'running' as const }] });
+    const projection = jest.spyOn(timelineProjection, 'createTimelineProjection').mockReturnValue(() => [row] as never);
+    let tree!: ReturnType<typeof create>;
+    try {
+      act(() => { tree = create(<PromptAssistantUi {...basePromptProps} clientState={{ h3Runs: [{ id: 'r', userMessageId: 'u', status: 'completed', startedAt: 1, messageIds: ['a'], tools: [{ id: 'tool', name: 'read_file', status: 'complete' }] }] }} />); });
+      expect(tree.root.findByType(RunTimelineRow).props.run.tools[0].status).toBe('complete');
+      expect(tree.root.findByType(ConversationTimeline).props.rows[0].tools[0].status).toBe('running');
+      act(() => tree.update(<PromptAssistantUi {...basePromptProps} clientState={{}} />));
+      expect(tree.root.findByType(ConversationTimeline).props.rows[0].tools[0].status).toBe('running');
+      expect(row.tools[0].status).toBe('running');
+      act(() => tree.unmount());
+    } finally { projection.mockRestore(); }
+  });
+
+  it('waits for the active workflow and displays catalog failures before mounting the version panel', () => {
+    const definition = require('../workflows/definitions/autodl/minimax-h3-i2v-15s-v1.0.1.json') as WorkflowDefinition;
+    const state = { h3Versions: [{ id: 'v', promptText: 'Prompt', sourceMessageId: 'm', createdAt: 1, images: [], parameters: {} }] };
+    const reload = jest.fn();
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} clientState={state} onReloadWorkflow={reload} />); });
+    act(() => tree.root.findByProps({ accessibilityLabel: '打开 Prompt 版本' }).props.onPress());
+    expect(tree.root.findAllByType(PromptVersionPanel)).toHaveLength(0);
+    expect(renderedText(tree)).toContain('正在加载工作流…');
+    act(() => tree.update(<PromptAssistantUi {...basePromptProps} clientState={state} workflowLoadIssue="catalog unavailable" onReloadWorkflow={reload} />));
+    expect(tree.root.findAllByType(PromptVersionPanel)).toHaveLength(0);
+    expect(renderedText(tree)).toContain('catalog unavailable');
+    act(() => tree.root.findByProps({ accessibilityLabel: '重新加载工作流' }).props.onPress());
+    expect(reload).toHaveBeenCalledTimes(1);
+    act(() => tree.update(<PromptAssistantUi {...basePromptProps} clientState={state} workflowDefinition={definition} />));
+    expect(tree.root.findByType(PromptVersionPanel).props.workflowDefinition).toBe(definition);
+    act(() => tree.unmount());
+  });
+
+  it('preserves a newer draft after delayed acceptance and shows errors with prior runs', async () => {
+    let resolve!: () => void;
+    const accepted = new Promise<void>(done => { resolve = done; });
+    mockChatContext = { messages: [], isRunning: false, attachments: [], agent: {}, removeAttachment: jest.fn() };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => { tree = create(<PromptAssistantUi {...basePromptProps} onAccept={() => accepted} clientState={{ h3Runs: [{ id: 'old', status: 'completed', userMessageId: 'u', startedAt: 1, messageIds: [], tools: [] }] }} runIssue={{ kind: 'error', message: '存储失败' }} />); });
+    expect(renderedText(tree)).toContain('存储失败');
+    act(() => tree.root.findByType(Composer).props.onChangeText('first'));
+    act(() => { void tree.root.findByType(Composer).props.onSubmit('first'); });
+    act(() => tree.root.findByType(Composer).props.onChangeText('new draft'));
+    await act(async () => resolve());
+    expect(tree.root.findByType(Composer).props.value).toBe('new draft');
+    act(() => tree.unmount());
+  });
   beforeEach(() => {
     jest.clearAllMocks();
     mockChatContext = {
@@ -300,13 +498,14 @@ describe('Prompt assistant UI primitives', () => {
   });
 
   it('sends every ready provider and gallery attachment even when only one is mentioned', async () => {
+    const accept = jest.fn(async () => undefined);
     const setPendingAttachments = jest.fn();
     const setPendingImageIdentities = jest.fn();
     mockChatContext = {
       ...mockChatContext,
       submitMessage: jest.fn(() => Promise.resolve()),
       attachments: [
-        { id: 'provider-1', status: 'ready', filename: '场景.png', source: { value: 'file://provider-1' } },
+        { id: 'provider-1', status: 'ready', size: 10, filename: '场景.png', source: { value: 'file://provider-1' } },
       ],
       agent: { setPendingAttachments, setPendingImageIdentities },
     };
@@ -325,6 +524,7 @@ describe('Prompt assistant UI primitives', () => {
           onDelete={() => undefined}
           onRename={() => undefined}
           onExportPrompt={() => Promise.resolve()}
+          onAccept={accept}
         />,
       );
     });
@@ -335,17 +535,8 @@ describe('Prompt assistant UI primitives', () => {
     await act(async () => {
       tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.onPress();
     });
-    expect(setPendingAttachments).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.objectContaining({ id: 'gallery-1' })]),
-      expect.any(Function),
-    );
-    expect(mockChatContext.submitMessage).toHaveBeenCalledWith('使用角色');
-    expect(setPendingImageIdentities).toHaveBeenCalledWith([
-      { attachmentId: 'provider-1', displayName: '图片1' },
-      { attachmentId: 'gallery-1', displayName: '图片2' },
-    ]);
-    const imageUris = tree.root.findAllByType(Image).map((node) => node.props.source?.uri);
-    expect(imageUris).toEqual(expect.arrayContaining(['file://provider-1', 'data:image/png;base64,abc']));
+    expect(accept).toHaveBeenCalledWith(expect.objectContaining({ text: '使用角色', attachments: [expect.objectContaining({ id: 'provider-1', displayName: '图片1' }), expect.objectContaining({ id: 'gallery-1', displayName: '图片2' })] }));
+    expect(setPendingAttachments).not.toHaveBeenCalled();
     alert.mockRestore();
     act(() => tree.unmount());
   });
@@ -373,7 +564,7 @@ describe('Prompt assistant UI primitives', () => {
     await act(async () => buttons[0].onPress?.());
     expect(pickAssistantImages).toHaveBeenCalledWith('gallery', 9);
     await act(async () => buttons[1].onPress?.());
-    expect(mockChatContext.openPicker).toHaveBeenCalledTimes(1);
+    expect(pickAssistantImages).toHaveBeenCalledWith('file', 9);
     alert.mockRestore();
     act(() => tree.unmount());
   });
@@ -382,6 +573,14 @@ describe('Prompt assistant UI primitives', () => {
     let tree!: ReturnType<typeof create>;
     act(() => { tree = create(<ConversationTimeline rows={[]} isRunning onExportPrompt={() => Promise.resolve()} />); });
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === '正在生成 Prompt…')).toBe(true);
+    act(() => tree.unmount());
+  });
+
+  it('shows only one progress indicator before the first visible response', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<ConversationTimeline rows={normalizeMessages([{ id: 'thinking', role: 'assistant', content: '' }])} isRunning onExportPrompt={async () => undefined} />); });
+    expect(renderedText(tree).filter(text => text === '正在生成 Prompt…')).toHaveLength(1);
+    expect(tree.root.findByType(FlatList).props.data).toHaveLength(0);
     act(() => tree.unmount());
   });
 
@@ -513,7 +712,7 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
-  it('shows the submitted user bubble before the agent run resolves', async () => {
+  it('keeps an unaccepted draft without inventing a user bubble', async () => {
     let tree!: ReturnType<typeof create>;
     await act(async () => {
       tree = create(
@@ -534,7 +733,8 @@ describe('Prompt assistant UI primitives', () => {
     await act(async () => {
       tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.onPress();
     });
-    expect(tree.root.findAllByType(Text).some((node) => node.props.children === '雨中的城市夜跑')).toBe(true);
+    expect(tree.root.findByType(Composer).props.value).toBe('雨中的城市夜跑');
+    expect(tree.root.findByType(ConversationTimeline).props.rows).toHaveLength(0);
     act(() => tree.unmount());
   });
 
@@ -553,6 +753,7 @@ describe('Prompt assistant UI primitives', () => {
           onDelete={() => undefined}
           onRename={() => undefined}
           onExportPrompt={() => Promise.resolve()}
+          onAccept={() => submitMessage()}
         />,
       );
     });

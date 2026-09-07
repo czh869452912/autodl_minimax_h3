@@ -1,5 +1,6 @@
 import { normalizeMessages } from './agentPresentation';
-import { parsePromptResult } from './promptParser';
+import { parsePromptCandidates } from './promptParser';
+import type { PromptBindingImage } from './promptBindings';
 import type { PromptRun } from './runState';
 
 export type PromptVersion = {
@@ -8,7 +9,11 @@ export type PromptVersion = {
   promptText: string;
   createdAt: number;
   restoredFrom?: string;
-  images: Array<{ id: string; displayName: string; filename?: string; uri: string }>;
+  artifactId?: string;
+  sourceRevision?: number;
+  sourceRange?: { start: number; end: number };
+  restoreCommandId?: string;
+  images: PromptBindingImage[];
   parameters: { resolution?: string; durationSeconds?: number; seed?: string };
 };
 
@@ -16,7 +21,7 @@ function record(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 function copyVersion(version: PromptVersion): PromptVersion {
-  return { ...version, images: version.images.map((image) => ({ ...image })), parameters: { ...version.parameters } };
+  return { ...version, ...(version.sourceRange ? { sourceRange: { ...version.sourceRange } } : {}), images: version.images.map((image) => ({ ...image })), parameters: { ...version.parameters } };
 }
 
 export function readPromptVersions(state: unknown): PromptVersion[] {
@@ -24,7 +29,10 @@ export function readPromptVersions(state: unknown): PromptVersion[] {
   return state.h3Versions.filter((value): value is PromptVersion => {
     if (!record(value) || typeof value.id !== 'string' || !value.id || typeof value.sourceMessageId !== 'string' || !value.sourceMessageId || typeof value.promptText !== 'string' || !value.promptText.trim() || typeof value.createdAt !== 'number' || !Number.isFinite(value.createdAt)) return false;
     if (value.restoredFrom !== undefined && typeof value.restoredFrom !== 'string') return false;
-    if (!Array.isArray(value.images) || !value.images.every((image) => record(image) && typeof image.id === 'string' && Boolean(image.id) && typeof image.displayName === 'string' && Boolean(image.displayName) && typeof image.uri === 'string' && Boolean(image.uri) && (image.filename === undefined || typeof image.filename === 'string'))) return false;
+    if ([value.artifactId, value.restoreCommandId].some(field => field !== undefined && (typeof field !== 'string' || !field.trim()))) return false;
+    if (value.sourceRevision !== undefined && (typeof value.sourceRevision !== 'number' || !Number.isSafeInteger(value.sourceRevision) || value.sourceRevision < 0)) return false;
+    if (value.sourceRange !== undefined && (!record(value.sourceRange) || typeof value.sourceRange.start !== 'number' || typeof value.sourceRange.end !== 'number' || !Number.isSafeInteger(value.sourceRange.start) || !Number.isSafeInteger(value.sourceRange.end) || value.sourceRange.start < 0 || value.sourceRange.end <= value.sourceRange.start)) return false;
+    if (!Array.isArray(value.images) || !value.images.every((image) => record(image) && typeof image.id === 'string' && Boolean(image.id) && typeof image.displayName === 'string' && Boolean(image.displayName) && typeof image.uri === 'string' && Boolean(image.uri) && (image.filename === undefined || typeof image.filename === 'string') && (image.ordinal === undefined || (typeof image.ordinal === 'number' && Number.isSafeInteger(image.ordinal) && image.ordinal > 0)) && (image.identityKnown === undefined || typeof image.identityKnown === 'boolean'))) return false;
     const parameters = value.parameters;
     return record(parameters) && (parameters.resolution === undefined || typeof parameters.resolution === 'string') && (parameters.seed === undefined || typeof parameters.seed === 'string') && (parameters.durationSeconds === undefined || (typeof parameters.durationSeconds === 'number' && Number.isFinite(parameters.durationSeconds) && parameters.durationSeconds > 0));
   }).map(copyVersion);
@@ -32,7 +40,8 @@ export function readPromptVersions(state: unknown): PromptVersion[] {
 
 export function reconcilePromptVersions(messages: readonly unknown[], completedIds: readonly string[], existing: readonly PromptVersion[], now: number, runs: readonly PromptRun[] = []): PromptVersion[] {
   const versions = [...existing];
-  const known = new Set(existing.map((version) => version.sourceMessageId));
+  const known = new Set(existing.flatMap(version => version.artifactId ? [version.artifactId] : []));
+  const legacyMessages = new Set(existing.filter(version => !version.artifactId).map(version => version.sourceMessageId));
   const completed = new Set(completedIds);
   let candidates: PromptVersion['images'] = [];
   const userImages = new Map<string, PromptVersion['images']>();
@@ -43,32 +52,47 @@ export function reconcilePromptVersions(messages: readonly unknown[], completedI
       // Default preview candidates come only from the most recent image-bearing
       // user turn. Text-only refinements retain them; never merge same labels
       // across turns. The export preview makes this scope explicit and editable.
-      const row = normalizeMessages([{ ...message, id: typeof message.id === 'string' ? message.id : 'legacy-user' }])[0];
-      if (row?.kind === 'user' && row.attachments.length) candidates = row.attachments.map((image, index) => ({ id: image.attachmentId ?? `${row.id}-image-${index + 1}`, displayName: image.displayName ?? `图片${index + 1}`, ...(image.filename ? { filename: image.filename } : {}), uri: image.uri }));
+      const parts = [...(Array.isArray(message.content) ? message.content : []), ...(Array.isArray(message.attachments) ? message.attachments : [])];
+      const images = parts.flatMap((part, index): PromptBindingImage[] => {
+        if (!record(part) || !['image', 'image_url'].includes(String(part.type))) return [];
+        const row = normalizeMessages([{ id: 'image', role: 'user', content: [part] }])[0];
+        if (row?.kind !== 'user' || !row.attachments[0]) return [];
+        const image = row.attachments[0];
+        const metadata = record(part.metadata) ? part.metadata : {};
+        const id = typeof metadata.attachmentId === 'string' && metadata.attachmentId ? metadata.attachmentId : typeof part.id === 'string' && part.id ? part.id : undefined;
+        return [{ id: id ?? `unresolved-${message.id}-${index}`, displayName: typeof metadata.displayName === 'string' && metadata.displayName ? metadata.displayName : '未绑定图片',
+          ...(id ? {} : { identityKnown: false }), ...(typeof metadata.ordinal === 'number' ? { ordinal: metadata.ordinal } : {}),
+          ...(image.filename ? { filename: image.filename } : {}), uri: image.uri }];
+      });
+      if (images.length) candidates = images;
       if (typeof message.id === 'string') userImages.set(message.id, candidates);
       continue;
     }
-    if (message.role !== 'assistant' || typeof message.id !== 'string' || !message.id || !completed.has(message.id) || known.has(message.id)) continue;
+    if (message.role !== 'assistant' || typeof message.id !== 'string' || !message.id || !completed.has(message.id) || legacyMessages.has(message.id)) continue;
     const content = typeof message.content === 'string' ? message.content : Array.isArray(message.content) ? message.content.map((part) => typeof part === 'string' ? part : record(part) && typeof part.text === 'string' ? part.text : '').join('\n') : '';
-    const result = parsePromptResult(content, message.id);
-    if (!result) continue;
+    const revision = typeof message.revision === 'number' && Number.isSafeInteger(message.revision) ? message.revision : 0;
+    const results = parsePromptCandidates(content, message.id, revision);
     const run = outputRuns.get(message.id);
     const images = run ? userImages.get(run.userMessageId) ?? [] : candidates;
-    versions.push({ id: `version-${message.id}`, sourceMessageId: message.id, promptText: result.promptText, createdAt: run?.endedAt ?? now, images: images.map((image) => ({ ...image })), parameters: {} });
-    known.add(message.id);
+    for (const result of results) {
+      if (known.has(result.id)) continue;
+      versions.push({ id: `version-${result.id}`, artifactId: result.id, sourceMessageId: message.id, sourceRevision: result.sourceRevision, sourceRange: { ...result.range }, promptText: result.promptText, createdAt: run?.endedAt ?? now, images: images.map((image) => ({ ...image })), parameters: {} });
+      known.add(result.id);
+    }
   }
   return versions;
 }
 
-export function restorePromptVersion(versions: readonly PromptVersion[], id: string, now: number): PromptVersion[] {
+export function restorePromptVersion(versions: readonly PromptVersion[], id: string, now: number, commandId?: string): PromptVersion[] {
+  if (commandId && versions.some(version => version.restoreCommandId === commandId)) return [...versions];
   const version = versions.find((item) => item.id === id);
   if (!version) return [...versions];
-  const base = `${id}-restored-${now}`;
+  const base = commandId ? `restored-${encodeURIComponent(commandId)}` : `${id}-restored-${now}`;
   let restoredId = base;
   let suffix = 1;
   const ids = new Set(versions.map((item) => item.id));
   while (ids.has(restoredId)) restoredId = `${base}-${suffix++}`;
-  return [...versions, { ...copyVersion(version), id: restoredId, createdAt: now, restoredFrom: id }];
+  return [...versions, { ...copyVersion(version), id: restoredId, createdAt: now, restoredFrom: id, ...(commandId ? { restoreCommandId: commandId } : {}) }];
 }
 
 export type PromptDiffLine = { kind: 'same' | 'removed' | 'added'; text: string };

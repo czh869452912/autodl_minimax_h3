@@ -6,7 +6,7 @@ export function readComposerDraft(state: unknown): { text: string; attachments: 
   const draft = (state as { h3Composer?: { text?: unknown; attachments?: unknown } } | null)?.h3Composer;
   const attachments = Array.isArray(draft?.attachments) ? draft.attachments.filter((item): item is AssistantImageAttachment & { displayName?: string } =>
     item && typeof item.id === 'string' && item.status === 'ready' && item.type === 'image'
-    && item.source?.type === 'data' && typeof item.source.value === 'string' && item.source.value.length > 0) : [];
+    && ['data', 'url'].includes(item.source?.type) && typeof item.source.value === 'string' && item.source.value.length > 0) : [];
   return { text: typeof draft?.text === 'string' ? draft.text : '', attachments };
 }
 export type RunRow = { id: string; kind: 'run'; run: PromptRun };
@@ -23,7 +23,7 @@ export function insertRunRows(rows: PresentationMessage[], runs: PromptRun[]): A
   return rows.flatMap(row => [row, ...(anchors.get(row.id) ?? [])] as Array<PresentationMessage | RunRow>).concat(unanchored);
 }
 export const RUN_LABELS: Record<PromptRun['status'], string> = {
-  running: '生成中', completed: '已完成', failed: '失败', cancelled: '已停止', interrupted: '已中断',
+  queued: '等待运行', running: '生成中', completed: '已完成', failed: '失败', cancelled: '已停止', interrupted: '已中断',
 };
 export function sessionRunLabel(state: unknown): string {
   const runs = readPromptRuns(state);

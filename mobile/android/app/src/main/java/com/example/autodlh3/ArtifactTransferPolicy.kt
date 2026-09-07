@@ -4,6 +4,8 @@ import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.URI
+import java.net.UnknownHostException
+import java.net.SocketTimeoutException
 
 data class ArtifactTransferRequest(
   val url: String,
@@ -30,6 +32,7 @@ class ArtifactTransferException(
   val diagnosticCode: String,
   val retryable: Boolean,
   cause: Throwable? = null,
+  val reason: String? = null,
 ) : IllegalArgumentException(diagnosticCode, cause)
 
 class ArtifactTransferPolicy(
@@ -122,9 +125,27 @@ class ArtifactTransferPolicy(
     val addresses = try {
       dns(host)
     } catch (error: Exception) {
-      throw ArtifactTransferException("ARTIFACT_PRIVATE_NETWORK", false, error)
+      val reason = when (error) {
+        is UnknownHostException -> "DNS_UNKNOWN_HOST"
+        is SocketTimeoutException -> "DNS_TIMEOUT"
+        else -> "DNS_EXCEPTION"
+      }
+      throw ArtifactTransferException("ARTIFACT_DNS_FAILED", true, error, reason)
     }
-    if (addresses.isEmpty() || addresses.any { !isPublic(it) }) {
+    if (addresses.isEmpty()) {
+      throw ArtifactTransferException("ARTIFACT_DNS_FAILED", true, reason = "DNS_EMPTY")
+    }
+    val nonPublic = addresses.filterNot(::isPublic)
+    // Benchmark space can be routed locally. Diagnose possible Fake-IP DNS,
+    // but never treat it as proof that a VPN safely owns the destination.
+    val domainHost = !host.contains(':') && !host.matches(Regex("[0-9.]+"))
+    val onlyBenchmark = nonPublic.isNotEmpty() && nonPublic.all {
+      it is Inet4Address && unsigned(it.address[0]) == 198 && unsigned(it.address[1]) in 18..19
+    }
+    if (domainHost && onlyBenchmark) {
+      throw ArtifactTransferException("ARTIFACT_VIRTUAL_DNS", false)
+    }
+    if (nonPublic.isNotEmpty()) {
       throw ArtifactTransferException("ARTIFACT_PRIVATE_NETWORK", false)
     }
     return addresses

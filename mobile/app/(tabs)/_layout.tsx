@@ -1,22 +1,22 @@
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppTabs } from '../../src/ui/AppTabs';
-import type { AppTabId } from '../../src/ui/theme';
+import { COLORS, type AppTabId } from '../../src/ui/theme';
 
 export default function TabsLayout() {
   const pathname = usePathname();
   const router = useRouter();
   const activeId = ((pathname.split('/').filter(Boolean).pop() || 'create')) as AppTabId;
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: COLORS.background }}>
       <Tabs
         tabBar={() => <AppTabs activeId={activeId} onSelect={(id) => router.navigate(`/(tabs)/${id}`)} />}
         screenOptions={{
           headerShown: false,
           tabBarHideOnKeyboard: true,
-          tabBarStyle: { backgroundColor: '#0f172a', borderTopColor: '#1e293b' },
-          tabBarActiveTintColor: '#818cf8',
-          tabBarInactiveTintColor: '#94a3b8',
+          tabBarStyle: { backgroundColor: COLORS.surface, borderTopColor: COLORS.border },
+          tabBarActiveTintColor: COLORS.primaryActive,
+          tabBarInactiveTintColor: COLORS.textMuted,
         }}
       >
         <Tabs.Screen name="create" options={{ title: '生成' }} />

@@ -191,7 +191,10 @@ function payloadFrom(operation: WorkflowOperation): ArtifactDownloadPayload | un
   return { artifact: artifact as ArtifactRecord };
 }
 
-function normalized(code: string, retryable: boolean): NormalizedError {
+function normalized(code: string, retryable: boolean, message?: string): NormalizedError {
+  if ((code === 'ARTIFACT_DNS_FAILED' || code === 'ARTIFACT_VIRTUAL_DNS') && message) {
+    return { code, message, retryable };
+  }
   if (code === 'ARTIFACT_MEDIA_INVALID_RETRYABLE' || code === 'ARTIFACT_MEDIA_INVALID') {
     return { code, message: mediaValidationMessage(code), retryable };
   }
@@ -368,7 +371,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
       await Promise.resolve(deps.commit.release(reservation)).catch(() => undefined);
     }
     const failure = artifactError(canonicalNativeTransferCause(cause));
-    const normalizedFailure = normalized(failure.code, failure.retryable);
+    const normalizedFailure = normalized(failure.code, failure.retryable, failure.message);
     if (failure.retryable) {
       const nextRetryAt = timestamp + Math.min(60_000, 1_000 * (2 ** Math.max(0, operation.attempt - 1)));
       await deps.updateDownloadState('ENQUEUED', failure.code);

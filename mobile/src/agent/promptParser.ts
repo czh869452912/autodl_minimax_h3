@@ -4,7 +4,12 @@ export type PromptParseResult = {
   confidence: 'high' | 'medium';
 };
 
-const TITLE = /(?:^|\n)[ \t]{0,3}(?:#{1,6}[ \t]*)?(?:(?:最终[ \t]*)?H3[ \t]+Prompt|最终[ \t]*Prompt)[ \t]*[:：]?[ \t]*\r?\n([\s\S]*?)(?=\n[ \t]*#{1,6}[ \t]|$)/gi;
+export type PromptArtifactCandidate = PromptParseResult & {
+  id: string;
+  sourceRevision: number;
+  range: { start: number; end: number };
+};
+const TITLE = /^[ \t]{0,3}(?:#{1,6}[ \t]*)?(?:(?:最终[ \t]*)?H3[ \t]+Prompt|最终[ \t]*Prompt)[ \t]*[:：]?[ \t]*\r?$/gim;
 
 type FenceBlock = { start: number; end: number; info: string; body: string; closed: boolean };
 function fencedBlocks(content: string): FenceBlock[] {
@@ -35,26 +40,52 @@ function hasH3Fields(text: string): boolean {
     .every((field) => Boolean(fields.get(field)));
 }
 
-export function parsePromptResult(content: string, messageId: string): PromptParseResult | null {
+export function parsePromptCandidates(content: string, messageId: string, revision = 0): PromptArtifactCandidate[] {
   const fences = fencedBlocks(content);
-  const dedicated = fences.filter((block) => block.closed && block.info.toLowerCase() === 'h3-prompt');
-  let candidate: string | undefined;
-  // Multiple artifacts require explicit selection; do not guess which one to export.
-  if (dedicated.length === 1) candidate = dedicated[0].body;
-  else if (dedicated.length > 1) return null;
-  else {
-    const titled = [...content.matchAll(TITLE)].find((match) => {
-      // Titles within generic examples are never artifact declarations.
-      return !fences.some((block) => match.index >= block.start && match.index < block.end);
-    })?.[1]?.trim();
-    if (!titled) return null;
-    if (/^(?:`{3,}|~{3,})/.test(titled)) {
-      const blocks = fencedBlocks(titled);
-      if (blocks.length !== 1 || !blocks[0].closed || blocks[0].start !== 0 || blocks[0].end !== titled.length) return null;
-      candidate = blocks[0].body;
-    } else candidate = titled;
+  const ranges = fences.filter(block => block.closed && block.info.toLowerCase() === 'h3-prompt')
+    .map(block => ({ start: block.start, end: block.end, body: block.body }));
+  for (const title of content.matchAll(TITLE)) {
+    const start = title.index!;
+    if (fences.some(block => start >= block.start && start < block.end)) continue;
+    const afterTitle = start + title[0].length;
+    const bodyStart = afterTitle + (content.slice(afterTitle).match(/^\s*/)?.[0].length ?? 0);
+    const fence = fences.find(block => block.start === bodyStart);
+    if (fence) {
+      if (fence.closed) {
+        const existing = ranges.find(range => range.start === fence.start);
+        if (existing) existing.start = start;
+        else ranges.push({ start, end: fence.end, body: fence.body });
+      }
+      continue;
+    }
+    const nextHeading = [...content.slice(bodyStart).matchAll(/^[ \t]{0,3}#{1,6}[ \t]+/gm)]
+      .map(match => bodyStart + match.index!)
+      .find(offset => !fences.some(block => offset >= block.start && offset < block.end));
+    const end = nextHeading ?? content.length;
+    ranges.push({ start, end, body: content.slice(bodyStart, end).trim() });
   }
-  return candidate && hasH3Fields(candidate)
-    ? { promptText: candidate, sourceMessageId: messageId, confidence: 'high' }
-    : null;
+  return ranges.sort((left, right) => left.start - right.start).filter(range => hasH3Fields(range.body)).map((range, index) => ({
+    id: `artifact-${encodeURIComponent(messageId)}-${revision}-${index + 1}`,
+    sourceMessageId: messageId, sourceRevision: revision, promptText: range.body, confidence: 'high',
+    range: { start: range.start, end: range.end },
+  }));
+}
+
+export function removePromptCandidateRanges(content: string, candidates: readonly PromptArtifactCandidate[], selectedIds: readonly string[]): string {
+  const selected = new Set(selectedIds);
+  let cursor = 0;
+  let result = '';
+  for (const candidate of [...candidates].filter(candidate => selected.has(candidate.id)).sort((left, right) => left.range.start - right.range.start)) {
+    if (candidate.range.start < cursor || candidate.range.end > content.length) continue;
+    result += content.slice(cursor, candidate.range.start);
+    cursor = candidate.range.end;
+  }
+  return result + content.slice(cursor);
+}
+
+export function parsePromptResult(content: string, messageId: string): PromptParseResult | null {
+  const candidates = parsePromptCandidates(content, messageId);
+  if (candidates.length !== 1) return null;
+  const { promptText, sourceMessageId, confidence } = candidates[0];
+  return { promptText, sourceMessageId, confidence };
 }

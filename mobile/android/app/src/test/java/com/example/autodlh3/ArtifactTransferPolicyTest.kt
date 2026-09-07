@@ -1,6 +1,8 @@
 package com.example.autodlh3
 
 import java.net.InetAddress
+import java.net.UnknownHostException
+import java.net.SocketTimeoutException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -55,7 +57,7 @@ class ArtifactTransferPolicyTest {
   @Test fun `provider supplied hosts still require every DNS answer to be public`() {
     val nonPublic = listOf(
       "0.0.0.0", "10.0.0.1", "100.64.0.1", "127.0.0.1", "169.254.1.1",
-      "172.16.0.1", "192.168.0.1", "192.0.0.1", "192.0.2.1", "198.18.0.1",
+      "172.16.0.1", "192.168.0.1", "192.0.0.1", "192.0.2.1",
       "198.51.100.1", "203.0.113.1", "224.0.0.1", "::", "::1", "fe80::1",
       "fc00::1", "2001:db8::1", "ff02::1", "::ffff:127.0.0.1", "::ffff:192.168.1.1",
     )
@@ -126,8 +128,46 @@ class ArtifactTransferPolicyTest {
 
   @Test fun `rejects unresolved hosts and malformed URLs`() {
     val unresolved = ArtifactTransferPolicy { emptyList() }
-    expectCode("ARTIFACT_PRIVATE_NETWORK") { unresolved.validate(request().url, request()) }
+    expectCode("ARTIFACT_DNS_FAILED") { unresolved.validate(request().url, request()) }
     expectCode("ARTIFACT_URL_INVALID") { unresolved.validate("not a url", request()) }
+  }
+
+  @Test fun `DNS exceptions are retryable and retain their cause`() {
+    val cause = UnknownHostException("sensitive resolver message")
+    val policy = ArtifactTransferPolicy { throw cause }
+    val error = runCatching { policy.resolvePublic("cdn.example.test") }.exceptionOrNull() as ArtifactTransferException
+    assertEquals("ARTIFACT_DNS_FAILED", error.diagnosticCode)
+    assertTrue(error.retryable)
+    assertEquals(cause, error.cause)
+    assertEquals("DNS_UNKNOWN_HOST", error.reason)
+  }
+
+  @Test fun `DNS diagnostics distinguish empty answers timeouts and other exceptions`() {
+    val empty = runCatching { ArtifactTransferPolicy { emptyList() }.resolvePublic("cdn.example.test") }
+      .exceptionOrNull() as ArtifactTransferException
+    assertTrue(empty.retryable)
+    assertEquals("DNS_EMPTY", empty.reason)
+    listOf(SocketTimeoutException("secret") to "DNS_TIMEOUT", IllegalStateException("secret") to "DNS_EXCEPTION").forEach { (cause, reason) ->
+      val error = runCatching { ArtifactTransferPolicy { throw cause }.resolvePublic("cdn.example.test") }
+        .exceptionOrNull() as ArtifactTransferException
+      assertEquals("ARTIFACT_DNS_FAILED", error.diagnosticCode)
+      assertTrue(error.retryable)
+      assertEquals(reason, error.reason)
+      assertEquals("ARTIFACT_DNS_FAILED", error.message)
+    }
+  }
+
+  @Test fun `benchmark DNS answers get a distinct error without allowing private mixtures`() {
+    listOf("198.18.0.0", "198.19.255.255").forEach { ip ->
+      val policy = ArtifactTransferPolicy { listOf(address("93.184.216.34"), address(ip)) }
+      expectCode("ARTIFACT_VIRTUAL_DNS") { policy.validate(request().url, request()) }
+    }
+    val mixed = ArtifactTransferPolicy { listOf(address("198.18.0.1"), address("10.0.0.1")) }
+    expectCode("ARTIFACT_PRIVATE_NETWORK") { mixed.validate(request().url, request()) }
+    val literal = ArtifactTransferPolicy { listOf(address("198.18.0.1")) }
+    expectCode("ARTIFACT_PRIVATE_NETWORK") {
+      literal.validate("https://198.18.0.1/video.mp4", request(allowPublicHosts = true))
+    }
   }
 
   @Test fun `revalidates redirect candidates with the same policy`() {

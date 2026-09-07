@@ -1,5 +1,6 @@
 jest.mock('deepagents/browser', () => ({ createDeepAgent: jest.fn(), StateBackend: jest.fn() }));
 jest.mock('@langchain/openai', () => ({ ChatOpenAI: jest.fn() }));
+jest.mock('./agentWorkspace', () => ({ createH3WorkspaceBackend: jest.fn(), createH3WorkspaceMiddleware: () => [], getH3ContextBudget: () => ({ inputTokens: 28672, outputTokens: 4096 }) }));
 import { normalizeCumulativeText, streamH3Agent } from './h3Agent';
 import type { H3AgentEvent } from './agentTypes';
 

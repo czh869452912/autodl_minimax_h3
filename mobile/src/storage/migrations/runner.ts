@@ -6,6 +6,7 @@ import { v5Registry } from './v5Registry';
 import { v6DurableExecutor } from './v6DurableExecutor';
 import { v7RegistryRelease } from './v7RegistryRelease';
 import { v8TaskRefresh } from './v8TaskRefresh';
+import { v9AgentRecords } from './v9AgentRecords';
 
 export type AppDatabaseMigrationOptions = {
   backup?: (db: SQLiteDatabase, fromVersion: number, toVersion: number) => void;
@@ -17,6 +18,7 @@ const steps = new Map<number, MigrationStep>([
   [v6DurableExecutor.fromVersion, v6DurableExecutor],
   [v7RegistryRelease.fromVersion, v7RegistryRelease],
   [v8TaskRefresh.fromVersion, v8TaskRefresh],
+  [v9AgentRecords.fromVersion, v9AgentRecords],
 ]);
 
 function version(db: SQLiteDatabase): number {
@@ -56,6 +58,7 @@ export function applyCurrentSchema(db: SQLiteDatabase): void {
   v6DurableExecutor.apply(context(db));
   v7RegistryRelease.apply(context(db));
   v8TaskRefresh.apply(context(db));
+  v9AgentRecords.apply(context(db));
 }
 
 export function runAppMigrations(db: SQLiteDatabase, options: AppDatabaseMigrationOptions = {}): MigrationResult {

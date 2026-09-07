@@ -1,5 +1,5 @@
 import type { LocalThreadSnapshot } from './threadStore';
-import { parsePromptResult, type PromptParseResult } from './promptParser';
+import { parsePromptResult, parsePromptCandidates, removePromptCandidateRanges, type PromptArtifactCandidate, type PromptParseResult } from './promptParser';
 
 export type ToolTimelineStep = {
   id: string;
@@ -20,6 +20,8 @@ export type PresentationMessage =
       kind: 'assistant';
       text: string;
       prompt: PromptParseResult | null;
+      candidates?: PromptArtifactCandidate[];
+      prose?: string;
       tools: ToolTimelineStep[];
     };
 export type SessionGroup = {
@@ -147,11 +149,14 @@ export function normalizeMessages(
         };
       });
     const text = textContent(message.content);
+    const candidates = parsePromptCandidates(text, id, Number((message as any).revision) || 0);
     normalized.push({
       id,
       kind: 'assistant',
       text,
       prompt: parsePromptResult(text, id),
+      candidates,
+      prose: removePromptCandidateRanges(text, candidates, candidates.map(candidate => candidate.id)),
       tools,
     });
   }
@@ -169,6 +174,7 @@ export function toolTimelineSummary(
 
 export function sessionTitle(snapshot: LocalThreadSnapshot): string {
   if (snapshot.customTitle?.trim()) return snapshot.customTitle.trim();
+  if (snapshot.summary) return snapshot.summary.title || '新会话';
   const first = snapshot.messages.find(
     (message) => (message as { role?: string }).role === 'user',
   ) as { content?: unknown } | undefined;
@@ -181,6 +187,7 @@ export function sortSessionSnapshots(values: readonly LocalThreadSnapshot[]): Lo
 }
 
 export function sessionMessageCount(snapshot: LocalThreadSnapshot): number {
+  if (snapshot.summary) return snapshot.summary.messageCount;
   return snapshot.messages.filter(message => ['user', 'assistant'].includes((message as { role?: string }).role ?? '')).length;
 }
 

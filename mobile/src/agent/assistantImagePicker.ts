@@ -1,6 +1,7 @@
 import { pickImagesFromGallery, type NativeImageAsset } from '../native/imagePicker';
-import { readImageAsDataSource } from './imageAttachmentUpload';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
+import { validateImageBudget } from './attachmentStore';
 
 export type AssistantImageAttachment = {
   id: string;
@@ -8,13 +9,14 @@ export type AssistantImageAttachment = {
   status: 'ready';
   filename: string;
   size: number;
-  source: { type: 'data'; value: string; mimeType: string };
+  source: { type: 'data' | 'url'; value: string; mimeType: string };
 };
 
 type Dependencies = {
   pickGallery: (remaining: number) => Promise<NativeImageAsset[]>;
   pickFiles: (remaining: number) => Promise<NativeImageAsset[]>;
-  read: typeof readImageAsDataSource;
+  read: (file: NativeImageAsset) => Promise<AssistantImageAttachment['source']>;
+  getSize: (uri: string) => Promise<number>;
   createId: () => string;
 };
 
@@ -61,12 +63,20 @@ export async function pickAssistantImages(source: 'gallery' | 'file', remaining:
   const resolved: Dependencies = {
     pickGallery: pickImagesFromGallery,
     pickFiles: pickImagesFromFiles,
-    read: readImageAsDataSource,
+    read: async file => ({ type: 'url', value: file.uri, mimeType: file.mimeType }),
+    getSize: async uri => {
+      const info = await FileSystem.getInfoAsync(uri);
+      if (!info.exists || info.isDirectory) throw new Error('图片已失效，请重新选择');
+      return info.size;
+    },
     createId: defaultAttachmentId,
     ...deps,
   };
-  const files = await (source === 'gallery' ? resolved.pickGallery : resolved.pickFiles)(remaining);
-  if (files.some((file) => file.size > 20 * 1024 * 1024)) throw new Error('图片附件不能超过 20MB');
+  if (remaining <= 0) return [];
+  const selected = await (source === 'gallery' ? resolved.pickGallery : resolved.pickFiles)(remaining);
+  const files = await Promise.all(selected.map(async file => Number.isFinite(file.size) && file.size > 0
+    ? file : { ...file, size: await resolved.getSize(file.uri) }));
+  validateImageBudget(files);
   const occupied = new Set<string>();
   const ids = files.map(() => allocateUniqueAttachmentId(resolved.createId(), occupied));
   return Promise.all(files.map(async (file, index) => ({

@@ -1,5 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
+import { COLORS } from './theme';
 
 export const ICON_NAMES = [
   'movie_filter', 'list_alt', 'grid_view', 'settings',
@@ -39,6 +40,6 @@ const ICON_MAP: Record<IconName, ComponentProps<typeof MaterialCommunityIcons>['
   notifications_active: 'bell-ring-outline',
 };
 
-export function AppIcon({ name, size = 24, color = '#94a3b8' }: { name: IconName; size?: number; color?: string }) {
+export function AppIcon({ name, size = 24, color = COLORS.textMuted }: { name: IconName; size?: number; color?: string }) {
   return <MaterialCommunityIcons name={ICON_MAP[name]} size={size} color={color} />;
 }

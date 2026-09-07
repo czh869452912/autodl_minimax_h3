@@ -55,21 +55,21 @@ function InlineVideoPlayer({ source, poster, validateSource, onInvalidSource, re
     <VideoView testID="inline-video-view" player={player} nativeControls contentFit="contain" surfaceType="textureView" useExoShutter={false} fullscreenOptions={{ enable: true, orientation: 'default' }} onFirstFrameRender={() => setHasFirstFrame(true)} style={styles.video} />
     {!hasFirstFrame && poster ? <View testID="video-poster" pointerEvents="none" style={styles.poster}><Image source={{ uri: poster }} style={styles.posterImage} resizeMode="contain" /></View> : null}
     {status === 'loading' ? <View pointerEvents="none" style={styles.loading}><ActivityIndicator color={COLORS.primaryActive} /></View> : null}
-    {status === 'error' ? <View style={styles.error}><Text numberOfLines={2} style={styles.errorText}>{validation === 'invalid' ? '本地视频文件已损坏' : '视频播放失败'}</Text>{validation === 'checking' ? <ActivityIndicator color={COLORS.primaryActive} /> : validation === 'invalid' && onInvalidSource ? <Pressable accessibilityRole="button" accessibilityLabel="重新下载视频" disabled={recovering} onPress={() => void onInvalidSource(source)} style={[styles.retry, recovering && styles.disabled]}><AppIcon name="refresh" size={18} color={COLORS.text} /><Text style={styles.retryText}>{recovering ? '重新下载中…' : '重新下载'}</Text></Pressable> : <Pressable accessibilityRole="button" accessibilityLabel="重试播放" onPress={retry} style={styles.retry}><AppIcon name="refresh" size={18} color={COLORS.text} /><Text style={styles.retryText}>重试播放</Text></Pressable>}</View> : null}
+    {status === 'error' ? <View style={styles.error}><Text numberOfLines={2} style={styles.errorText}>{validation === 'invalid' ? '本地视频文件已损坏' : '视频播放失败'}</Text>{validation === 'checking' ? <ActivityIndicator color={COLORS.primaryActive} /> : validation === 'invalid' && onInvalidSource ? <Pressable accessibilityRole="button" accessibilityLabel="重新下载视频" disabled={recovering} onPress={() => void onInvalidSource(source)} style={[styles.retry, recovering && styles.disabled]}><AppIcon name="refresh" size={18} color={COLORS.onPrimary} /><Text style={styles.retryText}>{recovering ? '重新下载中…' : '重新下载'}</Text></Pressable> : <Pressable accessibilityRole="button" accessibilityLabel="重试播放" onPress={retry} style={styles.retry}><AppIcon name="refresh" size={18} color={COLORS.onPrimary} /><Text style={styles.retryText}>重试播放</Text></Pressable>}</View> : null}
   </View>;
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  video: { flex: 1, backgroundColor: '#000' },
-  poster: { ...StyleSheet.absoluteFill, width: undefined, height: undefined, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: COLORS.mediaBackground },
+  video: { flex: 1, backgroundColor: COLORS.mediaBackground },
+  poster: { ...StyleSheet.absoluteFill, width: undefined, height: undefined, backgroundColor: COLORS.mediaBackground },
   posterImage: { flex: 1 },
   loading: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-  error: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 20, backgroundColor: '#020617e6' },
+  error: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 20, backgroundColor: COLORS.surface },
   errorText: { color: COLORS.textMuted, fontSize: 13, textAlign: 'center' },
-  retry: { minHeight: 42, paddingHorizontal: 16, borderRadius: 10, backgroundColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  retryText: { color: COLORS.text, fontWeight: '700' },
+  retry: { minHeight: 48, paddingHorizontal: 16, borderRadius: 10, backgroundColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  retryText: { color: COLORS.onPrimary, fontWeight: '700' },
   disabled: { opacity: 0.5 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#111827' },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: COLORS.surfaceRaised },
   emptyText: { color: COLORS.textMuted, fontSize: 13 },
 });

@@ -34,7 +34,7 @@
 
 ## 复审文档的新发现
 
-对 `docs/reviews/2026-09-05-task-list-refresh-review.md` 的复审部分逐项核对，结论如下：
+对 `docs/superpowers/archive/reviews/2026-09-05-task-list-refresh-review.md` 的复审部分逐项核对，结论如下：
 
 | 项目 | 本轮结论 |
 |---|---|

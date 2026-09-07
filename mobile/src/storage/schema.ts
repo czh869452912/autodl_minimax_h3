@@ -1,4 +1,4 @@
-export const APP_SCHEMA_VERSION = 8;
+export const APP_SCHEMA_VERSION = 9;
 export const RECOVERY_TABLE = 'app_database_recovery';
 
 export const APP_TABLES = [
@@ -6,6 +6,8 @@ export const APP_TABLES = [
   'artifact_blob_refs', 'artifact_blobs', 'media_deliveries', 'media_assets', 'tasks',
   'workflow_registry_releases', 'workflow_registry_active', 'workflow_registry', 'prompt_drafts', 'agent_threads',
   'app_scheduler_leases', 'task_projection_state', 'executor_wake_state', RECOVERY_TABLE,
+  'agent_messages', 'agent_runs', 'agent_versions', 'agent_client_records', 'agent_thread_index',
+  'agent_handoffs', 'agent_submissions', 'agent_workspaces',
 ] as const;
 
 export const V5_SCHEMA_STATEMENTS = [
@@ -57,4 +59,16 @@ export const V8_SCHEMA_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_workflow_operations_expired_claim ON workflow_operations(state, lease_expires_at, id)',
 ] as const;
 
-export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS] as const;
+export const V9_SCHEMA_STATEMENTS = [
+  'CREATE TABLE IF NOT EXISTS agent_submissions (id TEXT PRIMARY KEY NOT NULL,thread_id TEXT NOT NULL,user_message_id TEXT NOT NULL,run_id TEXT NOT NULL,draft_revision INTEGER NOT NULL)',
+  "CREATE TABLE IF NOT EXISTS agent_thread_index (thread_id TEXT PRIMARY KEY NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, custom_title TEXT, title TEXT NOT NULL DEFAULT '', message_count INTEGER NOT NULL DEFAULT 0, last_run_json TEXT, read_at INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0)",
+  'CREATE INDEX IF NOT EXISTS idx_agent_threads_page ON agent_thread_index(deleted,updated_at DESC,thread_id)',
+  'CREATE TABLE IF NOT EXISTS agent_messages (thread_id TEXT NOT NULL,id TEXT NOT NULL,sequence INTEGER NOT NULL,payload_json TEXT NOT NULL,PRIMARY KEY(thread_id,id),UNIQUE(thread_id,sequence))',
+  'CREATE TABLE IF NOT EXISTS agent_runs (thread_id TEXT NOT NULL,id TEXT NOT NULL,sequence INTEGER NOT NULL,payload_json TEXT NOT NULL,PRIMARY KEY(thread_id,id),UNIQUE(thread_id,sequence))',
+  'CREATE TABLE IF NOT EXISTS agent_versions (thread_id TEXT NOT NULL,id TEXT NOT NULL,sequence INTEGER NOT NULL,payload_json TEXT NOT NULL,PRIMARY KEY(thread_id,id),UNIQUE(thread_id,sequence))',
+  'CREATE TABLE IF NOT EXISTS agent_workspaces (thread_id TEXT NOT NULL,id TEXT NOT NULL,sequence INTEGER NOT NULL,payload_json TEXT NOT NULL,PRIMARY KEY(thread_id,id),UNIQUE(thread_id,sequence))',
+  'CREATE TABLE IF NOT EXISTS agent_client_records (thread_id TEXT NOT NULL,id TEXT NOT NULL,payload_json TEXT NOT NULL,PRIMARY KEY(thread_id,id))',
+  'CREATE TABLE IF NOT EXISTS agent_handoffs (id TEXT PRIMARY KEY NOT NULL,payload_json TEXT NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL)',
+] as const;
+
+export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS] as const;

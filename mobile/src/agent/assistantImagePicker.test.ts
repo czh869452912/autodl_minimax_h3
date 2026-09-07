@@ -8,6 +8,18 @@ jest.mock('expo-document-picker', () => ({
 }));
 
 describe('pickAssistantImages', () => {
+  it('resolves missing picker size before validating or reading the image', async () => {
+    const read = jest.fn(async () => ({ type: 'url' as const, value: 'file:///photo.jpg', mimeType: 'image/jpeg' }));
+    const file = { uri: 'file:///photo.jpg', name: 'photo.jpg', mimeType: 'image/jpeg', size: 0 };
+    await expect(pickAssistantImages('gallery', 1, {
+      pickGallery: async () => [file], getSize: async () => 123, read,
+    })).resolves.toMatchObject([{ size: 123 }]);
+    expect(read).toHaveBeenCalledWith({ ...file, size: 123 });
+    await expect(pickAssistantImages('gallery', 1, {
+      pickGallery: async () => [file], getSize: async () => 20 * 1024 * 1024 + 1, read,
+    })).rejects.toThrow('20MB');
+    expect(read).toHaveBeenCalledTimes(1);
+  });
   it('reads gallery images into ready assistant attachments', async () => {
     await expect(pickAssistantImages('gallery', 2, {
       pickGallery: async () => [{ uri: 'file:///photo.jpg', name: 'photo.jpg', mimeType: 'image/jpeg', size: 7 }],
@@ -38,7 +50,7 @@ describe('pickAssistantImages', () => {
     await expect(pickAssistantImages('gallery', 1, {
       pickGallery: async () => [{ uri: 'file:///large.jpg', name: 'large.jpg', mimeType: 'image/jpeg', size: 20 * 1024 * 1024 + 1 }],
       read,
-    })).rejects.toThrow('图片附件不能超过 20MB');
+    })).rejects.toThrow('20MB');
     expect(read).not.toHaveBeenCalled();
   });
 

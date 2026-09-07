@@ -136,6 +136,18 @@ class ArtifactTransferTest {
     assertTrue(partsDir.listFiles().isNullOrEmpty())
   }
 
+  @Test fun `connection time DNS failures retain their diagnostic and leave no part`() {
+    val policy = ArtifactTransferPolicy { throw java.net.UnknownHostException("resolver detail") }
+    val url = server.url("/video.mp4").newBuilder().host("artifact.public.test").build().toString()
+    val error = expectCode("ARTIFACT_DNS_FAILED") {
+      transfer(dns = { host, _ -> policy.resolvePublic(host) }).transfer(request(url = url))
+    }
+    assertTrue(error.retryable)
+    assertEquals("DNS_UNKNOWN_HOST", error.reason)
+    assertEquals(0, server.requestCount)
+    assertTrue(partsDir.listFiles().isNullOrEmpty())
+  }
+
   @Test fun `limits redirects to five`() {
     repeat(6) { server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", "/hop-$it")) }
     expectCode("ARTIFACT_REDIRECT_LIMIT") { transfer().transfer(request()) }

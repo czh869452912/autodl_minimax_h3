@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Alert, AppState, BackHandler } from 'react-native';
+import { Alert, AppState, BackHandler, StatusBar } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
 import { getDatabase, getDatabaseStartupState, type DatabaseStartupState } from '../src/storage/databaseClient';
 import { isLegacyAppDatabase, resetAppDatabase } from '../src/storage/database';
@@ -10,6 +10,7 @@ import { startForegroundTaskExecution } from '../src/tasks/foregroundRuntime';
 import { resumeTaskSyncAfterReconnect } from '../src/tasks/background';
 import * as Network from 'expo-network';
 import { createConnectivityEdgeDetector } from '../src/tasks/networkRecovery';
+import { COLORS } from '../src/ui/theme';
 import { listFullDatabaseBackups, restoreFullDatabaseBackup } from '../src/storage/backup';
 
 export default function RootLayout() {
@@ -56,6 +57,7 @@ export default function RootLayout() {
     }
     return (
       <SafeAreaProvider>
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
         <DatabaseRecoveryScreen
           diagnostic={startupState.diagnostic}
           allowReset={startupState.allowReset}
@@ -71,7 +73,8 @@ export default function RootLayout() {
   }
   return (
     <SafeAreaProvider>
-      {startupState.mode === 'legacy' ? null : <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#020617' } }} />}
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
+      {startupState.mode === 'legacy' ? null : <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.background } }} />}
     </SafeAreaProvider>
   );
 }

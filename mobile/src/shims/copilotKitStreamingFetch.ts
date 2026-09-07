@@ -23,6 +23,7 @@ export function getStreamingFetchTimeout(): number {
 }
 
 export function installStreamingFetch(): void {
+  if ((globalThis.fetch as any)?.__h3StreamingFetch) return;
   try {
     const response = new Response('');
     if (response.body && typeof response.body.getReader === 'function') return;
@@ -30,6 +31,11 @@ export function installStreamingFetch(): void {
     // Older React Native runtimes do not expose a complete Response object.
   }
 
+  globalThis.fetch = createStreamingFetch({ timeoutMs: streamingFetchTimeoutMs });
+}
+
+export function createStreamingFetch({ timeoutMs }: { timeoutMs: number }): typeof fetch {
+  if (typeof XMLHttpRequest === 'undefined') return globalThis.fetch.bind(globalThis);
   const TextEncoderCtor = (globalThis as any).TextEncoder;
   const originalFetch = globalThis.fetch;
   const streamingFetch = (input: any, init?: any): Promise<Response> => {
@@ -43,7 +49,6 @@ export function installStreamingFetch(): void {
       if (signal?.aborted) { reject(abortError()); return; }
       const xhr = new XMLHttpRequest();
       xhr.open(method, url);
-      const timeoutMs = streamingFetchTimeoutMs;
       xhr.timeout = timeoutMs;
       xhr.responseType = 'text';
       const entries = headers instanceof Headers ? Array.from(headers.entries()) : Object.entries(headers);
@@ -127,7 +132,8 @@ export function installStreamingFetch(): void {
     });
   };
   (streamingFetch as any).__originalFetch = originalFetch;
-  globalThis.fetch = streamingFetch as typeof fetch;
+  (streamingFetch as any).__h3StreamingFetch = true;
+  return streamingFetch as typeof fetch;
 }
 
 // esbuild's package bundle imports the minified export under the name `t`.
