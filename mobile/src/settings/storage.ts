@@ -9,6 +9,8 @@ const keys = {
   llmMaxRetries: 'llm.maxRetries',
   autoExportToGallery: 'media.autoExportToGallery',
   keepPrivateCopy: 'media.keepPrivateCopy',
+  llmContextWindowTokens: 'llm.contextWindowTokens',
+  llmMaxOutputTokens: 'llm.maxOutputTokens',
 } as const;
 
 export type AppSettings = {
@@ -20,10 +22,12 @@ export type AppSettings = {
   llmMaxRetries: string;
   autoExportToGallery: boolean;
   keepPrivateCopy: boolean;
+  llmContextWindowTokens?: string;
+  llmMaxOutputTokens?: string;
 };
 
 export async function readSettings(): Promise<AppSettings> {
-  const [token, llmEndpoint, llmModel, llmApiKey, llmTimeoutSeconds, llmMaxRetries, autoExportToGallery, keepPrivateCopy] = await Promise.all(
+  const [token, llmEndpoint, llmModel, llmApiKey, llmTimeoutSeconds, llmMaxRetries, autoExportToGallery, keepPrivateCopy, llmContextWindowTokens, llmMaxOutputTokens] = await Promise.all(
     Object.values(keys).map((key) => SecureStore.getItemAsync(key)),
   );
   return {
@@ -35,6 +39,8 @@ export async function readSettings(): Promise<AppSettings> {
     llmMaxRetries: llmMaxRetries || '2',
     autoExportToGallery: autoExportToGallery !== 'false',
     keepPrivateCopy: keepPrivateCopy !== 'false',
+    ...(llmContextWindowTokens ? { llmContextWindowTokens } : {}),
+    ...(llmMaxOutputTokens ? { llmMaxOutputTokens } : {}),
   };
 }
 
@@ -48,5 +54,7 @@ export async function saveSettings(values: Partial<AppSettings>): Promise<void> 
     values.llmMaxRetries === undefined ? undefined : SecureStore.setItemAsync(keys.llmMaxRetries, values.llmMaxRetries),
     values.autoExportToGallery === undefined ? undefined : SecureStore.setItemAsync(keys.autoExportToGallery, String(values.autoExportToGallery)),
     values.keepPrivateCopy === undefined ? undefined : SecureStore.setItemAsync(keys.keepPrivateCopy, String(values.keepPrivateCopy)),
+    values.llmContextWindowTokens === undefined ? undefined : SecureStore.setItemAsync(keys.llmContextWindowTokens, values.llmContextWindowTokens),
+    values.llmMaxOutputTokens === undefined ? undefined : SecureStore.setItemAsync(keys.llmMaxOutputTokens, values.llmMaxOutputTokens),
   ].filter((value): value is Promise<void> => Boolean(value)));
 }

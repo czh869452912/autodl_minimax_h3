@@ -1,5 +1,9 @@
 import { createPromptRuntimeRegistry } from './runtimeStore';
 import type { LocalThreadSnapshot, LocalThreadStore } from './threadStore';
+import { createLocalThreadStore } from './threadStore';
+import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
+import { createTimelineProjection } from './timelineProjection';
+import { normalizeMessages } from './agentPresentation';
 
 const config = { apiKey: 'key', endpoint: 'https://example.invalid', model: 'h3', timeoutMs: 600000, maxRetries: 2 };
 const snapshot = (threadId: string, updatedAt = 1): LocalThreadSnapshot => ({
@@ -30,6 +34,222 @@ function fakeAgent() {
 
 const store = { save: jest.fn(async () => undefined) } as unknown as LocalThreadStore;
 const saveMock = store.save as jest.Mock;
+
+it('isolates 1999 completed rows across 1000 deltas in ten seconds and composer edits from summaries', async () => {
+  jest.useFakeTimers();
+  const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
+  const messages = Array.from({ length: 2000 }, (_, index) => ({ id: `m-${index}`, role: 'assistant' as const, content: 'saved' }));
+  const runtime = registry.ensure(config, { ...snapshot('scale'), messages }, store);
+  const agent = runtime.agent as any;
+  const normalize = jest.fn(normalizeMessages), project = createTimelineProjection(normalize);
+  project(messages); normalize.mockClear();
+  const views = jest.fn(() => project(runtime.getViewSnapshot().messages));
+  runtime.subscribeView(views);
+  const summaries = jest.fn(); registry.subscribeSummary(summaries);
+  agent.isRunning = true;
+  try {
+    for (let index = 0; index < 1000; index++) {
+      messages[1999] = { ...messages[1999], content: `delta-${index}` };
+      agent.emitMessages(messages, {});
+      await jest.advanceTimersByTimeAsync(10);
+    }
+    expect(views).toHaveBeenCalledTimes(200);
+    expect(normalize).toHaveBeenCalledTimes(200);
+    expect(normalize.mock.calls.every(([rows]) => (rows[0] as any).id === 'm-1999')).toBe(true);
+    expect(runtime.getViewSnapshot().messages.at(-1)?.content).toBe('delta-999');
+    summaries.mockClear(); normalize.mockClear();
+    for (let index = 0; index < 100; index++) runtime.patchClientState({ h3Composer: { text: `draft-${index}`, revision: index } });
+    expect(summaries).not.toHaveBeenCalled();
+    expect(normalize).not.toHaveBeenCalled();
+  } finally { await registry.disposeAll(); jest.useRealTimers(); }
+});
+
+it('reports retained cache pressure after repeated save failures and keeps every draft owned', async () => {
+  let fail = true;
+  const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
+  const persistence = { save: async () => { if (fail) throw new Error('disk full'); } } as unknown as LocalThreadStore;
+  try {
+    for (let index = 0; index < 6; index++) {
+      const runtime = registry.ensure(config, snapshot(`dirty-${index}`), persistence);
+      runtime.patchClientState({ h3Composer: { text: `draft-${index}`, revision: 1 } });
+      await runtime.flush();
+    }
+    const notices: string[] = [];
+    const last = registry.ensure(config, snapshot('dirty-5'), persistence);
+    const unsubscribe = last.subscribe(event => { if (event.type === 'error') notices.push(event.message); });
+    expect(notices.some(message => message.includes('6 个会话') && message.includes('保留'))).toBe(true);
+    expect(registry.size()).toBe(6);
+    for (let index = 0; index < 6; index++) expect(registry.ensure(config, snapshot(`dirty-${index}`), persistence).getSnapshot().state).toMatchObject({ h3Composer: { text: `draft-${index}` } });
+    unsubscribe();
+  } finally { fail = false; await registry.disposeAll(); }
+});
+
+it('reopens an accepted run from SQLite after its first readback fails', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  const persistence = createLocalThreadStore(db as never);
+  const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
+  try {
+    const initial = { ...snapshot('accepted-reopen'), messages: [], state: { h3Composer: { text: 'durable prompt', revision: 1 } } };
+    await persistence.save(initial);
+    const runtime = registry.ensure(config, initial, persistence);
+    jest.spyOn(persistence, 'load').mockRejectedValueOnce(new Error('readback busy'));
+    const command = { id: 'submission', runId: 'accepted-run', draftRevision: 1, message: { id: 'accepted-user', role: 'user' as const, content: 'durable prompt' } };
+    expect(await runtime.accept(command)).toMatchObject({ executionReady: false, submissionId: command.id });
+    expect(runtime.needsReload()).toBe(true);
+    const saved = await persistence.load(initial.threadId);
+    const reopened = registry.ensure(config, saved!, persistence);
+    expect(reopened).not.toBe(runtime);
+    expect(reopened.getSnapshot().messages).toEqual([command.message]);
+    expect((reopened.getSnapshot().state as any).h3Runs).toEqual([expect.objectContaining({ id: command.runId, userMessageId: command.message.id, status: 'interrupted' })]);
+    await reopened.flush();
+    expect(db.getAllSync('SELECT * FROM agent_submissions')).toHaveLength(1);
+    expect((await persistence.load(initial.threadId))?.messages).toEqual([command.message]);
+  } finally { await registry.disposeAll(); db.close(); }
+});
+
+it('clears prepared retry after transactional acceptance fails and preserves the failed run', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  const persistence = createLocalThreadStore(db as never);
+  const agent = { ...fakeAgent(), clearPreparedRetry: jest.fn() };
+  const registry = createPromptRuntimeRegistry(() => agent as never);
+  try {
+    const initial = { ...snapshot('rejected-retry'), state: { h3Composer: { text: 'new draft', revision: 2 }, h3Runs: [{ id: 'failed-run', userMessageId: 'rejected-retry-message', status: 'failed', startedAt: 1, endedAt: 2, messageIds: [], tools: [] }] } };
+    await persistence.save(initial);
+    const runtime = registry.ensure(config, initial, persistence);
+    const write = db.runAsync.bind(db);
+    jest.spyOn(db, 'runAsync').mockImplementation(async (sql, ...params) => {
+      if (sql.startsWith('INSERT INTO agent_submissions')) throw new Error('disk full');
+      return write(sql, ...params);
+    });
+    await expect(runtime.accept({ id: 'retry-submit', runId: 'retry-run', retryOf: 'failed-run', draftRevision: -1, message: initial.messages[0] })).rejects.toThrow('disk full');
+    expect(agent.clearPreparedRetry).toHaveBeenCalledTimes(1);
+    expect(db.getAllSync('SELECT * FROM agent_submissions')).toHaveLength(0);
+    const saved = await persistence.load(initial.threadId);
+    expect(saved?.state).toMatchObject(initial.state);
+    expect((saved?.state as any).h3Runs).toHaveLength(1);
+    expect(saved?.messages).toEqual(initial.messages);
+  } finally { await registry.disposeAll(); db.close(); }
+});
+
+it.each([false, true])('preserves committed history and newer composer through failed readback, disposal and reopening (retry=%s)', async retry => {
+  const db = createInitializedRealSqliteTestDb();
+  const persistence = createLocalThreadStore(db as never);
+  const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
+  try {
+    const initial = { ...snapshot('recover-draft'), messages: [...snapshot('recover-draft').messages, { id: 'partial', role: 'assistant' as const, content: 'preserved partial reply' }], state: { h3Composer: { text: 'send me', attachments: [], revision: 1 }, h3Runs: [{ id: 'failed', userMessageId: 'recover-draft-message', status: 'failed', startedAt: 1, endedAt: 2, messageIds: ['partial'], tools: [] }] } };
+    await persistence.save(initial);
+    const runtime = registry.ensure(config, initial, persistence);
+    let rejectRead!: (reason: Error) => void;
+    let readStarted!: () => void;
+    const reading = new Promise<void>(resolve => { readStarted = resolve; });
+    jest.spyOn(persistence, 'load').mockImplementationOnce(async () => {
+      readStarted();
+      return new Promise((_resolve, reject) => { rejectRead = reject; });
+    });
+    const message = retry ? initial.messages[0] : { id: 'new-user', role: 'user' as const, content: 'send me' };
+    const accepting = runtime.accept({ id: 'accepted', runId: 'queued', message, draftRevision: retry ? -1 : 1, ...(retry ? { retryOf: 'failed' } : {}) });
+    await reading;
+    runtime.patchClientState({ h3Composer: { text: 'typed during readback', attachments: [], revision: 2 } });
+    rejectRead(new Error('readback failed'));
+    expect(await accepting).toMatchObject({ executionReady: false });
+    const committed = await persistence.load(initial.threadId);
+    const saves = jest.spyOn(persistence, 'save');
+    const newerComposer = { text: 'typed after readback failed', attachments: [], revision: 3 };
+    runtime.patchClientState({ h3Composer: newerComposer });
+    await runtime.dispose();
+    const afterDisposal = await persistence.load(initial.threadId);
+    const expectedMessages = retry ? initial.messages : [...initial.messages, message];
+    expect(saves).toHaveBeenCalled();
+    for (const [saved] of saves.mock.calls) {
+      expect(saved.messages).toEqual(expectedMessages);
+      expect((saved.state as any).h3Runs).toHaveLength(2);
+    }
+    expect(afterDisposal?.messages).toEqual(expectedMessages);
+    expect((afterDisposal?.state as any).h3Runs).toEqual([
+      expect.objectContaining({ id: 'failed', status: 'failed' }),
+      expect.objectContaining({ id: 'queued', status: 'queued' }),
+    ]);
+    expect(afterDisposal?.state).toMatchObject({ h3Composer: newerComposer });
+    const reopened = registry.ensure(config, committed!, persistence);
+    expect(reopened.getSnapshot().messages).toEqual(expectedMessages);
+    expect(reopened.getSnapshot().state).toMatchObject({ h3Composer: newerComposer });
+    expect((reopened.getSnapshot().state as any).h3Runs.at(-1)).toMatchObject({ id: 'queued', status: 'interrupted' });
+    await reopened.flush();
+    expect((await persistence.load(initial.threadId))?.state).toMatchObject({ h3Composer: newerComposer });
+    expect(db.getAllSync('SELECT * FROM agent_submissions')).toHaveLength(1);
+  } finally { await registry.disposeAll(); db.close(); }
+});
+
+it('keeps recovery drafts owned when disposal cannot reload the committed transcript', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  const persistence = createLocalThreadStore(db as never);
+  const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
+  try {
+    const initial = { ...snapshot('recovery-disk'), messages: [], state: { h3Composer: { text: 'sent', attachments: [], revision: 1 } } };
+    await persistence.save(initial);
+    const runtime = registry.ensure(config, initial, persistence);
+    const load = jest.spyOn(persistence, 'load').mockRejectedValueOnce(new Error('read failed'));
+    const command = { id: 's', runId: 'r', draftRevision: 1, message: { id: 'u', role: 'user' as const, content: 'sent' } };
+    expect(await runtime.accept(command)).toMatchObject({ executionReady: false });
+    const newerComposer = { text: 'unsaved recovery draft', attachments: [], revision: 2 };
+    runtime.patchClientState({ h3Composer: newerComposer });
+    await expect(runtime.accept({ ...command, id: 'duplicate', runId: 'duplicate' })).rejects.toThrow('重新打开');
+    const saves = jest.spyOn(persistence, 'save');
+    load.mockRejectedValueOnce(new Error('still unavailable'));
+    await expect(registry.evictThread(initial.threadId)).rejects.toThrow('still unavailable');
+    expect(registry.size()).toBe(1);
+    expect(saves).not.toHaveBeenCalled();
+    expect(runtime.getSnapshot().state).toMatchObject({ h3Composer: newerComposer });
+    await registry.evictThread(initial.threadId);
+    const saved = await persistence.load(initial.threadId);
+    expect(saved?.messages).toEqual([command.message]);
+    expect(saved?.state).toMatchObject({ h3Composer: newerComposer, h3Runs: [expect.objectContaining({ id: 'r', status: 'queued' })] });
+    expect(db.getAllSync('SELECT * FROM agent_submissions')).toHaveLength(1);
+  } finally { await registry.disposeAll(); db.close(); }
+});
+
+it('coalesces view deltas at 50ms and publishes a terminal boundary immediately', async () => {
+  jest.useFakeTimers();
+  const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
+  const runtime = registry.ensure(config, snapshot('view'), store);
+  const agent = runtime.agent as any;
+  agent.isRunning = true;
+  const seen = jest.fn();
+  runtime.subscribeView(seen);
+  try {
+    for (let i = 0; i < 10; i++) agent.emitMessages([{ id: 'a', role: 'assistant', content: String(i) }], {});
+    expect(seen).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(50);
+    expect(seen).toHaveBeenCalledTimes(1);
+    expect(runtime.getViewSnapshot().messages[0].content).toBe('9');
+    const input = { runId: 'run' };
+    agent.emit('onRunInitialized', { input });
+    seen.mockClear();
+    agent.emit('onEvent', { input, event: { type: 'RUN_FINISHED' } });
+    expect(seen).toHaveBeenCalledTimes(1);
+  } finally { await registry.disposeAll(); jest.useRealTimers(); }
+});
+
+it('retains dirty data when disposal fails and releases it only after retry saves', async () => {
+  let fail = true;
+  const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
+  const runtime = registry.ensure(config, snapshot('dirty'), { save: async () => { if (fail) throw new Error('disk full'); } } as never);
+  runtime.patchClientState({ h3Composer: { text: 'unsaved', revision: 1 } });
+  await expect(registry.evictThread('dirty')).rejects.toThrow('disk full');
+  expect(registry.size()).toBe(1);
+  expect(runtime.getSnapshot().state).toMatchObject({ h3Composer: { text: 'unsaved' } });
+  fail = false;
+  await registry.evictThread('dirty');
+  expect(registry.size()).toBe(0);
+});
+
+it('caps saved idle residents after browsing twenty conversations', async () => {
+  const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
+  for (let i = 0; i < 20; i++) { registry.ensure(config, snapshot(`idle-${i}`), store); await Promise.resolve(); await Promise.resolve(); }
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(registry.size()).toBeLessThanOrEqual(5);
+  await registry.disposeAll();
+});
 
 describe('prompt runtime registry', () => {
   it('renames metadata after an in-flight save and preserves later pending output on disposal', async () => {
@@ -192,9 +412,9 @@ it('retains the newest dirty snapshot after a transient disk failure for explici
   const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);
   const runtime = registry.ensure(config, snapshot('disk'), persistence);
   (runtime.agent as any).emitMessages([{ id: 'a', role: 'assistant', content: 'latest' }], {});
-  await runtime.flush();
+  expect(await runtime.flush()).toMatchObject({ kind: 'failed' });
   fail = false;
-  await runtime.flush();
+  expect(await runtime.flush()).toMatchObject({ kind: 'saved' });
   expect(saved.at(-1)?.messages[0].content).toBe('latest');
   await registry.disposeAll();
 });

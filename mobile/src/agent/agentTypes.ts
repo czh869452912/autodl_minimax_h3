@@ -4,7 +4,17 @@ export type H3AgentConfig = {
   model: string;
   timeoutMs: number;
   maxRetries: number;
+  contextWindowTokens?: number;
+  maxOutputTokens?: number;
 };
+
+export type H3ContextBudget = { inputTokens: number; outputTokens: number };
+export function getH3ContextBudget(config: Partial<H3AgentConfig> = {}): H3ContextBudget {
+  const window = config.contextWindowTokens ?? 32_768;
+  const outputTokens = config.maxOutputTokens ?? 4_096;
+  if (!Number.isInteger(window) || !Number.isInteger(outputTokens) || window < 8192 || outputTokens < 256 || outputTokens > window / 2) throw new Error('Invalid model context or output token budget');
+  return { inputTokens: window - outputTokens, outputTokens };
+}
 
 export type H3AgentInput = {
   threadId: string;
@@ -23,3 +33,4 @@ export type H3AgentEvent =
   | { type: 'tool-end'; id: string }
   | { type: 'status'; message: string }
   | { type: 'error'; error: Error };
+export const H3_GRAPH_VERSION = 'deepagents-1.13.2/h3-workspace-1';

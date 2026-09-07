@@ -16,9 +16,9 @@ export function AppHeader() {
 
 const styles = StyleSheet.create({
   container: { height: 76, backgroundColor: `${COLORS.surface}ee`, borderBottomWidth: 1, borderBottomColor: COLORS.border, justifyContent: 'center', paddingHorizontal: SPACING.xl },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  brand: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
   logo: { width: 42, height: 42, borderRadius: 13, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
-  logoMark: { width: 18, height: 18, backgroundColor: COLORS.text, borderRadius: 5, transform: [{ rotate: '45deg' }] },
-  title: { color: COLORS.text, fontSize: 22, fontWeight: '800', letterSpacing: -0.5 },
+  logoMark: { width: 18, height: 18, backgroundColor: COLORS.onPrimary, borderRadius: 5, transform: [{ rotate: '45deg' }] },
+  title: { color: COLORS.text, fontSize: 22, fontWeight: '800', letterSpacing: 0 },
   accent: { color: COLORS.primaryActive },
 });

@@ -8,6 +8,7 @@ const allowed = new Set([
   'storage/migrations/v6DurableExecutor.ts',
   'storage/migrations/v7RegistryRelease.ts',
   'storage/migrations/v8TaskRefresh.ts',
+  'storage/migrations/v9AgentRecords.ts',
 ]);
 
 function sourceFiles(root: string): string[] {

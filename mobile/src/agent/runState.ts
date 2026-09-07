@@ -4,9 +4,10 @@ export type PromptRunTool = {
 };
 export type PromptRun = {
   id: string; userMessageId: string;
-  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
   startedAt: number; endedAt?: number; error?: string; retryOf?: string;
   messageIds: string[]; tools: PromptRunTool[];
+  baseWorkspaceRevision?: number;
 };
 
 export function readPromptRuns(state: unknown): PromptRun[] {
@@ -14,17 +15,18 @@ export function readPromptRuns(state: unknown): PromptRun[] {
   if (!Array.isArray(value)) return [];
   return value.filter((run): run is PromptRun => run && typeof run.id === 'string'
     && typeof run.userMessageId === 'string' && typeof run.startedAt === 'number'
-    && ['running', 'completed', 'failed', 'cancelled', 'interrupted'].includes(run.status)
+    && ['queued', 'running', 'completed', 'failed', 'cancelled', 'interrupted'].includes(run.status)
     && Array.isArray(run.messageIds) && Array.isArray(run.tools));
 }
 
 export function endPromptRun(run: PromptRun, status: PromptRun['status'], now: number, error?: string): PromptRun {
-  if (run.status !== 'running') return run;
+  if (run.status !== 'running' && run.status !== 'queued') return run;
   return { ...run, status, endedAt: now, ...(error ? { error } : {}), tools: run.tools.map(tool => tool.status === 'running'
     ? { ...tool, status: status === 'failed' ? 'failed' : 'cancelled', endedAt: now } : tool) };
 }
 
 export function reducePromptRunEvent(run: PromptRun, event: Record<string, any>, now: number): PromptRun {
+  if (run.status === 'queued' && event.type === 'RUN_STARTED') return { ...run, status: 'running' };
   if (run.status !== 'running') return run;
   const messageId = event.messageId ?? event.parentMessageId;
   let next = messageId && !run.messageIds.includes(messageId)

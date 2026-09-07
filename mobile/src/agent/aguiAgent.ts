@@ -6,14 +6,16 @@ import { getOfficialH3SkillFiles } from './skillBundle';
 import type { Attachment } from '@copilotkit/shared';
 import { adaptDeepAgentStream } from './deepAgentStream';
 import { applyImageIdentities, type ImageIdentity } from './imageMessageIdentity';
+import { normalizeModelTranscript } from './modelTranscript';
+import { hydrateModelImages } from './attachmentStore';
 
 type DeepAgentGraph = { stream(input: unknown, options?: unknown): Promise<AsyncIterable<unknown>> | AsyncIterable<unknown> };
-const rec = (value: unknown): Record<string, any> => value && typeof value === 'object' ? value as Record<string, any> : {};
-const textOf = (message: Record<string, any>): string => {
-  const content = message.content ?? message.kwargs?.content ?? '';
-  if (typeof content === 'string') return content;
-  return Array.isArray(content) ? content.map((part) => typeof part === 'string' ? part : String(rec(part).text ?? '')).join('') : '';
+type AgentExecutionOptions = {
+  deadlineMs?: number;
+  workspace?: Pick<typeof import('./agentWorkspace'), 'prepareWorkspaceRun' | 'captureWorkspaceState'>;
+  budget?: import('./agentTypes').H3ContextBudget;
 };
+const rec = (value: unknown): Record<string, any> => value && typeof value === 'object' ? value as Record<string, any> : {};
 const imageContentPart = (part: Record<string, any>): Record<string, unknown> | null => {
   if (part.type === 'image_url' || part.type === 'file') return part;
   if (part.type !== 'image') return null;
@@ -28,40 +30,10 @@ const imageContentPart = (part: Record<string, any>): Record<string, unknown> | 
     : `data:${source.mimeType ?? part.mime_type ?? 'image/png'};base64,${value}`;
   return { type: 'image_url', image_url: { url } };
 };
-const messagesForDeepAgent = (messages: RunAgentInput['messages']): unknown[] => {
-  const resultIds = new Set(messages.flatMap((message) => {
-    const value = rec(message);
-    const id = value.tool_call_id ?? value.toolCallId;
-    return id && (value.role === 'tool' || value.tool === 'tool' || !value.role) ? [String(id)] : [];
-  }));
-  return messages.flatMap((message): unknown[] => {
+export const messagesForDeepAgent = (messages: RunAgentInput['messages']): unknown[] => {
+  return normalizeModelTranscript(messages).flatMap((message): unknown[] => {
   const record = rec(message);
   const role = String(record.role ?? '').toLowerCase();
-  const toolCallId = record.tool_call_id ?? record.toolCallId;
-  // CopilotKit stores TOOL_CALL_RESULT events as UI-shaped objects without a
-  // LangChain role. Normalize them before handing the transcript to LangChain.
-  if (toolCallId && (role === 'tool' || record.tool === 'tool' || !role)) {
-    return [{ role: 'tool' as const, content: textOf(record), tool_call_id: String(toolCallId) }];
-  }
-  if (role && !['user', 'human', 'assistant', 'ai', 'system', 'developer', 'tool'].includes(role)) return [];
-  if ((role === 'assistant' || role === 'ai') && Array.isArray(record.toolCalls)) {
-    const { toolCalls, ...rest } = record;
-    return [{ ...rest, role: 'assistant', content: record.content ?? '', tool_calls: toolCalls.flatMap((value: unknown) => {
-      const call = rec(value);
-      if (!resultIds.has(String(call.id))) return [];
-      const rawArgs = call.args ?? call.function?.arguments ?? {};
-      let args: unknown = rawArgs;
-      if (typeof rawArgs === 'string') {
-        try { args = JSON.parse(rawArgs); } catch {
-          // Stopping during argument streaming leaves an unexecuted partial
-          // invocation in UI history. Keep its text and all valid paired calls.
-          if (!resultIds.has(String(call.id))) return [];
-          throw new Error(`Invalid saved arguments for completed tool call ${call.id}`);
-        }
-      }
-      return [{ id: String(call.id), name: String(call.name ?? call.function?.name), args, type: 'tool_call' }];
-    }) }];
-  }
   const attachments = Array.isArray(record.attachments) ? record.attachments.map(rec) : [];
   const rawContent = Array.isArray(record.content) ? record.content.map(rec) : [];
   const contentImages = rawContent.some((part) => part.type === 'image' || part.type === 'image_url');
@@ -106,12 +78,12 @@ export class H3AgUiAgent extends AbstractAgent {
   private readonly graph: DeepAgentGraph;
   private abortController: AbortController | null = null;
   private cancelCurrentRun: (() => void) | undefined;
-  private preparedRetry: { retryOf?: string; userMessageId: string; messages: RunAgentInput['messages'] } | undefined;
+  private preparedRetry: { retryOf?: string; userMessageId: string; messages: RunAgentInput['messages']; workspace?: unknown } | undefined;
   private pendingAttachments: Attachment[] = [];
   private pendingImageIdentities: ImageIdentity[] = [];
   private consumePendingAttachments: (() => void) | undefined;
 
-  constructor(graph: DeepAgentGraph, config: AgentConfig = {}) {
+  constructor(graph: DeepAgentGraph, config: AgentConfig = {}, private readonly execution: AgentExecutionOptions = {}) {
     super({ agentId: 'h3-prompt-assistant', description: 'MiniMax H3 Prompt Assistant', ...config });
     this.graph = graph;
   }
@@ -120,29 +92,60 @@ export class H3AgUiAgent extends AbstractAgent {
     return new Observable((subscriber) => {
       const controller = new AbortController();
       this.abortController = controller;
+      const openTexts = new Set<string>();
+      const openTools = new Set<string>();
+      let terminal = false;
+      const emit = (event: BaseEvent) => {
+        if (terminal || subscriber.closed) return;
+        const value = rec(event);
+        if (event.type === EventType.TEXT_MESSAGE_START) openTexts.add(value.messageId);
+        if (event.type === EventType.TEXT_MESSAGE_END) openTexts.delete(value.messageId);
+        if (event.type === EventType.TOOL_CALL_START) openTools.add(value.toolCallId);
+        if (event.type === EventType.TOOL_CALL_END) openTools.delete(value.toolCallId);
+        if (event.type === EventType.RUN_ERROR || event.type === EventType.RUN_FINISHED) terminal = true;
+        subscriber.next(event);
+      };
+      const closeStreams = () => {
+        for (const toolCallId of openTools) emit({ type: EventType.TOOL_CALL_END, toolCallId } as BaseEvent);
+        for (const messageId of openTexts) emit({ type: EventType.TEXT_MESSAGE_END, messageId } as BaseEvent);
+      };
       this.cancelCurrentRun = () => {
-        if (controller.signal.aborted) return;
-        subscriber.next({ type: EventType.CUSTOM, name: 'h3.run.cancelled', value: { runId: input.runId } } as never);
+        if (controller.signal.aborted || terminal) return;
         controller.abort();
+        closeStreams();
+        emit({ type: EventType.CUSTOM, name: 'h3.run.cancelled', value: { runId: input.runId } } as never);
+        emit({ type: EventType.RUN_ERROR, code: 'abort', message: 'Run cancelled' } as never);
         subscriber.complete();
       };
-      void this.runStream(input, controller.signal, subscriber).catch((error) => {
-        if (!controller.signal.aborted) {
+      const deadline = this.execution.deadlineMs ? setTimeout(() => {
+        if (terminal || subscriber.closed) return;
+        controller.abort(); closeStreams();
+        emit({ type: EventType.RUN_ERROR, code: 'deadline', message: '运行超过时间限制，已保留输出，请重试' } as never);
+        subscriber.complete();
+      }, this.execution.deadlineMs) : undefined;
+      void this.runStream(input, controller.signal, { next: emit }).catch((error) => {
+        if (!controller.signal.aborted && !terminal) {
           const normalized = error instanceof Error ? error : new Error(String(error));
           console.error('[H3AgUiAgent] DeepAgents run failed', normalized.stack ?? normalized.message);
-          subscriber.next({ type: EventType.RUN_ERROR, message: normalized.message, rawEvent: normalized } as never);
+          closeStreams();
+          emit({ type: EventType.RUN_ERROR, message: normalized.message, rawEvent: normalized } as never);
         }
       }).finally(() => {
         if (this.abortController === controller) { this.abortController = null; this.cancelCurrentRun = undefined; }
         subscriber.complete();
       });
-      return () => controller.abort();
+      return () => {
+        if (deadline) clearTimeout(deadline);
+        controller.abort();
+        if (this.abortController === controller) { this.abortController = null; this.cancelCurrentRun = undefined; }
+      };
     });
   }
 
   abortRun(): void { this.cancelCurrentRun?.(); }
 
   getPreparedRetry() { return this.preparedRetry; }
+  clearPreparedRetry(): void { this.preparedRetry = undefined; }
 
   prepareRetry(runId?: string): void {
     if (this.isRunning) throw new Error('请先停止当前运行');
@@ -152,7 +155,10 @@ export class H3AgUiAgent extends AbstractAgent {
     const userId = run?.userMessageId ?? [...this.messages].reverse().find(message => message.role === 'user')?.id;
     const index = this.messages.findIndex(message => message.id === userId);
     if (index < 0) throw new Error('没有可重试的用户消息');
-    this.preparedRetry = { retryOf: run?.id, userMessageId: userId!, messages: this.messages.slice(0, index + 1) };
+    const state = rec(this.state);
+    const workspace = run?.baseWorkspaceRevision ? (state.h3Workspaces ?? []).find((item: any) => item.revision === run.baseWorkspaceRevision) : undefined;
+    if (run?.baseWorkspaceRevision && !workspace) throw new Error('重试所需的工作区版本缺失，请创建新的对话');
+    this.preparedRetry = { retryOf: run?.id, userMessageId: userId!, messages: this.messages.slice(0, index + 1), workspace };
   }
   dispose(): void {
     this.abortRun();
@@ -161,7 +167,12 @@ export class H3AgUiAgent extends AbstractAgent {
     this.pendingImageIdentities = [];
     this.consumePendingAttachments = undefined;
   }
-  clone(): H3AgUiAgent { return new H3AgUiAgent(this.graph, { agentId: this.agentId, description: this.description }); }
+  clone(): H3AgUiAgent {
+    return new H3AgUiAgent(this.graph, {
+      agentId: this.agentId, description: this.description, threadId: this.threadId,
+      initialMessages: this.messages, initialState: this.state,
+    }, this.execution);
+  }
 
   setPendingAttachments(attachments: Attachment[], onConsumed?: () => void): void {
     this.pendingAttachments = [...attachments];
@@ -193,9 +204,26 @@ export class H3AgUiAgent extends AbstractAgent {
     subscriber.next({ type: EventType.RUN_STARTED, threadId: input.threadId, runId: input.runId });
     const retry = this.preparedRetry;
     this.preparedRetry = undefined;
-    const abandonedIds = new Set(readPromptRuns(input.state).filter(run => run.status !== 'completed' && run.status !== 'running').flatMap(run => run.messageIds));
-    const modelMessages = (retry?.messages ?? input.messages).filter(message => !abandonedIds.has(message.id));
-    const stream = await this.graph.stream({ messages: messagesForDeepAgent(modelMessages), files: getOfficialH3SkillFiles() }, { configurable: { thread_id: input.threadId }, signal, streamMode: 'messages' });
+    const modelMessages = retry?.messages ?? input.messages;
+    const modelInput = await hydrateModelImages(messagesForDeepAgent(modelMessages));
+    if (signal.aborted) return;
+    const state = rec(input.state);
+    const workspaceAdapter = this.execution.workspace;
+    const budget = this.execution.budget;
+    const baseWorkspace = retry ? retry.workspace : state.h3Workspace;
+    const prepared = workspaceAdapter?.prepareWorkspaceRun(baseWorkspace, modelInput, this.execution.budget);
+    let workspace = baseWorkspace;
+    const revision = Math.max(0, Number(state.h3Workspace?.revision) || 0) + 1;
+    const rawStream = await this.graph.stream(prepared?.input ?? { messages: modelInput, files: getOfficialH3SkillFiles() }, { configurable: { thread_id: input.threadId }, context: prepared?.context, signal, streamMode: workspaceAdapter ? ['messages', 'values'] : 'messages' });
+    const stream = (async function* () {
+      for await (const value of rawStream) {
+        if (signal.aborted) return;
+        if (workspaceAdapter && Array.isArray(value) && value[0] === 'values') {
+          workspace = workspaceAdapter.captureWorkspaceState(value[1], revision, budget);
+          subscriber.next({ type: EventType.CUSTOM, name: 'h3.workspace', value: { runId: input.runId, workspace } } as never);
+        } else yield workspaceAdapter && Array.isArray(value) && value[0] === 'messages' ? value[1] : value;
+      }
+    })();
     let lastAssistantId: string | undefined;
     const incompleteIds = new Set<string>();
     const observeMessage = (id: string, incomplete: boolean) => {
@@ -214,11 +242,10 @@ export class H3AgUiAgent extends AbstractAgent {
       subscriber.next({ ...event, type: EventType[event.type] });
     }
     if (signal.aborted) return;
-    const state = rec(input.state);
     const priorIds = Array.isArray(state.h3CompletedMessageIds) ? state.h3CompletedMessageIds.filter((id: unknown): id is string => typeof id === 'string') : [];
     const completed = new Set<string>(priorIds);
     if (lastAssistantId && textIds.has(lastAssistantId) && !toolMessageIds.has(lastAssistantId) && !incompleteIds.has(lastAssistantId)) completed.add(lastAssistantId);
-    subscriber.next({ type: EventType.STATE_SNAPSHOT, snapshot: { ...state, h3CompletedMessageIds: [...completed] } } as never);
+    subscriber.next({ type: EventType.STATE_SNAPSHOT, snapshot: { h3CompletedMessageIds: [...completed] } } as never);
     subscriber.next({ type: EventType.RUN_FINISHED, threadId: input.threadId, runId: input.runId, outcome: { type: 'success' } });
   }
 }

@@ -28,4 +28,13 @@ describe('H3 model configuration validation', () => {
     });
     expect(ChatOpenAI).toHaveBeenCalledWith(expect.objectContaining({ timeout: 900000, maxRetries: 4 }));
   });
+
+  it('sets an explicit output allowance for unknown compatible models', () => {
+    createOpenAICompatibleModel({ apiKey: 'test', endpoint: 'https://example.test/v1', model: 'unknown', timeoutMs: 1000, maxRetries: 0 });
+    expect(ChatOpenAI).toHaveBeenLastCalledWith(expect.objectContaining({ maxTokens: 4096 }));
+  });
+
+  it('rejects a context budget that cannot reserve the configured output', () => {
+    expect(getH3AgentConfigError({ apiKey: 'test', endpoint: 'https://example.test/v1', model: 'unknown', timeoutMs: 1000, maxRetries: 0, contextWindowTokens: 8192, maxOutputTokens: 7000 })).toMatch(/budget/i);
+  });
 });

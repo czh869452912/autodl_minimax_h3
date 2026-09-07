@@ -1,8 +1,9 @@
 import { createDeepAgent, type DeepAgent } from 'deepagents/browser';
 import { adaptDeepAgentStream } from './deepAgentStream';
 import type { H3AgentConfig, H3AgentEvent, H3AgentInput } from './agentTypes';
-import { getOfficialH3SkillFiles, officialH3SkillRoot } from './skillBundle';
+import { officialH3SkillRoot } from './skillBundle';
 import { createOpenAICompatibleModel, type ModelFactory, validateH3AgentConfig } from './modelAdapter';
+import { createH3WorkspaceBackend, createH3WorkspaceMiddleware, getH3ContextBudget } from './agentWorkspace';
 
 const H3_SYSTEM_POLICY = [
   'You are the MiniMax H3 Prompt Assistant running as a local autonomous agent.',
@@ -26,16 +27,19 @@ export function normalizeCumulativeText(previous: string, next: string): { previ
 
 export function createH3Agent(config: H3AgentConfig, dependencies: Pick<H3AgentDependencies, 'modelFactory'> = {}): DeepAgent {
   validateH3AgentConfig(config);
+  const backend = createH3WorkspaceBackend();
   return createDeepAgent({
     model: (dependencies.modelFactory ?? createOpenAICompatibleModel)(config),
     skills: [officialH3SkillRoot],
     systemPrompt: H3_SYSTEM_POLICY,
+    backend,
+    middleware: createH3WorkspaceMiddleware(backend, getH3ContextBudget(config)),
   });
 }
 
 async function* streamDeepAgent(agent: DeepAgent, input: H3AgentInput): AsyncGenerator<H3AgentEvent> {
   const stream = await (agent as unknown as { stream: (state: unknown, config: unknown) => Promise<AsyncIterable<unknown>> }).stream(
-    { messages: input.messages as never[], files: getOfficialH3SkillFiles() },
+    { messages: input.messages as never[] },
     { configurable: { thread_id: input.threadId }, signal: input.signal, streamMode: 'messages' } as never,
   );
   const tools = new Map<string, { name: string; args: string }>();

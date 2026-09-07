@@ -45,11 +45,15 @@ const promptDraftStore = createPromptDraftStore(
 const workflowCatalog = createAppWorkflowCatalog();
 export type CreateFormDraftDependencies = Pick<ReturnType<typeof createPromptDraftStore>, 'read' | 'consume'> & {
   materialize: typeof materializePromptHandoff;
+  discard?: (id: string) => Promise<void>;
+  saveForm?: ReturnType<typeof createPromptDraftStore>['saveForm'];
 };
 const defaultDraftDependencies: CreateFormDraftDependencies = {
   read: (id) => promptDraftStore.read(id),
   consume: (id) => promptDraftStore.consume(id),
   materialize: materializePromptHandoff,
+  discard: id => promptDraftStore.discard(id),
+  saveForm: (id, form) => promptDraftStore.saveForm(id, form),
 };
 
 type CreateFormCatalog = {
@@ -68,19 +72,20 @@ export type CreateFormSubmissionDependencies = {
     audios: TaskMediaInput[];
     token: string;
     foregroundTick: () => void | Promise<unknown>;
+    handoffId?: string;
   }): Promise<{ id: string }>;
 };
 
 const defaultSubmissionDependencies: CreateFormSubmissionDependencies = {
   catalog: workflowCatalog,
   readSettings,
-  async queue({ definition, activeRecord, inputSnapshot, images, audios, token, foregroundTick }) {
+  async queue({ definition, activeRecord, inputSnapshot, images, audios, token, foregroundTick, handoffId }) {
     const adapters = createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? token : undefined });
     const runtime = createWorkflowRuntime({ adapters, jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `job-${Date.now()}-${Math.random().toString(16).slice(2)}` });
     const prepared = runtime.prepareSubmission(definition,
       { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord.contentHash, inputs: inputSnapshot, source: 'user', status: 'ready' },
       { workflowId: activeRecord.workflowId, workflowVersion: activeRecord.version, contentHash: activeRecord.contentHash });
-    const task = await persistSubmissionCommand(database, 'submission-' + Date.now() + '-' + Math.random().toString(16).slice(2), prepared, { images, audios });
+    const task = await persistSubmissionCommand(database, 'submission-' + Date.now() + '-' + Math.random().toString(16).slice(2), prepared, { images, audios, handoffId });
     void foregroundTick();
     return task;
   },
@@ -146,6 +151,9 @@ export function CreateForm({
   const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
   const [handoffError, setHandoffError] = useState<string | null>(null);
   const [appliedDraft, setAppliedDraft] = useState<string | null>(null);
+  const [acknowledgedDraft, setAcknowledgedDraft] = useState<string | null>(null);
+  const [applyAttempt, setApplyAttempt] = useState(0);
+  const [discardedDraft, setDiscardedDraft] = useState<string | null>(null);
   const [loadingDraft, setLoadingDraft] = useState(Boolean(draftId));
   const editRevision = useRef(0);
   const previousInitialPrompt = useRef(initialPrompt);
@@ -153,6 +161,7 @@ export function CreateForm({
   if (draftStart.current.id !== draftId) draftStart.current = { id: draftId, revision: editRevision.current };
   const appliedIds = useRef(new Set<string>());
   const consumedIds = useRef(new Set<string>());
+  const formSaveTail = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
     let cancelled = false;
     const useRecord = (record: RegistryRecord, warning: string | null) => {
@@ -189,6 +198,7 @@ export function CreateForm({
           setActiveRecord(null);
           setDefinition(null);
           setLoadError(workflowLoadMessage(presentationError));
+          setLoadingDraft(false);
         }
       }
     };
@@ -203,7 +213,7 @@ export function CreateForm({
     if (initialPrompt) { setPrompt(initialPrompt); setWorkflowValues((current) => ({ ...current, prompt: initialPrompt })); }
   }, [initialPrompt]);
   useEffect(() => {
-    if (!draftId || appliedIds.current.has(draftId)) { setLoadingDraft(false); return; }
+    if (!draftId || discardedDraft === draftId || appliedIds.current.has(draftId)) { setLoadingDraft(false); return; }
     if (!definition) return;
     let cancelled = false;
     const revision = draftStart.current.revision;
@@ -216,10 +226,12 @@ export function CreateForm({
         if (cancelled) return;
         if (!draft) throw new Error('草稿已过期或不存在，请返回提示词助手重新导出');
         if (!draft.handoff && draft.attachmentIds.length) throw new Error('旧草稿缺少参考图片数据，请返回提示词助手重新添加并导出');
-        const values = draft.handoff ? resolvePromptHandoffValues(draft.handoff, definition) : { prompt: resolveDraftPrompt(prompt, draft.prompt) };
-        const importedImages = draft.handoff ? await draftDependencies.materialize(draft.handoff) : [];
+        if (draft.form && draft.form.workflowId !== definition.id) throw new Error('已保存表单对应其他工作流，请切回原工作流');
+        const values = draft.form?.values ?? (draft.handoff ? resolvePromptHandoffValues(draft.handoff, definition) : { prompt: resolveDraftPrompt(prompt, draft.prompt) });
+        const importedImages = draft.form?.images ?? (draft.handoff ? await draftDependencies.materialize(draft.handoff) : []);
         if (cancelled || appliedIds.current.has(draftId)) return;
         if (editRevision.current !== revision) throw new Error('创建表单已修改，草稿已保留；请重新打开创建页应用');
+        editRevision.current = Math.max(editRevision.current, draft.form?.revision ?? 0);
         appliedIds.current.add(draftId);
         setWorkflowValues((current) => ({ ...current, ...values }));
         setPrompt(String(values.prompt));
@@ -227,6 +239,7 @@ export function CreateForm({
         if (values.duration !== undefined) setDuration(String(values.duration));
         if (values.seed !== undefined) setSeed(String(values.seed));
         setImages(importedImages);
+        if (draft.form) setAudios(draft.form.audios);
         setFieldErrors([]);
         setHandoffNotice(draft.handoff
           ? `已应用提示词助手草稿 · 来源 ${draft.handoff.source.threadId} / ${draft.handoff.source.messageId} · 版本 ${draft.handoff.source.versionId}。请检查参数和素材后手动提交。`
@@ -240,17 +253,30 @@ export function CreateForm({
     };
     void apply();
     return () => { cancelled = true; };
-  }, [draftId, definition, draftDependencies]);
-  // A committed render is the acknowledgement: do not delete before media and fields are applied.
+  }, [draftId, definition, draftDependencies, applyAttempt, discardedDraft]);
+  // A committed render acknowledges form ownership; the durable draft remains recoverable.
   useEffect(() => {
     if (!appliedDraft || consumedIds.current.has(appliedDraft)) return;
     consumedIds.current.add(appliedDraft);
     let cancelled = false;
-    void draftDependencies.consume(appliedDraft).catch(() => {
-      if (!cancelled) setHandoffError('表单已应用，但草稿清理失败；草稿仍保留，请勿重复导入。');
+    void draftDependencies.consume(appliedDraft).then(draft => {
+      if (!draft) throw new Error('交接草稿不存在');
+      if (!cancelled) setAcknowledgedDraft(appliedDraft);
+    }).catch(() => {
+      consumedIds.current.delete(appliedDraft);
+      if (!cancelled) setHandoffError('表单已应用，但素材接管保存失败；草稿仍保留，请重新应用。');
     });
     return () => { cancelled = true; };
   }, [appliedDraft, draftDependencies]);
+  useEffect(() => {
+    if (!acknowledgedDraft || !definition || !draftDependencies.saveForm) return;
+    let cancelled = false;
+    const id = acknowledgedDraft;
+    const form = { workflowId: definition.id, values: { ...workflowValues }, images: [...images], audios: [...audios], revision: editRevision.current };
+    formSaveTail.current = formSaveTail.current.catch(() => undefined).then(() => draftDependencies.saveForm!(id, form));
+    void formSaveTail.current.catch(error => { if (!cancelled) setHandoffError(`表单保存失败：${error instanceof Error ? error.message : '请重试'}`); });
+    return () => { cancelled = true; };
+  }, [acknowledgedDraft, definition, workflowValues, images, audios, draftDependencies]);
 
   const addMedia = async (kind: 'image' | 'audio', source: 'gallery' | 'file' = 'file') => {
     editRevision.current += 1;
@@ -281,6 +307,8 @@ export function CreateForm({
     let acquired = false;
     try {
       if (!definition || !activeRecord) throw new Error('工作流尚未加载完成');
+      if (loadingDraft || (appliedDraft && acknowledgedDraft !== appliedDraft)) throw new Error('请等待交接素材保存完成');
+      await formSaveTail.current;
       const inputSnapshot = buildSubmissionInputSnapshot({
         workflowValues,
         fallback: { prompt, resolution, duration, seed },
@@ -300,7 +328,12 @@ export function CreateForm({
       setSubmitting(true);
       const settings = await submissionDependencies.readSettings();
       if (!settings.token) throw new Error('请先在设置中保存 AutoDL Token');
-      const task = await submissionDependencies.queue({ definition, activeRecord, inputSnapshot, images, audios, token: settings.token, foregroundTick });
+      const task = await submissionDependencies.queue({ definition, activeRecord, inputSnapshot, images, audios, token: settings.token, foregroundTick, ...(acknowledgedDraft ? { handoffId: acknowledgedDraft } : {}) });
+      if (acknowledgedDraft) {
+        setImages([]); setAudios([]);
+        setWorkflowValues(current => ({ ...current, images: [], audios: [] }));
+      }
+      setAcknowledgedDraft(null); setAppliedDraft(null);
       Alert.alert('提交成功', `任务 ${task.id} 已加入队列`, [
         { text: '查看任务', onPress: () => router.navigate('/(tabs)/tasks') },
       ]);
@@ -327,6 +360,17 @@ export function CreateForm({
       {handoffNotice ? <Text accessibilityLiveRegion="polite" style={styles.help}>{handoffNotice}</Text> : null}
       {loadingDraft ? <Text style={styles.help}>正在读取交接草稿和保存参考图片…</Text> : null}
       {handoffError ? <Text accessibilityRole="alert" style={styles.help}>{handoffError}</Text> : null}
+      {handoffError && draftId && <View style={{ flexDirection: 'row', gap: 12 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="重新应用交接草稿" disabled={!definition || loadingDraft} onPress={() => {
+          draftStart.current = { id: draftId, revision: editRevision.current };
+          appliedIds.current.delete(draftId); consumedIds.current.delete(draftId);
+          setAppliedDraft(null); setAcknowledgedDraft(null); setApplyAttempt(value => value + 1);
+        }} style={{ minHeight: 48, justifyContent: 'center' }}><Text style={styles.help}>重新应用</Text></Pressable>
+        {draftDependencies.discard && <Pressable accessibilityRole="button" accessibilityLabel="丢弃交接草稿" disabled={loadingDraft} onPress={async () => {
+          try { await draftDependencies.discard!(draftId); setDiscardedDraft(draftId); setHandoffError(null); setAppliedDraft(null); setAcknowledgedDraft(null); }
+          catch (error) { setHandoffError(error instanceof Error ? error.message : '丢弃失败，请重试'); }
+        }} style={{ minHeight: 48, justifyContent: 'center' }}><Text style={styles.help}>丢弃草稿</Text></Pressable>}
+      </View>}
       {definition ? <WorkflowForm
         definition={{ ...definition, ui: { sections: (definition.ui?.sections ?? []).slice(0, 2) } }}
         value={workflowValues}
@@ -401,9 +445,9 @@ export function CreateForm({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="提交 AutoDL 任务生成"
-        disabled={submitting || loadingDraft || !definition || !activeRecord}
+        disabled={submitting || loadingDraft || Boolean(appliedDraft && acknowledgedDraft !== appliedDraft) || !definition || !activeRecord}
         onPress={() => void submit()}
-        style={[styles.submit, (submitting || loadingDraft || !definition || !activeRecord) && styles.disabled]}
+        style={[styles.submit, (submitting || loadingDraft || Boolean(appliedDraft && acknowledgedDraft !== appliedDraft) || !definition || !activeRecord) && styles.disabled]}
       >
         <AppIcon name="bolt" size={20} color={COLORS.text} />
         <Text style={styles.submitText}>
@@ -554,7 +598,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 5,
   },
-  submitText: { color: COLORS.text, fontSize: 16, fontWeight: '800' },
+  submitText: { color: COLORS.onPrimary, fontSize: 16, fontWeight: '800' },
   footnote: {
     color: COLORS.textSubtle,
     fontFamily: 'monospace',

@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { ArtifactRecord } from '../jobs/types';
 import { collectGarbage } from './cas';
+import { releaseExpiredAttachmentImports } from '../agent/attachmentStore';
 import { createAsyncCasGarbageRepository } from './casRepository';
 import { withAsyncSchedulerLease } from '../tasks/scheduler';
 
@@ -173,12 +174,15 @@ export async function reconcileMediaState(options: {
     );
   }
 
-  const garbage = await withAsyncSchedulerLease('cas-gc', (lease) => collectGarbage({
+  const garbage = await withAsyncSchedulerLease('cas-gc', async (lease) => {
+    await releaseExpiredAttachmentImports(options.db, now);
+    return collectGarbage({
     repository: createAsyncCasGarbageRepository(options.db),
     files: { remove: options.removeCasPath },
     limit,
     assertLease: lease.assertOwned,
-  }), {
+    });
+  }, {
     db: options.db,
     now: options.now,
     ttlMs: 120_000,

@@ -16,7 +16,7 @@ test('renders schema fields in declared order and emits controlled changes', () 
   expect(changes[0]).toMatchObject({ prompt: 'hello', mode: 'image' });
 });
 
-test('keeps schema-driven controls readable on the dark generation page', () => {
+test('keeps schema-driven controls readable on the light generation page', () => {
   let tree!: ReturnType<typeof create>;
   act(() => {
     tree = create(
@@ -40,6 +40,8 @@ test('keeps schema-driven controls readable on the dark generation page', () => 
   const optionStyle = StyleSheet.flatten(option.props.style);
   expect(optionStyle).toMatchObject({ borderWidth: 1 });
   expect([COLORS.surfaceRaised, COLORS.primarySoft]).toContain(optionStyle.backgroundColor);
+  expect(StyleSheet.flatten(option.findByType(Text).props.style).color).toBe(COLORS.primaryActive);
+  expect(optionStyle.minHeight).toBeGreaterThanOrEqual(48);
 });
 
 test('shows the schema limit and field error without truncating the prompt', () => {
