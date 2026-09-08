@@ -1,5 +1,13 @@
 import { applyAgentSettings, toH3AgentConfig } from './agentConfig';
 
+it('maps editable token budgets and reasoning strength into the model configuration', () => {
+  expect(toH3AgentConfig({
+    token: 'autodl', llmApiKey: 'key', llmEndpoint: 'https://api.deepseek.com/v1', llmModel: 'deepseek-v4-flash',
+    llmTimeoutSeconds: '600', llmMaxRetries: '2', llmContextWindowTokens: '65536', llmMaxOutputTokens: '16384',
+    llmReasoningEffort: 'max', autoExportToGallery: true, keepPrivateCopy: true,
+  })).toMatchObject({ contextWindowTokens: 65536, maxOutputTokens: 16384, reasoningEffort: 'max' });
+});
+
 it('maps secure settings into the local harness configuration', () => {
   expect(toH3AgentConfig({
     token: 'autodl',

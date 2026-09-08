@@ -72,3 +72,26 @@ describe('settings validation before secure persistence', () => {
     })).toThrow(message);
   });
 });
+
+const advancedSettings = {
+  token: '', llmEndpoint: 'https://api.deepseek.com', llmModel: 'deepseek-v4-flash', llmApiKey: 'key',
+  llmTimeoutSeconds: '600', llmMaxRetries: '2', autoExportToGallery: true, keepPrivateCopy: true,
+};
+it('rejects a saved unsupported OpenAI effort and preserves a supported none value', () => {
+  expect(() => prepareSettingsForSave({ ...advancedSettings, llmModel: 'gpt-5', llmReasoningEffort: 'none' })).toThrow(/思考强度/);
+  expect(prepareSettingsForSave({ ...advancedSettings, llmModel: 'gpt-5.1', llmReasoningEffort: 'none' }).llmReasoningEffort).toBe('none');
+});
+it('restores explicit defaults when advanced numeric fields are blank', () => {
+  expect(prepareSettingsForSave({ ...advancedSettings, llmTimeoutSeconds: ' ', llmMaxRetries: '', llmContextWindowTokens: '', llmMaxOutputTokens: ' ' })).toMatchObject({
+    llmTimeoutSeconds: '600', llmMaxRetries: '2', llmContextWindowTokens: '32768', llmMaxOutputTokens: '4096',
+  });
+});
+it.each(['low', 'high', 'max', 'none', 'default'] as const)('accepts DeepSeek thinking effort %s', llmReasoningEffort => {
+  expect(prepareSettingsForSave({ ...advancedSettings, llmReasoningEffort }).llmReasoningEffort).toBe(llmReasoningEffort);
+});
+it.each(['medium', 'xhigh', 'bogus'])('rejects unsupported DeepSeek thinking effort %s', llmReasoningEffort => {
+  expect(() => prepareSettingsForSave({ ...advancedSettings, llmReasoningEffort } as any)).toThrow(/思考强度/);
+});
+it.each(['-1', '3.5', '1e4', '0x1000'])('rejects invalid numeric output budget %s', llmMaxOutputTokens => {
+  expect(() => prepareSettingsForSave({ ...advancedSettings, llmMaxOutputTokens })).toThrow();
+});

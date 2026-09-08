@@ -12,6 +12,7 @@ import { hydrateModelImages } from './attachmentStore';
 type DeepAgentGraph = { stream(input: unknown, options?: unknown): Promise<AsyncIterable<unknown>> | AsyncIterable<unknown> };
 type AgentExecutionOptions = {
   deadlineMs?: number;
+  includeReasoningHistory?: boolean;
   workspace?: Pick<typeof import('./agentWorkspace'), 'prepareWorkspaceRun' | 'captureWorkspaceState'>;
   budget?: import('./agentTypes').H3ContextBudget;
 };
@@ -204,10 +205,20 @@ export class H3AgUiAgent extends AbstractAgent {
     subscriber.next({ type: EventType.RUN_STARTED, threadId: input.threadId, runId: input.runId });
     const retry = this.preparedRetry;
     this.preparedRetry = undefined;
-    const modelMessages = retry?.messages ?? input.messages;
+    const state = rec(input.state);
+    const history = retry?.messages ?? input.messages;
+    const reasoning = new Map(this.execution.includeReasoningHistory
+      ? readPromptRuns(state).flatMap(run => (run.activities ?? []).flatMap(activity =>
+        activity.kind === 'reasoning' && typeof activity.text === 'string' ? [[activity.messageId, activity.text] as const] : []))
+      : []);
+    const modelMessages = history.map(message => {
+      const savedReasoning = reasoning.get(message.id);
+      const additional = rec(rec(message).additional_kwargs);
+      return message.role === 'assistant' && savedReasoning !== undefined && typeof additional.reasoning_content !== 'string'
+        ? { ...message, additional_kwargs: { ...additional, reasoning_content: savedReasoning } } : message;
+    });
     const modelInput = await hydrateModelImages(messagesForDeepAgent(modelMessages));
     if (signal.aborted) return;
-    const state = rec(input.state);
     const workspaceAdapter = this.execution.workspace;
     const budget = this.execution.budget;
     const baseWorkspace = retry ? retry.workspace : state.h3Workspace;
@@ -226,15 +237,17 @@ export class H3AgUiAgent extends AbstractAgent {
     })();
     let lastAssistantId: string | undefined;
     const incompleteIds = new Set<string>();
-    const observeMessage = (id: string, incomplete: boolean) => {
+    const finishReasons = new Map<string, string>();
+    const observeMessage = (id: string, incomplete: boolean, finishReason?: string) => {
       lastAssistantId = id;
       if (incomplete) incompleteIds.add(id);
+      if (finishReason) finishReasons.set(id, finishReason);
     };
     const textIds = new Set<string>();
     const toolMessageIds = new Set<string>();
     for await (const event of adaptDeepAgentStream(stream, `assistant-${input.runId}`, signal, observeMessage)) {
       if (signal.aborted) return;
-      if (event.type === 'TEXT_MESSAGE_START') {
+      if (event.type === 'TEXT_MESSAGE_CONTENT' && event.delta.trim()) {
         textIds.add(event.messageId);
       } else if (event.type === 'TOOL_CALL_START') {
         toolMessageIds.add(event.parentMessageId);
@@ -244,8 +257,23 @@ export class H3AgUiAgent extends AbstractAgent {
     if (signal.aborted) return;
     const priorIds = Array.isArray(state.h3CompletedMessageIds) ? state.h3CompletedMessageIds.filter((id: unknown): id is string => typeof id === 'string') : [];
     const completed = new Set<string>(priorIds);
-    if (lastAssistantId && textIds.has(lastAssistantId) && !toolMessageIds.has(lastAssistantId) && !incompleteIds.has(lastAssistantId)) completed.add(lastAssistantId);
+    const hasFinalOutput = lastAssistantId && textIds.has(lastAssistantId) && !toolMessageIds.has(lastAssistantId) && !incompleteIds.has(lastAssistantId);
+    if (hasFinalOutput && lastAssistantId) completed.add(lastAssistantId);
     subscriber.next({ type: EventType.STATE_SNAPSHOT, snapshot: { h3CompletedMessageIds: [...completed] } } as never);
+    if (!hasFinalOutput) {
+      const reason = lastAssistantId ? finishReasons.get(lastAssistantId) : undefined;
+      const outputLimit = reason === 'length' || reason === 'max_tokens';
+      const code = outputLimit ? 'output_limit' : reason === 'content_filter' ? 'content_filter' : lastAssistantId && incompleteIds.has(lastAssistantId) ? 'incomplete_output' : 'empty_output';
+      const message = outputLimit
+        ? `模型达到单次输出上限${budget ? `（${budget.outputTokens} tokens）` : ''}，未完成最终回复。思考可能占用同一预算；请在设置 → LLM 高级设置中提高最大输出后重试。已保留本次内容。`
+        : reason === 'content_filter'
+          ? '模型服务的内容过滤中断了回复，未完成最终输出。请调整输入后重试，已保留本次内容。'
+          : code === 'incomplete_output'
+            ? `模型服务中断了回复（${reason}），请重试。已保留本次内容。`
+            : '模型本轮未返回最终回复（可能仅有思考或工具过程）。请重试；若反复发生，请检查最大输出预算和模型服务。已保留本次内容。';
+      subscriber.next({ type: EventType.RUN_ERROR, code, message } as never);
+      return;
+    }
     subscriber.next({ type: EventType.RUN_FINISHED, threadId: input.threadId, runId: input.runId, outcome: { type: 'success' } });
   }
 }

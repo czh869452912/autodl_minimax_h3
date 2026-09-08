@@ -10,6 +10,7 @@ export function toH3AgentConfig(settings: AppSettings): H3AgentConfig {
     maxRetries: Number(settings.llmMaxRetries),
     ...(settings.llmContextWindowTokens ? { contextWindowTokens: Number(settings.llmContextWindowTokens) } : {}),
     ...(settings.llmMaxOutputTokens ? { maxOutputTokens: Number(settings.llmMaxOutputTokens) } : {}),
+    ...(settings.llmReasoningEffort ? { reasoningEffort: settings.llmReasoningEffort } : {}),
   };
 }
 

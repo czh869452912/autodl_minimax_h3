@@ -56,7 +56,7 @@ function nextOrAbort(iterator: AsyncIterator<unknown>, signal: AbortSignal): Pro
 /** Explicit chunks append; only full messages are reconciled as snapshots. */
 export async function* adaptDeepAgentStream(
   stream: AsyncIterable<unknown>, fallbackId: string, signal: AbortSignal,
-  onAssistantMessage?: (id: string, incomplete: boolean) => void,
+  onAssistantMessage?: (id: string, incomplete: boolean, finishReason?: string) => void,
 ): AsyncGenerator<StreamEvent> {
   const messages = new Map<string, MessageState>();
   const results = new Set<string>();
@@ -110,7 +110,7 @@ export async function* adaptDeepAgentStream(
         if (!suppliedId && fallbackBoundary) { fallbackSegment++; fallbackBoundary = false; }
         const id = suppliedId ?? currentFallbackId();
         const finishReason = message.response_metadata?.finish_reason ?? message.response_metadata?.stop_reason;
-        onAssistantMessage?.(id, ['length', 'max_tokens', 'content_filter', 'error', 'cancelled'].includes(String(finishReason)));
+        onAssistantMessage?.(id, ['length', 'max_tokens', 'content_filter', 'error', 'cancelled'].includes(String(finishReason)), typeof finishReason === 'string' ? finishReason : undefined);
         let state = messages.get(id);
         if (!state) {
           state = { text: '', reasoning: '', opened: false, ended: false, tools: new Map() };

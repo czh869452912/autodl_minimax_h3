@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { LIGHT_PROMPT_COLORS as colors } from '../ui/theme';
 import { diffPromptVersions, type PromptVersion } from './promptVersions';
@@ -105,9 +105,8 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
       <Action label="预览并带入创建页" primary disabled={disabled} onPress={openPreview} />
     </View>
     {copyStatus ? <Text accessibilityLiveRegion="polite" style={styles.muted}>{copyStatus}</Text> : null}
-    {activePreview && <Modal visible transparent animationType="slide" onRequestClose={() => { if (!busy) setPreview(null); }}>
-      {/* Android Modal already uses adjustResize; a second height correction oscillates with IME layout. */}
-      <KeyboardAvoidingView style={styles.overlay} enabled={Platform.OS === 'ios'} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    {activePreview && <Modal visible transparent statusBarTranslucent animationType="slide" onRequestClose={() => { if (!busy) setPreview(null); }}>
+      <KeyboardAvoidingView style={styles.overlay} behavior="padding">
         <View style={styles.modal} accessibilityViewIsModal onFocus={event => event.stopPropagation()} onBlur={event => event.stopPropagation()}>
           <Text style={styles.title}>带入创建页前确认</Text>
           <ScrollView style={styles.previewScroll} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.previewContent}>
@@ -119,10 +118,19 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
             {missing.length > 0 && <Text accessibilityRole="alert" style={styles.error}>引用图片缺失或标签不唯一：{missing.join('、')}。请恢复绑定或返回会话补充图片后重新生成。</Text>}
             {invalidBindings && <Text accessibilityRole="alert" style={styles.error}>图片编号必须从图片1连续排列，才能保持创建页的引用对应关系。请保留所选图片之前的图片；若此版本缺少这些图片，请返回会话补充后重新生成。</Text>}
             <Text style={styles.title}>生成参数（可选）</Text><Text style={styles.muted}>留空使用创建页的工作流默认值。</Text>
-            <TextInput accessibilityLabel="分辨率（可选）" placeholder="分辨率 · 工作流默认" value={resolution} onChangeText={setResolution} editable={!busy} style={styles.input} />
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>分辨率</Text>
+              <TextInput accessibilityLabel="分辨率（可选）" placeholder="分辨率 · 工作流默认" placeholderTextColor={colors.placeholder} value={resolution} onChangeText={setResolution} editable={!busy} style={styles.input} />
+            </View>
             <View style={styles.row}>{resolutionOptions.map(value => <Action key={value} label={value} disabled={busy} onPress={() => setResolution(value)} />)}</View>
-            <TextInput accessibilityLabel="时长秒数（可选）" placeholder="时长（秒）· 工作流默认" keyboardType="decimal-pad" value={duration} onChangeText={setDuration} editable={!busy} style={styles.input} />
-            <TextInput accessibilityLabel="Seed（可选）" placeholder="Seed · 工作流默认" value={seed} onChangeText={setSeed} editable={!busy} style={styles.input} />
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>时长（秒）</Text>
+              <TextInput accessibilityLabel="时长秒数（可选）" placeholder="时长（秒）· 工作流默认" placeholderTextColor={colors.placeholder} keyboardType="decimal-pad" value={duration} onChangeText={setDuration} editable={!busy} style={styles.input} />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>随机种子（Seed）</Text>
+              <TextInput accessibilityLabel="Seed（可选）" placeholder="Seed · 工作流默认" placeholderTextColor={colors.placeholder} value={seed} onChangeText={setSeed} editable={!busy} style={styles.input} />
+            </View>
             {parameterValidation.error && <Text accessibilityRole="alert" style={styles.error}>{parameterValidation.error}</Text>}
             {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
           </ScrollView>
@@ -161,6 +169,8 @@ const styles = StyleSheet.create({
   imageCard: { width: 108, minHeight: 122, borderWidth: 1, borderColor: colors.line, padding: 8, borderRadius: 10, gap: 4 },
   thumbnail: { width: 90, height: 72, borderRadius: 6 },
   filename: { color: colors.muted, fontSize: 10 },
-  input: { minHeight: 46, borderWidth: 1, borderColor: colors.line, borderRadius: 8, padding: 12, color: colors.ink },
+  field: { gap: 6 },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.ink },
+  input: { minHeight: 46, borderWidth: 1, borderColor: colors.line, borderRadius: 8, padding: 12, color: colors.ink, backgroundColor: colors.surface },
   error: { color: colors.danger, fontSize: 13, lineHeight: 20 },
 });

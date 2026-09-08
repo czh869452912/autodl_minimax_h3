@@ -13,7 +13,6 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   SectionList,
@@ -166,6 +165,7 @@ export function PromptAssistantUi({
   const [inputSelection, setInputSelection] = useState({ start: initialComposer.text.length, end: initialComposer.text.length });
   const [mentionSheetOpen, setMentionSheetOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const submitLock = useRef(false);
   const inputRef = useRef<TextInput>(null);
@@ -173,39 +173,7 @@ export function PromptAssistantUi({
   const nextAttachmentNumber = useRef(1 + Math.max(0, ...initialComposer.attachments.map(item => Number(item.displayName?.replace('图片', '')) || 0)));
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const [keyboardHeight, setKeyboardHeight] = useState<number | null>(null);
-  // Keep the keyboard-hidden height captured at mount. Updating this while
-  // Android is resizing the window would make the resize delta look like zero
-  // and re-apply the full keyboard height (the extra tab-bar-sized lift seen
-  // on some edge-to-edge devices).
-  const baselineHeight = useRef(height);
-  useEffect(() => { if (keyboardHeight === null) baselineHeight.current = height; }, [height, width, keyboardHeight]);
   const wide = width >= 900 && height >= 480;
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
-      setKeyboardHeight(event.endCoordinates.height);
-    });
-    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
-      setKeyboardHeight(null);
-    });
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, []);
-  const keyboardPadding =
-    Platform.OS === 'android' && keyboardHeight != null
-      ? getKeyboardAvoidancePadding(
-        height,
-        keyboardHeight,
-        baselineHeight.current,
-        // The custom tab bar is hidden by React Navigation while the keyboard
-        // is open. Its freed layout space must not be treated as keyboard
-        // overlap, otherwise the composer rises by one tab-bar height.
-        8 + 66 + Math.max(insets.bottom, 8),
-      )
-      : 0;
   // AbstractAgent mutates its messages array when addMessage() is called. Do
   // not memoize by array identity or the first user bubble waits for the next
   // streamed event before becoming visible.
@@ -327,28 +295,25 @@ export function PromptAssistantUi({
       }}
       onDelete={onDeleteThread}
       onRename={onRenameThread}
+      onRenameVisibilityChange={setRenameOpen}
       onSearchHistory={onSearchHistory}
       onLoadMoreHistory={onLoadMoreHistory}
     />
   );
   return (
     <KeyboardAvoidingView
-      // Android adjustResize usually reports the keyboard-safe window height.
-      // Residual padding covers edge-to-edge devices where it does not, while
-      // remaining zero when the viewport was already resized.
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
-      style={[
-        styles.root,
-        {
-          paddingBottom: Math.max(insets.bottom, 8) + keyboardPadding,
-        },
-      ]}
+      // Use the actual container/keyboard intersection. Window-height deltas
+      // cannot account for a custom tab bar disappearing or modal windows.
+      behavior="padding"
+      keyboardVerticalOffset={insets.top}
+      enabled={isVisible && (wide || !historyOpen) && !renameOpen && !briefOpen && !versionsOpen && !mentionSheetOpen}
+      // Keep resting space outside the padding controlled by keyboard avoidance.
+      style={[styles.root, { marginBottom: Math.max(insets.bottom, 8) }]}
     >
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="打开对话历史"
-          onPress={() => setHistoryOpen(true)}
+          onPress={() => { if (!wide) setHistoryOpen(true); }}
           style={styles.headerButton}
         >
           <AppIcon
@@ -485,16 +450,6 @@ export function PromptAssistantUi({
       </DraggableBottomSheet>
     </KeyboardAvoidingView>
   );
-}
-
-export function getKeyboardAvoidancePadding(
-  viewportHeight: number,
-  keyboardHeight: number,
-  baselineViewportHeight: number,
-  hiddenBottomBarHeight = 0,
-): number {
-  const viewportResize = Math.max(baselineViewportHeight - viewportHeight, 0);
-  return Math.max(keyboardHeight - viewportResize - hiddenBottomBarHeight, 0);
 }
 
 export function ConversationTimeline({
@@ -1227,12 +1182,17 @@ function HistoryList({
   onRename,
   onSearchHistory,
   onLoadMoreHistory,
-}: HistoryProps) {
+  onRenameVisibilityChange,
+}: HistoryProps & { onRenameVisibilityChange: (visible: boolean) => void }) {
   const [query, setQuery] = useState('');
   const [renameTarget, setRenameTarget] = useState<LocalThreadSnapshot | null>(
     null,
   );
   const [renameValue, setRenameValue] = useState('');
+  useEffect(() => {
+    onRenameVisibilityChange(Boolean(renameTarget));
+    return () => onRenameVisibilityChange(false);
+  }, [renameTarget, onRenameVisibilityChange]);
   const search = useRef(onSearchHistory); search.current = onSearchHistory;
   useEffect(() => { if (!search.current) return; const timer = setTimeout(() => search.current?.(query), 250); return () => clearTimeout(timer); }, [query]);
   const groups = groupSessions(
@@ -1288,14 +1248,15 @@ function HistoryList({
         visible={Boolean(renameTarget)}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setRenameTarget(null)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior="padding"
           style={styles.renameKeyboardSurface}
         >
           <View style={styles.renameBackdrop}>
-            <View style={styles.renameCard}>
+            <View style={styles.renameCard} onFocus={event => event.stopPropagation()} onBlur={event => event.stopPropagation()}>
               <Text style={styles.renameTitle}>重命名会话</Text>
               <TextInput
                 autoFocus

@@ -1,7 +1,8 @@
 jest.mock('../shims/copilotKitStreamingFetch', () => ({ createStreamingFetch: jest.fn() }));
 jest.mock('yaml', () => jest.requireActual(require('path').join(require.resolve('yaml/package.json'), '..', 'dist', 'index.js')));
 jest.mock('@langchain/openai', () => ({ ChatOpenAI: jest.fn() }));
-import { AIMessage } from '@langchain/core/messages';
+jest.mock('./DeepSeekCompletions', () => ({ DeepSeekCompletions: jest.fn() }));
+import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { createDeepAgent, createSummarizationMiddleware } from 'deepagents/browser';
 import { createH3Agent } from './h3Agent';
@@ -115,4 +116,59 @@ it.each(['https://example.test/reference.jpg', 'data:image/png;base64,aGVsbG8=']
   ]));
   expect(JSON.stringify(model.received.at(-1))).toContain(imageUrl);
   expect(JSON.stringify(captureWorkspaceState(state, 1))).not.toContain('data:image/');
+});
+
+it('summarizes DeepSeek reasoning-heavy history before a model request and restores that summary', async () => {
+  const model = new ScriptedModel([new AIMessage('compact history'), new AIMessage('answer')]);
+  const deepseek = { ...config, model: 'deepseek-v4-flash' };
+  const messages = [
+    { id: 'u1', role: 'user', content: 'old question' },
+    { id: 'a1', role: 'assistant', content: 'old answer', additional_kwargs: { reasoning_content: 'thinking '.repeat(16000) } },
+    { id: 'u2', role: 'user', content: 'continue' },
+  ];
+  const state = await valuesOf(createH3Agent(deepseek, { modelFactory: (() => model) as never }), prepareWorkspaceRun(undefined, messages));
+  expect(model.received).toHaveLength(2);
+  expect(model.received.at(-1)?.some(message => message.id === 'a1')).toBe(false);
+  expect(model.received.at(-1)?.some(message => String(message.content).includes('compact history'))).toBe(true);
+  expect(messages[1].additional_kwargs?.reasoning_content).toHaveLength(144000);
+  const saved = captureWorkspaceState(state, 1);
+  expect(prepareWorkspaceRun(saved, messages).context.h3Summary).toBeDefined();
+  expect(prepareWorkspaceRun({ ...saved, budgetKey: saved.budgetKey.replace('budget-2', 'budget-1') }, messages).context.h3Summary).toBeUndefined();
+  const changed = messages.map(message => message.id === 'a1' ? { ...message, additional_kwargs: { reasoning_content: 'changed' } } : message);
+  expect(prepareWorkspaceRun(saved, changed).context.h3Summary).toBeUndefined();
+  const nextModel = new ScriptedModel([new AIMessage('continued')]);
+  await valuesOf(createH3Agent(deepseek, { modelFactory: (() => nextModel) as never }), prepareWorkspaceRun(saved, messages));
+  expect(nextModel.received).toHaveLength(1);
+});
+
+it('preserves recent tool pairs and their complete reasoning when summarizing older reasoning', async () => {
+  const model = new ScriptedModel([new AIMessage('compact history'), new AIMessage('answer')]);
+  const graph = createH3Agent({ ...config, model: 'deepseek-v4-flash' }, { modelFactory: (() => model) as never });
+  await graph.invoke({ messages: [
+    new HumanMessage('old question'),
+    new AIMessage({ content: 'old answer', additional_kwargs: { reasoning_content: 'thinking '.repeat(16000) } }),
+    new HumanMessage('read a guide'),
+    new AIMessage({ id: 'recent', content: '', additional_kwargs: { reasoning_content: 'Need the guide first' }, tool_calls: [{ id: 'read', name: 'read_file', args: { file_path: '/skills/README.md' } }] }),
+    new ToolMessage({ tool_call_id: 'read', content: 'guide contents' }),
+  ] });
+  const received = model.received.at(-1)!;
+  const index = received.findIndex(message => message.id === 'recent');
+  expect(index).toBeGreaterThan(0);
+  expect(received[index].additional_kwargs.reasoning_content).toBe('Need the guide first');
+  expect(received[index + 1].tool_call_id).toBe('read');
+  expect(model.received).toHaveLength(2);
+});
+
+it('rejects oversized retained DeepSeek reasoning without sending an over-budget request', async () => {
+  const model = new ScriptedModel([new AIMessage('must not execute')]);
+  const graph = createH3Agent({ ...config, model: 'deepseek-v4-flash' }, { modelFactory: (() => model) as never });
+  await expect(graph.invoke({ messages: [new AIMessage({ content: 'answer', additional_kwargs: { reasoning_content: 'thinking '.repeat(20000) } })] })).rejects.toThrow(/context budget/i);
+  expect(model.received).toHaveLength(0);
+});
+
+it.each(['unknown-model', 'deepseek-v4-flash'])('does not count unused reasoning when thinking is disabled: %s', async modelName => {
+  const model = new ScriptedModel([new AIMessage('answer')]);
+  const graph = createH3Agent({ ...config, model: modelName, reasoningEffort: 'none' }, { modelFactory: (() => model) as never });
+  await graph.invoke({ messages: [new AIMessage({ content: 'earlier', additional_kwargs: { reasoning_content: 'thinking '.repeat(20000) } }), { role: 'user', content: 'continue' }] });
+  expect(model.received).toHaveLength(1);
 });

@@ -53,4 +53,14 @@ describe('local LLM settings', () => {
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('media.autoExportToGallery', 'false');
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('media.keepPrivateCopy', 'false');
   });
+
+  it('round-trips a manually selected output budget and thinking effort', async () => {
+    const saved = new Map<string, string>();
+    jest.mocked(SecureStore.setItemAsync).mockImplementation(async (key, value) => { saved.set(key, value); });
+    jest.mocked(SecureStore.getItemAsync).mockImplementation(async key => saved.get(key) ?? null);
+    await saveSettings({ llmMaxOutputTokens: '16384', llmContextWindowTokens: '65536', llmReasoningEffort: 'max' });
+    expect(await readSettings()).toMatchObject({ llmMaxOutputTokens: '16384', llmContextWindowTokens: '65536', llmReasoningEffort: 'max' });
+    await saveSettings({ llmReasoningEffort: 'default' });
+    expect(await readSettings()).toMatchObject({ llmReasoningEffort: 'default' });
+  });
 });
