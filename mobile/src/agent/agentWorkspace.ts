@@ -1,5 +1,5 @@
 import CryptoJS from 'crypto-js';
-import { HumanMessage, coerceMessageLikeToMessage } from '@langchain/core/messages';
+import { HumanMessage, coerceMessageLikeToMessage, type BaseMessage } from '@langchain/core/messages';
 import { createMiddleware, todoListMiddleware, countTokensApproximately } from 'langchain';
 import { CompositeBackend, StateBackend, createSummarizationMiddleware, type FileData, type BackendProtocolV2 } from 'deepagents/browser';
 import { z } from 'zod';
@@ -33,10 +33,10 @@ function prefixHash(messages: readonly unknown[], cutoff: number): string {
   return digest(JSON.stringify(messages.slice(0, cutoff).map(value => {
     const message = coerceMessageLikeToMessage(value as never);
     const data = message as any;
-    return stable({ role: message.getType(), content: message.content, tool_calls: data.tool_calls ?? [], tool_call_id: data.tool_call_id ?? null });
+    return stable({ role: message.getType(), content: message.content, tool_calls: data.tool_calls ?? [], tool_call_id: data.tool_call_id ?? null, reasoning_content: message.additional_kwargs.reasoning_content });
   })));
 }
-const budgetKey = (budget: H3ContextBudget) => `${budget.inputTokens}:${budget.outputTokens}:budget-1`;
+const budgetKey = (budget: H3ContextBudget) => `${budget.inputTokens}:${budget.outputTokens}:budget-2`;
 
 // The installed public legacy constructor permits an immutable in-memory
 // bundle reader. All mutations are denied here, outside the model tool layer.
@@ -108,11 +108,39 @@ export function prepareWorkspaceRun(workspace: unknown, messages: readonly unkno
   return { input: { messages: [...messages], files: files as Record<string, FileData>, todos }, context };
 }
 
-export function createH3WorkspaceMiddleware(backend: BackendProtocolV2, budget = getH3ContextBudget()) {
+const reasoningTokens = (messages: readonly BaseMessage[]) => Math.ceil(messages.reduce((chars, message) =>
+  chars + (typeof message.additional_kwargs.reasoning_content === 'string' ? message.additional_kwargs.reasoning_content.length : 0), 0) / 4);
+
+export function createH3WorkspaceMiddleware(backend: BackendProtocolV2, budget = getH3ContextBudget(), options: { includeReasoning?: boolean } = {}) {
   const eventSchema = z.object({ cutoffIndex: z.number().int().positive(), summaryMessage: z.instanceof(HumanMessage), filePath: z.string().nullable() });
+  const summaryOptions = { backend, trigger: { type: 'tokens' as const, value: Math.floor(budget.inputTokens * 0.8) }, keep: { type: 'tokens' as const, value: Math.floor(budget.inputTokens * 0.25) }, trimTokensToSummarize: Math.max(1024, budget.inputTokens - 2048) };
+  const summarizer = createSummarizationMiddleware(summaryOptions);
+  const summaryMiddleware: typeof summarizer = options.includeReasoning ? {
+    ...summarizer,
+    wrapModelCall: (request, handler) => {
+      // DeepAgents 1.13 has no token-counter option. Its public hook accepts a
+      // message-count retention policy, so count reasoning here and let its
+      // summarizer preserve tool-call/result boundaries and durable summaries.
+      const event = request.state._summarizationEvent;
+      const effective = event ? [event.summaryMessage, ...request.messages.slice(event.cutoffIndex)] : request.messages;
+      const extra = reasoningTokens(effective);
+      const counted = request.systemMessage ? [request.systemMessage, ...effective] : effective;
+      if (!extra || countTokensApproximately(counted, request.tools) + extra < summaryOptions.trigger.value) return summarizer.wrapModelCall!(request, handler);
+      let keep = 0;
+      let tokens = 0;
+      for (let index = effective.length - 1; index >= 0; index--) {
+        const message = effective[index];
+        tokens += countTokensApproximately([message]) + reasoningTokens([message]);
+        if (tokens > summaryOptions.keep.value) break;
+        keep++;
+      }
+      const forced = createSummarizationMiddleware({ ...summaryOptions, trigger: { type: 'messages', value: 1 }, keep: { type: 'messages', value: Math.max(1, keep) } });
+      return forced.wrapModelCall!(request, handler);
+    },
+  } : summarizer;
   return [
     todoListMiddleware(),
-    createSummarizationMiddleware({ backend, trigger: { type: 'tokens', value: Math.floor(budget.inputTokens * 0.8) }, keep: { type: 'tokens', value: Math.floor(budget.inputTokens * 0.25) }, trimTokensToSummarize: Math.max(1024, budget.inputTokens - 2048) }),
+    summaryMiddleware,
     createMiddleware({
       name: 'H3WorkspaceRestore',
       stateSchema: z.object({ _summarizationEvent: eventSchema.optional(), _summarizationSessionId: z.string().optional() }),
@@ -129,7 +157,7 @@ export function createH3WorkspaceMiddleware(backend: BackendProtocolV2, budget =
         const modelMessages = [...retainedImages, ...request.messages];
         const messages = request.systemMessage ? [request.systemMessage, ...modelMessages] : modelMessages;
         const images = messages.reduce((count, message) => count + (Array.isArray(message.content) ? message.content.filter(part => typeof part === 'object' && (part.type === 'image' || part.type === 'image_url')).length : 0), 0);
-        const estimate = countTokensApproximately(messages, request.tools) + images * 2048;
+        const estimate = countTokensApproximately(messages, request.tools) + images * 2048 + (options.includeReasoning ? reasoningTokens(messages) : 0);
         if (estimate + 1024 > budget.inputTokens) throw new Error('Model input exceeds the configured context budget');
         return handler({ ...request, messages: modelMessages });
       },

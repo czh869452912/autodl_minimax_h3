@@ -334,6 +334,15 @@ it('does not certify earlier text when the final model message has no text', asy
   expect(events.some(e => e.type === 'RUN_FINISHED')).toBe(false);
 });
 
+it('restores saved reasoning for DeepSeek follow-ups without changing visible messages', async () => {
+  let received: any;
+  const messages = [{ id: 'u', role: 'user', content: 'original' }, { id: 'a', role: 'assistant', content: 'answer' }, { id: 'u2', role: 'user', content: 'continue' }];
+  const graph = { stream: async function* (input: any) { received = input.messages; yield [new AIMessage({ id: 'next', content: 'next answer' }), {}]; } };
+  await collect(new H3AgUiAgent(graph, {}, { includeReasoningHistory: true }), { ...runInput as any, messages, state: { h3Runs: [{ id: 'r', userMessageId: 'u', status: 'completed', startedAt: 1, messageIds: ['a'], tools: [], activities: [{ id: 'reason', kind: 'reasoning', messageId: 'a', text: 'Saved reasoning' }] }] } });
+  expect(received[1].additional_kwargs.reasoning_content).toBe('Saved reasoning');
+  expect(messages[1]).not.toHaveProperty('additional_kwargs');
+});
+
 it.each(['length', 'stop', undefined])('reports reasoning-only completion with finish reason %s', async reason => {
   const graph = { stream: async function* () {
     yield [new AIMessageChunk({ id: 'reasoning-only', content: '', additional_kwargs: { reasoning_content: 'Inspect reference' } }), {}];

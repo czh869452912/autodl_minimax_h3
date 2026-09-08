@@ -1,3 +1,6 @@
+import { DEFAULT_CONTEXT_TOKENS, DEFAULT_OUTPUT_TOKENS } from '../settings/llmDefaults';
+import type { ReasoningEffort } from './reasoningConfig';
+
 export type H3AgentConfig = {
   apiKey: string;
   endpoint: string;
@@ -6,12 +9,13 @@ export type H3AgentConfig = {
   maxRetries: number;
   contextWindowTokens?: number;
   maxOutputTokens?: number;
+  reasoningEffort?: ReasoningEffort;
 };
 
 export type H3ContextBudget = { inputTokens: number; outputTokens: number };
 export function getH3ContextBudget(config: Partial<H3AgentConfig> = {}): H3ContextBudget {
-  const window = config.contextWindowTokens ?? 32_768;
-  const outputTokens = config.maxOutputTokens ?? 4_096;
+  const window = config.contextWindowTokens ?? DEFAULT_CONTEXT_TOKENS;
+  const outputTokens = config.maxOutputTokens ?? DEFAULT_OUTPUT_TOKENS;
   if (!Number.isInteger(window) || !Number.isInteger(outputTokens) || window < 8192 || outputTokens < 256 || outputTokens > window / 2) throw new Error('Invalid model context or output token budget');
   return { inputTokens: window - outputTokens, outputTokens };
 }

@@ -4,6 +4,7 @@ import { H3_GRAPH_VERSION, type H3AgentConfig } from './agentTypes';
 import type { LocalThreadSnapshot, LocalThreadStore } from './threadStore';
 import type { SubmissionCommand, SubmissionReceipt } from './submissionCommands';
 import { readPromptVersions, reconcilePromptVersions } from './promptVersions';
+import { isDeepSeekV4 } from './reasoningConfig';
 export type FlushResult = { kind: 'saved' } | { kind: 'failed'; error: Error };
 
 export type PromptAgentConfig = H3AgentConfig;
@@ -38,11 +39,14 @@ function defaultAgentFactory(config: PromptAgentConfig): H3AgUiAgent {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { H3AgUiAgent } = require('./aguiAgent') as typeof import('./aguiAgent');
   const workspace = require('./agentWorkspace') as typeof import('./agentWorkspace');
-  return new H3AgUiAgent(createH3Agent(config) as never, {}, { workspace, budget: workspace.getH3ContextBudget(config), deadlineMs: Math.max(60000, config.timeoutMs * 2) });
+  return new H3AgUiAgent(createH3Agent(config) as never, {}, {
+    workspace, budget: workspace.getH3ContextBudget(config), deadlineMs: Math.max(60000, config.timeoutMs * 2),
+    includeReasoningHistory: isDeepSeekV4(config.model) && config.reasoningEffort !== 'none',
+  });
 }
 
 function configKey(config: PromptAgentConfig): string {
-  return `${H3_GRAPH_VERSION}\u0000${config.endpoint}\u0000${config.model}\u0000${config.apiKey}\u0000${config.timeoutMs}\u0000${config.maxRetries}\u0000${config.contextWindowTokens}\u0000${config.maxOutputTokens}`;
+  return `${H3_GRAPH_VERSION}\u0000${config.endpoint}\u0000${config.model}\u0000${config.apiKey}\u0000${config.timeoutMs}\u0000${config.maxRetries}\u0000${config.contextWindowTokens}\u0000${config.maxOutputTokens}\u0000${config.reasoningEffort ?? 'default'}`;
 }
 
 function mergeRecoveryComposer(durable: LocalThreadSnapshot, local: LocalThreadSnapshot): LocalThreadSnapshot {

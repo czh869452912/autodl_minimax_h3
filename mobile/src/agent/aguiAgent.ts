@@ -12,6 +12,7 @@ import { hydrateModelImages } from './attachmentStore';
 type DeepAgentGraph = { stream(input: unknown, options?: unknown): Promise<AsyncIterable<unknown>> | AsyncIterable<unknown> };
 type AgentExecutionOptions = {
   deadlineMs?: number;
+  includeReasoningHistory?: boolean;
   workspace?: Pick<typeof import('./agentWorkspace'), 'prepareWorkspaceRun' | 'captureWorkspaceState'>;
   budget?: import('./agentTypes').H3ContextBudget;
 };
@@ -204,10 +205,20 @@ export class H3AgUiAgent extends AbstractAgent {
     subscriber.next({ type: EventType.RUN_STARTED, threadId: input.threadId, runId: input.runId });
     const retry = this.preparedRetry;
     this.preparedRetry = undefined;
-    const modelMessages = retry?.messages ?? input.messages;
+    const state = rec(input.state);
+    const history = retry?.messages ?? input.messages;
+    const reasoning = new Map(this.execution.includeReasoningHistory
+      ? readPromptRuns(state).flatMap(run => (run.activities ?? []).flatMap(activity =>
+        activity.kind === 'reasoning' && typeof activity.text === 'string' ? [[activity.messageId, activity.text] as const] : []))
+      : []);
+    const modelMessages = history.map(message => {
+      const savedReasoning = reasoning.get(message.id);
+      const additional = rec(rec(message).additional_kwargs);
+      return message.role === 'assistant' && savedReasoning !== undefined && typeof additional.reasoning_content !== 'string'
+        ? { ...message, additional_kwargs: { ...additional, reasoning_content: savedReasoning } } : message;
+    });
     const modelInput = await hydrateModelImages(messagesForDeepAgent(modelMessages));
     if (signal.aborted) return;
-    const state = rec(input.state);
     const workspaceAdapter = this.execution.workspace;
     const budget = this.execution.budget;
     const baseWorkspace = retry ? retry.workspace : state.h3Workspace;

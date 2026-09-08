@@ -35,6 +35,18 @@ function fakeAgent() {
 const store = { save: jest.fn(async () => undefined) } as unknown as LocalThreadStore;
 const saveMock = store.save as jest.Mock;
 
+it('recreates an idle runtime when the reasoning effort changes', async () => {
+  const factory = jest.fn(() => fakeAgent() as never);
+  const registry = createPromptRuntimeRegistry(factory);
+  try {
+    const first = registry.ensure({ ...config, reasoningEffort: 'low' }, snapshot('effort'), store);
+    await first.flush();
+    const next = registry.ensure({ ...config, reasoningEffort: 'high' }, snapshot('effort'), store);
+    expect(next).not.toBe(first);
+    expect(factory).toHaveBeenLastCalledWith(expect.objectContaining({ reasoningEffort: 'high' }));
+  } finally { await registry.disposeAll(); }
+});
+
 it('batches reasoning bursts and flushes the tail before terminal persistence', async () => {
   jest.useFakeTimers();
   const registry = createPromptRuntimeRegistry(() => fakeAgent() as never);

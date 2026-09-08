@@ -1,4 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
+import type { ReasoningEffort } from '../agent/reasoningConfig';
+import { DEFAULT_LLM_ADVANCED_SETTINGS } from './llmDefaults';
 
 const keys = {
   token: 'autodl.token',
@@ -11,6 +13,7 @@ const keys = {
   keepPrivateCopy: 'media.keepPrivateCopy',
   llmContextWindowTokens: 'llm.contextWindowTokens',
   llmMaxOutputTokens: 'llm.maxOutputTokens',
+  llmReasoningEffort: 'llm.reasoningEffort',
 } as const;
 
 export type AppSettings = {
@@ -24,10 +27,11 @@ export type AppSettings = {
   keepPrivateCopy: boolean;
   llmContextWindowTokens?: string;
   llmMaxOutputTokens?: string;
+  llmReasoningEffort?: ReasoningEffort;
 };
 
 export async function readSettings(): Promise<AppSettings> {
-  const [token, llmEndpoint, llmModel, llmApiKey, llmTimeoutSeconds, llmMaxRetries, autoExportToGallery, keepPrivateCopy, llmContextWindowTokens, llmMaxOutputTokens] = await Promise.all(
+  const [token, llmEndpoint, llmModel, llmApiKey, llmTimeoutSeconds, llmMaxRetries, autoExportToGallery, keepPrivateCopy, llmContextWindowTokens, llmMaxOutputTokens, llmReasoningEffort] = await Promise.all(
     Object.values(keys).map((key) => SecureStore.getItemAsync(key)),
   );
   return {
@@ -35,12 +39,13 @@ export async function readSettings(): Promise<AppSettings> {
     llmEndpoint: llmEndpoint || 'https://api.openai.com/v1',
     llmModel: llmModel || 'gpt-4o-mini',
     llmApiKey: llmApiKey ?? '',
-    llmTimeoutSeconds: llmTimeoutSeconds || '600',
-    llmMaxRetries: llmMaxRetries || '2',
+    llmTimeoutSeconds: llmTimeoutSeconds || DEFAULT_LLM_ADVANCED_SETTINGS.llmTimeoutSeconds,
+    llmMaxRetries: llmMaxRetries || DEFAULT_LLM_ADVANCED_SETTINGS.llmMaxRetries,
     autoExportToGallery: autoExportToGallery !== 'false',
     keepPrivateCopy: keepPrivateCopy !== 'false',
     ...(llmContextWindowTokens ? { llmContextWindowTokens } : {}),
     ...(llmMaxOutputTokens ? { llmMaxOutputTokens } : {}),
+    ...(llmReasoningEffort ? { llmReasoningEffort: llmReasoningEffort as ReasoningEffort } : {}),
   };
 }
 
@@ -56,5 +61,6 @@ export async function saveSettings(values: Partial<AppSettings>): Promise<void> 
     values.keepPrivateCopy === undefined ? undefined : SecureStore.setItemAsync(keys.keepPrivateCopy, String(values.keepPrivateCopy)),
     values.llmContextWindowTokens === undefined ? undefined : SecureStore.setItemAsync(keys.llmContextWindowTokens, values.llmContextWindowTokens),
     values.llmMaxOutputTokens === undefined ? undefined : SecureStore.setItemAsync(keys.llmMaxOutputTokens, values.llmMaxOutputTokens),
+    values.llmReasoningEffort === undefined ? undefined : SecureStore.setItemAsync(keys.llmReasoningEffort, values.llmReasoningEffort),
   ].filter((value): value is Promise<void> => Boolean(value)));
 }
