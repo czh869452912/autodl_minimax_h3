@@ -18,7 +18,7 @@ it('bridges DeepAgents stream into official AG-UI lifecycle events', async () =>
   const graph = { stream: async function* (input: any) {
     graphInput = input;
     yield [{ id: 'assistant-1', type: 'ai', content: '', tool_calls: [{ id: 'tool-1', name: 'read_file', args: { path: '/skills/h3-prompt-writing/SKILL.md' } }] }, {}];
-    yield [{ id: 'assistant-1', type: 'ai', content: '完成' }, {}];
+    yield [{ id: 'assistant-final', type: 'ai', content: '完成' }, {}];
   } };
   const events = await collect(new H3AgUiAgent(graph as never), { threadId: 't1', runId: 'r1', state: {}, messages: [] } as never);
   expect(events.map((event) => event.type)).toEqual([
@@ -168,7 +168,7 @@ it('streams parallel raw tool arguments until finish, then emits results separat
     yield [new ToolMessage({ id: 'result-a', tool_call_id: 'read-a', content: 'A' }), {}];
   } };
   await new Promise<void>((resolve, reject) => new H3AgUiAgent(graph).run(runInput).subscribe({ next: e => observed.push(e), error: reject, complete: resolve }));
-  expect(observed.some(e => e.type === 'RUN_ERROR')).toBe(false);
+  expect(observed.at(-1)).toMatchObject({ type: 'RUN_ERROR', code: 'empty_output' });
   for (const [id, args] of [['read-a', '{"file_path":"/a.md"}'], ['read-b', '{"file_path":"/b.md"}']]) {
     const events = observed.filter(e => e.toolCallId === id);
     expect(events.filter(e => e.type === 'TOOL_CALL_ARGS').map(e => e.delta).join('')).toBe(args);
@@ -319,6 +319,8 @@ it.each(['length', 'content_filter', 'max_tokens'])('does not certify model outp
   } };
   const events = await collect(new H3AgUiAgent(graph), runInput);
   expect(events.find(e => e.type === 'STATE_SNAPSHOT').snapshot.h3CompletedMessageIds).toEqual([]);
+  expect(events.find(e => e.type === 'RUN_ERROR')).toMatchObject({ code: reason === 'content_filter' ? 'content_filter' : 'output_limit' });
+  expect(events.some(e => e.type === 'RUN_FINISHED')).toBe(false);
 });
 
 it('does not certify earlier text when the final model message has no text', async () => {
@@ -328,6 +330,26 @@ it('does not certify earlier text when the final model message has no text', asy
   } };
   const events = await collect(new H3AgUiAgent(graph), runInput);
   expect(events.find(e => e.type === 'STATE_SNAPSHOT').snapshot.h3CompletedMessageIds).toEqual([]);
+  expect(events.find(e => e.type === 'RUN_ERROR')).toMatchObject({ code: 'empty_output' });
+  expect(events.some(e => e.type === 'RUN_FINISHED')).toBe(false);
+});
+
+it.each(['length', 'stop', undefined])('reports reasoning-only completion with finish reason %s', async reason => {
+  const graph = { stream: async function* () {
+    yield [new AIMessageChunk({ id: 'reasoning-only', content: '', additional_kwargs: { reasoning_content: 'Inspect reference' } }), {}];
+    yield [new AIMessageChunk({ id: 'reasoning-only', content: '', response_metadata: { finish_reason: reason } }), {}];
+  } };
+  const events = await collect(new H3AgUiAgent(graph, {}, { budget: { inputTokens: 28672, outputTokens: 4096 } }), runInput);
+  expect(events.find(e => e.type === 'RUN_ERROR')).toMatchObject({ code: reason === 'length' ? 'output_limit' : 'empty_output' });
+  if (reason === 'length') expect(events.at(-1).message).toContain('4096');
+  expect(events.some(e => e.type === 'RUN_FINISHED')).toBe(false);
+  expect(events.find(e => e.type === 'CUSTOM' && e.name === 'h3.reasoning').value.delta).toBe('Inspect reference');
+});
+
+it('does not certify whitespace as a final response', async () => {
+  const graph = { stream: async function* () { yield [new AIMessage({ id: 'blank', content: ' \n ', response_metadata: { finish_reason: 'stop' } }), {}]; } };
+  const events = await collect(new H3AgUiAgent(graph), runInput);
+  expect(events.at(-1)).toMatchObject({ type: 'RUN_ERROR', code: 'empty_output' });
 });
 
 it('allows a new follow-up after cancelled raw arguments while preserving valid paired history', async () => {
@@ -340,7 +362,7 @@ it('allows a new follow-up after cancelled raw arguments while preserving valid 
   const partialEvents = await collect(cancelledAgent, runInput);
   const partialArgs = partialEvents.filter(e => e.type === 'TOOL_CALL_ARGS').map(e => e.delta).join('');
   let received: any[] = [];
-  const nextGraph = { stream: async function* (input: any) { received = input.messages.map(coerceMessageLikeToMessage); } };
+  const nextGraph = { stream: async function* (input: any) { received = input.messages.map(coerceMessageLikeToMessage); yield [new AIMessage({ id: 'followup', content: 'Final answer' }), {}]; } };
   const events = await collect(new H3AgUiAgent(nextGraph), { ...runInput as any, messages: [
     { role: 'assistant', content: 'read a skill', toolCalls: [{ id: 'valid-call', type: 'function', function: { name: 'read_file', arguments: '{"path":"/skill"}' } }] },
     { role: 'tool', toolCallId: 'valid-call', content: 'skill contents' },

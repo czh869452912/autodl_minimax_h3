@@ -31,7 +31,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [layoutHeight, setLayoutHeight] = useState(height);
-  const [keyboardTop, setKeyboardTop] = useState<number | null>(null);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [snap, setSnap] = useState<Exclude<SheetSnap, 'closed'>>('collapsed');
   const snapBeforeKeyboard = useRef(snap);
   const keyboardVisible = useRef(false);
@@ -52,19 +52,16 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
       if (!keyboardVisible.current) snapBeforeKeyboard.current = snap;
       keyboardVisible.current = true;
       setSnap('expanded');
-      if (Platform.OS !== 'android') return;
-      const screenY = event.endCoordinates?.screenY;
-      setKeyboardTop(typeof screenY === 'number' ? screenY : Math.max(0, height - (event.endCoordinates?.height ?? 0)));
+      setKeyboardOpen(true);
     });
-    const hide = Keyboard.addListener('keyboardDidHide', () => { setKeyboardTop(null); if (keyboardVisible.current) setSnap(snapBeforeKeyboard.current); keyboardVisible.current = false; });
+    const hide = Keyboard.addListener('keyboardDidHide', () => { setKeyboardOpen(false); if (keyboardVisible.current) setSnap(snapBeforeKeyboard.current); keyboardVisible.current = false; });
     return () => {
       show.remove();
       hide.remove();
     };
   }, [height, visible, snap]);
-  // Modal windows may already resize for the IME. Use the visible bounds once,
-  // rather than translating a full-height sheet (which clips scroll/footer areas).
-  const availableHeight = Math.max(1, Math.min(layoutHeight, keyboardTop ?? layoutHeight));
+  // The backdrop is laid out inside the keyboard-safe area on both platforms.
+  const availableHeight = Math.max(1, layoutHeight);
   const collapsedOffset = availableHeight * 0.45;
   const expandedOffset = Math.max(insets.top + 8, availableHeight * 0.08);
   const closeOffset = availableHeight * 0.22;
@@ -77,7 +74,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
     setInputFocus(false);
     if (!visible) { position.stopAnimation(); return; }
     setSnap('collapsed');
-    setKeyboardTop(null);
+    setKeyboardOpen(false);
     position.setValue(layoutHeight);
     return () => position.stopAnimation();
   }, [position, visible]);
@@ -131,14 +128,14 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
   return (
     <Modal visible={visible} transparent statusBarTranslucent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={close} onShow={() => { const target = findNodeHandle(headingRef.current); if (target) AccessibilityInfo.setAccessibilityFocus(target); }}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         enabled={hasInputFocus}
         style={styles.modalSurface}
       >
         <View style={styles.backdrop} onLayout={event => setLayoutHeight(event.nativeEvent.layout.height)}>
           <Pressable accessibilityRole="button" accessibilityLabel="关闭底部抽屉" style={StyleSheet.absoluteFill} onPress={close} />
-          <Animated.View style={[styles.sheet, { top: position, bottom: Math.max(0, layoutHeight - availableHeight) }]}>
-            <View testID="bottom-sheet-surface" onFocus={() => { ownsFocus.current = true; setInputFocus(true); }} onBlur={() => { ownsFocus.current = false; setInputFocus(false); }} onAccessibilityEscape={close} style={[styles.surface, { paddingBottom: keyboardTop === null ? Math.max(12, insets.bottom) : 12 }]} accessibilityViewIsModal>
+          <Animated.View style={[styles.sheet, { top: position, bottom: 0 }]}>
+            <View testID="bottom-sheet-surface" onFocus={() => { ownsFocus.current = true; setInputFocus(true); }} onBlur={() => { ownsFocus.current = false; setInputFocus(false); }} onAccessibilityEscape={close} style={[styles.surface, { paddingBottom: !keyboardOpen ? Math.max(12, insets.bottom) : 12 }]} accessibilityViewIsModal>
               <View accessibilityLabel="拖动调整抽屉高度" accessibilityRole="adjustable" accessibilityValue={{ text: snap === 'expanded' ? '全屏' : '半屏' }} accessibilityActions={[{ name: 'increment', label: '展开' }, { name: 'decrement', label: '收起' }]} onAccessibilityAction={event => animateTo(event.nativeEvent.actionName === 'increment' ? 'expanded' : 'collapsed')} style={styles.handleHitArea} {...panResponder.panHandlers}>
                 <View style={styles.handle} />
               </View>

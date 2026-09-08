@@ -18,7 +18,7 @@ jest.mock('./assistantImagePicker', () => ({
   pickAssistantImages: jest.fn(() => Promise.resolve([])),
 }));
 
-import { applyComposerSuggestion, getKeyboardAvoidancePadding, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline, AttachmentStrip, ReferenceImagePreview, type RunIssue } from './PromptAssistantUi';
+import { applyComposerSuggestion, PromptAssistantUi, PromptResultCard, ToolTimeline, Composer, ConversationTimeline, AttachmentStrip, ReferenceImagePreview, type RunIssue } from './PromptAssistantUi';
 import { normalizeMessages } from './agentPresentation';
 import { PromptVersionPanel } from './PromptVersionPanel';
 import { RunTimelineRow } from './RunTimelineRow';
@@ -584,58 +584,51 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
-  it('only compensates for keyboard overlap left by the Android viewport', () => {
-    expect(getKeyboardAvoidancePadding(800, 300, 800)).toBe(300);
-    expect(getKeyboardAvoidancePadding(500, 300, 800)).toBe(0);
-    expect(getKeyboardAvoidancePadding(500, 500, 800)).toBe(200);
-    expect(getKeyboardAvoidancePadding(500, 300, 730, 80)).toBe(0);
-    expect(getKeyboardAvoidancePadding(500, 380, 730, 80)).toBe(70);
-  });
-
-  it('adds Android keyboard overlap to the root and removes it when hidden', () => {
+  it('avoids actual Android container overlap without subtracting a hidden tab bar', async () => {
     const originalPlatform = Platform.OS;
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
-    const addListener = jest.spyOn(Keyboard, 'addListener');
     let tree!: ReturnType<typeof create>;
     try {
-      act(() => {
-        tree = create(
-          <PromptAssistantUi
-            threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]}
-            activeThreadId="t1"
-            onSelect={() => undefined}
-            onNew={() => undefined}
-            onDelete={() => undefined}
-            onRename={() => undefined}
-            onExportPrompt={() => Promise.resolve()}
-          />,
-        );
-      });
-      expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBeUndefined();
-      act(() => {
-        addListener.mock.calls
-          .filter(([eventName]) => eventName === 'keyboardDidShow')
-          .forEach(([, listener]) => listener({ endCoordinates: { screenY: -100, height: 300 } } as never));
-      });
-      expect(tree.root.findByType(KeyboardAvoidingView).props.style).toEqual(
-        expect.arrayContaining([expect.objectContaining({ paddingBottom: expect.any(Number) })]),
-      );
-      const liftedPadding = tree.root.findByType(KeyboardAvoidingView).props.style
-        .find((style: { paddingBottom?: number }) => style.paddingBottom != null).paddingBottom;
-      expect(liftedPadding).toBeGreaterThan(8);
-      act(() => {
-        addListener.mock.calls
-          .filter(([eventName]) => eventName === 'keyboardDidHide')
-          .forEach(([, listener]) => listener(undefined as never));
-      });
-      expect(tree.root.findByType(KeyboardAvoidingView).props.style).toEqual(
-        expect.arrayContaining([expect.objectContaining({ paddingBottom: 8 })]),
-      );
+      act(() => { tree = create(<PromptAssistantUi threads={[]} activeThreadId="t1" onSelect={() => undefined} onNew={() => undefined} onDelete={() => undefined} onRename={() => undefined} onExportPrompt={async () => undefined} />); });
+      const root = tree.root.findByType(KeyboardAvoidingView);
+      expect(root.props.behavior).toBe('padding');
+      // RN 0.86.3 integration probe: these private methods must be rechecked on RN upgrades.
+      // Edge-to-edge overlay: removing the tab bar grows the container to 800.
+      await act(async () => root.instance._onLayout({ persist() {}, nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 800 } } }));
+      expect(await root.instance._relativeKeyboardHeight({ screenY: 500, height: 300 })).toBe(300);
+      // Native adjustResize already brought the container above the keyboard.
+      await act(async () => root.instance._onLayout({ persist() {}, nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 500 } } }));
+      expect(await root.instance._relativeKeyboardHeight({ screenY: 500, height: 300 })).toBe(0);
+      act(() => tree.root.findByProps({ accessibilityLabel: '打开对话历史' }).props.onPress());
+      expect(tree.root.findAllByType(KeyboardAvoidingView)[0].props.enabled).toBe(false);
     } finally {
       act(() => tree?.unmount());
-      addListener.mockRestore();
       Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
     }
+  });
+
+  it('keeps keyboard avoidance enabled when history is an inline tablet sidebar', () => {
+    const dimensions = jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({ width: 1200, height: 800, scale: 1, fontScale: 1 });
+    let tree!: ReturnType<typeof create>;
+    try {
+      act(() => { tree = create(<PromptAssistantUi threads={[]} activeThreadId="t1" onSelect={() => undefined} onNew={() => undefined} onDelete={() => undefined} onRename={() => undefined} onExportPrompt={async () => undefined} />); });
+      act(() => tree.root.findByProps({ accessibilityLabel: '打开对话历史' }).props.onPress());
+      expect(tree.root.findAllByType(KeyboardAvoidingView)[0].props.enabled).toBe(true);
+    } finally { act(() => tree?.unmount()); dimensions.mockRestore(); }
+  });
+
+  it('suspends tablet keyboard avoidance only while the rename modal is open', () => {
+    const dimensions = jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({ width: 1200, height: 800, scale: 1, fontScale: 1 });
+    let tree!: ReturnType<typeof create>;
+    try {
+      act(() => { tree = create(<PromptAssistantUi threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]} activeThreadId="t1" onSelect={() => undefined} onNew={() => undefined} onDelete={() => undefined} onRename={() => undefined} onExportPrompt={async () => undefined} />); });
+      const root = () => tree.root.findAllByType(KeyboardAvoidingView)[0];
+      expect(root().props.enabled).toBe(true);
+      act(() => tree.root.findByProps({ accessibilityLabel: '管理会话 t1' }).props.onPress());
+      expect(root().props.enabled).toBe(false);
+      act(() => tree.root.findAllByType(Modal).find(node => node.props.visible)!.props.onRequestClose());
+      expect(root().props.enabled).toBe(true);
+    } finally { act(() => tree?.unmount()); dimensions.mockRestore(); }
   });
 
   it('keeps native padding behavior on iOS', () => {

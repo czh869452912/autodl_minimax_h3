@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { LIGHT_PROMPT_COLORS as colors } from '../ui/theme';
 import { diffPromptVersions, type PromptVersion } from './promptVersions';
@@ -105,9 +105,8 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
       <Action label="预览并带入创建页" primary disabled={disabled} onPress={openPreview} />
     </View>
     {copyStatus ? <Text accessibilityLiveRegion="polite" style={styles.muted}>{copyStatus}</Text> : null}
-    {activePreview && <Modal visible transparent animationType="slide" onRequestClose={() => { if (!busy) setPreview(null); }}>
-      {/* Android Modal already uses adjustResize; a second height correction oscillates with IME layout. */}
-      <KeyboardAvoidingView style={styles.overlay} enabled={Platform.OS === 'ios'} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    {activePreview && <Modal visible transparent statusBarTranslucent animationType="slide" onRequestClose={() => { if (!busy) setPreview(null); }}>
+      <KeyboardAvoidingView style={styles.overlay} behavior="padding">
         <View style={styles.modal} accessibilityViewIsModal onFocus={event => event.stopPropagation()} onBlur={event => event.stopPropagation()}>
           <Text style={styles.title}>带入创建页前确认</Text>
           <ScrollView style={styles.previewScroll} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.previewContent}>

@@ -1,6 +1,23 @@
 jest.mock(require.resolve('uuid', { paths: [require.resolve('@ag-ui/client')] }), () => ({ v4: () => 'test-generated-id' }));
 import { AIMessage, AIMessageChunk } from '@langchain/core/messages';
 import { H3AgUiAgent } from './aguiAgent';
+import { reducePromptRunEvent, type PromptRun } from './runState';
+
+it.each(['length', 'stop'])('persists reasoning-only %s as failed through the real SDK pipeline', async reason => {
+  let run: PromptRun = { id: 'r', userMessageId: 'u', status: 'running', startedAt: 1, messageIds: [], tools: [] };
+  const agent = new H3AgUiAgent({ stream: async function* () {
+    yield new AIMessageChunk({ id: 'a', content: '', additional_kwargs: { reasoning_content: 'Inspect reference' } });
+    yield new AIMessageChunk({ id: 'a', content: '', response_metadata: { finish_reason: reason } });
+  } });
+  const events: any[] = [];
+  await agent.runAgent({ runId: 'r' }, { onEvent: ({ event }) => { events.push(event); run = reducePromptRunEvent(run, event, 2); } });
+  expect(run.status).toBe('failed');
+  expect(run.error).toMatch(reason === 'length' ? /输出上限/ : /未返回最终回复/);
+  expect(run.activities?.[0].text).toBe('Inspect reference');
+  expect(events.filter(event => event.type === 'RUN_ERROR')).toHaveLength(1);
+  expect(events.some(event => event.type === 'RUN_FINISHED')).toBe(false);
+  expect(agent.isRunning).toBe(false);
+});
 
 it('preserves accepted image attachments through the real run input pipeline', async () => {
   let received: any;
