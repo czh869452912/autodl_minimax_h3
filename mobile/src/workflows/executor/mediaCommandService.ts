@@ -9,7 +9,7 @@ import { createOperationRepository } from './operationRepository';
 import type { ExportPayload } from './exportOperation';
 import type { OperationKind, WorkflowOperation } from './types';
 
-type TaskRow = { id: string; video_url?: string | null; local_uri?: string | null };
+type TaskRow = { id: string; video_url?: string | null; local_uri?: string | null; download_error?: string | null };
 type AssetRow = { id: string; task_id: string; source_url: string; local_path?: string | null; artifact_id?: string | null; mime_type: string };
 type ArtifactRow = { id: string; job_id: string; kind: string; uri?: string | null; mime?: string | null; metadata_json?: string | null };
 type BlobRow = { sha256: string; relative_path: string };
@@ -53,7 +53,7 @@ function parseMetadata(source: string | null | undefined): Record<string, unknow
 }
 
 async function loadContext(db: AppDatabase, taskId: string): Promise<Context> {
-  const task = await db.getFirstAsync<TaskRow>('SELECT id,video_url,local_uri FROM tasks WHERE id=? LIMIT 1', taskId);
+  const task = await db.getFirstAsync<TaskRow>('SELECT id,video_url,local_uri,download_error FROM tasks WHERE id=? LIMIT 1', taskId);
   if (!task) throw new Error('TASK_NOT_FOUND');
   const asset = await db.getFirstAsync<AssetRow>(
     "SELECT id,task_id,source_url,local_path,artifact_id,mime_type FROM media_assets WHERE task_id=? AND kind='video' ORDER BY updated_at DESC,id ASC LIMIT 1",
@@ -114,10 +114,10 @@ export function createMediaCommandService(options: {
   const now = options.now ?? Date.now;
   const operations = createOperationRepository(db);
 
-  const casSource = async (context: Context): Promise<{ sha256: string; uri: string } | undefined> => {
+  const casSource = async (context: Context, original = false): Promise<{ sha256: string; uri: string } | undefined> => {
     const row = await db.getFirstAsync<BlobRow>(
-      "SELECT b.sha256,b.relative_path FROM artifact_blob_refs r JOIN artifact_blobs b ON b.sha256=r.blob_sha256 WHERE r.owner_type='workflow_artifact' AND r.owner_id=? LIMIT 1",
-      `${context.task.id}:${context.artifact.id}`,
+      "SELECT b.sha256,b.relative_path FROM artifact_blob_refs r JOIN artifact_blobs b ON b.sha256=r.blob_sha256 WHERE r.owner_type=? AND r.owner_id=? LIMIT 1",
+      original ? 'workflow_artifact_original' : 'workflow_artifact', `${context.task.id}:${context.artifact.id}`,
     );
     if (!row) return undefined;
     const uri = options.resolveCasUri(row.relative_path);
@@ -168,11 +168,12 @@ export function createMediaCommandService(options: {
   const enqueueExport = async (context: Context, payload: ExportPayload): Promise<MediaCommandResult> => {
     const outcome = await transaction(db, async (db) => {
       await assertAppDatabaseWritableAsync(db);
-      const canonicalKey = `export:${context.task.id}:${context.artifact.id}:system-gallery`;
+      const suffix = payload.variant === 'original' ? ':original' : '';
+      const canonicalKey = `export:${context.task.id}:${context.artifact.id}:system-gallery${suffix}`;
       const active = await activeOperation(db, context.task.id, 'EXPORT', canonicalKey);
       if (active) return { id: active.id, status: 'in-flight' as const };
       const identity = await nextIdentity(
-        db, 'EXPORT', `${context.task.id}:export:${context.artifact.id}:system-gallery`,
+        db, 'EXPORT', `${context.task.id}:export:${context.artifact.id}:system-gallery${suffix}`,
         canonicalKey,
       );
       const timestamp = now();
@@ -181,7 +182,7 @@ export function createMediaCommandService(options: {
       if (changes(await db.runAsync("UPDATE media_assets SET export_status='QUEUED',updated_at=? WHERE id=? AND task_id=?", timestamp, context.asset.id, context.task.id)) !== 1) throw new Error('MEDIA_ASSET_NOT_FOUND');
       await db.runAsync(
         "INSERT INTO media_deliveries (id,asset_id,target,status,error,created_at,updated_at) VALUES (?,?,'system-gallery','QUEUED',NULL,?,?) ON CONFLICT(id) DO UPDATE SET status='QUEUED',error=NULL,updated_at=excluded.updated_at",
-        `${context.asset.id}:system-gallery`, context.asset.id, timestamp, timestamp,
+        `${context.asset.id}:system-gallery${suffix}`, context.asset.id, timestamp, timestamp,
       );
       return { id: identity.id, status: 'queued' as const };
     }, options.insideTransaction);
@@ -210,8 +211,8 @@ export function createMediaCommandService(options: {
           timestamp, context.asset.id, taskId,
         )) !== 1) throw new Error('MEDIA_ASSET_NOT_FOUND');
         await db.runAsync(
-          "UPDATE media_deliveries SET status='FAILED',error='SOURCE_INVALIDATED',updated_at=? WHERE asset_id=?",
-          timestamp, context.asset.id,
+          "UPDATE media_deliveries SET status='FAILED',error='SOURCE_INVALIDATED',updated_at=? WHERE id=?",
+          timestamp, `${context.asset.id}:system-gallery`,
         );
         await db.runAsync(
           "DELETE FROM artifact_blob_refs WHERE owner_type='workflow_artifact' AND owner_id=?",
@@ -226,14 +227,31 @@ export function createMediaCommandService(options: {
       await assertAppDatabaseWritableAsync(db);
       const context = await loadContext(db, taskId);
       const delivery = await db.getFirstAsync<{ status: string }>('SELECT status FROM media_deliveries WHERE id=? LIMIT 1', `${context.asset.id}:system-gallery`);
-      if (delivery?.status === 'EXPORTED') return { status: 'already-complete' };
+      const original = await casSource(context, true);
+      if (!original && await db.getFirstAsync(
+        "SELECT 1 FROM artifact_blob_refs WHERE owner_type='workflow_artifact_original' AND owner_id=? LIMIT 1", `${taskId}:${context.artifact.id}`,
+      )) {
+        const savedOriginal = await db.getFirstAsync<{ status: string }>('SELECT status FROM media_deliveries WHERE id=? LIMIT 1', `${context.asset.id}:system-gallery:original`);
+        if (savedOriginal?.status !== 'EXPORTED') return requestDownload(taskId, { target: 'system-gallery', keepPrivateCopy: policy.keepPrivateCopy });
+      }
+      let originalOutcome: MediaCommandResult | undefined;
+      if (original) {
+        const originalDelivery = await db.getFirstAsync<{ status: string }>('SELECT status FROM media_deliveries WHERE id=? LIMIT 1', `${context.asset.id}:system-gallery:original`);
+        if (originalDelivery?.status !== 'EXPORTED') originalOutcome = await enqueueExport(context, {
+          assetId: context.asset.id, artifactId: context.artifact.id, sourceUri: original.uri,
+          sourceKind: 'cas', blobSha256: original.sha256, keepPrivateCopy: true, variant: 'original',
+          displayName: artifactExportDisplayName(taskId, context.artifact.id).replace(/\.mp4$/, '_original.mp4'),
+        });
+      }
+      if (original && context.task.download_error?.startsWith('ARTIFACT_COMPATIBILITY_')) return originalOutcome ?? { status: 'already-complete' };
+      if (delivery?.status === 'EXPORTED') return originalOutcome ?? { status: 'already-complete' };
       const active = await activeOperation(db, taskId, 'EXPORT', `export:${taskId}:${context.artifact.id}:system-gallery`);
       if (active) return { status: 'in-flight', operation: await operations.get(active.id) };
       const cas = await casSource(context);
       if (cas) return enqueueExport(context, {
         assetId: context.asset.id, artifactId: context.artifact.id, sourceUri: cas.uri,
         sourceKind: 'cas', blobSha256: cas.sha256, keepPrivateCopy: policy.keepPrivateCopy,
-        displayName: artifactExportDisplayName(taskId, context.artifact.id),
+        displayName: original ? artifactExportDisplayName(taskId, context.artifact.id).replace(/\.mp4$/, '_compatible.mp4') : artifactExportDisplayName(taskId, context.artifact.id),
       });
       const candidate = context.asset.local_path || context.task.local_uri;
       if (candidate?.startsWith('file://') && !candidate.includes('/cas/sha256/') && await options.fileExists(candidate)) {

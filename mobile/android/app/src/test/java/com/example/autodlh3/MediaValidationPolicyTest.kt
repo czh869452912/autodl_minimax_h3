@@ -8,6 +8,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MediaValidationPolicyTest {
+  @Test fun readsHigh10SpsWithoutConsumingCsd() {
+    val csd = ByteBuffer.wrap(byteArrayOf(0, 0, 0, 1, 0x67, 110, 0, 30))
+    assertEquals(android.media.MediaCodecInfo.CodecProfileLevel.AVCProfileHigh10, AvcProfilePolicy.profile(csd))
+    assertEquals(0, csd.position())
+    assertEquals(android.media.MediaCodecInfo.CodecProfileLevel.AVCProfileHigh, AvcProfilePolicy.profile(ByteBuffer.wrap(byteArrayOf(0, 0, 1, 0x67, 100, 0, 30))))
+    assertNull(AvcProfilePolicy.profile(ByteBuffer.wrap(byteArrayOf(0, 0, 1, 0x68, 110))))
+    assertNull(AvcProfilePolicy.profile(ByteBuffer.wrap(byteArrayOf(0, 0, 0, 1, 0x67))))
+  }
   @Test fun acceptsAPlayableProbe() {
     assertNull(MediaValidationPolicy.errorCode(VideoProbeResult(1_000, 1, 3, 3)))
   }

@@ -79,6 +79,105 @@ function setup() {
   return { operations, blobs, cas, staged, transferArtifact, cancelArtifactTransfer, updateProjection, ensureProjection, updateDownloadState, verifyVideo, deliveryPolicy };
 }
 
+test('preserves the original before converting and validates a separate compatible artifact', async () => {
+  const deps = setup();
+  const order: string[] = [];
+  deps.verifyVideo.mockRejectedValueOnce({ code: 'MEDIA_CODEC_UNSUPPORTED' });
+  const compatible = { ...deps.staged, sha256: 'b'.repeat(64), stagedRelativePath: 'cas/parts/compatible.part',
+    publish: jest.fn(async () => ({ ...deps.staged, sha256: 'b'.repeat(64), relativePath: `cas/sha256/bb/${'b'.repeat(64)}` })) };
+  deps.cas.adoptNativePart.mockResolvedValueOnce(deps.staged).mockResolvedValueOnce(compatible);
+  const commit = Object.assign(jest.fn(async () => undefined), {
+    clearStale: jest.fn(), reserve: jest.fn(), release: jest.fn(),
+    checkpointOriginal: jest.fn(async () => { order.push('original'); }),
+  });
+  const prepareCompatibleVideo = jest.fn(async () => {
+    order.push('convert');
+    return { partUri: 'file:///cas/parts/compatible.part', mime: 'video/mp4', byteSize: 3, sha256: 'b'.repeat(64) };
+  });
+  await handleArtifactDownload(operation, 'worker', {
+    ...deps, commit, prepareCompatibleVideo, now: () => 50,
+    policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+  expect(order.slice(0, 2)).toEqual(['original', 'convert']);
+  expect(commit.checkpointOriginal).toHaveBeenCalledWith(expect.objectContaining({ blob: expect.objectContaining({ sha256: 'a'.repeat(64) }) }));
+  expect(prepareCompatibleVideo).toHaveBeenCalledWith(expect.objectContaining({ sourceSha256: 'a'.repeat(64), operationId: 'download-1:compatible' }));
+  expect(deps.verifyVideo).toHaveBeenCalledTimes(2);
+  expect(commit).toHaveBeenCalledWith(expect.objectContaining({ blob: expect.objectContaining({ sha256: 'b'.repeat(64) }) }));
+});
+
+test('structurally damaged media never reaches conversion or original publication', async () => {
+  const deps = setup();
+  deps.verifyVideo.mockRejectedValueOnce({ code: 'MEDIA_INVALID' });
+  const prepareCompatibleVideo = jest.fn();
+  await handleArtifactDownload(operation, 'worker', { ...deps, prepareCompatibleVideo,
+    policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
+  expect(prepareCompatibleVideo).not.toHaveBeenCalled();
+  expect(deps.staged.publish).not.toHaveBeenCalled();
+});
+
+test('resumes conversion from a retained original without touching the expired download URL', async () => {
+  const deps = setup();
+  const blob = { ...deps.staged, createdAt: 1, verifiedAt: 1 };
+  const commit = Object.assign(jest.fn(), { clearStale: jest.fn(), reserve: jest.fn(), release: jest.fn(),
+    original: jest.fn(async () => blob), checkpointOriginal: jest.fn() });
+  const prepareCompatibleVideo = jest.fn(async () => ({ partUri: 'file:///cas/parts/converted.part',
+    mime: 'video/mp4', byteSize: 3, sha256: 'b'.repeat(64) }));
+  await handleArtifactDownload(operation, 'worker', { ...deps, commit, prepareCompatibleVideo,
+    policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
+  expect(deps.transferArtifact).not.toHaveBeenCalled();
+  expect(prepareCompatibleVideo).toHaveBeenCalledTimes(1);
+  expect(commit).toHaveBeenCalledWith(expect.objectContaining({ compatible: true }));
+});
+
+test('conversion failure preserves the original checkpoint and never retries the network automatically', async () => {
+  const deps = setup();
+  deps.verifyVideo.mockRejectedValueOnce({ code: 'MEDIA_DECODE_FAILED' });
+  const commit = Object.assign(jest.fn(), { clearStale: jest.fn(), reserve: jest.fn(), release: jest.fn(), checkpointOriginal: jest.fn() });
+  const prepareCompatibleVideo = jest.fn(async () => { throw { code: 'MEDIA_COMPATIBILITY_HDR_UNSUPPORTED' }; });
+  await handleArtifactDownload(operation, 'worker', { ...deps, commit, prepareCompatibleVideo, now: () => 50,
+    policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
+  expect(commit.checkpointOriginal).toHaveBeenCalledTimes(1);
+  expect(commit.release).not.toHaveBeenCalled();
+  expect(commit).not.toHaveBeenCalled();
+  expect(deps.operations.retry).not.toHaveBeenCalled();
+  expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50,
+    expect.objectContaining({ code: 'ARTIFACT_COMPATIBILITY_HDR_UNSUPPORTED', diagnosticCode: 'MEDIA_COMPATIBILITY_HDR_UNSUPPORTED' }));
+});
+
+test('a busy converter retries using the retained original instead of failing permanently', async () => {
+  const deps = setup();
+  const commit = Object.assign(jest.fn(), { clearStale: jest.fn(), reserve: jest.fn(), release: jest.fn(),
+    original: jest.fn(async () => ({ ...deps.staged, createdAt: 1, verifiedAt: 1 })), checkpointOriginal: jest.fn() });
+  await handleArtifactDownload(operation, 'worker', { ...deps, commit,
+    prepareCompatibleVideo: jest.fn(async () => { throw { code: 'MEDIA_COMPATIBILITY_BUSY' }; }),
+    policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
+  expect(deps.transferArtifact).not.toHaveBeenCalled();
+  expect(deps.operations.retry).toHaveBeenCalledWith('download-1', 'worker', expect.objectContaining({
+    error: expect.objectContaining({ code: 'ARTIFACT_COMPATIBILITY_BUSY', retryable: true }) }));
+  expect(deps.operations.finish).not.toHaveBeenCalled();
+});
+
+test('a converter losing its lease cancels and cannot overwrite its successor projection', async () => {
+  jest.useFakeTimers();
+  try {
+    const deps = setup();
+    const conversion = deferred<{ partUri: string; mime: string; byteSize: number; sha256: string }>();
+    const commit = Object.assign(jest.fn(), { clearStale: jest.fn(), reserve: jest.fn(), release: jest.fn(),
+      original: jest.fn(async () => ({ ...deps.staged, createdAt: 1, verifiedAt: 1 })), checkpointOriginal: jest.fn() });
+    deps.operations.renew.mockResolvedValueOnce(true).mockResolvedValue(false);
+    const cancelCompatibleVideo = jest.fn(async () => { conversion.reject({ code: 'MEDIA_COMPATIBILITY_CANCELLED' }); return true; });
+    const pending = handleArtifactDownload(operation, 'worker', { ...deps, commit, leaseMs: 90,
+      prepareCompatibleVideo: () => conversion.promise, cancelCompatibleVideo,
+      policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }) });
+    await jest.advanceTimersByTimeAsync(100);
+    await pending;
+    expect(cancelCompatibleVideo).toHaveBeenCalledWith('download-1:compatible', 1);
+    expect(deps.updateDownloadState).toHaveBeenCalledTimes(1);
+    expect(deps.operations.finish).not.toHaveBeenCalled();
+    expect(deps.operations.retry).not.toHaveBeenCalled();
+  } finally { jest.useRealTimers(); }
+});
+
 test('ensures the media row and marks downloading before starting native transfer', async () => {
   const order: string[] = [];
   await handleArtifactDownload(operation, 'worker', {
@@ -185,7 +284,8 @@ test('does not cancel a replacement transfer after the native part has been hand
   });
 
   expect(deps.cancelArtifactTransfer).not.toHaveBeenCalled();
-  expect(deps.operations.retry).toHaveBeenCalled();
+  expect(deps.operations.retry).not.toHaveBeenCalled();
+  expect(deps.updateDownloadState).toHaveBeenCalledTimes(1);
   expect(deps.staged.publish).not.toHaveBeenCalled();
 });
 
@@ -211,9 +311,8 @@ test('renews the lease while native transfer is pending and cancels immediately 
     await handled;
 
     expect(deps.cancelArtifactTransfer).toHaveBeenCalledWith('download-1', 1);
-    expect(deps.operations.retry).toHaveBeenCalledWith('download-1', 'worker', expect.objectContaining({
-      error: expect.objectContaining({ code: 'ARTIFACT_NETWORK', retryable: true }),
-    }));
+    expect(deps.operations.retry).not.toHaveBeenCalled();
+    expect(deps.updateDownloadState).toHaveBeenCalledTimes(1);
     expect(deps.cas.adoptNativePart).not.toHaveBeenCalled();
   } finally {
     jest.useRealTimers();
@@ -290,7 +389,8 @@ test.each(['false', 'error'] as const)(
       expect(deps.cancelArtifactTransfer).toHaveBeenCalledWith('download-1', 1);
       expect(entries.has(attemptOnePart)).toBe(false);
       expect(entries.get(attemptTwoPart)).toEqual(new TextEncoder().encode('replacement'));
-      expect(deps.operations.retry).toHaveBeenCalled();
+      expect(deps.operations.retry).not.toHaveBeenCalled();
+      expect(deps.updateDownloadState).toHaveBeenCalledTimes(1);
     } finally {
       jest.useRealTimers();
     }
@@ -347,6 +447,19 @@ test.each([1, 2])('retries an invalid downloaded video on attempt %s without com
   expect(deps.operations.finish).not.toHaveBeenCalled();
   expect(deps.staged.publish).not.toHaveBeenCalled();
   expect(deps.staged.abort).toHaveBeenCalledTimes(1);
+});
+
+test.each(['MEDIA_CODEC_UNSUPPORTED', 'MEDIA_DECODE_FAILED'])('terminates %s without publishing or redownloading', async code => {
+  const deps = setup();
+  deps.verifyVideo.mockRejectedValueOnce(Object.assign(new Error(code), { code }));
+  await handleArtifactDownload(operation, 'worker', {
+    ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+  expect(deps.operations.retry).not.toHaveBeenCalled();
+  expect(deps.staged.publish).not.toHaveBeenCalled();
+  expect(deps.staged.abort).toHaveBeenCalledTimes(1);
+  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('DOWNLOAD_FAILED', code === 'MEDIA_CODEC_UNSUPPORTED' ? 'ARTIFACT_MEDIA_UNSUPPORTED' : 'ARTIFACT_MEDIA_DECODE_FAILED');
+  expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50, expect.objectContaining({ diagnosticCode: code, retryable: false }));
 });
 
 test('fails an invalid downloaded video on attempt 3 without committing projections or export', async () => {
@@ -552,6 +665,54 @@ test('commits the download and enqueues enabled gallery export atomically', asyn
     }]);
     await expect(taskStore.get('job-1')).resolves.toMatchObject({ downloadState: 'DOWNLOADED', exportState: 'QUEUED' });
     await expect(mediaStore.get('job-1:video-1')).resolves.toMatchObject({ status: 'downloaded', exportStatus: 'QUEUED' });
+  } finally { db.close(); }
+});
+
+test('checkpoints original bytes and their gallery delivery without publishing an unplayable primary media', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const { taskStore, operationStore } = await seedArtifactCommit(db);
+    const commit = createSqliteArtifactCommitter(db as never);
+    const original = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/original', createdAt: 50, verifiedAt: 50 };
+    const input = { operationId: 'download-1', owner: 'worker', jobId: 'job-1', artifact: operation.payload.artifact as never,
+      blob: original, localUri: 'file:///original', now: 50, deliveryPolicy: { autoExportToGallery: true, keepPrivateCopy: false } };
+    await commit.reserve(input);
+    await commit.checkpointOriginal!(input);
+    expect(db.getFirstSync("SELECT owner_type FROM artifact_blob_refs WHERE blob_sha256=?", original.sha256))
+      .toMatchObject({ owner_type: 'workflow_artifact_original' });
+    expect(await taskStore.get('job-1')).not.toMatchObject({ downloadState: 'DOWNLOADED' });
+    expect(await operationStore.get('download-1')).toMatchObject({ state: 'CLAIMED', payload: { originalBlob: { sha256: original.sha256 } } });
+    expect(operationStore.list('EXPORT')).toMatchObject([{ payload: { variant: 'original', sourceUri: 'file:///original' } }]);
+    expect(db.getFirstSync("SELECT status FROM media_deliveries WHERE id='job-1:video-1:system-gallery:original'"))
+      .toMatchObject({ status: 'QUEUED' });
+    // Re-checkpointing late gallery intent must not drop the in-flight compatible blob's GC reservation.
+    await commit.reserve({ ...input, blob: { ...original, sha256: 'b'.repeat(64), relativePath: 'cas/sha256/bb/compatible' } });
+    await commit.checkpointOriginal!(input);
+    expect(db.getFirstSync("SELECT owner_type FROM artifact_blob_refs WHERE blob_sha256=?", 'b'.repeat(64)))
+      .toMatchObject({ owner_type: 'artifact_operation:download-1' });
+    expect(operationStore.list('EXPORT')).toHaveLength(1);
+  } finally { db.close(); }
+});
+
+test('final commit observes a late manual save intent atomically and queues both files', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const { operationStore } = await seedArtifactCommit(db);
+    const commit = createSqliteArtifactCommitter(db as never);
+    const original = { sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/sha256/aa/original', createdAt: 50, verifiedAt: 50 };
+    const input = { operationId: 'download-1', owner: 'worker', jobId: 'job-1', artifact: operation.payload.artifact as never,
+      blob: original, localUri: 'file:///original', now: 50, deliveryPolicy: { autoExportToGallery: false, keepPrivateCopy: true } };
+    await commit.reserve(input);
+    await commit.checkpointOriginal!(input);
+    const current = await operationStore.get('download-1');
+    db.runSync('UPDATE workflow_operations SET payload_json=? WHERE id=?', JSON.stringify({ ...current!.payload,
+      deliveryIntent: { target: 'system-gallery', keepPrivateCopy: false } }), 'download-1');
+    await commit({ ...input, compatible: true, localUri: 'file:///compatible',
+      blob: { ...original, sha256: 'b'.repeat(64), relativePath: 'cas/sha256/bb/compatible' } });
+    expect(operationStore.list('EXPORT')).toHaveLength(2);
+    expect(operationStore.list('EXPORT').map(row => row.payload.displayName)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/_original\.mp4$/), expect.stringMatching(/_compatible\.mp4$/),
+    ]));
   } finally { db.close(); }
 });
 

@@ -142,6 +142,9 @@ jobs:
           cp "$apk" "$APK_PATH"
           sha256sum "$APK_PATH"
 
+      - name: Package media dependency sources and notices
+        run: python3 scripts/package-media-sources.py "$RUNNER_TEMP/media-sources"
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -163,10 +166,10 @@ jobs:
           if [[ -n "$fixes" ]]; then printf '## 修复\n%s\n\n' "$fixes" >> "$notes"; fi
           if [[ -n "$improvements" ]]; then printf '## 改进\n%s\n\n' "$improvements" >> "$notes"; fi
           if [[ -f docs/known-issues.md ]]; then
-            printf '## 已知问题\n部分 H.264 High 10（10-bit）视频可能下载成功但无法在设备上正常播放；客户端兼容转换尚未实现。详见 [已知问题](https://github.com/%s/blob/%s/docs/known-issues.md)。\n\n' "$GITHUB_REPOSITORY" "$RELEASE_TAG" >> "$notes"
+            printf '## 已知问题\n部分 H.264 High 10（10-bit）视频可能下载成功但无法在设备上正常播放；本版已加入 SDR 视频兼容转换及原件双份保存；HDR 转换仍不支持，真机性能与色彩待进一步验证。详见 [已知问题](https://github.com/%s/blob/%s/docs/known-issues.md)。\n\n' "$GITHUB_REPOSITORY" "$RELEASE_TAG" >> "$notes"
           fi
           printf '**Full Changelog**: %s\n' "$compare" >> "$notes"
-          gh release create "$RELEASE_TAG" "$APK_PATH" \
+          gh release create "$RELEASE_TAG" "$APK_PATH" "$RUNNER_TEMP/media-sources/AutoDL-media-sources.zip" \
             --repo "$GITHUB_REPOSITORY" \
             --title "AutoDL H3 $RELEASE_TAG" \
             --notes-file "$notes" \

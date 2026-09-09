@@ -5,6 +5,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import type { ArtifactRecord, NormalizedError } from '../../jobs/types';
 import type { ArtifactCas, ArtifactBlob } from '../../media/cas';
 import { cancelArtifactTransfer, transferArtifact } from '../../native/media';
+import type { prepareCompatibleVideo, cancelCompatibleVideo } from '../../native/videoCompatibility';
 import type { OperationRepository } from './operationRepository';
 import type { WorkflowOperation } from './types';
 import type { AppDatabase } from '../../storage/appDatabase';
@@ -12,7 +13,7 @@ import { assertAppDatabaseWritableAsync } from '../../storage/database';
 import { artifactExportDisplayName } from '../../media/artifactDisplayName';
 export { artifactExportDisplayName } from '../../media/artifactDisplayName';
 import { ArtifactOperationError, artifactError } from './artifactErrors';
-import { classifyMediaValidationFailure, mediaValidationMessage } from '../../media/mediaValidation';
+import { classifyMediaValidationFailure, mediaValidationMessage, mediaProbeFailureCode } from '../../media/mediaValidation';
 
 type ArtifactPolicy = {
   allowedHosts: string[];
@@ -32,6 +33,8 @@ type ArtifactOperationDeps = {
   cas: ArtifactCas;
   transferArtifact?: typeof transferArtifact;
   cancelArtifactTransfer?: typeof cancelArtifactTransfer;
+  prepareCompatibleVideo?: typeof prepareCompatibleVideo;
+  cancelCompatibleVideo?: typeof cancelCompatibleVideo;
   policy(jobId: string, artifact: ArtifactRecord): ArtifactPolicy | Promise<ArtifactPolicy>;
   ensureProjection(jobId: string, artifact: ArtifactRecord): Promise<void>;
   updateDownloadState(state: 'ENQUEUED' | 'DOWNLOADING' | 'DOWNLOAD_FAILED', errorCode?: string): Promise<void>;
@@ -54,6 +57,7 @@ export type ArtifactCommitInput = {
   now: number;
   deliveryPolicy: { autoExportToGallery: boolean; keepPrivateCopy: boolean };
   deliveryIntent?: SystemGalleryIntent;
+  compatible?: boolean;
 };
 
 export type ArtifactReservationInput = {
@@ -68,6 +72,8 @@ export type ArtifactCommitter = {
   clearStale(input: { operationId: string; owner: string }): Promise<void> | void;
   reserve(input: ArtifactReservationInput): Promise<void> | void;
   release(input: { operationId: string; owner: string }): Promise<void> | void;
+  checkpointOriginal?(input: ArtifactCommitInput): Promise<void> | void;
+  original?(jobId: string, artifactId: string): Promise<ArtifactBlob | undefined>;
 };
 
 function reservationOwnerType(operationId: string): string {
@@ -78,6 +84,30 @@ async function transaction(db: AppDatabase, work: (transaction: AppDatabase) => 
   await withWriteTransaction(db, work);
 }
 
+
+async function enqueueGallery(transaction: AppDatabase, input: ArtifactCommitInput, blob: ArtifactBlob, localUri: string, original = false): Promise<void> {
+  const assetId = `${input.jobId}:${input.artifact.id}`;
+  const suffix = original ? ':original' : '';
+  const exportId = `${input.jobId}:export:${input.artifact.id}:system-gallery${suffix}`;
+  const deliveryId = `${assetId}:system-gallery${suffix}`;
+  const delivery = await transaction.getFirstAsync<{ status: string }>('SELECT status FROM media_deliveries WHERE id=?', deliveryId);
+  if (original && delivery?.status === 'EXPORTED') return;
+  const payload = {
+    assetId, artifactId: input.artifact.id, sourceUri: localUri, sourceKind: 'cas', blobSha256: blob.sha256,
+    keepPrivateCopy: original ? true : input.deliveryIntent!.keepPrivateCopy,
+    ...(original ? { variant: 'original' } : {}),
+    displayName: artifactExportDisplayName(input.jobId, input.artifact.id).replace(/\.mp4$/,
+      original ? '_original.mp4' : input.compatible ? '_compatible.mp4' : '.mp4'),
+  };
+  await insertWorkflowOperation(transaction, { id: exportId, kind: 'EXPORT', jobId: input.jobId,
+    idempotencyKey: `export:${input.jobId}:${input.artifact.id}:system-gallery${suffix}`, payload,
+    now: input.now, nextRetryAt: input.now }, 'ignore');
+  // A manual reconstruction can reuse an already completed canonical export. Native publication is idempotent.
+  await transaction.runAsync("UPDATE workflow_operations SET state='PENDING',payload_json=?,next_retry_at=?,last_error_json=NULL,updated_at=? WHERE id=? AND state IN ('SUCCEEDED','FAILED')",
+    JSON.stringify(payload), input.now, input.now, exportId);
+  await transaction.runAsync("INSERT INTO media_deliveries (id,asset_id,target,status,created_at,updated_at) VALUES (?,?,'system-gallery','QUEUED',?,?) ON CONFLICT(id) DO UPDATE SET status=CASE WHEN media_deliveries.status='EXPORTING' THEN 'EXPORTING' ELSE 'QUEUED' END,error=NULL,updated_at=excluded.updated_at",
+    deliveryId, assetId, input.now, input.now);
+}
 
 export function createSqliteArtifactCommitter(db: AppDatabase, clock: () => number = Date.now): ArtifactCommitter {
   const assertGcIdle = async (transaction: AppDatabase) => {
@@ -90,6 +120,10 @@ export function createSqliteArtifactCommitter(db: AppDatabase, clock: () => numb
     await assertAppDatabaseWritableAsync(db);
     await transaction(db, async (transaction) => {
       await assertGcIdle(transaction);
+      const claim = await transaction.getFirstAsync<{ payload_json: string }>(
+        "SELECT payload_json FROM workflow_operations WHERE id=? AND state='CLAIMED' AND lease_owner=? LIMIT 1", input.operationId, input.owner);
+      if (!claim) throw new Error('artifact operation lease lost');
+      const currentPayload = JSON.parse(claim.payload_json);
       await transaction.runAsync(
         'INSERT INTO artifact_blobs (sha256,byte_size,mime,relative_path,created_at,verified_at) VALUES (?,?,?,?,?,?) ON CONFLICT(sha256) DO UPDATE SET verified_at=MAX(artifact_blobs.verified_at, excluded.verified_at)',
         input.blob.sha256, input.blob.byteSize, input.blob.mime, input.blob.relativePath, input.blob.createdAt, input.blob.verifiedAt,
@@ -99,7 +133,7 @@ export function createSqliteArtifactCommitter(db: AppDatabase, clock: () => numb
       const automaticIntent = input.artifact.kind === 'video' && input.deliveryPolicy.autoExportToGallery
         ? { target: 'system-gallery' as const, keepPrivateCopy: input.deliveryPolicy.keepPrivateCopy }
         : undefined;
-      const deliveryIntent = input.deliveryIntent ?? automaticIntent;
+      const deliveryIntent: SystemGalleryIntent | undefined = currentPayload.deliveryIntent ?? input.deliveryIntent ?? automaticIntent;
       const exportStatus = deliveryIntent ? 'QUEUED' : 'NOT_REQUESTED';
       const assetResult = await transaction.runAsync("UPDATE media_assets SET local_path = ?, mime_type = ?, status = 'downloaded', export_status = ?, updated_at = ? WHERE job_id = ? AND artifact_id = ?", input.localUri, input.blob.mime, exportStatus, input.now, input.jobId, input.artifact.id);
       if (Number(assetResult.changes ?? 0) !== 1) throw new Error('media asset projection missing');
@@ -108,23 +142,53 @@ export function createSqliteArtifactCommitter(db: AppDatabase, clock: () => numb
         if (Number(taskResult.changes ?? 0) !== 1) throw new Error('task projection missing');
       }
       if (deliveryIntent) {
-        const assetId = `${input.jobId}:${input.artifact.id}`;
-        const exportId = `${input.jobId}:export:${input.artifact.id}:system-gallery`;
-        await insertWorkflowOperation(transaction, { id: exportId, kind: 'EXPORT', jobId: input.jobId, idempotencyKey: `export:${input.jobId}:${input.artifact.id}:system-gallery`, payload: {
-            assetId,
-            artifactId: input.artifact.id,
-            sourceUri: input.localUri,
-            sourceKind: 'cas',
-            blobSha256: input.blob.sha256,
-            keepPrivateCopy: deliveryIntent.keepPrivateCopy,
-            displayName: artifactExportDisplayName(input.jobId, input.artifact.id),
-          }, now: input.now, nextRetryAt: input.now }, 'ignore');
+        const effective = { ...input, deliveryIntent };
+        const original: ArtifactBlob | undefined = currentPayload.originalBlob;
+        if (original) {
+          const retained = await transaction.getFirstAsync<{ present: number }>(
+            "SELECT 1 AS present FROM artifact_blob_refs WHERE blob_sha256=? AND owner_type='workflow_artifact_original' AND owner_id=?", original.sha256, `${input.jobId}:${input.artifact.id}`);
+          if (retained) await enqueueGallery(transaction, effective, original, `${FileSystem.documentDirectory ?? ''}${original.relativePath}`, true);
+        }
+        await enqueueGallery(transaction, effective, input.blob, input.localUri);
       }
       const result = await transaction.runAsync("UPDATE workflow_operations SET state = 'SUCCEEDED', lease_owner = NULL, lease_expires_at = NULL, last_error_json = NULL, updated_at = ? WHERE id = ? AND state = 'CLAIMED' AND lease_owner = ?", input.now, input.operationId, input.owner);
       if (Number(result.changes ?? 0) !== 1) throw new Error('artifact operation lease lost');
     });
   };
   return Object.assign(commit, {
+    async original(jobId: string, artifactId: string): Promise<ArtifactBlob | undefined> {
+      const row = await db.getFirstAsync<{ sha256: string; byte_size: number; mime: string; relative_path: string; created_at: number; verified_at: number }>(
+        "SELECT b.* FROM artifact_blobs b JOIN artifact_blob_refs r ON r.blob_sha256=b.sha256 WHERE r.owner_type='workflow_artifact_original' AND r.owner_id=? LIMIT 1", `${jobId}:${artifactId}`,
+      );
+      if (row) {
+        const info = await FileSystem.getInfoAsync(`${FileSystem.documentDirectory ?? ''}${row.relative_path}`);
+        if (!info.exists || info.isDirectory) {
+          await assertAppDatabaseWritableAsync(db);
+          await db.runAsync("DELETE FROM artifact_blob_refs WHERE blob_sha256=? AND owner_type='workflow_artifact_original' AND owner_id=?", row.sha256, `${jobId}:${artifactId}`);
+          return undefined;
+        }
+      }
+      return row ? { sha256: row.sha256, byteSize: row.byte_size, mime: row.mime, relativePath: row.relative_path, createdAt: row.created_at, verifiedAt: row.verified_at } : undefined;
+    },
+    async checkpointOriginal(input: ArtifactCommitInput): Promise<void> {
+      await assertAppDatabaseWritableAsync(db);
+      await transaction(db, async (transaction) => {
+        await assertGcIdle(transaction);
+        const claim = await transaction.getFirstAsync<{ payload_json: string }>(
+          "SELECT payload_json FROM workflow_operations WHERE id=? AND state='CLAIMED' AND lease_owner=? LIMIT 1", input.operationId, input.owner,
+        );
+        if (!claim) throw new Error('artifact operation lease lost');
+        const currentPayload = JSON.parse(claim.payload_json);
+        await transaction.runAsync('INSERT OR IGNORE INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)',
+          input.blob.sha256, 'workflow_artifact_original', `${input.jobId}:${input.artifact.id}`, input.now);
+        await transaction.runAsync('DELETE FROM artifact_blob_refs WHERE blob_sha256=? AND owner_type=? AND owner_id=?', input.blob.sha256, reservationOwnerType(input.operationId), input.owner);
+        await transaction.runAsync('UPDATE workflow_operations SET payload_json=?, updated_at=? WHERE id=?',
+          JSON.stringify({ ...currentPayload, originalBlob: input.blob }), input.now, input.operationId);
+        const intent = currentPayload.deliveryIntent ?? input.deliveryIntent ?? (input.deliveryPolicy.autoExportToGallery
+          ? { target: 'system-gallery', keepPrivateCopy: input.deliveryPolicy.keepPrivateCopy } : undefined);
+        if (intent) await enqueueGallery(transaction, { ...input, deliveryIntent: intent }, input.blob, input.localUri, true);
+      });
+    },
     async clearStale(input: { operationId: string; owner: string }): Promise<void> {
       await assertAppDatabaseWritableAsync(db);
       await transaction(db, async (transaction) => {
@@ -188,7 +252,7 @@ function normalized(code: string, retryable: boolean, message?: string): Normali
   if ((code === 'ARTIFACT_DNS_FAILED' || code === 'ARTIFACT_VIRTUAL_DNS') && message) {
     return { code, message, retryable };
   }
-  if (code === 'ARTIFACT_MEDIA_INVALID_RETRYABLE' || code === 'ARTIFACT_MEDIA_INVALID') {
+  if (code === 'ARTIFACT_MEDIA_INVALID_RETRYABLE' || code === 'ARTIFACT_MEDIA_INVALID' || code === 'ARTIFACT_MEDIA_UNSUPPORTED' || code === 'ARTIFACT_MEDIA_DECODE_FAILED' || code === 'ARTIFACT_MEDIA_PROBE_FAILED') {
     return { code, message: mediaValidationMessage(code), retryable };
   }
   return { code, message: retryable ? 'Artifact transfer will be retried.' : 'Artifact transfer failed policy or integrity validation.', retryable };
@@ -282,54 +346,101 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     const providerSha256 = typeof artifact.metadata?.sha256 === 'string' && artifact.metadata.sha256.trim()
       ? artifact.metadata.sha256.trim()
       : undefined;
-    await assertLease();
-    const transferOutcome = await withLeaseHeartbeat({
-      leaseMs: deps.leaseMs ?? 120_000,
-      assertLease,
-      onLeaseLost: async () => {
-        await (deps.cancelArtifactTransfer ?? cancelArtifactTransfer)(operation.id, operation.attempt);
-      },
-      work: () => (deps.transferArtifact ?? transferArtifact)({
-        url,
-        allowedHosts: policy.allowedHosts,
-        allowProviderSuppliedPublicHosts: policy.allowProviderSuppliedPublicHosts ?? false,
+    const resolveUri = deps.resolveUri ?? ((relativePath: string) => `${FileSystem.documentDirectory ?? ''}${relativePath}`);
+    let original = deps.prepareCompatibleVideo ? await deps.commit?.original?.(operation.jobId, artifact.id) : undefined;
+    const resumedOriginal = Boolean(original);
+    let compatible = Boolean(original);
+    if (!original) {
+      await assertLease();
+      const transferOutcome = await withLeaseHeartbeat({
+        leaseMs: deps.leaseMs ?? 120_000,
+        assertLease,
+        onLeaseLost: async () => {
+          await (deps.cancelArtifactTransfer ?? cancelArtifactTransfer)(operation.id, operation.attempt);
+        },
+        work: () => (deps.transferArtifact ?? transferArtifact)({
+          url,
+          allowedHosts: policy.allowedHosts,
+          allowProviderSuppliedPublicHosts: policy.allowProviderSuppliedPublicHosts ?? false,
+          maxBytes: policy.maxBytes,
+          acceptedMimes: policy.acceptedMimes,
+          connectTimeoutMs: policy.connectTimeoutMs,
+          idleTimeoutMs: policy.idleTimeoutMs,
+          expectedSha256: providerSha256?.toLowerCase(),
+          operationId: operation.id,
+          operationAttempt: operation.attempt,
+        }),
+      });
+      const transferred = transferOutcome.value;
+      const adoptionOptions = {
+        mime: transferred.mime,
         maxBytes: policy.maxBytes,
-        acceptedMimes: policy.acceptedMimes,
-        connectTimeoutMs: policy.connectTimeoutMs,
-        idleTimeoutMs: policy.idleTimeoutMs,
-        expectedSha256: providerSha256?.toLowerCase(),
+        expectedSha256: providerSha256,
         operationId: operation.id,
         operationAttempt: operation.attempt,
-      }),
-    });
-    const transferred = transferOutcome.value;
-    const adoptionOptions = {
-      mime: transferred.mime,
-      maxBytes: policy.maxBytes,
-      expectedSha256: providerSha256,
-      operationId: operation.id,
-      operationAttempt: operation.attempt,
-    };
-    if (transferOutcome.status === 'lease-lost') {
-      try {
-        const abandoned = await deps.cas.adoptNativePart(transferred, adoptionOptions);
-        await abandoned.abort();
-      } catch { /* adoption deletes only the validated owned attempt part on failure */ }
-      throw transferOutcome.cause;
-    }
-    staged = await deps.cas.adoptNativePart(transferred, {
-      ...adoptionOptions,
-      assertLease,
-    });
-    const resolveUri = deps.resolveUri ?? ((relativePath: string) => `${FileSystem.documentDirectory ?? ''}${relativePath}`);
-    if (artifact.kind === 'video') {
-      try {
-        await deps.verifyVideo(resolveUri(staged.stagedRelativePath));
-      } catch (cause) {
-        const failure = classifyMediaValidationFailure(operation.attempt);
-        throw new ArtifactOperationError(failure.code, mediaValidationMessage(failure.code), failure.retryable, { cause });
+      };
+      if (transferOutcome.status === 'lease-lost') {
+        try {
+          const abandoned = await deps.cas.adoptNativePart(transferred, adoptionOptions);
+          await abandoned.abort();
+        } catch { /* adoption deletes only the validated owned attempt part on failure */ }
+        throw transferOutcome.cause;
+      }
+      staged = await deps.cas.adoptNativePart(transferred, {
+        ...adoptionOptions,
+        assertLease,
+      });
+      if (artifact.kind === 'video') {
+        try {
+          await deps.verifyVideo(resolveUri(staged.stagedRelativePath));
+        } catch (cause) {
+          const failure = classifyMediaValidationFailure(operation.attempt, cause);
+          if (!deps.prepareCompatibleVideo || !['ARTIFACT_MEDIA_UNSUPPORTED', 'ARTIFACT_MEDIA_DECODE_FAILED'].includes(failure.code)) {
+            throw new ArtifactOperationError(failure.code, mediaValidationMessage(failure.code), failure.retryable, { cause });
+          }
+          if (!deps.commit?.checkpointOriginal) throw new ArtifactOperationError('ARTIFACT_COMPATIBILITY_FAILED', 'Original checkpoint unavailable', false);
+          const blob = { ...staged, createdAt: timestamp, verifiedAt: timestamp };
+          await deps.commit.reserve({ operationId: operation.id, owner, blob, now: timestamp });
+          reservation = { operationId: operation.id, owner };
+          const storedOriginal = await staged.publish();
+          original = { ...storedOriginal, createdAt: timestamp, verifiedAt: timestamp };
+          await deps.commit.checkpointOriginal({ operationId: operation.id, owner, jobId: operation.jobId, artifact,
+            blob: original, localUri: resolveUri(original.relativePath), now: timestamp,
+            deliveryPolicy: deps.deliveryPolicy, deliveryIntent: payload.deliveryIntent });
+          reservation = undefined;
+          staged = undefined;
+          compatible = true;
+        }
       }
     }
+    if (original) {
+      // The original is independently retained before conversion; retries never need the signed URL.
+      if (resumedOriginal) await deps.commit?.checkpointOriginal?.({ operationId: operation.id, owner, jobId: operation.jobId, artifact,
+        blob: original, localUri: resolveUri(original.relativePath), now: clock(), deliveryPolicy: deps.deliveryPolicy,
+        deliveryIntent: payload.deliveryIntent });
+      const conversionId = `${operation.id}:compatible`;
+      await assertLease();
+      try {
+        const outcome = await withLeaseHeartbeat({
+          leaseMs: deps.leaseMs ?? 120_000, assertLease,
+          onLeaseLost: async () => { await deps.cancelCompatibleVideo?.(conversionId, operation.attempt); },
+          work: () => deps.prepareCompatibleVideo!({ sourceUri: resolveUri(original!.relativePath), sourceSha256: original!.sha256,
+            operationId: conversionId, operationAttempt: operation.attempt, maxBytes: policy.maxBytes }),
+        });
+        staged = await deps.cas.adoptNativePart(outcome.value, { mime: 'video/mp4', maxBytes: policy.maxBytes,
+          operationId: conversionId, operationAttempt: operation.attempt,
+          ...(outcome.status === 'completed' ? { assertLease } : {}) });
+        if (outcome.status === 'lease-lost') throw outcome.cause;
+        await assertLease();
+        await deps.verifyVideo(resolveUri(staged.stagedRelativePath));
+      } catch (cause) {
+        const diagnostic = mediaProbeFailureCode(cause);
+        if (diagnostic === 'MEDIA_COMPATIBILITY_BUSY') throw new ArtifactOperationError('ARTIFACT_COMPATIBILITY_BUSY', 'Compatibility worker busy', true, { cause });
+        const code = diagnostic === 'MEDIA_COMPATIBILITY_HDR_UNSUPPORTED' ? 'ARTIFACT_COMPATIBILITY_HDR_UNSUPPORTED' : 'ARTIFACT_COMPATIBILITY_FAILED';
+        throw new ArtifactOperationError(code, 'Video compatibility conversion failed; original retained.', false, { cause });
+      }
+    }
+    if (!staged) throw new ArtifactOperationError('ARTIFACT_COMPATIBILITY_FAILED', 'Compatible result missing', false);
     if (deps.commit) {
       const blob = { ...staged, createdAt: timestamp, verifiedAt: timestamp };
       await deps.commit.reserve({ operationId: operation.id, owner, blob, now: timestamp });
@@ -340,6 +451,9 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     const localUri = resolveUri(blob.relativePath);
     if (deps.commit) {
       const latestPayload = payloadFrom((await deps.operations.get(operation.id)) ?? operation);
+      if (original) await deps.commit.checkpointOriginal?.({ operationId: operation.id, owner, jobId: operation.jobId, artifact,
+        blob: original, localUri: resolveUri(original.relativePath), now: clock(), deliveryPolicy: deps.deliveryPolicy,
+        deliveryIntent: latestPayload?.deliveryIntent ?? payload.deliveryIntent });
       await deps.commit({
         operationId: operation.id,
         owner,
@@ -350,6 +464,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
         now: timestamp,
         deliveryPolicy: deps.deliveryPolicy,
         deliveryIntent: latestPayload?.deliveryIntent ?? payload.deliveryIntent,
+        compatible,
       });
       reservation = undefined;
     } else {
@@ -363,8 +478,17 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     if (reservation && deps.commit) {
       await Promise.resolve(deps.commit.release(reservation)).catch(() => undefined);
     }
+    // A cancelled/replaced attempt may finish after its successor. It must not change that task's projection.
+    try {
+      if (!await deps.operations.renew(operation.id, owner, clock(), deps.leaseMs ?? 120_000)) return;
+    } catch { return; }
     const failure = artifactError(canonicalNativeTransferCause(cause));
     const normalizedFailure = normalized(failure.code, failure.retryable, failure.message);
+    // Keep bounded native diagnostics in the durable operation, never raw URLs or exceptions.
+    if (cause instanceof ArtifactOperationError) {
+      const diagnostic = mediaProbeFailureCode(cause.cause);
+      if (diagnostic && /^MEDIA_[A-Z_]{1,64}$/.test(diagnostic)) normalizedFailure.diagnosticCode = diagnostic;
+    }
     if (failure.retryable) {
       const nextRetryAt = timestamp + Math.min(60_000, 1_000 * (2 ** Math.max(0, operation.attempt - 1)));
       await deps.updateDownloadState('ENQUEUED', failure.code);

@@ -6,6 +6,7 @@ import { assertAppDatabaseWritableAsync } from '../../storage/database';
 import type { WorkflowOperation } from './types';
 
 export type ExportPayload = {
+  variant?: 'original';
   assetId: string;
   artifactId: string;
   sourceUri: string;
@@ -54,6 +55,7 @@ function payloadFrom(operation: WorkflowOperation): ExportPayload | undefined {
   return typeof value.assetId === 'string'
     && typeof value.artifactId === 'string'
     && typeof value.sourceUri === 'string'
+    && (value.variant == null || (value.variant === 'original' && value.sourceKind === 'cas'))
     && validSource
     && typeof value.keepPrivateCopy === 'boolean'
     && typeof value.displayName === 'string'
@@ -98,7 +100,7 @@ export async function handleExport(operation: WorkflowOperation, owner: string, 
   if (deps.canPublish && !await deps.canPublish(operation, owner, payload)) return;
   let result: { uri: string };
   try {
-    result = await deps.publish(payload.sourceUri, { mediaId: payload.assetId, displayName: payload.displayName });
+    result = await deps.publish(payload.sourceUri, { mediaId: payload.variant === 'original' ? `${payload.assetId}:original` : payload.assetId, displayName: payload.displayName });
   } catch (cause) {
     if (transientNativeFailure(cause)) {
       const retryError = failure('EXPORT_NATIVE_RETRY', true);
@@ -138,8 +140,27 @@ export async function handleExport(operation: WorkflowOperation, owner: string, 
 }
 
 export function createSqliteExportStore(db: AppDatabase) {
-  const deliveryId = (payload: ExportPayload) => `${payload.assetId}:system-gallery`;
+  const deliveryId = (payload: ExportPayload) => `${payload.assetId}:system-gallery${payload.variant === 'original' ? ':original' : ''}`;
+  // A paired save is complete only when both independently durable publications finish.
+  const refreshStatus = async (transaction: AppDatabase, jobId: string, assetId: string, now: number) => {
+    const task = await transaction.getFirstAsync<{ download_state: string; download_error: string | null }>('SELECT download_state,download_error FROM tasks WHERE id=?', jobId);
+    const originalOnly = task?.download_state === 'DOWNLOAD_FAILED' && Boolean(task.download_error?.startsWith('ARTIFACT_COMPATIBILITY_'));
+    const allRows = await transaction.getAllAsync<{ id: string; status: string; error: string | null }>(
+      'SELECT id,status,error FROM media_deliveries WHERE id IN (?,?)', `${assetId}:system-gallery`, `${assetId}:system-gallery:original`,
+    );
+    const rows = originalOnly ? allRows.filter(row => row.id.endsWith(':system-gallery:original')) : allRows;
+    const primary = rows.find(row => row.id === `${assetId}:system-gallery${originalOnly ? ':original' : ''}`);
+    const failed = rows.find(row => row.status === 'FAILED');
+    const status = rows.length === 0 ? 'NOT_REQUESTED' : failed ? 'EXPORT_FAILED' : primary && rows.every(row => row.status === 'EXPORTED') ? 'EXPORTED'
+      : rows.some(row => row.status === 'EXPORTING') ? 'EXPORTING' : 'QUEUED';
+    await transaction.runAsync('UPDATE tasks SET export_state=?,export_error=?,updated_at=MAX(updated_at,?) WHERE id=?', status, failed?.error ?? null, now, jobId);
+    await transaction.runAsync('UPDATE media_assets SET export_status=?,updated_at=? WHERE id=?', status, now, assetId);
+  };
   return {
+    async refreshStatus(jobId: string, assetId: string, now: number): Promise<void> {
+      await assertAppDatabaseWritableAsync(db);
+      await transaction(db, txn => refreshStatus(txn, jobId, assetId, now));
+    },
     async canPublish(operation: WorkflowOperation, owner: string, payload: ExportPayload): Promise<boolean> {
       return Boolean(await db.getFirstAsync(
         "SELECT 1 AS present FROM workflow_operations o WHERE o.id=? AND o.state='CLAIMED' AND o.lease_owner=? AND EXISTS (SELECT 1 FROM tasks t WHERE t.id=o.job_id) AND EXISTS (SELECT 1 FROM media_assets m WHERE m.id=? AND m.task_id=o.job_id) LIMIT 1",
@@ -159,6 +180,7 @@ export function createSqliteExportStore(db: AppDatabase) {
           "INSERT INTO media_deliveries (id,asset_id,target,status,error,created_at,updated_at) VALUES (?,?,'system-gallery','EXPORTING',NULL,?,?) ON CONFLICT(id) DO UPDATE SET status='EXPORTING',error=NULL,updated_at=excluded.updated_at",
           deliveryId(payload), payload.assetId, now, now,
         );
+        await refreshStatus(transaction, jobId, payload.assetId, now);
       });
     },
     async commitSuccess(input: ExportSuccessInput): Promise<void> {
@@ -166,24 +188,27 @@ export function createSqliteExportStore(db: AppDatabase) {
       await transaction(db, async (transaction) => {
         await transaction.runAsync(
           "INSERT INTO media_deliveries (id,asset_id,target,uri,status,error,created_at,updated_at) VALUES (?,?,'system-gallery',?,'EXPORTED',NULL,?,?) ON CONFLICT(id) DO UPDATE SET uri=excluded.uri,status='EXPORTED',error=NULL,updated_at=excluded.updated_at",
-          `${input.assetId}:system-gallery`, input.assetId, input.galleryUri, input.now, input.now,
+          deliveryId(input), input.assetId, input.galleryUri, input.now, input.now,
         );
-        const assetResult = await transaction.runAsync(
-          "UPDATE media_assets SET local_path=CASE WHEN ? THEN local_path ELSE NULL END,status=CASE WHEN ? THEN status ELSE 'queued' END,export_status='EXPORTED',updated_at=? WHERE id=?",
-          input.keepPrivateCopy ? 1 : 0, input.keepPrivateCopy ? 1 : 0, input.now, input.assetId,
-        );
-        if (changes(assetResult) !== 1) throw new Error('media asset projection missing');
-        const taskResult = await transaction.runAsync(
-          "UPDATE tasks SET local_uri=CASE WHEN ? THEN local_uri ELSE NULL END,gallery_uri=?,export_state='EXPORTED',export_error=NULL,exported_at=?,updated_at=MAX(updated_at, ?) WHERE id=?",
-          input.keepPrivateCopy ? 1 : 0, input.galleryUri, input.now, input.now, input.jobId,
-        );
-        if (changes(taskResult) !== 1) throw new Error('task projection missing');
-        if (!input.keepPrivateCopy && input.sourceKind === 'cas' && input.blobSha256) {
-          await transaction.runAsync(
-            "DELETE FROM artifact_blob_refs WHERE blob_sha256=? AND owner_type='workflow_artifact' AND owner_id=?",
-            input.blobSha256, input.referenceOwnerId,
+        if (input.variant !== 'original') {
+          const assetResult = await transaction.runAsync(
+            "UPDATE media_assets SET local_path=CASE WHEN ? THEN local_path ELSE NULL END,status=CASE WHEN ? THEN status ELSE 'queued' END,export_status='EXPORTED',updated_at=? WHERE id=?",
+            input.keepPrivateCopy ? 1 : 0, input.keepPrivateCopy ? 1 : 0, input.now, input.assetId,
           );
+          if (changes(assetResult) !== 1) throw new Error('media asset projection missing');
+          const taskResult = await transaction.runAsync(
+            "UPDATE tasks SET local_uri=CASE WHEN ? THEN local_uri ELSE NULL END,gallery_uri=?,export_state='EXPORTED',export_error=NULL,exported_at=?,updated_at=MAX(updated_at, ?) WHERE id=?",
+            input.keepPrivateCopy ? 1 : 0, input.galleryUri, input.now, input.now, input.jobId,
+          );
+          if (changes(taskResult) !== 1) throw new Error('task projection missing');
+          if (!input.keepPrivateCopy && input.sourceKind === 'cas' && input.blobSha256) {
+            await transaction.runAsync(
+              "DELETE FROM artifact_blob_refs WHERE blob_sha256=? AND owner_type='workflow_artifact' AND owner_id=?",
+              input.blobSha256, input.referenceOwnerId,
+            );
+          }
         }
+        await refreshStatus(transaction, input.jobId, input.assetId, input.now);
         const operationResult = await transaction.runAsync(
           "UPDATE workflow_operations SET state='SUCCEEDED',lease_owner=NULL,lease_expires_at=NULL,last_error_json=NULL,updated_at=? WHERE id=? AND state='CLAIMED' AND lease_owner=?",
           input.now, input.operationId, input.owner,
@@ -199,6 +224,7 @@ export function createSqliteExportStore(db: AppDatabase) {
         await transaction.runAsync("UPDATE tasks SET export_state='QUEUED',export_error=?,updated_at=MAX(updated_at, ?) WHERE id=?", input.error.code, input.now, jobId);
         await transaction.runAsync("UPDATE media_assets SET export_status='QUEUED',updated_at=? WHERE id=?", input.now, payload.assetId);
         await transaction.runAsync("UPDATE media_deliveries SET status='QUEUED',error=?,updated_at=? WHERE id=?", input.error.code, input.now, deliveryId(payload));
+        await refreshStatus(transaction, jobId, payload.assetId, input.now);
         const result = await transaction.runAsync("UPDATE workflow_operations SET state='PENDING',next_retry_at=?,lease_owner=NULL,lease_expires_at=NULL,last_error_json=?,updated_at=? WHERE id=? AND state='CLAIMED' AND lease_owner=?", input.nextRetryAt, JSON.stringify(input.error), input.now, operation.id, owner);
         if (changes(result) !== 1) throw new Error('export operation lease lost');
       });
@@ -214,6 +240,7 @@ export function createSqliteExportStore(db: AppDatabase) {
             deliveryId(payload), payload.assetId, error.code, now, now,
           );
         }
+        if (payload && operation.jobId) await refreshStatus(transaction, operation.jobId, payload.assetId, now);
         const result = await transaction.runAsync("UPDATE workflow_operations SET state='FAILED',lease_owner=NULL,lease_expires_at=NULL,last_error_json=?,updated_at=? WHERE id=? AND state='CLAIMED' AND lease_owner=?", JSON.stringify(error), now, operation.id, owner);
         if (changes(result) !== 1) throw new Error('export operation lease lost');
       });

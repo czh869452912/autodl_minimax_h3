@@ -1,0 +1,33 @@
+This application dynamically links FFmpegKit and FFmpeg under LGPLv3.
+FFmpegKit: Copyright (c) 2018-2023 Arthenica and contributors.
+FFmpeg: Copyright (c) the FFmpeg developers and individual source contributors.
+cpu_features: Copyright Google LLC and contributors (Apache License 2.0).
+smart-exception-java 0.2.1: Arthenica (LGPLv3).
+Android's system zlib and MediaCodec are used; x264/GPL codec libraries are not bundled.
+Individual source files contain the authoritative copyright notices.
+
+The matching AutoDL-media-sources.zip is provided alongside this APK at:
+https://github.com/czh869452912/autodl_minimax_h3/releases
+It contains pinned source archives, FFmpegKit Android build scripts, license
+texts and provenance. The application source for each release is available
+under its corresponding Git tag in the same repository.
+
+You may modify or replace these LGPL libraries and reverse engineer this
+application for debugging such modifications as permitted by the LGPL.
+The LGPL does not relicense unrelated application code.
+
+Rebuilding/relinking:
+1. Extract ffmpeg-kit-source.tar.gz and the FFmpeg/cpu_features archives.
+2. Follow the included Android build instructions with NDK r27d. Populate
+   src/ffmpeg and src/cpu-features from the matching archives if offline.
+   Build the min main variant using ./android.sh --disable-arm-v7a
+   --enable-android-media-codec --enable-android-zlib (upstream release recipe).
+3. Replace the Maven FFmpegKit dependency in mobile/android/app/build.gradle
+   with your built AAR using implementation files('libs/modified-ffmpeg-kit.aar').
+   The application's complete JavaScript and native source/build scripts are
+   available at the matching AutoDL release tag.
+4. Run npm ci --legacy-peer-deps in mobile, then :app:assembleDebug in
+   mobile/android using the documented Android SDK/JDK. You can sign a release
+   with your own key; our private signing key is not required. Android may
+   require uninstalling the original app before installing a differently
+   signed APK; export your media/data first.

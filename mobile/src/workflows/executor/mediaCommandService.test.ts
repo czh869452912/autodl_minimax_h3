@@ -34,6 +34,30 @@ function service(db: ReturnType<typeof createInitializedRealSqliteTestDb>, exist
   });
 }
 
+test.each([false, true])('manual save preserves original without unnecessary downloads (conversion failure: %s)', async (conversionFailed) => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    seed(db);
+    const hash = 'b'.repeat(64);
+    const path = `cas/sha256/bb/${hash}`;
+    const uri = `file:///documents/${path}`;
+    db.runSync('INSERT INTO artifact_blobs VALUES(?,?,?,?,?,?)', hash, 3, 'video/mp4', path, 1, 1);
+    db.runSync('INSERT INTO artifact_blob_refs VALUES(?,?,?,?)', hash, 'workflow_artifact_original', 'job-1:video-1', 1);
+    db.runSync("INSERT INTO media_deliveries(id,asset_id,target,status,created_at,updated_at) VALUES(?,?,'system-gallery','EXPORTED',1,1)", 'job-1:video-1:system-gallery', 'job-1:video-1');
+    if (conversionFailed) {
+      db.runSync("DELETE FROM media_deliveries WHERE id='job-1:video-1:system-gallery'");
+      db.runSync("UPDATE tasks SET download_error='ARTIFACT_COMPATIBILITY_FAILED' WHERE id='job-1'");
+    }
+    const commands = service(db, new Set([uri]));
+    const result = await commands.requestExport('job-1', { keepPrivateCopy: false });
+    expect(result.status).toBe('queued');
+    expect(result.operation?.payload).toMatchObject({ variant: 'original', sourceUri: uri });
+    expect(result.operation?.payload.displayName).toMatch(/_original\.mp4$/);
+    await expect(commands.requestExport('job-1', { keepPrivateCopy: false })).resolves.toMatchObject({ status: 'in-flight' });
+    expect(db.getAllSync('SELECT id FROM workflow_operations')).toHaveLength(1);
+  } finally { db.close(); }
+});
+
 test('returns already complete only for an existing CAS blob and workflow reference', async () => {
   const db = createInitializedRealSqliteTestDb();
   try {
@@ -277,5 +301,19 @@ test('rejects commands in recovery mode without appending work', async () => {
     db.runSync("INSERT INTO app_database_recovery (id,diagnostic,created_at) VALUES (1,'TEST_RECOVERY',1)");
     await expect(service(db, new Set()).requestDownload('job-1')).rejects.toThrow('APP_DATABASE_READ_ONLY');
     expect(db.getAllSync('SELECT * FROM workflow_operations')).toHaveLength(0);
+  } finally { db.close(); }
+});
+
+test('retrying compatibility preserves the saved original gallery delivery', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    seed(db);
+    const hash = 'b'.repeat(64);
+    db.runSync('INSERT INTO artifact_blobs VALUES(?,?,?,?,?,?)', hash, 3, 'video/mp4', `cas/sha256/bb/${hash}`, 1, 1);
+    db.runSync('INSERT INTO artifact_blob_refs VALUES(?,?,?,?)', hash, 'workflow_artifact_original', 'job-1:video-1', 1);
+    db.runSync("INSERT INTO media_deliveries(id,asset_id,target,uri,status,created_at,updated_at) VALUES(?,?,'system-gallery',?,'EXPORTED',1,1)", 'job-1:video-1:system-gallery:original', 'job-1:video-1', 'content://original');
+    await service(db, new Set()).requestRedownload('job-1');
+    expect(db.getFirstSync('SELECT uri,status,error FROM media_deliveries WHERE id=?', 'job-1:video-1:system-gallery:original')).toEqual({ uri: 'content://original', status: 'EXPORTED', error: null });
+    expect(db.getFirstSync("SELECT blob_sha256 FROM artifact_blob_refs WHERE owner_type='workflow_artifact_original'")).toEqual({ blob_sha256: hash });
   } finally { db.close(); }
 });

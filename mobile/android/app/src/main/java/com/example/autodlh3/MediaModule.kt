@@ -32,6 +32,7 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   private val executors = MediaWorkExecutors()
   private val publisher = MediaStorePublisher(context.contentResolver)
   private val integrity = MediaIntegrity(context)
+  private val compatibility = VideoCompatibility(context)
   private val transferPolicy = ArtifactTransferPolicy()
   private val artifactTransfer = ArtifactTransfer(
     partsDir = File(context.filesDir, "cas/parts"),
@@ -43,8 +44,52 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   override fun getName() = "AutoDLMedia"
 
   override fun invalidate() {
+    compatibility.close()
     executors.shutdown()
     super.invalidate()
+  }
+
+  @ReactMethod
+  fun prepareCompatibleVideo(options: ReadableMap, promise: Promise) {
+    val work = try {
+      val attempt = options.getDouble("operationAttempt")
+      val maxBytes = options.getDouble("maxBytes")
+      if (!attempt.isFinite() || attempt < 0 || attempt > Int.MAX_VALUE || attempt % 1.0 != 0.0 ||
+        !maxBytes.isFinite() || maxBytes <= 0 || maxBytes > 1024L * 1024 * 1024 || maxBytes % 1.0 != 0.0) {
+        throw VideoCompatibilityException("MEDIA_COMPATIBILITY_REQUEST_INVALID")
+      }
+      compatibility.register(CompatibleVideoRequest(
+        options.getString("sourceUri").orEmpty(), options.getString("sourceSha256").orEmpty(),
+        options.getString("operationId").orEmpty(), attempt.toInt(), maxBytes.toLong(),
+      ))
+    } catch (error: Exception) {
+      val code = (error as? VideoCompatibilityException)?.diagnosticCode ?: "MEDIA_COMPATIBILITY_REQUEST_INVALID"
+      promise.reject(code, code)
+      return
+    }
+    executors.executeMedia {
+      try {
+        val result = compatibility.prepare(work)
+        promise.resolve(Arguments.createMap().apply {
+          putString("partUri", result.partUri)
+          putString("mime", result.mime)
+          putDouble("byteSize", result.byteSize.toDouble())
+          putString("sha256", result.sha256)
+        })
+      } catch (error: Exception) {
+        val code = (error as? VideoCompatibilityException)?.diagnosticCode ?: "MEDIA_COMPATIBILITY_FAILED"
+        promise.reject(code, code)
+      }
+    }
+  }
+
+  @ReactMethod
+  fun cancelCompatibleVideo(operationId: String, operationAttempt: Double, promise: Promise) {
+    if (!operationAttempt.isFinite() || operationAttempt < 0 || operationAttempt > Int.MAX_VALUE || operationAttempt % 1.0 != 0.0) {
+      promise.reject("MEDIA_COMPATIBILITY_REQUEST_INVALID", "MEDIA_COMPATIBILITY_REQUEST_INVALID")
+      return
+    }
+    executors.executeCancellation { promise.resolve(compatibility.cancel(operationId, operationAttempt.toInt())) }
   }
 
   private fun transferRequest(options: ReadableMap): ArtifactTransferRequest = try {
@@ -184,8 +229,13 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
           putDouble("sampleCount", result.sampleCount.toDouble())
         })
       } catch (error: Exception) {
-        val diagnostic = (error as? MediaIntegrityException)?.diagnosticCode ?: "MEDIA_CONTAINER_INVALID"
-        promise.reject("MEDIA_INVALID", diagnostic, error)
+        val diagnostic = (error as? MediaIntegrityException)?.diagnosticCode ?: "MEDIA_PROBE_FAILED"
+        val code = when (diagnostic) {
+          "MEDIA_CODEC_UNSUPPORTED", "MEDIA_DECODE_FAILED" -> diagnostic
+          "MEDIA_NAL_INVALID", "MEDIA_SAMPLE_INVALID", "MEDIA_NO_VIDEO_TRACK", "MEDIA_DURATION_INVALID" -> "MEDIA_INVALID"
+          else -> "MEDIA_PROBE_FAILED"
+        }
+        promise.reject(code, diagnostic, error, Arguments.createMap().apply { putString("diagnosticCode", diagnostic) })
       }
     }
   }

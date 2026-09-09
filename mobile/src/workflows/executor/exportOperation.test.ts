@@ -30,6 +30,12 @@ function setupExport() {
   };
 }
 
+test('original export uses an independent native identity', async () => {
+  const deps = setupExport();
+  await handleExport({ ...operation, payload: { ...operation.payload, variant: 'original' } }, 'worker', deps);
+  expect(deps.publish).toHaveBeenCalledWith('file:///cas/video', { mediaId: 'job-1:video-1:original', displayName: 'job-1.mp4' });
+});
+
 test('publishes with a stable name and commits all delivery projections', async () => {
   const deps = setupExport();
   await handleExport(operation, 'worker', deps);
@@ -164,5 +170,43 @@ test('commits every export projection and private-copy release in one SQLite tra
     expect(await operations.get(operation.id)).toMatchObject({ state: 'SUCCEEDED' });
     expect(cas.hasReference('a'.repeat(64), 'workflow_artifact', 'job-1:video-1')).toBe(false);
     expect(cas.hasReference('a'.repeat(64), 'workflow_artifact', 'job-1:other')).toBe(true);
+  } finally { db.close(); }
+});
+
+test.each([false, true])('paired SQLite delivery preserves files in either completion order (original first: %s)', async (originalFirst) => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const tasks = createTaskRepository(db as never);
+    const media = createSqliteMediaStore(db);
+    const operations = createOperationRepository(db as never);
+    const cas = createCasRepository(db as never);
+    await tasks.upsert({ id: 'job-1', prompt: 'result', status: 'SUCCESS', resolution: '768p竖', duration: 5, localUri: 'file:///cas/compatible', downloadState: 'DOWNLOADED', exportState: 'QUEUED', createdAt: 1, updatedAt: 2 });
+    await media.upsert({ id: 'job-1:video-1', taskId: 'job-1', artifactId: 'video-1', jobId: 'job-1', title: 'result', prompt: 'result', sourceUrl: 'https://cdn/video.mp4', localPath: 'file:///cas/compatible', mimeType: 'video/mp4', kind: 'video', status: 'downloaded', exportStatus: 'QUEUED', createdAt: 1, updatedAt: 2 });
+    cas.upsertBlob({ sha256: 'a'.repeat(64), byteSize: 3, mime: 'video/mp4', relativePath: 'cas/original', createdAt: 1, verifiedAt: 1 });
+    cas.retain('a'.repeat(64), 'workflow_artifact_original', 'job-1:video-1', 1);
+    db.runSync("INSERT INTO media_deliveries(id,asset_id,target,status,error,created_at,updated_at) VALUES(?,?,'system-gallery','FAILED','EXPORT_NATIVE_FAILED',1,1)", 'job-1:video-1:system-gallery:original', 'job-1:video-1');
+    const store = createSqliteExportStore(db as never);
+    for (const original of originalFirst ? [true, false] : [false, true]) {
+      const id = original ? 'export-original' : operation.id;
+      const payload = { ...operation.payload, keepPrivateCopy: false, ...(original ? { variant: 'original' } : {}) } as ExportPayload;
+      operations.enqueue({ id, kind: 'EXPORT', jobId: 'job-1', idempotencyKey: id, payload, now: 1 });
+      await operations.claimById(id, 'worker', 1, 100);
+      await store.commitSuccess({ ...payload, operationId: id, owner: 'worker', jobId: 'job-1', galleryUri: original ? 'content://original' : 'content://compatible', referenceOwnerId: 'job-1:video-1', now: 50 });
+      if (originalFirst && original) {
+        await expect(tasks.get('job-1')).resolves.toMatchObject({ exportState: 'QUEUED', localUri: 'file:///cas/compatible', galleryUri: undefined });
+        await expect(media.get('job-1:video-1')).resolves.toMatchObject({ localPath: 'file:///cas/compatible' });
+      } else {
+        await expect(tasks.get('job-1')).resolves.toMatchObject({ exportState: originalFirst || original ? 'EXPORTED' : 'EXPORT_FAILED', galleryUri: 'content://compatible' });
+      }
+    }
+    expect(cas.hasReference('a'.repeat(64), 'workflow_artifact_original', 'job-1:video-1')).toBe(true);
+    expect(db.getAllSync('SELECT uri FROM media_deliveries ORDER BY id')).toEqual([{ uri: 'content://compatible' }, { uri: 'content://original' }]);
+    db.runSync("UPDATE tasks SET download_state='DOWNLOAD_FAILED',download_error='ARTIFACT_COMPATIBILITY_FAILED' WHERE id='job-1'");
+    db.runSync("DELETE FROM media_deliveries WHERE id='job-1:video-1:system-gallery'");
+    await store.refreshStatus('job-1', 'job-1:video-1', 60);
+    await expect(tasks.get('job-1')).resolves.toMatchObject({ exportState: 'EXPORTED' });
+    db.runSync("DELETE FROM media_deliveries WHERE id='job-1:video-1:system-gallery:original'");
+    await store.refreshStatus('job-1', 'job-1:video-1', 70);
+    await expect(tasks.get('job-1')).resolves.toMatchObject({ exportState: 'NOT_REQUESTED' });
   } finally { db.close(); }
 });

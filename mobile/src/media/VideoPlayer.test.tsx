@@ -25,6 +25,14 @@ jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 import { VideoPlayer } from './VideoPlayer';
 
 describe('inline video player', () => {
+  it.each(['MEDIA_CODEC_UNSUPPORTED', 'MEDIA_DECODE_FAILED'])('does not offer redownload for %s', async code => {
+    mockStatus = { status: 'error', error: { message: 'decoder failed' } };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => { tree = create(<VideoPlayer source="file:///video.mp4" validateSource={async () => { throw { code }; }} onInvalidSource={jest.fn()} />); });
+    expect(tree.root.findAllByProps({ accessibilityLabel: '重新下载视频' })).toHaveLength(0);
+    if (code === 'MEDIA_CODEC_UNSUPPORTED') expect(tree.root.findAllByProps({ accessibilityLabel: '重试播放' })).toHaveLength(0);
+    act(() => tree.unmount());
+  });
   beforeEach(() => {
     mockUseVideoPlayer.mockClear();
     mockPlayer.replay.mockClear();
