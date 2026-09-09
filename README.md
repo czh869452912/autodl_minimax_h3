@@ -36,6 +36,10 @@
 
 ## 安装与开始使用
 
+### 已知限制
+
+部分升级画质工作流输出 H.264 High 10（10-bit）视频，可能下载成功但无法在设备上正常播放或生成封面。v1.4.17 尚未提供客户端转码；影响范围、临时处理和后续方案见 [已知问题 MEDIA-001](docs/known-issues.md#media-001h264-high-10-视频的设备解码兼容性)。
+
 ### 方式一：从 Release 下载
 
 前往项目的 [GitHub Releases](https://github.com/czh869452912/autodl_minimax_h3/releases) 页面，下载最新 Android APK，并在手机上安装。

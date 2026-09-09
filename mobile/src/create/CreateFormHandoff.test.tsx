@@ -101,12 +101,14 @@ describe('Create prompt handoff', () => {
     context.submissionDependencies.catalog.getActive = async (id?: string) => id === record.workflowId ? record : old;
     let tree!: ReturnType<typeof create>;
     await act(async () => { tree = create(<CreateForm initialPrompt="Keep scene" draftDependencies={context.drafts} submissionDependencies={context.submissionDependencies} />); });
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '选择生成工作流' }).props.onPress());
     await act(async () => tree.root.findByProps({ accessibilityLabel: `选择工作流 ${definition.metadata.title}` }).props.onPress());
     expect(tree.root.findByType(WorkflowForm).props.value.prompt).toBe('Keep scene');
     await act(async () => tree.root.findByProps({ accessibilityLabel: '提交 AutoDL 任务生成' }).props.onPress());
     expect(text(tree)).toContain('至少需要 1');
     expect(context.queue).not.toHaveBeenCalled();
     act(() => tree.root.findByType(WorkflowForm).props.onChange({ ...tree.root.findByType(WorkflowForm).props.value, prompt: 'Newest scene' }));
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '选择生成工作流' }).props.onPress());
     await act(async () => tree.root.findByProps({ accessibilityLabel: `选择工作流 ${builtinWorkflowDefinitions[1].metadata.title}` }).props.onPress());
     expect(tree.root.findByType(WorkflowForm).props.value.prompt).toBe('Newest scene');
     act(() => tree.unmount());

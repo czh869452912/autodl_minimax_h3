@@ -36,7 +36,11 @@ it('selects a target workflow and exports aligned square parameters with durable
   let tree!: ReturnType<typeof create>;
   act(() => { tree = create(<PromptVersionPanel versions={[versions[0]]} workflows={choices} workflowDefinition={choices[0].definition} threadId="t" onSelect={() => undefined} onRestore={() => undefined} onExport={onExport} />); });
   act(() => press(tree, '预览并带入创建页'));
+  act(() => press(tree, '选择生成工作流'));
+  expect(tree.root.findByProps({ accessibilityLabel: '选择生成工作流' }).props.accessibilityState.expanded).toBe(true);
   act(() => press(tree, `选择工作流 ${zm.metadata.title}`));
+  expect(tree.root.findByProps({ accessibilityLabel: '选择生成工作流' }).props.accessibilityState.expanded).toBe(false);
+  expect(tree.root.findAllByProps({ accessibilityLabel: `选择工作流 ${zm.metadata.title}` })).toHaveLength(0);
   act(() => { press(tree, '768p(1:1)'); tree.root.findByProps({ accessibilityLabel: 'Seed（可选）' }).props.onChangeText('0'); });
   expect(text(tree)).toContain('至少需要 1');
   await act(async () => press(tree, '带入创建页'));

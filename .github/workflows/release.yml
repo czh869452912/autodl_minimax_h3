@@ -162,6 +162,9 @@ jobs:
           : > "$notes"
           if [[ -n "$fixes" ]]; then printf '## 修复\n%s\n\n' "$fixes" >> "$notes"; fi
           if [[ -n "$improvements" ]]; then printf '## 改进\n%s\n\n' "$improvements" >> "$notes"; fi
+          if [[ -f docs/known-issues.md ]]; then
+            printf '## 已知问题\n部分 H.264 High 10（10-bit）视频可能下载成功但无法在设备上正常播放；客户端兼容转换尚未实现。详见 [已知问题](https://github.com/%s/blob/%s/docs/known-issues.md)。\n\n' "$GITHUB_REPOSITORY" "$RELEASE_TAG" >> "$notes"
+          fi
           printf '**Full Changelog**: %s\n' "$compare" >> "$notes"
           gh release create "$RELEASE_TAG" "$APK_PATH" \
             --repo "$GITHUB_REPOSITORY" \
