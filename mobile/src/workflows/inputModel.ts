@@ -73,6 +73,7 @@ export function alignWorkflowInputs(definition: WorkflowDefinition, source: Reco
 export function mediaConstraints(definition: WorkflowDefinition, target: 'images' | 'audios') {
   const field = inputField(definition, target);
   const schema = inputProperties(definition)[field];
+  // Adapter-wide fallback for legacy schemas; package MIME enums narrow it (ZM excludes audio/mp4).
   const defaults = target === 'images' ? ['image/jpeg', 'image/png', 'image/webp'] : ['audio/mpeg', 'audio/wav', 'audio/flac', 'audio/mp4'];
   const declared = schema?.items?.properties?.mime?.enum ?? schema?.['x-workflow.acceptMime'];
   return {

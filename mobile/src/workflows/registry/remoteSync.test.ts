@@ -32,6 +32,43 @@ test('verifies real Ed25519 signature, installs, and identical manual sync prese
   expect(s.state().sequence).toBe(1);
 });
 test('rejects signature tampering without installing', async () => { const s = await setup(); s.tamper(); expect((await s.sync.sync()).status).toBe('failed'); expect(await s.repository.list()).toHaveLength(0); });
+test.each(['independent workflow', 'newer version'])('same signed index repairs a partial sync after a failed %s fetch', async (scenario) => {
+  const s = await setup();
+  const second = JSON.parse(JSON.stringify(s.pkg));
+  delete second.metadata.contentHash;
+  if (scenario === 'independent workflow') second.metadata.id = 'autodl.minimax-h3.retry';
+  else second.metadata.version = '1.0.2';
+  const entries = await Promise.all([s.pkg, second].map(async pkg => {
+    const { packageHash } = await parseVerifiedWorkflowPackage(pkg, 'remote');
+    return { workflowId: pkg.metadata.id, version: pkg.metadata.version, contentHash: packageHash, url: `${REMOTE_BASE}/packages/${packageHash}.json` };
+  }));
+  s.entries(entries);
+  const originalFetch = s.fetcher.getMockImplementation()!;
+  let unavailable = true;
+  s.fetcher.mockImplementation(async url => {
+    if (url !== entries[1].url) return originalFetch(url);
+    if (unavailable) throw new Error('Temporary package outage');
+    return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(second) } as unknown as Response;
+  });
+
+  expect(await s.sync.sync()).toMatchObject({ status: 'partial', installed: 1 });
+  const accepted = { sequence: s.state().sequence, indexHash: s.state().indexHash };
+  expect(accepted.sequence).toBe(1);
+  expect(accepted.indexHash).toMatch(/^[a-f0-9]{64}$/);
+  const originalPointer = await s.repository.getActivePointer!(s.pkg.metadata.id);
+  expect((await s.repository.getActive(s.pkg.metadata.id))?.version).toBe('1.0.1');
+  expect(await s.repository.list()).toHaveLength(1);
+
+  unavailable = false;
+  expect(await s.sync.sync()).toMatchObject({ status: 'success', installed: 1, errors: [] });
+  expect(s.state()).toMatchObject(accepted);
+  expect((await s.repository.getActive(second.metadata.id))?.version).toBe(second.metadata.version);
+  expect(await s.repository.list()).toHaveLength(2);
+  if (scenario === 'independent workflow') {
+    expect(await s.repository.getActivePointer!(s.pkg.metadata.id)).toEqual(originalPointer);
+  }
+});
+
 test('rejects older signed index and same sequence changed contents', async () => {
   const s = await setup(); await s.sync.sync(); s.setSequence(0); expect((await s.sync.sync()).status).toBe('failed');
   s.setSequence(1); s.entries([]); expect((await s.sync.sync()).status).toBe('failed'); expect(s.state().sequence).toBe(1);

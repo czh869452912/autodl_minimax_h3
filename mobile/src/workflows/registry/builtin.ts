@@ -1,4 +1,5 @@
 import h3Definition from '../definitions/autodl/minimax-h3-i2v-15s.json';
+import { APP_VERSION } from '../../config/appVersion';
 import h3DefinitionV101 from '../definitions/autodl/minimax-h3-i2v-15s-v1.0.1.json';
 import h3V100Package from '../definitions/autodl/minimax-h3-i2v-15s-v1.0.0.package.json';
 import h3V101Package from '../definitions/autodl/minimax-h3-i2v-15s-v1.0.1.package.json';
@@ -45,7 +46,7 @@ export function createAppWorkflowCatalog() {
   const registry = createWorkflowRegistry(database);
   const compatibility = {
     adapters: [{ id: 'autodl-comfyui', operations: ['workflow.submit'] }],
-    appVersion: '1.4.17',
+    appVersion: APP_VERSION,
     adapterVersions: { 'autodl-comfyui': '1.0.0' },
   };
   const coordinator = createWorkflowReleaseCoordinator({

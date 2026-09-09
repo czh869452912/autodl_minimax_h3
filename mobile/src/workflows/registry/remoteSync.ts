@@ -1,4 +1,5 @@
 import { canonicalizeDefinition } from './canonicalize';
+import { APP_VERSION } from '../../config/appVersion';
 import { verifyEd25519 } from './crypto';
 import { sha256Hex } from './hash';
 import { canonicalizePackage, isWorkflowCompatible, parseVerifiedWorkflowPackage } from './packageVerification';
@@ -14,7 +15,7 @@ export const REMOTE_INDEX = `${REMOTE_BASE}/index.json`;
 export type RemoteSyncResult = { at: number; status: 'success' | 'partial' | 'failed'; installed: number; skipped: number; errors: string[] };
 export type RemoteSyncState = { sequence?: number; indexHash?: string; result?: RemoteSyncResult };
 type Entry = { workflowId: string; version: string; contentHash: string; url: string };
-const compatibility = { appVersion: '1.4.17', adapters: [{ id: 'autodl-comfyui', operations: ['workflow.submit'] }], adapterVersions: { 'autodl-comfyui': '1.0.0' }, adapterArtifactKinds: { 'autodl-comfyui': ['video'] } };
+const compatibility = { appVersion: APP_VERSION, adapters: [{ id: 'autodl-comfyui', operations: ['workflow.submit'] }], adapterVersions: { 'autodl-comfyui': '1.0.0' }, adapterArtifactKinds: { 'autodl-comfyui': ['video'] } };
 const fail = (message: string): never => { throw new Error(message); };
 const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const schemaKeywords = new Set(['type', 'title', 'description', 'default', 'enum', 'const', 'minimum', 'maximum', 'minLength', 'maxLength', 'minItems', 'maxItems', 'items', 'properties', 'required', 'x-workflow.semantic', 'x-workflow.widget', 'x-workflow.acceptMime']);
@@ -49,6 +50,7 @@ export function assertRemoteH3Package(pkg: WorkflowPackage): void {
       const accepted = field['x-workflow.acceptMime'];
       const declared = field.items?.properties?.mime?.enum;
       if (accepted !== undefined && (!Array.isArray(accepted) || !Array.isArray(declared) || JSON.stringify([...accepted].sort()) !== JSON.stringify([...declared].sort()) || !field.items.required?.includes('mime'))) fail('MIME hints must match enforced item constraint');
+      // Adapter-wide vocabulary; individual packages narrow it (ZM excludes audio/mp4).
       const supported = name === 'images' ? ['image/jpeg','image/png','image/webp'] : ['audio/mpeg','audio/wav','audio/flac','audio/mp4'];
       if (declared && declared.some((mime: string) => !supported.includes(mime))) fail('Unsupported media MIME');
     }
@@ -121,6 +123,8 @@ export function createRemoteWorkflowSync(deps: { repository: WorkflowRegistry; p
       // Durably accept signed sequence before any installation. Equal index retries repair partial failures.
       state = { ...state, sequence: index.sequence, indexHash };
       await deps.state.save(state);
+      // Try the highest usable signed version, keeping the installed compatible version as a floor.
+      // Failed entries remain retryable with this same index, even after a lower version installs.
       const entries = [...index.entries].sort((a, b) => compareVersions(b.version, a.version));
       const selected = new Set<string>();
       for (const entry of entries) {
