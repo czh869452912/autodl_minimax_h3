@@ -27,3 +27,15 @@ test('active card timing advances independently and terminal cards own no timer'
   act(() => tree.unmount());
   jest.useRealTimers();
 });
+
+test('conversion failure offers saving the untouched original', () => {
+  const item: TaskCard = { id: 'a', prompt: 'p', status: 'SUCCESS', resolution: '768p', duration: 5, createdAt: 1, updatedAt: 2, downloadState: 'DOWNLOAD_FAILED', downloadError: 'ARTIFACT_COMPATIBILITY_FAILED', exportState: 'NOT_REQUESTED' };
+  const onExport = jest.fn();
+  let tree!: ReturnType<typeof create>;
+  act(() => { tree = create(<TaskCardRow item={item} busy={false} onDownload={jest.fn()} onExport={onExport} onRemove={jest.fn()} onOpen={jest.fn()} />); });
+  const button = tree.root.findAllByProps({ accessibilityLabel: '保存原件到系统相册' })[0];
+  expect(button).toBeDefined();
+  act(() => button.props.onPress());
+  expect(onExport).toHaveBeenCalledWith(item);
+  act(() => tree.unmount());
+});

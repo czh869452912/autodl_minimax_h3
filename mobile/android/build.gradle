@@ -14,6 +14,13 @@ buildscript {
 
 allprojects {
   repositories {
+    exclusiveContent {
+      forRepository { maven { url 'https://repo.maven.apache.org/maven2' } }
+      filter {
+        includeGroup 'io.github.jamaismagic.ffmpeg'
+        includeGroup 'com.arthenica'
+      }
+    }
     google()
     mavenCentral()
     maven { url 'https://www.jitpack.io' }

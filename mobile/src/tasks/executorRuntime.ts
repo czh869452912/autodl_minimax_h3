@@ -24,6 +24,7 @@ import { materializeJobArtifacts } from '../media/materializer';
 import type { ArtifactRecord } from '../jobs/types';
 import { assertLocalExportSource, createSqliteExportStore, handleExport } from '../workflows/executor/exportOperation';
 import { exportVideo, probeVideo } from '../native/media';
+import { prepareCompatibleVideo, cancelCompatibleVideo } from '../native/videoCompatibility';
 import * as FileSystem from 'expo-file-system/legacy';
 import { removeCasPath } from '../media/cas';
 import { reconcileMediaState } from '../media/reconciliation';
@@ -84,6 +85,8 @@ function createApplicationExecutor(database: AppDatabase) {
         },
         updateProjection: async () => undefined,
         verifyVideo: probeVideo,
+        prepareCompatibleVideo,
+        cancelCompatibleVideo,
         async ensureProjection(jobId, artifact) {
           const job = (await jobs.get(jobId));
           const task = await taskStore.get(jobId);
@@ -110,6 +113,9 @@ function createApplicationExecutor(database: AppDatabase) {
             status: state === 'ENQUEUED' ? 'queued' : state === 'DOWNLOADING' ? 'downloading' : 'failed',
             updatedAt: timestamp,
           });
+          if (state === 'DOWNLOAD_FAILED' && errorCode?.startsWith('ARTIFACT_COMPATIBILITY_')) {
+            await exportStore.refreshStatus(operation.jobId, `${operation.jobId}:${artifact.id}`, timestamp);
+          }
         },
         async policy(jobId) {
           const job = (await jobs.get(jobId));

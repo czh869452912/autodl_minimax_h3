@@ -38,6 +38,9 @@ export function mediaValidationMessage(code: MediaValidationArtifactCode): strin
 }
 
 export function mediaDownloadErrorMessage(error?: string): string | undefined {
+  if (error === 'ARTIFACT_COMPATIBILITY_BUSY') return '正在等待其他视频完成兼容处理，将自动继续';
+  if (error === 'ARTIFACT_COMPATIBILITY_FAILED') return '视频兼容转换失败，原件已保留；可重试本地转换或保存原件';
+  if (error === 'ARTIFACT_COMPATIBILITY_HDR_UNSUPPORTED') return '暂不支持 HDR 视频的兼容转换，原件已保留';
   return error?.startsWith('ARTIFACT_MEDIA_') && ['ARTIFACT_MEDIA_UNSUPPORTED', 'ARTIFACT_MEDIA_DECODE_FAILED', 'ARTIFACT_MEDIA_PROBE_FAILED', 'ARTIFACT_MEDIA_INVALID', 'ARTIFACT_MEDIA_INVALID_RETRYABLE'].includes(error)
     ? mediaValidationMessage(error as MediaValidationArtifactCode) : error;
 }
