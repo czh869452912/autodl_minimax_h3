@@ -1,0 +1,182 @@
+{
+  "apiVersion": "workflow.autodl/v1",
+  "kind": "Workflow",
+  "metadata": {
+    "id": "autodl.minimax-h3.zm-u24",
+    "version": "1.0.0",
+    "title": "MiniMax H3 升级画质",
+    "category": "video",
+    "description": "多图多音参考生视频 · 至少一张参考图 · 支持方形画幅",
+    "channel": "stable",
+    "contentHash": "43853b1f576594dec7f64c797d31a801ebd0609477ed42edee71aebf9ef4862b"
+  },
+  "spec": {
+    "adapter": {
+      "id": "autodl-comfyui",
+      "version": "0.0.0",
+      "operation": "workflow.submit",
+      "workflowId": "minimax_h3_zm_u24"
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "prompt",
+        "resolution",
+        "duration",
+        "images"
+      ],
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "title": "Prompt（视频描述）",
+          "description": "描述你想生成的视频：主体、动作、场景、镜头运动、光影与音效…",
+          "minLength": 1,
+          "maxLength": 10000,
+          "x-workflow.semantic": "prompt",
+          "x-workflow.widget": "textarea"
+        },
+        "resolution": {
+          "type": "string",
+          "title": "分辨率（Resolution）",
+          "enum": [
+            "768p竖",
+            "480p竖",
+            "768p横",
+            "480p横",
+            "480p(1:1)",
+            "768p(1:1)"
+          ],
+          "default": "768p竖",
+          "x-workflow.semantic": "enum",
+          "x-workflow.widget": "segmented"
+        },
+        "duration": {
+          "type": "integer",
+          "title": "视频时长（Duration）",
+          "minimum": 1,
+          "maximum": 15,
+          "default": 5,
+          "x-workflow.semantic": "integer",
+          "x-workflow.widget": "stepper"
+        },
+        "seed": {
+          "type": "integer",
+          "title": "随机种子 Seed（可选）",
+          "description": "0–999999999999999（留空则随机）",
+          "minimum": 0,
+          "maximum": 999999999999999,
+          "x-workflow.semantic": "seed",
+          "x-workflow.widget": "seed"
+        },
+        "images": {
+          "type": "array",
+          "maxItems": 9,
+          "items": {
+            "type": "object",
+            "required": [
+              "mime"
+            ],
+            "properties": {
+              "mime": {
+                "type": "string",
+                "enum": [
+                  "image/jpeg",
+                  "image/png",
+                  "image/webp"
+                ]
+              }
+            }
+          },
+          "x-workflow.semantic": "image[]",
+          "x-workflow.widget": "asset-list",
+          "title": "参考图片",
+          "x-workflow.acceptMime": [
+            "image/jpeg",
+            "image/png",
+            "image/webp"
+          ],
+          "minItems": 1
+        },
+        "audios": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "required": [
+              "mime"
+            ],
+            "properties": {
+              "mime": {
+                "type": "string",
+                "enum": [
+                  "audio/mpeg",
+                  "audio/wav",
+                  "audio/flac"
+                ]
+              }
+            }
+          },
+          "x-workflow.semantic": "audio[]",
+          "x-workflow.widget": "asset-list",
+          "title": "参考音频",
+          "x-workflow.acceptMime": [
+            "audio/mpeg",
+            "audio/wav",
+            "audio/flac"
+          ]
+        }
+      }
+    },
+    "uiSchema": {
+      "sections": [
+        {
+          "id": "prompt",
+          "title": "提示词",
+          "fields": [
+            "/prompt"
+          ]
+        },
+        {
+          "id": "generation",
+          "title": "生成参数",
+          "fields": [
+            "/resolution",
+            "/duration",
+            "/seed"
+          ]
+        },
+        {
+          "id": "references",
+          "title": "参考素材",
+          "fields": [
+            "/images",
+            "/audios"
+          ]
+        }
+      ]
+    },
+    "bindings": {
+      "prompt": "/prompt",
+      "resolution": "/resolution",
+      "duration": "/duration",
+      "seed": "/seed",
+      "images": "/images",
+      "audios": "/audios"
+    },
+    "outputs": {
+      "artifacts": [
+        {
+          "kind": "video",
+          "from": "/result/video"
+        }
+      ]
+    },
+    "compatibility": {
+      "minAppVersion": "1.4.17",
+      "requiredAdapterVersion": ">=1.0.0",
+      "artifactKinds": [
+        "video"
+      ]
+    }
+  }
+}

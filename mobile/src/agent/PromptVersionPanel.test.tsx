@@ -6,6 +6,8 @@ import { PromptVersionPanel } from './PromptVersionPanel';
 import type { PromptVersion } from './promptVersions';
 import type { PromptHandoff } from '../handoff/promptHandoff';
 import { builtinWorkflowDefinitions } from '../workflows/registry/builtin';
+import zmPackage from '../../../registry/workflows/autodl.minimax-h3.zm-u24/1.0.0.json';
+import { packageToDefinition, type WorkflowPackage } from '../workflows/schema/package';
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => undefined) }));
 const versions: PromptVersion[] = [
@@ -14,6 +16,33 @@ const versions: PromptVersion[] = [
 ];
 const text = (tree: ReturnType<typeof create>) => tree.root.findAllByType(Text).map((node) => [node.props.children].flat(Infinity).join('')).join('\n');
 const press = (tree: ReturnType<typeof create>, label: string) => tree.root.findByProps({ accessibilityLabel: label }).props.onPress();
+
+it('aligns unsupported generated parameters when opening the preview without changing the source version', () => {
+  const version = { ...versions[0], parameters: { resolution: '768p(1:1)', seed: '0' } };
+  let tree!: ReturnType<typeof create>;
+  act(() => { tree = create(<PromptVersionPanel versions={[version]} threadId="t" onSelect={() => undefined} onRestore={() => undefined} onExport={async () => undefined} />); });
+  act(() => press(tree, '预览并带入创建页'));
+  expect(tree.root.findByProps({ accessibilityLabel: '分辨率（可选）' }).props.value).toBe('768p竖');
+  expect(text(tree)).toContain('已使用默认值');
+  expect(tree.root.findByProps({ accessibilityLabel: 'Seed（可选）' }).props.value).toBe('0');
+  expect(version.parameters.resolution).toBe('768p(1:1)');
+  act(() => tree.unmount());
+});
+
+it('selects a target workflow and exports aligned square parameters with durable identity', async () => {
+  const zm = packageToDefinition(zmPackage as WorkflowPackage);
+  const choices = [builtinWorkflowDefinitions[1], zm].map(definition => ({ definition, contentHash: definition.id === zm.id ? zmPackage.metadata.contentHash : 'old-hash' }));
+  const onExport = jest.fn(async (_handoff: PromptHandoff) => undefined);
+  let tree!: ReturnType<typeof create>;
+  act(() => { tree = create(<PromptVersionPanel versions={[versions[0]]} workflows={choices} workflowDefinition={choices[0].definition} threadId="t" onSelect={() => undefined} onRestore={() => undefined} onExport={onExport} />); });
+  act(() => press(tree, '预览并带入创建页'));
+  act(() => press(tree, `选择工作流 ${zm.metadata.title}`));
+  act(() => { press(tree, '768p(1:1)'); tree.root.findByProps({ accessibilityLabel: 'Seed（可选）' }).props.onChangeText('0'); });
+  expect(text(tree)).toContain('至少需要 1');
+  await act(async () => press(tree, '带入创建页'));
+  expect(onExport.mock.calls[0][0]).toMatchObject({ target: { workflowId: zm.id, workflowVersion: '1.0.0', contentHash: zmPackage.metadata.contentHash }, parameters: { resolution: '768p(1:1)', seed: '0' } });
+  act(() => tree.unmount());
+});
 
 it('avoids Android keyboard overlap while keeping parameter inputs mounted', () => {
   const original = Platform.OS;

@@ -5,7 +5,7 @@ export type AutodlInput = { prompt: string; resolution: string; duration: number
 export function buildAutodlSubmitRequest(input: AutodlInput): Record<string, unknown> {
   const payload: Record<string, unknown> = { prompt: input.prompt, duration: input.duration, resolution: input.resolution };
   if (typeof input.seed === 'number' && Number.isFinite(input.seed)) payload.seed = input.seed;
-  else if (typeof input.seed === 'string' && input.seed.trim()) payload.seed = Number(input.seed) || input.seed.trim();
+  else if (typeof input.seed === 'string' && input.seed.trim()) payload.seed = Number.isFinite(Number(input.seed)) ? Number(input.seed) : input.seed.trim();
   input.images?.slice(0, 9).forEach((item, index) => { if (item.dataUri) payload[`ref_image_${index}`] = item.dataUri; });
   input.audios?.slice(0, 3).forEach((item, index) => { if (item.dataUri) payload[`ref_audio_${index}`] = item.dataUri; });
   return payload;

@@ -6,6 +6,15 @@ import { COLORS } from '../../ui/theme';
 
 const definition = { schemaVersion: '1.0', id: 'demo', version: '1.0.0', kind: 'atomic', platform: { adapter: 'demo', operation: 'workflow.submit' }, metadata: { title: 'Demo', category: 'video' }, inputs: { type: 'object', required: ['prompt'], properties: { prompt: { type: 'string', title: 'Prompt', maxLength: 10000, 'x-workflow.semantic': 'prompt', 'x-workflow.widget': 'textarea' }, mode: { type: 'string', enum: ['image', 'video'], 'x-workflow.semantic': 'enum', 'x-workflow.widget': 'segmented' } } }, ui: { sections: [{ id: 'main', title: 'Main', fields: ['prompt', 'mode'] }] }, request: { operation: 'workflow.submit', bindings: {} }, outputs: { artifacts: [] } } as WorkflowDefinition;
 
+test('renders plain schema strings and enums without optional semantic extensions', () => {
+  const plain = { ...definition, inputs: { type: 'object', properties: { prompt: { type: 'string' }, mode: { type: 'string', enum: ['a', 'b'] } } } };
+  let tree!: ReturnType<typeof create>;
+  act(() => { tree = create(<WorkflowForm definition={plain} value={{}} onChange={() => undefined} />); });
+  expect(tree.root.findAllByType(TextInput)).toHaveLength(1);
+  expect(tree.root.findAllByType(Text).some(node => node.props.children === 'b')).toBe(true);
+  act(() => tree.unmount());
+});
+
 test('renders schema fields in declared order and emits controlled changes', () => {
   const changes: Record<string, unknown>[] = [];
   let tree!: ReturnType<typeof create>;

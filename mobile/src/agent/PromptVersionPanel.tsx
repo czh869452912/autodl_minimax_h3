@@ -7,9 +7,16 @@ import { normalizePromptHandoffParameters, type PromptHandoff } from '../handoff
 import { validatePromptBindings } from '../handoff/promptBindings';
 import type { WorkflowDefinition } from '../workflows/schema/types';
 import defaultWorkflow from '../workflows/definitions/autodl/minimax-h3-i2v-15s-v1.0.1.json';
+import { alignWorkflowInputs, canonicalInputs, mediaConstraints } from '../workflows/inputModel';
+import { WorkflowSelector } from '../workflows/renderer/WorkflowSelector';
+import { WorkflowParameterFields } from '../workflows/renderer/WorkflowParameterFields';
+import { saveSelectedWorkflow } from '../workflows/registry/selection';
 import { createAgentId } from './submissionCommands';
 
+export type WorkflowChoice = { definition: WorkflowDefinition; contentHash: string };
+
 export type PromptVersionPanelProps = {
+  workflows?: WorkflowChoice[];
   versions: PromptVersion[];
   selectedVersionId?: string;
   onSelect: (id: string) => void;
@@ -26,7 +33,7 @@ function Action({ label, onPress, disabled = false, primary = false }: { label: 
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={[styles.action, primary && styles.primary, disabled && styles.disabled]}><Text style={[styles.actionText, primary && styles.primaryText]}>{label}</Text></Pressable>;
 }
 
-export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRestore, onExport, threadId, disabled = false, inSheet = false, onExpand, workflowDefinition = defaultWorkflow as WorkflowDefinition }: PromptVersionPanelProps) {
+export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRestore, onExport, threadId, disabled = false, inSheet = false, onExpand, workflowDefinition: defaultDefinition = defaultWorkflow as WorkflowDefinition, workflows }: PromptVersionPanelProps) {
   const selected = versions.find((version) => version.id === selectedVersionId) ?? versions[versions.length - 1];
   const selectedIndex = versions.findIndex((version) => version.id === selected?.id);
   const prior = versions[selectedIndex - 1];
@@ -37,6 +44,10 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
   const [resolution, setResolution] = useState('');
   const [duration, setDuration] = useState('');
   const [seed, setSeed] = useState('');
+  const [targetId, setTargetId] = useState(defaultDefinition.id);
+  const workflowDefinition = workflows?.find(item => item.definition.id === targetId)?.definition ?? defaultDefinition;
+  const [alignmentNotices, setAlignmentNotices] = useState<string[]>([]);
+  const parameterCache = useRef(new Map<string, Record<string, unknown>>());
   const [error, setError] = useState('');
   const [copyStatus, setCopyStatus] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,8 +65,6 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
   const activePreview = preview?.threadId === threadId ? preview : null;
   const bindings = validatePromptBindings(activePreview?.version.promptText ?? '', activePreview?.version.images.filter(image => included.includes(image.id)) ?? []);
   const { images, missing, invalid: invalidBindings } = bindings;
-  const properties = workflowDefinition.inputs.properties as Record<string, { enum?: unknown[] }> | undefined;
-  const resolutionOptions = properties?.resolution?.enum?.filter((value): value is string => typeof value === 'string') ?? [];
   const parameterValidation = useMemo(() => {
     try {
       if (duration.trim() && !/^\d+$/.test(duration.trim())) throw new Error('时长须为工作流支持的整数秒数');
@@ -64,18 +73,40 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
   }, [resolution, duration, seed, workflowDefinition]);
   const cannotExport = disabled || busy || !activePreview || !bindings.ok || Boolean(parameterValidation.error);
 
+  function selectTarget(id: string) {
+    if (busy || id === targetId) return;
+    const next = workflows?.find(item => item.definition.id === id);
+    if (!next) return;
+    const current = { resolution, duration, seed };
+    parameterCache.current.set(targetId, current);
+    const cached = parameterCache.current.get(id);
+    const aligned = alignWorkflowInputs(next.definition, { prompt: activePreview?.version.promptText ?? '', ...current });
+    const values = cached ?? canonicalInputs(next.definition, aligned.values);
+    setResolution(String(values.resolution ?? '')); setDuration(String(values.duration ?? '')); setSeed(String(values.seed ?? ''));
+    setAlignmentNotices(cached ? [] : aligned.notices);
+    setTargetId(id);
+  }
+
   function openPreview() {
     if (disabled || !selected) return;
     setPreview({ threadId, version: { ...selected, images: selected.images.map((image) => ({ ...image })), parameters: { ...selected.parameters } } });
+    parameterCache.current.clear(); setAlignmentNotices([]);
     setIncluded(selected.images.map((image) => image.id));
-    setResolution(selected.parameters.resolution ?? ''); setDuration(selected.parameters.durationSeconds?.toString() ?? ''); setSeed(selected.parameters.seed ?? ''); setError('');
+    const aligned = alignWorkflowInputs(workflowDefinition, { prompt: selected.promptText, ...selected.parameters });
+    const values = canonicalInputs(workflowDefinition, aligned.values);
+    setAlignmentNotices(aligned.notices);
+    setResolution(selected.parameters.resolution === undefined ? '' : String(values.resolution ?? ''));
+    setDuration(selected.parameters.durationSeconds === undefined ? '' : String(values.duration ?? ''));
+    setSeed(selected.parameters.seed === undefined ? '' : String(values.seed ?? '')); setError('');
   }
   async function exportPreview() {
     if (cannotExport || exportLock.current || !activePreview) return;
     exportLock.current = true; setBusy(true); setError('');
     const currentGeneration = generation.current;
     try {
-      await onExport({ prompt: activePreview.version.promptText, images: images.map((image) => ({ ...image })), parameters: parameterValidation.parameters, source: { threadId: activePreview.threadId, messageId: activePreview.version.sourceMessageId, versionId: activePreview.version.id, ...(activePreview.version.artifactId ? { artifactId: activePreview.version.artifactId } : {}), ...(activePreview.version.sourceRevision !== undefined ? { sourceRevision: activePreview.version.sourceRevision } : {}) } });
+      const choice = workflows?.find(item => item.definition.id === workflowDefinition.id);
+      await onExport({ ...(choice ? { target: { workflowId: choice.definition.id, workflowVersion: choice.definition.version, contentHash: choice.contentHash } } : {}), prompt: activePreview.version.promptText, images: images.map((image) => ({ ...image })), parameters: parameterValidation.parameters, source: { threadId: activePreview.threadId, messageId: activePreview.version.sourceMessageId, versionId: activePreview.version.id, ...(activePreview.version.artifactId ? { artifactId: activePreview.version.artifactId } : {}), ...(activePreview.version.sourceRevision !== undefined ? { sourceRevision: activePreview.version.sourceRevision } : {}) } });
+      if (choice) await saveSelectedWorkflow(choice.definition.id).catch(() => undefined);
       if (generation.current === currentGeneration) setPreview(null);
     } catch (cause) {
       if (generation.current === currentGeneration) setError(cause instanceof Error ? cause.message : '带入失败，请重试');
@@ -110,6 +141,9 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
         <View style={styles.modal} accessibilityViewIsModal onFocus={event => event.stopPropagation()} onBlur={event => event.stopPropagation()}>
           <Text style={styles.title}>带入创建页前确认</Text>
           <ScrollView style={styles.previewScroll} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.previewContent}>
+            {workflows && <WorkflowSelector definitions={workflows.map(item => item.definition)} selectedId={workflowDefinition.id} disabled={busy} onSelect={selectTarget} />}
+            {alignmentNotices.map((notice, index) => <Text key={index} style={styles.muted}>{notice}</Text>)}
+            {images.length < mediaConstraints(workflowDefinition, 'images').minimum && <Text style={styles.muted}>此工作流至少需要 {mediaConstraints(workflowDefinition, 'images').minimum} 张参考图，请在创建页补充后提交。</Text>}
             <Text style={styles.muted}>Prompt</Text><Text selectable style={styles.prompt}>{activePreview.version.promptText}</Text>
             <Text style={styles.title}>绑定图片 · {images.length} / {activePreview.version.images.length}</Text>
             <Text style={styles.muted}>默认列出生成此版本前最近一次上传的图片；请核对引用和标签。点击图片可取消或恢复绑定。</Text>
@@ -118,19 +152,11 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
             {missing.length > 0 && <Text accessibilityRole="alert" style={styles.error}>引用图片缺失或标签不唯一：{missing.join('、')}。请恢复绑定或返回会话补充图片后重新生成。</Text>}
             {invalidBindings && <Text accessibilityRole="alert" style={styles.error}>图片编号必须从图片1连续排列，才能保持创建页的引用对应关系。请保留所选图片之前的图片；若此版本缺少这些图片，请返回会话补充后重新生成。</Text>}
             <Text style={styles.title}>生成参数（可选）</Text><Text style={styles.muted}>留空使用创建页的工作流默认值。</Text>
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>分辨率</Text>
-              <TextInput accessibilityLabel="分辨率（可选）" placeholder="分辨率 · 工作流默认" placeholderTextColor={colors.placeholder} value={resolution} onChangeText={setResolution} editable={!busy} style={styles.input} />
-            </View>
-            <View style={styles.row}>{resolutionOptions.map(value => <Action key={value} label={value} disabled={busy} onPress={() => setResolution(value)} />)}</View>
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>时长（秒）</Text>
-              <TextInput accessibilityLabel="时长秒数（可选）" placeholder="时长（秒）· 工作流默认" placeholderTextColor={colors.placeholder} keyboardType="decimal-pad" value={duration} onChangeText={setDuration} editable={!busy} style={styles.input} />
-            </View>
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>随机种子（Seed）</Text>
-              <TextInput accessibilityLabel="Seed（可选）" placeholder="Seed · 工作流默认" placeholderTextColor={colors.placeholder} value={seed} onChangeText={setSeed} editable={!busy} style={styles.input} />
-            </View>
+            <WorkflowParameterFields definition={workflowDefinition} values={{ resolution, duration, seed }} disabled={busy} onChange={(target, value) => {
+              if (target === 'resolution') setResolution(String(value));
+              if (target === 'duration') setDuration(String(value));
+              if (target === 'seed') setSeed(String(value));
+            }} />
             {parameterValidation.error && <Text accessibilityRole="alert" style={styles.error}>{parameterValidation.error}</Text>}
             {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
           </ScrollView>

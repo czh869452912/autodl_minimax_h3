@@ -125,6 +125,7 @@ export function createWorkflowRegistry(db: AppDatabase | undefined): WorkflowReg
         if (existing && (existing.contentHash !== record.contentHash || existing.hashScheme !== record.hashScheme)) throw new Error('workflow definition is immutable');
         if (!existing) memory.set(key(record.workflowId, record.version), record);
         const previous = active.get(record.workflowId);
+        if (previous?.version === record.version && previous.content_hash === record.contentHash) return;
         active.set(record.workflowId, { workflow_id: record.workflowId, version: record.version, content_hash: record.contentHash, previous_version: previous?.version, previous_hash: previous?.content_hash });
         return;
       }
@@ -134,6 +135,7 @@ export function createWorkflowRegistry(db: AppDatabase | undefined): WorkflowReg
         if (existing && (existing.content_hash !== record.contentHash || existing.hash_scheme !== record.hashScheme)) throw new Error('workflow definition is immutable');
         if (!existing) db.runSync('INSERT INTO workflow_registry (workflow_id,version,content_hash,hash_scheme,source,trust,definition_json,installed_at,repository,ref,commit_sha) VALUES (?,?,?,?,?,?,?,?,?,?,?)', record.workflowId, record.version, record.contentHash, record.hashScheme, record.source, record.trust, record.definitionJson, record.installedAt, record.repository ?? null, record.ref ?? null, record.commit ?? null);
         const previous = db.getFirstSync<ActiveRow>('SELECT * FROM workflow_registry_active WHERE workflow_id = ? LIMIT 1', record.workflowId) as ActiveRow | null;
+        if (previous?.version === record.version && previous.content_hash === record.contentHash) return;
         db.runSync('INSERT OR REPLACE INTO workflow_registry_active (workflow_id,version,content_hash,previous_version,previous_hash) VALUES (?,?,?,?,?)', record.workflowId, record.version, record.contentHash, previous?.version ?? null, previous?.content_hash ?? null);
       };
       if (transaction) transaction.call(db, install);

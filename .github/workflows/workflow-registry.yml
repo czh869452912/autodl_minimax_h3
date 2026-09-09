@@ -1,0 +1,56 @@
+name: Publish signed workflow registry
+on:
+  workflow_dispatch:
+    inputs:
+      sequence:
+        description: Strictly increasing positive registry sequence
+        required: true
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: workflow-registry-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'czh869452912/autodl_minimax_h3' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: workflow-registry
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci --prefix mobile --legacy-peer-deps
+      - name: Check registry contracts
+        run: |
+          node --test scripts/publish-workflow-registry.test.mjs
+          npm test --prefix mobile -- --runInBand src/workflows/registry/remoteSync.test.ts
+      - name: Prepare isolated publication branch
+        shell: bash
+        run: |
+          if git show-ref --verify --quiet refs/remotes/origin/workflow-registry; then
+            git worktree add /tmp/workflow-publication origin/workflow-registry
+          else
+            mkdir /tmp/workflow-publication
+            git -C /tmp/workflow-publication init
+            git -C /tmp/workflow-publication checkout --orphan workflow-registry
+          fi
+      - name: Generate signed index and immutable packages
+        env:
+          WORKFLOW_REGISTRY_PRIVATE_KEY: ${{ secrets.WORKFLOW_REGISTRY_PRIVATE_KEY }}
+          REGISTRY_SEQUENCE: ${{ inputs.sequence }}
+        run: node scripts/publish-workflow-registry.mjs --output /tmp/workflow-publication --sequence "$REGISTRY_SEQUENCE"
+      - name: Publish static registry only
+        shell: bash
+        run: |
+          git -C /tmp/workflow-publication config user.name github-actions[bot]
+          git -C /tmp/workflow-publication config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git -C /tmp/workflow-publication add index.json packages
+          git -C /tmp/workflow-publication commit -m 'Publish signed workflow registry'
+          git fetch /tmp/workflow-publication HEAD
+          git push origin FETCH_HEAD:refs/heads/workflow-registry

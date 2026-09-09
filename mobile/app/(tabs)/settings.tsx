@@ -1,3 +1,4 @@
+import { WorkflowSyncPanel } from '../../src/settings/WorkflowSyncPanel';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Keyboard, KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -62,7 +63,7 @@ export default function SettingsScreen() {
       <Pressable accessibilityRole="button" accessibilityLabel="恢复 LLM 高级设置默认值" onPress={() => setValues(current => ({ ...current, ...advancedDefaults }))} style={styles.resetAdvanced}><Text style={styles.externalLinkText}>恢复高级设置默认值</Text></Pressable>
     </View> : null}</View>
     <View style={styles.card}><View style={styles.cardHeading}><AppIcon name="movie_filter" size={20} color={COLORS.primaryActive} /><Text style={styles.cardTitle}>存储与导出</Text></View><View style={styles.settingRow}><View style={styles.settingCopy}><Text style={styles.settingLabel}>自动保存到系统相册</Text><Text style={styles.help}>下载完成后保存到系统相册 / Movies / AutoDL-H3</Text></View><Switch accessibilityLabel="自动保存到系统相册" value={values.autoExportToGallery} onValueChange={(value) => update('autoExportToGallery', value)} trackColor={{ false: COLORS.border, true: COLORS.primaryActive }} thumbColor={COLORS.text} /></View><Text style={styles.location}>保存位置：系统相册 / Movies / AutoDL-H3</Text><View style={styles.settingRow}><View style={styles.settingCopy}><Text style={styles.settingLabel}>保留应用内副本</Text><Text style={styles.help}>关闭后仅在相册保存成功时删除应用内视频</Text></View><Switch accessibilityLabel="保留应用内副本" value={values.keepPrivateCopy} onValueChange={(value) => update('keepPrivateCopy', value)} trackColor={{ false: COLORS.border, true: COLORS.primaryActive }} thumbColor={COLORS.text} /></View></View>
-    <View style={styles.card}><View style={styles.cardHeading}><AppIcon name="info" size={20} color={COLORS.primaryActive} /><Text style={styles.cardTitle}>工作流说明</Text></View><Text style={styles.infoLine}>工作流：MiniMax H3 图像与音频生视频 v2（15s）</Text><Text style={styles.infoLine}>ID：minimax_h3_image_audio_to_video_v2_15s</Text><Text style={styles.infoLine}>参考素材：最多 9 张图片、3 段音频，单个文件 50MB</Text><Text style={styles.infoLine}>下载目录：Movies/AutoDL-H3（同时保留应用私有缓存）</Text></View>
+    <WorkflowSyncPanel />
     <Pressable accessibilityRole="button" accessibilityLabel="保存设置" disabled={saving} onPress={() => void save()} style={[styles.saveButton, saving && styles.disabled]}><AppIcon name="save" size={20} color={COLORS.onPrimary} /><Text style={styles.saveText}>{saving ? '保存中…' : '保存设置'}</Text></Pressable>
   </ScrollView></KeyboardAvoidingView>;
 }

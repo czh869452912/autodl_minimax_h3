@@ -45,7 +45,7 @@ export function createAppWorkflowCatalog() {
   const registry = createWorkflowRegistry(database);
   const compatibility = {
     adapters: [{ id: 'autodl-comfyui', operations: ['workflow.submit'] }],
-    appVersion: '1.4.10',
+    appVersion: '1.4.17',
     adapterVersions: { 'autodl-comfyui': '1.0.0' },
   };
   const coordinator = createWorkflowReleaseCoordinator({

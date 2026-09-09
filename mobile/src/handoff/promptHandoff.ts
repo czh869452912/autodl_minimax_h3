@@ -3,11 +3,13 @@ import type { AppDatabase } from '../storage/appDatabase';
 import { getDatabase } from '../storage/databaseClient';
 import { attachmentHashes, validateImageBudget } from '../media/attachments';
 import type { TaskMediaInput } from '../media/types';
+import { inputField, inputProperties, canonicalInputs } from '../workflows/inputModel';
 import { compileWorkflow } from '../workflows/compiler/compiler';
 import type { WorkflowDefinition } from '../workflows/schema/types';
 import { validatePromptBindings, type PromptBindingImage } from './promptBindings';
 
 export type PromptHandoff = {
+  target?: { workflowId: string; workflowVersion: string; contentHash: string };
   prompt: string;
   images: PromptBindingImage[];
   parameters: { resolution?: string; durationSeconds?: number; seed?: string };
@@ -25,6 +27,7 @@ export function decodePromptHandoff(value: unknown): PromptHandoff {
   if (!isObject(value) || typeof value.prompt !== 'string' || !Array.isArray(value.images)
     || !isObject(value.parameters) || !isObject(value.source)) throw new Error('提示词交接数据损坏，请重新导出');
   const { parameters, source } = value;
+  if (value.target !== undefined && (!isObject(value.target) || ['workflowId', 'workflowVersion', 'contentHash'].some(key => typeof (value.target as Record<string, unknown>)[key] !== 'string' || !(value.target as Record<string, string>)[key].trim()))) throw new Error('交接工作流身份无效');
   if (value.images.some((image) => !isObject(image) || typeof image.id !== 'string' || typeof image.displayName !== 'string'
     || typeof image.uri !== 'string' || (image.filename !== undefined && typeof image.filename !== 'string')
     || (image.ordinal !== undefined && (typeof image.ordinal !== 'number' || !Number.isSafeInteger(image.ordinal) || image.ordinal < 1))
@@ -45,34 +48,36 @@ export function resolvePromptHandoffValues(handoff: PromptHandoff, definition: W
   decodePromptHandoff(handoff);
   if (!validatePromptBindings(handoff.prompt, handoff.images).ok) throw new Error('参考图片绑定缺失或不唯一，请重新绑定');
   const properties = (definition.inputs.properties ?? {}) as Record<string, Record<string, unknown>>;
-  const values: Record<string, unknown> = { prompt: handoff.prompt };
-  const mapping = { resolution: 'resolution', durationSeconds: 'duration', seed: 'seed' };
+  const values: Record<string, unknown> = { [inputField(definition, 'prompt')]: handoff.prompt };
+  const mapping = { resolution: inputField(definition, 'resolution'), durationSeconds: inputField(definition, 'duration'), seed: inputField(definition, 'seed') };
+  const seedField = inputField(definition, 'seed');
+  const imageField = inputField(definition, 'images');
   for (const field of Object.values(mapping)) {
-    if (properties[field]) values[field] = properties[field].default ?? (field === 'seed' ? '' : undefined);
+    if (properties[field]) values[field] = properties[field].default ?? (field === seedField ? '' : undefined);
   }
   for (const [key, value] of Object.entries(handoff.parameters)) {
     if (value === undefined) continue;
     const field = mapping[key as keyof typeof mapping];
     if (!properties[field]) throw new Error(`当前工作流不支持交接参数 ${field}，请返回预览修改`);
-    if (field === 'seed' && typeof value === 'string' && value.trim() === '') { values.seed = ''; continue; }
-    if (field === 'seed' && properties.seed.type === 'integer') {
+    if (field === seedField && typeof value === 'string' && value.trim() === '') { values[seedField] = ''; continue; }
+    if (field === seedField && properties[seedField].type === 'integer') {
       if (typeof value !== 'string' || !/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))) throw new Error('交接参数 seed 无效，请返回预览修改');
-      values.seed = Number(value);
+      values[seedField] = Number(value);
     } else values[field] = value;
   }
-  if (!properties.prompt) throw new Error('当前工作流不支持交接提示词');
-  if (handoff.images.length && !properties.images) throw new Error('当前工作流不支持参考图片，请返回预览修改');
+  if (!properties[inputField(definition, 'prompt')]) throw new Error('当前工作流不支持交接提示词');
+  if (handoff.images.length && !properties[imageField]) throw new Error('当前工作流不支持参考图片，请返回预览修改');
   // Validate the exact active schemas, while leaving unrelated form fields untouched.
-  const partialDefinition = { ...definition, inputs: { ...definition.inputs, required: [] } };
-  const validationValues: Record<string, unknown> = { ...values, ...(handoff.images.length ? { images: handoff.images } : {}) };
-  if (validationValues.seed === '') delete validationValues.seed;
+  const partialDefinition = { ...definition, inputs: { ...definition.inputs, required: [], properties: { ...properties, ...(properties[imageField] ? { [imageField]: { ...properties[imageField], items: { type: 'object' } } } : {}) } } };
+  const validationValues: Record<string, unknown> = { ...values, ...(handoff.images.length ? { [imageField]: handoff.images } : {}) };
+  if (validationValues[seedField] === '') delete validationValues[seedField];
   const result = compileWorkflow(partialDefinition, `handoff:${definition.id}:${definition.version}`).validateDraft(validationValues);
   if (!result.ok) throw new Error(`交接参数不合法（${result.errors.map((error) => error.path.slice(1)).join('、')}），请返回预览修改`);
   return values;
 }
 
 export function normalizePromptHandoffParameters(parameters: PromptHandoff['parameters'], definition: WorkflowDefinition): PromptHandoff['parameters'] {
-  const values = resolvePromptHandoffValues({ prompt: 'preview', images: [], parameters, source: { threadId: 'preview', messageId: 'preview', versionId: 'preview' } }, definition);
+  const values = canonicalInputs(definition, resolvePromptHandoffValues({ prompt: 'preview', images: [], parameters, source: { threadId: 'preview', messageId: 'preview', versionId: 'preview' } }, definition));
   return {
     ...(parameters.resolution !== undefined ? { resolution: String(values.resolution) } : {}),
     ...(parameters.durationSeconds !== undefined ? { durationSeconds: Number(values.duration) } : {}),
