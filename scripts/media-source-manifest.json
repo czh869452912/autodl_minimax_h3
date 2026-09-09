@@ -1,0 +1,22 @@
+[
+  {
+    "name": "ffmpeg-kit-source.tar.gz",
+    "url": "https://codeload.github.com/JamaisMagic/ffmpeg-kit-16KB/tar.gz/c7ca204219d549f563799bacbbdfeb19e31530f2",
+    "sha256": "64629f6aed3b307574d709b27faca548f3f82c2cc9aab61d72a7cf9dff9e9a2f"
+  },
+  {
+    "name": "ffmpeg-source.tar.gz",
+    "url": "https://codeload.github.com/arthenica/FFmpeg/tar.gz/34277e12e80031c7f89494ba543684bc1dd0be8f",
+    "sha256": "db715cf38d8c1757f6ed417af2be9301905a060d14fec0b1096f17bd17431ff7"
+  },
+  {
+    "name": "cpu-features-source.tar.gz",
+    "url": "https://codeload.github.com/arthenica/cpu_features/tar.gz/d3b2440fcfc25fe8e6d0d4a85f06d68e98312f5b",
+    "sha256": "6a473c1e0f2381786e9005e05f5f77dd18b3eb1eef296bd33c13803925c11cc3"
+  },
+  {
+    "name": "smart-exception-java-0.2.1-sources.jar",
+    "url": "https://repo.maven.apache.org/maven2/com/arthenica/smart-exception-java/0.2.1/smart-exception-java-0.2.1-sources.jar",
+    "sha256": "8275af16bcb006e3547edb18f1eda54875a4d749409290d9d0e97fed013e3be9"
+  }
+]
