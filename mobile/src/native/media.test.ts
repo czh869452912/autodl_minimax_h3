@@ -41,7 +41,7 @@ describe('native media integrity', () => {
     await expect(probeVideo('file:///video.mp4', { probeVideo: async () => valid } as never)).resolves.toEqual(valid);
     await expect(probeVideo('file:///video.mp4', { probeVideo: async () => ({ ...valid, videoTrackCount: 0, hasVideoTrack: false }) } as never)).rejects.toMatchObject({ code: 'MEDIA_INVALID' });
     await expect(probeVideo('file:///video.mp4', { probeVideo: async () => ({ ...valid, durationMs: 0 }) } as never)).rejects.toMatchObject({ code: 'MEDIA_INVALID' });
-    await expect(probeVideo('file:///video.mp4', { probeVideo: async () => ({ ...valid, decodedFrames: 2 }) } as never)).rejects.toMatchObject({ code: 'MEDIA_INVALID' });
+    await expect(probeVideo('file:///video.mp4', { probeVideo: async () => ({ ...valid, decodedFrames: 2 }) } as never)).rejects.toMatchObject({ code: 'MEDIA_DECODE_FAILED' });
   });
 });
 

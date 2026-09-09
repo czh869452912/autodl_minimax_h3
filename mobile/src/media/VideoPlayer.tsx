@@ -1,3 +1,4 @@
+import { mediaProbeFailureCode } from './mediaValidation';
 import { useEffect, useState } from 'react';
 import { useEvent } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -22,7 +23,7 @@ export function VideoPlayer({ source, poster, validateSource, onInvalidSource, r
 
 function InlineVideoPlayer({ source, poster, validateSource, onInvalidSource, recovering }: VideoPlayerProps & { recovering: boolean }) {
   const [hasFirstFrame, setHasFirstFrame] = useState(false);
-  const [validation, setValidation] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+  const [validation, setValidation] = useState<'idle' | 'checking' | 'valid' | 'invalid' | 'unsupported' | 'decodeFailed'>('idle');
   const player = useVideoPlayer(source, (instance) => {
     instance.muted = false;
     instance.loop = false;
@@ -44,8 +45,8 @@ function InlineVideoPlayer({ source, poster, validateSource, onInvalidSource, re
       () => { if (current) setValidation('valid'); },
       (cause: unknown) => {
         if (!current) return;
-        const code = cause && typeof cause === 'object' ? (cause as { code?: unknown }).code : undefined;
-        setValidation(code === 'MEDIA_INVALID' ? 'invalid' : 'valid');
+        const code = mediaProbeFailureCode(cause);
+        setValidation(code === 'MEDIA_CODEC_UNSUPPORTED' ? 'unsupported' : code === 'MEDIA_DECODE_FAILED' ? 'decodeFailed' : code === 'MEDIA_INVALID' || ['MEDIA_NAL_INVALID', 'MEDIA_SAMPLE_INVALID', 'MEDIA_NO_VIDEO_TRACK', 'MEDIA_DURATION_INVALID'].includes(code ?? '') ? 'invalid' : 'valid');
       },
     );
     return () => { current = false; };
@@ -55,7 +56,7 @@ function InlineVideoPlayer({ source, poster, validateSource, onInvalidSource, re
     <VideoView testID="inline-video-view" player={player} nativeControls contentFit="contain" surfaceType="textureView" useExoShutter={false} fullscreenOptions={{ enable: true, orientation: 'default' }} onFirstFrameRender={() => setHasFirstFrame(true)} style={styles.video} />
     {!hasFirstFrame && poster ? <View testID="video-poster" pointerEvents="none" style={styles.poster}><Image source={{ uri: poster }} style={styles.posterImage} resizeMode="contain" /></View> : null}
     {status === 'loading' ? <View pointerEvents="none" style={styles.loading}><ActivityIndicator color={COLORS.primaryActive} /></View> : null}
-    {status === 'error' ? <View style={styles.error}><Text numberOfLines={2} style={styles.errorText}>{validation === 'invalid' ? '本地视频文件已损坏' : '视频播放失败'}</Text>{validation === 'checking' ? <ActivityIndicator color={COLORS.primaryActive} /> : validation === 'invalid' && onInvalidSource ? <Pressable accessibilityRole="button" accessibilityLabel="重新下载视频" disabled={recovering} onPress={() => void onInvalidSource(source)} style={[styles.retry, recovering && styles.disabled]}><AppIcon name="refresh" size={18} color={COLORS.onPrimary} /><Text style={styles.retryText}>{recovering ? '重新下载中…' : '重新下载'}</Text></Pressable> : <Pressable accessibilityRole="button" accessibilityLabel="重试播放" onPress={retry} style={styles.retry}><AppIcon name="refresh" size={18} color={COLORS.onPrimary} /><Text style={styles.retryText}>重试播放</Text></Pressable>}</View> : null}
+    {status === 'error' ? <View style={styles.error}><Text numberOfLines={2} style={styles.errorText}>{validation === 'unsupported' ? '当前设备不支持此视频编码，重新下载无法解决' : validation === 'decodeFailed' ? '设备解码失败，尚不能确定文件损坏' : validation === 'invalid' ? '本地视频文件已损坏' : '视频播放失败'}</Text>{validation === 'unsupported' ? null : validation === 'checking' ? <ActivityIndicator color={COLORS.primaryActive} /> : validation === 'invalid' && onInvalidSource ? <Pressable accessibilityRole="button" accessibilityLabel="重新下载视频" disabled={recovering} onPress={() => void onInvalidSource(source)} style={[styles.retry, recovering && styles.disabled]}><AppIcon name="refresh" size={18} color={COLORS.onPrimary} /><Text style={styles.retryText}>{recovering ? '重新下载中…' : '重新下载'}</Text></Pressable> : <Pressable accessibilityRole="button" accessibilityLabel="重试播放" onPress={retry} style={styles.retry}><AppIcon name="refresh" size={18} color={COLORS.onPrimary} /><Text style={styles.retryText}>重试播放</Text></Pressable>}</View> : null}
   </View>;
 }
 

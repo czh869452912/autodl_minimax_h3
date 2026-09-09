@@ -5,6 +5,15 @@ import { TaskCardRow } from './TaskCardRow';
 import type { TaskCard } from './taskCard';
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
+test('shows an encoding explanation without offering a futile download retry', () => {
+  const item: TaskCard = { id: 'a', prompt: 'p', status: 'SUCCESS', resolution: '768p', duration: 5, createdAt: 1, updatedAt: 2, downloadState: 'DOWNLOAD_FAILED', downloadError: 'ARTIFACT_MEDIA_UNSUPPORTED', exportState: 'NOT_REQUESTED' };
+  let tree!: ReturnType<typeof create>;
+  act(() => { tree = create(<TaskCardRow item={item} busy={false} onDownload={jest.fn()} onExport={jest.fn()} onRemove={jest.fn()} onOpen={jest.fn()} />); });
+  expect(tree.root.findAllByType(Text).some(node => String(node.props.children).includes('当前设备不支持此视频编码'))).toBe(true);
+  expect(tree.root.findAllByProps({ accessibilityLabel: '重试下载' })).toHaveLength(0);
+  act(() => tree.unmount());
+});
+
 test('active card timing advances independently and terminal cards own no timer', () => {
   jest.useFakeTimers({ now: 2000 });
   const item: TaskCard = { id: 'a', prompt: 'p', status: 'RUNNING', resolution: '720p', duration: 5, createdAt: 1000, startedAt: 1500, updatedAt: 1500, downloadState: 'IDLE', exportState: 'NOT_REQUESTED' };

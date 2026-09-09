@@ -1,5 +1,22 @@
 import { classifyMediaValidationFailure, mediaValidationMessage } from './mediaValidation';
 
+test.each([
+  ['MEDIA_CODEC_UNSUPPORTED', 'ARTIFACT_MEDIA_UNSUPPORTED'],
+  ['MEDIA_DECODE_FAILED', 'ARTIFACT_MEDIA_DECODE_FAILED'],
+  ['MEDIA_PROBE_FAILED', 'ARTIFACT_MEDIA_PROBE_FAILED'],
+])('does not retry download for %s', (code, expected) => {
+  expect(classifyMediaValidationFailure(1, { code })).toEqual({ code: expected, retryable: false });
+});
+
+test('preserves legacy native decode diagnostic instead of declaring corruption', () => {
+  expect(classifyMediaValidationFailure(1, { code: 'MEDIA_INVALID', message: 'MEDIA_DECODE_FAILED' }))
+    .toEqual({ code: 'ARTIFACT_MEDIA_DECODE_FAILED', retryable: false });
+});
+
+test('unknown probe errors do not prove file corruption', () => {
+  expect(classifyMediaValidationFailure(1, new Error('bridge error'))).toEqual({ code: 'ARTIFACT_MEDIA_PROBE_FAILED', retryable: false });
+});
+
 test('classifies the first two invalid video attempts as retryable', () => {
   expect(classifyMediaValidationFailure(1)).toEqual({
     code: 'ARTIFACT_MEDIA_INVALID_RETRYABLE',

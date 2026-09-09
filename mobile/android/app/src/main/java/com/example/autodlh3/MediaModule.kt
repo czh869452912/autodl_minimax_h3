@@ -184,8 +184,13 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
           putDouble("sampleCount", result.sampleCount.toDouble())
         })
       } catch (error: Exception) {
-        val diagnostic = (error as? MediaIntegrityException)?.diagnosticCode ?: "MEDIA_CONTAINER_INVALID"
-        promise.reject("MEDIA_INVALID", diagnostic, error)
+        val diagnostic = (error as? MediaIntegrityException)?.diagnosticCode ?: "MEDIA_PROBE_FAILED"
+        val code = when (diagnostic) {
+          "MEDIA_CODEC_UNSUPPORTED", "MEDIA_DECODE_FAILED" -> diagnostic
+          "MEDIA_NAL_INVALID", "MEDIA_SAMPLE_INVALID", "MEDIA_NO_VIDEO_TRACK", "MEDIA_DURATION_INVALID" -> "MEDIA_INVALID"
+          else -> "MEDIA_PROBE_FAILED"
+        }
+        promise.reject(code, diagnostic, error, Arguments.createMap().apply { putString("diagnosticCode", diagnostic) })
       }
     }
   }

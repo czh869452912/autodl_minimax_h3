@@ -2,6 +2,7 @@ package com.example.autodlh3
 
 import android.content.Context
 import android.media.MediaExtractor
+import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -165,6 +166,7 @@ class MediaIntegrity(private val context: Context) {
     try {
       val container = withExtractor(source) { extractor ->
         val videoTracks = mutableSetOf<Int>()
+        val formats = mutableListOf<MediaFormat>()
         val nalLengthSizes = mutableMapOf<Int, Int>()
         var durationUs = 0L
         for (index in 0 until extractor.trackCount) {
@@ -172,6 +174,7 @@ class MediaIntegrity(private val context: Context) {
           val mime = format.getString(MediaFormat.KEY_MIME).orEmpty()
           if (!mime.startsWith("video/")) continue
           videoTracks += index
+          formats += format
           if (mime == MediaFormat.MIMETYPE_VIDEO_AVC || mime == MediaFormat.MIMETYPE_VIDEO_HEVC) {
             nalLengthSizes[index] = if (format.containsKey("nal-length-size")) format.getInteger("nal-length-size") else 4
           }
@@ -194,6 +197,17 @@ class MediaIntegrity(private val context: Context) {
           }
           if (!extractor.advance()) break
         }
+        // Validate structural framing before checking this device's decoder capabilities.
+        val result = VideoProbeResult(durationUs / 1_000L, videoTracks.size, 0, sampleCount)
+        MediaValidationPolicy.errorCode(result)?.takeIf { it != "MEDIA_DECODE_FAILED" }?.let { throw MediaIntegrityException(it) }
+        for (format in formats) {
+          // Extractors may omit KEY_PROFILE even though the SPS declares High 10.
+          if (format.getString(MediaFormat.KEY_MIME) == MediaFormat.MIMETYPE_VIDEO_AVC) {
+            AvcProfilePolicy.profile(format.getByteBuffer("csd-0"))?.let { format.setInteger(MediaFormat.KEY_PROFILE, it) }
+          }
+          val supported = try { MediaCodecList(MediaCodecList.REGULAR_CODECS).findDecoderForFormat(format) != null } catch (_: Exception) { null }
+          if (supported == false) throw MediaIntegrityException("MEDIA_CODEC_UNSUPPORTED")
+        }
         Triple(videoTracks.size, durationUs, sampleCount)
       }
       val durationMs = container.second / 1_000L
@@ -201,21 +215,22 @@ class MediaIntegrity(private val context: Context) {
       MediaValidationPolicy.errorCode(preliminary)?.takeIf { it != "MEDIA_DECODE_FAILED" }?.let { throw MediaIntegrityException(it) }
       val durationUs = durationMs * 1_000L
       val positions = longArrayOf(0L, durationUs / 2L, maxOf(0L, durationUs - 100_000L))
-      val decodedFrames = withRetriever(source) { retriever ->
+      val decodedFrames = try { withRetriever(source) { retriever ->
         positions.count { position ->
           retriever.getFrameAtTime(position, MediaMetadataRetriever.OPTION_CLOSEST)?.let { bitmap ->
             bitmap.recycle()
             true
           } ?: false
         }
-      }
+      } } catch (error: Exception) { throw MediaIntegrityException("MEDIA_DECODE_FAILED", error) }
       val result = VideoProbeResult(durationMs, container.first, decodedFrames, container.third)
       MediaValidationPolicy.errorCode(result)?.let { throw MediaIntegrityException(it) }
       return result
     } catch (error: MediaIntegrityException) {
       throw error
     } catch (error: Exception) {
-      throw MediaIntegrityException("MEDIA_CONTAINER_INVALID", error)
+      // An extractor/IO exception does not prove that the remote bytes are corrupt.
+      throw MediaIntegrityException("MEDIA_PROBE_FAILED", error)
     }
   }
 

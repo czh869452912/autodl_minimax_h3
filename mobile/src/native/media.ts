@@ -109,8 +109,11 @@ export async function probeVideo(
   const native = requireIntegrityModule(module, 'probeVideo');
   const result = await native.probeVideo!(value);
   const hasVideoTrack = result.hasVideoTrack !== false && Number.isInteger(result.videoTrackCount) && result.videoTrackCount > 0;
-  if (!hasVideoTrack || !Number.isFinite(result.durationMs) || result.durationMs <= 0 || !Number.isInteger(result.decodedFrames) || result.decodedFrames < 3 || !Number.isFinite(result.sampleCount) || result.sampleCount <= 0) {
+  if (!hasVideoTrack || !Number.isFinite(result.durationMs) || result.durationMs <= 0 || !Number.isFinite(result.sampleCount) || result.sampleCount <= 0) {
     throw new MediaIntegrityError('MEDIA_INVALID', '视频文件不可播放');
+  }
+  if (!Number.isInteger(result.decodedFrames) || result.decodedFrames < 3) {
+    throw new MediaIntegrityError('MEDIA_DECODE_FAILED', '设备无法完成视频解码校验');
   }
   return result;
 }

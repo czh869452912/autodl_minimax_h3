@@ -349,6 +349,19 @@ test.each([1, 2])('retries an invalid downloaded video on attempt %s without com
   expect(deps.staged.abort).toHaveBeenCalledTimes(1);
 });
 
+test.each(['MEDIA_CODEC_UNSUPPORTED', 'MEDIA_DECODE_FAILED'])('terminates %s without publishing or redownloading', async code => {
+  const deps = setup();
+  deps.verifyVideo.mockRejectedValueOnce(Object.assign(new Error(code), { code }));
+  await handleArtifactDownload(operation, 'worker', {
+    ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10 }),
+  });
+  expect(deps.operations.retry).not.toHaveBeenCalled();
+  expect(deps.staged.publish).not.toHaveBeenCalled();
+  expect(deps.staged.abort).toHaveBeenCalledTimes(1);
+  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('DOWNLOAD_FAILED', code === 'MEDIA_CODEC_UNSUPPORTED' ? 'ARTIFACT_MEDIA_UNSUPPORTED' : 'ARTIFACT_MEDIA_DECODE_FAILED');
+  expect(deps.operations.finish).toHaveBeenCalledWith('download-1', 'worker', 'FAILED', 50, expect.objectContaining({ diagnosticCode: code, retryable: false }));
+});
+
 test('fails an invalid downloaded video on attempt 3 without committing projections or export', async () => {
   const deps = setup();
   deps.verifyVideo.mockRejectedValueOnce(Object.assign(new Error('native decoder detail'), { code: 'MEDIA_INVALID' }));

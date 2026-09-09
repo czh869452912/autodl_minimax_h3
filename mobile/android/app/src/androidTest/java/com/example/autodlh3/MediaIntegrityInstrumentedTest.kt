@@ -16,6 +16,28 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class MediaIntegrityInstrumentedTest {
+  @Test fun high10IsEitherSupportedOrClassifiedWithoutClaimingCorruption() {
+    val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+    val source = File(context.cacheDir, "high10-test.mp4")
+    val broken = File(context.cacheDir, "high10-broken.mp4")
+    try {
+      androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context.assets.open("high10-test.mp4").use { input ->
+        source.outputStream().use { input.copyTo(it) }
+      }
+      try {
+        assertEquals(3, MediaIntegrity(context).probeVideo(source.toURI().toString()).decodedFrames)
+      } catch (error: MediaIntegrityException) {
+        assertEquals("MEDIA_CODEC_UNSUPPORTED", error.diagnosticCode)
+      }
+      corruptFirstNalLength(source, broken)
+      try {
+        MediaIntegrity(context).probeVideo(broken.toURI().toString())
+        fail("Corrupt High 10 framing must still fail integrity validation")
+      } catch (error: MediaIntegrityException) {
+        assertTrue(error.diagnosticCode in setOf("MEDIA_NAL_INVALID", "MEDIA_SAMPLE_INVALID"))
+      }
+    } finally { source.delete(); broken.delete() }
+  }
   private fun corruptFirstNalLength(source: File, target: File) {
     source.copyTo(target, overwrite = true)
     RandomAccessFile(target, "rw").use { file ->

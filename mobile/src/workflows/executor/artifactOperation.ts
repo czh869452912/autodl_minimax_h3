@@ -12,7 +12,7 @@ import { assertAppDatabaseWritableAsync } from '../../storage/database';
 import { artifactExportDisplayName } from '../../media/artifactDisplayName';
 export { artifactExportDisplayName } from '../../media/artifactDisplayName';
 import { ArtifactOperationError, artifactError } from './artifactErrors';
-import { classifyMediaValidationFailure, mediaValidationMessage } from '../../media/mediaValidation';
+import { classifyMediaValidationFailure, mediaValidationMessage, mediaProbeFailureCode } from '../../media/mediaValidation';
 
 type ArtifactPolicy = {
   allowedHosts: string[];
@@ -188,7 +188,7 @@ function normalized(code: string, retryable: boolean, message?: string): Normali
   if ((code === 'ARTIFACT_DNS_FAILED' || code === 'ARTIFACT_VIRTUAL_DNS') && message) {
     return { code, message, retryable };
   }
-  if (code === 'ARTIFACT_MEDIA_INVALID_RETRYABLE' || code === 'ARTIFACT_MEDIA_INVALID') {
+  if (code === 'ARTIFACT_MEDIA_INVALID_RETRYABLE' || code === 'ARTIFACT_MEDIA_INVALID' || code === 'ARTIFACT_MEDIA_UNSUPPORTED' || code === 'ARTIFACT_MEDIA_DECODE_FAILED' || code === 'ARTIFACT_MEDIA_PROBE_FAILED') {
     return { code, message: mediaValidationMessage(code), retryable };
   }
   return { code, message: retryable ? 'Artifact transfer will be retried.' : 'Artifact transfer failed policy or integrity validation.', retryable };
@@ -326,7 +326,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
       try {
         await deps.verifyVideo(resolveUri(staged.stagedRelativePath));
       } catch (cause) {
-        const failure = classifyMediaValidationFailure(operation.attempt);
+        const failure = classifyMediaValidationFailure(operation.attempt, cause);
         throw new ArtifactOperationError(failure.code, mediaValidationMessage(failure.code), failure.retryable, { cause });
       }
     }
@@ -365,6 +365,11 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     }
     const failure = artifactError(canonicalNativeTransferCause(cause));
     const normalizedFailure = normalized(failure.code, failure.retryable, failure.message);
+    // Keep bounded native diagnostics in the durable operation, never raw URLs or exceptions.
+    if (cause instanceof ArtifactOperationError) {
+      const diagnostic = mediaProbeFailureCode(cause.cause);
+      if (diagnostic && /^MEDIA_[A-Z_]{1,64}$/.test(diagnostic)) normalizedFailure.diagnosticCode = diagnostic;
+    }
     if (failure.retryable) {
       const nextRetryAt = timestamp + Math.min(60_000, 1_000 * (2 ** Math.max(0, operation.attempt - 1)));
       await deps.updateDownloadState('ENQUEUED', failure.code);
