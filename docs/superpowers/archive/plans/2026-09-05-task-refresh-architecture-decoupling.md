@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Execution status (2026-09-05):** Tasks 1–10 complete, reviewed inline at the user's request. Automated verification passes; Task 11's full HTTPS transfer/release performance gate remains open. See the [verification report](../../verification/2026-09-05-task-refresh-architecture-decoupling.md) and [PERF-1](../../verification/2026-09-05-task-refresh-follow-ups.md#perf-1-full-transfer-and-release-performance-acceptance). Checked test-first steps summarize the recorded regression work; exact implementation and test names evolved during review.
+**Execution status (2026-09-05):** Tasks 1–10 complete, reviewed inline at the user's request. Automated verification passes; Task 11's full HTTPS transfer/release performance gate remains open. See the [verification report](../verification/2026-09-05-task-refresh-architecture-decoupling.md) and [PERF-1](../../../verification/2026-09-05-task-refresh-follow-ups.md#perf-1-full-transfer-and-release-performance-acceptance). Checked test-first steps summarize the recorded regression work; exact implementation and test names evolved during review.
 
 **Goal:** Make task-list refresh a fast SQLite projection read, while durable executor work, media transfer, hashing, maintenance, and retries run independently without freezing the React Native UI or losing refresh requests.
 

@@ -2,7 +2,7 @@
 
 Follow-up: a real-device stale task projection and SQLite contention regression was subsequently found and fixed. See the [regression report](2026-09-05-task-refresh-regression-fix.md); the earlier in-process tests below did not establish independent-connection write correctness.
 
-Implementation and inline review are complete through Tasks 1–10. Task 11 remains **partially complete**: there is no public HTTPS endpoint for the generated video, and the measurements below use a self-contained debug APK rather than a release-equivalent build. These measurements do not establish full transfer/UI performance acceptance. Integration remains subject to [PERF-1](2026-09-05-task-refresh-follow-ups.md#perf-1-full-transfer-and-release-performance-acceptance).
+Implementation and inline review are complete through Tasks 1–10. Task 11 remains **partially complete**: there is no public HTTPS endpoint for the generated video, and the measurements below use a self-contained debug APK rather than a release-equivalent build. These measurements do not establish full transfer/UI performance acceptance. Integration remains subject to [PERF-1](../../../verification/2026-09-05-task-refresh-follow-ups.md#perf-1-full-transfer-and-release-performance-acceptance).
 
 ## Source and automated checks
 
@@ -37,7 +37,7 @@ Inline review, as requested, identified and corrected:
 - Requests from both pending and completion subscribers preserve single-flight/trailing-read behavior.
 - Global task activity uses a covering index on `(status, download_state, export_state)`. A real SQLite `EXPLAIN QUERY PLAN` regression failed before this index and passed afterward, replacing `SCAN tasks` with a covering-index scan.
 
-The new index remains in unshipped schema v8, consistent with the earlier migration ruling. A developer database already upgraded by an intermediate branch commit needs a fresh fixture/reset or a later migration to acquire all v8 additions; shipped v7 databases receive them during upgrade. See [DEV-1](2026-09-05-task-refresh-follow-ups.md#dev-1-intermediate-v8-development-databases).
+The new index remains in unshipped schema v8, consistent with the earlier migration ruling. A developer database already upgraded by an intermediate branch commit needs a fresh fixture/reset or a later migration to acquire all v8 additions; shipped v7 databases receive them during upgrade. See [DEV-1](../../../verification/2026-09-05-task-refresh-follow-ups.md#dev-1-intermediate-v8-development-databases).
 
 Route tests verify that first-page hydration and manual refresh finish while worker/maintenance promises remain unresolved. Session tests verify no idle timer, unchanged-object reuse, revision fences, cross-runtime revision discovery, stale recovery, pagination, and disposal. Command tests verify atomic intent/projection/wake rollback and durable acknowledgement. Native tests verify redirect policy, timeouts, cancellation, limits, hashes, and publication ownership. These automated checks are distinct from an interactive device test during a real download.
 
@@ -66,7 +66,7 @@ Raw samples: [before index](task-refresh-benchmark-before.json), [after index](t
 | CAS adoption + publication | 224.09 ms | 410.72 ms | Correct hash, byte count and CAS path |
 | Maximum JS event-loop stall | 30.61 ms | 30.58 ms | Below 250 ms during measured local phases only |
 | Unchanged revision card-window reads | 0 | 0 | Pass; all existing card references reused |
-| Full HTTPS transfer | Not run | Not run | [PERF-1](2026-09-05-task-refresh-follow-ups.md#perf-1-full-transfer-and-release-performance-acceptance) |
+| Full HTTPS transfer | Not run | Not run | [PERF-1](../../../verification/2026-09-05-task-refresh-follow-ups.md#perf-1-full-transfer-and-release-performance-acceptance) |
 
 p95 uses nearest rank (`ceil(0.95 × 5)`), therefore the maximum of five values. Twenty warm revision samples per run and every event-loop sample are in the linked JSON files. Stall is `max(0, actual interval − 16 ms)` from a 16 ms JS interval surrounding native hashes, probe, fixture copy and CAS publication. The harness invokes the real native hasher twice on a local file; it does not substitute these timings for the transfer's streaming hash or durable reread.
 

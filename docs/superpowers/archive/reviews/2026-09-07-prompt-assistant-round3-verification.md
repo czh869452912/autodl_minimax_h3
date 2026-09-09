@@ -2,7 +2,7 @@
 
 日期：2026-09-07。基线：`4ed379e4`，`mobile/src` 与原评审的 `cb263cf3` 无差异。范围：核验、方案评估和实施规划；未修改产品代码。
 
-关联：[原评审](2026-09-06-prompt-assistant-agent-ux-review-round3.md)、[综合实施方案](../plans/2026-09-07-prompt-assistant-foundation-remediation.md)、[可复跑探针](evidence/round3-probes.cjs)。
+关联：[原评审](2026-09-06-prompt-assistant-agent-ux-review-round3.md)、[综合实施方案](../../plans/2026-09-07-prompt-assistant-foundation-remediation.md)、[可复跑探针](evidence/round3-probes.cjs)。
 
 ## 1. 核心结论
 
@@ -180,7 +180,7 @@ npm test -- --runInBand --silent
 npm run typecheck
   exit 0
 cd ..
-node docs/superpowers/reviews/evidence/round3-probes.cjs
+node docs/superpowers/archive/reviews/evidence/round3-probes.cjs
   exit 0，14 条证据输出
 ```
 

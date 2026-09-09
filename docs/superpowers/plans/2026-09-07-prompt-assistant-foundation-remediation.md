@@ -15,7 +15,7 @@
 
 **Tech Stack:** Expo 57 / React Native 0.86 / React 19、SQLite（现有 schema v8、withWriteTransaction）、DeepAgents 1.13.2、AG-UI client 0.0.57、CopilotKit RN 1.69.3、现有 CAS、Jest 和真实 AbstractAgent 集成测试。
 
-**依据：** [独立核验及全量映射](../reviews/2026-09-07-prompt-assistant-round3-verification.md)。日期 2026-09-07；基线 `4ed379e4`。本轮产出只含规划、核验和审计探针。
+**依据：** [独立核验及全量映射](../archive/reviews/2026-09-07-prompt-assistant-round3-verification.md)。日期 2026-09-07；基线 `4ed379e4`。本轮产出只含规划、核验和审计探针。
 
 ---
 

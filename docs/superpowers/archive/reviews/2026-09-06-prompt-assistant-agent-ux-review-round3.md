@@ -1,6 +1,6 @@
 # Prompt 助手第三轮审查：Agent、交互、Timeline 与 Session（修复后复审）
 
-> **后续独立核验（2026-09-07）**：[核验矩阵与证据](2026-09-07-prompt-assistant-round3-verification.md)纠正了本文 T6、U4、A1、P11、P5、H4 等结论或部分推理，并补充 SDK 默认摘要、附件大小限制及现有 CAS/GC 的实际行为。本文保留作为原始评审记录；修正优先级与实施边界请以[综合方案](../plans/2026-09-07-prompt-assistant-foundation-remediation.md)为准，不再沿用下述“0 项推翻”结论。
+> **后续独立核验（2026-09-07）**：[核验矩阵与证据](2026-09-07-prompt-assistant-round3-verification.md)纠正了本文 T6、U4、A1、P11、P5、H4 等结论或部分推理，并补充 SDK 默认摘要、附件大小限制及现有 CAS/GC 的实际行为。本文保留作为原始评审记录；修正优先级与实施边界请以[综合方案](../../plans/2026-09-07-prompt-assistant-foundation-remediation.md)为准，不再沿用下述“0 项推翻”结论。
 
 日期：2026-09-06。代码基线：`cb263cf3`（dev 已对齐 origin/main，v1.4.13），包含 `codex/prompt-assistant-correctness` 两批修复（PR #27）。
 

@@ -1,6 +1,6 @@
 # Prompt Assistant 修正实施记录
 
-日期：2026-09-07。实施基线：`4ed379e4`。依据：[独立核验](../superpowers/reviews/2026-09-07-prompt-assistant-round3-verification.md)、[获认可的方案](../superpowers/plans/2026-09-07-prompt-assistant-foundation-remediation.md)。
+日期：2026-09-07。实施基线：`4ed379e4`。依据：[独立核验](../superpowers/archive/reviews/2026-09-07-prompt-assistant-round3-verification.md)、[获认可的方案](../superpowers/plans/2026-09-07-prompt-assistant-foundation-remediation.md)。
 
 ## 已实施的修正
 

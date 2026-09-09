@@ -20,4 +20,4 @@ Schema v8 was development-only before the planned v1.4.11 release. Branch users 
 
 Status: addressed for the reported refresh regression; exhaustive multiprocess coverage remains separate.
 
-`src/test/realSqlite.ts` now offers an independent-connection transaction mode. A real file-backed writer-lock regression and a ten-round Expo SQLite device regression cover the reported command contention. The legacy in-process queue remains the default for older tests; it still is not proof of exhaustive independent-runtime contention behavior. See [regression verification](2026-09-05-task-refresh-regression-fix.md).
+`src/test/realSqlite.ts` now offers an independent-connection transaction mode. A real file-backed writer-lock regression and a ten-round Expo SQLite device regression cover the reported command contention. The legacy in-process queue remains the default for older tests; it still is not proof of exhaustive independent-runtime contention behavior. See [regression verification](../superpowers/archive/verification/2026-09-05-task-refresh-regression-fix.md).

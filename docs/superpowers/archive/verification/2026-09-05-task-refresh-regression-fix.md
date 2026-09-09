@@ -52,7 +52,7 @@
 - `npm run typecheck`、`npm run verify:workflow-releases`：通过。
 - 全量 Jest：123 suites / **701 tests passed**，2 个既有环境门控测试 skipped。
 - Android x86_64：`:app:testDebugUnitTest :app:assembleDebug :app:connectedDebugAndroidTest` 通过，35 项 JVM、1 项 instrumentation，构建 2m09s。最终正常入口 `:app:testDebugUnitTest :app:assembleDebug` 再次通过（1m10s），使用 `adb install -r` 覆盖安装。
-- 真实 Expo SQLite 并发夹具：[脚本](../../mobile/scripts/task-refresh-contention-device.jsx)、[原始结果](task-refresh-contention-device.json)。设备 `emulator-5554` / AVD `test_phone` / Android 15 / `sdk_gphone64_x86_64`，自包含 debug Hermes APK。
+- 真实 Expo SQLite 并发夹具：[脚本](../../../mobile/scripts/task-refresh-contention-device.jsx)、[原始结果](task-refresh-contention-device.json)。设备 `emulator-5554` / AVD `test_phone` / Android 15 / `sdk_gphone64_x86_64`，自包含 debug Hermes APK。
 - 10 轮，每轮独立连接持写锁 100 ms，同时 4 个 job 状态事务、3 个刷新命令与投影读：40 个状态转换完成，30 个命令发出 30 次信号，持久化 wake generation 精确为 30。最终 4 个 job 均 `SUCCEEDED`，对应 task 均 `SUCCESS`。
 - 额外读写冲突测试：整事务执行 2 次，证明真实原生锁错误走了回滚重试；旧状态修复 1 条。最大 JS 事件循环停顿 **22.0 ms**。这些数字只适用于该并发回归，不代替尚未完成的 HTTPS 大文件性能验收。
 - logcat 的 `ANR in|FATAL EXCEPTION|Input dispatching timed out|ReactNativeJS.*Error` 搜索无匹配。
