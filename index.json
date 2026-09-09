@@ -1,0 +1,20 @@
+{
+  "apiVersion": "autodl.workflow-registry/v1",
+  "registryId": "autodl-official",
+  "sequence": 1,
+  "entries": [
+    {
+      "workflowId": "autodl.minimax-h3.i2v-15s",
+      "version": "1.0.1",
+      "contentHash": "fe166625b82f953d23eac160ed509f468b2383b7d7c8be6383abca9096381897",
+      "url": "https://raw.githubusercontent.com/czh869452912/autodl_minimax_h3/workflow-registry/packages/fe166625b82f953d23eac160ed509f468b2383b7d7c8be6383abca9096381897.json"
+    },
+    {
+      "workflowId": "autodl.minimax-h3.zm-u24",
+      "version": "1.0.0",
+      "contentHash": "43853b1f576594dec7f64c797d31a801ebd0609477ed42edee71aebf9ef4862b",
+      "url": "https://raw.githubusercontent.com/czh869452912/autodl_minimax_h3/workflow-registry/packages/43853b1f576594dec7f64c797d31a801ebd0609477ed42edee71aebf9ef4862b.json"
+    }
+  ],
+  "signature": "750a24e6c5a6f1a72f88eecb79ebe1b9e6d75ee0cbf12373995d56a4e37fc345c12980b9eab1d85aa64739a299466b69f27cf9702dd724b290eaacff8ef1c30d"
+}
