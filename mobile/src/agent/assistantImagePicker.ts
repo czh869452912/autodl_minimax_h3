@@ -1,7 +1,7 @@
 import { pickImagesFromGallery, type NativeImageAsset } from '../native/imagePicker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
-import { validateImageBudget } from './attachmentStore';
+import { validateImageBudget } from '../media/attachments';
 
 export type AssistantImageAttachment = {
   id: string;

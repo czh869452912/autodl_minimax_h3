@@ -1,4 +1,4 @@
-import { createPromptDraftStore } from './promptDraft';
+import { createPromptDraftStore } from '../handoff/promptDraft';
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 
 it('round trips text-only drafts and preserves an applied draft until explicit discard', async () => {

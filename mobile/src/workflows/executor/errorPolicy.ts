@@ -1,5 +1,5 @@
 import type { NormalizedError } from '../../jobs/types';
-import { ProviderError } from '../providers/autodl/client';
+import { ProviderError } from '../providers/errors';
 import type { OperationKind } from './types';
 
 export type FailureDisposition = 'TERMINAL' | 'RETRYABLE' | 'UNKNOWN';

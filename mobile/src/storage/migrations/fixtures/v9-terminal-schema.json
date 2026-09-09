@@ -1,0 +1,226 @@
+{
+  "schemaVersion": 9,
+  "provenance": "Frozen after implementation review 2026-09-09; update only for an explicitly reviewed schema change, never regenerate during tests.",
+  "objects": [
+    {
+      "type": "index",
+      "name": "idx_agent_threads_page",
+      "sql": "CREATEINDEXidx_agent_threads_pageONagent_thread_index(deleted,updated_atDESC,thread_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_artifact_blob_refs_owner",
+      "sql": "CREATEINDEXidx_artifact_blob_refs_ownerONartifact_blob_refs(owner_type,owner_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_media_assets_created_at",
+      "sql": "CREATEINDEXidx_media_assets_created_atONmedia_assets(created_atDESC)"
+    },
+    {
+      "type": "index",
+      "name": "idx_media_assets_status_created_id",
+      "sql": "CREATEINDEXidx_media_assets_status_created_idONmedia_assets(status,created_atDESC,idDESC)"
+    },
+    {
+      "type": "index",
+      "name": "idx_media_assets_task_kind",
+      "sql": "CREATEINDEXidx_media_assets_task_kindONmedia_assets(task_id,kind)"
+    },
+    {
+      "type": "index",
+      "name": "idx_tasks_activity",
+      "sql": "CREATEINDEXidx_tasks_activityONtasks(status,download_state,export_state)"
+    },
+    {
+      "type": "index",
+      "name": "idx_tasks_created_id",
+      "sql": "CREATEINDEXidx_tasks_created_idONtasks(created_atDESC,idDESC)"
+    },
+    {
+      "type": "index",
+      "name": "idx_tasks_status_updated_id",
+      "sql": "CREATEINDEXidx_tasks_status_updated_idONtasks(status,updated_atDESC,idDESC)"
+    },
+    {
+      "type": "index",
+      "name": "idx_workflow_job_events_job_sequence",
+      "sql": "CREATEINDEXidx_workflow_job_events_job_sequenceONworkflow_job_events(job_id,sequence)"
+    },
+    {
+      "type": "index",
+      "name": "idx_workflow_jobs_status_updated_id",
+      "sql": "CREATEINDEXidx_workflow_jobs_status_updated_idONworkflow_jobs(status,updated_atASC,idASC)"
+    },
+    {
+      "type": "index",
+      "name": "idx_workflow_operations_due",
+      "sql": "CREATEINDEXidx_workflow_operations_dueONworkflow_operations(kind,state,next_retry_at,lease_expires_at,created_at,id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_workflow_operations_expired_claim",
+      "sql": "CREATEINDEXidx_workflow_operations_expired_claimONworkflow_operations(state,lease_expires_at,id)"
+    },
+    {
+      "type": "table",
+      "name": "agent_client_records",
+      "sql": "CREATETABLEagent_client_records(thread_idTEXTNOTNULL,idTEXTNOTNULL,payload_jsonTEXTNOTNULL,PRIMARYKEY(thread_id,id))"
+    },
+    {
+      "type": "table",
+      "name": "agent_handoffs",
+      "sql": "CREATETABLEagent_handoffs(idTEXTPRIMARYKEYNOTNULL,payload_jsonTEXTNOTNULL,statusTEXTNOTNULL,created_atINTEGERNOTNULL)"
+    },
+    {
+      "type": "table",
+      "name": "agent_messages",
+      "sql": "CREATETABLEagent_messages(thread_idTEXTNOTNULL,idTEXTNOTNULL,sequenceINTEGERNOTNULL,payload_jsonTEXTNOTNULL,PRIMARYKEY(thread_id,id),UNIQUE(thread_id,sequence))"
+    },
+    {
+      "type": "table",
+      "name": "agent_runs",
+      "sql": "CREATETABLEagent_runs(thread_idTEXTNOTNULL,idTEXTNOTNULL,sequenceINTEGERNOTNULL,payload_jsonTEXTNOTNULL,PRIMARYKEY(thread_id,id),UNIQUE(thread_id,sequence))"
+    },
+    {
+      "type": "table",
+      "name": "agent_submissions",
+      "sql": "CREATETABLEagent_submissions(idTEXTPRIMARYKEYNOTNULL,thread_idTEXTNOTNULL,user_message_idTEXTNOTNULL,run_idTEXTNOTNULL,draft_revisionINTEGERNOTNULL)"
+    },
+    {
+      "type": "table",
+      "name": "agent_thread_index",
+      "sql": "CREATETABLEagent_thread_index(thread_idTEXTPRIMARYKEYNOTNULL,created_atINTEGERNOTNULL,updated_atINTEGERNOTNULL,custom_titleTEXT,titleTEXTNOTNULLDEFAULT'',message_countINTEGERNOTNULLDEFAULT0,last_run_jsonTEXT,read_atINTEGERNOTNULLDEFAULT0,deletedINTEGERNOTNULLDEFAULT0)"
+    },
+    {
+      "type": "table",
+      "name": "agent_threads",
+      "sql": "CREATETABLEagent_threads(thread_idTEXTPRIMARYKEYNOTNULL,messages_jsonTEXTNOTNULL,state_jsonTEXTNOTNULL,created_atINTEGERNOTNULL,updated_atINTEGERNOTNULL,custom_titleTEXT)"
+    },
+    {
+      "type": "table",
+      "name": "agent_versions",
+      "sql": "CREATETABLEagent_versions(thread_idTEXTNOTNULL,idTEXTNOTNULL,sequenceINTEGERNOTNULL,payload_jsonTEXTNOTNULL,PRIMARYKEY(thread_id,id),UNIQUE(thread_id,sequence))"
+    },
+    {
+      "type": "table",
+      "name": "agent_workspaces",
+      "sql": "CREATETABLEagent_workspaces(thread_idTEXTNOTNULL,idTEXTNOTNULL,sequenceINTEGERNOTNULL,payload_jsonTEXTNOTNULL,PRIMARYKEY(thread_id,id),UNIQUE(thread_id,sequence))"
+    },
+    {
+      "type": "table",
+      "name": "app_database_recovery",
+      "sql": "CREATETABLEapp_database_recovery(idINTEGERPRIMARYKEYNOTNULLCHECK(id=1),diagnosticTEXTNOTNULL,created_atINTEGERNOTNULL)"
+    },
+    {
+      "type": "table",
+      "name": "app_scheduler_leases",
+      "sql": "CREATETABLEapp_scheduler_leases(lease_keyTEXTPRIMARYKEYNOTNULL,ownerTEXTNOTNULL,expires_atINTEGERNOTNULL)"
+    },
+    {
+      "type": "table",
+      "name": "artifact_blob_refs",
+      "sql": "CREATETABLEartifact_blob_refs(blob_sha256TEXTNOTNULL,owner_typeTEXTNOTNULL,owner_idTEXTNOTNULL,created_atINTEGERNOTNULL,PRIMARYKEY(blob_sha256,owner_type,owner_id))"
+    },
+    {
+      "type": "table",
+      "name": "artifact_blobs",
+      "sql": "CREATETABLEartifact_blobs(sha256TEXTPRIMARYKEYNOTNULL,byte_sizeINTEGERNOTNULL,mimeTEXTNOTNULL,relative_pathTEXTNOTNULLUNIQUE,created_atINTEGERNOTNULL,verified_atINTEGERNOTNULL)"
+    },
+    {
+      "type": "table",
+      "name": "executor_wake_state",
+      "sql": "CREATETABLEexecutor_wake_state(singletonINTEGERPRIMARYKEYNOTNULLCHECK(singleton=1),generationINTEGERNOTNULL,handled_generationINTEGERNOTNULL,maintenance_generationINTEGERNOTNULL,requested_atINTEGERNOTNULL)"
+    },
+    {
+      "type": "table",
+      "name": "media_assets",
+      "sql": "CREATETABLEmedia_assets(idTEXTPRIMARYKEYNOTNULL,task_idTEXTNOTNULL,titleTEXTNOTNULL,promptTEXTNOTNULL,source_urlTEXTNOTNULL,local_pathTEXT,poster_pathTEXT,mime_typeTEXTNOTNULL,widthINTEGER,heightINTEGER,duration_msINTEGER,statusTEXTNOTNULL,created_atINTEGERNOTNULL,updated_atINTEGERNOTNULL,artifact_idTEXT,job_idTEXT,workflow_idTEXT,kindTEXTNOTNULLDEFAULT'video',export_statusTEXT)"
+    },
+    {
+      "type": "table",
+      "name": "media_deliveries",
+      "sql": "CREATETABLEmedia_deliveries(idTEXTPRIMARYKEYNOTNULL,asset_idTEXTNOTNULL,targetTEXTNOTNULL,uriTEXT,statusTEXTNOTNULL,errorTEXT,created_atINTEGERNOTNULL,updated_atINTEGERNOTNULL)"
+    },
+    {
+      "type": "table",
+      "name": "prompt_drafts",
+      "sql": "CREATETABLEprompt_drafts(idTEXTPRIMARYKEYNOTNULL,promptTEXTNOTNULL,attachment_ids_jsonTEXTNOTNULL,created_atINTEGERNOTNULL)"
+    },
+    {
+      "type": "table",
+      "name": "task_projection_state",
+      "sql": "CREATETABLEtask_projection_state(singletonINTEGERPRIMARYKEYNOTNULLCHECK(singleton=1),revisionINTEGERNOTNULL)"
+    },
+    {
+      "type": "table",
+      "name": "tasks",
+      "sql": "CREATETABLEtasks(idTEXTPRIMARYKEYNOTNULL,promptTEXTNOTNULL,statusTEXTNOTNULL,resolutionTEXTNOTNULL,durationINTEGERNOTNULL,seedTEXT,images_jsonTEXT,audios_jsonTEXT,video_urlTEXT,local_uriTEXT,thumbnail_urlTEXT,download_stateTEXTNOTNULLDEFAULT'IDLE',download_errorTEXT,download_progressREAL,gallery_uriTEXT,export_stateTEXTNOTNULLDEFAULT'NOT_REQUESTED',export_errorTEXT,exported_atINTEGER,created_atINTEGERNOTNULL,updated_atINTEGERNOTNULL,started_atINTEGER,execution_durationINTEGER,workflow_idTEXT,workflow_versionTEXT,workflow_hashTEXT,adapter_idTEXT,adapter_versionTEXT,input_jsonTEXT,sync_errorTEXT,last_sync_atINTEGER)"
+    },
+    {
+      "type": "table",
+      "name": "workflow_artifacts",
+      "sql": "CREATETABLEworkflow_artifacts(idTEXTNOTNULL,job_idTEXTNOTNULL,kindTEXTNOTNULL,uriTEXT,mimeTEXT,metadata_jsonTEXT,PRIMARYKEY(job_id,id))"
+    },
+    {
+      "type": "table",
+      "name": "workflow_job_events",
+      "sql": "CREATETABLEworkflow_job_events(idTEXTPRIMARYKEYNOTNULL,job_idTEXTNOTNULL,sequenceINTEGERNOTNULL,event_typeTEXTNOTNULL,payload_jsonTEXTNOTNULL,created_atINTEGERNOTNULL,UNIQUE(job_id,sequence))"
+    },
+    {
+      "type": "table",
+      "name": "workflow_jobs",
+      "sql": "CREATETABLEworkflow_jobs(idTEXTPRIMARYKEYNOTNULL,workflow_idTEXTNOTNULL,workflow_versionTEXTNOTNULL,workflow_hashTEXTNOTNULL,adapter_idTEXTNOTNULL,adapter_versionTEXTNOTNULL,input_jsonTEXTNOTNULL,output_mapping_jsonTEXT,remote_jsonTEXT,statusTEXTNOTNULL,error_jsonTEXT,created_atINTEGERNOTNULL,updated_atINTEGERNOTNULL,started_atINTEGER,execution_durationREAL,revisionINTEGERNOTNULLDEFAULT0,provider_handle_jsonTEXT,last_error_jsonTEXT,next_sync_atINTEGER)"
+    },
+    {
+      "type": "table",
+      "name": "workflow_operations",
+      "sql": "CREATETABLEworkflow_operations(idTEXTPRIMARYKEYNOTNULL,kindTEXTNOTNULL,job_idTEXT,idempotency_keyTEXTNOTNULL,payload_jsonTEXTNOTNULL,stateTEXTNOTNULL,attemptINTEGERNOTNULLDEFAULT0,next_retry_atINTEGERNOTNULL,lease_ownerTEXT,lease_expires_atINTEGER,last_error_jsonTEXT,created_atINTEGERNOTNULL,updated_atINTEGERNOTNULL,UNIQUE(kind,idempotency_key))"
+    },
+    {
+      "type": "table",
+      "name": "workflow_registry",
+      "sql": "CREATETABLEworkflow_registry(workflow_idTEXTNOTNULL,versionTEXTNOTNULL,content_hashTEXTNOTNULL,sourceTEXTNOTNULL,trustTEXTNOTNULL,definition_jsonTEXTNOTNULL,installed_atINTEGERNOTNULL,repositoryTEXT,refTEXT,commit_shaTEXT,hash_schemeTEXT,PRIMARYKEY(workflow_id,version))"
+    },
+    {
+      "type": "table",
+      "name": "workflow_registry_active",
+      "sql": "CREATETABLEworkflow_registry_active(workflow_idTEXTPRIMARYKEYNOTNULL,versionTEXTNOTNULL,content_hashTEXTNOTNULL,previous_versionTEXT,previous_hashTEXT)"
+    },
+    {
+      "type": "table",
+      "name": "workflow_registry_releases",
+      "sql": "CREATETABLEworkflow_registry_releases(release_idTEXTPRIMARYKEYNOTNULL,manifest_hashTEXTNOTNULL,applied_atINTEGERNOTNULL)"
+    },
+    {
+      "type": "trigger",
+      "name": "tasks_projection_revision_delete",
+      "sql": "CREATETRIGGERtasks_projection_revision_deleteAFTERDELETEONtasksBEGINUPDATEtask_projection_stateSETrevision=revision+1WHEREsingleton=1;END"
+    },
+    {
+      "type": "trigger",
+      "name": "tasks_projection_revision_insert",
+      "sql": "CREATETRIGGERtasks_projection_revision_insertAFTERINSERTONtasksBEGINUPDATEtask_projection_stateSETrevision=revision+1WHEREsingleton=1;END"
+    },
+    {
+      "type": "trigger",
+      "name": "tasks_projection_revision_update",
+      "sql": "CREATETRIGGERtasks_projection_revision_updateAFTERUPDATEONtasksBEGINUPDATEtask_projection_stateSETrevision=revision+1WHEREsingleton=1;END"
+    },
+    {
+      "type": "trigger",
+      "name": "workflow_operations_projection_revision_delete",
+      "sql": "CREATETRIGGERworkflow_operations_projection_revision_deleteAFTERDELETEONworkflow_operationsBEGINUPDATEtask_projection_stateSETrevision=revision+1WHEREsingleton=1;END"
+    },
+    {
+      "type": "trigger",
+      "name": "workflow_operations_projection_revision_insert",
+      "sql": "CREATETRIGGERworkflow_operations_projection_revision_insertAFTERINSERTONworkflow_operationsBEGINUPDATEtask_projection_stateSETrevision=revision+1WHEREsingleton=1;END"
+    },
+    {
+      "type": "trigger",
+      "name": "workflow_operations_projection_revision_update",
+      "sql": "CREATETRIGGERworkflow_operations_projection_revision_updateAFTERUPDATEONworkflow_operationsBEGINUPDATEtask_projection_stateSETrevision=revision+1WHEREsingleton=1;END"
+    }
+  ]
+}

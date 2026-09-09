@@ -13,7 +13,7 @@ import {
 } from './releaseManifest';
 import type { WorkflowPackage } from '../schema/package';
 import { createWorkflowReleaseCoordinator } from './releaseCoordinator';
-import { isWorkflowCompatible } from './service';
+import { isWorkflowCompatible } from './packageVerification';
 import { createReleaseBackup } from '../../storage/backup';
 
 export const builtinWorkflowDefinitions: WorkflowDefinition[] = [h3Definition as WorkflowDefinition, h3DefinitionV101 as WorkflowDefinition];

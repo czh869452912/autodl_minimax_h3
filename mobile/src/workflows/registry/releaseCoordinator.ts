@@ -10,6 +10,7 @@ import {
   type WorkflowIdentity,
 } from './releaseManifest';
 import { computeWorkflowDigest, detectWorkflowRepresentation } from './identity';
+import { strictActiveRecord } from './activeRecord';
 
 export type ReleaseReconcileResult =
   | { status: 'unchanged' }
@@ -60,11 +61,7 @@ async function chooseBuiltinActivations(
     )[0];
     const target = effectiveRecords.get(`${workflowId}\u0000${selected.record.version}`);
     if (!target) throw new RegistryReleaseError('REGISTRY_RELEASE_TARGET_MISSING');
-    const pointer = await registry.getActivePointer(workflowId);
-    const active = pointer ? await registry.get(pointer.workflowId, pointer.version) : undefined;
-    if (pointer && (!active || active.contentHash !== pointer.contentHash)) {
-      throw new RegistryReleaseError('REGISTRY_ACTIVE_POINTER_INVALID');
-    }
+    const active = await strictActiveRecord(registry, workflowId);
     if (active && active.source !== 'builtin') continue;
     if (active?.version === target.version && active.contentHash === target.contentHash) continue;
     activations.push({

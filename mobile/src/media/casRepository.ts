@@ -1,4 +1,4 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../storage/appDatabase';
 import { assertAppDatabaseWritable, assertAppDatabaseWritableAsync } from '../storage/database';
 import type { ArtifactBlob } from './cas';
 
@@ -12,7 +12,7 @@ function changes(result: unknown): number {
   return Number((result as { changes?: number | bigint } | undefined)?.changes ?? 0);
 }
 
-export function createCasRepository(db: SQLiteDatabase) {
+export function createCasRepository(db: AppDatabase) {
   return {
     upsertBlob(blob: ArtifactBlob): void {
       assertAppDatabaseWritable(db);
@@ -57,7 +57,7 @@ export function createCasRepository(db: SQLiteDatabase) {
 
 export type CasRepository = ReturnType<typeof createCasRepository>;
 
-export function createAsyncCasGarbageRepository(db: SQLiteDatabase) {
+export function createAsyncCasGarbageRepository(db: AppDatabase) {
   return {
     async listUnreferenced(limit: number): Promise<ArtifactBlob[]> {
       return (await db.getAllAsync<BlobRow>('SELECT b.* FROM artifact_blobs b WHERE NOT EXISTS (SELECT 1 FROM artifact_blob_refs r WHERE r.blob_sha256=b.sha256) ORDER BY b.created_at,b.sha256 LIMIT ?', Math.max(0, Math.floor(limit)))).map(mapBlob);

@@ -1,5 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import type { TaskMediaInput } from '../../../tasks/types';
+import type { TaskMediaInput } from '../../../media/types';
 import type { AutodlInput } from './mapping';
 
 const IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);

@@ -1,7 +1,7 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../storage/appDatabase';
 import type { ArtifactRecord } from '../jobs/types';
 import { collectGarbage } from './cas';
-import { releaseExpiredAttachmentImports } from '../agent/attachmentStore';
+import { releaseExpiredAttachmentImports } from './attachments';
 import { createAsyncCasGarbageRepository } from './casRepository';
 import { withAsyncSchedulerLease } from '../tasks/scheduler';
 
@@ -39,7 +39,7 @@ type ReconciliationCursor = { updatedAt: number; id: string };
 
 const RECONCILIATION_CURSOR_KEY = 'media-reconciliation-cursor';
 
-async function readCursor(db: SQLiteDatabase): Promise<ReconciliationCursor | undefined> {
+async function readCursor(db: AppDatabase): Promise<ReconciliationCursor | undefined> {
   const row = await db.getFirstAsync<{ owner: string }>(
     'SELECT owner FROM app_scheduler_leases WHERE lease_key=? LIMIT 1',
     RECONCILIATION_CURSOR_KEY,
@@ -53,7 +53,7 @@ async function readCursor(db: SQLiteDatabase): Promise<ReconciliationCursor | un
   } catch { return undefined; }
 }
 
-async function listTaskPage(db: SQLiteDatabase, limit: number, cursor?: ReconciliationCursor): Promise<TaskRow[]> {
+async function listTaskPage(db: AppDatabase, limit: number, cursor?: ReconciliationCursor): Promise<TaskRow[]> {
   const select = "SELECT id,prompt,video_url,local_uri,download_state,gallery_uri,export_state,created_at,updated_at FROM tasks WHERE status IN ('SUCCESS','PARTIAL_SUCCESS')";
   if (!cursor) return await db.getAllAsync<TaskRow>(`${select} ORDER BY updated_at ASC,id ASC LIMIT ?`, limit);
   const rows = await db.getAllAsync<TaskRow>(
@@ -72,7 +72,7 @@ function parseArtifact(source: string, jobId: string): ArtifactRecord | undefine
   } catch { return undefined; }
 }
 
-async function insertAsset(db: SQLiteDatabase, task: TaskRow, artifact: ArtifactRecord, workflowId: string, now: number): Promise<boolean> {
+async function insertAsset(db: AppDatabase, task: TaskRow, artifact: ArtifactRecord, workflowId: string, now: number): Promise<boolean> {
   const sourceUrl = artifact.uri?.trim() || task.video_url?.trim() || '';
   if (!sourceUrl) return false;
   const localPath = artifact.kind === 'video' ? task.local_uri ?? null : null;
@@ -87,7 +87,7 @@ async function insertAsset(db: SQLiteDatabase, task: TaskRow, artifact: Artifact
 }
 
 export async function reconcileMediaState(options: {
-  db: SQLiteDatabase;
+  db: AppDatabase;
   limit?: number;
   fileExists(uri: string): Promise<boolean>;
   removeCasPath(relativePath: string): Promise<void>;

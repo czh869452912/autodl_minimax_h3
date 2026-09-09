@@ -1,8 +1,8 @@
 import type { AppSettings } from './storage';
 import { assertSafeHttpsUrl } from '../security/urlPolicy';
-import { DEFAULT_LLM_ADVANCED_SETTINGS as defaults } from './llmDefaults';
-import { validateReasoningEffort } from '../agent/reasoningConfig';
-import { getH3ContextBudget } from '../agent/agentTypes';
+import { DEFAULT_LLM_ADVANCED_SETTINGS as defaults } from '../config/llmDefaults';
+import { validateReasoningEffort } from '../config/llmReasoning';
+import { getH3ContextBudget } from '../config/llmBudget';
 
 export function prepareSettingsForSave(values: AppSettings, options: { allowInsecureLocalhost?: boolean } = {}): AppSettings {
   const normalized = {

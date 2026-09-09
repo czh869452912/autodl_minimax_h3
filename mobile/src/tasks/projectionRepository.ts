@@ -1,4 +1,4 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../storage/appDatabase';
 import type { DownloadState, ExportState, TaskStatus } from './types';
 import type { TaskCard, TaskCursor } from './taskCard';
 
@@ -116,7 +116,7 @@ function boundedAttempts(maxAttempts: number): number {
   return Math.max(1, Math.floor(maxAttempts));
 }
 
-export function createTaskProjectionRepository(db: SQLiteDatabase) {
+export function createTaskProjectionRepository(db: AppDatabase) {
   const readRevision = async (): Promise<number> => {
     const row = await db.getFirstAsync<RevisionRow>(
       'SELECT revision FROM task_projection_state WHERE singleton = 1 LIMIT 1',

@@ -1,5 +1,6 @@
+import { insertWorkflowOperation } from './operationInsert';
 import { withWriteTransaction } from '../../storage/sqliteBusy';
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../../storage/appDatabase';
 import { assertAppDatabaseWritableAsync } from '../../storage/database';
 import type { ArtifactRecord } from '../../jobs/types';
 import { artifactExportDisplayName } from '../../media/artifactDisplayName';
@@ -32,7 +33,7 @@ function manualFamilyPattern(canonicalKey: string): string {
   return `${canonicalKey.replace(/[\\%_]/g, (value) => `\\${value}`)}:manual:%`;
 }
 
-async function transaction<T>(db: SQLiteDatabase, work: (transaction: SQLiteDatabase) => Promise<T>, inside = false): Promise<T> {
+async function transaction<T>(db: AppDatabase, work: (transaction: AppDatabase) => Promise<T>, inside = false): Promise<T> {
   if (inside) return work(db);
   let result!: T;
   await withWriteTransaction(db, async txn => { result = await work(txn); });
@@ -51,7 +52,7 @@ function parseMetadata(source: string | null | undefined): Record<string, unknow
   } catch { return undefined; }
 }
 
-async function loadContext(db: SQLiteDatabase, taskId: string): Promise<Context> {
+async function loadContext(db: AppDatabase, taskId: string): Promise<Context> {
   const task = await db.getFirstAsync<TaskRow>('SELECT id,video_url,local_uri FROM tasks WHERE id=? LIMIT 1', taskId);
   if (!task) throw new Error('TASK_NOT_FOUND');
   const asset = await db.getFirstAsync<AssetRow>(
@@ -69,14 +70,14 @@ async function loadContext(db: SQLiteDatabase, taskId: string): Promise<Context>
   return { task, asset, artifact };
 }
 
-async function activeOperation(db: SQLiteDatabase, taskId: string, kind: OperationKind, canonicalKey: string): Promise<OperationRow | undefined> {
+async function activeOperation(db: AppDatabase, taskId: string, kind: OperationKind, canonicalKey: string): Promise<OperationRow | undefined> {
   return await db.getFirstAsync<OperationRow>(
     "SELECT id,idempotency_key,payload_json,state FROM workflow_operations WHERE job_id=? AND kind=? AND state IN ('PENDING','CLAIMED') AND (idempotency_key=? OR idempotency_key LIKE ? ESCAPE '\\') ORDER BY created_at DESC,id DESC LIMIT 1",
     taskId, kind, canonicalKey, manualFamilyPattern(canonicalKey),
   ) ?? undefined;
 }
 
-async function nextIdentity(db: SQLiteDatabase, kind: OperationKind, canonicalId: string, canonicalKey: string): Promise<{ id: string; key: string }> {
+async function nextIdentity(db: AppDatabase, kind: OperationKind, canonicalId: string, canonicalKey: string): Promise<{ id: string; key: string }> {
   const rows = await db.getAllAsync<{ idempotency_key: string }>(
     "SELECT idempotency_key FROM workflow_operations WHERE kind=? AND (idempotency_key=? OR idempotency_key LIKE ? ESCAPE '\\') ORDER BY idempotency_key",
     kind, canonicalKey, manualFamilyPattern(canonicalKey),
@@ -103,7 +104,7 @@ function hasDeliveryIntent(row: OperationRow): boolean {
 }
 
 export function createMediaCommandService(options: {
-  db: SQLiteDatabase;
+  db: AppDatabase;
   fileExists(uri: string): Promise<boolean>;
   resolveCasUri(relativePath: string): string;
   now?: () => number;
@@ -148,10 +149,7 @@ export function createMediaCommandService(options: {
       const identity = await nextIdentity(db, 'ARTIFACT_DOWNLOAD', `${taskId}:artifact:${context.artifact.id}`, canonicalKey);
       const timestamp = now();
       const payload = { artifact: context.artifact, ...(deliveryIntent ? { deliveryIntent } : {}) };
-      await db.runAsync(
-        "INSERT INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES (?,'ARTIFACT_DOWNLOAD',?,?,?,'PENDING',0,?,?,?)",
-        identity.id, taskId, identity.key, JSON.stringify(payload), timestamp, timestamp, timestamp,
-      );
+      await insertWorkflowOperation(db, { id: identity.id, kind: 'ARTIFACT_DOWNLOAD', jobId: taskId, idempotencyKey: identity.key, payload: payload, now: timestamp, nextRetryAt: timestamp }, 'error');
       if (changes(await db.runAsync("UPDATE tasks SET download_state='ENQUEUED',download_error=NULL,download_progress=0,updated_at=MAX(updated_at,?) WHERE id=?", timestamp, taskId)) !== 1) throw new Error('TASK_NOT_FOUND');
       if (changes(await db.runAsync("UPDATE media_assets SET status='queued',updated_at=? WHERE id=? AND task_id=?", timestamp, context.asset.id, taskId)) !== 1) throw new Error('MEDIA_ASSET_NOT_FOUND');
       if (deliveryIntent) {
@@ -178,10 +176,7 @@ export function createMediaCommandService(options: {
         canonicalKey,
       );
       const timestamp = now();
-      await db.runAsync(
-        "INSERT INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES (?,'EXPORT',?,?,?,'PENDING',0,?,?,?)",
-        identity.id, context.task.id, identity.key, JSON.stringify(payload), timestamp, timestamp, timestamp,
-      );
+      await insertWorkflowOperation(db, { id: identity.id, kind: 'EXPORT', jobId: context.task.id, idempotencyKey: identity.key, payload: payload, now: timestamp, nextRetryAt: timestamp }, 'error');
       if (changes(await db.runAsync("UPDATE tasks SET export_state='QUEUED',export_error=NULL,updated_at=MAX(updated_at,?) WHERE id=?", timestamp, context.task.id)) !== 1) throw new Error('TASK_NOT_FOUND');
       if (changes(await db.runAsync("UPDATE media_assets SET export_status='QUEUED',updated_at=? WHERE id=? AND task_id=?", timestamp, context.asset.id, context.task.id)) !== 1) throw new Error('MEDIA_ASSET_NOT_FOUND');
       await db.runAsync(
@@ -222,10 +217,7 @@ export function createMediaCommandService(options: {
           "DELETE FROM artifact_blob_refs WHERE owner_type='workflow_artifact' AND owner_id=?",
           `${taskId}:${context.artifact.id}`,
         );
-        await db.runAsync(
-          "INSERT INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES (?,'ARTIFACT_DOWNLOAD',?,?,?,'PENDING',0,?,?,?)",
-          identity.id, taskId, identity.key, JSON.stringify({ artifact: context.artifact }), timestamp, timestamp, timestamp,
-        );
+        await insertWorkflowOperation(db, { id: identity.id, kind: 'ARTIFACT_DOWNLOAD', jobId: taskId, idempotencyKey: identity.key, payload: { artifact: context.artifact }, now: timestamp, nextRetryAt: timestamp }, 'error');
         return { id: identity.id, status: 'queued' as const };
       }, options.insideTransaction);
       return { status: outcome.status, operation: await operations.get(outcome.id) };

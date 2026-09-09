@@ -1,4 +1,4 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../appDatabase';
 import { APP_SCHEMA_VERSION, APP_TABLES, CURRENT_SCHEMA_STATEMENTS } from '../schema';
 import { AppMigrationError, getRecoveryState, markRecovery, migrationDiagnostic } from '../recovery';
 import type { MigrationContext, MigrationResult, MigrationStep } from './types';
@@ -9,7 +9,7 @@ import { v8TaskRefresh } from './v8TaskRefresh';
 import { v9AgentRecords } from './v9AgentRecords';
 
 export type AppDatabaseMigrationOptions = {
-  backup?: (db: SQLiteDatabase, fromVersion: number, toVersion: number) => void;
+  backup?: (db: AppDatabase, fromVersion: number, toVersion: number) => void;
   now?: () => number;
 };
 
@@ -21,16 +21,16 @@ const steps = new Map<number, MigrationStep>([
   [v9AgentRecords.fromVersion, v9AgentRecords],
 ]);
 
-function version(db: SQLiteDatabase): number {
+function version(db: AppDatabase): number {
   return Number(db.getFirstSync<{ user_version: number }>('PRAGMA user_version')?.user_version ?? 0);
 }
 
-function hasAppTable(db: SQLiteDatabase): boolean {
+function hasAppTable(db: AppDatabase): boolean {
   const names = db.getAllSync<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'");
   return names.some((row) => (APP_TABLES as readonly string[]).includes(row.name));
 }
 
-function transaction(db: SQLiteDatabase, work: () => void): void {
+function transaction(db: AppDatabase, work: () => void): void {
   if (typeof db.withTransactionSync === 'function') {
     db.withTransactionSync(work);
     return;
@@ -45,7 +45,7 @@ function transaction(db: SQLiteDatabase, work: () => void): void {
   }
 }
 
-function context(db: SQLiteDatabase): MigrationContext {
+function context(db: AppDatabase): MigrationContext {
   return {
     db,
     exec: (sql) => db.execSync(sql),
@@ -53,7 +53,7 @@ function context(db: SQLiteDatabase): MigrationContext {
   };
 }
 
-export function applyCurrentSchema(db: SQLiteDatabase): void {
+export function applyCurrentSchema(db: AppDatabase): void {
   for (const statement of CURRENT_SCHEMA_STATEMENTS) db.execSync(statement);
   v6DurableExecutor.apply(context(db));
   v7RegistryRelease.apply(context(db));
@@ -61,7 +61,7 @@ export function applyCurrentSchema(db: SQLiteDatabase): void {
   v9AgentRecords.apply(context(db));
 }
 
-export function runAppMigrations(db: SQLiteDatabase, options: AppDatabaseMigrationOptions = {}): MigrationResult {
+export function runAppMigrations(db: AppDatabase, options: AppDatabaseMigrationOptions = {}): MigrationResult {
   const fromVersion = version(db);
   const recovery = getRecoveryState(db);
   if (recovery) throw new AppMigrationError(recovery.diagnostic, fromVersion);

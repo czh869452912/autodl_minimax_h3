@@ -1,7 +1,8 @@
+import { claimOperations } from '../../test/claimOperations';
 import { ProviderError } from '../providers/autodl/client';
 import type { QueueSubmissionInput } from '../runtime/runtime';
 import { createInitializedRealSqliteTestDb } from '../../test/realSqlite';
-import { createJobStateRepository } from './jobStateRepository';
+import { createJobStateRepository } from '../../tasks/jobStateStore';
 import { createOperationRepository } from './operationRepository';
 import { createDurableExecutor } from './durableExecutor';
 
@@ -50,11 +51,33 @@ test('duplicate queueing returns one job and one submit operation without provid
   } finally { value.db.close(); }
 });
 
+test('identical nonterminal polls currently record each reconciliation and schedule the next poll', async () => {
+  const value = setup();
+  try {
+    const job = await value.service.queueSubmission(input('identical-polls'));
+    const [submit] = await claimOperations(value.operations, { kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
+    await value.service.handle(submit, 'worker');
+    const snapshots: Array<{ revision: number; nextSyncAt?: number }> = [];
+    for (const now of [10_000, 20_000]) {
+      value.setNow(now);
+      const [poll] = await claimOperations(value.operations, { kind: 'STATUS_SYNC', owner: 'worker', now, leaseMs: 50, limit: 1 });
+      await value.service.handle(poll, 'worker');
+      snapshots.push((await value.jobs.get(job.id))!);
+      expect(await value.operations.get(poll.id)).toMatchObject({ state: 'SUCCEEDED' });
+    }
+    expect(snapshots[1].revision).toBe(snapshots[0].revision + 1);
+    expect(snapshots.map(snapshot => snapshot.nextSyncAt)).toEqual([15_000, 25_000]);
+    expect(value.db.getAllSync("SELECT id FROM workflow_job_events WHERE event_type='STATUS_RECONCILED'")).toHaveLength(2);
+    expect(value.operations.list('STATUS_SYNC').filter(op => op.state === 'PENDING')).toHaveLength(1);
+    expect(value.adapter.submit).toHaveBeenCalledTimes(1);
+  } finally { value.db.close(); }
+});
+
 test('pending work survives restart and persists the opaque handle before status work', async () => {
   const value = setup();
   try {
     const queued = await value.service.queueSubmission(input('submission-2'));
-    const [claimed] = await value.operations.claimDue({ kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
+    const [claimed] = await claimOperations(value.operations, { kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
     await value.service.handle(claimed, 'worker');
     expect(value.adapter.submit).toHaveBeenCalledTimes(1);
     expect((await value.jobs.get(queued.id))).toMatchObject({ status: 'QUEUED', providerHandle: { providerJobId: 'remote-1', opaque: 'kept' } });
@@ -67,7 +90,7 @@ test('expired SUBMITTING without handle becomes UNKNOWN and never resubmits', as
   const value = setup();
   try {
     const queued = await value.service.queueSubmission(input('submission-3'));
-    const [claimed] = await value.operations.claimDue({ kind: 'SUBMIT', owner: 'dead-process', now: 100, leaseMs: 50, limit: 1 });
+    const [claimed] = await claimOperations(value.operations, { kind: 'SUBMIT', owner: 'dead-process', now: 100, leaseMs: 50, limit: 1 });
     (await value.jobs.transition({
       jobId: queued.id, expectedRevision: queued.revision, patch: { status: 'SUBMITTING' },
       event: { id: 'submit-started', type: 'SUBMIT_STARTED', payload: {}, createdAt: 100 },
@@ -85,7 +108,7 @@ test.each([401, 422])('deterministic submit HTTP %s fails terminally', async (st
   value.adapter.submit.mockRejectedValueOnce(new ProviderError('autodl', 'submit', status === 401 ? 'auth' : 'http', 'secret payload', status));
   try {
     const queued = await value.service.queueSubmission(input(`terminal-${status}`));
-    const [claimed] = await value.operations.claimDue({ kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
+    const [claimed] = await claimOperations(value.operations, { kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
     await value.service.handle(claimed, 'worker');
     expect((await value.jobs.get(queued.id))).toMatchObject({ status: 'FAILED', lastError: { code: expect.stringContaining(String(status)) } });
     expect(await value.operations.get(claimed.id)).toMatchObject({ state: 'FAILED' });
@@ -97,12 +120,12 @@ test('submit timeout becomes UNKNOWN and blocks automatic resubmission', async (
   value.adapter.submit.mockRejectedValueOnce(new ProviderError('autodl', 'submit', 'timeout', 'token=secret'));
   try {
     const queued = await value.service.queueSubmission(input('timeout'));
-    const [claimed] = await value.operations.claimDue({ kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
+    const [claimed] = await claimOperations(value.operations, { kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
     await value.service.handle(claimed, 'worker');
     expect((await value.jobs.get(queued.id))).toMatchObject({ status: 'UNKNOWN' });
     expect(await value.operations.get(claimed.id)).toMatchObject({ state: 'BLOCKED' });
     expect(value.adapter.submit).toHaveBeenCalledTimes(1);
-    expect(await value.operations.claimDue({ kind: 'SUBMIT', owner: 'other', now: 1000, leaseMs: 50, limit: 1 })).toEqual([]);
+    expect(await claimOperations(value.operations, { kind: 'SUBMIT', owner: 'other', now: 1000, leaseMs: 50, limit: 1 })).toEqual([]);
   } finally { value.db.close(); }
 });
 
@@ -110,7 +133,7 @@ test('a CAS conflict before SUBMIT blocks the operation without a provider call'
   const value = setup();
   try {
     const queued = await value.service.queueSubmission(input('cas-conflict'));
-    const [claimed] = await value.operations.claimDue({ kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
+    const [claimed] = await claimOperations(value.operations, { kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
     const jobs = {
       ...value.jobs,
       transition: jest.fn(async () => ({ ok: false as const, current: { ...queued, revision: 1, status: 'SUBMITTING' as const } })),
@@ -134,9 +157,9 @@ test('status reconciliation uses only the persisted handle and maps artifacts to
   } as never);
   try {
     const queued = await value.service.queueSubmission(input('status-success'));
-    const [submit] = await value.operations.claimDue({ kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
+    const [submit] = await claimOperations(value.operations, { kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
     await value.service.handle(submit, 'worker');
-    const [status] = await value.operations.claimDue({ kind: 'STATUS_SYNC', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
+    const [status] = await claimOperations(value.operations, { kind: 'STATUS_SYNC', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
     await value.service.handle(status, 'worker');
     expect(value.adapter.getStatus).toHaveBeenCalledWith({ providerJobId: 'remote-1', opaque: 'kept' });
     expect(value.adapter.submit).toHaveBeenCalledTimes(1);
@@ -154,9 +177,9 @@ test('status 503 retries the same operation without submitting again', async () 
   const value = setup();
   try {
     await value.service.queueSubmission(input('status-retry'));
-    const [submit] = await value.operations.claimDue({ kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
+    const [submit] = await claimOperations(value.operations, { kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
     await value.service.handle(submit, 'worker');
-    const [status] = await value.operations.claimDue({ kind: 'STATUS_SYNC', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
+    const [status] = await claimOperations(value.operations, { kind: 'STATUS_SYNC', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
     value.adapter.getStatus.mockRejectedValueOnce(new ProviderError('autodl', 'status', 'http', 'upstream secret', 503));
     value.setNow(200);
     await value.service.handle(status, 'worker');
@@ -170,7 +193,7 @@ test('explicit replacement preserves the original UNKNOWN snapshot and audit', a
   value.adapter.submit.mockRejectedValueOnce(new ProviderError('autodl', 'submit', 'network', 'offline'));
   try {
     const original = await value.service.queueSubmission(input('original'));
-    const [submit] = await value.operations.claimDue({ kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
+    const [submit] = await claimOperations(value.operations, { kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
     await value.service.handle(submit, 'worker');
     const auditLength = (await value.jobs.listEvents(original.id)).length;
     const replacement = await value.service.createReplacementAttemptAfterConfirmation(original.id, 'replacement');

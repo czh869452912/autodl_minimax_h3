@@ -1,6 +1,6 @@
 import { normalizeMessages } from './agentPresentation';
 import { parsePromptCandidates } from './promptParser';
-import type { PromptBindingImage } from './promptBindings';
+import type { PromptBindingImage } from '../handoff/promptBindings';
 import type { PromptRun } from './runState';
 
 export type PromptVersion = {

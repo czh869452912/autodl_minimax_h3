@@ -1,3 +1,4 @@
+import { H3_EVENTS, decodeH3CustomEvent } from './eventContract';
 export type PromptRunTool = {
   id: string; name: string; status: 'running' | 'complete' | 'failed' | 'cancelled';
   startedAt: number; endedAt?: number; summary?: string;
@@ -29,12 +30,13 @@ export function endPromptRun(run: PromptRun, status: PromptRun['status'], now: n
 }
 
 export function reducePromptRunEvent(run: PromptRun, event: Record<string, any>, now: number): PromptRun {
+  if (event.type === 'CUSTOM' && !decodeH3CustomEvent(event)) return run;
   if (run.status === 'queued' && event.type === 'RUN_STARTED') return { ...run, status: 'running' };
   if (run.status !== 'running') return run;
-  const messageId = event.messageId ?? event.parentMessageId ?? (event.name === 'h3.reasoning' ? event.value?.messageId : undefined);
+  const messageId = event.messageId ?? event.parentMessageId ?? (event.name === H3_EVENTS.reasoning ? event.value?.messageId : undefined);
   let next = messageId && !run.messageIds.includes(messageId)
     ? { ...run, messageIds: [...run.messageIds, messageId] } : run;
-  const reasoning = event.type === 'CUSTOM' && event.name === 'h3.reasoning';
+  const reasoning = event.type === 'CUSTOM' && event.name === H3_EVENTS.reasoning;
   if (reasoning || event.type === 'TEXT_MESSAGE_CONTENT') {
     const kind = reasoning ? 'reasoning' : 'text';
     const delta = reasoning ? event.value?.delta : event.delta;
@@ -52,13 +54,13 @@ export function reducePromptRunEvent(run: PromptRun, event: Record<string, any>,
   }
   if (event.type === 'TOOL_CALL_ARGS') next = { ...next, tools: next.tools.map(tool => tool.id === event.toolCallId ? { ...tool, arguments: (tool.arguments ?? '') + event.delta } : tool) };
   if (event.type === 'TOOL_CALL_RESULT') next = { ...next, tools: next.tools.map(tool => tool.id === event.toolCallId ? { ...tool, output: event.content } : tool) };
-  if (event.type === 'CUSTOM' && event.name === 'h3.tool.status') {
+  if (event.type === 'CUSTOM' && event.name === H3_EVENTS.toolStatus) {
     const value = event.value ?? {};
     if (value.status === 'complete' || value.status === 'failed') next = { ...next, tools: next.tools.map(tool => tool.id === value.toolCallId
       ? { ...tool, status: value.status, endedAt: now, summary: value.summary } : tool) };
   }
   if (event.type === 'RUN_ERROR') return endPromptRun(next, 'failed', now, event.message);
-  if (event.type === 'CUSTOM' && event.name === 'h3.run.cancelled') return endPromptRun(next, 'cancelled', now);
+  if (event.type === 'CUSTOM' && event.name === H3_EVENTS.cancelled) return endPromptRun(next, 'cancelled', now);
   if (event.type === 'RUN_FINISHED') return endPromptRun(next, event.outcome?.type === 'interrupt' ? 'interrupted' : 'completed', now);
   return next;
 }

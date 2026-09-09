@@ -1,10 +1,10 @@
 import { assertAppDatabaseWritable, assertAppDatabaseWritableAsync } from '../storage/database';
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../storage/appDatabase';
 
 export async function withAsyncSchedulerLease<T>(
   key: string,
   work: (lease: { assertOwned(): Promise<void> }) => Promise<T>,
-  options: { db: SQLiteDatabase; now?: () => number; ttlMs?: number },
+  options: { db: AppDatabase; now?: () => number; ttlMs?: number },
 ): Promise<T | undefined> {
   const { db } = options;
   const now = options.now ?? Date.now;

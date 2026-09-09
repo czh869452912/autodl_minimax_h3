@@ -4,7 +4,7 @@ import type { H3AgentConfig, H3AgentEvent, H3AgentInput } from './agentTypes';
 import { officialH3SkillRoot } from './skillBundle';
 import { createOpenAICompatibleModel, type ModelFactory, validateH3AgentConfig } from './modelAdapter';
 import { createH3WorkspaceBackend, createH3WorkspaceMiddleware, getH3ContextBudget } from './agentWorkspace';
-import { isDeepSeekV4 } from './reasoningConfig';
+import { isDeepSeekV4 } from '../config/llmReasoning';
 
 const H3_SYSTEM_POLICY = [
   'You are the MiniMax H3 Prompt Assistant running as a local autonomous agent.',

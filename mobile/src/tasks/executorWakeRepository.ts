@@ -1,9 +1,9 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../storage/appDatabase';
 import { assertAppDatabaseWritableAsync } from '../storage/database';
 
 export type WakeState = Readonly<{ generation: number; handledGeneration: number; maintenanceGeneration: number; requestedAt: number }>;
 
-export function createExecutorWakeRepository(db: SQLiteDatabase) {
+export function createExecutorWakeRepository(db: AppDatabase) {
   const read = async (): Promise<WakeState> => {
     const row = await db.getFirstAsync<WakeState>(`SELECT generation, handled_generation AS handledGeneration,
       maintenance_generation AS maintenanceGeneration, requested_at AS requestedAt FROM executor_wake_state WHERE singleton=1`);

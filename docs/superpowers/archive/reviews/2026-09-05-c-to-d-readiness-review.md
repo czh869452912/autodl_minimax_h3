@@ -32,15 +32,15 @@
 
 发布来源：[v1.4.12](https://github.com/czh869452912/autodl_minimax_h3/releases/tag/v1.4.12)、[成功的发布流水线](https://github.com/czh869452912/autodl_minimax_h3/actions/runs/33965623010)。本轮查询了发布资产元数据，没有重新下载 APK 做独立签名校验。
 
-既有设备证据主要见 [刷新回归修复](../../verification/2026-09-05-task-refresh-regression-fix.md)：真实 Expo SQLite 10 轮并发、40 次状态转换、30 次命令唤醒、原问题数据恢复及 UI 成功状态；后续 N4 修复由集成回归覆盖，未重新安装。
+既有设备证据主要见 [刷新回归修复](../verification/2026-09-05-task-refresh-regression-fix.md)：真实 Expo SQLite 10 轮并发、40 次状态转换、30 次命令唤醒、原问题数据恢复及 UI 成功状态；后续 N4 修复由集成回归覆盖，未重新安装。
 
-未闭合性能门见 [PERF-1](../../verification/2026-09-05-task-refresh-follow-ups.md)：生产 HTTPS 128 MiB 完整传输、release 等效构建、100/1000 任务对比、5 次独立冷启动、下载期间交互与 JS stall 尚未完整验收。现有 debug 本地文件与 connection-cold 数字不能替代。
+未闭合性能门见 [PERF-1](../../../verification/2026-09-05-task-refresh-follow-ups.md)：生产 HTTPS 128 MiB 完整传输、release 等效构建、100/1000 任务对比、5 次独立冷启动、下载期间交互与 JS stall 尚未完整验收。现有 debug 本地文件与 connection-cold 数字不能替代。
 
 ## 3. D 计划必须调整的部分
 
 ### A. 迁移与状态所有权：v8 → v9，保留 C 的投影机制
 
-证据：旧 [D-Core 计划](../archive/plans/2026-09-01-d-core.md) 第 7、23 行仍要求 v7；`mobile/src/storage/schema.ts:1` 已为 v8；v7 属于 registry release，v8 属于刷新投影和持久唤醒。
+证据：旧 [D-Core 计划](../plans/2026-09-01-d-core.md) 第 7、23 行仍要求 v7；`mobile/src/storage/schema.ts:1` 已为 v8；v7 属于 registry release，v8 属于刷新投影和持久唤醒。
 
 调整建议：
 

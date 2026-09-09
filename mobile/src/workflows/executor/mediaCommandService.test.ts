@@ -48,6 +48,26 @@ test('returns already complete only for an existing CAS blob and workflow refere
   } finally { db.close(); }
 });
 
+test('redownload strict insert collision rolls back prior media invalidation and reference deletion', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    seed(db, { localUri: 'file:///existing.mp4' });
+    const hash = 'd'.repeat(64);
+    db.runSync('INSERT INTO artifact_blobs VALUES(?,?,?,?,?,?)', hash, 3, 'video/mp4', `cas/sha256/dd/${hash}`, 1, 1);
+    db.runSync('INSERT INTO artifact_blob_refs VALUES(?,?,?,?)', hash, 'workflow_artifact', 'job-1:video-1', 1);
+    db.runSync("INSERT INTO media_deliveries(id,asset_id,target,status,created_at,updated_at) VALUES('delivery','job-1:video-1','system-gallery','EXPORTED',1,1)");
+    // Inject a key collision after preflight, at the strict INSERT boundary.
+    db.execSync(`CREATE TRIGGER collide_download BEFORE INSERT ON workflow_operations BEGIN
+      INSERT INTO workflow_operations(id,kind,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at)
+      VALUES('collision',NEW.kind,NEW.idempotency_key,'{}','PENDING',0,1,1,1); END`);
+    const tables = ['tasks', 'media_assets', 'media_deliveries', 'artifact_blob_refs', 'workflow_operations'];
+    const snapshot = () => tables.map(table => db.getAllSync(`SELECT * FROM ${table}`));
+    const before = snapshot();
+    await expect(service(db, new Set()).requestRedownload('job-1')).rejects.toThrow(/UNIQUE/);
+    expect(snapshot()).toEqual(before);
+  } finally { db.close(); }
+});
+
 test('appends one manual generation after terminal download and reuses it while in flight', async () => {
   const db = createInitializedRealSqliteTestDb();
   try {

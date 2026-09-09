@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
-import type { ReasoningEffort } from '../agent/reasoningConfig';
-import { DEFAULT_LLM_ADVANCED_SETTINGS } from './llmDefaults';
+import type { ReasoningEffort } from '../config/llmReasoning';
+import { DEFAULT_LLM_ADVANCED_SETTINGS } from '../config/llmDefaults';
 
 const keys = {
   token: 'autodl.token',

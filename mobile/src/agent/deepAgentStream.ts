@@ -1,10 +1,11 @@
+import { H3_EVENTS } from './eventContract';
 import { AIMessageChunk } from '@langchain/core/messages';
 
 type RecordValue = Record<string, any>;
 const rec = (value: unknown): RecordValue => value && typeof value === 'object' ? value as RecordValue : {};
 export type StreamEvent =
-  | { type: 'CUSTOM'; name: 'h3.reasoning'; value: { messageId: string; delta: string } }
-  | { type: 'CUSTOM'; name: 'h3.tool.status'; value: { toolCallId: string; status: 'complete' | 'failed'; summary: string } }
+  | { type: 'CUSTOM'; name: typeof H3_EVENTS.reasoning; value: { messageId: string; delta: string } }
+  | { type: 'CUSTOM'; name: typeof H3_EVENTS.toolStatus; value: { toolCallId: string; status: 'complete' | 'failed'; summary: string } }
   | { type: 'TEXT_MESSAGE_START'; messageId: string; role: 'assistant' }
   | { type: 'TEXT_MESSAGE_CONTENT'; messageId: string; delta: string }
   | { type: 'TEXT_MESSAGE_END'; messageId: string }
@@ -102,7 +103,7 @@ export async function* adaptDeepAgentStream(
           if (!results.has(toolCallId)) {
             results.add(toolCallId);
             yield { type: 'TOOL_CALL_RESULT', messageId: id, toolCallId, content: textOf(message.content), role: 'tool' };
-            yield { type: 'CUSTOM', name: 'h3.tool.status', value: { toolCallId, status: message.status === 'error' ? 'failed' : 'complete', summary: textOf(message.content).slice(0, 240) } };
+            yield { type: 'CUSTOM', name: H3_EVENTS.toolStatus, value: { toolCallId, status: message.status === 'error' ? 'failed' : 'complete', summary: textOf(message.content).slice(0, 240) } };
           }
           continue;
         }
@@ -123,7 +124,7 @@ export async function* adaptDeepAgentStream(
         const reasoningDelta = snapshotReasoning ? (reasoning.startsWith(state.reasoning) ? reasoning.slice(state.reasoning.length) : '') : reasoning;
         if (reasoningDelta) {
           state.reasoning += reasoningDelta;
-          yield { type: 'CUSTOM', name: 'h3.reasoning', value: { messageId: id, delta: reasoningDelta } };
+          yield { type: 'CUSTOM', name: H3_EVENTS.reasoning, value: { messageId: id, delta: reasoningDelta } };
         }
         const chunks = message.tool_call_chunks;
         const rawChunks = chunk && Array.isArray(chunks) && chunks.length > 0;

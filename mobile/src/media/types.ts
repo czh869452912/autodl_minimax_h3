@@ -1,3 +1,4 @@
+export interface TaskMediaInput { uri?: string; dataUri?: string; name?: string; mime?: string; size?: number; sha256?: string; }
 export type MediaStatus = 'queued' | 'downloading' | 'downloaded' | 'failed';
 export type MediaKind = 'image' | 'video' | 'audio' | 'text' | 'file' | 'json';
 export type MediaExportStatus = 'NOT_REQUESTED' | 'QUEUED' | 'EXPORTING' | 'EXPORTED' | 'EXPORT_FAILED';

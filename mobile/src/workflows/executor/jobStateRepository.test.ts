@@ -1,7 +1,7 @@
 import type { JobRecord } from '../../jobs/types';
 import { createInitializedRealSqliteTestDb } from '../../test/realSqlite';
 import { createOperationRepository } from './operationRepository';
-import { createJobStateRepository } from './jobStateRepository';
+import { createJobStateRepository } from '../../tasks/jobStateStore';
 
 const job: JobRecord = {
   id: 'job-1', revision: 0, workflowId: 'demo', workflowVersion: '1.0.0', workflowContentHash: 'hash',

@@ -1,8 +1,8 @@
 import type { Message, State } from '@ag-ui/client';
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../storage/appDatabase';
 import { assertAppDatabaseWritableAsync } from '../storage/database';
 import { withWriteTransaction } from '../storage/sqliteBusy';
-import { attachmentHashes, createAttachmentStore, validateImageBudget } from './attachmentStore';
+import { attachmentHashes, createAttachmentStore, validateImageBudget } from '../media/attachments';
 import type { SubmissionCommand, SubmissionReceipt } from './submissionCommands';
 import { endPromptRun, readPromptRuns } from './runState';
 import CryptoJS from 'crypto-js';
@@ -43,15 +43,15 @@ function indexSnapshot(row: IndexRow): LocalThreadSnapshot {
     createdAt: row.created_at, updatedAt: row.updated_at, ...(row.custom_title ? { customTitle: row.custom_title } : {}), summary: { title: row.title, messageCount: row.message_count } };
 }
 
-export function createLocalThreadStore(db: SQLiteDatabase, attachments = createAttachmentStore(db)) {
+export function createLocalThreadStore(db: AppDatabase, attachments = createAttachmentStore(db)) {
   const durableFields = new Map<string, Map<string, unknown[]>>();
   const ownerId = (threadId: string, table: string, id: string) => JSON.stringify([threadId, table, id]);
-  async function updateRefs(tx: SQLiteDatabase, threadId: string, table: string, id: string, value: unknown) {
+  async function updateRefs(tx: AppDatabase, threadId: string, table: string, id: string, value: unknown) {
     const owner = ownerId(threadId, table, id);
     await attachments.release(tx, 'agent_record', owner);
     await attachments.retain(tx, 'agent_record', owner, attachmentHashes(value));
   }
-  async function writeRecords(tx: SQLiteDatabase, table: RecordTable, threadId: string, values: unknown) {
+  async function writeRecords(tx: AppDatabase, table: RecordTable, threadId: string, values: unknown) {
     const next = records(values);
     if (!next.length) return;
     let sequence = (await tx.getFirstAsync<{ next: number }>(`SELECT COALESCE(MAX(sequence),-1)+1 AS next FROM ${table} WHERE thread_id=?`, threadId))!.next;
@@ -64,7 +64,7 @@ export function createLocalThreadStore(db: SQLiteDatabase, attachments = createA
       await tx.runAsync(`INSERT INTO ${table}(thread_id,id,sequence,payload_json) VALUES(?,?,?,?) ON CONFLICT(thread_id,id) DO UPDATE SET payload_json=excluded.payload_json`, threadId, item.id, old?.sequence ?? sequence++, json);
     }
   }
-  async function writeSnapshot(tx: SQLiteDatabase, snapshot: LocalThreadSnapshot) {
+  async function writeSnapshot(tx: AppDatabase, snapshot: LocalThreadSnapshot) {
     await assertAppDatabaseWritableAsync(tx);
     const existing = await tx.getFirstAsync<IndexRow>('SELECT * FROM agent_thread_index WHERE thread_id=?', snapshot.threadId);
     if (existing?.deleted) throw new Error('会话已删除，拒绝迟到的更新');

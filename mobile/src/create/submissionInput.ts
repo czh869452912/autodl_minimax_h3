@@ -1,4 +1,4 @@
-import type { TaskMediaInput } from '../tasks/types';
+import type { TaskMediaInput } from '../media/types';
 
 const MIN_SEED = 1;
 const MAX_SEED = 999999999999999;

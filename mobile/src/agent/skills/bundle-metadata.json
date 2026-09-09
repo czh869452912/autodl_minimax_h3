@@ -1,0 +1,218 @@
+{
+  "/skills/3d-animation-short-generator/meta.yaml": {
+    "mimeType": "text/yaml",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/3d-animation-short-generator/references/fallback-policy.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/3d-animation-short-generator/references/model-selection.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/3d-animation-short-generator/references/qc-checklist.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/3d-animation-short-generator/references/shot-table-spec.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/3d-animation-short-generator/references/storyboard-guidelines.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/3d-animation-short-generator/SKILL.cn.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/3d-animation-short-generator/SKILL.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/brand-promo-video-generator/meta.yaml": {
+    "mimeType": "text/yaml",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/brand-promo-video-generator/SKILL.cn.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/brand-promo-video-generator/SKILL.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/co-op-game-intro-generator/meta.yaml": {
+    "mimeType": "text/yaml",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/co-op-game-intro-generator/references/h3-confirmation-image-template.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/co-op-game-intro-generator/references/h3-video-prompt-template.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/co-op-game-intro-generator/SKILL.cn.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/co-op-game-intro-generator/SKILL.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/h3-prompt-writing/agents/openai.yaml": {
+    "mimeType": "text/yaml",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/h3-prompt-writing/references/base-en.txt": {
+    "mimeType": "text/plain",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/h3-prompt-writing/references/ref-en.txt": {
+    "mimeType": "text/plain",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/h3-prompt-writing/SKILL.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/handdrawn-live-video-generator/meta.yaml": {
+    "mimeType": "text/yaml",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/handdrawn-live-video-generator/SKILL.cn.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-28T10:40:38.548Z",
+    "modified_at": "2026-08-28T10:40:38.548Z",
+    "newline": "crlf"
+  },
+  "/skills/handdrawn-live-video-generator/SKILL.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-28T10:40:38.548Z",
+    "modified_at": "2026-08-28T10:40:38.548Z",
+    "newline": "crlf"
+  },
+  "/skills/minimalist-product-ad-generator/meta.yaml": {
+    "mimeType": "text/yaml",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/minimalist-product-ad-generator/SKILL.cn.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/minimalist-product-ad-generator/SKILL.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-28T10:40:38.549Z",
+    "modified_at": "2026-08-28T10:40:38.549Z",
+    "newline": "crlf"
+  },
+  "/skills/music-video-subtitle-generator/meta.yaml": {
+    "mimeType": "text/yaml",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/music-video-subtitle-generator/SKILL.cn.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-28T10:40:38.550Z",
+    "modified_at": "2026-08-28T10:40:38.550Z",
+    "newline": "crlf"
+  },
+  "/skills/music-video-subtitle-generator/SKILL.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-28T10:40:38.550Z",
+    "modified_at": "2026-08-28T10:40:38.550Z",
+    "newline": "crlf"
+  },
+  "/skills/paper-collage-explainer-generator/meta.yaml": {
+    "mimeType": "text/yaml",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/paper-collage-explainer-generator/SKILL.cn.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/paper-collage-explainer-generator/SKILL.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/papercraft-stop-motion-explainer/meta.yaml": {
+    "mimeType": "text/yaml",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/papercraft-stop-motion-explainer/SKILL.cn.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/papercraft-stop-motion-explainer/SKILL.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  },
+  "/skills/README.md": {
+    "mimeType": "text/markdown",
+    "created_at": "2026-08-14T17:31:16.000Z",
+    "modified_at": "2026-08-14T17:31:16.000Z",
+    "newline": "lf"
+  }
+}

@@ -1,4 +1,4 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../storage/appDatabase';
 import type { JobRecord, JobRepository, ArtifactRecord, JobStatus } from './types';
 import { assertAppDatabaseWritable } from '../storage/database';
 
@@ -10,7 +10,7 @@ function parseJson<T>(source: string | null | undefined, fallback: T): T {
   try { return JSON.parse(source) as T; } catch { return fallback; }
 }
 
-export function createJobRepository(db: SQLiteDatabase | undefined): JobRepository & { listRecent(limit: number): Promise<JobRecord[]> } {
+export function createJobRepository(db: AppDatabase | undefined): JobRepository & { listRecent(limit: number): Promise<JobRecord[]> } {
   const jobs = new Map<string, JobRecord>();
   const artifacts = new Map<string, ArtifactRecord[]>();
   const database = db && typeof (db as unknown as { execSync?: unknown }).execSync === 'function' ? db : undefined;

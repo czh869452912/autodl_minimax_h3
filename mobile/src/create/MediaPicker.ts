@@ -1,5 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
-import type { TaskMediaInput } from '../tasks/types';
+import type { TaskMediaInput } from '../media/types';
 import { pickImagesFromGallery } from '../native/imagePicker';
 
 const MAX_BYTES = 50 * 1024 * 1024;

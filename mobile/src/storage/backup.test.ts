@@ -1,11 +1,17 @@
 import {
   createPreMigrationBackup,
+  databaseDirectoryUri,
   createReleaseBackup,
   listFullDatabaseBackups,
   restoreFullDatabaseBackup,
   type BackupDeps,
   type RestoreBackupDeps,
 } from './backup';
+
+test('normalizes the native SQLite directory path for the filesystem URI API', () => {
+  expect(databaseDirectoryUri('/data/user/0/app/databases')).toBe('file:///data/user/0/app/databases');
+  expect(databaseDirectoryUri('file:///data/user/0/app/databases')).toBe('file:///data/user/0/app/databases');
+});
 
 function fixture(overrides: Partial<BackupDeps> = {}) {
   const destination = { closeSync: jest.fn() };

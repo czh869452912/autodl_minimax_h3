@@ -1,10 +1,11 @@
+import { H3_EVENTS, H3_CLIENT_KEYS, decodeH3CustomEvent, workspaceRevision } from './eventContract';
 import { endPromptRun, readPromptRuns, reducePromptRunEvent } from './runState';
 import type { H3AgUiAgent } from './aguiAgent';
 import { H3_GRAPH_VERSION, type H3AgentConfig } from './agentTypes';
 import type { LocalThreadSnapshot, LocalThreadStore } from './threadStore';
 import type { SubmissionCommand, SubmissionReceipt } from './submissionCommands';
 import { readPromptVersions, reconcilePromptVersions } from './promptVersions';
-import { isDeepSeekV4 } from './reasoningConfig';
+import { isDeepSeekV4 } from '../config/llmReasoning';
 export type FlushResult = { kind: 'saved' } | { kind: 'failed'; error: Error };
 
 export type PromptAgentConfig = H3AgentConfig;
@@ -93,7 +94,7 @@ export function createPromptRuntimeRegistry(
 
       const agent = createAgent(config);
       let runs = readPromptRuns(seed.state).map(run => endPromptRun(run, 'interrupted', Date.now(), '运行中断，请重试'));
-      const clientKeys = ['h3Composer', 'h3Versions', 'h3SelectedVersionId', 'h3ReadAt', 'h3Workspace', 'h3Workspaces'];
+      const clientKeys = H3_CLIENT_KEYS;
       const clientState: Record<string, unknown> = {};
       for (const key of clientKeys) if (key in (seed.state ?? {})) clientState[key] = (seed.state as Record<string, unknown>)[key];
       const mergeState = (state: unknown) => ({ ...(state as Record<string, unknown>), ...clientState, ...(runs.length ? { h3Runs: runs } : {}) });
@@ -105,7 +106,7 @@ export function createPromptRuntimeRegistry(
         const pending = reasoningBuffer;
         reasoningBuffer = undefined;
         if (!pending) return false;
-        runs = runs.map(run => run.id === pending.runId ? reducePromptRunEvent(run, { type: 'CUSTOM', name: 'h3.reasoning', value: { messageId: pending.messageId, delta: pending.chunks.join('') } }, pending.at) : run);
+        runs = runs.map(run => run.id === pending.runId ? reducePromptRunEvent(run, { type: 'CUSTOM', name: H3_EVENTS.reasoning, value: { messageId: pending.messageId, delta: pending.chunks.join('') } }, pending.at) : run);
         return true;
       };
       let snapshot = { ...seed, state: mergeState(seed.state) } as LocalThreadSnapshot;
@@ -250,8 +251,10 @@ export function createPromptRuntimeRegistry(
           return { state: mergeState(state) as never };
         },
         onEvent: ({ input, event, state, messages }) => {
-          if (event.type === 'CUSTOM' && (event as any).name === 'h3.reasoning') {
-            const value = (event as any).value;
+          const custom = decodeH3CustomEvent(event);
+          if (event.type === 'CUSTOM' && !custom) return;
+          if (custom?.name === H3_EVENTS.reasoning) {
+            const value = custom.value;
             if (typeof value?.messageId !== 'string' || typeof value.delta !== 'string') return;
             if (reasoningBuffer && (reasoningBuffer.runId !== input.runId || reasoningBuffer.messageId !== value.messageId)) flushReasoning();
             reasoningBuffer ??= { runId: input.runId, messageId: value.messageId, chunks: [], at: Date.now() };
@@ -262,16 +265,16 @@ export function createPromptRuntimeRegistry(
             return;
           }
           const hadReasoning = flushReasoning();
-          if (event.type === 'CUSTOM' && (event as any).name === 'h3.workspace' && runs.some(run => run.id === input.runId && run.status === 'running')) {
-            const workspace = (event as any).value.workspace;
+          if (custom?.name === H3_EVENTS.workspace && runs.some(run => run.id === input.runId && run.status === 'running')) {
+            const workspace = custom.value.workspace;
             clientState.h3Workspace = workspace;
-            clientState.h3Workspaces = [...((clientState.h3Workspaces as any[]) ?? []).filter(value => value.revision !== workspace.revision), { ...workspace, id: String(workspace.revision) }];
+            clientState.h3Workspaces = [...(Array.isArray(clientState.h3Workspaces) ? clientState.h3Workspaces : []).filter(value => workspaceRevision(value) !== workspace.revision), { ...workspace, id: String(workspace.revision) }];
             persist(messages, state, true);
           }
           const updated = runs.map(run => run.id === input.runId ? reducePromptRunEvent(run, event, Date.now()) : run);
           if (hadReasoning || updated.some((run, index) => run !== runs[index])) {
             runs = updated;
-            persist(messages, state, ['RUN_ERROR', 'RUN_FINISHED', 'CUSTOM'].includes(event.type) && (event as any).name !== 'h3.reasoning');
+            persist(messages, state, ['RUN_ERROR', 'RUN_FINISHED', 'CUSTOM'].includes(event.type));
             return { state: mergeState(state) as never };
           }
         },

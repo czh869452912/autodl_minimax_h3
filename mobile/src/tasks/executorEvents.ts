@@ -1,3 +1,5 @@
+import { notifyListeners } from './notifyListeners';
+
 export type ExecutorTrigger = 'command' | 'foreground' | 'connectivity' | 'timer' | 'background' | 'service';
 export type ExecutorWorkState = Readonly<{ phase: 'idle' | 'scheduled' | 'running' | 'backoff'; nextWakeAt?: number; error?: string }>;
 
@@ -12,9 +14,9 @@ export function createExecutorEvents() {
     publish(next: ExecutorWorkState) {
       if (state.phase === next.phase && state.nextWakeAt === next.nextWakeAt && state.error === next.error) return;
       state = Object.freeze(next);
-      for (const listener of observers) listener();
+      notifyListeners(observers);
     },
-    signal(trigger: ExecutorTrigger) { for (const listener of wakes) listener(trigger); },
+    signal(trigger: ExecutorTrigger) { notifyListeners(wakes, trigger); },
   };
 }
 export const executorEvents = createExecutorEvents();

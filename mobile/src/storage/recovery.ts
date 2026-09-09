@@ -1,5 +1,6 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from './appDatabase';
 import { RECOVERY_TABLE } from './schema';
+import { maintenanceDatabase, blockDatabase } from './databaseAccess';
 
 export type AppRecoveryState = { readonly: true; diagnostic: string; createdAt: number };
 
@@ -14,7 +15,7 @@ export function migrationDiagnostic(fromVersion: number, toVersion: number): str
   return `MIGRATION_${fromVersion}_TO_${toVersion}_FAILED`;
 }
 
-export function getRecoveryState(db: SQLiteDatabase | undefined): AppRecoveryState | undefined {
+export function getRecoveryState(db: AppDatabase | undefined): AppRecoveryState | undefined {
   if (!db || typeof (db as { getFirstSync?: unknown }).getFirstSync !== 'function') return undefined;
   try {
     const row = db.getFirstSync<{ diagnostic: string; created_at: number }>(
@@ -29,7 +30,7 @@ export function getRecoveryState(db: SQLiteDatabase | undefined): AppRecoverySta
   }
 }
 
-export async function getRecoveryStateAsync(db: SQLiteDatabase | undefined): Promise<AppRecoveryState | undefined> {
+export async function getRecoveryStateAsync(db: AppDatabase | undefined): Promise<AppRecoveryState | undefined> {
   if (!db) return undefined;
   if (typeof db.getFirstAsync !== 'function') throw new Error('APP_DATABASE_ASYNC_RECOVERY_UNAVAILABLE');
   const row = await db.getFirstAsync<{ diagnostic: string; created_at: number }>(
@@ -41,7 +42,9 @@ export async function getRecoveryStateAsync(db: SQLiteDatabase | undefined): Pro
   return { readonly: true, diagnostic: row.diagnostic, createdAt };
 }
 
-export function markRecovery(db: SQLiteDatabase, diagnostic: string, createdAt: number): void {
+export function markRecovery(db: AppDatabase, diagnostic: string, createdAt: number): void {
+  blockDatabase(db, diagnostic);
+  db = maintenanceDatabase(db);
   try {
     db.execSync(`CREATE TABLE IF NOT EXISTS ${RECOVERY_TABLE} (id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1), diagnostic TEXT NOT NULL, created_at INTEGER NOT NULL)`);
     db.runSync(`INSERT OR REPLACE INTO ${RECOVERY_TABLE} (id, diagnostic, created_at) VALUES (1, ?, ?)`, diagnostic, createdAt);

@@ -11,6 +11,7 @@ jest.mock('./database', () => ({
 
 import { AppMigrationError } from './recovery';
 import { getDatabase, getDatabaseStartupState, resetDatabaseClientForTests } from './databaseClient';
+import { didResetDatabase } from './databaseAccess';
 
 beforeEach(() => {
   resetDatabaseClientForTests();
@@ -61,4 +62,14 @@ test('legacy schemas remain in the explicit legacy flow', () => {
 test('does not hide non-migration startup failures', () => {
   mockEnsure.mockImplementationOnce(() => { throw new TypeError('unexpected'); });
   expect(() => getDatabase()).toThrow('unexpected');
+  getDatabase();
+  expect(mockEnsure).toHaveBeenCalledTimes(2);
+});
+
+test('successful maintenance retires the old handle and initializes a new facade', () => {
+  const old = getDatabase();
+  didResetDatabase(old);
+  expect(() => old.runSync('DELETE FROM tasks')).toThrow('DATABASE_HANDLE_RETIRED');
+  expect(getDatabase()).not.toBe(old);
+  expect(mockEnsure).toHaveBeenCalledTimes(2);
 });

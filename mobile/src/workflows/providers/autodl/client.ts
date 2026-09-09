@@ -6,22 +6,10 @@ export { H3_WORKFLOW_ID } from './metadata';
 
 const BASE_URL = 'https://autodl.art/api/v1/comfyui/comfyui_workflow/';
 
-export type ProviderErrorKind = 'network' | 'timeout' | 'auth' | 'http' | 'provider' | 'response';
+import { ProviderError } from '../errors';
+export { ProviderError, type ProviderErrorKind } from '../errors';
 export type AutodlResponseData = { task_id?: string; status?: unknown; results?: unknown; created_at?: unknown; started_at?: unknown; duration?: unknown };
 
-export class ProviderError extends Error {
-  constructor(
-    public readonly provider: 'autodl',
-    public readonly operation: 'submit' | 'status',
-    public readonly kind: ProviderErrorKind,
-    message: string,
-    public readonly status?: number,
-    options?: { cause?: unknown },
-  ) {
-    super(message, options);
-    this.name = 'ProviderError';
-  }
-}
 
 function networkMessage(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error);

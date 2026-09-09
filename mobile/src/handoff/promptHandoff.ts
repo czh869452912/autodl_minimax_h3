@@ -1,8 +1,8 @@
 import { File, Paths } from 'expo-file-system';
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../storage/appDatabase';
 import { getDatabase } from '../storage/databaseClient';
-import { attachmentHashes, validateImageBudget } from './attachmentStore';
-import type { TaskMediaInput } from '../tasks/types';
+import { attachmentHashes, validateImageBudget } from '../media/attachments';
+import type { TaskMediaInput } from '../media/types';
 import { compileWorkflow } from '../workflows/compiler/compiler';
 import type { WorkflowDefinition } from '../workflows/schema/types';
 import { validatePromptBindings, type PromptBindingImage } from './promptBindings';
@@ -92,7 +92,7 @@ function safeName(value: string, extension: string): string {
 }
 
 /** Resolve already-owned CAS inputs. Applying a draft never creates a second file. */
-export async function materializePromptHandoff(handoff: PromptHandoff, db: SQLiteDatabase = getDatabase()): Promise<TaskMediaInput[]> {
+export async function materializePromptHandoff(handoff: PromptHandoff, db: AppDatabase = getDatabase()): Promise<TaskMediaInput[]> {
   decodePromptHandoff(handoff);
   if (handoff.images.length > 9) throw new Error('参考图片最多 9 张，请返回预览调整');
   const bindings = validatePromptBindings(handoff.prompt, handoff.images);
