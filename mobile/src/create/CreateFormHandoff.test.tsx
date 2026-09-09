@@ -5,6 +5,9 @@ import { CreateForm, type CreateFormDraftDependencies } from './CreateForm';
 import { materializePromptHandoff, type PromptHandoff } from '../handoff/promptHandoff';
 import type { PromptDraft } from '../handoff/promptDraft';
 import { builtinWorkflowDefinitions } from '../workflows/registry/builtin';
+import type { RegistryRecord } from '../workflows/registry/types';
+import zmPackage from '../../../registry/workflows/autodl.minimax-h3.zm-u24/1.0.0.json';
+import { packageToDefinition, type WorkflowPackage } from '../workflows/schema/package';
 import { WorkflowForm } from '../workflows/renderer/WorkflowForm';
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { Directory, File, Paths } from 'expo-file-system';
@@ -31,7 +34,7 @@ function setup(value: PromptDraft = draft) {
   const discard = jest.fn(async (id: string) => { rows.delete(id); });
   const drafts: CreateFormDraftDependencies = { read: async (id) => rows.get(id) ?? null, consume, discard, materialize: value => materializePromptHandoff(value, db as never) };
   const definition = builtinWorkflowDefinitions[1];
-  const active = { workflowId: definition.id, version: definition.version, definitionJson: JSON.stringify(definition), contentHash: 'hash', hashScheme: 'workflow-package/without-declared-hash+sorted-json@1', source: 'builtin', trust: 'builtin', installedAt: 1 } as const;
+  const active: RegistryRecord = { workflowId: definition.id, version: definition.version, definitionJson: JSON.stringify(definition), contentHash: 'hash', hashScheme: 'workflow-package/without-declared-hash+sorted-json@1', source: 'builtin', trust: 'builtin', installedAt: 1 } as const;
   const queue = jest.fn(async () => ({ id: 'task1' }));
   const submissionDependencies = { catalog: { bootstrap: async () => undefined, listActive: async () => [active], getActive: async () => active }, queue, readSettings: jest.fn() };
   return { rows, consume, discard, drafts, queue, submissionDependencies };
@@ -39,6 +42,75 @@ function setup(value: PromptDraft = draft) {
 const text = (tree: ReturnType<typeof create>) => tree.root.findAllByType(Text).map((node) => node.props.children).flat(Infinity).join(' ');
 
 describe('Create prompt handoff', () => {
+  it('keeps saved drafts independent and rehydrates A after navigating A to B to A', async () => {
+    const context = setup();
+    const second = { ...draft, id: 'd2', prompt: 'B scene', handoff: { ...handoff, prompt: 'B scene' } };
+    context.rows.set('d2', second);
+    context.drafts.saveForm = async (id, form) => { context.rows.set(id, { ...context.rows.get(id)!, form }); };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => { tree = create(<CreateForm draftId="d1" draftDependencies={context.drafts} submissionDependencies={context.submissionDependencies} />); });
+    act(() => tree.root.findByType(WorkflowForm).props.onChange({ ...tree.root.findByType(WorkflowForm).props.value, prompt: 'A edited' }));
+    await act(async () => Promise.resolve());
+    await act(async () => tree.update(<CreateForm draftId="d2" draftDependencies={context.drafts} submissionDependencies={context.submissionDependencies} />));
+    expect(tree.root.findByType(WorkflowForm).props.value.prompt).toBe('B scene');
+    expect(context.rows.get('d1')?.form?.values.prompt).toBe('A edited');
+    await act(async () => tree.update(<CreateForm draftId="d1" draftDependencies={context.drafts} submissionDependencies={context.submissionDependencies} />));
+    expect(tree.root.findByType(WorkflowForm).props.value.prompt).toBe('A edited');
+    expect(context.rows.get('d2')?.form?.values.prompt).toBe('B scene');
+    act(() => tree.unmount());
+  });
+  it('waits for the new draft target catalog before applying on an already mounted form', async () => {
+    const definition = packageToDefinition(zmPackage as WorkflowPackage);
+    const target = { workflowId: definition.id, workflowVersion: definition.version, contentHash: zmPackage.metadata.contentHash };
+    const context = setup({ ...draft, handoff: { ...handoff, target, parameters: { resolution: '768p(1:1)', seed: '0' } } });
+    const old = (await context.submissionDependencies.catalog.listActive())[0];
+    const upgraded: RegistryRecord = { ...old, workflowId: definition.id, version: definition.version, contentHash: target.contentHash, definitionJson: JSON.stringify(zmPackage) };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => { tree = create(<CreateForm initialPrompt="old" draftDependencies={context.drafts} submissionDependencies={context.submissionDependencies} />); });
+    const pending = deferred<undefined>();
+    context.submissionDependencies.catalog.bootstrap = () => pending.promise;
+    context.submissionDependencies.catalog.listActive = async () => [old, upgraded];
+    await act(async () => tree.update(<CreateForm initialPrompt="old" draftId="d1" draftDependencies={context.drafts} submissionDependencies={context.submissionDependencies} />));
+    expect(context.consume).not.toHaveBeenCalled();
+    await act(async () => pending.resolve(undefined));
+    expect(tree.root.findByType(WorkflowForm).props.value).toMatchObject({ resolution: '768p(1:1)', seed: 0 });
+    expect(context.consume).toHaveBeenCalledTimes(1);
+    act(() => tree.unmount());
+  });
+  it('opens the exported target instead of the first catalog entry and preserves seed zero', async () => {
+    const definition = packageToDefinition(zmPackage as WorkflowPackage);
+    const target = { workflowId: definition.id, workflowVersion: definition.version, contentHash: zmPackage.metadata.contentHash };
+    const context = setup({ ...draft, handoff: { ...handoff, target, parameters: { resolution: '768p(1:1)', seed: '0' } } });
+    const old = (await context.submissionDependencies.catalog.listActive())[0];
+    const record = { ...old, workflowId: definition.id, version: definition.version, contentHash: target.contentHash, definitionJson: JSON.stringify(zmPackage) };
+    context.submissionDependencies.catalog.listActive = async () => [old, record];
+    let tree!: ReturnType<typeof create>;
+    await act(async () => { tree = create(<CreateForm draftId="d1" draftDependencies={context.drafts} submissionDependencies={context.submissionDependencies} />); });
+    expect(tree.root.findByType(WorkflowForm).props.definition.id).toBe(definition.id);
+    expect(tree.root.findByType(WorkflowForm).props.value).toMatchObject({ resolution: '768p(1:1)', seed: 0 });
+    expect(context.consume).toHaveBeenCalledTimes(1);
+    act(() => tree.unmount());
+  });
+
+  it('switches workflows explicitly without submitting or losing prompt and shows required media errors', async () => {
+    const definition = packageToDefinition(zmPackage as WorkflowPackage);
+    const context = setup();
+    const old = (await context.submissionDependencies.catalog.listActive())[0];
+    const record = { ...old, workflowId: definition.id, version: definition.version, contentHash: zmPackage.metadata.contentHash, definitionJson: JSON.stringify(zmPackage) };
+    context.submissionDependencies.catalog.listActive = async () => [old, record];
+    context.submissionDependencies.catalog.getActive = async (id?: string) => id === record.workflowId ? record : old;
+    let tree!: ReturnType<typeof create>;
+    await act(async () => { tree = create(<CreateForm initialPrompt="Keep scene" draftDependencies={context.drafts} submissionDependencies={context.submissionDependencies} />); });
+    await act(async () => tree.root.findByProps({ accessibilityLabel: `选择工作流 ${definition.metadata.title}` }).props.onPress());
+    expect(tree.root.findByType(WorkflowForm).props.value.prompt).toBe('Keep scene');
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '提交 AutoDL 任务生成' }).props.onPress());
+    expect(text(tree)).toContain('至少需要 1');
+    expect(context.queue).not.toHaveBeenCalled();
+    act(() => tree.root.findByType(WorkflowForm).props.onChange({ ...tree.root.findByType(WorkflowForm).props.value, prompt: 'Newest scene' }));
+    await act(async () => tree.root.findByProps({ accessibilityLabel: `选择工作流 ${builtinWorkflowDefinitions[1].metadata.title}` }).props.onPress());
+    expect(tree.root.findByType(WorkflowForm).props.value.prompt).toBe('Newest scene');
+    act(() => tree.unmount());
+  });
   it('applies source, version, images and schema-valid parameters once without submitting under StrictMode', async () => {
     const context = setup();
     let tree!: ReturnType<typeof create>;

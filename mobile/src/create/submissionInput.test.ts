@@ -1,5 +1,6 @@
 import { buildAutodlSubmitRequest, type AutodlInput } from '../workflows/providers/autodl/mapping';
 import { buildSubmissionInputSnapshot } from './submissionInput';
+import { builtinWorkflowDefinitions } from '../workflows/registry/builtin';
 
 const baseInput = {
   workflowValues: { prompt: 'p', resolution: '768p竖', duration: 5, seed: '' },
@@ -41,4 +42,13 @@ test('preserves a non-decimal seed so schema validation can reject it', () => {
   });
 
   expect(snapshot.seed).toBe('abc');
+});
+
+test('uses bound schema fields and its seed range when building the durable snapshot', () => {
+  const definition = { ...builtinWorkflowDefinitions[1], inputs: { type: 'object', properties: {
+    text: { type: 'string', 'x-workflow.semantic': 'prompt' }, seconds: { type: 'integer' },
+    random: { type: 'integer', minimum: 0, maximum: 99 }, photos: { type: 'array' },
+  } }, request: { operation: 'workflow.submit', bindings: { prompt: '/text', duration: '/seconds', seed: '/random', images: '/photos' } } };
+  const snapshot = buildSubmissionInputSnapshot({ ...baseInput, definition, workflowValues: { text: ' p ', seconds: '7', random: '' }, random: () => 0 });
+  expect(snapshot).toEqual({ text: 'p', seconds: 7, random: 0, photos: [] });
 });

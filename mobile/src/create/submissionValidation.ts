@@ -15,7 +15,7 @@ type SubmissionValidationResult =
   | { ok: false; fieldErrors: SubmissionFieldError[]; summary: string };
 
 function fieldForPath(path: string, definition: WorkflowDefinition): string | undefined {
-  const match = path.match(/^\/([^/]+)$/);
+  const match = path.match(/^\/([^/]+)/);
   if (!match) return undefined;
   const field = match[1];
   return Object.prototype.hasOwnProperty.call(definition.inputs.properties ?? {}, field) ? field : undefined;
@@ -30,6 +30,8 @@ export function formatSubmissionFieldError(error: SubmissionFieldError, definiti
   if (error.code === 'WORKFLOW_CHANGED') return error.message;
   const schema = propertyFor(error, definition);
   const label = String(schema?.title ?? error.field ?? (error.path || '参数'));
+  const media = error.path.match(/^\/([^/]+)\/(\d+)\/mime$/);
+  if (media) return `${label}第 ${Number(media[2]) + 1} 项的格式不受当前工作流支持，请替换素材。`;
   if (error.code === 'MAX_LENGTH' && typeof error.value === 'string' && typeof schema?.maxLength === 'number') {
     return `${label}最多 ${schema.maxLength.toLocaleString()} 个字符，当前 ${error.value.length.toLocaleString()} 个。`;
   }

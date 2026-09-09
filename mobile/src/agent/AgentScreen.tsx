@@ -20,6 +20,9 @@ import { PromptAssistantUi, type RunIssue } from './PromptAssistantUi';
 import { createPromptDraftStore } from '../handoff/promptDraft';
 import { sortSessionSnapshots } from './agentPresentation';
 import type { PromptHandoff } from '../handoff/promptHandoff';
+import { chooseWorkflow, readSelectedWorkflow } from '../workflows/registry/selection';
+import { workflowCatalogEvents } from '../workflows/registry/catalogEvents';
+import type { WorkflowChoice } from './PromptVersionPanel';
 import { normalizePromptHandoffParameters } from '../handoff/promptHandoff';
 import { createAppWorkflowCatalog } from '../workflows/registry/builtin';
 import { registryRecordToDefinition } from '../workflows/registry/catalog';
@@ -117,24 +120,27 @@ function ReadyAgent({
   const router = useRouter();
   const catalog = useMemo(() => createAppWorkflowCatalog(), []);
   const [workflow, setWorkflow] = useState<{ record: RegistryRecord; definition: WorkflowDefinition }>();
+  const [workflows, setWorkflows] = useState<WorkflowChoice[]>([]);
   const [workflowLoadIssue, setWorkflowLoadIssue] = useState<string>();
   const [workflowReload, setWorkflowReload] = useState(0);
+  useEffect(() => workflowCatalogEvents.subscribe(() => setWorkflowReload(value => value + 1)), []);
   useFocusEffect(useCallback(() => {
     let current = true;
     setWorkflow(undefined); setWorkflowLoadIssue(undefined);
     void (async () => {
       await catalog.bootstrap();
-      const record = (await catalog.listActive())[0];
+      const records = await catalog.listActive();
+      const record = chooseWorkflow(records, await readSelectedWorkflow().catch(() => null));
       if (!record) throw new Error('没有可用工作流');
       const definition = registryRecordToDefinition(record);
-      if (current) setWorkflow({ record, definition });
+      if (current) { setWorkflow({ record, definition }); setWorkflows(records.map(item => ({ definition: registryRecordToDefinition(item), contentHash: item.contentHash }))); }
     })().catch(reason => { if (current) setWorkflowLoadIssue(reason instanceof Error ? reason.message : '工作流加载失败'); });
     return () => { current = false; };
   }, [catalog, workflowReload]));
-  const requireCurrentWorkflow = async () => {
+  const requireCurrentWorkflow = async (target?: PromptHandoff['target']) => {
     if (!workflow) throw new Error('工作流尚未就绪，请重新加载后重试');
-    const current = await catalog.getActive(workflow.record.workflowId);
-    if (!current || current.version !== workflow.record.version || current.contentHash !== workflow.record.contentHash) {
+    const current = await catalog.getActive(target?.workflowId ?? workflow.record.workflowId);
+    if (!current || current.version !== (target?.workflowVersion ?? workflow.record.version) || current.contentHash !== (target?.contentHash ?? workflow.record.contentHash)) {
       setWorkflow(undefined); setWorkflowLoadIssue('工作流已更新，请重新加载后确认生成参数');
       throw new Error('工作流已更新，请重新加载后确认生成参数');
     }
@@ -290,6 +296,7 @@ function ReadyAgent({
       config={config}
       snapshot={activeSnapshot}
       workflowDefinition={workflow?.definition}
+      workflows={workflows}
       workflowLoadIssue={workflowLoadIssue}
       onReloadWorkflow={() => setWorkflowReload(value => value + 1)}
       persistenceIssue={persistenceIssue}
@@ -311,7 +318,7 @@ function ReadyAgent({
         });
       }}
       onExportHandoff={async (handoff) => {
-        const definition = await requireCurrentWorkflow();
+        const definition = await requireCurrentWorkflow(handoff.target);
         handoff = { ...handoff, parameters: normalizePromptHandoffParameters(handoff.parameters, definition) };
         const draft = await draftStore.save({ prompt: handoff.prompt, attachmentIds: handoff.images.map(image => image.id), handoff });
         router.navigate({ pathname: '/(tabs)/create', params: { draftId: draft.id } });
@@ -332,6 +339,7 @@ function AgentSession({
   config: AgentConfig;
   snapshot: LocalThreadSnapshot;
   workflowDefinition?: WorkflowDefinition;
+  workflows?: WorkflowChoice[];
   workflowLoadIssue?: string;
   onReloadWorkflow: () => void;
   persistenceIssue?: string;

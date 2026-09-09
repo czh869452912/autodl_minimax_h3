@@ -9,6 +9,9 @@ import type { TaskMediaInput } from '../media/types';
 const MAX_AGE = 60 * 60 * 1000;
 export type AppliedPromptForm = {
   workflowId: string;
+  workflowVersion?: string;
+  contentHash?: string;
+  canonicalValues?: Record<string, unknown>;
   values: Record<string, unknown>;
   images: TaskMediaInput[];
   audios: TaskMediaInput[];

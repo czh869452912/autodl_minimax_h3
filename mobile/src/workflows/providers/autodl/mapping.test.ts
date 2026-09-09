@@ -1,5 +1,9 @@
 import { buildAutodlSubmitRequest, normalizeAutodlStatus, parseAutodlResult } from './mapping';
 
+test.each([0, '0'])('sends seed zero as a JSON number (%s)', seed => {
+  expect(buildAutodlSubmitRequest({ prompt: 'p', resolution: '768p(1:1)', duration: 5, seed }).seed).toBe(0);
+});
+
 test('maps H3 reference slots from zero exactly as provider metadata declares', () => {
   const payload = buildAutodlSubmitRequest({
     prompt: 'p', resolution: '768p竖', duration: 15,

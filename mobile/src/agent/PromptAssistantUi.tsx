@@ -49,7 +49,7 @@ import { readPromptRuns, type PromptRun } from './runState';
 import { RunTimelineRow } from './RunTimelineRow';
 import { enrichRunTools, indexRunTools, projectRunTimeline } from './runTimeline';
 import { readPromptVersions, restorePromptVersion } from './promptVersions';
-import { PromptVersionPanel } from './PromptVersionPanel';
+import { PromptVersionPanel, type WorkflowChoice } from './PromptVersionPanel';
 import type { PromptHandoff } from '../handoff/promptHandoff';
 import { createAgentId } from './submissionCommands';
 import { validateImageBudget } from '../media/attachments';
@@ -101,6 +101,7 @@ export function PromptAssistantUi({
   transcript,
   transcriptRevision,
   workflowDefinition,
+  workflows,
   workflowLoadIssue,
   onReloadWorkflow,
 }: HistoryProps & {
@@ -117,6 +118,7 @@ export function PromptAssistantUi({
   transcript?: readonly unknown[];
   transcriptRevision?: number;
   workflowDefinition?: WorkflowDefinition;
+  workflows?: WorkflowChoice[];
   workflowLoadIssue?: string;
   onReloadWorkflow?: () => void;
 }) {
@@ -414,7 +416,7 @@ export function PromptAssistantUi({
       />
       <DraggableBottomSheet ref={versionSheet} visible={versionsOpen} title="Prompt 版本" onClose={() => setVersionsOpen(false)}>
           {versionsOpen && !workflowDefinition ? <View style={{ gap: 12 }}><Text accessibilityRole={workflowLoadIssue ? 'alert' : undefined} accessibilityLiveRegion="polite" style={styles.noticeText}>{workflowLoadIssue ?? '正在加载工作流…'}</Text>{workflowLoadIssue && onReloadWorkflow ? <Pressable accessibilityRole="button" accessibilityLabel="重新加载工作流" onPress={onReloadWorkflow} style={styles.secondaryAction}><Text style={styles.secondaryActionText}>重新加载工作流</Text></Pressable> : null}</View> : null}
-          {versionsOpen && workflowDefinition ? <PromptVersionPanel workflowDefinition={workflowDefinition} inSheet onExpand={() => versionSheet.current?.expand()} versions={versions} selectedVersionId={typeof state.h3SelectedVersionId === 'string' ? state.h3SelectedVersionId : undefined} threadId={activeThreadId} onSelect={id => onClientStateChange?.({ h3SelectedVersionId: id })} onRestore={(id, commandId) => {
+          {versionsOpen && workflowDefinition ? <PromptVersionPanel workflows={workflows} workflowDefinition={workflowDefinition} inSheet onExpand={() => versionSheet.current?.expand()} versions={versions} selectedVersionId={typeof state.h3SelectedVersionId === 'string' ? state.h3SelectedVersionId : undefined} threadId={activeThreadId} onSelect={id => onClientStateChange?.({ h3SelectedVersionId: id })} onRestore={(id, commandId) => {
             const next = restorePromptVersion(versions, id, Date.now(), commandId);
             onClientStateChange?.({ h3Versions: next, h3SelectedVersionId: next[next.length - 1]?.id });
           }} onExport={async handoff => { if (onExportHandoff) await onExportHandoff(handoff); else await onExportPrompt(handoff.prompt); setVersionsOpen(false); }} /> : null}
