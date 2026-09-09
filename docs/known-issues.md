@@ -1,0 +1,44 @@
+# 已知问题
+
+## MEDIA-001：H.264 High 10 视频的设备解码兼容性
+
+- 状态：未修复，随 v1.4.17 发布记录。
+- 确认日期：2026-09-09。
+- 已复现工作流：AutoDL `autodl.minimax-h3.zm-u24`（升级画质）。其他工作流若返回相同编码也可能受影响；不代表所有 ZM-U24 输出都存在问题。
+- 影响范围：App 内播放、封面抽取，以及导出后依赖系统解码器的相册播放。当前实测设备为 Android 15 / API 35 的 x86_64 模拟器，尚未完成真机矩阵验证，不能据此认定只影响模拟器或所有真机均不可播放。
+
+### 现象与证据
+
+生成任务、下载和相册导出均可能显示成功，但视频画面异常、无法正常播放或封面不可用。
+
+本次样本的 CDN 响应为 HTTP 200、`video/mp4`、847,665 字节。设备实际文件与 CDN 内容的 SHA-256 完全相同：`8a5fbb193daa875c3d945e697c7fe6a08ac5a3ce5f769251f957504de67f0075`。因此本次问题不属于下载错文件、签名 URL 被改写或传输损坏。
+
+`ffprobe` 检测到 H.264 **High 10**、`yuv420p10le`（10-bit）、864×480、24 fps，音频为 AAC-LC。模拟器 Media3 日志报告 `NoSupport [codec.profileLevel, avc1.6E001E, video/avc]` 和 `Format exceeds selected codec's capabilities`。完整 MP4 文件及正确 MIME 并不保证设备能解码其中的视频编码。
+
+当前播放组件使用 Expo Video / Media3，封面和抽帧探测使用 `MediaMetadataRetriever`，均依赖设备解码能力。探测失败还可能被统一映射为 `MEDIA_INVALID`，导致界面将编码不支持误报为文件损坏、建议重新下载。即使抽帧探测通过，也不能保证整个视频在播放器中正常解码。
+
+Android 平台没有保证 H.264 High 10 支持，实际能力取决于设备。参考 [Android 支持的媒体格式](https://developer.android.com/media/platform/supported-formats) 和 [Media3 格式支持](https://developer.android.com/media/media3/exoplayer/supported-formats)。
+
+### 当前处理方式
+
+- 保留原始视频，使用明确支持 H.264 High 10 软件解码的播放器查看，或在电脑上转换为 8-bit 副本。
+- 重复下载同一文件不能补充设备解码能力；下载完成和导出完成不代表播放兼容性已验证。
+- 如需手动转换，可使用以下 FFmpeg 命令（需本机 FFmpeg 含 libx264）：
+
+  ```sh
+  ffmpeg -i input.mp4 -c:v libx264 -pix_fmt yuv420p -profile:v main -crf 18 -c:a aac -movflags +faststart output-compatible.mp4
+  ```
+
+  转码会重新编码视频并损失部分精度，原文件应另行保留。此方案不代表所有分辨率、帧率都兼容所有设备。已在电脑上验证本次样本可转换为 8-bit H.264；App 尚未提供本地转换功能。
+
+### 后续客户端改进方向（未实现）
+
+服务端不在本项目控制范围内，不以修改服务端或工作流 schema 作为解决前提。
+
+1. 分离文件完整性、编码信息和设备可播放性检测；对不支持的 codec/profile 返回独立错误，停止无效重下载。
+2. 增加原生软件视频解码能力，对不兼容文件按需生成 H.264 8-bit / AAC 兼容副本；仅接入 Media3 官方 FFmpeg 音频扩展无法解决 H.264 视频解码问题。
+3. 原始 CAS 文件保持不变，兼容副本独立计算哈希，记录源哈希和转换版本。统一供播放、封面及默认相册导出使用，保留原文件导出能力。
+4. 转换接入持久化操作队列，支持进度、取消、进程退出后重试、并发限制、缓存复用和垃圾回收；历史文件无需重新生成或下载。
+5. 验收覆盖本次 High 10 样本、普通 8-bit 视频、真实损坏文件，以及模拟器和多种真机上的播放、封面、导出、音画同步与资源开销。
+
+本条问题不会通过重新发布远端工作流包自动修复，需要后续 App 版本增加媒体兼容能力。
