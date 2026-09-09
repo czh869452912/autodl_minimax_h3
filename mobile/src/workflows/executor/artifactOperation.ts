@@ -1,3 +1,5 @@
+import { normalizeArtifactDownloadPolicy } from '../providers/downloadPolicy';
+import { insertWorkflowOperation } from './operationInsert';
 import { withWriteTransaction } from '../../storage/sqliteBusy';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { ArtifactRecord, NormalizedError } from '../../jobs/types';
@@ -5,7 +7,7 @@ import type { ArtifactCas, ArtifactBlob } from '../../media/cas';
 import { cancelArtifactTransfer, transferArtifact } from '../../native/media';
 import type { OperationRepository } from './operationRepository';
 import type { WorkflowOperation } from './types';
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../../storage/appDatabase';
 import { assertAppDatabaseWritableAsync } from '../../storage/database';
 import { artifactExportDisplayName } from '../../media/artifactDisplayName';
 export { artifactExportDisplayName } from '../../media/artifactDisplayName';
@@ -72,13 +74,13 @@ function reservationOwnerType(operationId: string): string {
   return `artifact_operation:${operationId}`;
 }
 
-async function transaction(db: SQLiteDatabase, work: (transaction: SQLiteDatabase) => Promise<void>): Promise<void> {
+async function transaction(db: AppDatabase, work: (transaction: AppDatabase) => Promise<void>): Promise<void> {
   await withWriteTransaction(db, work);
 }
 
 
-export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => number = Date.now): ArtifactCommitter {
-  const assertGcIdle = async (transaction: SQLiteDatabase) => {
+export function createSqliteArtifactCommitter(db: AppDatabase, clock: () => number = Date.now): ArtifactCommitter {
+  const assertGcIdle = async (transaction: AppDatabase) => {
     const gcLease = await transaction.getFirstAsync<{ expires_at: number }>(
       "SELECT expires_at FROM app_scheduler_leases WHERE lease_key='cas-gc' LIMIT 1",
     );
@@ -108,12 +110,7 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => n
       if (deliveryIntent) {
         const assetId = `${input.jobId}:${input.artifact.id}`;
         const exportId = `${input.jobId}:export:${input.artifact.id}:system-gallery`;
-        await transaction.runAsync(
-          "INSERT OR IGNORE INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES (?,'EXPORT',?,?,?,'PENDING',0,?,?,?)",
-          exportId,
-          input.jobId,
-          `export:${input.jobId}:${input.artifact.id}:system-gallery`,
-          JSON.stringify({
+        await insertWorkflowOperation(transaction, { id: exportId, kind: 'EXPORT', jobId: input.jobId, idempotencyKey: `export:${input.jobId}:${input.artifact.id}:system-gallery`, payload: {
             assetId,
             artifactId: input.artifact.id,
             sourceUri: input.localUri,
@@ -121,11 +118,7 @@ export function createSqliteArtifactCommitter(db: SQLiteDatabase, clock: () => n
             blobSha256: input.blob.sha256,
             keepPrivateCopy: deliveryIntent.keepPrivateCopy,
             displayName: artifactExportDisplayName(input.jobId, input.artifact.id),
-          }),
-          input.now,
-          input.now,
-          input.now,
-        );
+          }, now: input.now, nextRetryAt: input.now }, 'ignore');
       }
       const result = await transaction.runAsync("UPDATE workflow_operations SET state = 'SUCCEEDED', lease_owner = NULL, lease_expires_at = NULL, last_error_json = NULL, updated_at = ? WHERE id = ? AND state = 'CLAIMED' AND lease_owner = ?", input.now, input.operationId, input.owner);
       if (Number(result.changes ?? 0) !== 1) throw new Error('artifact operation lease lost');
@@ -280,7 +273,7 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     if (deps.commit) await deps.commit.clearStale({ operationId: operation.id, owner });
     await deps.ensureProjection(operation.jobId, artifact);
     await deps.updateDownloadState('DOWNLOADING');
-    const policy = await deps.policy(operation.jobId, artifact);
+    const policy = normalizeArtifactDownloadPolicy(await deps.policy(operation.jobId, artifact));
     const assertLease = async () => {
       if (!await deps.operations.renew(operation.id, owner, clock(), deps.leaseMs ?? 120_000)) {
         throw new Error('artifact operation lease lost');
@@ -301,9 +294,9 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
         allowedHosts: policy.allowedHosts,
         allowProviderSuppliedPublicHosts: policy.allowProviderSuppliedPublicHosts ?? false,
         maxBytes: policy.maxBytes,
-        acceptedMimes: policy.acceptedMimes ?? ['video/mp4'],
-        connectTimeoutMs: policy.connectTimeoutMs ?? 30_000,
-        idleTimeoutMs: policy.idleTimeoutMs ?? 30_000,
+        acceptedMimes: policy.acceptedMimes,
+        connectTimeoutMs: policy.connectTimeoutMs,
+        idleTimeoutMs: policy.idleTimeoutMs,
         expectedSha256: providerSha256?.toLowerCase(),
         operationId: operation.id,
         operationAttempt: operation.attempt,

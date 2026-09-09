@@ -1,3 +1,4 @@
+import { claimOperations } from '../../test/claimOperations';
 import { createInitializedRealSqliteTestDb } from '../../test/realSqlite';
 import { createOperationRepository } from './operationRepository';
 import { createExecutorTick } from './tick';
@@ -192,7 +193,7 @@ test('expired leases and retry timestamps survive a real database reopen', async
     const first = createOperationRepository(firstDb as never);
     enqueue(first, 'STATUS_SYNC', 0);
     enqueue(first, 'STATUS_SYNC', 1, 500);
-    await first.claimDue({ kind: 'STATUS_SYNC', owner: 'dead', now: 100, leaseMs: 50, limit: 1 });
+    await claimOperations(first, { kind: 'STATUS_SYNC', owner: 'dead', now: 100, leaseMs: 50, limit: 1 });
     firstDb.close();
 
     const secondDb = createInitializedRealSqliteTestDb(file);

@@ -1,16 +1,18 @@
+import { insertWorkflowOperation } from '../workflows/executor/operationInsert';
 import { withWriteTransaction } from '../storage/sqliteBusy';
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../storage/appDatabase';
 import type { PreparedWorkflowSubmission } from '../workflows/runtime/runtime';
 import type { JobRecord } from '../jobs/types';
-import type { TaskMediaInput, TaskRecord } from '../tasks/types';
+import type { TaskRecord } from '../tasks/types';
+import type { TaskMediaInput } from '../media/types';
 import { jobToTaskProjection } from '../tasks/projection';
 import { createExecutorWakeRepository } from '../tasks/executorWakeRepository';
 import { taskProjectionEvents } from '../tasks/taskProjectionEvents';
 import { executorWakePort } from '../tasks/executorEvents';
 import { assertAppDatabaseWritableAsync } from '../storage/database';
-import { attachmentHashes, createAttachmentStore } from '../agent/attachmentStore';
+import { attachmentHashes, createAttachmentStore } from '../media/attachments';
 
-export async function persistSubmissionCommand(database: SQLiteDatabase, submissionId: string, prepared: PreparedWorkflowSubmission,
+export async function persistSubmissionCommand(database: AppDatabase, submissionId: string, prepared: PreparedWorkflowSubmission,
   media: { images: TaskMediaInput[]; audios: TaskMediaInput[]; handoffId?: string }, now = Date.now()): Promise<TaskRecord> {
   const job: JobRecord = { id: `job:${submissionId}`, revision: 0, workflowId: prepared.workflowId, workflowVersion: prepared.workflowVersion,
     workflowContentHash: prepared.workflowContentHash, adapterId: prepared.adapterId, adapterVersion: prepared.adapterVersion,
@@ -34,8 +36,7 @@ export async function persistSubmissionCommand(database: SQLiteDatabase, submiss
       }
       await db.runAsync(`INSERT INTO workflow_job_events(id,job_id,sequence,event_type,payload_json,created_at) VALUES(?,?,0,'VALIDATED',?,?)`,
         `${job.id}:event:0:validated`, job.id, JSON.stringify({ workflowContentHash: job.workflowContentHash }), now);
-      await db.runAsync(`INSERT INTO workflow_operations(id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at)
-        VALUES(?,'SUBMIT',?,?,?,'PENDING',0,?,?,?)`, `${job.id}:submit`, job.id, `submit:${submissionId}`, JSON.stringify({ prepared }), now, now, now);
+      await insertWorkflowOperation(db, { id: `${job.id}:submit`, kind: 'SUBMIT', jobId: job.id, idempotencyKey: `submit:${submissionId}`, payload: { prepared }, now: now, nextRetryAt: now }, 'error');
       await db.runAsync(`INSERT INTO tasks(id,prompt,status,resolution,duration,seed,images_json,audios_json,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,created_at,updated_at)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, task.id, task.prompt, task.status, task.resolution, task.duration, task.seed ?? null,
       JSON.stringify(media.images), JSON.stringify(media.audios), job.workflowId, job.workflowVersion, job.workflowContentHash, job.adapterId, job.adapterVersion, JSON.stringify(job.inputSnapshot), now, now);

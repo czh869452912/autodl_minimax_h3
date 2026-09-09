@@ -1,4 +1,4 @@
-import { createPromptDraftStore } from '../agent/promptDraft';
+import { createPromptDraftStore } from '../handoff/promptDraft';
 import { createLocalThreadStore } from '../agent/threadStore';
 import { createJobRepository } from '../jobs/repository';
 import { createSqliteMediaStore } from '../media/repository';

@@ -1,4 +1,4 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../../storage/appDatabase';
 import type {
   AppliedRegistryRelease,
   BuiltinReleaseBatch,
@@ -15,7 +15,7 @@ type Row = { workflow_id: string; version: string; content_hash: string; hash_sc
 type ActiveRow = { workflow_id: string; version: string; content_hash: string; previous_version?: string; previous_hash?: string };
 type ReleaseRow = { release_id: string; manifest_hash: string; applied_at: number };
 
-export function createWorkflowRegistry(db: SQLiteDatabase | undefined): WorkflowRegistry {
+export function createWorkflowRegistry(db: AppDatabase | undefined): WorkflowRegistry {
   const memory = new Map<string, RegistryRecord>();
   const active = new Map<string, ActiveRow>();
   const appliedReleases = new Map<string, AppliedRegistryRelease>();

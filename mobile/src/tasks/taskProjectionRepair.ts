@@ -1,14 +1,14 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../storage/appDatabase';
 import type { ArtifactRecord } from '../jobs/types';
 import { withWriteTransaction } from '../storage/sqliteBusy';
-import { createJobStateRepository } from '../workflows/executor/jobStateRepository';
+import { createJobStateRepository } from './jobStateStore';
 import { createTaskRepository } from './repository';
 import { jobToTaskProjection } from './projection';
 
 // Recover projections left stale by older builds, including jobs outside the
 // recent-history window. This bounded correctness repair has no media I/O and
 // must not be gated by the five-minute maintenance cooldown.
-export async function repairStaleTaskStatuses(db: SQLiteDatabase, limit = 32): Promise<{ repaired: number; hasMore: boolean }> {
+export async function repairStaleTaskStatuses(db: AppDatabase, limit = 32): Promise<{ repaired: number; hasMore: boolean }> {
   const bounded = Math.max(1, Math.min(32, Math.floor(limit)));
   const candidates = await db.getAllAsync<{ id: string }>(`SELECT j.id FROM workflow_jobs j LEFT JOIN tasks t ON t.id=j.id
     WHERE t.id IS NULL OR t.status <> CASE j.status

@@ -1,3 +1,4 @@
+import { claimOperations } from '../../test/claimOperations';
 import { createInitializedRealSqliteTestDb } from '../../test/realSqlite';
 import { createOperationRepository } from './operationRepository';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -35,9 +36,9 @@ test('claims only due work in deterministic order and respects the limit', async
     enqueue(repository, { id: 'later-created', idempotencyKey: 'later-created', now: 101, nextRetryAt: 100 });
     enqueue(repository, { id: 'first', idempotencyKey: 'first', now: 100, nextRetryAt: 100 });
     enqueue(repository, { id: 'not-due', idempotencyKey: 'not-due', now: 99, nextRetryAt: 201 });
-    expect(await repository.claimDue({ kind: 'STATUS_SYNC', owner: 'worker', now: 200, leaseMs: 50, limit: 1 }))
+    expect(await claimOperations(repository, { kind: 'STATUS_SYNC', owner: 'worker', now: 200, leaseMs: 50, limit: 1 }))
       .toMatchObject([{ id: 'first', attempt: 1, leaseOwner: 'worker', leaseExpiresAt: 250 }]);
-    expect(await repository.claimDue({ kind: 'STATUS_SYNC', owner: 'worker', now: 200, leaseMs: 50, limit: 5 }))
+    expect(await claimOperations(repository, { kind: 'STATUS_SYNC', owner: 'worker', now: 200, leaseMs: 50, limit: 5 }))
       .toMatchObject([{ id: 'later-created' }]);
   } finally { db.close(); }
 });
@@ -46,7 +47,7 @@ test('only the lease owner can renew, release, retry, or finish', async () => {
   const { db, repository } = setup();
   try {
     enqueue(repository);
-    await repository.claimDue({ kind: 'STATUS_SYNC', owner: 'a', now: 100, leaseMs: 50, limit: 1 });
+    await claimOperations(repository, { kind: 'STATUS_SYNC', owner: 'a', now: 100, leaseMs: 50, limit: 1 });
     expect(await repository.renew('op-1', 'b', 120, 50)).toBe(false);
     expect(await repository.release('op-1', 'b', 120)).toBe(false);
     expect(await repository.retry('op-1', 'b', { now: 120, nextRetryAt: 140 })).toBe(false);
@@ -64,10 +65,10 @@ test('contention yields one owner and attempts increment on each successful clai
   const contender = createOperationRepository(db as never);
   try {
     enqueue(repository);
-    expect(await repository.claimDue({ kind: 'STATUS_SYNC', owner: 'a', now: 100, leaseMs: 50, limit: 1 })).toHaveLength(1);
-    expect(await contender.claimDue({ kind: 'STATUS_SYNC', owner: 'b', now: 100, leaseMs: 50, limit: 1 })).toEqual([]);
+    expect(await claimOperations(repository, { kind: 'STATUS_SYNC', owner: 'a', now: 100, leaseMs: 50, limit: 1 })).toHaveLength(1);
+    expect(await claimOperations(contender, { kind: 'STATUS_SYNC', owner: 'b', now: 100, leaseMs: 50, limit: 1 })).toEqual([]);
     expect(await repository.release('op-1', 'a', 110)).toBe(true);
-    expect(await contender.claimDue({ kind: 'STATUS_SYNC', owner: 'b', now: 110, leaseMs: 50, limit: 1 }))
+    expect(await claimOperations(contender, { kind: 'STATUS_SYNC', owner: 'b', now: 110, leaseMs: 50, limit: 1 }))
       .toMatchObject([{ attempt: 2, leaseOwner: 'b' }]);
   } finally { db.close(); }
 });
@@ -76,11 +77,11 @@ test('retry and finish clear lease ownership and persist normalized failure', as
   const { db, repository } = setup();
   try {
     enqueue(repository);
-    await repository.claimDue({ kind: 'STATUS_SYNC', owner: 'a', now: 100, leaseMs: 50, limit: 1 });
+    await claimOperations(repository, { kind: 'STATUS_SYNC', owner: 'a', now: 100, leaseMs: 50, limit: 1 });
     expect(await repository.retry('op-1', 'a', { now: 120, nextRetryAt: 500, error: { code: 'HTTP_503', message: 'retry', retryable: true } })).toBe(true);
     expect(await repository.get('op-1')).toMatchObject({ state: 'PENDING', nextRetryAt: 500, lastError: { code: 'HTTP_503' } });
     expect(await repository.get('op-1')).not.toHaveProperty('leaseOwner');
-    await repository.claimDue({ kind: 'STATUS_SYNC', owner: 'b', now: 500, leaseMs: 50, limit: 1 });
+    await claimOperations(repository, { kind: 'STATUS_SYNC', owner: 'b', now: 500, leaseMs: 50, limit: 1 });
     expect(await repository.finish('op-1', 'b', 'FAILED', 510, { code: 'HTTP_422', message: 'invalid' })).toBe(true);
     expect(await repository.get('op-1')).toMatchObject({ state: 'FAILED', lastError: { code: 'HTTP_422' } });
     expect(await repository.get('op-1')).not.toHaveProperty('leaseOwner');
@@ -92,8 +93,8 @@ test('expired safe work is requeued while expired submits require job-aware reco
   try {
     enqueue(repository, { id: 'status', idempotencyKey: 'status' });
     enqueue(repository, { id: 'submit', kind: 'SUBMIT', idempotencyKey: 'submit' });
-    await repository.claimDue({ kind: 'STATUS_SYNC', owner: 'dead', now: 100, leaseMs: 50, limit: 1 });
-    await repository.claimDue({ kind: 'SUBMIT', owner: 'dead', now: 100, leaseMs: 50, limit: 1 });
+    await claimOperations(repository, { kind: 'STATUS_SYNC', owner: 'dead', now: 100, leaseMs: 50, limit: 1 });
+    await claimOperations(repository, { kind: 'SUBMIT', owner: 'dead', now: 100, leaseMs: 50, limit: 1 });
     expect(await repository.recoverExpired(151, 32)).toMatchObject({
       uncertainSubmits: [{ id: 'submit', kind: 'SUBMIT', state: 'CLAIMED' }],
       reopened: 1,
@@ -115,7 +116,7 @@ test('countOutstanding observes claimed work from another database connection', 
   const observer = createOperationRepository(observerDb as never);
   try {
     enqueue(claimant, { jobId: 'job-a' });
-    expect(await claimant.claimDue({ kind: 'STATUS_SYNC', owner: 'worker-a', now: 100, leaseMs: 1_000, limit: 1 }))
+    expect(await claimOperations(claimant, { kind: 'STATUS_SYNC', owner: 'worker-a', now: 100, leaseMs: 1_000, limit: 1 }))
       .toMatchObject([{ id: 'op-1', state: 'CLAIMED' }]);
 
     expect(await observer.pendingSummary({ now: 100, jobIds: ['job-a'] })).toEqual({ remainingDue: 0, remainingScheduled: 0 });
@@ -179,7 +180,7 @@ test('recovers no more than the requested batch and reports trailing expired cla
     for (let index = 0; index < 33; index += 1) {
       enqueue(repository, { id: `expired-${index}`, idempotencyKey: `expired-${index}` });
     }
-    expect(await repository.claimDue({ kind: 'STATUS_SYNC', owner: 'dead', now: 100, leaseMs: 50, limit: 33 })).toHaveLength(33);
+    expect(await claimOperations(repository, { kind: 'STATUS_SYNC', owner: 'dead', now: 100, leaseMs: 50, limit: 33 })).toHaveLength(33);
 
     expect(await repository.recoverExpired(151, 32)).toEqual({ uncertainSubmits: [], reopened: 32, hasMore: true });
     expect(repository.list().filter((operation) => operation.state === 'CLAIMED')).toHaveLength(1);
@@ -204,7 +205,7 @@ test('executor hot writes work when synchronous recovery reads are unavailable',
     enqueue(repository, { id: 'expired', idempotencyKey: 'expired', now: 102, nextRetryAt: 100 });
     const syncRecoveryRead = jest.spyOn(db, 'getFirstSync').mockImplementation(() => { throw new Error('sync database access is unavailable'); });
 
-    expect(await repository.claimDue({ kind: 'STATUS_SYNC', owner: 'worker', now: 100, leaseMs: 50, limit: 1 })).toHaveLength(1);
+    expect(await claimOperations(repository, { kind: 'STATUS_SYNC', owner: 'worker', now: 100, leaseMs: 50, limit: 1 })).toHaveLength(1);
     expect(await repository.release('due-claim', 'worker', 101)).toBe(true);
 
     expect(await repository.claimById('by-id', 'worker', 100, 50)).toMatchObject({ leaseOwner: 'worker' });

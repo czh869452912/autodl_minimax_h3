@@ -1,4 +1,4 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../storage/appDatabase';
 import type { AppSettings } from '../settings/storage';
 import { assertAppDatabaseWritable, assertAppDatabaseWritableAsync } from '../storage/database';
 
@@ -14,7 +14,7 @@ function changes(result: unknown): number {
 }
 
 export function claimMaintenanceWindow(
-  db: SQLiteDatabase,
+  db: AppDatabase,
   now: number,
   force: boolean,
   intervalMs = 300_000,
@@ -31,7 +31,7 @@ export function claimMaintenanceWindow(
 }
 
 export async function claimMaintenanceWindowAsync(
-  db: SQLiteDatabase, now: number, force: boolean, intervalMs = 300_000,
+  db: AppDatabase, now: number, force: boolean, intervalMs = 300_000,
 ): Promise<boolean> {
   await assertAppDatabaseWritableAsync(db);
   const result = await db.runAsync(

@@ -1,5 +1,6 @@
 import type { OperationRepository } from './operationRepository';
 import type { OperationKind, WorkflowOperation } from './types';
+import { OPERATION_LANES } from './types';
 
 export type TickSummary = {
   claimed: number;
@@ -13,7 +14,7 @@ export type TickSummary = {
 };
 export type TickOptions = { reason: 'foreground' | 'background' | 'service'; maxOperations?: number; now?: number };
 
-const laneOrder: OperationKind[] = ['SUBMIT', 'STATUS_SYNC', 'ARTIFACT_DOWNLOAD', 'EXPORT'];
+const laneOrder = OPERATION_LANES;
 const concurrency: Record<OperationKind, number> = { SUBMIT: 1, STATUS_SYNC: 4, ARTIFACT_DOWNLOAD: 1, EXPORT: 1 };
 
 async function waitForAll(work: Promise<void>[]): Promise<void> {

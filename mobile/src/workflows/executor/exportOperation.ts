@@ -1,6 +1,6 @@
 import { withWriteTransaction } from '../../storage/sqliteBusy';
 import * as FileSystem from 'expo-file-system/legacy';
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../../storage/appDatabase';
 import type { NormalizedError } from '../../jobs/types';
 import { assertAppDatabaseWritableAsync } from '../../storage/database';
 import type { WorkflowOperation } from './types';
@@ -39,7 +39,7 @@ type ExportDeps = {
   removeLegacyPrivate?(sourceUri: string): Promise<void>;
 };
 
-async function transaction(db: SQLiteDatabase, work: (transaction: SQLiteDatabase) => Promise<void>): Promise<void> {
+async function transaction(db: AppDatabase, work: (transaction: AppDatabase) => Promise<void>): Promise<void> {
   await withWriteTransaction(db, work);
 }
 
@@ -137,7 +137,7 @@ export async function handleExport(operation: WorkflowOperation, owner: string, 
   }
 }
 
-export function createSqliteExportStore(db: SQLiteDatabase) {
+export function createSqliteExportStore(db: AppDatabase) {
   const deliveryId = (payload: ExportPayload) => `${payload.assetId}:system-gallery`;
   return {
     async canPublish(operation: WorkflowOperation, owner: string, payload: ExportPayload): Promise<boolean> {

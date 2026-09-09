@@ -1,10 +1,11 @@
+import { claimOperations } from '../../test/claimOperations';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import type { QueueSubmissionInput } from '../runtime/runtime';
 import { createInitializedRealSqliteTestDb } from '../../test/realSqlite';
 import { createDurableExecutor } from './durableExecutor';
-import { createJobStateRepository } from './jobStateRepository';
+import { createJobStateRepository } from '../../tasks/jobStateStore';
 import { createOperationRepository } from './operationRepository';
 import { createExecutorTick } from './tick';
 
@@ -55,7 +56,7 @@ test('a PENDING submit survives a database reopen and calls the provider once', 
 
     const restarted = openRuntime(file, provider, () => 151);
     try {
-      const [submit] = await restarted.operations.claimDue({ kind: 'SUBMIT', owner: 'restart', now: 151, leaseMs: 50, limit: 1 });
+      const [submit] = await claimOperations(restarted.operations, { kind: 'SUBMIT', owner: 'restart', now: 151, leaseMs: 50, limit: 1 });
       await restarted.service.handle(submit, 'restart');
       expect(provider.submit).toHaveBeenCalledTimes(1);
       expect(await restarted.operations.get(submit.id)).toMatchObject({ state: 'SUCCEEDED' });
@@ -72,7 +73,7 @@ test('an expired SUBMITTING submit without a handle reopens UNKNOWN/BLOCKED with
   try {
     const first = openRuntime(file, provider, () => 100);
     const job = await first.service.queueSubmission(input('unknown-restart'));
-    const [submit] = await first.operations.claimDue({ kind: 'SUBMIT', owner: 'dead', now: 100, leaseMs: 50, limit: 1 });
+    const [submit] = await claimOperations(first.operations, { kind: 'SUBMIT', owner: 'dead', now: 100, leaseMs: 50, limit: 1 });
     (await first.jobs.transition({
       jobId: job.id, expectedRevision: job.revision, patch: { status: 'SUBMITTING', updatedAt: 100 },
       event: { id: `${job.id}:acceptance:started`, type: 'SUBMIT_STARTED', payload: {}, createdAt: 100 },
@@ -85,7 +86,7 @@ test('an expired SUBMITTING submit without a handle reopens UNKNOWN/BLOCKED with
       expect(provider.submit).not.toHaveBeenCalled();
       expect((await restarted.jobs.get(job.id))).toMatchObject({ status: 'UNKNOWN' });
       expect(await restarted.operations.get(submit.id)).toMatchObject({ state: 'BLOCKED' });
-      expect(await restarted.operations.claimDue({ kind: 'SUBMIT', owner: 'other', now: 1_000, leaseMs: 50, limit: 1 })).toEqual([]);
+      expect(await claimOperations(restarted.operations, { kind: 'SUBMIT', owner: 'other', now: 1_000, leaseMs: 50, limit: 1 })).toEqual([]);
     } finally { restarted.db.close(); }
   } finally { fs.rmSync(file, { force: true }); }
 });
@@ -96,7 +97,7 @@ test('a persisted provider handle reopens into status-only recovery with the ori
   try {
     const first = openRuntime(file, provider, () => 100);
     const job = await first.service.queueSubmission(input('handle-restart'));
-    const [submit] = await first.operations.claimDue({ kind: 'SUBMIT', owner: 'dead', now: 100, leaseMs: 50, limit: 1 });
+    const [submit] = await claimOperations(first.operations, { kind: 'SUBMIT', owner: 'dead', now: 100, leaseMs: 50, limit: 1 });
     const started = (await first.jobs.transition({
       jobId: job.id, expectedRevision: job.revision, patch: { status: 'SUBMITTING', updatedAt: 100 },
       event: { id: `${job.id}:acceptance:started`, type: 'SUBMIT_STARTED', payload: {}, createdAt: 100 },
@@ -112,7 +113,7 @@ test('a persisted provider handle reopens into status-only recovery with the ori
     const restarted = openRuntime(file, provider, () => 151);
     try {
       await restarted.service.recover(151);
-      const [status] = await restarted.operations.claimDue({ kind: 'STATUS_SYNC', owner: 'restart', now: 151, leaseMs: 50, limit: 1 });
+      const [status] = await claimOperations(restarted.operations, { kind: 'STATUS_SYNC', owner: 'restart', now: 151, leaseMs: 50, limit: 1 });
       await restarted.service.handle(status, 'restart');
       expect(provider.submit).not.toHaveBeenCalled();
       expect(provider.getStatus).toHaveBeenCalledTimes(1);

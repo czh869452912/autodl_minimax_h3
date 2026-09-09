@@ -1,4 +1,4 @@
-import type { TaskMediaInput } from '../../../tasks/types';
+import type { TaskMediaInput } from '../../../media/types';
 import type { ArtifactRecord } from '../../../jobs/types';
 
 export type AutodlInput = { prompt: string; resolution: string; duration: number; seed?: number | string; images?: TaskMediaInput[]; audios?: TaskMediaInput[] };

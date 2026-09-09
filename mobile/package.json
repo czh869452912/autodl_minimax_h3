@@ -8,7 +8,10 @@
     "android": "expo run:android",
     "verify:workflow-releases": "node scripts/verify-workflow-releases.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "generate:skills": "node scripts/generate-h3-skill-bundle.mjs",
+    "verify:skills": "node scripts/generate-h3-skill-bundle.mjs --check",
+    "verify:process-recovery": "node scripts/verify-process-recovery.mjs"
   },
   "dependencies": {
     "@copilotkit/react-core": "^1.69.3",

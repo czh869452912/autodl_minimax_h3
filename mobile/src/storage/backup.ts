@@ -1,5 +1,7 @@
 import { backupDatabaseSync, defaultDatabaseDirectory, openDatabaseSync, type SQLiteDatabase } from 'expo-sqlite';
 import { Directory } from 'expo-file-system';
+import { maintenanceDatabase, didResetDatabase } from './databaseAccess';
+import type { AppDatabase } from './appDatabase';
 
 export type BackupDeps = {
   now(): number;
@@ -20,15 +22,19 @@ export type RestoreBackupDeps = {
 };
 
 const expoRestoreBackupDeps: RestoreBackupDeps = {
-  listNames: () => new Directory(defaultDatabaseDirectory).list().map((entry) => entry.name),
+  listNames: () => new Directory(databaseDirectoryUri(defaultDatabaseDirectory)).list().map((entry) => entry.name),
   open: (name) => openDatabaseSync(name),
   backup: (options) => backupDatabaseSync(options),
 };
 
 const FULL_BACKUP_NAME = /^autodl-h3-(?:v\d+-to-v\d+|release-[A-Za-z0-9._-]+-[0-9a-f]{12})-(\d+)\.backup\.db$/;
 
+export function databaseDirectoryUri(directory: string): string {
+  return directory.startsWith('file://') ? directory : `file://${directory}`;
+}
+
 export function createPreMigrationBackup(
-  source: SQLiteDatabase,
+  source: AppDatabase,
   fromVersion: number,
   toVersion: number,
   deps: BackupDeps = expoBackupDeps,
@@ -36,7 +42,7 @@ export function createPreMigrationBackup(
   const name = `autodl-h3-v${fromVersion}-to-v${toVersion}-${deps.now()}.backup.db`;
   const destination = deps.open(name);
   try {
-    deps.backup({ sourceDatabase: source, destDatabase: destination });
+    deps.backup({ sourceDatabase: maintenanceDatabase(source), destDatabase: destination });
     return name;
   } finally {
     destination.closeSync();
@@ -44,7 +50,7 @@ export function createPreMigrationBackup(
 }
 
 export function createReleaseBackup(
-  source: SQLiteDatabase,
+  source: AppDatabase,
   releaseId: string,
   manifestHash: string,
   deps: BackupDeps = expoBackupDeps,
@@ -53,7 +59,7 @@ export function createReleaseBackup(
   const name = `autodl-h3-release-${safeReleaseId}-${manifestHash.slice(0, 12)}-${deps.now()}.backup.db`;
   const destination = deps.open(name);
   try {
-    deps.backup({ sourceDatabase: source, destDatabase: destination });
+    deps.backup({ sourceDatabase: maintenanceDatabase(source), destDatabase: destination });
     return name;
   } finally {
     destination.closeSync();
@@ -71,7 +77,7 @@ export function listFullDatabaseBackups(
 }
 
 export function restoreFullDatabaseBackup(
-  destination: SQLiteDatabase,
+  destination: AppDatabase,
   backupName: string,
   deps: RestoreBackupDeps = expoRestoreBackupDeps,
 ): void {
@@ -82,7 +88,8 @@ export function restoreFullDatabaseBackup(
   try {
     const check = source.getFirstSync<{ integrity_check: string }>('PRAGMA integrity_check');
     if (check?.integrity_check !== 'ok') throw new Error('REGISTRY_RELEASE_BACKUP_INVALID');
-    deps.backup({ sourceDatabase: source, destDatabase: destination });
+    deps.backup({ sourceDatabase: source, destDatabase: maintenanceDatabase(destination) });
+    didResetDatabase(destination);
   } finally {
     source.closeSync();
   }

@@ -1,6 +1,7 @@
 import type { JobRecord, NormalizedError } from '../../jobs/types';
 
-export type OperationKind = 'SUBMIT' | 'STATUS_SYNC' | 'ARTIFACT_DOWNLOAD' | 'EXPORT';
+export const OPERATION_LANES = ['SUBMIT', 'STATUS_SYNC', 'ARTIFACT_DOWNLOAD', 'EXPORT'] as const;
+export type OperationKind = typeof OPERATION_LANES[number];
 export type OperationState = 'PENDING' | 'CLAIMED' | 'SUCCEEDED' | 'FAILED' | 'BLOCKED';
 export type ProviderHandle = Readonly<Record<string, unknown>>;
 

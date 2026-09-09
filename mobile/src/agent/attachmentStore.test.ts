@@ -1,5 +1,5 @@
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
-import { createAttachmentStore, releaseExpiredAttachmentImports, validateImageBudget } from './attachmentStore';
+import { createAttachmentStore, releaseExpiredAttachmentImports, validateImageBudget } from '../media/attachments';
 import { createCasRepository } from '../media/casRepository';
 import CryptoJS from 'crypto-js';
 

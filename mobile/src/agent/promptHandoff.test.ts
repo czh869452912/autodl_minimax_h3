@@ -1,5 +1,5 @@
 import { Directory, File, Paths } from 'expo-file-system';
-import { materializePromptHandoff, normalizePromptHandoffParameters, resolvePromptHandoffValues, type PromptHandoff } from './promptHandoff';
+import { materializePromptHandoff, normalizePromptHandoffParameters, resolvePromptHandoffValues, type PromptHandoff } from '../handoff/promptHandoff';
 import { builtinWorkflowDefinitions } from '../workflows/registry/builtin';
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 

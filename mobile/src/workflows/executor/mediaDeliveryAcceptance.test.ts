@@ -1,5 +1,5 @@
 import { createInitializedRealSqliteTestDb } from '../../test/realSqlite';
-import { createJobStateRepository } from './jobStateRepository';
+import { createJobStateRepository } from '../../tasks/jobStateStore';
 import { createOperationRepository } from './operationRepository';
 import { createDurableExecutor } from './durableExecutor';
 import { createExecutorTick } from './tick';

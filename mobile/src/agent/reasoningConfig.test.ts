@@ -1,4 +1,4 @@
-import { reasoningOptions, validateReasoningEffort } from './reasoningConfig';
+import { reasoningOptions, validateReasoningEffort } from '../config/llmReasoning';
 
 it.each([
   ['gpt-5', ['default', 'minimal', 'low', 'medium', 'high']],

@@ -1,10 +1,10 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../storage/appDatabase';
 import { assertAppDatabaseWritableAsync, getAppRecoveryState } from '../storage/database';
 import { decodePromptHandoff, type PromptHandoff } from './promptHandoff';
-import { attachmentHashes, createAttachmentStore } from './attachmentStore';
+import { attachmentHashes, createAttachmentStore } from '../media/attachments';
 import { withWriteTransaction } from '../storage/sqliteBusy';
-import { createAgentId } from './submissionCommands';
-import type { TaskMediaInput } from '../tasks/types';
+import { createId as createAgentId } from '../ids';
+import type { TaskMediaInput } from '../media/types';
 
 const MAX_AGE = 60 * 60 * 1000;
 export type AppliedPromptForm = {
@@ -63,7 +63,7 @@ function parse(
 }
 
 export function createPromptDraftStore(
-  db: SQLiteDatabase,
+  db: AppDatabase,
   now = () => Date.now(),
   assets = createAttachmentStore(db),
 ) {

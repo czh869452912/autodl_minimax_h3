@@ -1,13 +1,14 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from './appDatabase';
 import { APP_SCHEMA_VERSION, APP_TABLES } from './schema';
 import { getRecoveryState, getRecoveryStateAsync, type AppRecoveryState } from './recovery';
 import { applyCurrentSchema, runAppMigrations, type AppDatabaseMigrationOptions } from './migrations/runner';
+import { maintenanceDatabase, didResetDatabase, checkDatabaseAccess, checkDatabaseAccessAsync } from './databaseAccess';
 
 export { APP_SCHEMA_VERSION };
 export type { AppRecoveryState };
 export type AppDatabaseOptions = AppDatabaseMigrationOptions;
 
-export function readAppSchemaVersion(db: SQLiteDatabase | undefined): number | undefined {
+export function readAppSchemaVersion(db: AppDatabase | undefined): number | undefined {
   if (!db || typeof (db as { getFirstSync?: unknown }).getFirstSync !== 'function') return undefined;
   try {
     const row = db.getFirstSync<{ user_version?: number }>('PRAGMA user_version');
@@ -17,7 +18,7 @@ export function readAppSchemaVersion(db: SQLiteDatabase | undefined): number | u
   }
 }
 
-export function isLegacyAppDatabase(db: SQLiteDatabase | undefined): boolean {
+export function isLegacyAppDatabase(db: AppDatabase | undefined): boolean {
   const current = readAppSchemaVersion(db);
   if (current === undefined || current === APP_SCHEMA_VERSION || current > APP_SCHEMA_VERSION) return false;
   const getAllSync = (db as { getAllSync?: (sql: string) => Array<{ name?: string }> }).getAllSync;
@@ -30,7 +31,7 @@ export function isLegacyAppDatabase(db: SQLiteDatabase | undefined): boolean {
   }
 }
 
-function withTransaction(db: SQLiteDatabase, work: () => void): void {
+function withTransaction(db: AppDatabase, work: () => void): void {
   if (typeof db.withTransactionSync === 'function') {
     db.withTransactionSync(work);
     return;
@@ -45,34 +46,40 @@ function withTransaction(db: SQLiteDatabase, work: () => void): void {
   }
 }
 
-export function resetAppDatabase(db: SQLiteDatabase | undefined): void {
+export function resetAppDatabase(db: AppDatabase | undefined): void {
   if (!db || typeof (db as { execSync?: unknown }).execSync !== 'function') return;
+  const application = db;
+  db = maintenanceDatabase(db);
+  if ((readAppSchemaVersion(db) ?? 0) > APP_SCHEMA_VERSION) throw new Error('APP_DATABASE_READ_ONLY: SCHEMA_VERSION_NEWER_THAN_APP');
   withTransaction(db, () => {
     for (const table of APP_TABLES) db.execSync(`DROP TABLE IF EXISTS ${table}`);
     applyCurrentSchema(db);
     db.execSync(`PRAGMA user_version = ${APP_SCHEMA_VERSION}`);
   });
+  didResetDatabase(application);
 }
 
-export function getAppRecoveryState(db: SQLiteDatabase | undefined): AppRecoveryState | undefined {
+export function getAppRecoveryState(db: AppDatabase | undefined): AppRecoveryState | undefined {
   return getRecoveryState(db);
 }
 
-export async function getAppRecoveryStateAsync(db: SQLiteDatabase | undefined): Promise<AppRecoveryState | undefined> {
+export async function getAppRecoveryStateAsync(db: AppDatabase | undefined): Promise<AppRecoveryState | undefined> {
   return getRecoveryStateAsync(db);
 }
 
-export function assertAppDatabaseWritable(db: SQLiteDatabase | undefined): void {
+export function assertAppDatabaseWritable(db: AppDatabase | undefined): void {
+  if (db && checkDatabaseAccess(db)) return;
   const recovery = getRecoveryState(db);
   if (recovery) throw new Error(`APP_DATABASE_READ_ONLY: ${recovery.diagnostic}`);
 }
 
-export async function assertAppDatabaseWritableAsync(db: SQLiteDatabase | undefined): Promise<void> {
+export async function assertAppDatabaseWritableAsync(db: AppDatabase | undefined): Promise<void> {
+  if (db && await checkDatabaseAccessAsync(db)) return;
   const recovery = await getRecoveryStateAsync(db);
   if (recovery) throw new Error(`APP_DATABASE_READ_ONLY: ${recovery.diagnostic}`);
 }
 
-export function ensureAppDatabase(db: SQLiteDatabase | undefined, options: AppDatabaseOptions = {}) {
+export function ensureAppDatabase(db: AppDatabase | undefined, options: AppDatabaseOptions = {}) {
   if (!db || typeof (db as { execSync?: unknown }).execSync !== 'function') return undefined;
   return runAppMigrations(db, options);
 }

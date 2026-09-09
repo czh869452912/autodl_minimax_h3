@@ -10,7 +10,7 @@ import { AppIcon } from '../../src/ui/icons';
 import { COLORS, SPACING } from '../../src/ui/theme';
 import type { MediaAsset } from '../../src/media/types';
 import { resolveLocalVideoSource } from '../../src/tasks/localMedia';
-import { mediaStore, taskCommandService, taskStore } from '../../src/tasks/taskServices';
+import { getTaskServices } from '../../src/tasks/taskServices';
 import { probeVideo } from '../../src/native/media';
 
 export default function VideoDetailScreen() {
@@ -25,9 +25,9 @@ export default function VideoDetailScreen() {
 
   const reloadTaskAndAsset = useCallback(async () => {
     if (!id) return null;
-    const media = await mediaStore.get(id);
+    const media = await getTaskServices().mediaStore.get(id);
       const taskId = media?.taskId || id;
-    const value = await taskStore.get(taskId);
+    const value = await getTaskServices().taskStore.get(taskId);
     if (!value) { setAsset(media); setTask(null); setLocalSource(undefined); return null; }
       const verifiedLocalSource = await resolveLocalVideoSource({ task: value, asset: media });
       setLocalSource(verifiedLocalSource);
@@ -63,7 +63,7 @@ export default function VideoDetailScreen() {
     if (!task || exporting || !source) return;
     setExporting(true);
     try {
-      await taskCommandService.requestExport(task.id, { keepPrivateCopy: true });
+      await getTaskServices().taskCommandService.requestExport(task.id, { keepPrivateCopy: true });
       const updated = await reloadTaskAndAsset();
       if (updated?.exportState === 'EXPORTED') Alert.alert('已保存', '视频已保存到系统相册 / Movies / AutoDL-H3');
       else if (updated?.exportState === 'EXPORT_FAILED') Alert.alert('保存失败', updated.exportError || '保存到系统相册失败');
@@ -75,7 +75,7 @@ export default function VideoDetailScreen() {
     if (!task || !localSource || invalidSource !== localSource || redownloading) return;
     setRedownloading(true);
     try {
-      await taskCommandService.requestRedownload(task.id);
+      await getTaskServices().taskCommandService.requestRedownload(task.id);
       await reloadTaskAndAsset();
       Alert.alert('已开始重新下载', '已清除损坏的本地副本并开始重新下载');
     } catch (error) {

@@ -7,7 +7,7 @@ import { openDatabaseSync } from 'expo-sqlite';
 import * as FileSystem from 'expo-file-system/legacy';
 import { ensureAppDatabase } from '../src/storage/database';
 import { withRetryingQueries, withWriteTransaction } from '../src/storage/sqliteBusy';
-import { createJobStateRepository } from '../src/workflows/executor/jobStateRepository';
+import { createJobStateRepository } from '../src/tasks/jobStateStore';
 import { createTaskCommandService } from '../src/tasks/taskCommandService';
 import { createTaskProjectionRepository } from '../src/tasks/projectionRepository';
 import { repairStaleTaskStatuses } from '../src/tasks/taskProjectionRepair';

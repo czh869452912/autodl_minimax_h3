@@ -41,7 +41,7 @@ jest.mock('expo-router', () => ({
 jest.mock('../settings/storage', () => ({ readSettings: async () => ({ llmApiKey: 'key', llmEndpoint: 'https://example.invalid', llmModel: 'h3', llmTimeoutSeconds: '600', llmMaxRetries: '2' }) }));
 jest.mock('../storage/databaseClient', () => ({ getDatabase: () => ({}) }));
 jest.mock('./threadStore', () => ({ createLocalThreadStore: () => mockStore }));
-jest.mock('./promptDraft', () => ({ createPromptDraftStore: () => ({}) }));
+jest.mock('../handoff/promptDraft', () => ({ createPromptDraftStore: () => ({}) }));
 jest.mock('./modelAdapter', () => ({ getH3AgentConfigError: () => undefined }));
 jest.mock('./imageAttachmentUpload', () => ({ readImageAsDataSource: jest.fn() }));
 jest.mock('./runtimeStore', () => ({

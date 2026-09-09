@@ -1,4 +1,4 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../storage/appDatabase';
 import type { ExecutorTrigger } from './executorEvents';
 import type { ExecutorWakeRepository } from './executorWakeRepository';
 import { withAsyncSchedulerLease } from './scheduler';
@@ -9,7 +9,7 @@ export type WorkerResult = Readonly<{ capturedGeneration: number; handledGenerat
 export type ExecutorRunner = { runSlice(request: WorkerRequest): Promise<WorkerResult> };
 
 export function createExecutorRunner(deps: {
-  db: SQLiteDatabase;
+  db: AppDatabase;
   wakes: ExecutorWakeRepository;
   now?: () => number;
   runCycle(request: WorkerRequest): Promise<{ budgetExhausted: boolean }>;

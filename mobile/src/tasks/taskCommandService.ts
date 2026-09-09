@@ -1,5 +1,5 @@
 import { withWriteTransaction } from '../storage/sqliteBusy';
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../storage/appDatabase';
 import { createMediaCommandService, type MediaCommandService } from '../workflows/executor/mediaCommandService';
 import { createExecutorWakeRepository } from './executorWakeRepository';
 import { executorWakePort } from './executorEvents';
@@ -8,7 +8,7 @@ import { taskProjectionEvents } from './taskProjectionEvents';
 export type CommandReceipt = Readonly<{ status: 'accepted' | 'coalesced' | 'already-complete'; wakeGeneration: number; acceptedAt: number }>;
 
 export function createTaskCommandService(options: {
-  db: SQLiteDatabase; fileExists(uri: string): Promise<boolean>; resolveCasUri(path: string): string;
+  db: AppDatabase; fileExists(uri: string): Promise<boolean>; resolveCasUri(path: string): string;
   now?: () => number; invalidate?: () => void; signal?: () => void;
 }) {
   const now = options.now ?? Date.now;

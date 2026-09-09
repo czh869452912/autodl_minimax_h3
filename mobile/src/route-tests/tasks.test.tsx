@@ -12,11 +12,11 @@ jest.mock('expo-router', () => ({
   router: { push: jest.fn() },
   useFocusEffect: (effect: () => void) => { require('react').useEffect(effect, [effect]); },
 }));
-jest.mock('../tasks/taskServices', () => ({
+jest.mock('../tasks/taskServices', () => ({ getTaskServices: () => ({
   taskProjectionRepository: { readConsistentWindow: (...args: unknown[]) => (mockRead as any)(...args), readRevision: async () => 1, readActivity: async () => mockActivity },
   taskCommandService: { requestRefresh: () => mockRefresh(), requestDownload: () => mockDownload(), requestExport: (...args: unknown[]) => (mockExport as any)(...args) },
   taskStore: { remove: async () => undefined }, listActiveTaskIds: async () => ['off-page-task'],
-}));
+}) }));
 jest.mock('../settings/storage', () => ({ readSettings: async () => ({ keepPrivateCopy: false }) }));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 jest.mock('../native/taskMonitor', () => ({ getTaskMonitorStatus: async () => ({ running: false }), startTaskMonitor: (ids: string[]) => mockMonitor(ids), stopTaskMonitor: async () => true }));

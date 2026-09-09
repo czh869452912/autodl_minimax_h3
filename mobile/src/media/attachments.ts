@@ -1,7 +1,7 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../storage/appDatabase';
 import * as FileSystem from 'expo-file-system/legacy';
 import CryptoJS from 'crypto-js';
-import { createArtifactCas, type ArtifactCasBlob } from '../media/cas';
+import { createArtifactCas, type ArtifactCasBlob } from './cas';
 import { sha256File } from '../native/media';
 import { withAsyncSchedulerLease } from '../tasks/scheduler';
 import { withWriteTransaction } from '../storage/sqliteBusy';
@@ -10,7 +10,7 @@ import { getDatabase } from '../storage/databaseClient';
 
 const IMAGE_BYTES = 20 * 1024 * 1024;
 const newOwnerId = () => CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex);
-export async function releaseExpiredAttachmentImports(db: SQLiteDatabase, now = Date.now()): Promise<void> {
+export async function releaseExpiredAttachmentImports(db: AppDatabase, now = Date.now()): Promise<void> {
   await assertAppDatabaseWritableAsync(db);
   await withWriteTransaction(db, async tx => {
     await tx.runAsync("DELETE FROM artifact_blob_refs WHERE owner_type='agent_import' AND NOT EXISTS (SELECT 1 FROM app_scheduler_leases l WHERE l.lease_key='agent-import:'||artifact_blob_refs.owner_id AND l.expires_at>?)", now);
@@ -82,7 +82,7 @@ async function importText(content: string): Promise<ArtifactCasBlob> {
   } catch (error) { await FileSystem.deleteAsync(partUri, { idempotent: true }).catch(() => undefined); throw error; }
 }
 
-export function createAttachmentStore(db: SQLiteDatabase, deps: { importImage?: typeof importImage; importText?: typeof importText; readText?: (uri: string) => Promise<string>; resolveUri?: typeof resolveUri } = {}) {
+export function createAttachmentStore(db: AppDatabase, deps: { importImage?: typeof importImage; importText?: typeof importText; readText?: (uri: string) => Promise<string>; resolveUri?: typeof resolveUri } = {}) {
   const importer = deps.importImage ?? importImage;
   const uriFor = deps.resolveUri ?? resolveUri;
   const imported = new Map<string, ArtifactCasBlob>();
@@ -236,14 +236,14 @@ export function createAttachmentStore(db: SQLiteDatabase, deps: { importImage?: 
       };
       return visit(input);
     },
-    async retain(tx: SQLiteDatabase, ownerType: string, ownerId: string, hashes: readonly string[]) {
+    async retain(tx: AppDatabase, ownerType: string, ownerId: string, hashes: readonly string[]) {
       for (const hash of hashes) {
         const exists = await tx.getFirstAsync('SELECT sha256 FROM artifact_blobs WHERE sha256=?', hash);
         if (!exists) throw new Error('参考素材记录缺失，请重新添加');
         await tx.runAsync('INSERT OR IGNORE INTO artifact_blob_refs VALUES(?,?,?,?)', hash, ownerType, ownerId, Date.now());
       }
     },
-    async release(tx: SQLiteDatabase, ownerType: string, ownerId: string) { await tx.runAsync('DELETE FROM artifact_blob_refs WHERE owner_type=? AND owner_id=?', ownerType, ownerId); },
+    async release(tx: AppDatabase, ownerType: string, ownerId: string) { await tx.runAsync('DELETE FROM artifact_blob_refs WHERE owner_type=? AND owner_id=?', ownerType, ownerId); },
   };
 }
 

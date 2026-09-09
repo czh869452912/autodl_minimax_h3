@@ -1,5 +1,5 @@
-import { createPromptDraftStore } from './promptDraft';
-import { createAttachmentStore } from './attachmentStore';
+import { createPromptDraftStore } from '../handoff/promptDraft';
+import { createAttachmentStore } from '../media/attachments';
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 
 const hash = 'a'.repeat(64);

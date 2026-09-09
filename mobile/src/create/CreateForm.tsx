@@ -1,3 +1,5 @@
+import { defaultDraftDependencies, defaultSubmissionDependencies, type CreateFormDraftDependencies, type CreateFormSubmissionDependencies } from './createServices';
+export type { CreateFormDraftDependencies, CreateFormSubmissionDependencies } from './createServices';
 import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -9,87 +11,24 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { getDatabase } from '../storage/databaseClient';
-import { readSettings } from '../settings/storage';
-import type { TaskMediaInput } from '../tasks/types';
+import type { TaskMediaInput } from '../media/types';
 import { AppIcon } from '../ui/icons';
 import { COLORS, SPACING } from '../ui/theme';
 import { AudioPreviewList, ImagePreviewGrid } from './AttachmentPreview';
 import { pickTaskMedia } from './MediaPicker';
 import { RESOLUTION_OPTIONS, type Resolution } from './resolutions';
-import { createPromptDraftStore } from '../agent/promptDraft';
-import { materializePromptHandoff, resolvePromptHandoffValues } from '../agent/promptHandoff';
+import { resolvePromptHandoffValues } from '../handoff/promptHandoff';
 import { resolveDraftPrompt } from './draftPrompt';
 import { WorkflowForm } from '../workflows/renderer/WorkflowForm';
 import type { WorkflowDefinition } from '../workflows/schema/types';
-import { createJobRepository } from '../jobs/repository';
-import { createWorkflowRuntime } from '../workflows/runtime/runtime';
-import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
 import { createSubmissionGate } from './submissionGate';
-import { createAppWorkflowCatalog } from '../workflows/registry/builtin';
 import type { RegistryRecord } from '../workflows/registry/types';
 import { registryRecordToDefinition } from '../workflows/registry/catalog';
-import { persistSubmissionCommand } from './submissionCommand';
-import { executorWakePort } from '../tasks/executorEvents';
 import { buildSubmissionInputSnapshot } from './submissionInput';
 import { formatSubmissionFieldError, type SubmissionFieldError, validateSubmissionBeforeQueue } from './submissionValidation';
 import { RegistryReleaseError, type RegistryReleaseErrorCode } from '../workflows/registry/releaseManifest';
 
-const database = getDatabase();
-const jobStore = createJobRepository(database);
 const submissionGate = createSubmissionGate();
-
-const promptDraftStore = createPromptDraftStore(
-  database,
-);
-const workflowCatalog = createAppWorkflowCatalog();
-export type CreateFormDraftDependencies = Pick<ReturnType<typeof createPromptDraftStore>, 'read' | 'consume'> & {
-  materialize: typeof materializePromptHandoff;
-  discard?: (id: string) => Promise<void>;
-  saveForm?: ReturnType<typeof createPromptDraftStore>['saveForm'];
-};
-const defaultDraftDependencies: CreateFormDraftDependencies = {
-  read: (id) => promptDraftStore.read(id),
-  consume: (id) => promptDraftStore.consume(id),
-  materialize: materializePromptHandoff,
-  discard: id => promptDraftStore.discard(id),
-  saveForm: (id, form) => promptDraftStore.saveForm(id, form),
-};
-
-type CreateFormCatalog = {
-  bootstrap(): Promise<unknown>;
-  listActive(): Promise<RegistryRecord[]>;
-  getActive(workflowId: string): Promise<RegistryRecord | undefined>;
-};
-export type CreateFormSubmissionDependencies = {
-  catalog: CreateFormCatalog;
-  readSettings: typeof readSettings;
-  queue(input: {
-    definition: WorkflowDefinition;
-    activeRecord: RegistryRecord;
-    inputSnapshot: Record<string, unknown>;
-    images: TaskMediaInput[];
-    audios: TaskMediaInput[];
-    token: string;
-    foregroundTick: () => void | Promise<unknown>;
-    handoffId?: string;
-  }): Promise<{ id: string }>;
-};
-
-const defaultSubmissionDependencies: CreateFormSubmissionDependencies = {
-  catalog: workflowCatalog,
-  readSettings,
-  async queue({ definition, activeRecord, inputSnapshot, images, audios, token, foregroundTick, handoffId }) {
-    const adapters = createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? token : undefined });
-    const runtime = createWorkflowRuntime({ adapters, jobs: jobStore, credentials: { get: async () => ({ ok: true }) }, id: () => `job-${Date.now()}-${Math.random().toString(16).slice(2)}` });
-    const prepared = runtime.prepareSubmission(definition,
-      { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord.contentHash, inputs: inputSnapshot, source: 'user', status: 'ready' },
-      { workflowId: activeRecord.workflowId, workflowVersion: activeRecord.version, contentHash: activeRecord.contentHash });
-    const task = await persistSubmissionCommand(database, 'submission-' + Date.now() + '-' + Math.random().toString(16).slice(2), prepared, { images, audios, handoffId });
-    void foregroundTick();
-    return task;
-  },
-};
 
 const SAFE_EXISTING_CATALOG_CODES = new Set<RegistryReleaseErrorCode>([
   'REGISTRY_RELEASE_MANIFEST_INVALID',
@@ -123,7 +62,7 @@ export function workflowLoadMessage(error: unknown): string {
 export function CreateForm({
   initialPrompt = '',
   draftId,
-  foregroundTick = () => executorWakePort.signal('command'),
+  foregroundTick = () => undefined,
   submissionDependencies = defaultSubmissionDependencies,
   draftDependencies = defaultDraftDependencies,
 }: {

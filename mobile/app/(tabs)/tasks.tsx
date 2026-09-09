@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View }
 import { router } from 'expo-router';
 import { AppIcon } from '../../src/ui/icons';
 import { COLORS, SPACING } from '../../src/ui/theme';
-import { taskCommandService, taskStore, listActiveTaskIds } from '../../src/tasks/taskServices';
+import { getTaskServices } from '../../src/tasks/taskServices';
 import { useTaskListSession } from '../../src/tasks/useTaskListSession';
 import { TaskCardRow } from '../../src/tasks/TaskCardRow';
 import { taskProjectionEvents } from '../../src/tasks/taskProjectionEvents';
@@ -19,26 +19,26 @@ export default function TasksScreen() {
   useEffect(() => { let active = true; void getTaskMonitorStatus().then(value => { if (active) setMonitoring(value.running); }).catch(() => undefined); return () => { active = false; }; }, []);
   const refresh = useCallback(() => {
     void session.refresh('manual').catch(error => Alert.alert('刷新失败', error instanceof Error ? error.message : String(error)));
-    void taskCommandService.requestRefresh({ maintenance: 'force-next-slice' }).catch(error => Alert.alert('后台刷新请求失败', error instanceof Error ? error.message : String(error)));
+    void getTaskServices().taskCommandService.requestRefresh({ maintenance: 'force-next-slice' }).catch(error => Alert.alert('后台刷新请求失败', error instanceof Error ? error.message : String(error)));
   }, [session]);
   const action = useCallback(async (item: TaskCard, exportRequested: boolean) => {
     if (busy.current.has(item.id)) return;
     busy.current.add(item.id); setBusyIds(new Set(busy.current));
     try {
-      if (exportRequested) { const settings = await readSettings(); await taskCommandService.requestExport(item.id, { keepPrivateCopy: settings.keepPrivateCopy }); }
-      else await taskCommandService.requestDownload(item.id);
+      if (exportRequested) { const settings = await readSettings(); await getTaskServices().taskCommandService.requestExport(item.id, { keepPrivateCopy: settings.keepPrivateCopy }); }
+      else await getTaskServices().taskCommandService.requestDownload(item.id);
     } catch (error) { Alert.alert(exportRequested ? '保存失败' : '下载失败', error instanceof Error ? error.message : String(error)); }
     finally { busy.current.delete(item.id); setBusyIds(new Set(busy.current)); }
   }, []);
   const download = useCallback((item: TaskCard) => { void action(item, false); }, [action]);
   const exportTask = useCallback((item: TaskCard) => { void action(item, true); }, [action]);
-  const remove = useCallback((id: string) => { void taskStore.remove(id).then(() => taskProjectionEvents.invalidate()).catch(error => Alert.alert('移除失败', String(error))); }, []);
+  const remove = useCallback((id: string) => { void getTaskServices().taskStore.remove(id).then(() => taskProjectionEvents.invalidate()).catch(error => Alert.alert('移除失败', String(error))); }, []);
   const open = useCallback((id: string) => router.push({ pathname: '/video/[id]', params: { id } }), []);
   const renderItem = useCallback(({ item }: { item: TaskCard }) => <TaskCardRow item={item} busy={busyIds.has(item.id)} onDownload={download} onExport={exportTask} onRemove={remove} onOpen={open} />, [busyIds, download, exportTask, remove, open]);
   const toggleMonitoring = async () => {
     try {
       if (monitoring) { await stopTaskMonitor(); setMonitoring(false); return; }
-      const result = await startTaskMonitor(await listActiveTaskIds());
+      const result = await startTaskMonitor(await getTaskServices().listActiveTaskIds());
       if (result.started) setMonitoring(true);
       else Alert.alert('无法开启持续监控', result.reason === 'no-active-tasks' ? '当前没有可监控的任务。' : '请检查通知权限或稍后重试。');
     } catch (error) { Alert.alert('开启失败', String(error)); }

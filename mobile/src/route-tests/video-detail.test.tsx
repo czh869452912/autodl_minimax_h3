@@ -24,7 +24,7 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ back: mockBack }),
 }));
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
-jest.mock('../tasks/taskServices', () => ({
+jest.mock('../tasks/taskServices', () => ({ getTaskServices: () => ({
   taskStore: { list: () => mockList(), get: (id: string) => mockGet(id) },
   mediaStore: {
     get: (id: string) => mockMediaGet(id),
@@ -32,7 +32,7 @@ jest.mock('../tasks/taskServices', () => ({
 
   taskCommandService: { requestExport: (taskId: string, policy: { keepPrivateCopy: boolean }) => mockRequestExport(taskId, policy),
   requestRedownload: (taskId: string) => mockRequestRedownload(taskId) },
-}));
+}) }));
 jest.mock('../native/media', () => ({ probeVideo: (source: string) => mockProbeVideo(source) }));
 jest.mock('../tasks/localMedia', () => ({ resolveLocalVideoSource: (...args: unknown[]) => mockResolveLocal(...args) }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: (value: string) => mockCopy(value), getStringAsync: () => mockReadClipboard() }));

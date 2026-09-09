@@ -1,8 +1,8 @@
 import type { WorkflowPackage } from '../schema/package';
 import type { WorkflowDefinition } from '../schema/types';
-import { parseVerifiedWorkflowPackage } from './service';
+import { parseVerifiedWorkflowPackage } from './packageVerification';
 import { canonicalizeDefinition } from './canonicalize';
-import { sha256Hex } from './crypto';
+import { sha256Hex } from './hash';
 import { compareVersions } from './semver';
 import {
   LEGACY_DEFINITION_IDENTITY_V1,

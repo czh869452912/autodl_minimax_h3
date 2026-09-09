@@ -1,14 +1,13 @@
 import type { WorkflowDefinition, WorkflowDraft, ValidationResult } from '../schema/types';
-import type { JobRecord, JobRepository, ArtifactRecord } from '../../jobs/types';
+import type { JobRecord, ArtifactRecord } from '../../jobs/types';
 import type { PlatformAdapterManifest } from '../schema/types';
 import { validateWorkflowDefinition } from '../schema/validator';
 import { compileWorkflow } from '../compiler/compiler';
 import type { ProviderAdapter, ProviderStatusUpdate, ProviderTarget } from '../providers/registry';
 
 type Adapter = Omit<ProviderAdapter, 'manifest'> & { manifest(): Pick<PlatformAdapterManifest, 'id' | 'adapterVersion' | 'operations'> };
-type RuntimeDeps = { adapters: Map<string, Adapter>; jobs: JobRepository; credentials: { get(adapterId: string): Promise<{ ok: boolean }> }; id: () => string; now?: () => number };
+type RuntimeDeps = { adapters: Map<string, Adapter>; now?: () => number };
 export type WorkflowProvenance = { workflowId: string; workflowVersion: string; contentHash: string };
-type SubmitOptions = { provenance: WorkflowProvenance };
 export type PreparedWorkflowSubmission = {
   workflowId: string;
   workflowVersion: string;
@@ -30,18 +29,7 @@ function applyOutputMapping(job: JobRecord, artifacts: ArtifactRecord[]): Artifa
   });
 }
 
-function stable(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
-  if (value && typeof value === 'object') return `{${Object.keys(value as Record<string, unknown>).sort().map((key) => `${JSON.stringify(key)}:${stable((value as Record<string, unknown>)[key])}`).join(',')}}`;
-  return JSON.stringify(value);
-}
-
-function sameArtifacts(left: ArtifactRecord[], right: ArtifactRecord[]): boolean {
-  return stable(left.map(({ jobId: _jobId, ...item }) => item)) === stable(right.map(({ jobId: _jobId, ...item }) => item));
-}
-
 export function createWorkflowRuntime(deps: RuntimeDeps) {
-  const locks = new Set<string>();
   const now = deps.now ?? Date.now;
   return {
     validateDraft(workflow: WorkflowDefinition, draft: WorkflowDraft, expected?: WorkflowProvenance): ValidationResult {
@@ -90,30 +78,6 @@ export function createWorkflowRuntime(deps: RuntimeDeps) {
       };
       const artifacts = applyOutputMapping(current, update.artifacts.map((item) => ({ ...item, jobId: job.id })));
       return { job: current, artifacts };
-    },
-    async submit(workflow: WorkflowDefinition, draft: WorkflowDraft, options: SubmitOptions): Promise<JobRecord> {
-      const provenance = options?.provenance;
-      const validation = this.validateDraft(workflow, draft, provenance); if (!validation.ok) throw new Error(validation.errors.map((item) => item.message).join('; '));
-      const adapter = deps.adapters.get(workflow.platform.adapter); if (!adapter) throw new Error('workflow adapter unavailable');
-      const credential = await deps.credentials.get(workflow.platform.adapter); if (!credential.ok) throw new Error('workflow credentials unavailable');
-      const validated = await adapter.validateCredentials(); if (!validated.ok) throw new Error('workflow credentials unavailable');
-      const id = deps.id(); if (locks.has(id)) throw new Error('workflow submission already in progress'); locks.add(id);
-      const timestamp = now();
-      let job: JobRecord = { id, revision: 0, workflowId: workflow.id, workflowVersion: workflow.version, workflowContentHash: draft.contentHash, adapterId: adapter.manifest().id, adapterVersion: adapter.manifest().adapterVersion, inputSnapshot: draft.inputs, outputMapping: workflow.outputs, status: 'SUBMITTING', createdAt: timestamp, updatedAt: timestamp };
-      await deps.jobs.upsert(job);
-      try {
-        const requestInput = compileWorkflow(workflow, draft.contentHash).buildRequest(draft.inputs);
-        const handle = await adapter.submit(requestInput, { operation: workflow.platform.operation, workflowId: workflow.platform.workflowId ?? workflow.id });
-        const providerJobId = handle.providerJobId;
-        if (typeof providerJobId !== 'string' || !providerJobId) throw new Error('provider returned an invalid job handle');
-        job = { ...job, status: 'QUEUED', providerHandle: handle, remote: { providerJobId }, updatedAt: now() };
-        await deps.jobs.upsert(job);
-        return job;
-      } catch (error) { job = { ...job, status: 'UNKNOWN', error: { code: 'SUBMIT_UNKNOWN', message: error instanceof Error ? error.message : String(error) }, updatedAt: now() }; await deps.jobs.upsert(job); throw error; } finally { locks.delete(id); }
-    },
-    async sync(job: JobRecord): Promise<JobRecord> {
-      const adapter = deps.adapters.get(job.adapterId); const handle = job.providerHandle ?? job.remote; if (!adapter || !handle) return job;
-      const update = await adapter.getStatus(handle); const { job: current, artifacts: mapped } = this.mapStatus(job, update); const previousArtifacts = await deps.jobs.listArtifacts(job.id); const metadataChanged = job.status !== current.status || job.remote?.rawStatus !== current.remote?.rawStatus || job.startedAt !== current.startedAt || job.executionDuration !== current.executionDuration; if (!metadataChanged && sameArtifacts(previousArtifacts, mapped)) return job; await deps.jobs.upsert(current); if (!sameArtifacts(previousArtifacts, mapped)) await deps.jobs.replaceArtifacts(job.id, mapped); return current;
     },
   };
 }

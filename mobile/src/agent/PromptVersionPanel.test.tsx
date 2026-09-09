@@ -4,7 +4,7 @@ import { KeyboardAvoidingView, Platform, Text } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { PromptVersionPanel } from './PromptVersionPanel';
 import type { PromptVersion } from './promptVersions';
-import type { PromptHandoff } from './promptHandoff';
+import type { PromptHandoff } from '../handoff/promptHandoff';
 import { builtinWorkflowDefinitions } from '../workflows/registry/builtin';
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => undefined) }));

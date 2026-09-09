@@ -1,3 +1,4 @@
+import { claimOperations } from '../../test/claimOperations';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -8,7 +9,7 @@ import { ProviderError } from '../providers/autodl/client';
 import type { QueueSubmissionInput } from '../runtime/runtime';
 import { createDurableExecutor } from './durableExecutor';
 import { createExecutorTick } from './tick';
-import { createJobStateRepository } from './jobStateRepository';
+import { createJobStateRepository } from '../../tasks/jobStateStore';
 import { createOperationRepository } from './operationRepository';
 
 const acceptanceCase = process.env.C_CORE_RECOVERY_CASE;
@@ -152,7 +153,7 @@ acceptanceTest(`process recovery ${acceptanceCase ?? 'disabled'} ${acceptancePha
     if (acceptancePhase === 'seed') {
       const job = await value.service.queueSubmission(submission(`${acceptanceCase}-process`));
       if (acceptanceCase === 'unknown' || acceptanceCase === 'handle') {
-        await value.operations.claimDue({ kind: 'SUBMIT', owner: 'dead-process', now: 100, leaseMs: 50, limit: 1 });
+        await claimOperations(value.operations, { kind: 'SUBMIT', owner: 'dead-process', now: 100, leaseMs: 50, limit: 1 });
         const started = (await value.jobs.transition({
           jobId: job.id, expectedRevision: job.revision, patch: { status: 'SUBMITTING', updatedAt: 100 },
           event: { id: `${job.id}:process:started`, type: 'SUBMIT_STARTED', payload: {}, createdAt: 100 },

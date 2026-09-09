@@ -1,3 +1,4 @@
+import { H3_EVENTS } from './eventContract';
 import { readPromptRuns } from './runState';
 import { AbstractAgent, type AgentConfig, type RunAgentInput } from '@ag-ui/client';
 import { EventType, type BaseEvent } from '@ag-ui/core';
@@ -7,7 +8,7 @@ import type { Attachment } from '@copilotkit/shared';
 import { adaptDeepAgentStream } from './deepAgentStream';
 import { applyImageIdentities, type ImageIdentity } from './imageMessageIdentity';
 import { normalizeModelTranscript } from './modelTranscript';
-import { hydrateModelImages } from './attachmentStore';
+import { hydrateModelImages } from '../media/attachments';
 
 type DeepAgentGraph = { stream(input: unknown, options?: unknown): Promise<AsyncIterable<unknown>> | AsyncIterable<unknown> };
 type AgentExecutionOptions = {
@@ -114,7 +115,7 @@ export class H3AgUiAgent extends AbstractAgent {
         if (controller.signal.aborted || terminal) return;
         controller.abort();
         closeStreams();
-        emit({ type: EventType.CUSTOM, name: 'h3.run.cancelled', value: { runId: input.runId } } as never);
+        emit({ type: EventType.CUSTOM, name: H3_EVENTS.cancelled, value: { runId: input.runId } } as never);
         emit({ type: EventType.RUN_ERROR, code: 'abort', message: 'Run cancelled' } as never);
         subscriber.complete();
       };
@@ -231,7 +232,7 @@ export class H3AgUiAgent extends AbstractAgent {
         if (signal.aborted) return;
         if (workspaceAdapter && Array.isArray(value) && value[0] === 'values') {
           workspace = workspaceAdapter.captureWorkspaceState(value[1], revision, budget);
-          subscriber.next({ type: EventType.CUSTOM, name: 'h3.workspace', value: { runId: input.runId, workspace } } as never);
+          subscriber.next({ type: EventType.CUSTOM, name: H3_EVENTS.workspace, value: { runId: input.runId, workspace } } as never);
         } else yield workspaceAdapter && Array.isArray(value) && value[0] === 'messages' ? value[1] : value;
       }
     })();

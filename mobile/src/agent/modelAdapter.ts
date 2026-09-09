@@ -2,7 +2,7 @@ import { ChatOpenAI, type ChatOpenAIFields } from '@langchain/openai';
 import type { H3AgentConfig } from './agentTypes';
 import { createStreamingFetch } from '../shims/copilotKitStreamingFetch';
 import { getH3ContextBudget } from './agentTypes';
-import { isDeepSeekV4, reasoningRequestFields, validateReasoningEffort } from './reasoningConfig';
+import { isDeepSeekV4, reasoningRequestFields, validateReasoningEffort } from '../config/llmReasoning';
 import { DeepSeekCompletions } from './DeepSeekCompletions';
 
 export type ModelFactory = (config: H3AgentConfig) => ChatOpenAI;

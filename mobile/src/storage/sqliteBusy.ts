@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from './appDatabase';
 
 export function isSqliteBusy(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -21,7 +22,7 @@ export async function retrySqliteBusy<T>(work: () => Promise<T>): Promise<T> {
 // Retry the entire rolled-back transaction, never a single statement against
 // a stale read snapshot. Callbacks must contain only transactional DB work or
 // repeatable reads; network requests/publication stay outside this boundary.
-export async function withWriteTransaction<T>(db: SQLiteDatabase, work: (txn: SQLiteDatabase) => Promise<T>): Promise<T> {
+export async function withWriteTransaction<T>(db: AppDatabase, work: (txn: AppDatabase) => Promise<T>): Promise<T> {
   return retrySqliteBusy(async () => {
     let result!: T;
     await db.withExclusiveTransactionAsync(async txn => { result = await work(txn); });

@@ -2,7 +2,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { AppIcon } from '../ui/icons';
 import { COLORS, SPACING } from '../ui/theme';
-import type { TaskMediaInput } from '../tasks/types';
+import type { TaskMediaInput } from '../media/types';
 
 function AudioRow({ item, index, onRemove }: { item: TaskMediaInput; index: number; onRemove: () => void }) {
   const player = useAudioPlayer(item.uri ?? item.dataUri);

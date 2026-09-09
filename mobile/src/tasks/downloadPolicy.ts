@@ -1,8 +1,10 @@
+import { normalizeArtifactDownloadPolicy, DEFAULT_ARTIFACT_DOWNLOAD_BYTES as DEFAULT_VIDEO_DOWNLOAD_BYTES } from '../workflows/providers/downloadPolicy';
+export { DEFAULT_ARTIFACT_DOWNLOAD_BYTES as DEFAULT_VIDEO_DOWNLOAD_BYTES } from '../workflows/providers/downloadPolicy';
 import { assertSafeHttpsUrl, UrlPolicyError } from '../security/urlPolicy';
 import { fetch as expoFetch } from 'expo/fetch';
 import { ArtifactOperationError, artifactError, type ArtifactErrorCode } from '../workflows/executor/artifactErrors';
 
-export const DEFAULT_VIDEO_DOWNLOAD_BYTES = 2 * 1024 * 1024 * 1024;
+
 
 export function assertArtifactDownloadPolicy(allowedHosts?: string[], allowProviderSuppliedPublicHosts = false): void {
   if (!allowProviderSuppliedPublicHosts && !allowedHosts?.some((host) => host.trim().length > 0)) {
@@ -101,10 +103,7 @@ async function readWithTimeout<T>(read: Promise<T>, timeoutMs: number, onTimeout
 }
 
 export async function openArtifactDownload(initialUrl: string, options: Omit<ArtifactDownloadOptions, 'writer'>): Promise<OpenArtifactDownloadResult> {
-  const maxBytes = options.maxBytes ?? DEFAULT_VIDEO_DOWNLOAD_BYTES;
-  const acceptedMimes = options.acceptedMimes ?? ['video/mp4'];
-  const connectTimeoutMs = options.connectTimeoutMs ?? options.timeoutMs ?? 30_000;
-  const idleTimeoutMs = options.idleTimeoutMs ?? options.timeoutMs ?? 30_000;
+  const { maxBytes, acceptedMimes, connectTimeoutMs, idleTimeoutMs } = normalizeArtifactDownloadPolicy(options);
   const fetcher = options.fetcher ?? (expoFetch as typeof fetch);
   const maxHops = options.maxHops ?? 3;
   let current = validateRedirectUrl(initialUrl, options.allowedHosts, options.allowProviderSuppliedPublicHosts);

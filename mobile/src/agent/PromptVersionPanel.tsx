@@ -3,8 +3,8 @@ import { Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, 
 import * as Clipboard from 'expo-clipboard';
 import { LIGHT_PROMPT_COLORS as colors } from '../ui/theme';
 import { diffPromptVersions, type PromptVersion } from './promptVersions';
-import { normalizePromptHandoffParameters, type PromptHandoff } from './promptHandoff';
-import { validatePromptBindings } from './promptBindings';
+import { normalizePromptHandoffParameters, type PromptHandoff } from '../handoff/promptHandoff';
+import { validatePromptBindings } from '../handoff/promptBindings';
 import type { WorkflowDefinition } from '../workflows/schema/types';
 import defaultWorkflow from '../workflows/definitions/autodl/minimax-h3-i2v-15s-v1.0.1.json';
 import { createAgentId } from './submissionCommands';

@@ -1,10 +1,12 @@
-import { openDatabaseSync, type SQLiteDatabase } from 'expo-sqlite';
+import { openDatabaseSync } from 'expo-sqlite';
+import type { AppDatabase } from './appDatabase';
 import { ensureAppDatabase } from './database';
 import { createPreMigrationBackup } from './backup';
 import { AppMigrationError } from './recovery';
 import { withRetryingQueries } from './sqliteBusy';
+import { protectDatabase } from './databaseAccess';
 
-let sharedDatabase: SQLiteDatabase | undefined;
+let sharedDatabase: AppDatabase | undefined;
 export type DatabaseStartupState =
   | { mode: 'writable' }
   | { mode: 'legacy' }
@@ -12,11 +14,11 @@ export type DatabaseStartupState =
 let startupState: DatabaseStartupState = { mode: 'writable' };
 
 /** Return the single application database handle for this JS runtime. */
-export function getDatabase(): SQLiteDatabase {
+export function getDatabase(): AppDatabase {
   if (!sharedDatabase) {
-    sharedDatabase = openDatabaseSync('autodl-h3.db');
+    const raw = openDatabaseSync('autodl-h3.db');
     try {
-      const result = ensureAppDatabase(sharedDatabase, {
+      const result = ensureAppDatabase(raw, {
         backup: (db, fromVersion, toVersion) => { createPreMigrationBackup(db, fromVersion, toVersion); },
       });
       if (result?.mode === 'legacy') startupState = { mode: 'legacy' };
@@ -27,7 +29,11 @@ export function getDatabase(): SQLiteDatabase {
       if (!(error instanceof AppMigrationError)) throw error;
       startupState = { mode: 'readonly', diagnostic: error.diagnostic, allowReset: true };
     }
-    sharedDatabase = withRetryingQueries(sharedDatabase);
+    let retired = false;
+    sharedDatabase = protectDatabase(withRetryingQueries(raw), {
+      startupDiagnostic: () => retired ? 'DATABASE_HANDLE_RETIRED' : startupState.mode === 'readonly' ? startupState.diagnostic : startupState.mode === 'legacy' ? 'LEGACY_DATABASE_REQUIRES_RESET' : undefined,
+      didReset: () => { retired = true; sharedDatabase = undefined; startupState = { mode: 'writable' }; },
+    });
   }
   return sharedDatabase;
 }

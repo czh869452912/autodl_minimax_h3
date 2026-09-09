@@ -1,7 +1,6 @@
+import { insertWorkflowOperation } from './operationInsert';
 import { withWriteTransaction } from '../../storage/sqliteBusy';
-import { createTaskRepository } from '../../tasks/repository';
-import { jobToTaskProjection } from '../../tasks/projection';
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../../storage/appDatabase';
 import type { ArtifactRecord, JobRecord, JobStatus, NormalizedError } from '../../jobs/types';
 import { assertAppDatabaseWritableAsync } from '../../storage/database';
 import type { EnqueueOperation, JobEvent, ProviderHandle, TransitionResult } from './types';
@@ -65,15 +64,11 @@ function terminalStatus(value: unknown): TerminalTaskStatus | undefined {
   }
 }
 
-async function insertOperation(db: SQLiteDatabase, operation: EnqueueOperation): Promise<void> {
-  await db.runAsync(
-    "INSERT OR IGNORE INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES (?,?,?,?,?,'PENDING',0,?,?,?)",
-    operation.id, operation.kind, operation.jobId ?? null, operation.idempotencyKey, JSON.stringify(operation.payload),
-    operation.nextRetryAt ?? operation.now, operation.now, operation.now,
-  );
+async function insertOperation(db: AppDatabase, operation: EnqueueOperation): Promise<void> {
+  await insertWorkflowOperation(db, { id: operation.id, kind: operation.kind, jobId: operation.jobId ?? undefined, idempotencyKey: operation.idempotencyKey, payload: operation.payload, now: operation.now, nextRetryAt: operation.nextRetryAt ?? operation.now }, 'ignore');
 }
 
-async function insertEvent(db: SQLiteDatabase, jobId: string, sequence: number, event: NewEvent): Promise<JobEvent> {
+async function insertEvent(db: AppDatabase, jobId: string, sequence: number, event: NewEvent): Promise<JobEvent> {
   await db.runAsync(
     'INSERT INTO workflow_job_events (id,job_id,sequence,event_type,payload_json,created_at) VALUES (?,?,?,?,?,?)',
     event.id, jobId, sequence, event.type, JSON.stringify(event.payload), event.createdAt,
@@ -81,7 +76,7 @@ async function insertEvent(db: SQLiteDatabase, jobId: string, sequence: number, 
   return { ...event, jobId, sequence };
 }
 
-async function replaceArtifacts(db: SQLiteDatabase, jobId: string, artifacts: ArtifactRecord[]): Promise<void> {
+async function replaceArtifacts(db: AppDatabase, jobId: string, artifacts: ArtifactRecord[]): Promise<void> {
   await db.runAsync('DELETE FROM workflow_artifacts WHERE job_id = ?', jobId);
   for (const artifact of artifacts) {
     await db.runAsync(
@@ -96,7 +91,9 @@ async function replaceArtifacts(db: SQLiteDatabase, jobId: string, artifacts: Ar
   }
 }
 
-export function createJobStateRepository(db: SQLiteDatabase) {
+export type JobProjectionWriter = (input: { tx: AppDatabase; job: JobRecord; artifacts?: ArtifactRecord[]; created: boolean }) => Promise<void>;
+
+export function createJobStateRepository(db: AppDatabase, project: JobProjectionWriter) {
   const get = async (id: string): Promise<JobRecord | undefined> => {
     const row = await db.getFirstAsync<JobRow>('SELECT * FROM workflow_jobs WHERE id = ? LIMIT 1', id);
     return row ? mapJob(row) : undefined;
@@ -127,7 +124,7 @@ export function createJobStateRepository(db: SQLiteDatabase) {
       const existing = await get(job.id);
       if (existing) return existing;
       return withWriteTransaction(db, async db => {
-        const get = createJobStateRepository(db).get;
+        const get = createJobStateRepository(db, project).get;
         const current = await get(job.id);
         if (current) return current;
         await db.runAsync(
@@ -144,14 +141,14 @@ export function createJobStateRepository(db: SQLiteDatabase) {
         await insertOperation(db, operation);
         const created = await get(job.id);
         if (!created) throw new Error('job creation failed');
-        await createTaskRepository(db).upsertWorkflowProjection(jobToTaskProjection(created));
+        await project({ tx: db, job: created, created: true });
         return created;
       });
     },
     async transition(input: JobTransition): Promise<TransitionResult> {
       await assertAppDatabaseWritableAsync(db);
       return withWriteTransaction(db, async db => {
-        const get = createJobStateRepository(db).get;
+        const get = createJobStateRepository(db, project).get;
         const current = await get(input.jobId);
         if (!current) throw new Error(`job not found: ${input.jobId}`);
         if (current.revision !== input.expectedRevision) return { ok: false, current };
@@ -189,9 +186,7 @@ export function createJobStateRepository(db: SQLiteDatabase) {
         for (const operation of input.nextOperations ?? []) await insertOperation(db, operation);
         const updated = await get(input.jobId);
         if (!updated) throw new Error('job transition failed');
-        const tasks = createTaskRepository(db);
-        const previous = await tasks.get(updated.id);
-        await tasks.upsertWorkflowProjection(jobToTaskProjection(updated, input.artifacts, previous));
+        await project({ tx: db, job: updated, artifacts: input.artifacts, created: false });
         return { ok: true, current: updated, event };
       });
     },

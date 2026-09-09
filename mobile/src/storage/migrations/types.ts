@@ -1,7 +1,7 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '../appDatabase';
 
 export type MigrationContext = {
-  db: SQLiteDatabase;
+  db: AppDatabase;
   exec(sql: string): void;
   hasColumn(table: string, column: string): boolean;
 };

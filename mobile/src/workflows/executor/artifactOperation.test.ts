@@ -104,6 +104,16 @@ test('writes a terminal failed projection when validation fails', async () => {
   expect(deps.updateDownloadState).toHaveBeenLastCalledWith('DOWNLOAD_FAILED', 'ARTIFACT_INTEGRITY_FAILED');
 });
 
+test.each([0, -1, NaN])('invalid timeout %s fails terminally without native transfer or retry', async timeoutMs => {
+  const deps = setup();
+  await handleArtifactDownload(operation, 'worker', { ...deps, now: () => 50, policy: () => ({ allowedHosts: ['cdn.example'], maxBytes: 10, connectTimeoutMs: timeoutMs }) });
+  expect(deps.updateDownloadState).toHaveBeenNthCalledWith(1, 'DOWNLOADING');
+  expect(deps.updateDownloadState).toHaveBeenLastCalledWith('DOWNLOAD_FAILED', 'ARTIFACT_INPUT_INVALID');
+  expect(deps.operations.finish).toHaveBeenCalledWith(operation.id, 'worker', 'FAILED', 50, expect.objectContaining({ code: 'ARTIFACT_INPUT_INVALID' }));
+  expect(deps.transferArtifact).not.toHaveBeenCalled();
+  expect(deps.operations.retry).not.toHaveBeenCalled();
+});
+
 test('transfers natively, adopts into CAS, retains the blob, updates projection, and finishes', async () => {
   const deps = setup();
   await handleArtifactDownload(operation, 'worker', {

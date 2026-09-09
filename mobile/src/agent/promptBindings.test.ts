@@ -1,4 +1,4 @@
-import { parsePromptImageReferences, validatePromptBindings } from './promptBindings';
+import { parsePromptImageReferences, validatePromptBindings } from '../handoff/promptBindings';
 
 const image = (id: string, displayName: string, ordinal?: number) => ({ id, displayName, uri: `file://${id}`, ...(ordinal ? { ordinal } : {}) });
 
