@@ -1,10 +1,10 @@
 # Local video compatibility engine
 
-## Multi-codec playback integration (2026-09-10)
+## Unified playback integration (2026-09-10)
 
-The application now also bundles LibVLC 3.7.5 for local software video playback.
-`VideoPlayer.tsx` routes local unsupported profiles to `LibVlcView`; regular files
-continue through expo-video / Media3 1.9.0. Conversion is a separate durable
+The application uses AndroidX Media3 1.9.0 `PlayerView` controls with a libmpv
+0.41.0 playback engine for local video. All local profiles follow this native path;
+there is no device-codec versus software-player routing mode. Conversion remains a separate durable
 `compatibilityOnly` operation: an intact original is available before a compatible
 copy is ready. Failure of this derivative does not mark the original download failed.
 The conversion operation currently shares the serialized artifact lane.
@@ -16,9 +16,10 @@ at most three explicit `codec_name` attempts. Frame-count and full-decode checks
 remain strict. Bounded redacted diagnostics distinguish probe, decode, encode and
 output validation stages; persistent operation errors include `diagnosticStage`.
 
-See `docs/reviews/2026-09-10-multi-codec-implementation.md` at the repository root
-for tested boundaries, build evidence and instrumentation commands. Device playback
-and release acceptance are still pending; static 16KB alignment is not runtime QA.
+See `docs/reviews/2026-09-10-unified-mpv-migration.md` at the repository root
+for current build, actual application playback and instrumentation evidence.
+Physical-device and release acceptance remain separate; static 16KB alignment is not
+runtime QA on an actual 16KB-page device.
 
 `VideoCompatibility.kt` exposes `prepareCompatibleVideo` and `cancelCompatibleVideo` through `AutoDLMedia`. The TypeScript contract lives in `mobile/src/native/videoCompatibility.ts`. The original is opened read-only and copied to a bounded private snapshot whose SHA-256 must match the caller's checkpoint. A successful result is an uncommitted CAS part: `files/cas/parts/sha256(operationId + NUL + decimalAttempt).part`. The caller owns CAS commit and gallery publication.
 
@@ -27,6 +28,10 @@ Software FFmpeg decoders (`h264`, `hevc`, `vp9`) read SDR files, including H.264
 Limits: one process-wide conversion, two codec threads, one filter thread, 1 GiB source/output maximum, 10 minute source duration, 4096-pixel input axes, output within 1920×1080, 4 Mbps video/128 kbps stereo audio, 15 minute wall-clock watchdog. Caller `maxBytes` can reduce the output cap. Full source decode uses `-xerror -err_detect explode`; output is fully decoded again, frame counts/duration/8-bit AVC are checked, and Android `MediaIntegrity` must accept it. Cancellation targets the exact operation and attempt, including work queued on the bridge. Input snapshots and unsuccessful owned parts are removed in `finally`; the next serialized conversion removes input snapshots left by process death, while abandoned CAS parts remain the application's CAS reconciliation responsibility. Native cancellation is cooperative (a broken vendor codec or blocked content provider can delay return).
 
 ## Dependency and provenance
+
+Playback pins `dev.jdtech.mpv:libmpv:1.0.0`. Its original AAR hash, complete
+source graph, GPLv3 boundary, 16KB alignment evidence, and deterministic local
+ELF relocation used to coexist with FFmpegKit are documented in [LIBMPV.md](LIBMPV.md).
 
 Pinned Maven Central artifact: `io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-min-16kb:6.1.4`.
 
@@ -37,7 +42,7 @@ Pinned Maven Central artifact: `io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-min
 - All four Android ABIs are present: armeabi-v7a, arm64-v8a, x86, x86_64. All 36 ELF `.so` libraries were inspected and every PT_LOAD alignment is at least 16384 bytes. Actual 16KB-page device execution is separate from ELF alignment verification.
 - Artifact POM declares LGPLv3. FFmpegKit is a community fork of retired Arthenica FFmpegKit. Its Java dependency is `com.arthenica:smart-exception-java:0.2.1`.
 
-When distributing APKs, include dependency copyright/license notices, LGPLv3 and GPLv3 license text (LGPLv3 incorporates GPLv3), corresponding library source/build materials and the applicable means for replacing/relinking the LGPL libraries. Do not infer that a Maven POM alone meets redistribution obligations. This change does not relicense application source. Preserve the above exact dependency/build provenance when preparing release materials.
+When distributing APKs, include dependency copyright/license notices, LGPLv3 and GPLv3 license text (LGPLv3 incorporates GPLv3), corresponding library source/build materials and the applicable means for replacing/relinking the LGPL libraries. Do not infer that a Maven POM alone meets redistribution obligations. Preserve the above exact dependency/build provenance when preparing release materials.
 
 ## Device verification
 
@@ -46,3 +51,17 @@ When distributing APKs, include dependency copyright/license notices, LGPLv3 and
 ```powershell
 .\gradlew.bat :app:connectedDebugAndroidTest -PreactNativeArchitectures=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.example.autodlh3.VideoCompatibilityInstrumentedTest
 ```
+
+## Playback buffering and control policy
+
+The 15-second cumulative first-frame watchdog applies only to local file/content
+sources while playback is requested, visible, attached and audio focus is held.
+HTTP/HTTPS buffering is not failed by this local watchdog; mpv transport errors
+still surface as recoverable failures. No decoder engine is switched and an intact
+original is never redownloaded solely because playback stalled.
+
+Host/surface suspension exposes paused playWhenReady while retaining private resume
+intent; only an actual focus wait uses the audio-focus suppression reason. Media3
+speed controls support 0.25–4x with pitch fixed to 1. Independent pitch requests fail
+explicitly instead of silently changing their meaning. The position ticker sleeps
+when playback is inactive, except while retired file descriptors await native idle.

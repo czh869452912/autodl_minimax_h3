@@ -6,25 +6,29 @@ smart-exception-java 0.2.1: Arthenica (LGPLv3).
 Android's system zlib and MediaCodec are used; the FFmpegKit min build does not bundle x264/GPL codec libraries.
 Individual source files contain the authoritative copyright notices.
 
-LibVLC Android 3.7.5, VideoLAN and contributors.
-Maven artifact: org.videolan.android:libvlc-all:3.7.5
-AAR SHA-256: 2c25507adb1260aa4d81aad8c2ce98765d98026b9381f49ea454d0b8092f21cb
-Upstream: https://code.videolan.org/videolan/vlc-android
-Engine: https://code.videolan.org/videolan/vlc
-LibVLC engine is LGPL; bundled modules/dependencies have their own licenses.
-See LIBVLC-BUILD-AND-PROVENANCE.md in the release source bundle for the
-pinned JNI, VLC core, Android build revisions, patches and contrib dependency
-source-fetch recipes. These are separate from the FFmpegKit source archives.
+libmpv Android wrapper 1.0.0, Ilya Zhuravlev, sfan5, Jarne de Meulemeester
+and contributors (MIT).
+Maven artifact: dev.jdtech.mpv:libmpv:1.0.0
+Original AAR SHA-256: df146592480fc8418415a06b1f1a1d6318b0088e21f52254b0e9a82b61ca8fa2
+Upstream: https://github.com/jarnedemeulemeester/libmpv-android
+Pinned wrapper revision: fcf6745703dc1265bca88f12fee8fc355ddf251e
+Engine: mpv 0.41.0 with FFmpeg 8.1 and the dependency versions pinned by
+that wrapper revision. The FFmpeg configuration enables GPL and version-3
+code; the combined native playback engine is distributed under GPLv3.
+The individual bundled libraries retain their own copyrights and licenses.
+See LIBMPV-BUILD-AND-PROVENANCE.md in the release source bundle for the
+complete source graph, binary/source evidence and local ELF relocation.
 
 The matching AutoDL-media-sources.zip is provided alongside this APK at:
 https://github.com/czh869452912/autodl_minimax_h3/releases
-It contains pinned source archives, FFmpegKit Android build scripts, license
-texts and provenance. The application source for each release is available
+It contains the original libmpv AAR, pinned source archives, Android build
+scripts, license texts and provenance. The application source for each release is available
 under its corresponding Git tag in the same repository.
 
-You may modify or replace these LGPL libraries and reverse engineer this
-application for debugging such modifications as permitted by the LGPL.
-The LGPL does not relicense unrelated application code.
+The LGPL terms permit modification or replacement of the LGPL libraries and
+reverse engineering for debugging those modifications. GPLv3 terms apply to
+the combined libmpv playback engine. The release source bundle provides the
+corresponding source and component license materials described above.
 
 Rebuilding/relinking:
 1. Extract ffmpeg-kit-source.tar.gz and the FFmpeg/cpu_features archives.
@@ -41,3 +45,7 @@ Rebuilding/relinking:
    with your own key; our private signing key is not required. Android may
    require uninstalling the original app before installing a differently
    signed APK; export your media/data first.
+5. For playback-engine changes, follow LIBMPV-BUILD-AND-PROVENANCE.md using
+   the pinned wrapper and complete dependency graph. Run the same checked ELF
+   relocation after rebuilding, or give the rebuilt FFmpeg libraries unique
+   SONAMEs during compilation, before packaging them beside FFmpegKit.

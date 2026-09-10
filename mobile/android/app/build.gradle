@@ -1,6 +1,7 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
+apply from: rootProject.file("gradle/libmpv.gradle")
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
@@ -108,10 +109,11 @@ android {
     }
     defaultConfig {
         applicationId 'com.example.autodlh3'
-        minSdkVersion rootProject.ext.minSdkVersion
+        // dev.jdtech.mpv:libmpv:1.0.0 declares and supports Android API 26+.
+        minSdkVersion Math.max(26, rootProject.ext.minSdkVersion as int)
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 30
-        versionName "1.4.20"
+        versionCode 31
+        versionName "1.4.21"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
@@ -179,9 +181,10 @@ gradle.taskGraph.whenReady { graph ->
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
-    implementation("androidx.media3:media3-exoplayer:1.9.0")
+    implementation("androidx.media3:media3-common:1.9.0")
     implementation("androidx.media3:media3-ui:1.9.0")
-    implementation("org.videolan.android:libvlc-all:3.7.5")
+    add('libmpvOriginal', "dev.jdtech.mpv:libmpv:1.0.0@aar")
+    implementation(files(tasks.named('relocateLibmpvAar')))
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // LGPLv3, software decoding + Android MediaCodec AVC encoding. See VIDEO_COMPATIBILITY.md.
     implementation("io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-min-16kb:6.1.4")

@@ -34,7 +34,6 @@
         <data android:scheme="autodlh3"/>
       </intent-filter>
     </activity>
-    <activity android:name=".Media3PlayerActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode" android:exported="false" android:screenOrientation="unspecified" android:theme="@style/AppTheme"/>
     <service android:name=".TaskMonitorService" android:exported="false" android:foregroundServiceType="dataSync"/>
     <service android:name=".TaskMonitorHeadlessService" android:exported="false"/>
   </application>

@@ -3,10 +3,10 @@
     "name": "AutoDL H3",
     "slug": "autodl-h3",
     "scheme": "autodlh3",
-    "version": "1.4.20",
+    "version": "1.4.21",
     "icon": "./assets/icon.png",
     "orientation": "default",
-    "plugins": ["expo-router", "expo-sqlite", "expo-video"],
+    "plugins": ["expo-router", "expo-sqlite"],
     "android": {
       "package": "com.example.autodlh3",
       "usesCleartextTraffic": false,

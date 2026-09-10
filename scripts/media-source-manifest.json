@@ -5,12 +5,12 @@
     "sha256": "64629f6aed3b307574d709b27faca548f3f82c2cc9aab61d72a7cf9dff9e9a2f"
   },
   {
-    "name": "ffmpeg-source.tar.gz",
+    "name": "ffmpeg-kit-ffmpeg-source.tar.gz",
     "url": "https://codeload.github.com/arthenica/FFmpeg/tar.gz/34277e12e80031c7f89494ba543684bc1dd0be8f",
     "sha256": "db715cf38d8c1757f6ed417af2be9301905a060d14fec0b1096f17bd17431ff7"
   },
   {
-    "name": "cpu-features-source.tar.gz",
+    "name": "ffmpeg-kit-cpu-features-source.tar.gz",
     "url": "https://codeload.github.com/arthenica/cpu_features/tar.gz/d3b2440fcfc25fe8e6d0d4a85f06d68e98312f5b",
     "sha256": "6a473c1e0f2381786e9005e05f5f77dd18b3eb1eef296bd33c13803925c11cc3"
   },
@@ -20,21 +20,85 @@
     "sha256": "8275af16bcb006e3547edb18f1eda54875a4d749409290d9d0e97fed013e3be9"
   },
   {
-    "name": "libvlcjni-source.tar.gz",
-    "git": "https://code.videolan.org/videolan/libvlcjni.git",
-    "commit": "81bb02ba48dcad32550e0626139a387b3c30af04",
-    "directory": "libvlcjni"
+    "name": "libmpv-1.0.0-original.aar",
+    "url": "https://repo.maven.apache.org/maven2/dev/jdtech/mpv/libmpv/1.0.0/libmpv-1.0.0.aar",
+    "sha256": "df146592480fc8418415a06b1f1a1d6318b0088e21f52254b0e9a82b61ca8fa2"
   },
   {
-    "name": "vlc-source.tar.gz",
-    "git": "https://github.com/videolan/vlc.git",
-    "commit": "ac6c2a405d652b5576128ceb9fec2c342f0e83ec",
-    "directory": "vlc"
+    "name": "libmpv-android-source.tar.gz",
+    "url": "https://codeload.github.com/jarnedemeulemeester/libmpv-android/tar.gz/fcf6745703dc1265bca88f12fee8fc355ddf251e",
+    "sha256": "0006e4243da3ebfb3d43cc4c87a07026384b47807337d9180e221cd8b9389589"
   },
   {
-    "name": "vlc-android-build-source.tar.gz",
-    "git": "https://github.com/videolan/vlc-android.git",
-    "commit": "c78874b9540be9328da92625559933d8a549cec2",
-    "directory": "vlc-android"
+    "name": "mpv-0.41.0-source.tar.gz",
+    "url": "https://codeload.github.com/mpv-player/mpv/tar.gz/refs/tags/v0.41.0",
+    "sha256": "ee21092a5ee427353392360929dc64645c54479aefdb5babc5cfbb5fad626209"
+  },
+  {
+    "name": "ffmpeg-8.1-libmpv-source.tar.gz",
+    "url": "https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n8.1",
+    "sha256": "dd308201bb1239a1b73185f80c6b4121f4efdfa424a009ce544fd00bf736bb2e"
+  },
+  {
+    "name": "libass-0.17.4-source.tar.gz",
+    "url": "https://codeload.github.com/libass/libass/tar.gz/refs/tags/0.17.4",
+    "sha256": "c287d180d93dc9c9021872574b618ac49027e84cc90e1289318b1ee68bb42251"
+  },
+  {
+    "name": "harfbuzz-14.1.0-source.tar.gz",
+    "url": "https://codeload.github.com/harfbuzz/harfbuzz/tar.gz/refs/tags/14.1.0",
+    "sha256": "9deffe9dded3c367c7d08265fd0a64193fad505a362a4889d898568c1cd46812"
+  },
+  {
+    "name": "fribidi-1.0.16-source.tar.gz",
+    "url": "https://codeload.github.com/fribidi/fribidi/tar.gz/refs/tags/v1.0.16",
+    "sha256": "5a1d187a33daa58fcee2ad77f0eb9d136dd6fa4096239199ba31e850d397e8a8"
+  },
+  {
+    "name": "freetype-2.14.3-source.tar.gz",
+    "git": "https://gitlab.freedesktop.org/freetype/freetype.git",
+    "commit": "0a0221a1347e2f1e07c395263540026e9a0aa7c7",
+    "directory": "freetype-2.14.3",
+    "submodules": true
+  },
+  {
+    "name": "fontconfig-2.17.1-source.tar.gz",
+    "git": "https://gitlab.freedesktop.org/fontconfig/fontconfig.git",
+    "commit": "6d0a98982ec351c165c9224c8b7dbdfca3010e47",
+    "directory": "fontconfig-2.17.1"
+  },
+  {
+    "name": "libxml2-2.15.2-source.tar.gz",
+    "git": "https://gitlab.gnome.org/GNOME/libxml2.git",
+    "commit": "3d840e17858de03a09fba8b202e3a89267d5795a",
+    "directory": "libxml2-2.15.2"
+  },
+  {
+    "name": "mbedtls-3.6.6-source.tar.bz2",
+    "url": "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.6/mbedtls-3.6.6.tar.bz2",
+    "sha256": "8fb65fae8dcae5840f793c0a334860a411f884cc537ea290ce1c52bb64ca007a"
+  },
+  {
+    "name": "dav1d-1.5.3-source.tar.gz",
+    "git": "https://code.videolan.org/videolan/dav1d.git",
+    "commit": "b546257f770768b2c88258c533da38b91a06f737",
+    "directory": "dav1d-1.5.3"
+  },
+  {
+    "name": "libplacebo-7.360.1-source.tar.gz",
+    "git": "https://code.videolan.org/videolan/libplacebo.git",
+    "commit": "cee9b076f2c63104ccfd497fa79c39a867293ec4",
+    "directory": "libplacebo-7.360.1",
+    "submodules": true
+  },
+  {
+    "name": "libunibreak-6.1-source.tar.gz",
+    "url": "https://github.com/adah1972/libunibreak/releases/download/libunibreak_6_1/libunibreak-6.1.tar.gz",
+    "sha256": "cc4de0099cf7ff05005ceabff4afed4c582a736abc38033e70fdac86335ce93f"
+  },
+  {
+    "name": "lua-5.2.4-source.tar.gz",
+    "url": "https://www.lua.org/ftp/lua-5.2.4.tar.gz",
+    "sha256": "b9e2e4aad6789b3b63a056d442f7b39f0ecfca3ae0f1fc0ae4e9614401b69f4b"
   }
 ]

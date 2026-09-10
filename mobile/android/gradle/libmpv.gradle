@@ -1,0 +1,199 @@
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
+
+def libmpvOriginal = configurations.create('libmpvOriginal')
+def relocatedLibmpvAar = layout.buildDirectory.file('generated/libmpv/libmpv-1.0.0-autodl.aar')
+def libmpvLibraryNames = [
+    'libavcodec.so': 'libmpcodec.so',
+    'libavdevice.so': 'libmpdevice.so',
+    'libavfilter.so': 'libmpfilter.so',
+    'libavformat.so': 'libmpformat.so',
+    'libavutil.so': 'libmputil.so',
+    'libswresample.so': 'libmpresample.so',
+    'libswscale.so': 'libmpscale.so',
+    'libc++_shared.so': 'libmpv_shared.so',
+]
+
+tasks.register('relocateLibmpvAar') {
+    inputs.files(libmpvOriginal)
+    outputs.file(relocatedLibmpvAar)
+
+    doLast {
+        def source = libmpvOriginal.singleFile
+        def expectedSha256 = 'df146592480fc8418415a06b1f1a1d6318b0088e21f52254b0e9a82b61ca8fa2'
+        def digest = MessageDigest.getInstance('SHA-256').digest(source.bytes).encodeHex().toString()
+        if (digest != expectedSha256) {
+            throw new GradleException("Unexpected libmpv AAR SHA-256: ${digest}")
+        }
+
+        def destination = relocatedLibmpvAar.get().asFile
+        destination.parentFile.mkdirs()
+        libmpvLibraryNames.each { oldName, newName ->
+            if (oldName.getBytes(StandardCharsets.US_ASCII).length != newName.getBytes(StandardCharsets.US_ASCII).length) {
+                throw new GradleException("libmpv relocation names differ in length: ${oldName}, ${newName}")
+            }
+        }
+        def replacementCounts = ['armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'].collectEntries { abi ->
+            [(abi): libmpvLibraryNames.collectEntries { oldName, ignored -> [(oldName): 0] }]
+        }
+
+        def relocateElf = { byte[] bytes, String entryName ->
+            byte[] originalBytes = bytes.clone()
+            def permittedChanges = new BitSet(bytes.length)
+            if (bytes.length < 64 || Byte.toUnsignedInt(bytes[0]) != 0x7f ||
+                    Byte.toUnsignedInt(bytes[1]) != 0x45 || Byte.toUnsignedInt(bytes[2]) != 0x4c ||
+                    Byte.toUnsignedInt(bytes[3]) != 0x46) {
+                throw new GradleException("Invalid ELF in libmpv AAR: ${entryName}")
+            }
+            int elfClass = Byte.toUnsignedInt(bytes[4])
+            if (!(elfClass in [1, 2]) || Byte.toUnsignedInt(bytes[5]) != 1) {
+                throw new GradleException("Unsupported ELF encoding in libmpv AAR: ${entryName}")
+            }
+            def buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+            def u16 = { int offset -> Short.toUnsignedInt(buffer.getShort(offset)) }
+            def u32 = { int offset -> Integer.toUnsignedLong(buffer.getInt(offset)) }
+            def word = { int offset -> elfClass == 1 ? u32(offset) : buffer.getLong(offset) }
+            long programOffset = word(elfClass == 1 ? 28 : 32)
+            int programEntrySize = u16(elfClass == 1 ? 42 : 54)
+            int programCount = u16(elfClass == 1 ? 44 : 56)
+            int expectedProgramEntrySize = elfClass == 1 ? 32 : 56
+            if (programEntrySize < expectedProgramEntrySize || programOffset < 0 ||
+                    programOffset + (long) programEntrySize * programCount > bytes.length) {
+                throw new GradleException("Invalid ELF program headers in libmpv AAR: ${entryName}")
+            }
+
+            def loadSegments = []
+            def dynamicSegment = null
+            for (int index = 0; index < programCount; index++) {
+                int header = (int) programOffset + index * programEntrySize
+                long type = u32(header)
+                long fileOffset = word(header + (elfClass == 1 ? 4 : 8))
+                long virtualAddress = word(header + (elfClass == 1 ? 8 : 16))
+                long fileSize = word(header + (elfClass == 1 ? 16 : 32))
+                if (fileOffset < 0 || fileSize < 0 || fileOffset + fileSize > bytes.length) {
+                    throw new GradleException("Invalid ELF segment in libmpv AAR: ${entryName}")
+                }
+                if (type == 1) {
+                    loadSegments.add([fileOffset: fileOffset, virtualAddress: virtualAddress, fileSize: fileSize])
+                } else if (type == 2) {
+                    dynamicSegment = [fileOffset: fileOffset, fileSize: fileSize]
+                }
+            }
+            if (dynamicSegment == null) {
+                throw new GradleException("ELF has no dynamic table in libmpv AAR: ${entryName}")
+            }
+
+            int dynamicEntrySize = elfClass == 1 ? 8 : 16
+            Long stringTableAddress = null
+            Long stringTableSize = null
+            def stringReferences = []
+            long dynamicEnd = dynamicSegment.fileOffset + dynamicSegment.fileSize
+            for (long offset = dynamicSegment.fileOffset; offset + dynamicEntrySize <= dynamicEnd; offset += dynamicEntrySize) {
+                long tag = word((int) offset)
+                long value = word((int) offset + (elfClass == 1 ? 4 : 8))
+                if (tag == 0) break
+                if (tag == 1 || tag == 14) stringReferences.add([tag: tag, offset: value])
+                if (tag == 5) stringTableAddress = value
+                if (tag == 10) stringTableSize = value
+            }
+            if (stringTableAddress == null || stringTableSize == null) {
+                throw new GradleException("ELF has no dynamic string table in libmpv AAR: ${entryName}")
+            }
+            def stringLoad = loadSegments.find {
+                stringTableAddress >= it.virtualAddress && stringTableAddress + stringTableSize <= it.virtualAddress + it.fileSize
+            }
+            if (stringLoad == null) {
+                throw new GradleException("ELF dynamic string table is not file-backed: ${entryName}")
+            }
+            long stringTableOffset = stringLoad.fileOffset + stringTableAddress - stringLoad.virtualAddress
+
+            def originalLibraryName = entryName.substring(entryName.lastIndexOf('/') + 1)
+            def expectedSoname = libmpvLibraryNames[originalLibraryName]
+            boolean expectedSonameFound = false
+            stringReferences.each { reference ->
+                long start = stringTableOffset + reference.offset
+                long tableEnd = stringTableOffset + stringTableSize
+                if (start < stringTableOffset || start >= tableEnd) {
+                    throw new GradleException("Invalid ELF dynamic string reference in libmpv AAR: ${entryName}")
+                }
+                int end = (int) start
+                while (end < tableEnd && bytes[end] != 0) end++
+                if (end == tableEnd) {
+                    throw new GradleException("Unterminated ELF dynamic string in libmpv AAR: ${entryName}")
+                }
+                def oldName = new String(bytes, (int) start, end - (int) start, StandardCharsets.US_ASCII)
+                def newName = libmpvLibraryNames[oldName]
+                if (newName != null) {
+                    if (reference.tag == 14 && oldName == originalLibraryName) {
+                        expectedSonameFound = true
+                    }
+                    def newBytes = newName.getBytes(StandardCharsets.US_ASCII)
+                    System.arraycopy(newBytes, 0, bytes, (int) start, newBytes.length)
+                    permittedChanges.set((int) start, (int) start + newBytes.length)
+                    def abiCounts = replacementCounts[entryName.split('/')[1]]
+                    if (abiCounts == null) throw new GradleException("Unexpected libmpv ABI: ${entryName}")
+                    abiCounts[oldName]++
+                }
+            }
+            if (expectedSoname != null && !expectedSonameFound) {
+                throw new GradleException("ELF SONAME does not match its renamed entry: ${entryName}")
+            }
+            stringReferences.each { reference ->
+                int start = (int) (stringTableOffset + reference.offset)
+                int end = start
+                while (bytes[end] != 0) end++
+                def currentName = new String(bytes, start, end - start, StandardCharsets.US_ASCII)
+                if (libmpvLibraryNames.containsKey(currentName)) {
+                    throw new GradleException("Unrelocated ELF dynamic string ${currentName} in ${entryName}")
+                }
+                if (reference.tag == 14 && expectedSoname != null && currentName != expectedSoname) {
+                    throw new GradleException("Unexpected relocated ELF SONAME ${currentName} in ${entryName}")
+                }
+            }
+            for (int index = 0; index < bytes.length; index++) {
+                if (bytes[index] != originalBytes[index] && !permittedChanges.get(index)) {
+                    throw new GradleException("ELF relocation changed an unrelated byte in ${entryName} at ${index}")
+                }
+            }
+            bytes
+        }
+
+        source.withInputStream { input ->
+            new ZipInputStream(input).withCloseable { zipInput ->
+                destination.withOutputStream { output ->
+                    new ZipOutputStream(output).withCloseable { zipOutput ->
+                        ZipEntry entry
+                        while ((entry = zipInput.nextEntry) != null) {
+                            def entryName = entry.name
+                            libmpvLibraryNames.each { oldName, newName ->
+                                if (entryName.endsWith("/${oldName}")) {
+                                    entryName = entryName.substring(0, entryName.length() - oldName.length()) + newName
+                                }
+                            }
+                            def bytes = zipInput.readAllBytes()
+                            if (entry.name.startsWith('jni/') && entry.name.endsWith('.so')) {
+                                bytes = relocateElf(bytes, entry.name)
+                            }
+                            def outputEntry = new ZipEntry(entryName)
+                            outputEntry.time = 0
+                            zipOutput.putNextEntry(outputEntry)
+                            zipOutput.write(bytes)
+                            zipOutput.closeEntry()
+                            zipInput.closeEntry()
+                        }
+                    }
+                }
+            }
+        }
+        replacementCounts.each { abi, counts ->
+            counts.each { oldName, count ->
+                if (count == 0) throw new GradleException("libmpv relocation did not find ${oldName} for ${abi}")
+            }
+        }
+    }
+}

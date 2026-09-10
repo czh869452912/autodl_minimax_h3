@@ -29,12 +29,3 @@ allprojects {
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
-
-// Expo SDK 57's generated package list references expo-video's experimental
-// module annotation. Opt in at the app build boundary so generated sources
-// remain buildable without patching node_modules.
-subprojects {
-  tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-    compilerOptions.freeCompilerArgs.add("-opt-in=com.facebook.react.common.annotations.UnstableReactNativeAPI")
-  }
-}
