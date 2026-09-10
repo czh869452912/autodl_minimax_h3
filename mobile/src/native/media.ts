@@ -1,7 +1,6 @@
 import { NativeModules, Platform } from 'react-native';
 
 type AutoDLMediaModule = {
-  openVideo?(source: string): void;
   extractPoster?(source: string, key: string): Promise<string>;
   exportVideo?(source: string, mediaId: string, displayName: string): Promise<ExportVideoResult>;
   sha256File?(source: string): Promise<string>;
@@ -54,12 +53,6 @@ export type ExportVideoResult = {
 };
 
 type ExportVideoOptions = { mediaId: string; displayName?: string };
-
-export function openNativeVideo(source: string): boolean {
-  const module = NativeModules.AutoDLMedia as AutoDLMediaModule | undefined;
-  if (Platform.OS !== 'android' || !module?.openVideo || !source.trim()) return false;
-  try { module.openVideo(source); return true; } catch { return false; }
-}
 
 export async function extractPoster(source: string, key: string): Promise<string | undefined> {
   const module = NativeModules.AutoDLMedia as AutoDLMediaModule | undefined;

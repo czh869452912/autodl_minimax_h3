@@ -1,0 +1,7 @@
+fatal: unable to access 'https://github.com/fastfloat/fast_float.git/': Failed to connect to github.com port 443 after 21095 ms: Couldn't connect to server
+error: RPC failed; curl 28 Recv failure: Connection was reset
+fatal: unable to access 'https://github.com/pallets/jinja/': Failed to connect to github.com port 443 after 21099 ms: Couldn't connect to server
+fatal: unable to access 'https://github.com/pallets/markupsafe/': Failed to connect to github.com port 443 after 21058 ms: Couldn't connect to server
+fatal: unable to access 'https://github.com/Immediate-Mode-UI/Nuklear.git/': Failed to connect to github.com port 443 after 21048 ms: Couldn't connect to server
+fatal: unable to access 'https://github.com/fastfloat/fast_float.git/': Failed to connect to github.com port 443 after 21091 ms: Couldn't connect to server
+fatal: unable to access 'https://github.com/fastfloat/fast_float.git/': Failed to connect to github.com port 443 after 21059 ms: Couldn't connect to server

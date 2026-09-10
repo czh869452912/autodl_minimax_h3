@@ -11,6 +11,7 @@ from pathlib import Path
 
 def verify(path):
     failures, names = [], set()
+    compressed = 0
     with zipfile.ZipFile(path) as archive, Path(path).open('rb') as apk:
         for entry in archive.infolist():
             if not entry.filename.startswith('lib/') or not entry.filename.endswith('.so'):
@@ -45,10 +46,14 @@ def verify(path):
             apk.seek(entry.header_offset + 26)
             name_size, extra_size = struct.unpack('<HH', apk.read(4))
             data_offset = entry.header_offset + 30 + name_size + extra_size
+            if entry.compress_type != zipfile.ZIP_STORED:
+                compressed += 1
             if entry.compress_type == zipfile.ZIP_STORED and data_offset % required_alignment:
                 failures.append(f'{entry.filename}: ZIP data is not {required_alignment // 1024}KB aligned')
     if not names or failures:
         raise ValueError('\n'.join(failures) or 'APK contains no native libraries')
+    if compressed:
+        print(f'NOTE: {compressed} compressed native entries: ELF checked; ZIP offsets not applicable. Installation must extract them before loading; direct mmap loading was not verified.')
     print(f'Verified {len(names)} unique native libraries: ELF and uncompressed ZIP alignment (64-bit: 16KB; 32-bit: 4KB)')
 
 

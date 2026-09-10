@@ -1,78 +1,84 @@
-import { NativeModules, Platform } from 'react-native';
-import React from 'react';
-import { act, create } from 'react-test-renderer';
+import React, { Component } from 'react';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-const mockPlayer = { pause: jest.fn(), currentTime: 4.2, play: jest.fn(), replay: jest.fn() };
-let mockStatus = { status: 'error' };
-const mockUseVideo = jest.fn(() => mockPlayer);
-const mockPrefer = jest.fn(async () => false);
-jest.mock('expo-video', () => ({ useVideoPlayer: () => mockUseVideo(), VideoView: (props: object) => require('react').createElement('VideoView', props) }));
-jest.mock('expo', () => ({ useEvent: () => mockStatus }));
-jest.mock('../settings/videoDecodeMode', () => ({ useVideoDecodeMode: () => 'auto' }));
+let mockMode: 'auto' | 'hardware' | 'software' | undefined = 'auto';
+let mounts = 0;
+let unmounts = 0;
+
+class MockNativePlaybackHost extends Component<Record<string, unknown>> {
+  componentDidMount() { mounts += 1; }
+  componentWillUnmount() { unmounts += 1; }
+  render() { return React.createElement('AutoDLVideoView', this.props); }
+}
+
+jest.mock('../settings/videoDecodeMode', () => ({ useVideoDecodeMode: () => mockMode }));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
-jest.mock('./softwarePlayback', () => ({
-  ...jest.requireActual('./softwarePlayback'),
-  preferSoftwarePlayback: () => mockPrefer(),
-  openExternalVideo: jest.fn(),
-  SoftwareVideoView: (props: object) => require('react').createElement('SoftwareVideoView', props),
+jest.mock('./unifiedPlayback', () => ({
+  UnifiedVideoView: (props: Record<string, unknown>) => <MockNativePlaybackHost {...props} />,
+  openExternalVideo: jest.fn(async () => undefined),
 }));
+
 import { VideoPlayer } from './VideoPlayer';
 
-beforeEach(() => { Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' }); NativeModules.AutoDLMedia = { softwareVideoPlayback: true }; jest.clearAllMocks(); mockPrefer.mockResolvedValue(false); mockStatus = { status: 'error' }; });
-test('known Hi10P uses software without constructing Media3', async () => {
-  mockPrefer.mockResolvedValue(true);
-  let tree!: ReturnType<typeof create>;
-  await act(async () => { tree = create(<VideoPlayer source="file:///high10.mp4" />); });
-  expect(mockUseVideo).not.toHaveBeenCalled();
-  expect(tree.root.findByProps({ testID: 'software-video-view' })).toBeTruthy();
-  act(() => tree.unmount());
-});
-test('decoder failure switches once and preserves position; software failure does not loop back', async () => {
-  let tree!: ReturnType<typeof create>;
-  await act(async () => { tree = create(<VideoPlayer source="file:///high10.mp4" validateSource={async () => { throw { code: 'MEDIA_CODEC_UNSUPPORTED' }; }} />); });
-  const software = tree.root.findByProps({ testID: 'software-video-view' });
-  expect(software.props.initialPositionMs).toBe(4200);
-  expect(mockPlayer.pause).toHaveBeenCalled();
-  act(() => software.props.onPlayback({ nativeEvent: { status: 'decodeFailed', positionMs: 4200 } }));
-  expect(tree.root.findAllByProps({ testID: 'software-video-view' })).toHaveLength(0);
-  expect(tree.root.findAllByProps({ testID: 'inline-video-view' })).toHaveLength(0);
-  expect(tree.root.findByProps({ accessibilityLabel: '重试兼容播放' })).toBeTruthy();
-  act(() => tree.unmount());
-});
-test('proven corrupt source is not sent to software fallback', async () => {
-  let tree!: ReturnType<typeof create>;
-  await act(async () => { tree = create(<VideoPlayer source="file:///broken.mp4" validateSource={async () => { throw { code: 'MEDIA_INVALID' }; }} onInvalidSource={jest.fn()} />); });
-  expect(tree.root.findAllByProps({ testID: 'software-video-view' })).toHaveLength(0);
-  expect(tree.root.findByProps({ accessibilityLabel: '重新下载视频' })).toBeTruthy();
-  act(() => tree.unmount());
-});
-test('remote network failure stays in Media3', async () => {
-  let tree!: ReturnType<typeof create>;
-  await act(async () => { tree = create(<VideoPlayer source="https://expired.test/a.mp4" />); });
-  expect(mockPrefer).not.toHaveBeenCalled();
-  expect(tree.root.findAllByProps({ testID: 'software-video-view' })).toHaveLength(0);
-  act(() => tree.unmount());
-});
+describe('unified playback routing', () => {
+  beforeEach(() => {
+    mockMode = 'auto';
+    mounts = 0;
+    unmounts = 0;
+  });
 
-test('remote buffering beyond the local watchdog does not switch decoders or probe metadata', async () => {
-  jest.useFakeTimers();
-  mockStatus = { status: 'loading' };
-  let tree!: ReturnType<typeof create>;
-  try {
-    await act(async () => { tree = create(<VideoPlayer source="https://slow.test/a.mp4" />); });
-    expect(tree.root.findByProps({ testID: 'inline-video-view' })).toBeTruthy();
-    await act(async () => { jest.advanceTimersByTime(30_000); });
-    expect(mockPrefer).not.toHaveBeenCalled();
-    expect(mockPlayer.pause).not.toHaveBeenCalled();
-    expect(tree.root.findAllByProps({ testID: 'software-video-view' })).toHaveLength(0);
-  } finally { act(() => tree?.unmount()); jest.useRealTimers(); }
-});
+  it.each([
+    'file:///data/user/0/app/files/video.mp4',
+    'content://media/external/video/7',
+    'https://cdn.example.test/video.mp4',
+  ])('sends %s to the same native playback contract', source => {
+    let tree!: ReactTestRenderer;
+    act(() => { tree = create(<VideoPlayer source={source} />); });
+    const view = tree.root.findByProps({ testID: 'unified-video-view' });
 
-test('production metadata probe short-circuits HTTPS even when manual software playback is available', async () => {
-  const nativeProbe = jest.fn();
-  NativeModules.AutoDLMedia.videoPlaybackInfo = nativeProbe;
-  const actual = jest.requireActual<typeof import('./softwarePlayback')>('./softwarePlayback');
-  expect(actual.canUseSoftwarePlayback('https://cdn.test/a.mp4')).toBe(true);
-  expect(await actual.preferSoftwarePlayback('https://cdn.test/a.mp4')).toBe(false);
-  expect(nativeProbe).not.toHaveBeenCalled();
+    expect(view.props).toMatchObject({ source, decodeMode: 'auto', retryToken: 0 });
+    expect(mounts).toBe(1);
+  });
+
+  it('updates decode preference without recreating the active native playback host', () => {
+    mockMode = 'hardware';
+    let tree!: ReactTestRenderer;
+    act(() => { tree = create(<VideoPlayer source="file:///video.mp4" />); });
+    expect(tree.root.findByProps({ testID: 'unified-video-view' }).props.decodeMode).toBe('hardware');
+
+    mockMode = 'software';
+    act(() => tree.update(<VideoPlayer source="file:///video.mp4" />));
+
+    expect(tree.root.findByProps({ testID: 'unified-video-view' }).props.decodeMode).toBe('software');
+    expect(mounts).toBe(1);
+    expect(unmounts).toBe(0);
+  });
+
+  it('commits source and decode mode together without remounting the player', () => {
+    let tree!: ReactTestRenderer;
+    act(() => { tree = create(<VideoPlayer source="file:///old.mp4" />); });
+    mockMode = 'software';
+    act(() => tree.update(<VideoPlayer source="content://media/external/video/9" />));
+    expect(tree.root.findByProps({ testID: 'unified-video-view' }).props).toMatchObject({
+      source: 'content://media/external/video/9', decodeMode: 'software', retryToken: 0,
+    });
+    expect(mounts).toBe(1);
+    expect(unmounts).toBe(0);
+  });
+
+  it('mounts once settings become available and stays mounted afterward', () => {
+    mockMode = undefined;
+    let tree!: ReactTestRenderer;
+    act(() => { tree = create(<VideoPlayer source="file:///video.mp4" />); });
+    expect(mounts).toBe(0);
+
+    mockMode = 'auto';
+    act(() => tree.update(<VideoPlayer source="file:///video.mp4" />));
+    expect(mounts).toBe(1);
+
+    mockMode = 'hardware';
+    act(() => tree.update(<VideoPlayer source="file:///video.mp4" />));
+    expect(mounts).toBe(1);
+    expect(unmounts).toBe(0);
+  });
 });

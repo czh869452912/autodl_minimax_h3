@@ -20,7 +20,7 @@
 - **多模态上下文**：可在 Prompt 助手中添加图片、引用素材，并保留本地会话记录。
 - **任务队列**：查看任务状态、刷新进度、重试下载，并通过 Android 后台任务同步生成结果。
 - **本地画廊**：搜索和管理已下载作品，查看首帧、视频详情并批量删除。
-- **原生视频播放**：在详情页预览视频，通过 AndroidX Media3 进入稳定的全屏播放模式。
+- **原生视频播放**：在详情页通过 AndroidX Media3 控件和 libmpv 引擎预览、全屏播放多种本地视频编码。
 - **作品导出**：将视频保存到系统相册，也可按设置自动导出并保留应用内副本。
 - **本地安全存储**：AutoDL Token 和 LLM API Key 由 Expo SecureStore（Android Keystore）保存。
 - **工作流内核 B 阶段**：声明式 WorkflowPackage、受限 JSON Schema/JSON Pointer compiler、本地 Registry active/previous 指针、兼容性校验、固定 Git commit-attestation 校验，以及 Registry 驱动的创建页已经接入。远程工作流仍只能是签名声明式 JSON，不执行远程代码。
@@ -43,6 +43,8 @@
 ### 方式一：从 Release 下载
 
 前往项目的 [GitHub Releases](https://github.com/czh869452912/autodl_minimax_h3/releases) 页面，下载最新 Android APK，并在手机上安装。
+
+当前源码构建要求 Android 8.0（API 26）或更高版本，与统一播放引擎的最低系统版本一致。
 
 Android 可能会提示是否允许安装来自浏览器或文件管理器的应用，请根据系统提示为本次安装授权。建议只从本项目的 GitHub Releases 下载 APK。
 
@@ -161,7 +163,7 @@ Prompt 助手不是一个简单的文本输入框。它在 APK 内运行 DeepAge
 | 视频生成 | AutoDL 托管的 ComfyUI 工作流 |
 | LLM 接口 | 用户配置的 OpenAI-compatible Endpoint、Model 和 API Key |
 | 本地数据 | SQLite 索引、应用私有文件目录、SecureStore |
-| 原生播放 | AndroidX Media3 |
+| 原生播放 | AndroidX Media3 UI + libmpv 0.41.0 |
 | 服务端依赖 | 项目不要求自建业务服务端；外部依赖为 AutoDL 与用户选择的 LLM API |
 
 维护原则：

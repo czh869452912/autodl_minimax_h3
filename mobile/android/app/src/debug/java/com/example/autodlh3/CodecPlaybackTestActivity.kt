@@ -5,10 +5,15 @@ import android.os.Bundle
 
 /** Instrumentation host only; absent from release and not externally exported. */
 class CodecPlaybackTestActivity : Activity() {
-  lateinit var video: LibVlcView
+  lateinit var video: UnifiedVideoView
   override fun onCreate(state: Bundle?) {
     super.onCreate(state)
-    video = LibVlcView(this)
+    video = UnifiedVideoView(this)
+    intent.getStringExtra("sourceBeforeAttach")?.let {
+      video.configuredSource = it
+      video.configuredDecodeMode = "software"
+      video.applyConfiguration()
+    }
     setContentView(video)
   }
   override fun onResume() { super.onResume(); video.onHostResume() }

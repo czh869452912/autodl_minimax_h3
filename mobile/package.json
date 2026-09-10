@@ -43,7 +43,6 @@
     "expo-secure-store": "~57.0.3",
     "expo-sqlite": "~57.0.2",
     "expo-task-manager": "~57.0.16",
-    "expo-video": "~57.0.3",
     "js-yaml": "^5.4.1",
     "langchain": "^1.5.10",
     "langsmith": "^0.7.17",

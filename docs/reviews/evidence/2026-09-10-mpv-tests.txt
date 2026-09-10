@@ -1,0 +1,8 @@
+Test Suites: 1 skipped, 161 passed, 161 of 162 total
+Tests:       2 skipped, 1124 passed, 1126 total
+Snapshots:   0 total
+Time:        28.66 s, estimated 31 s
+Ran all test suites.
+
+TypeScript: npx tsc --noEmit, exit 0.
+Python source-packager regression: 3 tests passed.

@@ -1,0 +1,51 @@
+[
+  {
+    "name": "com.example.autodlh3.ArtifactTransferPolicyTest",
+    "tests": "10",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0"
+  },
+  {
+    "name": "com.example.autodlh3.ArtifactTransferTest",
+    "tests": "18",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0"
+  },
+  {
+    "name": "com.example.autodlh3.MediaStorePublisherTest",
+    "tests": "4",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0"
+  },
+  {
+    "name": "com.example.autodlh3.MediaValidationPolicyTest",
+    "tests": "5",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0"
+  },
+  {
+    "name": "com.example.autodlh3.MpvPlaybackPolicyTest",
+    "tests": "7",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0"
+  },
+  {
+    "name": "com.example.autodlh3.TaskNotificationPolicyTest",
+    "tests": "3",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0"
+  },
+  {
+    "name": "com.example.autodlh3.VideoEncodingPlanTest",
+    "tests": "3",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0"
+  }
+]

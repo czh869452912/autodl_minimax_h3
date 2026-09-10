@@ -6,7 +6,7 @@
     "version": "1.4.20",
     "icon": "./assets/icon.png",
     "orientation": "default",
-    "plugins": ["expo-router", "expo-sqlite", "expo-video"],
+    "plugins": ["expo-router", "expo-sqlite"],
     "android": {
       "package": "com.example.autodlh3",
       "usesCleartextTraffic": false,

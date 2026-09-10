@@ -3,10 +3,6 @@ package com.example.autodlh3
 import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
-import android.media.MediaExtractor
-import android.media.MediaFormat
-import android.media.MediaCodecInfo
-import android.media.MediaCodecList
 import android.net.Uri
 import androidx.core.content.FileProvider
 import com.arthenica.ffmpegkit.FFmpegKit
@@ -50,32 +46,6 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
     durableSha256 = { source, checkCancelled -> integrity.sha256(source, checkCancelled) },
   )
   override fun getName() = "AutoDLMedia"
-
-  override fun getConstants(): Map<String, Any> = mapOf("softwareVideoPlayback" to true)
-
-  /** A routing hint only. It never marks bytes corrupt or proves a decoder can render. */
-  @ReactMethod
-  fun videoPlaybackInfo(source: String, promise: Promise) {
-    executors.executeMedia {
-      val extractor = MediaExtractor()
-      try {
-        val uri = Uri.parse(source)
-        require(uri.scheme in setOf("file", "content"))
-        extractor.setDataSource(context, uri, null)
-        val format = (0 until extractor.trackCount).map(extractor::getTrackFormat)
-          .first { it.getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true }
-        val profile = if (format.getString(MediaFormat.KEY_MIME) == MediaFormat.MIMETYPE_VIDEO_AVC)
-          AvcProfilePolicy.profile(format.getByteBuffer("csd-0")) else null
-        profile?.let { format.setInteger(MediaFormat.KEY_PROFILE, it) }
-        val highBitDepthAvc = profile in setOf(MediaCodecInfo.CodecProfileLevel.AVCProfileHigh10,
-          MediaCodecInfo.CodecProfileLevel.AVCProfileHigh422, MediaCodecInfo.CodecProfileLevel.AVCProfileHigh444)
-        val preferSoftware = highBitDepthAvc || MediaCodecList(MediaCodecList.REGULAR_CODECS).findDecoderForFormat(format) == null
-        promise.resolve(Arguments.createMap().apply { putBoolean("preferSoftware", preferSoftware) })
-      } catch (_: Exception) {
-        promise.reject("MEDIA_PROBE_FAILED", "MEDIA_PROBE_FAILED")
-      } finally { extractor.release() }
-    }
-  }
 
   override fun invalidate() {
     compatibility.close()
@@ -201,16 +171,6 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
         promise.resolve(artifactTransfer.cancel(operationId.trim(), operationAttempt.toInt()))
       }
     }
-  }
-
-  @ReactMethod
-  fun openVideo(source: String) {
-    if (source.isBlank()) return
-    val intent = Intent(context, Media3PlayerActivity::class.java).apply {
-      putExtra(Media3PlayerActivity.EXTRA_SOURCE, source)
-      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-    context.startActivity(intent)
   }
 
   @ReactMethod
