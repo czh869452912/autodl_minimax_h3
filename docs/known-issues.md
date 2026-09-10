@@ -2,7 +2,8 @@
 
 ## MEDIA-001：H.264 High 10 视频的设备解码兼容性
 
-- 状态：v1.4.17 已知问题；v1.4.18 增加客户端 SDR 兼容转换，真机验收继续跟踪。
+- 状态：v1.4.19 改为原件直接播放；已加入 LibVLC 软解、集中解码模式和软件封面，真机多编码验收继续跟踪。
+- 最新进展：自动转码和重试转换入口已停用。下载只做结构完整性校验；自动模式仅本地播放错误/无首帧时回退软解，远程网络失败不切换解码器。详情见 [原件直接播放与集中解码设置](reviews/2026-09-10-original-playback-decode-modes.md)。
 - 后续进展（2026-09-10，v1.4.18）：已实现损坏、设备编码不支持和探测失败的独立分类与提示，阻止不兼容文件的无效自动重下载；已实现Android按需软件解码生成兼容副本，并将原件和副本独立保存到相册；模拟器验证通过，真机验收待完成。方案和边界见 [客户端视频编码兼容性评估](media-codec-compatibility.md)。
 - 确认日期：2026-09-09。
 - 已复现工作流：AutoDL `autodl.minimax-h3.zm-u24`（升级画质）。其他工作流若返回相同编码也可能受影响；不代表所有 ZM-U24 输出都存在问题。
@@ -16,7 +17,7 @@
 
 `ffprobe` 检测到 H.264 **High 10**、`yuv420p10le`（10-bit）、864×480、24 fps，音频为 AAC-LC。模拟器 Media3 日志报告 `NoSupport [codec.profileLevel, avc1.6E001E, video/avc]` 和 `Format exceeds selected codec's capabilities`。完整 MP4 文件及正确 MIME 并不保证设备能解码其中的视频编码。
 
-当前播放组件使用 Expo Video / Media3，封面和抽帧探测使用 `MediaMetadataRetriever`，均依赖设备解码能力。探测失败还可能被统一映射为 `MEDIA_INVALID`，导致界面将编码不支持误报为文件损坏、建议重新下载。即使抽帧探测通过，也不能保证整个视频在播放器中正常解码。
+v1.4.17 当时的播放组件使用 Expo Video / Media3，封面和抽帧探测使用 `MediaMetadataRetriever`，均依赖设备解码能力。探测失败还可能被统一映射为 `MEDIA_INVALID`，导致界面将编码不支持误报为文件损坏、建议重新下载。即使抽帧探测通过，也不能保证整个视频在播放器中正常解码。
 
 Android 平台没有保证 H.264 High 10 支持，实际能力取决于设备。参考 [Android 支持的媒体格式](https://developer.android.com/media/platform/supported-formats) 和 [Media3 格式支持](https://developer.android.com/media/media3/exoplayer/supported-formats)。
 
@@ -40,7 +41,7 @@ Android 平台没有保证 H.264 High 10 支持，实际能力取决于设备。
 
   转码会重新编码视频并损失部分精度，原文件应另行保留。此方案不代表所有分辨率、帧率都兼容所有设备。已在电脑上验证本次样本可转换为 8-bit H.264；v1.4.17尚无本地转换；后续未发布实现见上方进展。
 
-### 客户端改进与后续验收
+### 历史转换方案（已由 v1.4.19 原件播放方案替代）
 
 服务端不在本项目控制范围内，不以修改服务端或工作流 schema 作为解决前提。
 

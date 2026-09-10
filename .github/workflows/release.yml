@@ -141,6 +141,7 @@ jobs:
           mkdir -p "$(dirname "$APK_PATH")"
           cp "$apk" "$APK_PATH"
           sha256sum "$APK_PATH"
+          python3 scripts/verify-apk-native-alignment.py "$APK_PATH"
 
       - name: Package media dependency sources and notices
         run: python3 scripts/package-media-sources.py "$RUNNER_TEMP/media-sources"
@@ -166,7 +167,7 @@ jobs:
           if [[ -n "$fixes" ]]; then printf '## 修复\n%s\n\n' "$fixes" >> "$notes"; fi
           if [[ -n "$improvements" ]]; then printf '## 改进\n%s\n\n' "$improvements" >> "$notes"; fi
           if [[ -f docs/known-issues.md ]]; then
-            printf '## 已知问题\n部分 H.264 High 10（10-bit）视频可能下载成功但无法在设备上正常播放；本版已加入 SDR 视频兼容转换及原件双份保存；HDR 转换仍不支持，真机性能与色彩待进一步验证。详见 [已知问题](https://github.com/%s/blob/%s/docs/known-issues.md)。\n\n' "$GITHUB_REPOSITORY" "$RELEASE_TAG" >> "$notes"
+            printf '## 已知问题\n部分 H.264 High 10（10-bit）视频可能下载成功但无法在设备上正常播放；本版改为原件直接播放，提供自动、硬解码、软解码设置及软件封面生成；自动解码回退仅用于本地源。目标手机与 HEVC/VP9/AV1/HDR 组合的性能和色彩仍待验证。详见 [已知问题](https://github.com/%s/blob/%s/docs/known-issues.md)。\n\n' "$GITHUB_REPOSITORY" "$RELEASE_TAG" >> "$notes"
           fi
           printf '**Full Changelog**: %s\n' "$compare" >> "$notes"
           gh release create "$RELEASE_TAG" "$APK_PATH" "$RUNNER_TEMP/media-sources/AutoDL-media-sources.zip" \
