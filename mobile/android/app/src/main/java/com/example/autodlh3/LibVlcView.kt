@@ -23,7 +23,7 @@ import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import java.lang.ref.WeakReference
 
-/** Local-file software fallback. A TextureView update, not Playing, signals the first frame. */
+/** Original-stream software decoding. A TextureView update, not Playing, signals the first frame. */
 class LibVlcView(context: Context) : FrameLayout(context), TextureView.SurfaceTextureListener,
   LifecycleEventListener, MediaController.MediaPlayerControl {
   companion object { private var active = WeakReference<LibVlcView>(null) }
@@ -69,7 +69,7 @@ class LibVlcView(context: Context) : FrameLayout(context), TextureView.SurfaceTe
     firstFrame = false
     pendingPosition = initialPositionMs.coerceAtLeast(0)
     if (value.isNullOrBlank()) return
-    if (Uri.parse(value).scheme !in setOf("file", "content")) {
+    if (Uri.parse(value).scheme !in setOf("file", "content", "https")) {
       onPlaybackEvent?.invoke("sourceUnavailable", 0)
       return
     }
@@ -94,7 +94,7 @@ class LibVlcView(context: Context) : FrameLayout(context), TextureView.SurfaceTe
       val media = if (uri.scheme == "content") {
         descriptor = context.contentResolver.openFileDescriptor(uri, "r") ?: error("source unavailable")
         Media(lib, descriptor!!.fileDescriptor)
-      } else Media(lib, uri)
+      } else if (uri.scheme == "file") Media(lib, requireNotNull(uri.path)) else Media(lib, uri)
       try {
         // Never retry the same platform decoder that caused the Media3 failure.
         media.setHWDecoderEnabled(false, false)

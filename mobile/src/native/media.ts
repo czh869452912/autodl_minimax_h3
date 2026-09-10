@@ -5,6 +5,7 @@ type AutoDLMediaModule = {
   extractPoster?(source: string, key: string): Promise<string>;
   exportVideo?(source: string, mediaId: string, displayName: string): Promise<ExportVideoResult>;
   sha256File?(source: string): Promise<string>;
+  probeVideoStructure?(source: string): Promise<VideoProbeResult>;
   probeVideo?(source: string): Promise<VideoProbeResult & { hasVideoTrack?: boolean }>;
   transferArtifact?(options: NativeArtifactTransferRequest): Promise<NativeArtifactTransferResult>;
   cancelArtifactTransfer?(operationId: string, operationAttempt: number): Promise<boolean>;
@@ -83,7 +84,7 @@ function requireIntegritySource(source: string): string {
   return value;
 }
 
-function requireIntegrityModule(module: AutoDLMediaModule | undefined, method: 'sha256File' | 'probeVideo'): AutoDLMediaModule {
+function requireIntegrityModule(module: AutoDLMediaModule | undefined, method: 'sha256File' | 'probeVideo' | 'probeVideoStructure'): AutoDLMediaModule {
   if (!module?.[method] || (module === NativeModules.AutoDLMedia && Platform.OS !== 'android')) {
     throw new MediaIntegrityError('MEDIA_INTEGRITY_UNAVAILABLE', '当前设备不支持媒体完整性验证');
   }
@@ -185,4 +186,14 @@ export async function cancelArtifactTransfer(
   }
   const native = requireArtifactModule(module, 'cancelArtifactTransfer');
   return native.cancelArtifactTransfer!(value, operationAttempt);
+}
+
+/** Validate downloaded bytes independently of this device's video decoder. */
+export async function probeVideoStructure(source: string, module: AutoDLMediaModule | undefined = NativeModules.AutoDLMedia): Promise<VideoProbeResult> {
+  const native = requireIntegrityModule(module, 'probeVideoStructure');
+  const result = await native.probeVideoStructure!(requireIntegritySource(source));
+  if (!Number.isInteger(result.videoTrackCount) || result.videoTrackCount < 1 || !Number.isFinite(result.durationMs) || result.durationMs <= 0 || !Number.isFinite(result.sampleCount) || result.sampleCount <= 0) {
+    throw new MediaIntegrityError('MEDIA_INVALID', '视频容器或数据不完整');
+  }
+  return result;
 }

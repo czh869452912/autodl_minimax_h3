@@ -5,15 +5,15 @@ import { TaskCardRow } from './TaskCardRow';
 import type { TaskCard } from './taskCard';
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
-test('a failed derivative keeps the original downloaded and offers conversion retry', () => {
+test('a failed derivative keeps the original downloaded without offering retired conversion', () => {
   const item: TaskCard = { id: 'a', prompt: 'p', status: 'SUCCESS', resolution: '768p', duration: 5, createdAt: 1, updatedAt: 2, downloadState: 'DOWNLOADED', compatibilityState: 'FAILED', exportState: 'EXPORTED' };
   const retry = jest.fn();
   let tree!: ReturnType<typeof create>;
   act(() => { tree = create(<TaskCardRow item={item} busy={false} onDownload={retry} onExport={jest.fn()} onRemove={jest.fn()} onOpen={jest.fn()} />); });
   expect(tree.root.findAllByProps({ accessibilityLabel: '重试下载' })).toHaveLength(0);
   expect(tree.root.findAllByType(Text).some(node => node.props.children === '原件已保存到相册')).toBe(true);
-  act(() => tree.root.findByProps({ accessibilityLabel: '重试兼容转换' }).props.onPress());
-  expect(retry).toHaveBeenCalledWith(item);
+  expect(tree.root.findAllByProps({ accessibilityLabel: '重试兼容转换' })).toHaveLength(0);
+  expect(retry).not.toHaveBeenCalled();
   act(() => tree.unmount());
 });
 

@@ -28,11 +28,14 @@ class LibVlcPlaybackInstrumentedTest {
         val first = CountDownLatch(1)
         val progressed = CountDownLatch(1)
         val failure = AtomicReference<String?>(null)
+        val sought = CountDownLatch(1)
+        val targetPosition = java.util.concurrent.atomic.AtomicLong(-1)
         ActivityScenario.launch<CodecPlaybackTestActivity>(Intent(context, CodecPlaybackTestActivity::class.java)).use { scenario ->
           scenario.onActivity { activity ->
             activity.video.onPlaybackEvent = { status, time ->
               if (status == "firstFrame") first.countDown()
               if (status == "progress" && time > 100) progressed.countDown()
+              if (status == "progress" && targetPosition.get() >= 0 && time >= targetPosition.get() - 250) sought.countDown()
               if (status in setOf("sourceUnavailable", "decodeFailed")) failure.set(status)
             }
             activity.video.setSource(uri)
@@ -43,8 +46,14 @@ class LibVlcPlaybackInstrumentedTest {
             assertTrue(activity.video.getDuration() > 0)
             activity.video.pause()
             assertFalse(activity.video.isPlaying())
-            activity.video.seekTo(activity.video.getDuration() / 2)
+            targetPosition.set(activity.video.getDuration().toLong() / 2)
+            activity.video.seekTo(targetPosition.get().toInt())
             activity.video.start()
+          }
+          assertTrue("Seek did not reach the requested position", sought.await(10, TimeUnit.SECONDS))
+          instrumentation.uiAutomation.takeScreenshot()?.let { screenshot ->
+            File(context.cacheDir, "direct-playback.png").outputStream().use { screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            screenshot.recycle()
           }
           assertNull(failure.get())
         }

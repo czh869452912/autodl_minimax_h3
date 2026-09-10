@@ -234,33 +234,31 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   fun extractPoster(source: String, key: String, promise: Promise) {
     if (source.isBlank()) { promise.reject("INVALID_SOURCE", "视频地址为空"); return }
     executors.executeMedia {
-      val retriever = MediaMetadataRetriever()
+      var part: File? = null
       try {
-        if (source.startsWith("http://") || source.startsWith("https://")) retriever.setDataSource(source, emptyMap()) else retriever.setDataSource(source)
-        val bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: throw IllegalStateException("无法读取视频首帧")
+        val uri = Uri.parse(source)
+        require(uri.scheme in setOf("file", "content"))
         val dir = File(context.filesDir, "posters").apply { mkdirs() }
-        val file = File(dir, key.replace(Regex("[^A-Za-z0-9_.-]"), "_") + ".jpg")
-        FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 88, it) }
-        bitmap.recycle(); promise.resolve(file.toURI().toString())
-      } catch (_: Exception) {
-        // System frame extraction has the same codec restrictions as MediaCodec. A failed
-        // poster must not prevent storing/playing a software-decodable original.
+        val hash = java.security.MessageDigest.getInstance("SHA-256").digest((key + "\n" + source).toByteArray()).joinToString("") { "%02x".format(it) }
+        val file = File(dir, "sw-v3-$hash.jpg")
+        part = File(dir, "sw-v3-$hash-${java.util.UUID.randomUUID()}.jpg")
+        val fd = if (uri.scheme == "content") context.contentResolver.openFileDescriptor(uri, "r") else null
         try {
-          val uri = Uri.parse(source)
-          require(uri.scheme in setOf("file", "content"))
-          val dir = File(context.filesDir, "posters").apply { mkdirs() }
-          val file = File(dir, key.replace(Regex("[^A-Za-z0-9_.-]"), "_") + ".jpg")
-          val fd = if (uri.scheme == "content") context.contentResolver.openFileDescriptor(uri, "r") else null
-          try {
-            val input = if (uri.scheme == "content") "/proc/self/fd/${requireNotNull(fd).fd}" else requireNotNull(uri.path)
-            val result = FFmpegKit.executeWithArguments(arrayOf("-v", "error", "-nostdin", "-threads", "2",
-              "-protocol_whitelist", "file", "-i", input, "-frames:v", "1", "-an", "-vf",
-              "scale=640:640:force_original_aspect_ratio=decrease", "-y", file.absolutePath))
-            if (!ReturnCode.isSuccess(result.returnCode) || file.length() == 0L) { file.delete(); error("poster failed") }
-            promise.resolve(file.toURI().toString())
-          } finally { fd?.close() }
-        } catch (_: Exception) { promise.reject("POSTER_FAILED", "无法读取视频封面") }
-      } finally { retriever.release() }
+          val input = if (uri.scheme == "content") "/proc/self/fd/${requireNotNull(fd).fd}" else requireNotNull(uri.path)
+          // Decode the original in software. Do not trust a non-null system bitmap as proof
+          // of correct pixels (some platform decoders return a garbled High 10 frame).
+          val result = FFmpegKit.executeWithArguments(arrayOf("-v", "error", "-nostdin", "-xerror",
+            "-hwaccel", "none", "-threads", "2", "-protocol_whitelist", "file", "-i", input,
+            "-map", "0:v:0", "-frames:v", "1", "-an", "-vf",
+            "scale=640:640:force_original_aspect_ratio=decrease,format=yuvj420p", "-y", part.absolutePath))
+          check(ReturnCode.isSuccess(result.returnCode) && part.length() > 0)
+          val bitmap = android.graphics.BitmapFactory.decodeFile(part.absolutePath) ?: error("poster invalid")
+          bitmap.recycle()
+          check(part.renameTo(file))
+          promise.resolve(file.toURI().toString())
+        } finally { fd?.close() }
+      } catch (_: Exception) { promise.reject("POSTER_FAILED", "无法读取视频封面，原件仍可播放") }
+      finally { part?.delete() }
     }
   }
 
@@ -291,11 +289,16 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   }
 
   @ReactMethod
-  fun probeVideo(source: String, promise: Promise) {
+  fun probeVideo(source: String, promise: Promise) = probe(source, promise, true)
+
+  @ReactMethod
+  fun probeVideoStructure(source: String, promise: Promise) = probe(source, promise, false)
+
+  private fun probe(source: String, promise: Promise, checkDeviceDecode: Boolean) {
     if (source.isBlank()) { promise.reject("MEDIA_SOURCE_INVALID", "媒体 URI 为空"); return }
     executors.executeMedia {
       try {
-        val result = integrity.probeVideo(source)
+        val result = integrity.probeVideo(source, checkDeviceDecode)
         promise.resolve(Arguments.createMap().apply {
           putDouble("durationMs", result.durationMs.toDouble())
           putInt("videoTrackCount", result.videoTrackCount)

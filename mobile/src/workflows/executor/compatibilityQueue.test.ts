@@ -6,7 +6,7 @@ import { createMediaCommandService } from './mediaCommandService';
 import type { WorkflowOperation } from './types';
 import { createSqliteExportStore } from './exportOperation';
 
-test('original becomes available before conversion; failed conversion retries locally without invalidating download', async () => {
+test('original becomes available before conversion; legacy conversion remains readable but is not requeued', async () => {
   const db = createInitializedRealSqliteTestDb();
   const hash = 'a'.repeat(64);
   const blob = { sha256: hash, mime: 'video/mp4', byteSize: 100, relativePath: `cas/sha256/aa/${hash}`, createdAt: 1, verifiedAt: 1 };
@@ -47,8 +47,8 @@ test('original becomes available before conversion; failed conversion retries lo
     expect((await operations.get(childId))!.lastError).toMatchObject({ diagnosticCode: 'MEDIA_COMPATIBILITY_ENCODE_FAILED', diagnosticStage: 'encode' });
     expect((await createTaskProjectionRepository(db as never).readWindow()).items[0]).toMatchObject({ localUri: uri, downloadState: 'DOWNLOADED', compatibilityState: 'FAILED' });
     const commands = createMediaCommandService({ db: db as never, fileExists: async candidate => candidate === uri, resolveCasUri: path => `file:///documents/${path}`, now: () => 20 });
-    expect((await commands.requestDownload('j')).operation!.id).toBe(childId);
-    expect((await operations.get(childId))!.state).toBe('PENDING');
+    expect((await commands.requestDownload('j')).status).toBe('already-complete');
+    expect((await operations.get(childId))!.state).toBe('FAILED');
     expect(transfer).toHaveBeenCalledTimes(1);
     expect(db.getAllSync('SELECT * FROM workflow_operations')).toHaveLength(2);
     expect(db.getFirstSync('SELECT download_state FROM tasks')).toEqual({ download_state: 'DOWNLOADED' });

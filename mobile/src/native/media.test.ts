@@ -1,4 +1,4 @@
-import { cancelArtifactTransfer, exportVideo, probeVideo, sha256File, transferArtifact } from './media';
+import { cancelArtifactTransfer, exportVideo, probeVideo, probeVideoStructure, sha256File, transferArtifact } from './media';
 
 describe('native gallery publisher', () => {
   it('passes a stable media id and file name to Android', async () => {
@@ -120,4 +120,10 @@ describe('native artifact transfer', () => {
     expect(native.transferArtifact).toHaveBeenCalledWith({ ...request, operationId: 'operation-1' });
     expect(native.cancelArtifactTransfer).toHaveBeenCalledWith('operation-1', 2);
   });
+});
+
+it('accepts a structurally valid original without demanding device-decoded frames', async () => {
+  const result = { durationMs: 10125, videoTrackCount: 1, sampleCount: 243, decodedFrames: 0 };
+  await expect(probeVideoStructure('file:///high10.mp4', { probeVideoStructure: async () => result })).resolves.toEqual(result);
+  await expect(probeVideoStructure('file:///broken.mp4', { probeVideoStructure: async () => ({ ...result, sampleCount: 0 }) })).rejects.toMatchObject({ code: 'MEDIA_INVALID' });
 });

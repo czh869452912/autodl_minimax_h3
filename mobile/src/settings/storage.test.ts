@@ -18,6 +18,7 @@ describe('local LLM settings', () => {
       .mockResolvedValueOnce('4');
 
     await expect(readSettings()).resolves.toEqual({
+      videoDecodeMode: 'auto',
       token: 'autodl-token',
       llmEndpoint: 'https://api.example.test/v1',
       llmModel: 'h3-model',
@@ -63,4 +64,12 @@ describe('local LLM settings', () => {
     await saveSettings({ llmReasoningEffort: 'default' });
     expect(await readSettings()).toMatchObject({ llmReasoningEffort: 'default' });
   });
+});
+
+it.each(['auto', 'hardware', 'software'] as const)('persists video decoding mode %s', async videoDecodeMode => {
+  const saved = new Map<string, string>();
+  jest.mocked(SecureStore.setItemAsync).mockImplementation(async (key, value) => { saved.set(key, value); });
+  jest.mocked(SecureStore.getItemAsync).mockImplementation(async key => saved.get(key) ?? null);
+  await saveSettings({ videoDecodeMode });
+  expect((await readSettings()).videoDecodeMode).toBe(videoDecodeMode);
 });

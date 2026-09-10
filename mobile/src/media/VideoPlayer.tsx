@@ -1,3 +1,4 @@
+import { useVideoDecodeMode, type VideoDecodeMode } from '../settings/videoDecodeMode';
 import { mediaProbeFailureCode } from './mediaValidation';
 import { useEffect, useState } from 'react';
 import { useEvent } from 'expo';
@@ -5,7 +6,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppIcon } from '../ui/icons';
 import { COLORS } from '../ui/theme';
-import { canUseSoftwarePlayback, preferSoftwarePlayback, openExternalVideo, SoftwareVideoView } from './softwarePlayback';
+import { canUseSoftwarePlayback, preferSoftwarePlayback, openExternalVideo, SoftwareVideoView, HardwareVideoView } from './softwarePlayback';
 
 type VideoPlayerProps = {
   source: string;
@@ -23,6 +24,17 @@ export function VideoPlayer({ source, poster, validateSource, onInvalidSource, r
 }
 
 function PlaybackHost(props: VideoPlayerProps & { recovering: boolean }) {
+  return canUseSoftwarePlayback(props.source) ? <ConfiguredPlayback {...props} /> : <AutomaticPlayback {...props} />;
+}
+function ConfiguredPlayback(props: VideoPlayerProps & { recovering: boolean }) {
+  const mode = useVideoDecodeMode();
+  if (canUseSoftwarePlayback(props.source)) {
+    if (!mode) return <View style={styles.empty}><ActivityIndicator /></View>;
+    if (mode !== 'auto') return <SoftwarePlayer key={mode} source={props.source} poster={props.poster} initialPositionMs={0} mode={mode} />;
+  }
+  return <AutomaticPlayback key={mode ?? 'auto'} {...props} />;
+}
+function AutomaticPlayback(props: VideoPlayerProps & { recovering: boolean }) {
   const [backend, setBackend] = useState<'checking' | 'media3' | 'software'>(() => canUseSoftwarePlayback(props.source) ? 'checking' : 'media3');
   const [positionMs, setPositionMs] = useState(0);
   useEffect(() => {
@@ -40,7 +52,8 @@ function PlaybackHost(props: VideoPlayerProps & { recovering: boolean }) {
   } : undefined} />;
 }
 
-function SoftwarePlayer({ source, poster, initialPositionMs }: { source: string; poster?: string; initialPositionMs: number }) {
+function SoftwarePlayer({ source, poster, initialPositionMs, mode = 'software' }: { source: string; poster?: string; initialPositionMs: number; mode?: VideoDecodeMode }) {
+  const NativePlayer = mode === 'hardware' ? HardwareVideoView : SoftwareVideoView;
   const [attempt, setAttempt] = useState(0);
   const [frame, setFrame] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -50,13 +63,13 @@ function SoftwarePlayer({ source, poster, initialPositionMs }: { source: string;
     return () => clearTimeout(timeout);
   }, [attempt, frame, failed]);
   return <View style={styles.container}>
-    {!failed ? <SoftwareVideoView key={attempt} testID="software-video-view" source={source} initialPositionMs={initialPositionMs} style={styles.video} onPlayback={({ nativeEvent }) => {
+    {!failed ? <NativePlayer key={attempt} testID={mode === 'hardware' ? 'hardware-video-view' : 'software-video-view'} source={source} initialPositionMs={initialPositionMs} style={styles.video} onPlayback={({ nativeEvent }) => {
       if (nativeEvent.status === 'firstFrame') setFrame(true);
       if (nativeEvent.status === 'decodeFailed' || nativeEvent.status === 'sourceUnavailable') setFailed(true);
     }} /> : null}
     {!frame && poster ? <View pointerEvents="none" style={styles.poster}><Image source={{ uri: poster }} style={styles.posterImage} resizeMode="contain" /></View> : null}
     {!frame && !failed ? <View pointerEvents="none" style={styles.loading}><ActivityIndicator color={COLORS.primaryActive} /></View> : null}
-    {failed ? <View style={styles.error}><Text style={styles.errorText}>此视频暂时无法在应用内播放，原件仍可保存到相册</Text><Pressable accessibilityRole="button" accessibilityLabel="重试兼容播放" style={styles.retry} onPress={() => { setFrame(false); setFailed(false); setAttempt(value => value + 1); }}><Text style={styles.retryText}>重试播放</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="使用外部播放器打开" style={styles.retry} onPress={() => void openExternalVideo(source).catch(() => Alert.alert('无法打开', '没有可用的外部播放器，或原件已不可访问'))}><Text style={styles.retryText}>使用外部播放器</Text></Pressable></View> : null}
+    {failed ? <View style={styles.error}><Text style={styles.errorText}>{mode === 'hardware' ? '硬件解码失败，请在设置中选择自动或软解码' : '此视频暂时无法在应用内播放，原件仍可保存到相册'}</Text><Pressable accessibilityRole="button" accessibilityLabel="重试兼容播放" style={styles.retry} onPress={() => { setFrame(false); setFailed(false); setAttempt(value => value + 1); }}><Text style={styles.retryText}>重试播放</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="使用外部播放器打开" style={styles.retry} onPress={() => void openExternalVideo(source).catch(() => Alert.alert('无法打开', '没有可用的外部播放器，或原件已不可访问'))}><Text style={styles.retryText}>使用外部播放器</Text></Pressable></View> : null}
   </View>;
 }
 
@@ -69,7 +82,13 @@ function InlineVideoPlayer({ source, poster, validateSource, onInvalidSource, re
     instance.keepScreenOnWhilePlaying = true;
     instance.bufferOptions = { minBufferForPlayback: 2, preferredForwardBufferDuration: 20 };
   });
-  const { status, error } = useEvent(player, 'statusChange', { status: player.status });
+  const { status } = useEvent(player, 'statusChange', { status: player.status });
+  const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
+  useEffect(() => {
+    if (hasFirstFrame || validation === 'invalid' || !onSoftwareFallback || (status !== 'loading' && !isPlaying)) return;
+    const timer = setTimeout(() => { player.pause(); onSoftwareFallback(player.currentTime); }, 15_000);
+    return () => clearTimeout(timer);
+  }, [source, hasFirstFrame, validation, status, isPlaying, onSoftwareFallback, player]);
   const retry = () => {
     setHasFirstFrame(false);
     player.replay();
@@ -78,9 +97,9 @@ function InlineVideoPlayer({ source, poster, validateSource, onInvalidSource, re
   useEffect(() => {
     let current = true;
     setValidation('idle');
-    if (status !== 'error' || !/^(file|content):\/\//.test(source)) return () => { current = false; };
+    if (status !== 'error') return () => { current = false; };
     const fallback = () => { if (current && onSoftwareFallback) { player.pause(); onSoftwareFallback(player.currentTime); } };
-    if (!validateSource) { fallback(); return () => { current = false; }; }
+    if (!/^(file|content):\/\//.test(source) || !validateSource) { fallback(); return () => { current = false; }; }
     setValidation('checking');
     void validateSource(source).then(
       () => { if (current) { setValidation('valid'); fallback(); } },
@@ -88,7 +107,7 @@ function InlineVideoPlayer({ source, poster, validateSource, onInvalidSource, re
         if (!current) return;
         const code = mediaProbeFailureCode(cause);
         setValidation(code === 'MEDIA_CODEC_UNSUPPORTED' ? 'unsupported' : code === 'MEDIA_DECODE_FAILED' ? 'decodeFailed' : code === 'MEDIA_INVALID' || ['MEDIA_NAL_INVALID', 'MEDIA_SAMPLE_INVALID', 'MEDIA_NO_VIDEO_TRACK', 'MEDIA_DURATION_INVALID'].includes(code ?? '') ? 'invalid' : 'valid');
-        if (code === 'MEDIA_CODEC_UNSUPPORTED' || code === 'MEDIA_DECODE_FAILED') fallback();
+        if (!['MEDIA_INVALID', 'MEDIA_NAL_INVALID', 'MEDIA_SAMPLE_INVALID', 'MEDIA_NO_VIDEO_TRACK', 'MEDIA_DURATION_INVALID'].includes(code ?? '')) fallback();
       },
     );
     return () => { current = false; };
