@@ -5,6 +5,18 @@ import { TaskCardRow } from './TaskCardRow';
 import type { TaskCard } from './taskCard';
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
+test('a failed derivative keeps the original downloaded and offers conversion retry', () => {
+  const item: TaskCard = { id: 'a', prompt: 'p', status: 'SUCCESS', resolution: '768p', duration: 5, createdAt: 1, updatedAt: 2, downloadState: 'DOWNLOADED', compatibilityState: 'FAILED', exportState: 'EXPORTED' };
+  const retry = jest.fn();
+  let tree!: ReturnType<typeof create>;
+  act(() => { tree = create(<TaskCardRow item={item} busy={false} onDownload={retry} onExport={jest.fn()} onRemove={jest.fn()} onOpen={jest.fn()} />); });
+  expect(tree.root.findAllByProps({ accessibilityLabel: '重试下载' })).toHaveLength(0);
+  expect(tree.root.findAllByType(Text).some(node => node.props.children === '原件已保存到相册')).toBe(true);
+  act(() => tree.root.findByProps({ accessibilityLabel: '重试兼容转换' }).props.onPress());
+  expect(retry).toHaveBeenCalledWith(item);
+  act(() => tree.unmount());
+});
+
 test('shows an encoding explanation without offering a futile download retry', () => {
   const item: TaskCard = { id: 'a', prompt: 'p', status: 'SUCCESS', resolution: '768p', duration: 5, createdAt: 1, updatedAt: 2, downloadState: 'DOWNLOAD_FAILED', downloadError: 'ARTIFACT_MEDIA_UNSUPPORTED', exportState: 'NOT_REQUESTED' };
   let tree!: ReturnType<typeof create>;

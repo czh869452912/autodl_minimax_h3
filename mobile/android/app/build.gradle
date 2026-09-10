@@ -103,6 +103,9 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace 'com.example.autodlh3'
+    if (findProperty('codecReviewAssets')) {
+        sourceSets.androidTest.assets.srcDir(file(findProperty('codecReviewAssets')))
+    }
     defaultConfig {
         applicationId 'com.example.autodlh3'
         minSdkVersion rootProject.ext.minSdkVersion
@@ -176,8 +179,9 @@ gradle.taskGraph.whenReady { graph ->
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
-    implementation("androidx.media3:media3-exoplayer:1.8.1")
-    implementation("androidx.media3:media3-ui:1.8.1")
+    implementation("androidx.media3:media3-exoplayer:1.9.0")
+    implementation("androidx.media3:media3-ui:1.9.0")
+    implementation("org.videolan.android:libvlc-all:3.7.5")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // LGPLv3, software decoding + Android MediaCodec AVC encoding. See VIDEO_COMPATIBILITY.md.
     implementation("io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-min-16kb:6.1.4")

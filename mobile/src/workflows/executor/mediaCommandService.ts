@@ -127,6 +127,16 @@ export function createMediaCommandService(options: {
   const requestDownload = async (taskId: string, deliveryIntent?: SystemGalleryIntent): Promise<MediaCommandResult> => {
     await assertAppDatabaseWritableAsync(db);
     const initial = await loadContext(db, taskId);
+    if (!deliveryIntent && await casSource(initial, true)) {
+      const compatibility = await db.getFirstAsync<OperationRow>(
+        "SELECT id,idempotency_key,payload_json,state FROM workflow_operations WHERE job_id=? AND kind='ARTIFACT_DOWNLOAD' AND json_valid(payload_json) AND json_extract(payload_json,'$.compatibilityOnly')=1 AND json_extract(payload_json,'$.artifact.id')=? ORDER BY created_at DESC,id DESC LIMIT 1",
+        taskId, initial.artifact.id);
+      if (compatibility && compatibility.state !== 'SUCCEEDED') {
+        const timestamp = now();
+        const changed = await db.runAsync("UPDATE workflow_operations SET state='PENDING',last_error_json=NULL,next_retry_at=?,updated_at=? WHERE id=? AND state IN ('FAILED','BLOCKED')", timestamp, timestamp, compatibility.id);
+        return { status: changes(changed) ? 'queued' : 'in-flight', operation: await operations.get(compatibility.id) };
+      }
+    }
     if (!deliveryIntent && await casSource(initial)) return { status: 'already-complete' };
     const outcome = await transaction(db, async (db) => {
       await assertAppDatabaseWritableAsync(db);
@@ -244,6 +254,7 @@ export function createMediaCommandService(options: {
         });
       }
       if (original && context.task.download_error?.startsWith('ARTIFACT_COMPATIBILITY_')) return originalOutcome ?? { status: 'already-complete' };
+      if (original && !await casSource(context)) return originalOutcome ?? { status: 'already-complete' };
       if (delivery?.status === 'EXPORTED') return originalOutcome ?? { status: 'already-complete' };
       const active = await activeOperation(db, taskId, 'EXPORT', `export:${taskId}:${context.artifact.id}:system-gallery`);
       if (active) return { status: 'in-flight', operation: await operations.get(active.id) };

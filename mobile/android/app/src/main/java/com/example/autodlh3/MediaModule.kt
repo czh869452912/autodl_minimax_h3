@@ -3,6 +3,14 @@ package com.example.autodlh3
 import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import android.media.MediaExtractor
+import android.media.MediaFormat
+import android.media.MediaCodecInfo
+import android.media.MediaCodecList
+import android.net.Uri
+import androidx.core.content.FileProvider
+import com.arthenica.ffmpegkit.FFmpegKit
+import com.arthenica.ffmpegkit.ReturnCode
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ExecutorService
@@ -43,6 +51,32 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   )
   override fun getName() = "AutoDLMedia"
 
+  override fun getConstants(): Map<String, Any> = mapOf("softwareVideoPlayback" to true)
+
+  /** A routing hint only. It never marks bytes corrupt or proves a decoder can render. */
+  @ReactMethod
+  fun videoPlaybackInfo(source: String, promise: Promise) {
+    executors.executeMedia {
+      val extractor = MediaExtractor()
+      try {
+        val uri = Uri.parse(source)
+        require(uri.scheme in setOf("file", "content"))
+        extractor.setDataSource(context, uri, null)
+        val format = (0 until extractor.trackCount).map(extractor::getTrackFormat)
+          .first { it.getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true }
+        val profile = if (format.getString(MediaFormat.KEY_MIME) == MediaFormat.MIMETYPE_VIDEO_AVC)
+          AvcProfilePolicy.profile(format.getByteBuffer("csd-0")) else null
+        profile?.let { format.setInteger(MediaFormat.KEY_PROFILE, it) }
+        val highBitDepthAvc = profile in setOf(MediaCodecInfo.CodecProfileLevel.AVCProfileHigh10,
+          MediaCodecInfo.CodecProfileLevel.AVCProfileHigh422, MediaCodecInfo.CodecProfileLevel.AVCProfileHigh444)
+        val preferSoftware = highBitDepthAvc || MediaCodecList(MediaCodecList.REGULAR_CODECS).findDecoderForFormat(format) == null
+        promise.resolve(Arguments.createMap().apply { putBoolean("preferSoftware", preferSoftware) })
+      } catch (_: Exception) {
+        promise.reject("MEDIA_PROBE_FAILED", "MEDIA_PROBE_FAILED")
+      } finally { extractor.release() }
+    }
+  }
+
   override fun invalidate() {
     compatibility.close()
     executors.shutdown()
@@ -78,7 +112,12 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
         })
       } catch (error: Exception) {
         val code = (error as? VideoCompatibilityException)?.diagnosticCode ?: "MEDIA_COMPATIBILITY_FAILED"
-        promise.reject(code, code)
+        promise.reject(code, code, Arguments.createMap().apply {
+          (error as? VideoCompatibilityException)?.let {
+            putString("stage", it.stage)
+            putString("detail", it.detail)
+          }
+        })
       }
     }
   }
@@ -175,6 +214,23 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   }
 
   @ReactMethod
+  fun openExternalVideo(source: String, promise: Promise) {
+    try {
+      val parsed = Uri.parse(source)
+      val uri = when (parsed.scheme) {
+        "content" -> parsed
+        "file" -> FileProvider.getUriForFile(context, "${context.packageName}.media", File(requireNotNull(parsed.path)))
+        else -> throw IllegalArgumentException()
+      }
+      context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, "video/*")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+      })
+      promise.resolve(true)
+    } catch (_: Exception) { promise.reject("MEDIA_EXTERNAL_UNAVAILABLE", "没有可用的外部播放器，或原件已不可访问") }
+  }
+
+  @ReactMethod
   fun extractPoster(source: String, key: String, promise: Promise) {
     if (source.isBlank()) { promise.reject("INVALID_SOURCE", "视频地址为空"); return }
     executors.executeMedia {
@@ -186,7 +242,25 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
         val file = File(dir, key.replace(Regex("[^A-Za-z0-9_.-]"), "_") + ".jpg")
         FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 88, it) }
         bitmap.recycle(); promise.resolve(file.toURI().toString())
-      } catch (error: Exception) { promise.reject("POSTER_FAILED", error.message, error) } finally { retriever.release() }
+      } catch (_: Exception) {
+        // System frame extraction has the same codec restrictions as MediaCodec. A failed
+        // poster must not prevent storing/playing a software-decodable original.
+        try {
+          val uri = Uri.parse(source)
+          require(uri.scheme in setOf("file", "content"))
+          val dir = File(context.filesDir, "posters").apply { mkdirs() }
+          val file = File(dir, key.replace(Regex("[^A-Za-z0-9_.-]"), "_") + ".jpg")
+          val fd = if (uri.scheme == "content") context.contentResolver.openFileDescriptor(uri, "r") else null
+          try {
+            val input = if (uri.scheme == "content") "/proc/self/fd/${requireNotNull(fd).fd}" else requireNotNull(uri.path)
+            val result = FFmpegKit.executeWithArguments(arrayOf("-v", "error", "-nostdin", "-threads", "2",
+              "-protocol_whitelist", "file", "-i", input, "-frames:v", "1", "-an", "-vf",
+              "scale=640:640:force_original_aspect_ratio=decrease", "-y", file.absolutePath))
+            if (!ReturnCode.isSuccess(result.returnCode) || file.length() == 0L) { file.delete(); error("poster failed") }
+            promise.resolve(file.toURI().toString())
+          } finally { fd?.close() }
+        } catch (_: Exception) { promise.reject("POSTER_FAILED", "无法读取视频封面") }
+      } finally { retriever.release() }
     }
   }
 

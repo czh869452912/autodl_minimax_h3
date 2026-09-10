@@ -21,11 +21,14 @@ data class CompatibleVideoRequest(
   val operationAttempt: Int, val maxBytes: Long,
 )
 data class CompatibleVideoResult(val partUri: String, val mime: String, val byteSize: Long, val sha256: String)
-class VideoCompatibilityException(val diagnosticCode: String) : IllegalArgumentException(diagnosticCode)
+class VideoCompatibilityException(
+  val diagnosticCode: String, val stage: String? = null, val detail: String? = null,
+) : IllegalArgumentException(diagnosticCode)
 
 /** No network input, no mutation of the original, and no publication before complete validation. */
 class VideoCompatibility(private val context: Context) {
   class Work internal constructor(val request: CompatibleVideoRequest) {
+    @Volatile internal var stage: String = "sourceSnapshot"
     @Volatile internal var failure: String? = null
     @Volatile internal var sessionId: Long? = null
     internal var terminal = false
@@ -84,7 +87,7 @@ class VideoCompatibility(private val context: Context) {
     check(work)
     FFmpegKitConfig.ffprobeExecute(session)
     check(work)
-    if (!ReturnCode.isSuccess(session.returnCode)) fail("MEDIA_COMPATIBILITY_DECODE_FAILED")
+    if (!ReturnCode.isSuccess(session.returnCode)) sessionFailure(work, session.returnCode?.value, session.output)
     return JSONObject(session.output)
   }
 
@@ -95,7 +98,19 @@ class VideoCompatibility(private val context: Context) {
     check(work)
     FFmpegKitConfig.ffmpegExecute(session)
     check(work)
-    if (!ReturnCode.isSuccess(session.returnCode)) fail("MEDIA_COMPATIBILITY_DECODE_FAILED")
+    if (!ReturnCode.isSuccess(session.returnCode)) sessionFailure(work, session.returnCode?.value, session.allLogsAsString)
+  }
+
+  private fun sessionFailure(work: Work, returnCode: Int?, output: String?): Nothing {
+    val detail = CompatibilityDiagnostics.sanitize("exit=$returnCode ${output.orEmpty()}")
+    android.util.Log.w("AutoDLMedia", "compatibility stage=${work.stage} $detail")
+    val code = when (work.stage) {
+      "sourceProbe", "sourceFrames" -> "MEDIA_COMPATIBILITY_SOURCE_PROBE_FAILED"
+      "sourceDecode" -> "MEDIA_COMPATIBILITY_DECODE_FAILED"
+      "encode" -> "MEDIA_COMPATIBILITY_ENCODE_FAILED"
+      else -> "MEDIA_COMPATIBILITY_OUTPUT_INVALID"
+    }
+    throw VideoCompatibilityException(code, work.stage, detail)
   }
 
   fun prepare(work: Work): CompatibleVideoResult {
@@ -150,6 +165,7 @@ class VideoCompatibility(private val context: Context) {
       if (digest.digest().joinToString("") { "%02x".format(it) } != request.sourceSha256) {
         fail("MEDIA_COMPATIBILITY_SOURCE_CHANGED")
       }
+      work.stage = "sourceProbe"
       val metadata = probe(input, work)
       val streams = metadata.getJSONArray("streams")
       val videos = (0 until streams.length()).map(streams::getJSONObject).filter { it.optString("codec_type") == "video" }
@@ -174,17 +190,48 @@ class VideoCompatibility(private val context: Context) {
         "-max_alloc", "268435456", "-protocol_whitelist", "file", "-format_whitelist", "mov,matroska,webm", "-threads", "2", "-c:v", codec,
         "-i", input.absolutePath, "-map", "0:v:0", "-map", "0:a:0?", "-sn", "-dn")
       // Decode the entire source before encoding; byte limits must never turn a truncated decode into success.
+      work.stage = "sourceDecode"
       run(decode + listOf("-f", "null", "-"), work)
+      work.stage = "sourceFrames"
       val sourceVideo = probe(input, work, true).getJSONArray("streams").let { list ->
         (0 until list.length()).map(list::getJSONObject).single { it.optString("codec_type") == "video" }
       }
-      run(decode + listOf("-filter_threads", "1", "-vf",
-        "scale=w='min(1920,iw)':h='min(1080,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,format=yuv420p",
-        "-c:v", "h264_mediacodec", "-pix_fmt", "yuv420p", "-profile:v", "baseline", "-bf", "0",
-        "-b:v", "4000000", "-g", "60", "-c:a", "aac", "-b:a", "128000", "-ac", "2",
-        "-threads", "2", "-map_metadata", "-1", "-movflags", "+faststart", "-fs", request.maxBytes.toString(),
-        "-f", "mp4", "-y", part.absolutePath), work)
+      work.stage = "encode"
+      fun ratio(value: String, separator: String, fallback: Double): Double {
+        val parts = value.split(separator)
+        val result = if (parts.size == 2) (parts[0].toDoubleOrNull() ?: 0.0) / (parts[1].toDoubleOrNull() ?: 0.0) else fallback
+        return if (result.isFinite() && result > 0) result else fallback
+      }
+      var displayWidth = video.optInt("width") * ratio(video.optString("sample_aspect_ratio"), ":", 1.0)
+      var displayHeight = video.optInt("height").toDouble()
+      val sideData = video.optJSONArray("side_data_list")
+      val rotated = sideData != null && (0 until sideData.length()).any {
+        kotlin.math.abs(sideData.getJSONObject(it).optDouble("rotation", 0.0)) % 180.0 == 90.0
+      }
+      if (rotated) { val previous = displayWidth; displayWidth = displayHeight; displayHeight = previous }
+      val plans = VideoEncodingPlans.candidates(displayWidth, displayHeight, ratio(video.optString("avg_frame_rate"), "/", 24.0))
+      if (plans.isEmpty()) fail("MEDIA_COMPATIBILITY_ENCODER_UNAVAILABLE")
+      var encoded = false
+      var lastError: VideoCompatibilityException? = null
+      for (plan in plans) {
+        check(work)
+        try {
+          android.util.Log.i("AutoDLMedia", "compatibility encoder=${plan.codecName} size=${plan.width}x${plan.height}")
+          run(decode + listOf("-filter_threads", "1", "-vf", plan.filter,
+            "-c:v", "h264_mediacodec", "-codec_name", plan.codecName, "-pix_fmt", "yuv420p", "-profile:v", "baseline", "-bf", "0",
+            "-b:v", plan.bitrate.toString(), "-g", "60", "-fps_mode", "passthrough", "-c:a", "aac", "-b:a", "128000", "-ac", "2",
+            "-threads", "2", "-map_metadata", "-1", "-movflags", "+faststart", "-fs", request.maxBytes.toString(),
+            "-f", "mp4", "-y", part.absolutePath), work)
+          encoded = true
+          break
+        } catch (error: VideoCompatibilityException) {
+          if (error.diagnosticCode != "MEDIA_COMPATIBILITY_ENCODE_FAILED") throw error
+          lastError = error
+        }
+      }
+      if (!encoded) throw requireNotNull(lastError)
       if (part.length() <= 0 || part.length() >= request.maxBytes) fail("MEDIA_COMPATIBILITY_SIZE_LIMIT")
+      work.stage = "outputProbe"
       val output = probe(part, work, true)
       val outStreams = output.getJSONArray("streams")
       val outVideo = (0 until outStreams.length()).map(outStreams::getJSONObject).first { it.optString("codec_type") == "video" }
@@ -194,14 +241,20 @@ class VideoCompatibility(private val context: Context) {
         kotlin.math.abs(outDuration - duration) > kotlin.math.max(0.5, duration * 0.02)) {
         fail("MEDIA_COMPATIBILITY_OUTPUT_INVALID")
       }
+      work.stage = "outputDecode"
       run(listOf("-v", "error", "-nostdin", "-xerror", "-err_detect", "explode", "-threads", "2",
         "-protocol_whitelist", "file", "-i", part.absolutePath, "-map", "0:v:0", "-map", "0:a:0?", "-f", "null", "-"), work)
       val integrity = MediaIntegrity(context)
+      work.stage = "platformPlaybackProbe"
       integrity.probeVideo(part.toURI().toString())
       val sha = integrity.sha256(part.toURI().toString()) { check(work) }
       work.finish()
       complete = true
       return CompatibleVideoResult(part.toURI().toString(), "video/mp4", part.length(), sha)
+    } catch (error: VideoCompatibilityException) {
+      throw if (error.stage != null) error else VideoCompatibilityException(error.diagnosticCode, work.stage)
+    } catch (error: MediaIntegrityException) {
+      throw VideoCompatibilityException("MEDIA_COMPATIBILITY_OUTPUT_INVALID", work.stage, error.diagnosticCode)
     } finally {
       watchdog.shutdownNow()
       input?.delete()

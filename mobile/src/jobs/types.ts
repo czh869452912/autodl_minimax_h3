@@ -1,5 +1,5 @@
 export type JobStatus = 'DRAFT' | 'VALIDATING' | 'READY_TO_SUBMIT' | 'SUBMITTING' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'PARTIAL_SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'UNKNOWN';
-export type NormalizedError = { code: string; message: string; retryable?: boolean; diagnosticCode?: string };
+export type NormalizedError = { code: string; message: string; retryable?: boolean; diagnosticCode?: string; diagnosticStage?: string };
 export type ArtifactKind = 'image' | 'video' | 'audio' | 'text' | 'file' | 'json';
 export type ArtifactRecord = { id: string; jobId: string; kind: ArtifactKind; uri?: string; mime?: string; metadata?: Record<string, unknown> };
 export type JobRecord = { id: string; revision: number; workflowId: string; workflowVersion: string; workflowContentHash: string; adapterId: string; adapterVersion: string; inputSnapshot: Record<string, unknown>; outputMapping?: { artifacts: Array<{ kind: ArtifactKind; from: string }> }; providerHandle?: Readonly<Record<string, unknown>>; lastError?: NormalizedError; nextSyncAt?: number; remote?: { providerJobId?: string; rawStatus?: string }; status: JobStatus; error?: NormalizedError; createdAt: number; updatedAt: number; startedAt?: number; executionDuration?: number };

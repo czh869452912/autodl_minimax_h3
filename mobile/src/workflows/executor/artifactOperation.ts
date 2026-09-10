@@ -74,6 +74,7 @@ export type ArtifactCommitter = {
   release(input: { operationId: string; owner: string }): Promise<void> | void;
   checkpointOriginal?(input: ArtifactCommitInput): Promise<void> | void;
   original?(jobId: string, artifactId: string): Promise<ArtifactBlob | undefined>;
+  deferCompatibility?(input: ArtifactCommitInput): Promise<void>;
 };
 
 function reservationOwnerType(operationId: string): string {
@@ -156,6 +157,27 @@ export function createSqliteArtifactCommitter(db: AppDatabase, clock: () => numb
     });
   };
   return Object.assign(commit, {
+    async deferCompatibility(input: ArtifactCommitInput): Promise<void> {
+      await assertAppDatabaseWritableAsync(db);
+      await transaction(db, async (tx) => {
+        await assertGcIdle(tx);
+        const claim = await tx.getFirstAsync<{ payload_json: string }>(
+          "SELECT payload_json FROM workflow_operations WHERE id=? AND state='CLAIMED' AND lease_owner=?", input.operationId, input.owner);
+        if (!claim) throw new Error('artifact operation lease lost');
+        const payload = JSON.parse(claim.payload_json);
+        // The independently retained original is immediately available to the software player.
+        await tx.runAsync("UPDATE media_assets SET local_path=?,mime_type=?,status='downloaded',updated_at=? WHERE job_id=? AND artifact_id=?",
+          input.localUri, input.blob.mime, input.now, input.jobId, input.artifact.id);
+        await tx.runAsync("UPDATE tasks SET local_uri=?,download_state='DOWNLOADED',download_error=NULL,download_progress=1,updated_at=MAX(updated_at,?) WHERE id=?",
+          input.localUri, input.now, input.jobId);
+        const compatibilityId = `${input.operationId}:compatibility-v2`;
+        await insertWorkflowOperation(tx, { id: compatibilityId, kind: 'ARTIFACT_DOWNLOAD', jobId: input.jobId,
+          idempotencyKey: compatibilityId, payload: { ...payload, artifact: input.artifact, originalBlob: input.blob, compatibilityOnly: true },
+          now: input.now, nextRetryAt: input.now }, 'ignore');
+        await tx.runAsync("UPDATE workflow_operations SET state='SUCCEEDED',lease_owner=NULL,lease_expires_at=NULL,last_error_json=NULL,updated_at=? WHERE id=? AND state='CLAIMED' AND lease_owner=?",
+          input.now, input.operationId, input.owner);
+      });
+    },
     async original(jobId: string, artifactId: string): Promise<ArtifactBlob | undefined> {
       const row = await db.getFirstAsync<{ sha256: string; byte_size: number; mime: string; relative_path: string; created_at: number; verified_at: number }>(
         "SELECT b.* FROM artifact_blobs b JOIN artifact_blob_refs r ON r.blob_sha256=b.sha256 WHERE r.owner_type='workflow_artifact_original' AND r.owner_id=? LIMIT 1", `${jobId}:${artifactId}`,
@@ -348,6 +370,9 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
       : undefined;
     const resolveUri = deps.resolveUri ?? ((relativePath: string) => `${FileSystem.documentDirectory ?? ''}${relativePath}`);
     let original = deps.prepareCompatibleVideo ? await deps.commit?.original?.(operation.jobId, artifact.id) : undefined;
+    if (operation.payload.compatibilityOnly === true && !original) {
+      throw new ArtifactOperationError('ARTIFACT_COMPATIBILITY_SOURCE_MISSING', 'Original unavailable; conversion never downloads a remote replacement.', false);
+    }
     const resumedOriginal = Boolean(original);
     let compatible = Boolean(original);
     if (!original) {
@@ -418,6 +443,13 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
       if (resumedOriginal) await deps.commit?.checkpointOriginal?.({ operationId: operation.id, owner, jobId: operation.jobId, artifact,
         blob: original, localUri: resolveUri(original.relativePath), now: clock(), deliveryPolicy: deps.deliveryPolicy,
         deliveryIntent: payload.deliveryIntent });
+      if (operation.payload.compatibilityOnly !== true && deps.commit?.deferCompatibility) {
+        await assertLease();
+        await deps.commit.deferCompatibility({ operationId: operation.id, owner, jobId: operation.jobId, artifact,
+          blob: original, localUri: resolveUri(original.relativePath), now: clock(), deliveryPolicy: deps.deliveryPolicy,
+          deliveryIntent: payload.deliveryIntent });
+        return;
+      }
       const conversionId = `${operation.id}:compatible`;
       await assertLease();
       try {
@@ -488,6 +520,8 @@ export async function handleArtifactDownload(operation: WorkflowOperation, owner
     if (cause instanceof ArtifactOperationError) {
       const diagnostic = mediaProbeFailureCode(cause.cause);
       if (diagnostic && /^MEDIA_[A-Z_]{1,64}$/.test(diagnostic)) normalizedFailure.diagnosticCode = diagnostic;
+      const stage = (cause.cause as { userInfo?: { stage?: unknown } } | undefined)?.userInfo?.stage;
+      if (typeof stage === 'string' && /^[a-zA-Z]{1,40}$/.test(stage)) normalizedFailure.diagnosticStage = stage;
     }
     if (failure.retryable) {
       const nextRetryAt = timestamp + Math.min(60_000, 1_000 * (2 ** Math.max(0, operation.attempt - 1)));

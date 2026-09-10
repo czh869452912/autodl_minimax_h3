@@ -96,6 +96,11 @@ function createApplicationExecutor(database: AppDatabase) {
         },
         async updateDownloadState(state, errorCode) {
           if (!operation.jobId) throw new Error('JOB_ID_MISSING');
+          if (operation.payload.compatibilityOnly === true) {
+            // Conversion has its own durable operation state. It cannot hide a downloaded original.
+            await database.runAsync('UPDATE tasks SET updated_at=MAX(updated_at,?) WHERE id=?', Date.now(), operation.jobId);
+            return;
+          }
           const artifact = operation.payload.artifact as ArtifactRecord | undefined;
           if (!artifact?.id) throw new Error('ARTIFACT_INPUT_INVALID');
           const timestamp = Date.now();

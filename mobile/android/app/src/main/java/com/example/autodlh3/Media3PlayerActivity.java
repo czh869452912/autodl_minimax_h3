@@ -11,6 +11,8 @@ import android.graphics.Color;
 import androidx.annotation.Nullable;
 import android.app.Activity;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.Player;
+import androidx.media3.common.PlaybackException;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.ui.PlayerView;
 
@@ -19,6 +21,7 @@ public final class Media3PlayerActivity extends Activity {
   private ExoPlayer player;
   private PlayerView playerView;
   private boolean resumeOnStart;
+  private LibVlcView softwarePlayer;
 
   @Override protected void onCreate(@Nullable Bundle state) {
     super.onCreate(state);
@@ -38,6 +41,21 @@ public final class Media3PlayerActivity extends Activity {
 
     player = new ExoPlayer.Builder(this).build();
     playerView.setPlayer(player);
+    player.addListener(new Player.Listener() {
+      @Override public void onPlayerError(PlaybackException error) {
+        String scheme = Uri.parse(source).getScheme();
+        if (softwarePlayer != null || !("file".equals(scheme) || "content".equals(scheme))) return;
+        // The software backend is attempted once; never loop back to Media3.
+        long position = Math.max(0, player.getCurrentPosition());
+        playerView.setPlayer(null);
+        player.release();
+        player = null;
+        softwarePlayer = new LibVlcView(Media3PlayerActivity.this);
+        softwarePlayer.setInitialPositionMs(position);
+        setContentView(softwarePlayer);
+        softwarePlayer.setSource(source);
+      }
+    });
     player.setMediaItem(MediaItem.fromUri(Uri.parse(source)));
     player.prepare();
     player.play();
@@ -66,16 +84,19 @@ public final class Media3PlayerActivity extends Activity {
     setFullscreen(false);
     super.onStop();
     if (player != null) { resumeOnStart = player.isPlaying(); player.pause(); }
+    if (softwarePlayer != null) softwarePlayer.onHostPause();
   }
 
   @Override protected void onStart() {
     super.onStart();
     if (player != null && resumeOnStart) player.play();
+    if (softwarePlayer != null) softwarePlayer.onHostResume();
   }
 
   @Override protected void onDestroy() {
     if (playerView != null) playerView.setPlayer(null);
     if (player != null) player.release();
+    if (softwarePlayer != null) softwarePlayer.dispose();
     player = null;
     super.onDestroy();
   }

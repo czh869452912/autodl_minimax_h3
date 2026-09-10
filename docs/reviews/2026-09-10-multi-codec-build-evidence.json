@@ -1,0 +1,87 @@
+{
+  "aarSha256": "2c25507adb1260aa4d81aad8c2ce98765d98026b9381f49ea454d0b8092f21cb",
+  "aarBytes": 93158778,
+  "apkBytes": 332817552,
+  "libvlcLibraries": [
+    {
+      "path": "jni/arm64-v8a/libc++_shared.so",
+      "bytes": 9290184,
+      "compressedBytes": 2378572
+    },
+    {
+      "path": "jni/arm64-v8a/libvlc.so",
+      "bytes": 46087168,
+      "compressedBytes": 21883089
+    },
+    {
+      "path": "jni/arm64-v8a/libvlcjni.so",
+      "bytes": 94440,
+      "compressedBytes": 25673
+    },
+    {
+      "path": "jni/armeabi-v7a/libc++_shared.so",
+      "bytes": 554808,
+      "compressedBytes": 208550
+    },
+    {
+      "path": "jni/armeabi-v7a/libvlc.so",
+      "bytes": 40090588,
+      "compressedBytes": 20362917
+    },
+    {
+      "path": "jni/armeabi-v7a/libvlcjni.so",
+      "bytes": 67112,
+      "compressedBytes": 23957
+    },
+    {
+      "path": "jni/x86/libc++_shared.so",
+      "bytes": 931652,
+      "compressedBytes": 313532
+    },
+    {
+      "path": "jni/x86/libvlc.so",
+      "bytes": 50150232,
+      "compressedBytes": 21686540
+    },
+    {
+      "path": "jni/x86/libvlcjni.so",
+      "bytes": 116200,
+      "compressedBytes": 29006
+    },
+    {
+      "path": "jni/x86_64/libc++_shared.so",
+      "bytes": 9015544,
+      "compressedBytes": 2389454
+    },
+    {
+      "path": "jni/x86_64/libvlc.so",
+      "bytes": 54588400,
+      "compressedBytes": 23580582
+    },
+    {
+      "path": "jni/x86_64/libvlcjni.so",
+      "bytes": 90648,
+      "compressedBytes": 27453
+    }
+  ],
+  "apkLibrariesInspected": 70,
+  "alignmentFailures": [],
+  "jvmTests": {
+    "tests": 43,
+    "failures": 0,
+    "errors": 0
+  },
+  "apkSha256": "4e1e094219dcfc3c486252f2f08544bfa6016a0507d40ea666959cd7dcdae54d",
+  "abis": [
+    "arm64-v8a",
+    "x86_64"
+  ],
+  "typecheck": "passed",
+  "jest": {
+    "suitesPassed": 46,
+    "testsPassed": 350,
+    "testsSkipped": 1
+  },
+  "media3ResolvedVersion": "1.9.0",
+  "deviceTests": "Not run: no adb device; emulator launch rejected by automatic approval policy."
+}
