@@ -25,6 +25,7 @@ import com.facebook.react.uimanager.events.Event
 class HardwareVideoView(context: Context) : FrameLayout(context), LifecycleEventListener {
   var onPlaybackEvent: ((String, Long) -> Unit)? = null
   var initialPositionMs = 0L
+  var configuredSource: String? = null
   private val view = PlayerView(context)
   private var player: ExoPlayer? = null
   private var source: String? = null
@@ -104,7 +105,15 @@ class HardwareVideoViewManager : SimpleViewManager<HardwareVideoView>() {
       })
     }
   }
-  @ReactProp(name = "source") fun source(view: HardwareVideoView, value: String?) { view.setSource(value) }
+  @ReactProp(name = "source") fun source(view: HardwareVideoView, value: String?) { view.configuredSource = value }
+  @ReactProp(name = "initialPositionMs", defaultDouble = 0.0)
+  fun position(view: HardwareVideoView, value: Double) {
+    view.initialPositionMs = if (value.isFinite()) value.toLong().coerceAtLeast(0) else 0
+  }
+  override fun onAfterUpdateTransaction(view: HardwareVideoView) {
+    super.onAfterUpdateTransaction(view)
+    view.setSource(view.configuredSource)
+  }
   override fun onDropViewInstance(view: HardwareVideoView) { view.dispose(); super.onDropViewInstance(view) }
   override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any> =
     mutableMapOf("topPlayback" to mapOf("registrationName" to "onPlayback"))

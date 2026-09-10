@@ -6,7 +6,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppIcon } from '../ui/icons';
 import { COLORS } from '../ui/theme';
-import { canUseSoftwarePlayback, preferSoftwarePlayback, openExternalVideo, SoftwareVideoView, HardwareVideoView } from './softwarePlayback';
+import { canUseSoftwarePlayback, canAutomaticallyDecodeLocally, preferSoftwarePlayback, openExternalVideo, SoftwareVideoView, HardwareVideoView } from './softwarePlayback';
 
 type VideoPlayerProps = {
   source: string;
@@ -35,10 +35,10 @@ function ConfiguredPlayback(props: VideoPlayerProps & { recovering: boolean }) {
   return <AutomaticPlayback key={mode ?? 'auto'} {...props} />;
 }
 function AutomaticPlayback(props: VideoPlayerProps & { recovering: boolean }) {
-  const [backend, setBackend] = useState<'checking' | 'media3' | 'software'>(() => canUseSoftwarePlayback(props.source) ? 'checking' : 'media3');
+  const [backend, setBackend] = useState<'checking' | 'media3' | 'software'>(() => canAutomaticallyDecodeLocally(props.source) ? 'checking' : 'media3');
   const [positionMs, setPositionMs] = useState(0);
   useEffect(() => {
-    if (!canUseSoftwarePlayback(props.source)) return;
+    if (!canAutomaticallyDecodeLocally(props.source)) return;
     let current = true;
     const timeout = setTimeout(() => { if (current) { current = false; setBackend('media3'); } }, 1500);
     void preferSoftwarePlayback(props.source).then(prefer => { if (current) { current = false; clearTimeout(timeout); setBackend(prefer ? 'software' : 'media3'); } });
@@ -46,7 +46,7 @@ function AutomaticPlayback(props: VideoPlayerProps & { recovering: boolean }) {
   }, [props.source]);
   if (backend === 'checking') return <View style={styles.empty}><ActivityIndicator color={COLORS.primary} /></View>;
   if (backend === 'software') return <SoftwarePlayer source={props.source} poster={props.poster} initialPositionMs={positionMs} />;
-  return <InlineVideoPlayer {...props} onSoftwareFallback={canUseSoftwarePlayback(props.source) ? position => {
+  return <InlineVideoPlayer {...props} onSoftwareFallback={canAutomaticallyDecodeLocally(props.source) ? position => {
     setPositionMs(Number.isFinite(position) ? Math.max(0, position * 1000) : 0);
     setBackend('software');
   } : undefined} />;
@@ -85,7 +85,7 @@ function InlineVideoPlayer({ source, poster, validateSource, onInvalidSource, re
   const { status } = useEvent(player, 'statusChange', { status: player.status });
   const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
   useEffect(() => {
-    if (hasFirstFrame || validation === 'invalid' || !onSoftwareFallback || (status !== 'loading' && !isPlaying)) return;
+    if (!/^(file|content):\/\//.test(source) || hasFirstFrame || validation === 'invalid' || !onSoftwareFallback || (status !== 'loading' && !isPlaying)) return;
     const timer = setTimeout(() => { player.pause(); onSoftwareFallback(player.currentTime); }, 15_000);
     return () => clearTimeout(timer);
   }, [source, hasFirstFrame, validation, status, isPlaying, onSoftwareFallback, player]);
@@ -97,7 +97,7 @@ function InlineVideoPlayer({ source, poster, validateSource, onInvalidSource, re
   useEffect(() => {
     let current = true;
     setValidation('idle');
-    if (status !== 'error') return () => { current = false; };
+    if (status !== 'error' || !/^(file|content):\/\//.test(source)) return () => { current = false; };
     const fallback = () => { if (current && onSoftwareFallback) { player.pause(); onSoftwareFallback(player.currentTime); } };
     if (!/^(file|content):\/\//.test(source) || !validateSource) { fallback(); return () => { current = false; }; }
     setValidation('checking');

@@ -8,7 +8,7 @@
 
 | 设置 | 当前 Android 实现 | 失败行为 |
 | --- | --- | --- |
-| 自动（默认） | Media3 平台解码；已知不支持的 AVC profile 直接使用 LibVLC 软件解码 | 解码异常或 15 秒没有首帧时回退一次；已证实文件结构损坏则提供重新下载 |
+| 自动（默认） | Media3 平台解码；已知不支持的 AVC profile 直接使用 LibVLC 软件解码 | 仅本地 file/content 源解码异常或 15 秒没有首帧时回退一次；HTTPS 错误/慢缓冲保持 Media3，不做本地能力探测；已证实文件结构损坏则提供重新下载 |
 | 硬解码 | 独立 Media3 PlayerView，视频 decoder selector 仅保留 `hardwareAccelerated` 解码器，音频正常选择 | 明确提示切换自动或软解码，不伪装成硬解码成功 |
 | 软解码 | LibVLC 3.7.5，关闭硬件解码，直接解码原始流 | 显示失败、重试与外部播放器入口 |
 
@@ -46,7 +46,7 @@
 
 本轮验证结果：
 
-- TypeScript 类型检查通过；相关完整回归 409 项通过、1 项跳过；新增设置保存和零设备解码帧结构检查后，受影响测试再次通过。
+- TypeScript 类型检查通过；当时选定的回归范围 409 项通过、1 项跳过（未包含 video-detail.test.tsx，不是完整回归；该路由测试在提交时存在 mock 漏改导致的失败）；新增设置保存和零设备解码帧结构检查后，受影响测试再次通过。
 - Android JVM 43 项通过；双 ABI（x86_64 / arm64-v8a）开发 APK 与 instrumentation APK 构建通过。
 - 在已连接的 `emulator-5554` 上运行真实样本：`OriginalMediaInstrumentedTest`、`LibVlcPlaybackInstrumentedTest` 两项通过。检查原件结构、软件封面、原件哈希保持不变；文件与 MediaStore content URI 均出帧、推进播放时钟，暂停后 seek 能到达请求的中点。
 - 目视检查了模拟器生成的封面、实际软件播放截图和集中设置界面，真实样本未出现截图所示的条纹花屏。
@@ -61,3 +61,15 @@
 - 本地锁定的 LibVLC 3.7.5 源码 `org/videolan/libvlc/Media.java`（本轮检查实际制品源码，不推断新版行为）。
 
 仍需后续设备验收：目标手机原始失败视频、HEVC Main10、VP9/AV1、不同厂商硬件、HDR 色彩、持续播放功耗与内存。LibVLC 分发许可和对应源码交付沿用已有发布检查，当前开发包验证不替代发布验收。
+
+## 审查修正
+
+修正 video-detail 路由测试的 probeVideoStructure mock；路由测试现在使用生产能力判断（包括 HTTPS 可手动软解），分别验证远程错误与慢缓冲不会触发自动解码回退。硬解码补齐 initialPositionMs ReactProp，等待 onAfterUpdateTransaction 后打开源，规避属性顺序影响。外部播放器启动显式派发主线程。
+
+核对锁定的 LibVLC 3.7.5 源码：VLCObject.setEventListener 在未指定 Handler 时使用 Looper.getMainLooper，dispatchEventFromNative 使用 Handler.post，因此“事件直接在 VLC 线程操作 UI”的判断不适用于本版本。SurfaceTexture 生命周期仍需独立压力测试；本轮不凭未经复现的竞态假设改变释放协议。
+
+后续工作：清理生产不可达转换代码和 projection/export 历史分支；将每轮退休扫描改为带版本标记的升级修复并验证恢复中断；发布前继续验证最终 APK 的 ELF/ZIP 16KB 对齐、依赖打包与体积、许可对应源码交付。历史检查不等于后续发布制品已经验收。
+
+审查修正验证：TypeScript 通过；包含全部 src/route-tests 的指定回归范围 435 项通过、1 项跳过。随后新增 HTTPS 原生探测短路断言，playbackRouting 的 6 项测试全通过。Android JVM 测试及双 ABI APK 构建通过。HardwareVideoPropsInstrumentedTest 在 emulator-5554 通过：两种 React 属性顺序均保留 ExoPlayer 的 4200ms pending seek，非有限/负数归零；这是进度传递验证，不是硬解码画面验收。
+
+本次开发 APK：332835012 字节，SHA-256 `46d62c271f10a558392e3b3c414d43262ac738c126727a6b78b02112cbbb5201`。检查 70 个 native 库的 ELF PT_LOAD 对齐与未压缩 ZIP 数据起点对齐，均满足 16384 字节；未发现重复库路径。这不能替代所有 native 符号冲突的运行验证，也不覆盖未来 release APK。

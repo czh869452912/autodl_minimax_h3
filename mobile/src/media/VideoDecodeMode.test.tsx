@@ -1,3 +1,4 @@
+import { NativeModules, Platform } from 'react-native';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 let mockMode: 'auto' | 'hardware' | 'software' = 'auto';
@@ -6,7 +7,7 @@ const mockPlayer = { pause: jest.fn(), currentTime: 3, status: 'readyToPlay' };
 let mockStatus = 'readyToPlay';
 jest.mock('../settings/videoDecodeMode', () => ({ useVideoDecodeMode: () => mockMode }));
 jest.mock('./softwarePlayback', () => ({
-  canUseSoftwarePlayback: () => true,
+  ...jest.requireActual('./softwarePlayback'),
   preferSoftwarePlayback: () => mockPrefer(),
   openExternalVideo: jest.fn(),
   SoftwareVideoView: (props: object) => require('react').createElement('Software', props),
@@ -17,7 +18,7 @@ jest.mock('expo', () => ({ useEvent: () => ({ status: mockStatus, isPlaying: tru
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 import { VideoPlayer } from './VideoPlayer';
 
-beforeEach(() => { mockMode = 'auto'; mockStatus = 'readyToPlay'; mockPrefer.mockResolvedValue(false); jest.useFakeTimers(); });
+beforeEach(() => { Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' }); NativeModules.AutoDLMedia = { softwareVideoPlayback: true }; mockMode = 'auto'; mockStatus = 'readyToPlay'; mockPrefer.mockResolvedValue(false); jest.useFakeTimers(); });
 afterEach(() => jest.useRealTimers());
 test.each(['hardware', 'software'] as const)('%s bypasses automatic selection and preserves explicit mode on failure', async mode => {
   mockMode = mode;

@@ -12,7 +12,7 @@ const mockResolveLocal = jest.fn(async (..._args: unknown[]): Promise<string | u
 const mockSync = jest.fn(async (..._args: unknown[]) => ({ tasks: [], summary: { operations: { remainingDue: 0, remainingScheduled: 0, budgetExhausted: false } } }));
 const mockRequestExport = jest.fn(async (_taskId: string, _policy: { keepPrivateCopy: boolean }) => ({ status: 'queued' as const }));
 const mockRequestRedownload = jest.fn(async (_taskId: string) => ({ status: 'queued' as const }));
-const mockProbeVideo = jest.fn(async (_source: string) => undefined);
+const mockProbeVideoStructure = jest.fn(async (_source: string) => undefined);
 const task = {
   id: 'task-1', prompt: 'A very long prompt. '.repeat(300), status: 'SUCCESS' as const,
   resolution: '768p竖', duration: 5, videoUrl: 'https://example/video.mp4',
@@ -33,7 +33,7 @@ jest.mock('../tasks/taskServices', () => ({ getTaskServices: () => ({
   taskCommandService: { requestExport: (taskId: string, policy: { keepPrivateCopy: boolean }) => mockRequestExport(taskId, policy),
   requestRedownload: (taskId: string) => mockRequestRedownload(taskId) },
 }) }));
-jest.mock('../native/media', () => ({ probeVideo: (source: string) => mockProbeVideo(source) }));
+jest.mock('../native/media', () => ({ probeVideoStructure: (source: string) => mockProbeVideoStructure(source) }));
 jest.mock('../tasks/localMedia', () => ({ resolveLocalVideoSource: (...args: unknown[]) => mockResolveLocal(...args) }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: (value: string) => mockCopy(value), getStringAsync: () => mockReadClipboard() }));
 jest.mock('../media/VideoPlayer', () => ({
@@ -57,7 +57,7 @@ describe('video detail screen', () => {
     mockSync.mockClear();
     mockRequestExport.mockClear();
     mockRequestRedownload.mockClear();
-    mockProbeVideo.mockClear();
+    mockProbeVideoStructure.mockClear();
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   });
 

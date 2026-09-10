@@ -4,8 +4,13 @@ export function canUseSoftwarePlayback(source: string): boolean {
   return Platform.OS === 'android' && NativeModules.AutoDLMedia?.softwareVideoPlayback === true && /^(file|content|https):\/\//.test(source);
 }
 
+/** Automatic fallback is a local decoding decision, not network error recovery. */
+export function canAutomaticallyDecodeLocally(source: string): boolean {
+  return /^(file|content):\/\//.test(source) && canUseSoftwarePlayback(source);
+}
+
 export async function preferSoftwarePlayback(source: string): Promise<boolean> {
-  if (!canUseSoftwarePlayback(source)) return false;
+  if (!canAutomaticallyDecodeLocally(source)) return false;
   try { return (await NativeModules.AutoDLMedia.videoPlaybackInfo(source))?.preferSoftware === true; }
   catch { return false; } // Metadata is a hint, never proof of corrupt bytes.
 }

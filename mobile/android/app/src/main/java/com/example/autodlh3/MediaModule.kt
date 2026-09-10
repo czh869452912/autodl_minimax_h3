@@ -215,19 +215,21 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
 
   @ReactMethod
   fun openExternalVideo(source: String, promise: Promise) {
-    try {
-      val parsed = Uri.parse(source)
-      val uri = when (parsed.scheme) {
-        "content" -> parsed
-        "file" -> FileProvider.getUriForFile(context, "${context.packageName}.media", File(requireNotNull(parsed.path)))
-        else -> throw IllegalArgumentException()
-      }
-      context.startActivity(Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, "video/*")
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-      })
-      promise.resolve(true)
-    } catch (_: Exception) { promise.reject("MEDIA_EXTERNAL_UNAVAILABLE", "没有可用的外部播放器，或原件已不可访问") }
+    com.facebook.react.bridge.UiThreadUtil.runOnUiThread {
+      try {
+        val parsed = Uri.parse(source)
+        val uri = when (parsed.scheme) {
+          "content" -> parsed
+          "file" -> FileProvider.getUriForFile(context, "${context.packageName}.media", File(requireNotNull(parsed.path)))
+          else -> throw IllegalArgumentException()
+        }
+        context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+          setDataAndType(uri, "video/*")
+          addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        })
+        promise.resolve(true)
+      } catch (_: Exception) { promise.reject("MEDIA_EXTERNAL_UNAVAILABLE", "没有可用的外部播放器，或原件已不可访问") }
+    }
   }
 
   @ReactMethod
