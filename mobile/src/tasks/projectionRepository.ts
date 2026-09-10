@@ -14,6 +14,7 @@ type TaskCardRow = {
   download_state?: DownloadState | null;
   download_error?: string | null;
   download_progress?: number | null;
+  compatibility_state?: TaskCard['compatibilityState'];
   gallery_uri?: string | null;
   export_state?: ExportState | null;
   export_error?: string | null;
@@ -71,6 +72,7 @@ const taskCardColumns = [
   'gallery_uri', 'export_state', 'export_error',
   'created_at', 'updated_at', 'started_at', 'execution_duration',
   'sync_error', 'last_sync_at',
+  "(SELECT o.state FROM workflow_operations o WHERE o.job_id=tasks.id AND o.kind='ARTIFACT_DOWNLOAD' AND json_valid(o.payload_json) AND json_extract(o.payload_json,'$.compatibilityOnly')=1 ORDER BY o.created_at DESC,o.id DESC LIMIT 1) AS compatibility_state",
 ].join(', ');
 
 function optionalString(value: string | null | undefined): string | undefined {
@@ -94,6 +96,7 @@ function toTaskCard(row: TaskCardRow): TaskCard {
     downloadState: row.download_state ?? (row.local_uri ? 'DOWNLOADED' : 'IDLE'),
     ...(optionalString(row.download_error) ? { downloadError: optionalString(row.download_error) } : {}),
     ...(optionalNumber(row.download_progress) == null ? {} : { downloadProgress: optionalNumber(row.download_progress) }),
+    ...(row.compatibility_state ? { compatibilityState: row.compatibility_state } : {}),
     ...(optionalString(row.gallery_uri) ? { galleryUri: optionalString(row.gallery_uri) } : {}),
     exportState: row.export_state ?? 'NOT_REQUESTED',
     ...(optionalString(row.export_error) ? { exportError: optionalString(row.export_error) } : {}),

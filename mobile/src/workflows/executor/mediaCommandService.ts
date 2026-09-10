@@ -127,6 +127,7 @@ export function createMediaCommandService(options: {
   const requestDownload = async (taskId: string, deliveryIntent?: SystemGalleryIntent): Promise<MediaCommandResult> => {
     await assertAppDatabaseWritableAsync(db);
     const initial = await loadContext(db, taskId);
+    if (!deliveryIntent && await casSource(initial, true)) return { status: 'already-complete' };
     if (!deliveryIntent && await casSource(initial)) return { status: 'already-complete' };
     const outcome = await transaction(db, async (db) => {
       await assertAppDatabaseWritableAsync(db);
@@ -244,6 +245,7 @@ export function createMediaCommandService(options: {
         });
       }
       if (original && context.task.download_error?.startsWith('ARTIFACT_COMPATIBILITY_')) return originalOutcome ?? { status: 'already-complete' };
+      if (original && !await casSource(context)) return originalOutcome ?? { status: 'already-complete' };
       if (delivery?.status === 'EXPORTED') return originalOutcome ?? { status: 'already-complete' };
       const active = await activeOperation(db, taskId, 'EXPORT', `export:${taskId}:${context.artifact.id}:system-gallery`);
       if (active) return { status: 'in-flight', operation: await operations.get(active.id) };

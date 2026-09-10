@@ -161,7 +161,7 @@ class MediaIntegrity(private val context: Context) {
     }
   }
 
-  fun probeVideo(source: String): VideoProbeResult {
+  fun probeVideo(source: String, checkDeviceDecode: Boolean = true): VideoProbeResult {
     if (source.isBlank()) throw MediaIntegrityException("MEDIA_SOURCE_INVALID")
     try {
       val container = withExtractor(source) { extractor ->
@@ -200,7 +200,7 @@ class MediaIntegrity(private val context: Context) {
         // Validate structural framing before checking this device's decoder capabilities.
         val result = VideoProbeResult(durationUs / 1_000L, videoTracks.size, 0, sampleCount)
         MediaValidationPolicy.errorCode(result)?.takeIf { it != "MEDIA_DECODE_FAILED" }?.let { throw MediaIntegrityException(it) }
-        for (format in formats) {
+        if (checkDeviceDecode) for (format in formats) {
           // Extractors may omit KEY_PROFILE even though the SPS declares High 10.
           if (format.getString(MediaFormat.KEY_MIME) == MediaFormat.MIMETYPE_VIDEO_AVC) {
             AvcProfilePolicy.profile(format.getByteBuffer("csd-0"))?.let { format.setInteger(MediaFormat.KEY_PROFILE, it) }
@@ -213,6 +213,7 @@ class MediaIntegrity(private val context: Context) {
       val durationMs = container.second / 1_000L
       val preliminary = VideoProbeResult(durationMs, container.first, 0, container.third)
       MediaValidationPolicy.errorCode(preliminary)?.takeIf { it != "MEDIA_DECODE_FAILED" }?.let { throw MediaIntegrityException(it) }
+      if (!checkDeviceDecode) return preliminary
       val durationUs = durationMs * 1_000L
       val positions = longArrayOf(0L, durationUs / 2L, maxOf(0L, durationUs - 100_000L))
       val decodedFrames = try { withRetriever(source) { retriever ->

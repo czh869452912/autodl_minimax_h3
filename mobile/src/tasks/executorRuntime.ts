@@ -1,3 +1,4 @@
+import { retireVideoConversion } from '../media/retireVideoConversion';
 import { readSettings } from '../settings/storage';
 import { artifactNetworkMessage } from '../workflows/executor/artifactErrors';
 import { getDatabase } from '../storage/databaseClient';
@@ -23,8 +24,7 @@ import { createSqliteMediaStore } from '../media/repository';
 import { materializeJobArtifacts } from '../media/materializer';
 import type { ArtifactRecord } from '../jobs/types';
 import { assertLocalExportSource, createSqliteExportStore, handleExport } from '../workflows/executor/exportOperation';
-import { exportVideo, probeVideo } from '../native/media';
-import { prepareCompatibleVideo, cancelCompatibleVideo } from '../native/videoCompatibility';
+import { exportVideo, probeVideoStructure } from '../native/media';
 import * as FileSystem from 'expo-file-system/legacy';
 import { removeCasPath } from '../media/cas';
 import { reconcileMediaState } from '../media/reconciliation';
@@ -74,6 +74,10 @@ function createApplicationExecutor(database: AppDatabase) {
         return;
       }
       if (operation.kind !== 'ARTIFACT_DOWNLOAD') return current.durable.handle(operation, owner);
+      if (operation.payload.compatibilityOnly === true) {
+        await operations.finish(operation.id, owner, 'FAILED', Date.now(), { code: 'ARTIFACT_CONVERSION_RETIRED', message: 'Original playback replaces conversion.', retryable: false });
+        return;
+      }
       await handleArtifactDownload(operation, owner, {
         operations,
         blobs,
@@ -84,9 +88,7 @@ function createApplicationExecutor(database: AppDatabase) {
           keepPrivateCopy: current.settings.keepPrivateCopy,
         },
         updateProjection: async () => undefined,
-        verifyVideo: probeVideo,
-        prepareCompatibleVideo,
-        cancelCompatibleVideo,
+        verifyVideo: probeVideoStructure,
         async ensureProjection(jobId, artifact) {
           const job = (await jobs.get(jobId));
           const task = await taskStore.get(jobId);
@@ -96,6 +98,11 @@ function createApplicationExecutor(database: AppDatabase) {
         },
         async updateDownloadState(state, errorCode) {
           if (!operation.jobId) throw new Error('JOB_ID_MISSING');
+          if (operation.payload.compatibilityOnly === true) {
+            // Conversion has its own durable operation state. It cannot hide a downloaded original.
+            await database.runAsync('UPDATE tasks SET updated_at=MAX(updated_at,?) WHERE id=?', Date.now(), operation.jobId);
+            return;
+          }
           const artifact = operation.payload.artifact as ArtifactRecord | undefined;
           if (!artifact?.id) throw new Error('ARTIFACT_INPUT_INVALID');
           const timestamp = Date.now();
@@ -157,6 +164,7 @@ function createApplicationExecutor(database: AppDatabase) {
   const executorRunner = createExecutorRunner({
     db: database, wakes: createExecutorWakeRepository(database),
     runCycle: async request => {
+      await retireVideoConversion(database, { now: Date.now(), resolveUri: path => `${FileSystem.documentDirectory ?? ''}${path}`, fileExists: async uri => { const info = await FileSystem.getInfoAsync(uri); return info.exists && !info.isDirectory; } });
       const repair = await repairStaleTaskStatuses(database);
       const result = await cycle.run({ reason: request.trigger === 'background' ? 'background' : request.trigger === 'service' ? 'service' : 'foreground' });
       return { ...result, budgetExhausted: result.budgetExhausted || repair.hasMore };

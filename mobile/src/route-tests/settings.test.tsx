@@ -97,3 +97,13 @@ it('edits and saves DeepSeek effort and output budget, and restores advanced def
     expect(saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ token: 'keep-token', llmApiKey: 'keep-key', llmModel: 'deepseek-v4-flash', llmReasoningEffort: 'default', llmMaxOutputTokens: '4096' }));
   } finally { act(() => tree?.unmount()); alert.mockRestore(); }
 });
+
+it('saves the centralized video decoding selection', async () => {
+  let tree!: ReturnType<typeof create>;
+  await act(async () => { tree = create(<SettingsScreen />); });
+  expect(tree.root.findByProps({ accessibilityLabel: '视频解码：自动' }).props.accessibilityState.checked).toBe(true);
+  act(() => tree.root.findByProps({ accessibilityLabel: '视频解码：软解码' }).props.onPress());
+  await act(async () => tree.root.findByProps({ accessibilityLabel: '保存设置' }).props.onPress());
+  expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ videoDecodeMode: 'software' }));
+  act(() => tree.unmount());
+});

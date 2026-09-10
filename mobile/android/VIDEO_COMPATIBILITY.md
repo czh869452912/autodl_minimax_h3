@@ -1,5 +1,25 @@
 # Local video compatibility engine
 
+## Multi-codec playback integration (2026-09-10)
+
+The application now also bundles LibVLC 3.7.5 for local software video playback.
+`VideoPlayer.tsx` routes local unsupported profiles to `LibVlcView`; regular files
+continue through expo-video / Media3 1.9.0. Conversion is a separate durable
+`compatibilityOnly` operation: an intact original is available before a compatible
+copy is ready. Failure of this derivative does not mark the original download failed.
+The conversion operation currently shares the serialized artifact lane.
+
+The older fixed landscape output rectangle described below has been replaced by
+`VideoEncodingPlans`: orientation-aware 1920/1080 and 1280/720 long/short edge
+candidates, encoder capability/alignment checks, aspect-preserving scale/pad, and
+at most three explicit `codec_name` attempts. Frame-count and full-decode checks
+remain strict. Bounded redacted diagnostics distinguish probe, decode, encode and
+output validation stages; persistent operation errors include `diagnosticStage`.
+
+See `docs/reviews/2026-09-10-multi-codec-implementation.md` at the repository root
+for tested boundaries, build evidence and instrumentation commands. Device playback
+and release acceptance are still pending; static 16KB alignment is not runtime QA.
+
 `VideoCompatibility.kt` exposes `prepareCompatibleVideo` and `cancelCompatibleVideo` through `AutoDLMedia`. The TypeScript contract lives in `mobile/src/native/videoCompatibility.ts`. The original is opened read-only and copied to a bounded private snapshot whose SHA-256 must match the caller's checkpoint. A successful result is an uncommitted CAS part: `files/cas/parts/sha256(operationId + NUL + decimalAttempt).part`. The caller owns CAS commit and gallery publication.
 
 Software FFmpeg decoders (`h264`, `hevc`, `vp9`) read SDR files, including H.264 High10. Android's `h264_mediacodec` encoder produces 8-bit YUV420 AVC baseline and FFmpeg's native AAC encoder handles audio. This does not require the device to decode High10. Missing or failing AVC encoders produce an explicit conversion failure. HDR/PQ/HLG, BT.2020, Dolby Vision and mastering/light metadata are rejected; there is no tone mapping. Inputs without explicit HDR metadata are treated as SDR. Network URLs and nested network protocols are rejected.

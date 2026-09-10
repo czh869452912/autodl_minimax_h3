@@ -18,5 +18,23 @@
     "name": "smart-exception-java-0.2.1-sources.jar",
     "url": "https://repo.maven.apache.org/maven2/com/arthenica/smart-exception-java/0.2.1/smart-exception-java-0.2.1-sources.jar",
     "sha256": "8275af16bcb006e3547edb18f1eda54875a4d749409290d9d0e97fed013e3be9"
+  },
+  {
+    "name": "libvlcjni-source.tar.gz",
+    "git": "https://code.videolan.org/videolan/libvlcjni.git",
+    "commit": "81bb02ba48dcad32550e0626139a387b3c30af04",
+    "directory": "libvlcjni"
+  },
+  {
+    "name": "vlc-source.tar.gz",
+    "git": "https://github.com/videolan/vlc.git",
+    "commit": "ac6c2a405d652b5576128ceb9fec2c342f0e83ec",
+    "directory": "vlc"
+  },
+  {
+    "name": "vlc-android-build-source.tar.gz",
+    "git": "https://github.com/videolan/vlc-android.git",
+    "commit": "c78874b9540be9328da92625559933d8a549cec2",
+    "directory": "vlc-android"
   }
 ]

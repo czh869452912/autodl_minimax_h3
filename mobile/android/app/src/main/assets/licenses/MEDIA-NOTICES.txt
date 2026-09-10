@@ -3,8 +3,18 @@ FFmpegKit: Copyright (c) 2018-2023 Arthenica and contributors.
 FFmpeg: Copyright (c) the FFmpeg developers and individual source contributors.
 cpu_features: Copyright Google LLC and contributors (Apache License 2.0).
 smart-exception-java 0.2.1: Arthenica (LGPLv3).
-Android's system zlib and MediaCodec are used; x264/GPL codec libraries are not bundled.
+Android's system zlib and MediaCodec are used; the FFmpegKit min build does not bundle x264/GPL codec libraries.
 Individual source files contain the authoritative copyright notices.
+
+LibVLC Android 3.7.5, VideoLAN and contributors.
+Maven artifact: org.videolan.android:libvlc-all:3.7.5
+AAR SHA-256: 2c25507adb1260aa4d81aad8c2ce98765d98026b9381f49ea454d0b8092f21cb
+Upstream: https://code.videolan.org/videolan/vlc-android
+Engine: https://code.videolan.org/videolan/vlc
+LibVLC engine is LGPL; bundled modules/dependencies have their own licenses.
+See LIBVLC-BUILD-AND-PROVENANCE.md in the release source bundle for the
+pinned JNI, VLC core, Android build revisions, patches and contrib dependency
+source-fetch recipes. These are separate from the FFmpegKit source archives.
 
 The matching AutoDL-media-sources.zip is provided alongside this APK at:
 https://github.com/czh869452912/autodl_minimax_h3/releases

@@ -144,10 +144,14 @@ export function createSqliteExportStore(db: AppDatabase) {
   // A paired save is complete only when both independently durable publications finish.
   const refreshStatus = async (transaction: AppDatabase, jobId: string, assetId: string, now: number) => {
     const task = await transaction.getFirstAsync<{ download_state: string; download_error: string | null }>('SELECT download_state,download_error FROM tasks WHERE id=?', jobId);
-    const originalOnly = task?.download_state === 'DOWNLOAD_FAILED' && Boolean(task.download_error?.startsWith('ARTIFACT_COMPATIBILITY_'));
+    const legacyOriginalOnly = task?.download_state === 'DOWNLOAD_FAILED' && Boolean(task.download_error?.startsWith('ARTIFACT_COMPATIBILITY_'));
     const allRows = await transaction.getAllAsync<{ id: string; status: string; error: string | null }>(
       'SELECT id,status,error FROM media_deliveries WHERE id IN (?,?)', `${assetId}:system-gallery`, `${assetId}:system-gallery:original`,
     );
+    const pendingDerivative = await transaction.getFirstAsync(
+      "SELECT 1 FROM workflow_operations WHERE job_id=? AND kind='ARTIFACT_DOWNLOAD' AND state<>'SUCCEEDED' AND json_valid(payload_json) AND json_extract(payload_json,'$.compatibilityOnly')=1 AND job_id || ':' || json_extract(payload_json,'$.artifact.id')=? LIMIT 1",
+      jobId, assetId);
+    const originalOnly = legacyOriginalOnly || (Boolean(pendingDerivative) && !allRows.some(row => row.id === `${assetId}:system-gallery`));
     const rows = originalOnly ? allRows.filter(row => row.id.endsWith(':system-gallery:original')) : allRows;
     const primary = rows.find(row => row.id === `${assetId}:system-gallery${originalOnly ? ':original' : ''}`);
     const failed = rows.find(row => row.status === 'FAILED');

@@ -17,6 +17,7 @@ export type TaskCard = Readonly<{
   downloadState: DownloadState;
   downloadError?: string;
   downloadProgress?: number;
+  compatibilityState?: 'PENDING' | 'CLAIMED' | 'SUCCEEDED' | 'FAILED' | 'BLOCKED';
   galleryUri?: string;
   exportState: ExportState;
   exportError?: string;
