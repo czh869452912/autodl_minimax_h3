@@ -112,8 +112,8 @@ android {
         // dev.jdtech.mpv:libmpv:1.0.0 declares and supports Android API 26+.
         minSdkVersion Math.max(26, rootProject.ext.minSdkVersion as int)
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 31
-        versionName "1.4.21"
+        versionCode 32
+        versionName "1.4.22"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
