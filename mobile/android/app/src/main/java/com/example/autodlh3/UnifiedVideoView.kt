@@ -39,6 +39,22 @@ class UnifiedVideoView(context: Context) : FrameLayout(context), LifecycleEventL
     (context as? ReactContext)?.addLifecycleEventListener(this)
   }
 
+  override fun requestLayout() {
+    super.requestLayout()
+    // React Native owns this host's bounds and may not run another Android layout
+    // pass when they are unchanged. Native children still need one after being
+    // moved back from the fullscreen window (and when their controls change).
+    post {
+      if (!disposed && isAttachedToWindow && playerView.parent === this) {
+        measure(
+          View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+          View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY),
+        )
+        layout(left, top, right, bottom)
+      }
+    }
+  }
+
   fun applyConfiguration() {
     if (disposed) return
     val next = configuredSource?.takeIf { it.isNotBlank() }
