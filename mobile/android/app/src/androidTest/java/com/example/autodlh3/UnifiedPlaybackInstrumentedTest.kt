@@ -24,6 +24,55 @@ import org.junit.runner.RunWith
 class UnifiedPlaybackInstrumentedTest {
   private val instrumentation = InstrumentationRegistry.getInstrumentation()
 
+  @Test fun exitingFullscreenRestoresInlineBoundsWithoutAnotherReactLayout() {
+    ActivityScenario.launch<CodecPlaybackTestActivity>(
+      Intent(instrumentation.targetContext, CodecPlaybackTestActivity::class.java),
+    ).use { scenario ->
+      scenario.onActivity { activity ->
+        val video = activity.video
+        (video.parent as android.view.ViewGroup).removeView(video)
+        // Like a React root: child bounds are assigned externally, not by the
+        // normal Android measure/layout traversal after requestLayout().
+        val root = object : android.widget.FrameLayout(activity) {
+          override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+            setMeasuredDimension(android.view.View.MeasureSpec.getSize(widthSpec), android.view.View.MeasureSpec.getSize(heightSpec))
+          }
+          override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) = Unit
+        }
+        root.addView(video)
+        activity.setContentView(root)
+        video.measure(
+          android.view.View.MeasureSpec.makeMeasureSpec(320, android.view.View.MeasureSpec.EXACTLY),
+          android.view.View.MeasureSpec.makeMeasureSpec(180, android.view.View.MeasureSpec.EXACTLY),
+        )
+        video.layout(20, 40, 340, 220)
+      }
+      awaitState(scenario) { it.playerView.width == 320 && it.playerView.height == 180 }
+      repeat(3) { cycle ->
+        scenario.onActivity { it.video.setFullscreen(true) }
+        // Let the Dialog actually lay out the player at fullscreen dimensions.
+        awaitState(scenario) { it.playerView.parent !== it && it.playerView.height > 180 }
+        if (cycle == 1) {
+          instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        } else {
+          scenario.onActivity { it.video.setFullscreen(false) }
+        }
+        awaitState(scenario) {
+          it.playerView.parent === it && it.playerView.width == 320 && it.playerView.height == 180
+        }
+        scenario.onActivity {
+          val video = it.video
+          assertEquals(20, video.left)
+          assertEquals(40, video.top)
+          assertEquals(320, video.playerView.measuredWidth)
+          assertEquals(180, video.playerView.measuredHeight)
+          assertEquals(0, video.playerView.left)
+          assertEquals(0, video.playerView.top)
+        }
+      }
+    }
+  }
+
   @Test fun sourceConfiguredBeforeViewAttachmentRendersPixels() {
     val context = instrumentation.targetContext
     val file = File(context.cacheDir, "mpv-before-attach.mp4")
