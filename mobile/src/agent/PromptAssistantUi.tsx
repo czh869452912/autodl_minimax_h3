@@ -482,8 +482,9 @@ export function ConversationTimeline({
   const setFollow = useCallback((value: boolean) => { followingLatestRef.current = value; setFollowingLatest(value); }, []);
   const inspectProcess = useCallback(() => setFollow(false), [setFollow]);
   const scrollToLatest = useCallback((animated = !isRunning) => {
-    if (followingLatestRef.current) listRef.current?.scrollToEnd({ animated });
-  }, [isRunning]);
+    // Keep the inspiration header visible when the empty page exceeds the viewport.
+    if (allRows.length && followingLatestRef.current) listRef.current?.scrollToEnd({ animated });
+  }, [isRunning, allRows.length]);
   useEffect(() => {
     scrollToLatest();
   }, [isRunning, scrollToLatest, rows.length]);
@@ -703,30 +704,58 @@ function EmptyTimeline({
 }: {
   onSelectSuggestion: (suggestion: string) => void;
 }) {
+  const { width } = useWindowDimensions();
+  const cardWidth = Math.min(300, Math.max(220, (width - 32) * 0.76));
   return (
     <View style={styles.empty}>
-      <View style={styles.emptyMark}>
-        <AppIcon
-          name="auto_awesome"
-          size={24}
-          color={LIGHT_PROMPT_COLORS.ink}
-        />
+      <View style={styles.emptyHeading}>
+        <View style={styles.emptyMark}>
+          <AppIcon name="auto_awesome" size={23} color="#FFFFFF" />
+        </View>
+        <Text style={styles.emptyTitle}>叮～今日灵感掉落</Text>
       </View>
-      <Text style={styles.emptyTitle}>
-        把一个想法，变成可执行的 H3 Prompt
-      </Text>
       <Text style={styles.emptySubtitle}>
-        描述主体、动作、镜头和氛围；我会帮你补全细节。
+        从一个灵感开始，让画面慢慢成形。
       </Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" snapToInterval={cardWidth + 14} decelerationRate="fast" contentContainerStyle={styles.inspirationRail}>
+        {EMPTY_SUGGESTIONS.slice(0, 2).map((suggestion, index) => (
+          <Pressable
+            key={suggestion}
+            accessibilityRole="button"
+            accessibilityLabel={`使用建议 ${suggestion}`}
+            accessibilityHint="填入输入框，可修改后发送"
+            onPress={() => onSelectSuggestion(suggestion)}
+            style={({ pressed }) => [styles.inspirationCard, { width: cardWidth, backgroundColor: index === 0 ? '#465957' : '#877564' }, pressed && styles.inspirationPressed]}
+          >
+            <View style={styles.inspirationCategory}>
+              <AppIcon name={index === 0 ? 'auto_awesome' : 'movie_filter'} size={18} color="#F3F2EB" />
+              <Text style={styles.inspirationCategoryText}>{index === 0 ? '镜头灵感' : '风格实验室'}</Text>
+            </View>
+            <View style={styles.inspirationArtwork} accessible={false} importantForAccessibility="no-hide-descendants">
+              <View style={[styles.artOrb, { backgroundColor: index === 0 ? '#B6C9B3' : '#E5CDB0' }]} />
+              <View style={[styles.artFrame, { transform: [{ rotate: index === 0 ? '-12deg' : '12deg' }] }]}>
+                <AppIcon name={index === 0 ? 'movie_filter' : 'auto_awesome'} size={42} color="#FFFFFF" />
+              </View>
+              <Text style={styles.artCaption}>{index === 0 ? 'MOTION / 01' : 'STUDIO / 02'}</Text>
+            </View>
+            <Text style={styles.inspirationTitle}>{suggestion}</Text>
+            <View style={styles.inspirationCta}>
+              <Text style={styles.inspirationCtaText}>试试这个灵感</Text>
+              <Text style={styles.inspirationCtaText}>↗</Text>
+            </View>
+          </Pressable>
+        ))}
+      </ScrollView>
       <View style={styles.suggestions}>
-        {EMPTY_SUGGESTIONS.map((suggestion) => (
+        {EMPTY_SUGGESTIONS.slice(2).map((suggestion) => (
           <Pressable
             key={suggestion}
             accessibilityRole="button"
             accessibilityLabel={`使用建议 ${suggestion}`}
             onPress={() => onSelectSuggestion(suggestion)}
-            style={styles.suggestion}
+            style={({ pressed }) => [styles.suggestion, pressed && styles.composerActionPressed]}
           >
+            <Text style={styles.suggestionArrow}>↘</Text>
             <Text style={styles.suggestionText}>{suggestion}</Text>
           </Pressable>
         ))}
@@ -1020,6 +1049,7 @@ export function Composer({
           ref={inputRef}
           value={value}
           onChangeText={onChangeText}
+          accessibilityLabel="创作想法"
           placeholder="描述你想生成的画面…"
           placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder}
           multiline
