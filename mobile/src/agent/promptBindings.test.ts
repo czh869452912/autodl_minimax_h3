@@ -39,3 +39,25 @@ it('never repairs missing or ambiguous references by guessing', () => {
     expect(preparePromptExport('@图片2', source)).toMatchObject({ ok: false, prompt: '@图片2' });
   }
 });
+
+it('assigns continuous export positions to mixed numbered and legacy images without references', () => {
+  const legacy = { ...image('legacy', '未绑定图片'), identityKnown: false };
+  const source = [legacy, image('numbered', '图片7')];
+  const result = preparePromptExport('A quiet landscape.', source);
+  expect(result).toMatchObject({ ok: true, prompt: 'A quiet landscape.', images: [
+    { id: 'numbered', displayName: '图片1', ordinal: 1 },
+    { id: 'legacy', displayName: '未绑定图片', ordinal: 2, identityKnown: false },
+  ] });
+  expect(validatePromptBindings(result.prompt, result.images).ok).toBe(true);
+  expect(legacy.ordinal).toBeUndefined();
+  expect(source[1].displayName).toBe('图片7');
+  expect(preparePromptExport('@图片7', source).ok).toBe(false);
+});
+
+it('assigns export positions to entirely unnumbered images without guessing numeric references', () => {
+  const source = [image('a', 'Reference'), image('b', '未绑定图片')];
+  const result = preparePromptExport('A quiet landscape.', source);
+  expect(result.images.map(image => image.ordinal)).toEqual([1, 2]);
+  expect(validatePromptBindings(result.prompt, result.images).ok).toBe(true);
+  expect(preparePromptExport('@图片1', source)).toMatchObject({ ok: false, missing: [1] });
+});

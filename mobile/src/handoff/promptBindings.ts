@@ -50,8 +50,10 @@ export function preparePromptExport(prompt: string, sourceImages: readonly Promp
   if (!bindings.ok) return { ...bindings, prompt };
   const rewritten = prompt.replace(/@(?:图片\s*|Picture\s+)(\d+)\b|<(?:图片\s*|Picture\s+)(\d+)>/gi,
     (label, chinese: string | undefined, bracketed: string | undefined) => label.replace(/\d+/, String(positions.get(Number(chinese ?? bracketed)))));
-  return { ...bindings, prompt: rewritten, images: bindings.images.map((image, index) => image.ordinal === undefined ? image : {
+  // With no numeric references, unnumbered legacy images are safe to assign
+  // export positions too. Referenced, unidentified images were rejected above.
+  return { ...bindings, prompt: rewritten, images: bindings.images.map((image, index) => ({
     ...image, ordinal: index + 1,
     displayName: imageReferenceOrdinal(image.displayName) === undefined ? image.displayName : image.displayName.replace(/\d+/, String(index + 1)),
-  }) };
+  })) };
 }
