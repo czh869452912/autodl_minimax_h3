@@ -61,6 +61,54 @@ function renderedText(tree: ReturnType<typeof create>): string[] {
 }
 
 describe('Prompt assistant UI primitives', () => {
+  it.each(['Picture 1', 'Picture 3', '图片3'])('continues numbering after restoring %s in StrictMode', async (displayName) => {
+    const saved = { id: 'saved', type: 'image', status: 'ready', displayName, size: 10, source: { type: 'url', value: 'file://saved' } };
+    const fresh = (id: string) => ({ id, status: 'ready', size: 10, source: { value: `file://${id}` } });
+    const clientState = { h3Composer: { text: 'use references', attachments: [saved] } };
+    const onAccept = jest.fn(async () => undefined);
+    const render = () => <React.StrictMode><PromptAssistantUi {...basePromptProps} clientState={clientState} onAccept={onAccept} /></React.StrictMode>;
+    mockChatContext = { ...mockChatContext, attachments: [fresh('new')] };
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(render()); });
+    const next = displayName === 'Picture 1' ? 2 : 4;
+    expect(tree.root.findByProps({ accessibilityLabel: `查看附件 图片${next}` })).toBeTruthy();
+    // Re-renders and removal must not renumber an existing attachment or reuse a number.
+    act(() => tree.update(render()));
+    mockChatContext = { ...mockChatContext, attachments: [] };
+    act(() => tree.update(render()));
+    mockChatContext = { ...mockChatContext, attachments: [fresh('later')] };
+    act(() => tree.update(render()));
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.onPress());
+    expect(onAccept.mock.calls[0]).toEqual([expect.objectContaining({ attachments: [
+      expect.objectContaining({ id: 'later', displayName: `图片${next + 1}` }),
+      expect.objectContaining({ id: 'saved', displayName }),
+    ] })]);
+    act(() => tree.unmount());
+  });
+
+  it('keeps image numbers across submitted turns and resumes them after reopening history', async () => {
+    const attachment = (id: string) => ({ id, status: 'ready', size: 10, source: { value: `file://${id}` } });
+    mockChatContext = { ...mockChatContext, attachments: [attachment('first')] };
+    const onAccept = jest.fn(async () => undefined);
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} onAccept={onAccept} />); });
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.onPress());
+    expect(onAccept.mock.calls[0]).toEqual([expect.objectContaining({ attachments: [expect.objectContaining({ displayName: '图片1' })] })]);
+    mockChatContext = { ...mockChatContext, attachments: [] };
+    act(() => tree.update(<PromptAssistantUi {...basePromptProps} onAccept={onAccept} />));
+    mockChatContext = { ...mockChatContext, attachments: [attachment('second')] };
+    act(() => tree.update(<PromptAssistantUi {...basePromptProps} onAccept={onAccept} />));
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.onPress());
+    expect(onAccept.mock.calls[1]).toEqual([expect.objectContaining({ attachments: [expect.objectContaining({ displayName: '图片2' })] })]);
+    act(() => tree.unmount());
+    const transcript = [{ id: 'u2', role: 'user', content: [{ type: 'image_url', image_url: { url: 'file://second' }, metadata: { attachmentId: 'second', displayName: '图片2' } }] }];
+    mockChatContext = { ...mockChatContext, attachments: [attachment('third')] };
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} transcript={transcript} onAccept={onAccept} />); });
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.onPress());
+    expect(onAccept.mock.calls[2]).toEqual([expect.objectContaining({ attachments: [expect.objectContaining({ displayName: '图片3' })] })]);
+    act(() => tree.unmount());
+  });
+
   it('does not reproject a stable transcript for reasoning-only or composer updates', () => {
     const project = jest.fn(() => []);
     const factory = jest.spyOn(timelineProjection, 'createTimelineProjection').mockReturnValue(project);

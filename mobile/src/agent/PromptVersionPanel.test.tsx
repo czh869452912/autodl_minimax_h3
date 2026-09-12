@@ -3,7 +3,7 @@ import { act, create } from 'react-test-renderer';
 import { KeyboardAvoidingView, Platform, Text } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { PromptVersionPanel } from './PromptVersionPanel';
-import type { PromptVersion } from './promptVersions';
+import { reconcilePromptVersions, type PromptVersion } from './promptVersions';
 import type { PromptHandoff } from '../handoff/promptHandoff';
 import { builtinWorkflowDefinitions } from '../workflows/registry/builtin';
 import zmPackage from '../../../registry/workflows/autodl.minimax-h3.zm-u24/1.0.0.json';
@@ -16,6 +16,33 @@ const versions: PromptVersion[] = [
 ];
 const text = (tree: ReturnType<typeof create>) => tree.root.findAllByType(Text).map((node) => [node.props.children].flat(Infinity).join('')).join('\n');
 const press = (tree: ReturnType<typeof create>, label: string) => tree.root.findByProps({ accessibilityLabel: label }).props.onPress();
+
+it('exports two successive image turns and can still export the original version', async () => {
+  const user = (n: number) => ({ id: `u${n}`, role: 'user', content: [{ type: 'image_url', image_url: { url: `file://image${n}` }, metadata: { attachmentId: `image${n}`, displayName: `图片${n}` } }] });
+  const assistant = (n: number) => ({ id: `a${n}`, role: 'assistant', content: `\`\`\`h3-prompt\nintegrated_multimodal_description: @图片${n} runs.\noverall_soundscape: Wind.\nnon_diegetic_music: None.\n\`\`\`` });
+  const messages = [user(1), assistant(1)];
+  const first = reconcilePromptVersions(messages, ['a1'], [], 1);
+  const onExport = jest.fn(async (_handoff: PromptHandoff) => undefined);
+  const props = { threadId: 't', onSelect: () => undefined, onRestore: () => undefined, onExport };
+  let tree!: ReturnType<typeof create>;
+  act(() => { tree = create(<PromptVersionPanel {...props} versions={first} />); });
+  act(() => press(tree, '预览并带入创建页'));
+  await act(async () => press(tree, '带入创建页'));
+  const second = reconcilePromptVersions([...messages, user(2), assistant(2)], ['a1', 'a2'], first, 2);
+  act(() => tree.update(<PromptVersionPanel {...props} versions={second} />));
+  act(() => press(tree, '预览并带入创建页'));
+  expect(tree.root.findByProps({ accessibilityLabel: '绑定图片 图片1' }).props.accessibilityState.checked).toBe(false);
+  expect(tree.root.findByProps({ accessibilityLabel: '绑定图片 图片2' }).props.accessibilityState.checked).toBe(true);
+  expect(tree.root.findByProps({ accessibilityLabel: '带入创建页' }).props.disabled).toBe(false);
+  await act(async () => press(tree, '带入创建页'));
+  expect(onExport.mock.calls[1][0]).toMatchObject({ prompt: first[0].promptText, images: [{ id: 'image2', uri: 'file://image2', displayName: '图片1', ordinal: 1 }] });
+  expect(second[1].promptText).toContain('@图片2');
+  act(() => tree.update(<PromptVersionPanel {...props} versions={second} selectedVersionId={first[0].id} />));
+  act(() => press(tree, '预览并带入创建页'));
+  await act(async () => press(tree, '带入创建页'));
+  expect(onExport.mock.calls[2][0]).toEqual(onExport.mock.calls[0][0]);
+  act(() => tree.unmount());
+});
 
 it('aligns unsupported generated parameters when opening the preview without changing the source version', () => {
   const version = { ...versions[0], parameters: { resolution: '768p(1:1)', seed: '0' } };
@@ -155,19 +182,19 @@ it('prevents duplicate exports while pending and closes stale previews on task c
   act(() => tree.unmount());
 });
 
-it('refuses gaps in numeric bindings and exports reordered candidates by image number', async () => {
+it('allows deselecting unreferenced earlier images and renumbers the exported images', async () => {
   const onExport = jest.fn(async (_handoff: PromptHandoff) => undefined);
   const reversed = { ...versions[1], images: [...versions[1].images].reverse() };
   let tree!: ReturnType<typeof create>;
   act(() => { tree = create(<PromptVersionPanel versions={[reversed]} threadId="t" onSelect={() => undefined} onRestore={() => undefined} onExport={onExport} />); });
   act(() => press(tree, '预览并带入创建页'));
   act(() => press(tree, '绑定图片 图片1'));
-  expect(tree.root.findByProps({ accessibilityLabel: '带入创建页' }).props.disabled).toBe(true);
+  expect(tree.root.findByProps({ accessibilityLabel: '带入创建页' }).props.disabled).toBe(false);
   await act(async () => press(tree, '带入创建页'));
-  expect(onExport).not.toHaveBeenCalled();
-  act(() => press(tree, '绑定图片 图片1'));
+  expect(onExport.mock.calls[0][0].images).toMatchObject([{ id: 'img9', displayName: '图片1', ordinal: 1 }]);
+  act(() => press(tree, '预览并带入创建页'));
   await act(async () => press(tree, '带入创建页'));
-  expect(onExport.mock.calls[0][0].images.map((image) => image.displayName)).toEqual(['图片1', '图片2']);
+  expect(onExport.mock.calls[1][0].images.map((image) => image.displayName)).toEqual(['图片1', '图片2']);
   act(() => tree.unmount());
 });
 

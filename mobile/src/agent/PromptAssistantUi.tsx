@@ -2,7 +2,7 @@ import { styles, sentStyles, markdownStyles } from './PromptAssistantStyles';
 import { HistoryList, type HistoryProps } from './HistoryList';
 import { ToolTimeline } from './ToolTimeline';
 export { ToolTimeline } from './ToolTimeline';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useCopilotChatContext } from '@copilotkit/react-native';
 import { CopilotMarkdown } from '@copilotkit/react-native/components';
 import { getSourceUrl } from '@copilotkit/shared';
@@ -51,6 +51,7 @@ import { enrichRunTools, indexRunTools, projectRunTimeline } from './runTimeline
 import { readPromptVersions, restorePromptVersion } from './promptVersions';
 import { PromptVersionPanel, type WorkflowChoice } from './PromptVersionPanel';
 import type { PromptHandoff } from '../handoff/promptHandoff';
+import { imageReferenceOrdinal } from '../handoff/promptBindings';
 import { createAgentId } from './submissionCommands';
 import { validateImageBudget } from '../media/attachments';
 import { createTimelineProjection } from './timelineProjection';
@@ -160,7 +161,7 @@ export function PromptAssistantUi({
   const submitLock = useRef(false);
   const inputRef = useRef<TextInput>(null);
   const attachmentNames = useRef(new Map(initialComposer.attachments.map(item => [item.id, item.displayName ?? '图片1'])));
-  const nextAttachmentNumber = useRef(1 + Math.max(0, ...initialComposer.attachments.map(item => Number(item.displayName?.replace('图片', '')) || 0)));
+  const nextAttachmentNumber = useRef(1 + Math.max(0, ...initialComposer.attachments.map(item => imageReferenceOrdinal(item.displayName ?? '') ?? 0)));
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const wide = width >= 900 && height >= 480;
@@ -215,20 +216,34 @@ export function PromptAssistantUi({
       { text: '取消', style: 'cancel' },
     ]);
   };
-  const composerAttachments = (() => {
-    const current = [...attachments, ...galleryAttachments] as AttachmentLike[];
-    if (!current.length) {
-      attachmentNames.current.clear();
-      nextAttachmentNumber.current = 1;
+  const historyImageNames = useMemo(() => {
+    const names = new Map<string, string>();
+    let nextNumber = 1;
+    for (const row of rows) {
+      if (row.kind !== 'user') continue;
+      for (const image of row.attachments) {
+        const ordinal = imageReferenceOrdinal(image.displayName ?? '');
+        if (ordinal) nextNumber = Math.max(nextNumber, ordinal + 1);
+        if (image.attachmentId && image.displayName) names.set(image.attachmentId, image.displayName);
+      }
     }
+    return { names, nextNumber };
+  }, [rows]);
+  const composerImageNames = (() => {
+    // Allocate on a detached map so discarded renders cannot consume numbers.
+    const names = new Map([...attachmentNames.current, ...historyImageNames.names]);
     const named = assignImageDisplayNames(
-      current,
-      attachmentNames.current,
-      nextAttachmentNumber.current,
+      [...attachments, ...galleryAttachments] as AttachmentLike[],
+      names,
+      Math.max(nextAttachmentNumber.current, historyImageNames.nextNumber),
     );
-    nextAttachmentNumber.current = named.nextNumber;
-    return named.attachments;
+    return { ...named, names };
   })();
+  const composerAttachments = composerImageNames.attachments;
+  useLayoutEffect(() => {
+    attachmentNames.current = composerImageNames.names;
+    nextAttachmentNumber.current = composerImageNames.nextNumber;
+  });
   // Depend on identities rather than image bytes or streamed assistant state.
   const composerSignature = composerAttachments.map(item => `${item.id}:${item.status}:${item.displayName}`).join('|');
   useEffect(() => {
