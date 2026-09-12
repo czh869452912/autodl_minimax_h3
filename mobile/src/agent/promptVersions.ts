@@ -1,6 +1,6 @@
 import { normalizeMessages } from './agentPresentation';
 import { parsePromptCandidates } from './promptParser';
-import type { PromptBindingImage } from '../handoff/promptBindings';
+import { imageReferenceOrdinal, type PromptBindingImage } from '../handoff/promptBindings';
 import type { PromptRun } from './runState';
 
 export type PromptVersion = {
@@ -49,9 +49,8 @@ export function reconcilePromptVersions(messages: readonly unknown[], completedI
   for (const message of messages) {
     if (!record(message)) continue;
     if (message.role === 'user') {
-      // Default preview candidates come only from the most recent image-bearing
-      // user turn. Text-only refinements retain them; never merge same labels
-      // across turns. The export preview makes this scope explicit and editable.
+      // Snapshot all images available to this turn. Legacy conversations reused
+      // labels, so a later upload replaces that label instead of making it ambiguous.
       const parts = [...(Array.isArray(message.content) ? message.content : []), ...(Array.isArray(message.attachments) ? message.attachments : [])];
       const images = parts.flatMap((part, index): PromptBindingImage[] => {
         if (!record(part) || !['image', 'image_url'].includes(String(part.type))) return [];
@@ -64,7 +63,11 @@ export function reconcilePromptVersions(messages: readonly unknown[], completedI
           ...(id ? {} : { identityKnown: false }), ...(typeof metadata.ordinal === 'number' ? { ordinal: metadata.ordinal } : {}),
           ...(image.filename ? { filename: image.filename } : {}), uri: image.uri }];
       });
-      if (images.length) candidates = images;
+      if (images.length) {
+        const ids = new Set(images.map(image => image.id));
+        const ordinals = new Set(images.map(image => image.ordinal ?? imageReferenceOrdinal(image.displayName)).filter(ordinal => ordinal !== undefined));
+        candidates = [...candidates.filter(image => !ids.has(image.id) && !ordinals.has(image.ordinal ?? imageReferenceOrdinal(image.displayName) ?? 0)), ...images];
+      }
       if (typeof message.id === 'string') userImages.set(message.id, candidates);
       continue;
     }

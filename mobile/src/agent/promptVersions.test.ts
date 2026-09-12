@@ -11,7 +11,7 @@ it('creates each completed artifact once and retains its immutable image identit
   const next = reconcilePromptVersions([...messages, user('u2', '图片9'), assistant('a2')], ['a1', 'a2'], versions, 200);
   expect(next).toHaveLength(2);
   expect(next[0]).toEqual(versions[0]);
-  expect(next[1].images.map((image) => image.id)).toEqual(['attachment-u2']);
+  expect(next[1].images.map((image) => image.id)).toEqual(['attachment-u1', 'attachment-u2']);
   expect(versions).toHaveLength(1);
   expect(reconcilePromptVersions(messages, ['a1'], next, 300)).toEqual(next);
 });
@@ -26,9 +26,9 @@ it('tolerates malformed legacy image parts while keeping valid references', () =
   expect(reconcilePromptVersions(messages, ['a'], [], 1)[0].images[0].id).toBe('attachment-u1');
 });
 
-it('keeps latest image candidates for a text-only refinement without combining older turns', () => {
+it('keeps the conversation image context for a text-only refinement', () => {
   const messages = [user('old', '图片1'), user('new', '图片7'), { id: 'refine', role: 'user', content: 'Faster.' }, assistant('a')];
-  expect(reconcilePromptVersions(messages, ['a'], [], 1)[0].images.map((image) => image.id)).toEqual(['attachment-new']);
+  expect(reconcilePromptVersions(messages, ['a'], [], 1)[0].images.map((image) => image.id)).toEqual(['attachment-old', 'attachment-new']);
 });
 
 it('binds a retry artifact to its original user image context even after newer conversations', () => {

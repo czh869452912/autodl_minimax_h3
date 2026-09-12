@@ -22,7 +22,7 @@ export function parsePromptImageReferences(prompt: string): Array<{ ordinal: num
   return [...ordinals].map(ordinal => ({ ordinal, label: `图片${ordinal}` }));
 }
 
-export function validatePromptBindings(prompt: string, sourceImages: readonly PromptBindingImage[]) {
+export function validatePromptBindings(prompt: string, sourceImages: readonly PromptBindingImage[], requireContiguous = true) {
   const references = parsePromptImageReferences(prompt);
   const images = sourceImages.map(image => ({ ...image, ...(image.ordinal ?? imageReferenceOrdinal(image.displayName) ? { ordinal: image.ordinal ?? imageReferenceOrdinal(image.displayName) } : {}) }));
   const ids = new Set<string>();
@@ -38,7 +38,20 @@ export function validatePromptBindings(prompt: string, sourceImages: readonly Pr
     } else if (references.length > 0) invalid = true;
   }
   images.sort((left, right) => (left.ordinal ?? Infinity) - (right.ordinal ?? Infinity));
-  if (ordinals.size && images.some((image, index) => image.ordinal !== index + 1)) invalid = true;
+  if (requireContiguous && ordinals.size && images.some((image, index) => image.ordinal !== index + 1)) invalid = true;
   const missing = references.filter(reference => !images.some(image => image.identityKnown !== false && image.ordinal === reference.ordinal)).map(reference => reference.ordinal);
   return { ok: !invalid && missing.length === 0, images, missing, invalid };
+}
+
+/** Translate conversation labels to the creation page's selected image positions. */
+export function preparePromptExport(prompt: string, sourceImages: readonly PromptBindingImage[]) {
+  const bindings = validatePromptBindings(prompt, sourceImages, false);
+  const positions = new Map(bindings.images.map((image, index) => [image.ordinal, index + 1]));
+  if (!bindings.ok) return { ...bindings, prompt };
+  const rewritten = prompt.replace(/@(?:图片\s*|Picture\s+)(\d+)\b|<(?:图片\s*|Picture\s+)(\d+)>/gi,
+    (label, chinese: string | undefined, bracketed: string | undefined) => label.replace(/\d+/, String(positions.get(Number(chinese ?? bracketed)))));
+  return { ...bindings, prompt: rewritten, images: bindings.images.map((image, index) => image.ordinal === undefined ? image : {
+    ...image, ordinal: index + 1,
+    displayName: imageReferenceOrdinal(image.displayName) === undefined ? image.displayName : image.displayName.replace(/\d+/, String(index + 1)),
+  }) };
 }

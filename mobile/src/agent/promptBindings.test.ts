@@ -1,4 +1,4 @@
-import { parsePromptImageReferences, validatePromptBindings } from '../handoff/promptBindings';
+import { parsePromptImageReferences, preparePromptExport, validatePromptBindings } from '../handoff/promptBindings';
 
 const image = (id: string, displayName: string, ordinal?: number) => ({ id, displayName, uri: `file://${id}`, ...(ordinal ? { ordinal } : {}) });
 
@@ -21,4 +21,21 @@ it('rejects duplicate aliases, conflicting explicit ordinals, gaps and duplicate
     [image('b', 'Picture 2')],
     [image('a', '图片1'), image('a', '图片2')],
   ]) expect(validatePromptBindings('<Picture 2>', images).ok).toBe(false);
+});
+
+it('remaps sparse conversation references and images together without changing the source', () => {
+  const source = [image('second', '图片12'), image('first', '图片2')];
+  const prompt = '@图片12 follows <Picture 2>, @Picture 12 and <图片2>.';
+  const result = preparePromptExport(prompt, source);
+  expect(result).toMatchObject({ ok: true, prompt: '@图片2 follows <Picture 1>, @Picture 2 and <图片1>.', images: [
+    { id: 'first', displayName: '图片1', ordinal: 1 }, { id: 'second', displayName: '图片2', ordinal: 2 },
+  ] });
+  expect(validatePromptBindings(result.prompt, result.images).ok).toBe(true);
+  expect(source.map(image => image.displayName)).toEqual(['图片12', '图片2']);
+});
+
+it('never repairs missing or ambiguous references by guessing', () => {
+  for (const source of [[image('one', '图片1')], [image('a', '图片2'), image('b', '图片2')]]) {
+    expect(preparePromptExport('@图片2', source)).toMatchObject({ ok: false, prompt: '@图片2' });
+  }
 });

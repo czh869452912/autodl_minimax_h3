@@ -51,6 +51,7 @@ import { enrichRunTools, indexRunTools, projectRunTimeline } from './runTimeline
 import { readPromptVersions, restorePromptVersion } from './promptVersions';
 import { PromptVersionPanel, type WorkflowChoice } from './PromptVersionPanel';
 import type { PromptHandoff } from '../handoff/promptHandoff';
+import { imageReferenceOrdinal } from '../handoff/promptBindings';
 import { createAgentId } from './submissionCommands';
 import { validateImageBudget } from '../media/attachments';
 import { createTimelineProjection } from './timelineProjection';
@@ -217,9 +218,14 @@ export function PromptAssistantUi({
   };
   const composerAttachments = (() => {
     const current = [...attachments, ...galleryAttachments] as AttachmentLike[];
-    if (!current.length) {
-      attachmentNames.current.clear();
-      nextAttachmentNumber.current = 1;
+    // Resume numbering from the conversation, including after reopening it.
+    for (const row of rows) {
+      if (row.kind !== 'user') continue;
+      for (const image of row.attachments) {
+        const ordinal = imageReferenceOrdinal(image.displayName ?? '');
+        if (ordinal) nextAttachmentNumber.current = Math.max(nextAttachmentNumber.current, ordinal + 1);
+        if (image.attachmentId && image.displayName) attachmentNames.current.set(image.attachmentId, image.displayName);
+      }
     }
     const named = assignImageDisplayNames(
       current,

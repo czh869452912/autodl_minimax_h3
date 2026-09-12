@@ -4,7 +4,7 @@ import * as Clipboard from 'expo-clipboard';
 import { LIGHT_PROMPT_COLORS as colors } from '../ui/theme';
 import { diffPromptVersions, type PromptVersion } from './promptVersions';
 import { normalizePromptHandoffParameters, type PromptHandoff } from '../handoff/promptHandoff';
-import { validatePromptBindings } from '../handoff/promptBindings';
+import { imageReferenceOrdinal, parsePromptImageReferences, preparePromptExport } from '../handoff/promptBindings';
 import type { WorkflowDefinition } from '../workflows/schema/types';
 import defaultWorkflow from '../workflows/definitions/autodl/minimax-h3-i2v-15s-v1.0.1.json';
 import { alignWorkflowInputs, canonicalInputs, mediaConstraints } from '../workflows/inputModel';
@@ -63,7 +63,7 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
   useEffect(() => { setExpanded(false); setCopyStatus(''); }, [selected?.id]);
   const diff = useMemo(() => compare && selected && prior ? diffPromptVersions(prior.promptText, selected.promptText) : [], [compare, selected?.promptText, prior?.promptText]);
   const activePreview = preview?.threadId === threadId ? preview : null;
-  const bindings = validatePromptBindings(activePreview?.version.promptText ?? '', activePreview?.version.images.filter(image => included.includes(image.id)) ?? []);
+  const bindings = preparePromptExport(activePreview?.version.promptText ?? '', activePreview?.version.images.filter(image => included.includes(image.id)) ?? []);
   const { images, missing, invalid: invalidBindings } = bindings;
   const parameterValidation = useMemo(() => {
     try {
@@ -91,7 +91,9 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
     if (disabled || !selected) return;
     setPreview({ threadId, version: { ...selected, images: selected.images.map((image) => ({ ...image })), parameters: { ...selected.parameters } } });
     parameterCache.current.clear(); setAlignmentNotices([]);
-    setIncluded(selected.images.map((image) => image.id));
+    const references = parsePromptImageReferences(selected.promptText);
+    const referenced = new Set(references.map(reference => reference.ordinal));
+    setIncluded(selected.images.filter(image => !references.length || referenced.has(image.ordinal ?? imageReferenceOrdinal(image.displayName) ?? 0)).map(image => image.id));
     const aligned = alignWorkflowInputs(workflowDefinition, { prompt: selected.promptText, ...selected.parameters });
     const values = canonicalInputs(workflowDefinition, aligned.values);
     setAlignmentNotices(aligned.notices);
@@ -105,7 +107,7 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
     const currentGeneration = generation.current;
     try {
       const choice = workflows?.find(item => item.definition.id === workflowDefinition.id);
-      await onExport({ ...(choice ? { target: { workflowId: choice.definition.id, workflowVersion: choice.definition.version, contentHash: choice.contentHash } } : {}), prompt: activePreview.version.promptText, images: images.map((image) => ({ ...image })), parameters: parameterValidation.parameters, source: { threadId: activePreview.threadId, messageId: activePreview.version.sourceMessageId, versionId: activePreview.version.id, ...(activePreview.version.artifactId ? { artifactId: activePreview.version.artifactId } : {}), ...(activePreview.version.sourceRevision !== undefined ? { sourceRevision: activePreview.version.sourceRevision } : {}) } });
+      await onExport({ ...(choice ? { target: { workflowId: choice.definition.id, workflowVersion: choice.definition.version, contentHash: choice.contentHash } } : {}), prompt: bindings.prompt, images: images.map((image) => ({ ...image })), parameters: parameterValidation.parameters, source: { threadId: activePreview.threadId, messageId: activePreview.version.sourceMessageId, versionId: activePreview.version.id, ...(activePreview.version.artifactId ? { artifactId: activePreview.version.artifactId } : {}), ...(activePreview.version.sourceRevision !== undefined ? { sourceRevision: activePreview.version.sourceRevision } : {}) } });
       if (choice) await saveSelectedWorkflow(choice.definition.id).catch(() => undefined);
       if (generation.current === currentGeneration) setPreview(null);
     } catch (cause) {
@@ -144,13 +146,13 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
             {workflows && <WorkflowSelector definitions={workflows.map(item => item.definition)} selectedId={workflowDefinition.id} disabled={busy} onSelect={selectTarget} />}
             {alignmentNotices.map((notice, index) => <Text key={index} style={styles.muted}>{notice}</Text>)}
             {images.length < mediaConstraints(workflowDefinition, 'images').minimum && <Text style={styles.muted}>此工作流至少需要 {mediaConstraints(workflowDefinition, 'images').minimum} 张参考图，请在创建页补充后提交。</Text>}
-            <Text style={styles.muted}>Prompt</Text><Text selectable style={styles.prompt}>{activePreview.version.promptText}</Text>
+            <Text style={styles.muted}>Prompt（导出内容）</Text><Text selectable style={styles.prompt}>{bindings.prompt}</Text>
             <Text style={styles.title}>绑定图片 · {images.length} / {activePreview.version.images.length}</Text>
-            <Text style={styles.muted}>默认列出生成此版本前最近一次上传的图片；请核对引用和标签。点击图片可取消或恢复绑定。</Text>
+            <Text style={styles.muted}>列出生成此版本时会话中已有的图片，默认勾选引用图片。导出时按所选图片顺序同步调整 Prompt 编号，历史版本不变。点击图片可取消或恢复绑定。</Text>
             <View style={styles.row}>{activePreview.version.images.map((image) => <Pressable key={image.id} accessibilityRole="checkbox" accessibilityLabel={`绑定图片 ${image.displayName}`} accessibilityState={{ checked: included.includes(image.id), disabled: busy }} disabled={busy} onPress={() => setIncluded((ids) => ids.includes(image.id) ? ids.filter((id) => id !== image.id) : [...ids, image.id])} style={[styles.imageCard, included.includes(image.id) && styles.activeVersion]}><Image source={{ uri: image.uri }} style={styles.thumbnail} accessibilityLabel={image.displayName} /><Text style={styles.actionText}>{included.includes(image.id) ? '✓ ' : '○ '}{image.displayName}</Text>{image.filename ? <Text numberOfLines={1} style={styles.filename}>{image.filename}</Text> : null}</Pressable>)}</View>
             {!activePreview.version.images.length && <Text style={styles.muted}>此版本没有可绑定的图片。</Text>}
             {missing.length > 0 && <Text accessibilityRole="alert" style={styles.error}>引用图片缺失或标签不唯一：{missing.join('、')}。请恢复绑定或返回会话补充图片后重新生成。</Text>}
-            {invalidBindings && <Text accessibilityRole="alert" style={styles.error}>图片编号必须从图片1连续排列，才能保持创建页的引用对应关系。请保留所选图片之前的图片；若此版本缺少这些图片，请返回会话补充后重新生成。</Text>}
+            {invalidBindings && <Text accessibilityRole="alert" style={styles.error}>图片身份或编号不唯一，请检查绑定；若图片信息缺失，请返回会话补充后重新生成。</Text>}
             <Text style={styles.title}>生成参数（可选）</Text><Text style={styles.muted}>留空使用创建页的工作流默认值。</Text>
             <WorkflowParameterFields definition={workflowDefinition} values={{ resolution, duration, seed }} disabled={busy} onChange={(target, value) => {
               if (target === 'resolution') setResolution(String(value));

@@ -61,6 +61,29 @@ function renderedText(tree: ReturnType<typeof create>): string[] {
 }
 
 describe('Prompt assistant UI primitives', () => {
+  it('keeps image numbers across submitted turns and resumes them after reopening history', async () => {
+    const attachment = (id: string) => ({ id, status: 'ready', size: 10, source: { value: `file://${id}` } });
+    mockChatContext = { ...mockChatContext, attachments: [attachment('first')] };
+    const onAccept = jest.fn(async () => undefined);
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} onAccept={onAccept} />); });
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.onPress());
+    expect(onAccept.mock.calls[0]).toEqual([expect.objectContaining({ attachments: [expect.objectContaining({ displayName: '图片1' })] })]);
+    mockChatContext = { ...mockChatContext, attachments: [] };
+    act(() => tree.update(<PromptAssistantUi {...basePromptProps} onAccept={onAccept} />));
+    mockChatContext = { ...mockChatContext, attachments: [attachment('second')] };
+    act(() => tree.update(<PromptAssistantUi {...basePromptProps} onAccept={onAccept} />));
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.onPress());
+    expect(onAccept.mock.calls[1]).toEqual([expect.objectContaining({ attachments: [expect.objectContaining({ displayName: '图片2' })] })]);
+    act(() => tree.unmount());
+    const transcript = [{ id: 'u2', role: 'user', content: [{ type: 'image_url', image_url: { url: 'file://second' }, metadata: { attachmentId: 'second', displayName: '图片2' } }] }];
+    mockChatContext = { ...mockChatContext, attachments: [attachment('third')] };
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} transcript={transcript} onAccept={onAccept} />); });
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.onPress());
+    expect(onAccept.mock.calls[2]).toEqual([expect.objectContaining({ attachments: [expect.objectContaining({ displayName: '图片3' })] })]);
+    act(() => tree.unmount());
+  });
+
   it('does not reproject a stable transcript for reasoning-only or composer updates', () => {
     const project = jest.fn(() => []);
     const factory = jest.spyOn(timelineProjection, 'createTimelineProjection').mockReturnValue(project);
