@@ -69,6 +69,10 @@ type AttachmentLike = {
 
 export type RunIssue = { kind: 'error' | 'aborted'; message: string; runId?: string };
 
+function isCompactPromptLayout(width: number, fontScale: number): boolean {
+  return width < 400 || fontScale > 1.15;
+}
+
 export function applyComposerSuggestion(
   value: string,
   setDraft: (value: string) => void,
@@ -141,6 +145,7 @@ export function PromptAssistantUi({
   const versionSheet = useRef<DraggableBottomSheetHandle>(null);
   const briefSheet = useRef<DraggableBottomSheetHandle>(null);
   const [brief, setBrief] = useState({ subject: '', camera: '', style: '', duration: '' });
+  const hasBrief = Object.values(brief).some(value => value.trim());
   // Runtime snapshots are published at a bounded rate. The SDK-only fallback
   // remains uncached because the SDK can mutate its message array in place.
   const projectionRevision = transcriptRevision ?? clientState;
@@ -163,7 +168,8 @@ export function PromptAssistantUi({
   const attachmentNames = useRef(new Map(initialComposer.attachments.map(item => [item.id, item.displayName ?? '图片1'])));
   const nextAttachmentNumber = useRef(1 + Math.max(0, ...initialComposer.attachments.map(item => imageReferenceOrdinal(item.displayName ?? '') ?? 0)));
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
+  const { width, height, fontScale } = useWindowDimensions();
+  const compactActions = isCompactPromptLayout(width, fontScale);
   const wide = width >= 900 && height >= 480;
   // AbstractAgent mutates its messages array when addMessage() is called. Do
   // not memoize by array identity or the first user bubble waits for the next
@@ -192,12 +198,15 @@ export function PromptAssistantUi({
       finally { submitLock.current = false; setSubmitting(false); }
   };
   const pickerLock = useRef(false);
-  const returnToMentions = useRef(false);
-  const addGalleryImages = async (source: 'gallery' | 'file' = 'gallery') => {
+  const addGalleryImages = async (source: 'gallery' | 'file', returnToMentions: boolean) => {
     if (pickerLock.current) return;
     pickerLock.current = true;
     try {
-      const remaining = Math.max(0, 9 - attachments.filter((item) => item.status === 'ready').length - galleryAttachments.length);
+      const remaining = Math.max(0, 9 - attachments.length - galleryAttachments.length);
+      if (!remaining) {
+        Alert.alert('添加图片失败', '参考图片最多 9 张，请先移除部分附件');
+        return;
+      }
       const picked = await pickAssistantImages(source, remaining);
       validateImageBudget([...attachments, ...galleryAttachments, ...picked]);
       setGalleryAttachments((current) => mergeUniqueAssistantAttachments(
@@ -206,15 +215,16 @@ export function PromptAssistantUi({
         new Set(attachments.map((attachment) => attachment.id)),
       ));
     } catch (error) {
-      Alert.alert('相册不可用', error instanceof Error ? error.message : '读取相册图片失败');
-    } finally { pickerLock.current = false; if (returnToMentions.current) { returnToMentions.current = false; setMentionSheetOpen(true); } }
+      Alert.alert('添加图片失败', error instanceof Error ? error.message : '读取图片失败，请重试');
+    } finally { pickerLock.current = false; if (returnToMentions) setMentionSheetOpen(true); }
   };
-  const handleOpenPicker = async () => {
+  const handleOpenPicker = async (returnToMentions = false) => {
+    const cancel = () => { if (returnToMentions) setMentionSheetOpen(true); };
     Alert.alert('添加图片附件', '选择图片来源', [
-      { text: '从相册选择', onPress: () => void addGalleryImages() },
-      { text: '从文件选择', onPress: () => void addGalleryImages('file') },
-      { text: '取消', style: 'cancel' },
-    ]);
+      { text: '从相册选择', onPress: () => void addGalleryImages('gallery', returnToMentions) },
+      { text: '从文件选择', onPress: () => void addGalleryImages('file', returnToMentions) },
+      { text: '取消', style: 'cancel', onPress: cancel },
+    ], { cancelable: true, onDismiss: cancel });
   };
   const historyImageNames = useMemo(() => {
     const names = new Map<string, string>();
@@ -371,15 +381,15 @@ export function PromptAssistantUi({
             onSelectSuggestion={applySuggestion}
           />
           <View style={styles.composerDock}>
-            <View style={styles.composerActions}>
-              <Pressable accessibilityRole="button" accessibilityLabel="补充创作信息" accessibilityState={{ expanded: briefOpen }} onPress={() => setBriefOpen(true)} style={({ pressed }) => [styles.composerAction, pressed && styles.composerActionPressed]}>
+            <View testID="composer-actions" style={styles.composerActions}>
+              <Pressable accessibilityRole="button" accessibilityLabel="补充创作信息" accessibilityState={{ expanded: briefOpen }} onPress={() => setBriefOpen(true)} style={({ pressed }) => [styles.composerAction, compactActions && styles.composerActionCompact, pressed && styles.composerActionPressed]}>
                 <AppIcon name="filter_list" size={18} color={LIGHT_PROMPT_COLORS.muted} />
-                <Text style={styles.composerActionText}>补充创作信息</Text>
+                <Text style={styles.composerActionText}>{compactActions ? '创作信息' : '补充创作信息'}</Text>
                 <AppIcon name="expand_more" size={16} color={LIGHT_PROMPT_COLORS.muted} />
               </Pressable>
-              {versions.length ? <Pressable accessibilityRole="button" accessibilityLabel="打开 Prompt 版本" accessibilityState={{ expanded: versionsOpen }} onPress={() => setVersionsOpen(true)} style={({ pressed }) => [styles.composerAction, pressed && styles.composerActionPressed]}>
+              {versions.length ? <Pressable accessibilityRole="button" accessibilityLabel="打开 Prompt 版本" accessibilityState={{ expanded: versionsOpen }} onPress={() => setVersionsOpen(true)} style={({ pressed }) => [styles.composerAction, compactActions && styles.composerActionCompact, pressed && styles.composerActionPressed]}>
                 <AppIcon name="list_alt" size={18} color={LIGHT_PROMPT_COLORS.muted} />
-                <Text style={styles.composerActionText}>Prompt 版本</Text>
+                <Text style={styles.composerActionText}>{compactActions ? '版本' : 'Prompt 版本'}</Text>
                 <Text style={styles.versionCount}>{versions.length}</Text>
                 <AppIcon name="expand_more" size={16} color={LIGHT_PROMPT_COLORS.muted} />
               </Pressable> : null}
@@ -424,9 +434,8 @@ export function PromptAssistantUi({
         onClose={() => setMentionSheetOpen(false)}
         onSelect={handleSelectMention}
         onAdd={() => {
-          returnToMentions.current = true;
           setMentionSheetOpen(false);
-          void handleOpenPicker();
+          void handleOpenPicker(true);
         }}
       />
       <DraggableBottomSheet ref={versionSheet} visible={versionsOpen} title="Prompt 版本" onClose={() => setVersionsOpen(false)}>
@@ -437,11 +446,12 @@ export function PromptAssistantUi({
           }} onExport={async handoff => { if (onExportHandoff) await onExportHandoff(handoff); else await onExportPrompt(handoff.prompt); setVersionsOpen(false); }} /> : null}
       </DraggableBottomSheet>
       <DraggableBottomSheet ref={briefSheet} visible={briefOpen} title="补充创作信息" onClose={() => setBriefOpen(false)} footer={
-          <Pressable accessibilityRole="button" accessibilityLabel="加入创作草稿" style={briefStyles.submit} onPress={() => {
+          <Pressable accessibilityRole="button" accessibilityLabel="加入创作草稿" disabled={!hasBrief} accessibilityState={{ disabled: !hasBrief }} style={[briefStyles.submit, !hasBrief && { opacity: 0.45 }]} onPress={() => {
             const labels = { subject: '主体与动作', camera: '镜头与运动', style: '风格与氛围', duration: '期望时长' };
             const extra = (Object.keys(brief) as Array<keyof typeof brief>).filter(key => brief[key].trim()).map(key => `${labels[key]}：${brief[key].trim()}`).join('\n');
             if (!extra) return;
             applySuggestion([draft.trim(), extra].filter(Boolean).join('\n'));
+            setBrief({ subject: '', camera: '', style: '', duration: '' });
             setBriefOpen(false);
           }}><Text style={briefStyles.submitText}>加入草稿</Text></Pressable>
       }>
@@ -480,6 +490,7 @@ export function ConversationTimeline({
 }) {
   const listRef = useRef<FlatList<ReturnType<typeof projectRunTimeline>[number]>>(null);
   const [visibleCount, setVisibleCount] = useState(50);
+  const [viewportHeight, setViewportHeight] = useState(0);
   const allRows = useMemo(() => {
     const runToolIds = new Set(runs.flatMap(run => run.tools.map(tool => tool.id)));
     return projectRunTimeline(rows, runs, completedMessageIds).map(row => row.kind === 'assistant' && row.tools.some(tool => runToolIds.has(tool.id))
@@ -495,6 +506,12 @@ export function ConversationTimeline({
   const [followingLatest, setFollowingLatest] = useState(true);
   const followingLatestRef = useRef(true);
   const setFollow = useCallback((value: boolean) => { followingLatestRef.current = value; setFollowingLatest(value); }, []);
+  const previousRowCount = useRef(allRows.length);
+  useLayoutEffect(() => {
+    // Scrolling inspiration must not opt the first conversation out of following.
+    if (previousRowCount.current === 0 && allRows.length > 0) setFollow(true);
+    previousRowCount.current = allRows.length;
+  }, [allRows.length, setFollow]);
   const inspectProcess = useCallback(() => setFollow(false), [setFollow]);
   const scrollToLatest = useCallback((animated = !isRunning) => {
     // Keep the inspiration header visible when the empty page exceeds the viewport.
@@ -529,12 +546,15 @@ export function ConversationTimeline({
             updateFollow('scroll-end', nativeEvent)
           }
           onContentSizeChange={() => scrollToLatest()}
-          onLayout={() => scrollToLatest()}
+          onLayout={({ nativeEvent }) => {
+            setViewportHeight(nativeEvent.layout.height);
+            scrollToLatest();
+          }}
           ListEmptyComponent={
             isRunning ? (
               <RunningIndicator />
             ) : (
-              <EmptyTimeline onSelectSuggestion={onSelectSuggestion} />
+              <EmptyTimeline viewportHeight={viewportHeight} onSelectSuggestion={onSelectSuggestion} />
             )
           }
           ListFooterComponent={
@@ -555,7 +575,7 @@ export function ConversationTimeline({
         />
           }
         />
-        {!followingLatest ? (
+        {allRows.length > 0 && !followingLatest ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="回到最新消息"
@@ -716,23 +736,26 @@ const EMPTY_SUGGESTIONS = Object.keys(officialH3SkillManifest)
 
 function EmptyTimeline({
   onSelectSuggestion,
+  viewportHeight,
 }: {
   onSelectSuggestion: (suggestion: string) => void;
+  viewportHeight: number;
 }) {
-  const { width } = useWindowDimensions();
-  const cardWidth = Math.min(300, Math.max(220, (width - 32) * 0.76));
+  const { width, height, fontScale } = useWindowDimensions();
+  const compact = isCompactPromptLayout(width, fontScale) || (viewportHeight || height) < 500;
+  const cardWidth = Math.min(300, Math.max(160, (width - 32) * 0.76));
   return (
-    <View style={styles.empty}>
+    <View style={[styles.empty, compact && { paddingTop: 4, paddingBottom: 4 }]}>
       <View style={styles.emptyHeading}>
         <View style={styles.emptyMark}>
           <AppIcon name="auto_awesome" size={23} color="#FFFFFF" />
         </View>
-        <Text style={styles.emptyTitle}>叮～今日灵感掉落</Text>
+        <Text style={[styles.emptyTitle, compact && { fontSize: 20, lineHeight: 28 }]}>叮～今日灵感掉落</Text>
       </View>
       <Text style={styles.emptySubtitle}>
         从一个灵感开始，让画面慢慢成形。
       </Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" snapToInterval={cardWidth + 14} decelerationRate="fast" contentContainerStyle={styles.inspirationRail}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" snapToInterval={cardWidth + 14} decelerationRate="fast" contentContainerStyle={[styles.inspirationRail, compact && { paddingTop: 14 }]}>
         {EMPTY_SUGGESTIONS.slice(0, 2).map((suggestion, index) => (
           <Pressable
             key={suggestion}
@@ -740,21 +763,21 @@ function EmptyTimeline({
             accessibilityLabel={`使用建议 ${suggestion}`}
             accessibilityHint="填入输入框，可修改后发送"
             onPress={() => onSelectSuggestion(suggestion)}
-            style={({ pressed }) => [styles.inspirationCard, { width: cardWidth, backgroundColor: index === 0 ? '#465957' : '#877564' }, pressed && styles.inspirationPressed]}
+            style={({ pressed }) => [styles.inspirationCard, { width: cardWidth, backgroundColor: index === 0 ? '#465957' : '#877564' }, compact && { padding: 14, borderRadius: 20 }, pressed && styles.inspirationPressed]}
           >
             <View style={styles.inspirationCategory}>
               <AppIcon name={index === 0 ? 'auto_awesome' : 'movie_filter'} size={18} color="#F3F2EB" />
               <Text style={styles.inspirationCategoryText}>{index === 0 ? '镜头灵感' : '风格实验室'}</Text>
             </View>
-            <View style={styles.inspirationArtwork} accessible={false} importantForAccessibility="no-hide-descendants">
+            {!compact && <View testID="inspiration-artwork" style={styles.inspirationArtwork} accessible={false} importantForAccessibility="no-hide-descendants">
               <View style={[styles.artOrb, { backgroundColor: index === 0 ? '#B6C9B3' : '#E5CDB0' }]} />
               <View style={[styles.artFrame, { transform: [{ rotate: index === 0 ? '-12deg' : '12deg' }] }]}>
                 <AppIcon name={index === 0 ? 'movie_filter' : 'auto_awesome'} size={42} color="#FFFFFF" />
               </View>
               <Text style={styles.artCaption}>{index === 0 ? 'MOTION / 01' : 'STUDIO / 02'}</Text>
-            </View>
-            <Text style={styles.inspirationTitle}>{suggestion}</Text>
-            <View style={styles.inspirationCta}>
+            </View>}
+            <Text style={[styles.inspirationTitle, compact && { fontSize: 18, lineHeight: 26, minHeight: 0, marginTop: 16 }]}>{suggestion}</Text>
+            <View style={[styles.inspirationCta, compact && { marginTop: 14 }]}>
               <Text style={styles.inspirationCtaText}>试试这个灵感</Text>
               <Text style={styles.inspirationCtaText}>↗</Text>
             </View>
@@ -935,7 +958,7 @@ function ImageMentionSheet({
             </ScrollView>
           ) : (
             <View style={styles.mentionEmpty}>
-              <Text style={styles.mentionEmptyText}>先上传图片附件</Text>
+              <Text accessibilityLiveRegion="polite" style={styles.mentionEmptyText}>{attachments.some(item => item.status === 'uploading') ? '图片正在上传，完成后可引用' : '先上传图片附件'}</Text>
               <Pressable
                 accessibilityLabel="上传图片附件"
                 onPress={onAdd}

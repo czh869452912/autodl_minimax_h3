@@ -50,6 +50,14 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
   const parameterCache = useRef(new Map<string, Record<string, unknown>>());
   const [error, setError] = useState('');
   const [copyStatus, setCopyStatus] = useState('');
+  const [restoreStatus, setRestoreStatus] = useState('');
+  const [restoring, setRestoring] = useState(false);
+  const restoreLock = useRef(false);
+  const restoreTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    restoreLock.current = false; setRestoring(false); setRestoreStatus('');
+    return () => clearTimeout(restoreTimer.current);
+  }, [threadId]);
   const [busy, setBusy] = useState(false);
   const [visibleCount, setVisibleCount] = useState(50);
   const visibleStart = Math.max(0, versions.length - visibleCount);
@@ -121,12 +129,12 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
     try { await Clipboard.setStringAsync(selected.promptText); setCopyStatus('已复制'); }
     catch { setCopyStatus('复制失败，请重试'); }
   }
-  if (!selected) return null;
+  if (!selected) return <View style={[styles.panel, inSheet && styles.sheetPanel]}><Text accessibilityLiveRegion="polite" style={styles.muted}>暂无可用版本，生成完成后会显示在这里。</Text></View>;
   return <View style={[styles.panel, inSheet && styles.sheetPanel]}>
     <View style={styles.heading}>{!inSheet && <Text style={styles.title}>Prompt 版本</Text>}<Text style={styles.muted}>版本 {selectedIndex + 1}{selectedIndex === versions.length - 1 ? ' · 最新' : ' · 历史'}</Text></View>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={styles.row}>
       {visibleStart > 0 && <Action label="加载更早版本" onPress={() => setVisibleCount(count => count + 50)} />}
-      {versions.slice(visibleStart).map((version, index) => <Pressable key={version.id} accessibilityRole="button" accessibilityLabel={`选择版本 ${visibleStart + index + 1}`} accessibilityState={{ selected: version.id === selected.id }} onPress={() => onSelect(version.id)} style={[styles.version, version.id === selected.id && styles.activeVersion]}><Text style={styles.actionText}>V{visibleStart + index + 1}{version.restoredFrom ? ' · 恢复' : ''}</Text></Pressable>)}
+      {versions.slice(visibleStart).map((version, index) => <Pressable key={version.id} accessibilityRole="button" accessibilityLabel={`选择版本 ${visibleStart + index + 1}`} accessibilityState={{ selected: version.id === selected.id }} onPress={() => { setRestoreStatus(''); onSelect(version.id); }} style={[styles.version, version.id === selected.id && styles.activeVersion]}><Text style={styles.actionText}>V{visibleStart + index + 1}{version.restoredFrom ? ' · 恢复' : ''}</Text></Pressable>)}
     </ScrollView>
     <ScrollView style={inSheet ? { flex: 1 } : { flexGrow: 0 }} contentContainerStyle={{ gap: 12, paddingBottom: 12 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
     <Text selectable numberOfLines={expanded ? undefined : inSheet ? 3 : 7} style={styles.prompt}>{selected.promptText}</Text>
@@ -134,10 +142,17 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onRe
     {compare && prior && <View style={styles.diff}><Text style={styles.muted}>V{selectedIndex} → V{selectedIndex + 1} · − 删除 / + 新增</Text><ScrollView style={styles.diffScroll} nestedScrollEnabled>{diff.map((line, index) => <Text key={index} selectable style={[styles.diffLine, line.kind === 'removed' && styles.removed, line.kind === 'added' && styles.added]}>{line.kind === 'added' ? '+ ' : line.kind === 'removed' ? '− ' : '  '}{line.text}</Text>)}</ScrollView></View>}
     </ScrollView>
     <View style={[{ gap: 10 }, inSheet && styles.sheetFooter]}>
-      <View style={styles.row}><Action label="复制版本 Prompt" onPress={copyPrompt} /><Action label="恢复此版本" disabled={disabled} onPress={() => { if (!disabled) onRestore(selected.id, createAgentId()); }} /></View>
+      <View style={styles.row}><Action label="复制版本 Prompt" onPress={copyPrompt} /><Action label="复制为最新版本" disabled={disabled || restoring} onPress={() => {
+        if (disabled || restoreLock.current) return;
+        restoreLock.current = true; setRestoring(true);
+        try { onRestore(selected.id, createAgentId()); setRestoreStatus('已复制为最新版本'); }
+        catch { setRestoreStatus('复制版本失败，请重试'); }
+        restoreTimer.current = setTimeout(() => { restoreLock.current = false; setRestoring(false); }, 1000);
+      }} /></View>
       <Action label="预览并带入创建页" primary disabled={disabled} onPress={openPreview} />
     </View>
     {copyStatus ? <Text accessibilityLiveRegion="polite" style={styles.muted}>{copyStatus}</Text> : null}
+    {restoreStatus ? <Text accessibilityLiveRegion="polite" style={styles.muted}>{restoreStatus}</Text> : null}
     {activePreview && <Modal visible transparent statusBarTranslucent animationType="slide" onRequestClose={() => { if (!busy) setPreview(null); }}>
       <KeyboardAvoidingView style={styles.overlay} behavior="padding">
         <View style={styles.modal} accessibilityViewIsModal onFocus={event => event.stopPropagation()} onBlur={event => event.stopPropagation()}>

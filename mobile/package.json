@@ -1,6 +1,6 @@
 {
   "name": "autodl-h3-mobile",
-  "version": "1.4.24",
+  "version": "1.4.25",
   "private": true,
   "main": "index.js",
   "scripts": {
