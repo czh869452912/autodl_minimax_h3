@@ -17,6 +17,13 @@ const versions: PromptVersion[] = [
 const text = (tree: ReturnType<typeof create>) => tree.root.findAllByType(Text).map((node) => [node.props.children].flat(Infinity).join('')).join('\n');
 const press = (tree: ReturnType<typeof create>, label: string) => tree.root.findByProps({ accessibilityLabel: label }).props.onPress();
 
+it('explains an empty version panel', () => {
+  let tree!: ReturnType<typeof create>;
+  act(() => { tree = create(<PromptVersionPanel versions={[]} threadId="t" inSheet onSelect={() => undefined} onRestore={() => undefined} onExport={async () => undefined} />); });
+  expect(text(tree)).toContain('暂无可用版本');
+  act(() => tree.unmount());
+});
+
 it('exports two successive image turns and can still export the original version', async () => {
   const user = (n: number) => ({ id: `u${n}`, role: 'user', content: [{ type: 'image_url', image_url: { url: `file://image${n}` }, metadata: { attachmentId: `image${n}`, displayName: `图片${n}` } }] });
   const assistant = (n: number) => ({ id: `a${n}`, role: 'assistant', content: `\`\`\`h3-prompt\nintegrated_multimodal_description: @图片${n} runs.\noverall_soundscape: Wind.\nnon_diegetic_music: None.\n\`\`\`` });
@@ -112,10 +119,14 @@ it('selects a compact old version, shows real changes, restores, and copies only
   act(() => press(tree, '选择版本 1'));
   expect(onSelect).toHaveBeenCalledWith('v1');
   act(() => { tree.update(<PromptVersionPanel versions={versions} selectedVersionId="v1" threadId="t" onSelect={onSelect} onRestore={onRestore} onExport={async () => undefined} />); });
-  act(() => press(tree, '恢复此版本'));
+  act(() => { press(tree, '复制为最新版本'); press(tree, '复制为最新版本'); });
+  expect(onRestore).toHaveBeenCalledTimes(1);
+  expect(text(tree)).toContain('已复制为最新版本');
   expect(onRestore).toHaveBeenCalledWith('v1', expect.any(String));
   await act(async () => press(tree, '复制版本 Prompt'));
   expect(Clipboard.setStringAsync).toHaveBeenCalledWith(versions[0].promptText);
+  act(() => press(tree, '选择版本 2'));
+  expect(text(tree)).not.toContain('已复制为最新版本');
   act(() => tree.unmount());
 });
 

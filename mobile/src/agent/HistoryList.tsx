@@ -66,6 +66,7 @@ export function HistoryList({
         <Text style={styles.newHistoryText}>新对话</Text>
       </Pressable>
       <SectionList
+        keyboardShouldPersistTaps="handled"
         sections={sections}
         style={styles.historyList}
         onEndReached={onLoadMoreHistory}
