@@ -23,3 +23,37 @@ test('command receipt observes atomic intent, projection and wake before returni
     expect(db.getFirstSync('SELECT * FROM tasks')).toEqual(before);
   } finally { db.close(); }
 });
+
+
+test.each(['PENDING', 'CLAIMED', 'SUCCEEDED'])('cancel is atomic, idempotent and never cancels a submitted operation (%s)', async state => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    db.runSync("INSERT INTO tasks(id,prompt,status,resolution,duration,created_at,updated_at) VALUES('c','p','QUEUED','720p',5,1,1)");
+    db.runSync("INSERT INTO workflow_jobs(id,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,status,created_at,updated_at) VALUES('c','h3','1','hash','a','1','{}','QUEUED',1,1)");
+    db.runSync("INSERT INTO workflow_operations(id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,created_at,updated_at) VALUES('submit','SUBMIT','c','submit:c','{}',?,?,1,1,1)", state, state === 'PENDING' ? 0 : 1);
+    const commands = createTaskCommandService({ db: db as never, fileExists: async () => false, resolveCasUri: p => p, invalidate: () => undefined });
+    if (state === 'PENDING') {
+      await commands.requestCancel('c'); await commands.requestCancel('c');
+      expect(db.getFirstSync('SELECT status FROM tasks')).toEqual({ status: 'CANCELLED' });
+      expect(db.getFirstSync('SELECT state FROM workflow_operations')).toEqual({ state: 'BLOCKED' });
+      expect(db.getAllSync('SELECT * FROM workflow_job_events')).toHaveLength(1);
+    } else {
+      await expect(commands.requestCancel('c')).rejects.toThrow('服务端');
+      expect(db.getFirstSync('SELECT status FROM tasks')).toEqual({ status: 'QUEUED' });
+    }
+  } finally { db.close(); }
+});
+
+
+test('download cancellation clears leases and pending delivery intent before native completion', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    db.runSync("INSERT INTO tasks(id,prompt,status,resolution,duration,download_state,export_state,created_at,updated_at) VALUES('d','p','SUCCESS','720p',5,'DOWNLOADING','QUEUED',1,1)");
+    db.runSync("INSERT INTO workflow_operations(id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,lease_owner,lease_expires_at,created_at,updated_at) VALUES('transfer','ARTIFACT_DOWNLOAD','d','artifact:d:v','{}','CLAIMED',1,1,'worker',9999,1,1)");
+    const commands = createTaskCommandService({ db: db as never, fileExists: async () => false, resolveCasUri: p => p, invalidate: () => undefined });
+    await commands.requestCancelMedia('d', 'ARTIFACT_DOWNLOAD');
+    await commands.requestCancelMedia('d', 'ARTIFACT_DOWNLOAD');
+    expect(db.getFirstSync('SELECT state,lease_owner FROM workflow_operations')).toEqual({ state: 'BLOCKED', lease_owner: null });
+    expect(db.getFirstSync('SELECT download_state,export_state FROM tasks')).toEqual({ download_state: 'DOWNLOAD_FAILED', export_state: 'NOT_REQUESTED' });
+  } finally { db.close(); }
+});

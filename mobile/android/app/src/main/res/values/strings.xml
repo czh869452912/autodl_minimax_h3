@@ -1,3 +1,19 @@
 <resources>
   <string name="app_name">AutoDL H3</string>
+  <string name="exo_controls_play_description">播放</string>
+  <string name="exo_controls_pause_description">暂停</string>
+  <string name="exo_controls_fullscreen_enter_description">进入全屏</string>
+  <string name="exo_controls_fullscreen_exit_description">退出全屏</string>
+  <string name="exo_controls_settings_description">播放设置</string>
+  <string name="exo_controls_seek_bar_description">播放进度</string>
+  <string name="exo_controls_hide">隐藏播放控件</string>
+  <string name="exo_controls_show">显示播放控件</string>
+  <string name="exo_controls_previous_description">上一段视频</string>
+  <string name="exo_controls_next_description">下一段视频</string>
+  <string name="exo_controls_playback_speed">播放速度</string>
+  <string name="exo_track_selection_title_audio">音轨</string>
+  <string name="exo_track_selection_auto">自动</string>
+  <string name="exo_track_selection_none">无</string>
+  <plurals name="exo_controls_fastforward_by_amount_description"><item quantity="other">快进 %d 秒</item></plurals>
+  <plurals name="exo_controls_rewind_by_amount_description"><item quantity="other">快退 %d 秒</item></plurals>
 </resources>

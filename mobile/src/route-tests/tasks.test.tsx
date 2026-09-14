@@ -68,3 +68,13 @@ test('automatic failure retains cards with a nonmodal stale indicator; manual fa
   expect(texts()).toContain('状态可能已过期：offline');
   expect(alert).toHaveBeenCalledTimes(1);
 });
+
+
+test('initial background read does not activate pull-to-refresh', async () => {
+  let release!: (value: any) => void;
+  mockRead.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
+  act(() => { tree = create(<TasksScreen />); });
+  expect(tree.root.findByType(FlatList).props.refreshing).toBe(false);
+  await act(async () => release({ revision: 1, items: [mockCard], activity: mockActivity }));
+  expect(tree.root.findByType(FlatList).props.refreshing).toBe(false);
+});

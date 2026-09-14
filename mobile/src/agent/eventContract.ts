@@ -1,7 +1,7 @@
 export const H3_EVENTS = {
   reasoning: 'h3.reasoning', workspace: 'h3.workspace', toolStatus: 'h3.tool.status', cancelled: 'h3.run.cancelled',
 } as const;
-export const H3_CLIENT_KEYS = ['h3Composer', 'h3Versions', 'h3SelectedVersionId', 'h3ReadAt', 'h3Workspace', 'h3Workspaces'] as const;
+export const H3_CLIENT_KEYS = ['h3Composer', 'h3Versions', 'h3SelectedVersionId', 'h3HiddenVersionIds', 'h3ReadAt', 'h3Workspace', 'h3Workspaces'] as const;
 export type WorkspaceSnapshot = Record<string, unknown> & { revision: number };
 export type H3CustomEvent =
   | { type: 'CUSTOM'; name: typeof H3_EVENTS.reasoning; value: { messageId: string; delta: string } }

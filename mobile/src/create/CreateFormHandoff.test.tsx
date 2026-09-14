@@ -1,3 +1,4 @@
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 import React, { StrictMode } from 'react';
 import { act, create } from 'react-test-renderer';
 import { Text, TextInput, Image } from 'react-native';
@@ -119,8 +120,8 @@ describe('Create prompt handoff', () => {
     await act(async () => { tree = create(<StrictMode><CreateForm draftId="d1" draftDependencies={context.drafts} submissionDependencies={context.submissionDependencies} /></StrictMode>); });
     expect(tree.root.findByType(WorkflowForm).props.value).toMatchObject({ prompt: 'Orbit a tower', resolution: '480p横', duration: 8, seed: 123 });
     expect(tree.root.findByType(Image).props.source.uri).toMatch(/^file:/);
-    expect(text(tree)).toContain('thread-1');
-    expect(text(tree)).toContain('version-2');
+    expect(text(tree)).toContain('提示词与参考素材已带入');
+    expect(text(tree)).not.toContain('version-2');
     expect(context.rows.size).toBe(1);
     expect(context.consume).toHaveBeenCalledTimes(1);
     expect(context.queue).not.toHaveBeenCalled();
@@ -179,8 +180,9 @@ describe('Create prompt handoff', () => {
     expect(context.rows.has('d1')).toBe(true);
     await act(async () => { tree.update(<CreateForm initialPrompt="Updated outside" draftId="d1" draftDependencies={context.drafts} submissionDependencies={context.submissionDependencies} />); });
     await act(async () => { pending.resolve(); });
-    expect(tree.root.findByType(WorkflowForm).props.value.prompt).toBe('Updated outside');
-    expect(context.consume).not.toHaveBeenCalled();
+    expect(tree.root.findByType(WorkflowForm).props.value.prompt).toBe('Orbit a tower');
+    expect(text(tree)).toContain('替换');
+    expect(context.consume).toHaveBeenCalledWith('d1');
     act(() => tree.unmount());
   });
 
@@ -221,7 +223,10 @@ it('reapplies a retained handoff after an edit conflict and can explicitly disca
   act(() => tree.unmount());
   const invalid = setup({ ...draft, handoff: { ...handoff, parameters: { durationSeconds: -1 } } });
   await act(async () => { tree = create(<CreateForm draftId="d1" draftDependencies={invalid.drafts} submissionDependencies={invalid.submissionDependencies} />); });
+  const discardAlert = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => undefined);
   await act(async () => tree.root.findByProps({ accessibilityLabel: '丢弃交接草稿' }).props.onPress());
+  await act(async () => { const buttons = discardAlert.mock.calls.at(-1)?.[2] as any[]; await buttons.find(button => button.style === 'destructive').onPress(); });
+  discardAlert.mockRestore();
   expect(invalid.discard).toHaveBeenCalledWith('d1');
   act(() => tree.unmount());
 });

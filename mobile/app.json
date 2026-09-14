@@ -1,5 +1,6 @@
 {
   "expo": {
+    "userInterfaceStyle": "light",
     "name": "AutoDL H3",
     "slug": "autodl-h3",
     "scheme": "autodlh3",

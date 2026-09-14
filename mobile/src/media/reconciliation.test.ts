@@ -116,3 +116,31 @@ test('advances a persisted cursor so healthy old tasks cannot starve later repai
     expect(db.getFirstSync("SELECT id FROM media_assets WHERE task_id='job-4'")).toBeTruthy();
   } finally { db.close(); }
 });
+
+
+test('user deletion survives repeated repair and stale upserts while sibling artifacts and shared files remain', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  const { createSqliteMediaStore } = require('./repository');
+  try {
+    await seedCompletedTask(db, 'deleted');
+    for (const id of ['v1', 'v2']) db.runSync("INSERT INTO workflow_artifacts(id,job_id,kind,uri,mime) VALUES(?,'deleted','video','https://cdn.test/v.mp4','video/mp4')", id);
+    await reconcileMediaState(deps(db));
+    const store = createSqliteMediaStore(db);
+    const old = await store.get('deleted:v1');
+    expect(old).toBeTruthy();
+    await store.remove('deleted:v1');
+    await store.upsert(old);
+    await store.upsertArtifactProjection(old);
+    await reconcileMediaState(deps(db));
+    await reconcileMediaState(deps(db));
+    expect(await store.get('deleted:v1')).toBeNull();
+    expect(await store.get('deleted:v2')).toBeTruthy();
+    db.runSync("INSERT INTO artifact_blob_refs(blob_sha256,owner_type,owner_id,created_at) VALUES('shared','workflow_artifact','deleted:v1',1)");
+    expect(db.getAllSync("SELECT * FROM artifact_blob_refs WHERE owner_id='deleted:v1'")).toEqual([]);
+    await store.upsertDelivery({ id: 'late', assetId: 'deleted:v1', target: 'system-gallery', status: 'EXPORTED', createdAt: 1, updatedAt: 2 });
+    expect(await store.listDeliveries('deleted:v1')).toEqual([]);
+    await store.remove('deleted:v2');
+    await reconcileMediaState(deps(db)); await reconcileMediaState(deps(db));
+    expect(db.getAllSync("SELECT * FROM media_assets WHERE task_id='deleted'")).toEqual([]);
+  } finally { db.close(); }
+});

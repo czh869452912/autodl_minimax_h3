@@ -16,6 +16,7 @@ export type AppliedPromptForm = {
   images: TaskMediaInput[];
   audios: TaskMediaInput[];
   revision: number;
+  undoMedia?: { images: TaskMediaInput[]; audios: TaskMediaInput[] };
 };
 export type PromptDraft = {
   id: string;
@@ -154,7 +155,7 @@ export function createPromptDraftStore(
       });
     },
     async saveForm(id: string, form: AppliedPromptForm): Promise<void> {
-      const staged = await assets.externalize(form.images);
+      const staged = await assets.externalize(form);
       try {
         await withWriteTransaction(db, async tx => {
           await assertAppDatabaseWritableAsync(tx);
@@ -162,7 +163,7 @@ export function createPromptDraftStore(
           if (!row || row.status !== 'applied') return;
           const current = decode(row);
           if (current.form && current.form.revision >= form.revision) return;
-          const next = { ...current, form: { ...form, images: staged.value } };
+          const next = { ...current, form: staged.value };
           await assets.release(tx, 'create_form', id);
           await assets.retain(tx, 'create_form', id, attachmentHashes(next));
           await tx.runAsync('UPDATE agent_handoffs SET payload_json=? WHERE id=?', JSON.stringify(next), id);

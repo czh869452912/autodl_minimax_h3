@@ -1,16 +1,20 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { userFacingError } from '../../src/media/mediaValidation';
+import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import type { TaskRecord } from '../../src/tasks/types';
-import { exportStatusLabel, mediaStatusLabel } from '../../src/gallery/presentation';
+import { exportStatusLabel } from '../../src/gallery/presentation';
+import { formatDownloadStatus, formatTaskStatus } from '../../src/tasks/presentation';
+import { taskProjectionEvents } from '../../src/tasks/taskProjectionEvents';
 import { VideoPlayer } from '../../src/media/VideoPlayer';
 import { AppIcon } from '../../src/ui/icons';
 import { COLORS, SPACING } from '../../src/ui/theme';
 import type { MediaAsset } from '../../src/media/types';
 import { resolveLocalVideoSource } from '../../src/tasks/localMedia';
 import { getTaskServices } from '../../src/tasks/taskServices';
+import { openExternalVideo, shareVideo } from '../../src/media/unifiedPlayback';
 import { probeVideoStructure } from '../../src/native/media';
 
 export default function VideoDetailScreen() {
@@ -22,41 +26,53 @@ export default function VideoDetailScreen() {
   const [exporting, setExporting] = useState(false);
   const [redownloading, setRedownloading] = useState(false);
   const [localSource, setLocalSource] = useState<string>();
+  const [loadError, setLoadError] = useState<string>();
+  const [actionNotice, setActionNotice] = useState('');
+  const readSequence = useRef(0);
+  const focused = useRef(false);
 
   const reloadTaskAndAsset = useCallback(async () => {
-    if (!id) return null;
-    const media = await getTaskServices().mediaStore.get(id);
-      const taskId = media?.taskId || id;
-    const value = await getTaskServices().taskStore.get(taskId);
-    if (!value) { setAsset(media); setTask(null); setLocalSource(undefined); return null; }
-      const verifiedLocalSource = await resolveLocalVideoSource({ task: value, asset: media });
+    if (!focused.current) return null;
+    const sequence = ++readSequence.current;
+    try {
+      const media = id ? await getTaskServices().mediaStore.get(id) : null;
+      const value = id ? await getTaskServices().taskStore.get(media?.taskId || id) : null;
+      const verifiedLocalSource = value ? await resolveLocalVideoSource({ task: value, asset: media }) : undefined;
+      if (sequence !== readSequence.current) return null;
       setLocalSource(verifiedLocalSource);
-    setAsset(media);
-    setTask(value);
-    return value;
+      setAsset(media);
+      setTask(value ?? null);
+      setLoadError(undefined);
+      return value;
+    } catch {
+      if (sequence === readSequence.current) setLoadError('作品状态读取失败，请重试');
+      return null;
+    } finally {
+      if (sequence === readSequence.current) setLoaded(true);
+    }
   }, [id]);
 
-  useEffect(() => {
-    if (!id) { setLoaded(true); return; }
-    void reloadTaskAndAsset().finally(() => setLoaded(true));
-  }, [id, reloadTaskAndAsset]);
+  useFocusEffect(useCallback(() => {
+    focused.current = true;
+    setLoaded(false);
+    setTask(null); setAsset(null); setLocalSource(undefined); setLoadError(undefined);
+    void reloadTaskAndAsset();
+    const unsubscribe = taskProjectionEvents.subscribe(() => { void reloadTaskAndAsset(); });
+    return () => { focused.current = false; readSequence.current++; unsubscribe(); };
+  }, [reloadTaskAndAsset]));
 
   if (!loaded) return <View style={styles.center}><ActivityIndicator color={COLORS.primaryActive} /><Text style={styles.muted}>正在加载作品…</Text></View>;
-  if (!task) return <View style={styles.center}><Text style={styles.title}>作品不存在或已删除</Text><Pressable accessibilityRole="button" accessibilityLabel="返回画廊" onPress={() => router.back()} style={styles.backAction}><Text style={styles.backGlyph}>‹</Text><Text style={styles.backActionText}>返回画廊</Text></Pressable></View>;
+  if (loadError && !task) return <View style={styles.center}><Text accessibilityRole="alert">{loadError}</Text><Pressable accessibilityRole="button" accessibilityLabel="重试读取作品" onPress={() => void reloadTaskAndAsset()} style={styles.backAction}><Text style={styles.backActionText}>重试</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="返回上一页" onPress={() => router.back()} style={styles.backAction}><Text style={styles.backActionText}>返回上一页</Text></Pressable></View>;
+  if (!task) return <View style={styles.center}><Text style={styles.title}>作品不存在或已删除</Text><Pressable accessibilityRole="button" accessibilityLabel="返回上一页" onPress={() => router.back()} style={styles.backAction}><Text style={styles.backGlyph}>‹</Text><Text style={styles.backActionText}>返回上一页</Text></Pressable></View>;
 
   const source = localSource || asset?.sourceUrl || task.videoUrl || '';
   const copyPrompt = async () => {
     if (!task.prompt.trim()) { Alert.alert('无法复制', '当前作品没有 Prompt'); return; }
     try {
       await Clipboard.setStringAsync(task.prompt);
-      const copied = await Clipboard.getStringAsync();
-      if (copied !== task.prompt) {
-        Alert.alert('复制不完整', '系统剪贴板未保留完整 Prompt，可能是键盘剪贴板或目标应用的长度限制。');
-        return;
-      }
-      Alert.alert('已复制', 'Prompt 已复制到剪贴板');
+      setActionNotice('Prompt 已复制到剪贴板');
     } catch {
-      Alert.alert('复制失败', '无法写入剪贴板，请稍后重试');
+      setActionNotice('复制失败，请稍后重试');
     }
   };
   const saveToGallery = async () => {
@@ -64,9 +80,7 @@ export default function VideoDetailScreen() {
     setExporting(true);
     try {
       await getTaskServices().taskCommandService.requestExport(task.id, { keepPrivateCopy: true });
-      const updated = await reloadTaskAndAsset();
-      if (updated?.exportState === 'EXPORTED') Alert.alert('已保存', '视频已保存到系统相册 / Movies / AutoDL-H3');
-      else if (updated?.exportState === 'EXPORT_FAILED') Alert.alert('保存失败', updated.exportError || '保存到系统相册失败');
+      await reloadTaskAndAsset();
     } catch (error) {
       Alert.alert('保存失败', error instanceof Error ? error.message : '保存到系统相册失败');
     } finally { setExporting(false); }
@@ -84,10 +98,21 @@ export default function VideoDetailScreen() {
   };
 
   return <SafeAreaView style={styles.safe} edges={['top', 'bottom']}><ScrollView testID="detail-content" style={styles.container} contentContainerStyle={styles.content}>
-    <View style={styles.header}><Pressable accessibilityRole="button" accessibilityLabel="返回画廊" onPress={() => router.back()} hitSlop={10} style={styles.back}><Text style={styles.backGlyph}>‹</Text><Text style={styles.backText}>返回画廊</Text></Pressable><Text style={styles.title}>视频详情</Text></View>
+    <View style={styles.header}><Pressable accessibilityRole="button" accessibilityLabel="返回上一页" onPress={() => router.back()} hitSlop={10} style={styles.back}><Text style={styles.backGlyph}>‹</Text><Text style={styles.backText}>返回上一页</Text></Pressable><Text style={styles.title}>视频详情</Text></View>
+    {loadError ? <Pressable accessibilityRole="button" accessibilityLabel="重试读取作品" onPress={() => void reloadTaskAndAsset()}><Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{loadError} · 点击重试</Text></Pressable> : null}
+    {task.exportState === 'EXPORT_FAILED' ? <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{userFacingError(task.exportError) || '保存到系统相册失败，请重试'}</Text> : null}
     <View testID="adaptive-media-region" style={styles.mediaRegion}><View testID="video-frame" style={styles.player}>{source ? <VideoPlayer source={source} poster={[asset?.posterPath, task.thumbnailUrl].find(uri => uri?.includes('/posters/sw-v3-'))} validateSource={localSource && source === localSource ? probeVideoStructure : undefined} onInvalidSource={localSource && source === localSource ? redownloadInvalidSource : undefined} recovering={redownloading} /> : <View accessibilityLabel="视频源不可用" style={styles.sourceEmpty}><AppIcon name="movie_filter" size={30} color={COLORS.textSubtle} /><Text style={styles.sourceEmptyText}>视频源不可用</Text></View>}</View></View>
-    <Text style={styles.meta}>{task.resolution} · {task.duration}s · {task.status} · {localSource ? '已下载' : mediaStatusLabel(task.downloadState === 'DOWNLOAD_FAILED' ? 'failed' : 'downloading')}</Text>
-    {source ? <View style={styles.exportRow}><Text style={styles.exportStatus}>{exporting || task.exportState === 'QUEUED' || task.exportState === 'EXPORTING' ? '正在保存到相册' : exportStatusLabel(task) || '尚未保存到相册'}</Text>{task.exportState !== 'EXPORTED' && <Pressable accessibilityRole="button" accessibilityLabel={task.exportState === 'EXPORT_FAILED' ? '重试保存到系统相册' : '保存到系统相册'} disabled={exporting || task.exportState === 'QUEUED' || task.exportState === 'EXPORTING'} onPress={() => void saveToGallery()} style={[styles.exportButton, (exporting || task.exportState === 'QUEUED' || task.exportState === 'EXPORTING') && styles.disabled]}><Text style={styles.exportButtonText}>{exporting || task.exportState === 'QUEUED' || task.exportState === 'EXPORTING' ? '保存中…' : task.exportState === 'EXPORT_FAILED' ? '重试保存到系统相册' : '保存到系统相册'}</Text></Pressable>}</View> : null}
+    {actionNotice ? <Text accessibilityLiveRegion="polite" style={styles.muted}>{actionNotice}</Text> : null}
+    {(task.syncError || task.downloadError) ? <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{userFacingError(task.syncError || task.downloadError)}</Text> : null}
+    {(task.status === 'SUCCESS' || task.status === 'PARTIAL_SUCCESS') && !localSource && task.downloadState !== 'DOWNLOADING' && task.downloadState !== 'ENQUEUED' ? <Pressable accessibilityRole="button" disabled={redownloading} style={styles.exportButton} onPress={() => {
+      if (redownloading) return;
+      setRedownloading(true);
+      void getTaskServices().taskCommandService.requestDownload(task.id).then(() => reloadTaskAndAsset()).catch(() => setActionNotice('下载未能开始，请刷新任务状态后重试')).finally(() => setRedownloading(false));
+    }}><Text style={styles.exportButtonText}>{redownloading ? '正在准备下载…' : task.downloadState === 'DOWNLOAD_FAILED' ? '重试下载视频' : '下载视频'}</Text></Pressable> : null}
+    {(task.syncError || task.downloadError || task.exportError) ? <Pressable accessibilityRole="button" style={styles.backAction} onPress={() => void Clipboard.setStringAsync([task.syncError, task.downloadError, task.exportError].filter(Boolean).join('\n')).then(() => setActionNotice('诊断已复制')).catch(() => setActionNotice('诊断复制失败'))}><Text style={styles.backActionText}>复制诊断详情</Text></Pressable> : null}
+    {localSource ? <View style={styles.exportRow}><Pressable accessibilityRole="button" style={styles.exportButton} onPress={() => void shareVideo(localSource).catch(() => setActionNotice('分享失败，请重试'))}><Text style={styles.exportButtonText}>分享视频</Text></Pressable><Pressable accessibilityRole="button" style={styles.exportButton} onPress={() => void openExternalVideo(localSource).catch(() => setActionNotice('没有可用的外部播放器'))}><Text style={styles.exportButtonText}>使用外部播放器</Text></Pressable></View> : null}
+    <Text style={styles.meta}>{task.resolution} · {task.duration}s · {formatTaskStatus(task.status)} · {localSource ? '已下载' : formatDownloadStatus(task.downloadState, task.downloadProgress)}</Text>
+    {source ? <View style={styles.exportRow}><Text accessibilityLiveRegion="polite" style={styles.exportStatus}>{exporting || task.exportState === 'QUEUED' || task.exportState === 'EXPORTING' ? '正在保存到相册' : exportStatusLabel(task) || '尚未保存到相册'}</Text>{task.exportState !== 'EXPORTED' && <Pressable accessibilityRole="button" accessibilityLabel={task.exportState === 'EXPORT_FAILED' ? '重试保存到系统相册' : '保存到系统相册'} disabled={exporting || task.exportState === 'QUEUED' || task.exportState === 'EXPORTING'} onPress={() => void saveToGallery()} style={[styles.exportButton, (exporting || task.exportState === 'QUEUED' || task.exportState === 'EXPORTING') && styles.disabled]}><Text style={styles.exportButtonText}>{exporting || task.exportState === 'QUEUED' || task.exportState === 'EXPORTING' ? '保存中…' : task.exportState === 'EXPORT_FAILED' ? '重试保存到系统相册' : '保存到系统相册'}</Text></Pressable>}</View> : null}
     <View testID="bottom-prompt-card" style={styles.promptCard}><View style={styles.promptHeader}><Text style={styles.sectionTitle}>Prompt</Text><Text style={styles.promptCount}>{task.prompt.length.toLocaleString()} 字符</Text></View><ScrollView accessibilityLabel="滚动 Prompt" nestedScrollEnabled style={styles.promptScroll}><Text selectable style={styles.prompt}>{task.prompt || '暂无 Prompt'}</Text></ScrollView><Pressable accessibilityRole="button" accessibilityLabel="复制 Prompt" onPress={() => void copyPrompt()} style={styles.copy}><AppIcon name="content_copy" size={18} color={COLORS.onPrimary} /><Text style={styles.copyText}>复制 Prompt</Text></Pressable></View>
   </ScrollView></SafeAreaView>;
 }
@@ -97,6 +122,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, backgroundColor: COLORS.background, padding: SPACING.xl }, muted: { color: COLORS.textMuted },
   header: { flexDirection: 'row', alignItems: 'center', gap: SPACING.lg, marginBottom: SPACING.lg }, back: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 5 }, backText: { color: COLORS.primaryActive, fontSize: 14, fontWeight: '700' }, title: { color: COLORS.text, fontSize: 24, fontWeight: '800' },
   mediaRegion: { flex: 1, minHeight: 240 }, player: { flex: 1, minHeight: 220, width: '100%', borderRadius: 16, overflow: 'hidden', backgroundColor: COLORS.mediaBackground }, sourceEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: COLORS.surface }, sourceEmptyText: { color: COLORS.textMuted, fontSize: 13 }, meta: { color: COLORS.textMuted, marginTop: 13, fontSize: 12 },
-  exportRow: { marginTop: SPACING.md, gap: SPACING.sm }, exportStatus: { color: COLORS.textMuted, fontSize: 12 }, exportButton: { minHeight: 48, borderRadius: 11, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 }, exportButtonText: { color: COLORS.onPrimary, fontWeight: '800' }, disabled: { opacity: 0.5 }, promptCard: { marginTop: SPACING.lg, padding: SPACING.lg, borderRadius: 16, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border }, promptHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: SPACING.sm }, sectionTitle: { color: COLORS.text, fontSize: 16, fontWeight: '800' }, promptCount: { color: COLORS.textSubtle, fontSize: 11 }, promptScroll: { maxHeight: 240 }, prompt: { color: COLORS.text, lineHeight: 22, fontSize: 14, paddingBottom: 4 },
+  exportRow: { marginTop: SPACING.md, gap: SPACING.sm }, exportStatus: { color: COLORS.textMuted, fontSize: 12 }, exportButton: { minHeight: 48, borderRadius: 11, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 }, exportButtonText: { color: COLORS.onPrimary, fontWeight: '800' }, disabled: { opacity: 0.5 }, promptCard: { marginTop: SPACING.lg, padding: SPACING.lg, borderRadius: 16, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border }, promptHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: SPACING.sm }, sectionTitle: { color: COLORS.text, fontSize: 16, fontWeight: '800' }, promptCount: { color: COLORS.textSubtle, fontSize: 13 }, promptScroll: { maxHeight: 240 }, prompt: { color: COLORS.text, lineHeight: 22, fontSize: 14, paddingBottom: 4 },
   copy: { minHeight: 48, marginTop: SPACING.md, borderRadius: 11, backgroundColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 }, copyText: { color: COLORS.onPrimary, fontWeight: '800' }, backAction: { minHeight: 48, paddingHorizontal: 16, borderRadius: 11, backgroundColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', gap: 7 }, backActionText: { color: COLORS.onPrimary, fontWeight: '800' }, backGlyph: { color: COLORS.onPrimary, fontSize: 27, lineHeight: 24 },
 });

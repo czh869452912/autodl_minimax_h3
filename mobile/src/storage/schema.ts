@@ -1,8 +1,8 @@
-export const APP_SCHEMA_VERSION = 9;
+export const APP_SCHEMA_VERSION = 10;
 export const RECOVERY_TABLE = 'app_database_recovery';
 
 export const APP_TABLES = [
-  'workflow_artifacts', 'workflow_jobs', 'workflow_operations', 'workflow_job_events',
+  'media_asset_tombstones', 'workflow_artifacts', 'workflow_jobs', 'workflow_operations', 'workflow_job_events',
   'artifact_blob_refs', 'artifact_blobs', 'media_deliveries', 'media_assets', 'tasks',
   'workflow_registry_releases', 'workflow_registry_active', 'workflow_registry', 'prompt_drafts', 'agent_threads',
   'app_scheduler_leases', 'task_projection_state', 'executor_wake_state', RECOVERY_TABLE,
@@ -71,4 +71,12 @@ export const V9_SCHEMA_STATEMENTS = [
   'CREATE TABLE IF NOT EXISTS agent_handoffs (id TEXT PRIMARY KEY NOT NULL,payload_json TEXT NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL)',
 ] as const;
 
-export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS] as const;
+export const V10_SCHEMA_STATEMENTS = [
+  'CREATE TABLE IF NOT EXISTS media_asset_tombstones (id TEXT PRIMARY KEY NOT NULL, task_id TEXT NOT NULL, artifact_id TEXT, kind TEXT NOT NULL, deleted_at INTEGER NOT NULL)',
+  'CREATE INDEX IF NOT EXISTS idx_media_tombstones_task ON media_asset_tombstones(task_id,artifact_id)',
+  "CREATE TRIGGER IF NOT EXISTS media_assets_respect_deletion BEFORE INSERT ON media_assets WHEN EXISTS (SELECT 1 FROM media_asset_tombstones d WHERE d.id=NEW.id OR (d.task_id=NEW.task_id AND d.artifact_id=NEW.artifact_id) OR (d.task_id=NEW.task_id AND d.kind=NEW.kind AND NEW.artifact_id='recovered-primary-video')) BEGIN SELECT RAISE(IGNORE); END",
+  "CREATE TRIGGER IF NOT EXISTS media_refs_respect_deletion BEFORE INSERT ON artifact_blob_refs WHEN NEW.owner_type IN ('workflow_artifact','workflow_artifact_original') AND EXISTS (SELECT 1 FROM media_asset_tombstones d WHERE NEW.owner_id=d.task_id || ':' || d.artifact_id) BEGIN SELECT RAISE(IGNORE); END",
+  "CREATE TRIGGER IF NOT EXISTS media_deliveries_respect_deletion BEFORE INSERT ON media_deliveries WHEN EXISTS(SELECT 1 FROM media_asset_tombstones WHERE id=NEW.asset_id) BEGIN SELECT RAISE(IGNORE); END",
+] as const;
+
+export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS] as const;

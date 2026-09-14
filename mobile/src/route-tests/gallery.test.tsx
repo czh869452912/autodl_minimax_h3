@@ -4,6 +4,7 @@ import { Modal } from 'react-native';
 
 const mockPush = jest.fn();
 let mockPosterPath: string | undefined;
+const mockPage = jest.fn();
 const mockMediaUpsert = jest.fn(async (_value: unknown) => undefined);
 const mockResolveLocal = jest.fn(async () => 'file:///video.mp4' as string | undefined);
 
@@ -21,7 +22,7 @@ jest.mock('../tasks/repository', () => ({
 jest.mock('../tasks/localMedia', () => ({ resolveLocalVideoSource: () => mockResolveLocal() }));
 jest.mock('../media/repository', () => ({
   createSqliteMediaStore: jest.fn(() => ({
-    listPage: jest.fn(async () => ({ items: [{ id: 'job-1:video-1', taskId: 'task-1', title: 'cinematic city', prompt: 'cinematic city', sourceUrl: 'https://example/video.mp4', localPath: 'file:///video.mp4', posterPath: mockPosterPath, mimeType: 'video/mp4', kind: 'video', status: 'downloaded', createdAt: 1, updatedAt: 2 }] })),
+    listPage: jest.fn(async (options: unknown) => mockPage(options) ?? ({ items: [{ id: 'job-1:video-1', taskId: 'task-1', title: 'cinematic city', prompt: 'cinematic city', sourceUrl: 'https://example/video.mp4', localPath: 'file:///video.mp4', posterPath: mockPosterPath, mimeType: 'video/mp4', kind: 'video', status: 'downloaded', createdAt: 1, updatedAt: 2 }] })),
     upsert: (value: unknown) => mockMediaUpsert(value),
   })),
 }));
@@ -51,7 +52,7 @@ describe('gallery navigation', () => {
     await act(async () => { renderer = create(<GalleryScreen />); });
     const texts = renderer!.root.findAllByType(require('react-native').Text).map((node) => [node.props.children].flat(Infinity).join(''));
     expect(texts).toContain('— · 准备中');
-    expect(mockMediaUpsert).toHaveBeenCalledWith(expect.objectContaining({ localPath: undefined, status: 'queued' }));
+    expect(mockMediaUpsert).not.toHaveBeenCalled();
     act(() => { renderer!.unmount(); jest.runOnlyPendingTimers(); });
   });
 });
@@ -60,8 +61,26 @@ it('discards an old corrupted poster even when regeneration cannot produce a rep
   mockPosterPath = 'file:///documents/posters/old.jpg';
   let renderer!: ReturnType<typeof create>;
   await act(async () => { renderer = create(<GalleryScreen />); });
-  expect(mockMediaUpsert).toHaveBeenCalledWith(expect.objectContaining({ posterPath: undefined }));
+  expect(mockMediaUpsert).not.toHaveBeenCalled();
   expect(renderer.root.findAllByType(require('react-native').Image).some(node => node.props.source?.uri === mockPosterPath)).toBe(false);
   act(() => renderer.unmount());
   mockPosterPath = undefined;
+});
+
+
+it('discards a slow old search after a new query and completes a query cleared during debounce', async () => {
+  jest.useFakeTimers();
+  let release!: (page: unknown) => void;
+  mockPage.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  let tree!: ReturnType<typeof create>;
+  await act(async () => { tree = create(<GalleryScreen />); });
+  act(() => tree.root.findByProps({ accessibilityLabel: '搜索作品' }).props.onChangeText('new'));
+  await act(async () => { jest.advanceTimersByTime(300); });
+  await act(async () => release({ items: [{ id: 'old', title: 'obsolete' }] }));
+  expect(tree.root.findAllByType(require('react-native').Text).some(node => node.props.children === 'obsolete')).toBe(false);
+  act(() => { tree.root.findByProps({ accessibilityLabel: '搜索作品' }).props.onChangeText('temp'); });
+  act(() => { tree.root.findByProps({ accessibilityLabel: '搜索作品' }).props.onChangeText('new'); });
+  await act(async () => { jest.advanceTimersByTime(300); });
+  expect(tree.root.findByType(require('react-native').FlatList).props.refreshing).toBe(false);
+  act(() => tree.unmount()); jest.useRealTimers();
 });

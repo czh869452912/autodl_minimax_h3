@@ -32,6 +32,6 @@ const styles = StyleSheet.create({
   item: { flex: 1, minWidth: 0, minHeight: 66, paddingVertical: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 8, marginHorizontal: 2, gap: 3 },
   pressed: { backgroundColor: COLORS.surfaceRaised },
   activeItem: { backgroundColor: COLORS.primarySoft },
-  label: { color: COLORS.textMuted, fontSize: 11, fontWeight: '600', textAlign: 'center', flexShrink: 1 },
+  label: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600', textAlign: 'center', flexShrink: 1 },
   activeLabel: { color: COLORS.primaryActive, fontWeight: '800' },
 });

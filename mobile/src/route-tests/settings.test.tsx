@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Alert, Linking, Text } from 'react-native';
+import { Alert, Linking, ScrollView, Text } from 'react-native';
 
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(),
@@ -105,5 +105,64 @@ it('saves the centralized video decoding selection', async () => {
   act(() => tree.root.findByProps({ accessibilityLabel: '视频解码：软解码' }).props.onPress());
   await act(async () => tree.root.findByProps({ accessibilityLabel: '保存设置' }).props.onPress());
   expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ videoDecodeMode: 'software' }));
+  act(() => tree.unmount());
+});
+
+
+test('keeps save outside the scroll content and retains dirty settings after a failed save', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  jest.mocked(saveSettings).mockRejectedValueOnce(new Error('write failed'));
+  let tree!: ReturnType<typeof create>;
+  await act(async () => { tree = create(<SettingsScreen />); });
+  const button = () => tree.root.findByProps({ accessibilityLabel: '保存设置' });
+  expect(button().props.disabled).toBe(true);
+  expect(tree.root.findByType(ScrollView).findAllByProps({ accessibilityLabel: '保存设置' })).toHaveLength(0);
+  act(() => tree.root.findByProps({ accessibilityLabel: 'LLM 模型' }).props.onChangeText('changed-model'));
+  expect(button().props.disabled).toBe(false);
+  await act(async () => button().props.onPress());
+  expect(tree.root.findByProps({ accessibilityLabel: 'LLM 模型' }).props.value).toBe('changed-model');
+  expect(button().props.disabled).toBe(false);
+  await act(async () => button().props.onPress());
+  expect(button().props.disabled).toBe(true);
+  act(() => tree.unmount());
+  alert.mockRestore();
+});
+
+
+test('does not overwrite edits made while an earlier snapshot is saving', async () => {
+  let release!: () => void;
+  jest.mocked(saveSettings).mockReturnValueOnce(new Promise<void>(resolve => { release = resolve; }));
+  let tree!: ReturnType<typeof create>;
+  await act(async () => { tree = create(<SettingsScreen />); });
+  const input = () => tree.root.findByProps({ accessibilityLabel: 'LLM 模型' });
+  act(() => input().props.onChangeText('first'));
+  act(() => { void tree.root.findByProps({ accessibilityLabel: '保存设置' }).props.onPress(); });
+  act(() => input().props.onChangeText('second'));
+  await act(async () => release());
+  expect(input().props.value).toBe('second');
+  expect(tree.root.findByProps({ accessibilityLabel: '保存设置' }).props.disabled).toBe(false);
+  act(() => input().props.onChangeText('first'));
+  expect(tree.root.findByProps({ accessibilityLabel: '保存设置' }).props.disabled).toBe(true);
+  act(() => tree.unmount());
+});
+
+
+it.each(['{broken', '{"token":42}', '{"futureSetting":"new"}'])('isolates an unreadable draft (%s) and allows recovery without blocking saved settings', async raw => {
+  const secure = require('expo-secure-store');
+  secure.getItemAsync.mockResolvedValueOnce(raw);
+  secure.setItemAsync.mockClear();
+  let tree!: ReturnType<typeof create>;
+  await act(async () => { tree = create(<SettingsScreen />); });
+  expect(tree.root.findByProps({ accessibilityLabel: 'ComfyUI Token' }).props.value).toBe('');
+  expect(tree.root.findAllByProps({ accessibilityLabel: '重试读取设置' })).toHaveLength(0);
+  expect(secure.setItemAsync).not.toHaveBeenCalled();
+  secure.setItemAsync.mockRejectedValueOnce(new Error('locked'));
+  await act(async () => tree.root.findByProps({ accessibilityLabel: '丢弃无法读取的草稿' }).props.onPress());
+  expect(tree.root.findByProps({ accessibilityLabel: '丢弃无法读取的草稿' })).toBeTruthy();
+  await act(async () => tree.root.findByProps({ accessibilityLabel: '丢弃无法读取的草稿' }).props.onPress());
+  expect(tree.root.findAllByProps({ accessibilityLabel: '丢弃无法读取的草稿' })).toHaveLength(0);
+  expect(secure.setItemAsync).toHaveBeenCalledWith('settings.pendingDraft', '');
+  await act(async () => tree.root.findByProps({ accessibilityLabel: 'ComfyUI Token' }).props.onChangeText('edited'));
+  expect(secure.setItemAsync).toHaveBeenLastCalledWith('settings.pendingDraft', expect.stringContaining('edited'));
   act(() => tree.unmount());
 });

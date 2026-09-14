@@ -14,6 +14,17 @@ export function formatTaskStatus(status: TaskStatus): string {
   return STATUS_LABELS[status] ?? status;
 }
 
+export function formatDownloadStatus(state: TaskRecord['downloadState'], progress?: number): string {
+  switch (state) {
+    case 'ENQUEUED': return '等待下载';
+    case 'DOWNLOADING': return progress != null && Number.isFinite(progress)
+      ? `下载中 ${Math.round(Math.max(0, Math.min(1, progress)) * 100)}%` : '下载中';
+    case 'DOWNLOADED': return '已下载';
+    case 'DOWNLOAD_FAILED': return '下载失败';
+    default: return '尚未下载';
+  }
+}
+
 export function formatTaskCreatedAt(timestamp: number): string {
   const date = new Date(timestamp);
   if (!Number.isFinite(date.getTime())) return '—';

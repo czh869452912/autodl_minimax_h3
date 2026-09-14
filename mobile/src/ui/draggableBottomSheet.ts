@@ -17,6 +17,7 @@ export function resolveBottomSheetRelease({
   expandedOffset,
   closeOffset,
 }: BottomSheetRelease): SheetSnap {
+  if (translationY > 60 && velocityY >= 1400) return 'closed';
   const projectedDelta = translationY + velocityY * 0.2;
   if (current === 'collapsed' && projectedDelta >= closeOffset) return 'closed';
   const origin = current === 'expanded' ? expandedOffset : collapsedOffset;

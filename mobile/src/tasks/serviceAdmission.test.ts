@@ -51,6 +51,7 @@ test('concurrent first admission resolving out of order still constructs one exe
     const first = executorRunner.runSlice({ trigger: 'background' });
     const second = executorRunner.runSlice({ trigger: 'service' });
     expect(mockCreateRunner).not.toHaveBeenCalled();
+    await new Promise(resolve => setTimeout(resolve, 0));
     admits[1]();
     await second;
     admits[0]();

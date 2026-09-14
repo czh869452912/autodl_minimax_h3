@@ -38,9 +38,24 @@ export function mediaValidationMessage(code: MediaValidationArtifactCode): strin
 }
 
 export function mediaDownloadErrorMessage(error?: string): string | undefined {
+  if (error === 'USER_CANCELLED') return '下载已取消，可重新下载';
   if (error === 'ARTIFACT_COMPATIBILITY_BUSY') return '正在等待其他视频完成兼容处理，将自动继续';
   if (error === 'ARTIFACT_COMPATIBILITY_FAILED') return '视频兼容转换失败，原件已保留；可重试本地转换或保存原件';
   if (error === 'ARTIFACT_COMPATIBILITY_HDR_UNSUPPORTED') return '暂不支持 HDR 视频的兼容转换，原件已保留';
   return error?.startsWith('ARTIFACT_MEDIA_') && ['ARTIFACT_MEDIA_UNSUPPORTED', 'ARTIFACT_MEDIA_DECODE_FAILED', 'ARTIFACT_MEDIA_PROBE_FAILED', 'ARTIFACT_MEDIA_INVALID', 'ARTIFACT_MEDIA_INVALID_RETRYABLE'].includes(error)
     ? mediaValidationMessage(error as MediaValidationArtifactCode) : error;
+}
+
+
+export function userFacingError(error?: string): string | undefined {
+  if (!error) return undefined;
+  const mapped = mediaDownloadErrorMessage(error);
+  if (mapped !== error) return mapped;
+  if (/401|403|UNAUTHORIZED|TOKEN|CREDENTIAL/i.test(error)) return '连接凭据无效或没有访问权限，请检查设置';
+  if (/EXPIRED|410|404|URL_UNAVAILABLE/i.test(error)) return '视频地址已失效，请刷新任务结果后重试';
+  if (/TIMEOUT|NETWORK|FETCH|ENOTFOUND|ECONN/i.test(error)) return '网络连接失败，请检查网络后重试';
+  if (/PERMISSION|DENIED/i.test(error)) return '缺少访问权限，请在系统设置中允许访问';
+  if (/SQLITE|DATABASE|STORAGE|ENOSPC/i.test(error)) return '本机数据或存储暂不可用，请检查可用空间后重试';
+  if (/429|RATE_LIMIT/i.test(error)) return '请求过于频繁，请稍后重试';
+  return /[\u3400-\u9fff]/.test(error) ? error : '操作未完成，请重试；诊断详情可在视频详情页复制';
 }

@@ -1,3 +1,4 @@
+import { readPendingMaintenance } from '../storage/pendingMaintenance';
 import { retireVideoConversion } from '../media/retireVideoConversion';
 import { readSettings } from '../settings/storage';
 import { artifactNetworkMessage } from '../workflows/executor/artifactErrors';
@@ -191,7 +192,7 @@ async function currentExecutor() {
 }
 
 export const executorRunner: ExecutorRunner = {
-  async runSlice(request) { return (await currentExecutor()).executorRunner.runSlice(request); },
+  async runSlice(request) { if (await readPendingMaintenance()) return { capturedGeneration: 0, handledGeneration: 0, remainingDue: 0, remainingScheduled: 0, budgetExhausted: false }; return (await currentExecutor()).executorRunner.runSlice(request); },
 };
 export async function readTerminalNotifications(taskIds: string[]) {
   return (await currentExecutor()).readTerminalNotifications(taskIds);

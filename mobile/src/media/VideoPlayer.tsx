@@ -1,3 +1,4 @@
+import * as Network from 'expo-network';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useVideoDecodeMode } from '../settings/videoDecodeMode';
@@ -105,12 +106,29 @@ function PlaybackHost({ source, poster, validateSource, onInvalidSource, recover
     );
   }, [retryToken, source, validateSource]);
 
+  const reconnectAttempt = useRef(false);
+  const retryHandler = useRef<() => void>(() => undefined);
   const retryPlayback = () => {
     validationSequence.current += 1;
     setVisual({ source, firstFrame: false, status: 'loading', failure: 'none' });
     setRetry(current => ({ source, token: current.source === source ? current.token + 1 : 1 }));
   };
 
+  retryHandler.current = retryPlayback;
+  const failedSource = useRef(false);
+  failedSource.current = currentVisual.status === 'sourceUnavailable' && currentVisual.failure === 'recoverable' && !isLocalSource(source);
+  useEffect(() => {
+    reconnectAttempt.current = false;
+    let offline = false;
+    const subscription = Network.addNetworkStateListener(state => {
+      const online = state.isInternetReachable ?? state.isConnected;
+      if (online === false) offline = true;
+      if (online === true && offline && failedSource.current && !reconnectAttempt.current) {
+        reconnectAttempt.current = true; offline = false; retryHandler.current();
+      }
+    });
+    return () => subscription.remove();
+  }, [source]);
   if (!decodeMode) {
     return <View style={styles.empty}><ActivityIndicator color={COLORS.primaryActive} /></View>;
   }
@@ -121,8 +139,8 @@ function PlaybackHost({ source, poster, validateSource, onInvalidSource, recover
     {!currentVisual.firstFrame && poster ? <View testID="video-poster" pointerEvents="none" style={styles.poster}><Image source={{ uri: poster }} style={styles.posterImage} resizeMode="contain" /></View> : null}
     {currentVisual.status === 'loading' && currentVisual.failure === 'none' ? <View pointerEvents="none" style={styles.loading}><ActivityIndicator color={COLORS.primaryActive} /></View> : null}
     {currentVisual.failure === 'checking' ? <View style={styles.error}><Text style={styles.errorText}>正在检查本地视频文件</Text><ActivityIndicator color={COLORS.primaryActive} /></View> : null}
-    {failed ? <View style={styles.error}>
-      <Text numberOfLines={2} style={styles.errorText}>{currentVisual.failure === 'invalid' ? '本地视频文件已损坏' : '视频播放失败，原件未被判定为损坏'}</Text>
+    {failed ? <View accessibilityLiveRegion="assertive" style={styles.error}>
+      <Text numberOfLines={2} style={styles.errorText}>{currentVisual.failure === 'invalid' ? '本地视频文件已损坏' : currentVisual.status === 'decodeFailed' ? '视频解码失败，可重试或使用外部播放器' : '视频源暂不可访问，请检查网络或重新下载'}</Text>
       {currentVisual.failure === 'invalid' && onInvalidSource
         ? <Pressable accessibilityRole="button" accessibilityLabel="重新下载视频" disabled={recovering} onPress={() => void onInvalidSource(source)} style={[styles.retry, recovering && styles.disabled]}><AppIcon name="refresh" size={18} color={COLORS.onPrimary} /><Text style={styles.retryText}>{recovering ? '重新下载中…' : '重新下载'}</Text></Pressable>
         : <Pressable accessibilityRole="button" accessibilityLabel="重试播放" onPress={retryPlayback} style={styles.retry}><AppIcon name="refresh" size={18} color={COLORS.onPrimary} /><Text style={styles.retryText}>重试播放</Text></Pressable>}

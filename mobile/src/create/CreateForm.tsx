@@ -2,7 +2,10 @@ import { defaultDraftDependencies, defaultSubmissionDependencies, type CreateFor
 export type { CreateFormDraftDependencies, CreateFormSubmissionDependencies } from './createServices';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -78,6 +81,11 @@ export function CreateForm({
   draftDependencies?: CreateFormDraftDependencies;
 }) {
   const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
+  const mediaRef = useRef<View>(null);
+  const [incomingPrompt, setIncomingPrompt] = useState('');
+  const [undoMedia, setUndoMedia] = useState<{ images: TaskMediaInput[]; audios: TaskMediaInput[] }>();
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [prompt, setPrompt] = useState(initialPrompt);
   const [resolution, setResolution] = useState<string>(
     RESOLUTION_OPTIONS[0],
@@ -127,7 +135,7 @@ export function CreateForm({
   const catalogReady = useRef(false);
   useEffect(() => {
     let cancelled = false;
-    catalogReady.current = false;
+    catalogReady.current = false; setCatalogLoading(true);
     const useRecord = (record: RegistryRecord, warning: string | null) => {
       const next = registryRecordToDefinition(record);
       if (cancelled) return;
@@ -162,7 +170,7 @@ export function CreateForm({
       try {
         await submissionDependencies.catalog.bootstrap();
         const record = await selectRecord();
-        if (!record) throw new Error('没有可用工作流');
+        if (!record) { if (!cancelled) { setDefinition(null); setActiveRecord(null); setLoadError(null); } return; }
         useRecord(record, null);
       } catch (error) {
         let presentationError = error;
@@ -185,15 +193,13 @@ export function CreateForm({
         }
       }
     };
-    void load();
+    void load().finally(() => { if (!cancelled) setCatalogLoading(false); });
     return () => { cancelled = true; };
   }, [submissionDependencies.catalog, catalogRevision, draftId, draftDependencies]);
   useEffect(() => {
-    if (previousInitialPrompt.current !== initialPrompt) {
-      editRevision.current += 1;
-      previousInitialPrompt.current = initialPrompt;
-    }
-    if (initialPrompt) { setPrompt(initialPrompt); setWorkflowValues((current) => ({ ...current, prompt: initialPrompt })); }
+    if (previousInitialPrompt.current === initialPrompt) return;
+    previousInitialPrompt.current = initialPrompt;
+    if (initialPrompt) setIncomingPrompt(initialPrompt);
   }, [initialPrompt]);
   useEffect(() => {
     if (!draftId || discardedDraft === draftId || appliedIds.current.has(draftId)) { setLoadingDraft(false); return; }
@@ -229,11 +235,9 @@ export function CreateForm({
         if (values.duration !== undefined) setDuration(String(values.duration));
         if (values.seed !== undefined) setSeed(String(values.seed));
         setImages(importedImages);
-        if (draft.form) setAudios(draft.form.audios);
+        if (draft.form) { setAudios(draft.form.audios); setUndoMedia(draft.form.undoMedia); }
         setFieldErrors([]);
-        setHandoffNotice(draft.handoff
-          ? `已应用提示词助手草稿 · 来源 ${draft.handoff.source.threadId} / ${draft.handoff.source.messageId} · 版本 ${draft.handoff.source.versionId}。请检查参数和素材后手动提交。`
-          : '已应用提示词助手草稿，请检查后手动提交。');
+        setHandoffNotice('提示词与参考素材已带入，请核对后生成。');
         setAppliedDraft(draftId);
       } catch (error) {
         if (!cancelled) setHandoffError(`交接未应用：${error instanceof Error ? error.message : '读取草稿失败'}。草稿已保留。`);
@@ -262,16 +266,16 @@ export function CreateForm({
     if (!acknowledgedDraft || acknowledgedDraft !== draftId || appliedDraft !== draftId || loadingDraft || !definition || !draftDependencies.saveForm) return;
     let cancelled = false;
     const id = acknowledgedDraft;
-    const form = { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord?.contentHash, canonicalValues: canonicalInputs(definition, workflowValues), values: { ...workflowValues }, images: [...images], audios: [...audios], revision: editRevision.current };
+    const form = { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord?.contentHash, canonicalValues: canonicalInputs(definition, workflowValues), values: { ...workflowValues }, images: [...images], audios: [...audios], undoMedia, revision: editRevision.current };
     formSaveTail.current = formSaveTail.current.catch(() => undefined).then(() => draftDependencies.saveForm!(id, form));
     void formSaveTail.current.catch(error => { if (!cancelled) setHandoffError(`表单保存失败：${error instanceof Error ? error.message : '请重试'}`); });
     return () => { cancelled = true; };
-  }, [acknowledgedDraft, appliedDraft, draftId, loadingDraft, definition, activeRecord, workflowValues, images, audios, draftDependencies]);
+  }, [acknowledgedDraft, appliedDraft, draftId, loadingDraft, definition, activeRecord, workflowValues, images, audios, undoMedia, draftDependencies]);
 
   const addMedia = async (kind: 'image' | 'audio', source: 'gallery' | 'file' = 'file') => {
     if (!definition || picking || switching || submitting) return;
     editRevision.current += 1;
-    setPicking(true);
+    setPicking(true); setUndoMedia(undefined);
     try {
       const current = kind === 'image' ? images : audios;
       const picked = await pickTaskMedia(
@@ -279,6 +283,8 @@ export function CreateForm({
         mediaConstraints(definition, kind === 'image' ? 'images' : 'audios').maximum - current.length,
         source,
         mediaConstraints(definition, kind === 'image' ? 'images' : 'audios').mimes,
+        skipped => Alert.alert(`已跳过 ${skipped.length} 个素材`, skipped.join('\n')),
+        50 * 1024 * 1024 - [...images, ...audios].reduce((sum, item) => sum + (item.size ?? 0), 0),
       );
       if (kind === 'image') setImages((items) => [...items, ...picked]);
       else setAudios((items) => [...items, ...picked]);
@@ -300,7 +306,7 @@ export function CreateForm({
     if (switching || submitting || picking || loadingDraft || awaitingDraft || id === definition?.id) return;
     const record = records.find(item => item.workflowId === id);
     if (!record || !definition) return;
-    setSwitching(true);
+    setSwitching(true); setUndoMedia(undefined);
     try {
       await formSaveTail.current;
       const latest = canonicalInputs(definition, liveForm.current.workflowValues);
@@ -316,6 +322,12 @@ export function CreateForm({
   };
   const imageRules = definition ? mediaConstraints(definition, 'images') : { minimum: 0, maximum: 9, field: 'images', mimes: [] };
   const audioRules = definition ? mediaConstraints(definition, 'audios') : { minimum: 0, maximum: 3, field: 'audios', mimes: [] };
+  useEffect(() => {
+    if (!definition || !activeRecord) return;
+    const inputs = buildSubmissionInputSnapshot({ definition, workflowValues, fallback: { prompt, resolution, duration, seed }, images, audios });
+    const checked = validateSubmissionBeforeQueue({ definition, loaded: activeRecord, active: activeRecord, inputs });
+    setFieldErrors(current => current.filter(error => ![imageRules.field, audioRules.field].includes(error.field ?? '') || (!checked.ok && checked.fieldErrors.some(next => next.path === error.path))));
+  }, [images, audios]);
   const submit = async () => {
     let acquired = false;
     try {
@@ -324,7 +336,7 @@ export function CreateForm({
       if (loadingDraft || (appliedDraft && acknowledgedDraft !== appliedDraft)) throw new Error('请等待交接素材保存完成');
       if (!submissionGate.tryAcquire()) return;
       acquired = true;
-      setSubmitting(true);
+      setSubmitting(true); setUndoMedia(undefined);
       await formSaveTail.current;
       const inputSnapshot = buildSubmissionInputSnapshot({
         definition,
@@ -337,7 +349,8 @@ export function CreateForm({
       const validation = validateSubmissionBeforeQueue({ definition, loaded: activeRecord, active: currentActive, inputs: inputSnapshot });
       if (!validation.ok) {
         setFieldErrors(validation.fieldErrors);
-        Alert.alert('参数设置不合法', validation.summary);
+        if (scrollRef.current && [imageRules.field, audioRules.field].includes(validation.fieldErrors[0]?.field ?? '')) mediaRef.current?.measureLayout?.(scrollRef.current.getInnerViewNode(), (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true }), () => undefined);
+        if (!validation.fieldErrors.some(error => error.field)) Alert.alert('参数设置不合法', validation.summary);
         return;
       }
       setFieldErrors([]);
@@ -351,6 +364,7 @@ export function CreateForm({
       }
       setAcknowledgedDraft(null); setAppliedDraft(null);
       Alert.alert('提交成功', `任务 ${task.id} 已加入队列`, [
+        { text: '留在此页', style: 'cancel' },
         { text: '查看任务', onPress: () => router.navigate('/(tabs)/tasks') },
       ]);
     } catch (error) {
@@ -363,15 +377,20 @@ export function CreateForm({
     }
   };
   return (
-    <ScrollView
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView ref={scrollRef}
       style={styles.container}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
     >
+      {incomingPrompt ? <View style={styles.card}><Text>收到新的提示词，请选择如何带入。当前编辑内容已保留。</Text>{(['替换','追加','取消'] as const).map(action => <Pressable key={action} accessibilityRole="button" disabled={submitting || switching} style={styles.mediaButton} onPress={() => { if (action !== '取消') { const field = definition ? inputField(definition, 'prompt') : 'prompt'; setWorkflowValues(current => ({ ...current, [field]: action === '追加' ? [String(current[field] ?? ''), incomingPrompt].filter(Boolean).join('\n') : incomingPrompt })); editRevision.current++; } setIncomingPrompt(''); }}><Text>{action}</Text></Pressable>)}</View> : null}
+      {catalogLoading ? <ActivityIndicator accessibilityLabel="正在加载工作流" /> : !definition && !loadError ? <Pressable accessibilityRole="button" onPress={() => router.navigate('/(tabs)/settings')} style={styles.mediaButton}><Text>暂无工作流，前往设置同步</Text></Pressable> : null}
       <Text style={styles.title}>{definition?.metadata.title ?? '工作流创建'}</Text>
       <Text style={styles.subtitle}>
         {loadError ?? definition?.metadata.description ?? '正在加载本地活动工作流…'}
       </Text>
+      {loadError ? <Pressable accessibilityRole="button" accessibilityLabel="重试加载工作流" onPress={() => setCatalogRevision(value => value + 1)} style={styles.mediaButton}><Text style={styles.mediaText}>重试加载工作流</Text></Pressable> : null}
+      {submitting || switching ? <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator /><Text style={styles.help}>{submitting ? '正在提交，参数暂时锁定…' : '正在切换工作流…'}</Text></View> : null}
       <WorkflowSelector definitions={records.map(registryRecordToDefinition)} selectedId={definition?.id} onSelect={id => void selectWorkflow(id)} disabled={submitting || switching || picking || loadingDraft || awaitingDraft || Boolean(appliedDraft && acknowledgedDraft !== appliedDraft)} />
       {alignmentNotices.map((notice, index) => <Text key={index} style={styles.help}>{notice}</Text>)}
       {handoffNotice ? <Text accessibilityLiveRegion="polite" style={styles.help}>{handoffNotice}</Text> : null}
@@ -382,15 +401,17 @@ export function CreateForm({
           draftStart.current = { id: draftId, revision: editRevision.current };
           appliedIds.current.delete(draftId); consumedIds.current.delete(draftId);
           setAppliedDraft(null); setAcknowledgedDraft(null); setApplyAttempt(value => value + 1);
-        }} style={{ minHeight: 48, justifyContent: 'center' }}><Text style={styles.help}>重新应用</Text></Pressable>
-        {draftDependencies.discard && <Pressable accessibilityRole="button" accessibilityLabel="丢弃交接草稿" disabled={loadingDraft} onPress={async () => {
+        }} style={styles.mediaButton}><Text style={styles.help}>重新应用</Text></Pressable>
+        {draftDependencies.discard && <Pressable accessibilityRole="button" accessibilityLabel="丢弃交接草稿" disabled={loadingDraft} onPress={() => Alert.alert('丢弃交接草稿？', '草稿丢弃后无法恢复。', [{ text: '保留', style: 'cancel' }, { text: '丢弃草稿', style: 'destructive', onPress: async () => {
           try { await draftDependencies.discard!(draftId); setDiscardedDraft(draftId); setHandoffError(null); setAppliedDraft(null); setAcknowledgedDraft(null); }
           catch (error) { setHandoffError(error instanceof Error ? error.message : '丢弃失败，请重试'); }
-        }} style={{ minHeight: 48, justifyContent: 'center' }}><Text style={styles.help}>丢弃草稿</Text></Pressable>}
+        } }])} style={styles.mediaButton}><Text style={styles.help}>丢弃草稿</Text></Pressable>}
       </View>}
       {definition ? <WorkflowForm
         definition={{ ...definition, ui: { sections: (definition.ui?.sections ?? [{ id: 'parameters', title: '参数', fields: Object.keys(inputProperties(definition)) }]).map(section => ({ ...section, fields: section.fields.filter(field => field !== imageRules.field && field !== audioRules.field) })).filter(section => section.fields.length) } }}
+        scrollRef={scrollRef}
         value={workflowValues}
+        disabled={submitting || switching}
         errors={fieldErrors.filter((error) => error.field).map((error) => ({ path: error.field!, message: formatSubmissionFieldError(error, definition) }))}
         onChange={(next) => {
           if (submitting || switching) return;
@@ -403,7 +424,7 @@ export function CreateForm({
           setSeed(String(next.seed ?? ''));
         }}
       /> : null}
-      <View style={styles.card}>
+      <View ref={mediaRef} style={styles.card}>
         <View style={styles.mediaHeader}>
           <View style={styles.mediaHeaderCopy}>
             <Text style={styles.sectionTitle}>参考素材</Text>
@@ -443,9 +464,11 @@ export function CreateForm({
           </Pressable>
         </View>
         <ImagePreviewGrid
+          disabled={submitting || switching}
           items={images}
           onRemove={(index) => {
             if (submitting || switching) return;
+            setUndoMedia({ images, audios });
             editRevision.current += 1;
             setImages((items) =>
               items.filter((_, itemIndex) => itemIndex !== index),
@@ -453,15 +476,20 @@ export function CreateForm({
           }}
         />
         <AudioPreviewList
+          disabled={submitting || switching}
           items={audios}
           onRemove={(index) => {
             if (submitting || switching) return;
+            setUndoMedia({ images, audios });
             editRevision.current += 1;
             setAudios((items) =>
               items.filter((_, itemIndex) => itemIndex !== index),
             );
           }}
         />
+        {undoMedia ? <Pressable accessibilityRole="button" disabled={submitting || switching} style={styles.mediaButton} onPress={() => { setImages(undoMedia.images); setAudios(undoMedia.audios); setUndoMedia(undefined); editRevision.current++; }}><Text>撤销上次素材删除</Text></Pressable> : null}
+        {images.length >= imageRules.maximum ? <Text>参考图片已达上限，请先删除再添加</Text> : null}
+        {audios.length >= audioRules.maximum ? <Text>参考音频已达上限，请先删除再添加</Text> : null}
         <Text style={styles.help}>音频格式：{audioRules.mimes.map(mime => mime.replace('audio/', '')).join(' / ')}</Text>
         {definition && fieldErrors.filter(error => error.path.startsWith(`/${imageRules.field}`) || error.path.startsWith(`/${audioRules.field}`)).map((error, index) => <Text key={index} accessibilityRole="alert" style={{ color: COLORS.danger }}>{formatSubmissionFieldError(error, definition)}</Text>)}
       </View>
@@ -480,7 +508,7 @@ export function CreateForm({
       <Text style={styles.footnote}>
         提交后保存至任务队列，成功后自动下载 MP4 至本地。
       </Text>
-    </ScrollView>
+    </ScrollView></KeyboardAvoidingView>
   );
 }
 
@@ -494,36 +522,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
   },
   subtitle: { color: COLORS.textMuted, fontSize: 14, lineHeight: 21 },
-  label: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    marginBottom: SPACING.sm,
-  },
-  promptBox: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.md,
-  },
-  promptInput: {
-    minHeight: 150,
-    color: COLORS.text,
-    fontSize: 15,
-    lineHeight: 23,
-    textAlignVertical: 'top',
-  },
-  counter: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    color: COLORS.textSubtle,
-    fontSize: 11,
-    paddingTop: SPACING.sm,
-    marginTop: SPACING.sm,
-    fontFamily: 'monospace',
-  },
   card: {
     backgroundColor: `${COLORS.surface}cc`,
     borderWidth: 1,
@@ -532,58 +530,6 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     gap: SPACING.sm,
   },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
-  chip: {
-    minWidth: '46%',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceRaised,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  selectedChip: {
-    borderColor: COLORS.primaryActive,
-    backgroundColor: COLORS.primarySoft,
-  },
-  chipText: { color: COLORS.textMuted, fontSize: 13 },
-  selectedText: { color: '#c7d2fe', fontWeight: '800' },
-  durationRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  step: {
-    width: 42,
-    height: 44,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.surfaceRaised,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  stepText: { color: COLORS.primaryActive, fontSize: 23 },
-  durationInput: {
-    flex: 1,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    color: COLORS.text,
-    textAlign: 'center',
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  rangeHint: { color: COLORS.textSubtle, fontSize: 11, textAlign: 'center' },
-  input: {
-    color: COLORS.text,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    fontFamily: 'monospace',
-  },
   mediaHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -591,8 +537,8 @@ const styles = StyleSheet.create({
   },
   mediaHeaderCopy: { flex: 1, minWidth: 0 },
   sectionTitle: { color: COLORS.text, fontWeight: '800', fontSize: 16 },
-  help: { color: COLORS.textMuted, fontSize: 11, marginTop: 4 },
-  count: { flexShrink: 0, color: COLORS.primaryActive, fontSize: 11, fontFamily: 'monospace', textAlign: 'right' },
+  help: { color: COLORS.textMuted, fontSize: 13, marginTop: 4 },
+  count: { flexShrink: 0, color: COLORS.primaryActive, fontSize: 13, fontFamily: 'monospace', textAlign: 'right' },
   mediaButtons: { flexDirection: 'row', gap: SPACING.sm },
   mediaButton: {
     flex: 1,
@@ -625,7 +571,7 @@ const styles = StyleSheet.create({
   footnote: {
     color: COLORS.textSubtle,
     fontFamily: 'monospace',
-    fontSize: 11,
+    fontSize: 13,
     lineHeight: 17,
     textAlign: 'center',
   },

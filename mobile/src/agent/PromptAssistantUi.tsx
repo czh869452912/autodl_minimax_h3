@@ -1,3 +1,4 @@
+import { ImagePreview } from '../ui/ImagePreview';
 import { styles, sentStyles, markdownStyles } from './PromptAssistantStyles';
 import { HistoryList, type HistoryProps } from './HistoryList';
 import { ToolTimeline } from './ToolTimeline';
@@ -9,6 +10,7 @@ import { getSourceUrl } from '@copilotkit/shared';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  ActivityIndicator,
   Alert,
   AccessibilityInfo,
   findNodeHandle,
@@ -67,7 +69,7 @@ type AttachmentLike = {
   size?: number;
 };
 
-export type RunIssue = { kind: 'error' | 'aborted'; message: string; runId?: string };
+export type RunIssue = { kind: 'error' | 'aborted' | 'submit' | 'validation'; message: string; runId?: string };
 
 function isCompactPromptLayout(width: number, fontScale: number): boolean {
   return width < 400 || fontScale > 1.15;
@@ -97,6 +99,7 @@ export function PromptAssistantUi({
   onClientStateChange,
   isVisible = true,
   notice,
+  persistentNotice = false,
   runIssue = null,
   onRunIssueChange = () => undefined,
   onRetry = async () => undefined,
@@ -116,6 +119,7 @@ export function PromptAssistantUi({
   onClientStateChange?: (patch: Record<string, unknown>) => void;
   isVisible?: boolean;
   notice?: string;
+  persistentNotice?: boolean;
   runIssue?: RunIssue | null;
   onRunIssueChange?: (issue: RunIssue | null) => void;
   onRetry?: (runId?: string) => Promise<void>;
@@ -136,6 +140,8 @@ export function PromptAssistantUi({
   } = useCopilotChatContext();
   const state = clientState ?? agent.state ?? {};
   const initialComposer = useRef(readComposerDraft(state)).current;
+  const [dismissedNotice, setDismissedNotice] = useState<string>();
+  useEffect(() => setDismissedNotice(undefined), [notice, activeThreadId]);
   const [draft, setDraft] = useState(initialComposer.text);
   const draftRef = useRef(draft); draftRef.current = draft;
   const draftRevision = useRef(Number((state.h3Composer as any)?.revision) || 0);
@@ -155,7 +161,8 @@ export function PromptAssistantUi({
   const runs = cachedRuns ?? enrichRunTools(readPromptRuns(state), messages);
   const completedMessageIds = useMemo(() => Array.isArray(state.h3CompletedMessageIds) ? state.h3CompletedMessageIds.filter((id: unknown): id is string => typeof id === 'string') : [], [state.h3CompletedMessageIds]);
   const savedVersions = useMemo(() => readPromptVersions(state), [state.h3Versions]);
-  const versions = savedVersions;
+  const hiddenVersions = Array.isArray(state.h3HiddenVersionIds) ? state.h3HiddenVersionIds as string[] : [];
+  const versions = savedVersions.filter(version => !hiddenVersions.includes(version.id));
   const latestEnd = runs.reduce((time, run) => Math.max(time, run.endedAt ?? 0), 0);
   useEffect(() => { if (isVisible) onClientStateChange?.({ h3ReadAt: Date.now() }); }, [activeThreadId, latestEnd, isVisible, onClientStateChange]);
   const [inputSelection, setInputSelection] = useState({ start: initialComposer.text.length, end: initialComposer.text.length });
@@ -179,6 +186,10 @@ export function PromptAssistantUi({
   const rows = cachedRows ?? projectTimeline(messages);
   const handleSubmit = async (value: string) => {
     if (submitLock.current || isRunning) return;
+    if (value.length > 4000) {
+      onRunIssueChange({ kind: 'validation', message: '消息超过 4,000 字符，请缩短后重新发送；完整草稿已保留。' });
+      return;
+    }
     const ready = [...attachments.filter((item) => item.status === 'ready'), ...galleryAttachments];
     if (!value.trim() && !ready.length)
       return;
@@ -194,7 +205,7 @@ export function PromptAssistantUi({
         if (draftRef.current === value && draftRevision.current === revision) { setDraft(''); setInputSelection({ start: 0, end: 0 }); }
         setGalleryAttachments(current => current.filter(item => !submittedIds.has(item.id)));
         for (const item of attachments) if (submittedIds.has(item.id)) removeAttachment(item.id);
-      } catch (reason) { onRunIssueChange({ kind: 'error', message: reason instanceof Error ? reason.message : '发送失败，草稿已保留' }); }
+      } catch (reason) { onRunIssueChange({ kind: 'submit', message: reason instanceof Error ? reason.message : '发送失败，草稿已保留' }); }
       finally { submitLock.current = false; setSubmitting(false); }
   };
   const pickerLock = useRef(false);
@@ -358,10 +369,10 @@ export function PromptAssistantUi({
       <View style={styles.body}>
         {wide ? <View style={styles.sidebar}>{history}</View> : null}
         <View style={styles.conversation}>
-          {notice ? (
+          {notice && (persistentNotice || notice !== dismissedNotice) && notice !== runIssue?.message ? (
             <View style={styles.notice}>
               <AppIcon name="info" size={16} color={LIGHT_PROMPT_COLORS.accent} />
-              <Text style={styles.noticeText}>{notice}</Text>
+              <Text accessibilityRole="alert" style={styles.noticeText}>{notice}</Text>{!persistentNotice && <Pressable accessibilityRole="button" accessibilityLabel="关闭提示" onPress={() => setDismissedNotice(notice)} style={{ minHeight: 48, minWidth: 48, justifyContent: 'center' }}><Text>关闭</Text></Pressable>}
             </View>
           ) : null}
           <ConversationTimeline
@@ -377,6 +388,8 @@ export function PromptAssistantUi({
             runs={runs}
             completedMessageIds={completedMessageIds}
             latestVersionMessageId={versions.at(-1)?.sourceMessageId}
+            onResend={() => handleSubmit(draft)}
+            onDismissIssue={() => onRunIssueChange(null)}
             onRetry={onRetry}
             onSelectSuggestion={applySuggestion}
           />
@@ -401,10 +414,12 @@ export function PromptAssistantUi({
               onOpenPicker={handleOpenPicker}
               onOpenMentionPicker={() => setMentionSheetOpen(true)}
               onCancel={() => {
+                if (!isRunning) return;
                 agent.abortRun?.();
                 onRunIssueChange({ kind: 'aborted', message: '已停止生成' });
               }}
-              isRunning={isRunning || submitting}
+              isRunning={isRunning}
+              submitting={submitting}
               attachments={composerAttachments}
               inputRef={inputRef}
               selection={inputSelection}
@@ -440,8 +455,8 @@ export function PromptAssistantUi({
       />
       <DraggableBottomSheet ref={versionSheet} visible={versionsOpen} title="Prompt 版本" onClose={() => setVersionsOpen(false)}>
           {versionsOpen && !workflowDefinition ? <View style={{ gap: 12 }}><Text accessibilityRole={workflowLoadIssue ? 'alert' : undefined} accessibilityLiveRegion="polite" style={styles.noticeText}>{workflowLoadIssue ?? '正在加载工作流…'}</Text>{workflowLoadIssue && onReloadWorkflow ? <Pressable accessibilityRole="button" accessibilityLabel="重新加载工作流" onPress={onReloadWorkflow} style={styles.secondaryAction}><Text style={styles.secondaryActionText}>重新加载工作流</Text></Pressable> : null}</View> : null}
-          {versionsOpen && workflowDefinition ? <PromptVersionPanel workflows={workflows} workflowDefinition={workflowDefinition} inSheet onExpand={() => versionSheet.current?.expand()} versions={versions} selectedVersionId={typeof state.h3SelectedVersionId === 'string' ? state.h3SelectedVersionId : undefined} threadId={activeThreadId} onSelect={id => onClientStateChange?.({ h3SelectedVersionId: id })} onRestore={(id, commandId) => {
-            const next = restorePromptVersion(versions, id, Date.now(), commandId);
+          {versionsOpen && workflowDefinition ? <PromptVersionPanel workflows={workflows} workflowDefinition={workflowDefinition} inSheet onDelete={id => onClientStateChange?.({ h3HiddenVersionIds: [...hiddenVersions, id] })} onExpand={() => versionSheet.current?.expand()} versions={versions} selectedVersionId={typeof state.h3SelectedVersionId === 'string' ? state.h3SelectedVersionId : undefined} threadId={activeThreadId} onSelect={id => onClientStateChange?.({ h3SelectedVersionId: id })} onRestore={(id, commandId) => {
+            const next = restorePromptVersion(savedVersions, id, Date.now(), commandId);
             onClientStateChange?.({ h3Versions: next, h3SelectedVersionId: next[next.length - 1]?.id });
           }} onExport={async handoff => { if (onExportHandoff) await onExportHandoff(handoff); else await onExportPrompt(handoff.prompt); setVersionsOpen(false); }} /> : null}
       </DraggableBottomSheet>
@@ -469,6 +484,8 @@ export function PromptAssistantUi({
 
 export function ConversationTimeline({
   rows,
+  onResend,
+  onDismissIssue,
   isRunning,
   onExportPrompt,
   runIssue = null,
@@ -479,6 +496,8 @@ export function ConversationTimeline({
   latestVersionMessageId,
 }: {
   rows: ReturnType<typeof normalizeMessages>;
+  onResend?: () => Promise<void>;
+  onDismissIssue?: () => void;
   isRunning: boolean;
   onExportPrompt: (prompt: string, artifactId?: string) => Promise<void>;
   runIssue?: RunIssue | null;
@@ -512,7 +531,10 @@ export function ConversationTimeline({
     if (previousRowCount.current === 0 && allRows.length > 0) setFollow(true);
     previousRowCount.current = allRows.length;
   }, [allRows.length, setFollow]);
-  const inspectProcess = useCallback(() => setFollow(false), [setFollow]);
+  const bottomDistance = useRef(0);
+  const [unread, setUnread] = useState(false);
+  useEffect(() => { if (!followingLatestRef.current) setUnread(true); }, [allRows]);
+  const inspectProcess = useCallback(() => { if (bottomDistance.current > 80) setFollow(false); }, [setFollow]);
   const scrollToLatest = useCallback((animated = !isRunning) => {
     // Keep the inspiration header visible when the empty page exceeds the viewport.
     if (allRows.length && followingLatestRef.current) listRef.current?.scrollToEnd({ animated });
@@ -521,6 +543,8 @@ export function ConversationTimeline({
     scrollToLatest();
   }, [isRunning, scrollToLatest, rows.length]);
   const updateFollow = useCallback((type: 'scroll' | 'scroll-end', metrics: TimelineMetrics) => {
+    bottomDistance.current = metrics.contentSize.height - metrics.layoutMeasurement.height - metrics.contentOffset.y;
+    if (followingLatestRef.current) setUnread(false);
     setFollow(nextFollowState(followingLatestRef.current, { type, metrics }));
   }, [setFollow]);
   return (
@@ -536,7 +560,7 @@ export function ConversationTimeline({
           keyboardShouldPersistTaps="handled"
           scrollEventThrottle={16}
           onScrollBeginDrag={() =>
-            { Keyboard.dismiss(); setFollow(nextFollowState(followingLatestRef.current, { type: 'drag-start' })); }
+            { if (bottomDistance.current > 80) setFollow(false); }
           }
           onScroll={({ nativeEvent }) => updateFollow('scroll', nativeEvent)}
           onMomentumScrollEnd={({ nativeEvent }) =>
@@ -558,7 +582,7 @@ export function ConversationTimeline({
             )
           }
           ListFooterComponent={
-            runIssue ? <RunIssueRow issue={runIssue} onRetry={onRetry} /> : !runs.length && allRows.length > 0 && isRunning ? (
+            runIssue ? <RunIssueRow issue={runIssue} onRetry={runIssue.kind === 'submit' ? onResend ?? (async () => undefined) : onRetry} onDismiss={onDismissIssue} disabled={isRunning} /> : !runs.length && allRows.length > 0 && isRunning ? (
               <RunningIndicator compact />
             ) : null
           }
@@ -580,7 +604,7 @@ export function ConversationTimeline({
             accessibilityRole="button"
             accessibilityLabel="回到最新消息"
             onPress={() => {
-              setFollow(nextFollowState(followingLatestRef.current, { type: 'back-to-latest' }));
+              setUnread(false); setFollow(nextFollowState(followingLatestRef.current, { type: 'back-to-latest' }));
               listRef.current?.scrollToEnd({ animated: true });
             }}
             style={{
@@ -595,7 +619,7 @@ export function ConversationTimeline({
             }}
           >
             <AppIcon name="download" size={16} color={LIGHT_PROMPT_COLORS.ink} />
-            <Text>回到最新</Text>
+            <Text>{unread ? '有新内容 · 回到最新' : '回到最新'}</Text>
           </Pressable>
         ) : null}
         <ReferenceImagePreview uri={previewImage} onClose={() => setPreviewImage(null)} />
@@ -616,7 +640,7 @@ const TimelineMessageRow = React.memo(function TimelineMessageRow({ item, comple
                 contentContainerStyle={sentStyles.sentAttachments}
               >
                 {item.attachments.map((attachment, index) => (
-                  <Pressable accessibilityRole="button" accessibilityLabel={`查看参考图片 ${item.id} ${attachment.displayName ?? `图片${index + 1}`}`} key={`${attachment.uri}-${index}`} onPress={() => onPreview(attachment.uri)}><Image
+                  <Pressable accessibilityRole="button" accessibilityLabel={`查看参考图片 ${attachment.displayName ?? `图片${index + 1}`}`} key={`${attachment.uri}-${index}`} onPress={() => onPreview(attachment.uri)}><Image
                     key={`${attachment.uri}-${index}`}
                     source={{ uri: attachment.uri }}
                     style={sentStyles.sentAttachment}
@@ -690,35 +714,40 @@ const briefStyles = StyleSheet.create({
 function RunIssueRow({
   issue,
   onRetry,
+  onDismiss,
+  disabled,
 }: {
   issue: RunIssue;
+  onDismiss?: () => void;
+  disabled?: boolean;
   onRetry: () => Promise<void>;
 }) {
   const [retrying, setRetrying] = useState(false);
   const handleRetry = async () => {
-    if (retrying) return;
+    if (retrying || disabled) return;
     setRetrying(true);
     try {
       await onRetry();
-    } finally {
+    } catch { /* owning screen retains the actionable issue */ } finally {
       setRetrying(false);
     }
   };
   return (
     <View accessibilityRole="alert" style={styles.runIssue}>
-      <Text style={styles.runIssueText}>{issue.message}</Text>
+<Text style={styles.runIssueText}>{issue.message}</Text>{onDismiss ? <Pressable accessibilityRole="button" accessibilityLabel="关闭运行提示" onPress={onDismiss} style={{ minHeight: 48 }}><Text>关闭</Text></Pressable> : null}
+      {issue.kind !== 'validation' ? <>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="重试上一轮"
+        accessibilityLabel={issue.kind === 'submit' ? '重新发送草稿' : '重试上一轮'}
         accessibilityState={{ disabled: retrying }}
-        disabled={retrying}
+        disabled={retrying || disabled}
         onPress={() => void handleRetry()}
         style={styles.runIssueAction}
       >
         <Text style={styles.runIssueActionText}>
-          {retrying ? '正在重试…' : '重试'}
+          {retrying ? '正在重试…' : issue.kind === 'submit' ? '重新发送' : '重试'}
         </Text>
-      </Pressable>
+      </Pressable></> : null}
     </View>
   );
 }
@@ -756,14 +785,14 @@ function EmptyTimeline({
         从一个灵感开始，让画面慢慢成形。
       </Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" snapToInterval={cardWidth + 14} decelerationRate="fast" contentContainerStyle={[styles.inspirationRail, compact && { paddingTop: 14 }]}>
-        {EMPTY_SUGGESTIONS.slice(0, 2).map((suggestion, index) => (
+        {EMPTY_SUGGESTIONS.slice(0, Math.ceil(EMPTY_SUGGESTIONS.length / 2)).map((suggestion, index) => (
           <Pressable
             key={suggestion}
             accessibilityRole="button"
             accessibilityLabel={`使用建议 ${suggestion}`}
             accessibilityHint="填入输入框，可修改后发送"
             onPress={() => onSelectSuggestion(suggestion)}
-            style={({ pressed }) => [styles.inspirationCard, { width: cardWidth, backgroundColor: index === 0 ? '#465957' : '#877564' }, compact && { padding: 14, borderRadius: 20 }, pressed && styles.inspirationPressed]}
+            style={({ pressed }) => [styles.inspirationCard, { width: cardWidth, backgroundColor: index === 0 ? COLORS.primary : COLORS.warning }, compact && { padding: 14, borderRadius: 20 }, pressed && styles.inspirationPressed]}
           >
             <View style={styles.inspirationCategory}>
               <AppIcon name={index === 0 ? 'auto_awesome' : 'movie_filter'} size={18} color="#F3F2EB" />
@@ -785,7 +814,7 @@ function EmptyTimeline({
         ))}
       </ScrollView>
       <View style={styles.suggestions}>
-        {EMPTY_SUGGESTIONS.slice(2).map((suggestion) => (
+        {EMPTY_SUGGESTIONS.slice(Math.ceil(EMPTY_SUGGESTIONS.length / 2)).map((suggestion) => (
           <Pressable
             key={suggestion}
             accessibilityRole="button"
@@ -836,7 +865,7 @@ function useClipboardFeedback(text: string) {
 
 function ResponseCopyButton({ id, text }: { id: string; text: string }) {
   const { status, copy } = useClipboardFeedback(text);
-  return <Pressable accessibilityRole="button" accessibilityLabel={`复制回答 ${id}`} onPress={() => void copy()} style={styles.assistantCopy}>
+  return <Pressable accessibilityRole="button" accessibilityLabel={`复制回答 ${text.slice(0, 20)}`} onPress={() => void copy()} style={styles.assistantCopy}>
     <AppIcon name="content_copy" size={14} color={LIGHT_PROMPT_COLORS.muted} />
     <Text accessibilityLiveRegion="polite" style={styles.assistantCopyText}>{status || '复制'}</Text>
   </Pressable>;
@@ -904,7 +933,7 @@ export function PromptResultCard({
           onPress={() => void exportPrompt()}
           style={[styles.primaryAction, (!ready || exporting) && { opacity: 0.45 }]}
         >
-          <Text style={styles.primaryActionText}>{exporting ? '正在导出…' : '导出到生成'}</Text>
+          <Text style={styles.primaryActionText}>{exporting ? '正在导出…' : '查看 Prompt 版本'}</Text>
           <Text style={styles.primaryActionArrow}>↗</Text>
         </Pressable>
       </View>
@@ -1034,14 +1063,7 @@ export function AttachmentStrip({
 }
 
 export function ReferenceImagePreview({ uri, onClose }: { uri: string | null; onClose: () => void }) {
-  const insets = useSafeAreaInsets();
-  const closeRef = useRef<View>(null);
-  return <Modal visible={uri !== null} transparent animationType="none" onRequestClose={onClose} onShow={() => { const target = findNodeHandle(closeRef.current); if (target) AccessibilityInfo.setAccessibilityFocus(target); }}>
-    <View accessibilityViewIsModal onAccessibilityEscape={onClose} style={{ flex: 1, backgroundColor: COLORS.mediaBackground, paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12, paddingHorizontal: 16 }}>
-      <Pressable ref={closeRef} accessibilityRole="button" accessibilityLabel="关闭图片预览" onPress={onClose} style={{ width: 48, height: 48, alignSelf: 'flex-end', alignItems: 'center', justifyContent: 'center' }}><AppIcon name="close" size={24} color={COLORS.onPrimary} /></Pressable>
-      {uri ? <Image testID="reference-image-preview" accessibilityLabel="参考图片" source={{ uri }} resizeMode="contain" style={{ flex: 1, width: '100%' }} /> : null}
-    </View>
-  </Modal>;
+  return <ImagePreview uri={uri} onClose={onClose} />;
 }
 
 export function Composer({
@@ -1052,6 +1074,7 @@ export function Composer({
   onOpenMentionPicker,
   onCancel,
   isRunning,
+  submitting = false,
   attachments,
   onRemoveAttachment,
   inputRef,
@@ -1065,18 +1088,24 @@ export function Composer({
   onOpenMentionPicker?: () => void;
   onCancel: () => void;
   isRunning: boolean;
+  submitting?: boolean;
   attachments: AttachmentLike[];
   onRemoveAttachment?: (id: string) => void;
   inputRef?: React.RefObject<TextInput | null>;
   selection?: { start: number; end: number };
   onSelectionChange?: (event: { nativeEvent: { selection: { start: number; end: number } } }) => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const uploading = attachments.some((item) => item.status === 'uploading');
   const disabled =
+    submitting || value.length > 4000 ||
     uploading ||
     (!value.trim() && !attachments.some((item) => item.status === 'ready'));
   return (
     <View style={styles.composer}>
+      <Modal visible={editing} animationType="slide" onRequestClose={() => setEditing(false)}><KeyboardAvoidingView behavior="padding" style={{ flex: 1, padding: 24, backgroundColor: COLORS.background }}><Text style={{ fontSize: 20 }}>编辑创作想法</Text><TextInput accessibilityLabel="全屏编辑创作想法" multiline value={value} onChangeText={onChangeText} textAlignVertical="top" style={{ flex: 1, fontSize: 16, color: COLORS.text }} /><Text>{value.length.toLocaleString()} / 4,000 字符</Text><Pressable accessibilityRole="button" onPress={() => setEditing(false)} style={{ minHeight: 48, justifyContent: 'center' }}><Text>完成编辑</Text></Pressable></KeyboardAvoidingView></Modal>
+      <Pressable accessibilityRole="button" accessibilityLabel="全屏编辑" onPress={() => setEditing(true)} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-end' }}><Text>展开编辑</Text></Pressable>
+      {uploading ? <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator /><Text>图片上传中，完成后可发送；可移除附件取消上传。</Text></View> : null}
       <AttachmentStrip
         attachments={attachments}
         onOpenPicker={onOpenPicker}
@@ -1091,18 +1120,17 @@ export function Composer({
           placeholder="描述你想生成的画面…"
           placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder}
           multiline
-          maxLength={4000}
           style={styles.input}
           editable
           scrollEnabled
           textAlignVertical="top"
           selection={selection}
           onSelectionChange={onSelectionChange}
-          onSubmitEditing={() => {
-            if (!disabled) onSubmit(value);
-          }}
         />
       </View>
+      <Text accessibilityLiveRegion="polite" style={{ color: value.length > 4000 ? COLORS.danger : LIGHT_PROMPT_COLORS.muted, fontSize: 13 }}>
+        {value.length.toLocaleString()} / 4,000 字符{value.length > 4000 ? ' · 请缩短后发送，内容已保留' : ''}
+      </Text>
       <View style={styles.composerRow}>
         <Pressable
           accessibilityLabel="添加图片附件"
@@ -1128,22 +1156,22 @@ export function Composer({
         </Pressable>
         <View testID="composer-toolbar-spacer" style={styles.toolbarSpacer} />
         <Pressable
-          accessibilityLabel={isRunning ? '停止生成' : '发送消息'}
-          accessibilityState={{ disabled: !isRunning && disabled }}
+          accessibilityLabel={isRunning ? '停止生成' : submitting ? '发送中' : '发送消息'}
+          accessibilityState={{ disabled: !isRunning && disabled, busy: submitting }}
           disabled={!isRunning && disabled}
-          onPress={() => (isRunning ? onCancel() : onSubmit(value))}
+          onPress={() => { if (isRunning) onCancel(); else if (!disabled) onSubmit(value); }}
           style={[
             styles.sendButton,
             !isRunning && disabled && styles.sendDisabled,
           ]}
         >
-          <AppIcon
+          {submitting && !isRunning ? <ActivityIndicator size="small" color={LIGHT_PROMPT_COLORS.muted} /> : <AppIcon
             name={isRunning ? 'close' : 'send'}
             size={18}
             color={
               isRunning || !disabled ? '#FFFFFF' : LIGHT_PROMPT_COLORS.muted
             }
-          />
+          />}
         </Pressable>
       </View>
     </View>

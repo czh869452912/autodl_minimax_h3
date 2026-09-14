@@ -95,3 +95,10 @@ it.each(['medium', 'xhigh', 'bogus'])('rejects unsupported DeepSeek thinking eff
 it.each(['-1', '3.5', '1e4', '0x1000'])('rejects invalid numeric output budget %s', llmMaxOutputTokens => {
   expect(() => prepareSettingsForSave({ ...advancedSettings, llmMaxOutputTokens })).toThrow();
 });
+
+
+test('context budget failure identifies both fields for inline correction', () => {
+  const { SettingsValidationError } = require('./validation');
+  try { prepareSettingsForSave({ ...advancedSettings, llmContextWindowTokens: '8192', llmMaxOutputTokens: '8000' }); throw new Error('expected validation'); }
+  catch (error) { expect(error).toBeInstanceOf(SettingsValidationError); expect((error as any).fields).toEqual(['llmContextWindowTokens', 'llmMaxOutputTokens']); }
+});

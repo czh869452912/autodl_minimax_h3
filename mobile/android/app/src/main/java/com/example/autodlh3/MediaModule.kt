@@ -193,6 +193,28 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   }
 
   @ReactMethod
+  fun shareVideo(source: String, promise: Promise) {
+    com.facebook.react.bridge.UiThreadUtil.runOnUiThread {
+      try {
+        val parsed = Uri.parse(source)
+        val uri = when (parsed.scheme) {
+          "content" -> parsed
+          "file" -> FileProvider.getUriForFile(context, "${context.packageName}.media", File(requireNotNull(parsed.path)))
+          else -> throw IllegalArgumentException()
+        }
+        val send = Intent(Intent.ACTION_SEND).apply {
+          type = "video/*"
+          putExtra(Intent.EXTRA_STREAM, uri)
+          clipData = android.content.ClipData.newRawUri("视频", uri)
+          addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(send, "分享视频").apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION) })
+        promise.resolve(true)
+      } catch (_: Exception) { promise.reject("MEDIA_SHARE_UNAVAILABLE", "分享失败，请确认本地视频可访问") }
+    }
+  }
+
+  @ReactMethod
   fun extractPoster(source: String, key: String, promise: Promise) {
     if (source.isBlank()) { promise.reject("INVALID_SOURCE", "视频地址为空"); return }
     executors.executeMedia {

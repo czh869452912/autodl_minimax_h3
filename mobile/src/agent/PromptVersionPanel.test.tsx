@@ -1,3 +1,4 @@
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { KeyboardAvoidingView, Platform, Text } from 'react-native';
@@ -56,9 +57,9 @@ it('aligns unsupported generated parameters when opening the preview without cha
   let tree!: ReturnType<typeof create>;
   act(() => { tree = create(<PromptVersionPanel versions={[version]} threadId="t" onSelect={() => undefined} onRestore={() => undefined} onExport={async () => undefined} />); });
   act(() => press(tree, '预览并带入创建页'));
-  expect(tree.root.findByProps({ accessibilityLabel: '分辨率（可选）' }).props.value).toBe('768p竖');
+  expect(tree.root.findByProps({ accessibilityLabel: '分辨率（Resolution）' }).props.value).toBe('768p竖');
   expect(text(tree)).toContain('已使用默认值');
-  expect(tree.root.findByProps({ accessibilityLabel: 'Seed（可选）' }).props.value).toBe('0');
+  expect(tree.root.findByProps({ accessibilityLabel: '随机种子 Seed（可选）' }).props.value).toBe('0');
   expect(version.parameters.resolution).toBe('768p(1:1)');
   act(() => tree.unmount());
 });
@@ -75,7 +76,7 @@ it('selects a target workflow and exports aligned square parameters with durable
   act(() => press(tree, `选择工作流 ${zm.metadata.title}`));
   expect(tree.root.findByProps({ accessibilityLabel: '选择生成工作流' }).props.accessibilityState.expanded).toBe(false);
   expect(tree.root.findAllByProps({ accessibilityLabel: `选择工作流 ${zm.metadata.title}` })).toHaveLength(0);
-  act(() => { press(tree, '768p(1:1)'); tree.root.findByProps({ accessibilityLabel: 'Seed（可选）' }).props.onChangeText('0'); });
+  act(() => { press(tree, '768p(1:1)'); tree.root.findByProps({ accessibilityLabel: '随机种子 Seed（可选）' }).props.onChangeText('0'); });
   expect(text(tree)).toContain('至少需要 1');
   await act(async () => press(tree, '带入创建页'));
   expect(onExport.mock.calls[0][0]).toMatchObject({ target: { workflowId: zm.id, workflowVersion: '1.0.0', contentHash: zmPackage.metadata.contentHash }, parameters: { resolution: '768p(1:1)', seed: '0' } });
@@ -97,10 +98,10 @@ it('avoids Android keyboard overlap while keeping parameter inputs mounted', () 
       modalSurface.props.onBlur({ stopPropagation });
     });
     expect(stopPropagation).toHaveBeenCalledTimes(2);
-    const input = tree.root.findByProps({ accessibilityLabel: '时长秒数（可选）' });
+    const input = tree.root.findByProps({ accessibilityLabel: '视频时长（Duration）' });
     for (const value of ['1', '16', '6']) {
       act(() => input.props.onChangeText(value));
-      expect(tree.root.findByProps({ accessibilityLabel: '时长秒数（可选）' })).toBe(input);
+      expect(tree.root.findByProps({ accessibilityLabel: '视频时长（Duration）' })).toBe(input);
       expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBe('padding');
     }
   } finally {
@@ -139,9 +140,9 @@ it('previews all images and exports only explicitly selected images and paramete
   expect(tree.root.findByProps({ accessibilityLabel: '绑定图片 图片1' }).props.accessibilityState.checked).toBe(true);
   act(() => {
     press(tree, '绑定图片 图片2');
-    tree.root.findByProps({ accessibilityLabel: '分辨率（可选）' }).props.onChangeText('480p横');
-    tree.root.findByProps({ accessibilityLabel: '时长秒数（可选）' }).props.onChangeText('6');
-    tree.root.findByProps({ accessibilityLabel: 'Seed（可选）' }).props.onChangeText('123');
+    tree.root.findByProps({ accessibilityLabel: '分辨率（Resolution）' }).props.onChangeText('480p横');
+    tree.root.findByProps({ accessibilityLabel: '视频时长（Duration）' }).props.onChangeText('6');
+    tree.root.findByProps({ accessibilityLabel: '随机种子 Seed（可选）' }).props.onChangeText('123');
   });
   await act(async () => press(tree, '带入创建页'));
   expect(onExport).toHaveBeenCalledWith({ prompt: versions[1].promptText, images: [{ ...versions[1].images[0], ordinal: 1 }], parameters: { resolution: '480p横', durationSeconds: 6, seed: '123' }, source: { threadId: 'thread1', messageId: 'm2', versionId: 'v2' } });
@@ -160,7 +161,7 @@ it('blocks known missing image references and invalid durations, including progr
   expect(tree.root.findByProps({ accessibilityLabel: '带入创建页' }).props.disabled).toBe(true);
   await act(async () => press(tree, '带入创建页'));
   expect(onExport).not.toHaveBeenCalled();
-  act(() => { press(tree, '绑定图片 图片1'); tree.root.findByProps({ accessibilityLabel: '时长秒数（可选）' }).props.onChangeText('-1'); });
+  act(() => { press(tree, '绑定图片 图片1'); tree.root.findByProps({ accessibilityLabel: '视频时长（Duration）' }).props.onChangeText('-1'); });
   expect(tree.root.findByProps({ accessibilityLabel: '带入创建页' }).props.disabled).toBe(true);
   act(() => tree.unmount());
 });
@@ -209,7 +210,7 @@ it('allows deselecting unreferenced earlier images and renumbers the exported im
   act(() => tree.unmount());
 });
 
-it.each([['分辨率（可选）', '720p'], ['时长秒数（可选）', '16'], ['时长秒数（可选）', '1.5'], ['Seed（可选）', '0'], ['Seed（可选）', '1e3']])('refuses invalid %s before saving a handoff', async (label, value) => {
+it.each([['分辨率（Resolution）', '720p'], ['视频时长（Duration）', '16'], ['视频时长（Duration）', '1.5'], ['随机种子 Seed（可选）', '0'], ['随机种子 Seed（可选）', '1e3']])('refuses invalid %s before saving a handoff', async (label, value) => {
   const onExport = jest.fn(async () => undefined);
   let tree!: ReturnType<typeof create>;
   act(() => { tree = create(<PromptVersionPanel versions={versions} threadId="t" onSelect={() => undefined} onRestore={() => undefined} onExport={onExport} />); });

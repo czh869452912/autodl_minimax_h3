@@ -41,7 +41,7 @@ jest.mock('expo-router', () => ({
 jest.mock('../settings/storage', () => ({ readSettings: async () => ({ llmApiKey: 'key', llmEndpoint: 'https://example.invalid', llmModel: 'h3', llmTimeoutSeconds: '600', llmMaxRetries: '2' }) }));
 jest.mock('../storage/databaseClient', () => ({ getDatabase: () => ({}) }));
 jest.mock('./threadStore', () => ({ createLocalThreadStore: () => mockStore }));
-jest.mock('../handoff/promptDraft', () => ({ createPromptDraftStore: () => ({}) }));
+jest.mock('../handoff/promptDraft', () => ({ createPromptDraftStore: () => ({ save: async () => ({ id: 'saved' }) }) }));
 jest.mock('./modelAdapter', () => ({ getH3AgentConfigError: () => undefined }));
 jest.mock('./imageAttachmentUpload', () => ({ readImageAsDataSource: jest.fn() }));
 jest.mock('./runtimeStore', () => ({
@@ -73,9 +73,9 @@ test('uses the active catalog release and blocks exports while catalog loading o
   expect(ui().workflowDefinition.version).toBe('active-test');
   mockCatalog.bootstrap.mockRejectedValueOnce(new Error('catalog unavailable'));
   await act(async () => ui().onReloadWorkflow());
-  expect(ui().workflowDefinition).toBeUndefined();
+  expect(ui().workflowDefinition.version).toBe('active-test');
   expect(ui().workflowLoadIssue).toBe('catalog unavailable');
-  await expect(ui().onExportPrompt('prompt')).rejects.toThrow('工作流');
+  await expect(ui().onExportPrompt('prompt')).resolves.toBeUndefined();
 });
 
 test('rejects a changed active release and disables the SDK attachment writer', async () => {
@@ -160,4 +160,25 @@ test('initial empty-session save rejection reaches the screen error handling', a
   mockStore.save.mockRejectedValueOnce(new Error('initial save unavailable'));
   await act(async () => { tree = create(<AgentScreen />); });
   expect(tree.root.findAllByType(Text).map((node) => node.props.children)).toContain('initial save unavailable');
+});
+
+
+test('history search, pagination and rename failures preserve the mounted session and propagate to local recovery UI', async () => {
+  for (let i = 0; i < 50; i++) mockRows.set(String(i), thread(String(i), i + 1));
+  await act(async () => { tree = create(<AgentScreen />); });
+  const mounted = tree.root.findByType(PromptAssistantUi);
+  const id = ui().activeThreadId;
+  const rows = ui().threads;
+  const runtime = promptRuntimeRegistry.ensure(config, mockRows.get(id)!, mockStore as never);
+  const list = jest.spyOn(mockStore, 'listSummaries').mockRejectedValue(new Error('database unavailable'));
+  const rename = jest.spyOn(promptRuntimeRegistry, 'renameThread').mockRejectedValueOnce(new Error('rename unavailable'));
+  try {
+    await act(async () => { await expect(ui().onSearchHistory('needle')).rejects.toThrow('database unavailable'); });
+    await act(async () => { await expect(ui().onLoadMoreHistory()).rejects.toThrow('database unavailable'); });
+    await act(async () => { await expect(ui().onRename(id, 'new')).rejects.toThrow('rename unavailable'); });
+    expect(tree.root.findByType(PromptAssistantUi)).toBe(mounted);
+    expect(ui().activeThreadId).toBe(id);
+    expect(ui().threads).toBe(rows);
+    expect(runtime.disposed()).toBe(false);
+  } finally { list.mockRestore(); rename.mockRestore(); }
 });
