@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import React, { createContext, useContext, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Animated,
@@ -10,6 +10,7 @@ import {
   PanResponder,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -18,6 +19,12 @@ import {
 import { resolveBottomSheetRelease, type SheetSnap } from './draggableBottomSheet';
 import { COLORS } from './theme';
 import { AppIcon } from './icons';
+
+const SheetScrollContext = createContext<(offset: number) => void>(() => undefined);
+export const SheetScrollView = forwardRef<ScrollView, React.ComponentProps<typeof ScrollView>>(function SheetScrollView({ onScroll, ...props }, ref) {
+  const report = useContext(SheetScrollContext);
+  return <ScrollView {...props} ref={ref} scrollEventThrottle={16} onScroll={event => { if (!props.horizontal) report(event.nativeEvent.contentOffset.y); onScroll?.(event); }} />;
+});
 
 export type DraggableBottomSheetHandle = { expand: () => void };
 
@@ -67,6 +74,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
   const closeOffset = availableHeight * 0.22;
   const position = useRef(new Animated.Value(collapsedOffset)).current;
   const dragStart = useRef(collapsedOffset);
+  const contentAtTop = useRef(true);
 
   useEffect(() => {
     keyboardVisible.current = false;
@@ -100,17 +108,16 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
   useImperativeHandle(ref, () => ({ expand: () => setSnap('expanded') }), []);
   const close = () => { if (ownsFocus.current || keyboardVisible.current) Keyboard.dismiss(); onClose(); };
 
-  const panResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
+  const responders = useMemo(() => { const callbacks = {
+    onMoveShouldSetPanResponder: (_: unknown, gesture: { dy: number; dx: number }) => Math.abs(gesture.dy) > 12 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
     onPanResponderGrant: () => {
       dragStart.current = snap === 'expanded' ? expandedOffset : collapsedOffset;
       position.stopAnimation(value => { dragStart.current = value; });
     },
-    onPanResponderMove: (_, gesture) => {
+    onPanResponderMove: (_: unknown, gesture: { dy: number }) => {
       position.setValue(Math.max(0, Math.min(collapsedOffset + closeOffset, dragStart.current + gesture.dy)));
     },
-    onPanResponderRelease: (_, gesture) => {
+    onPanResponderRelease: (_: unknown, gesture: { dy: number; vy: number }) => {
       const decision = resolveBottomSheetRelease({
         current: snap,
         translationY: gesture.dy,
@@ -123,7 +130,8 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
       else animateTo(decision);
     },
     onPanResponderTerminate: () => animateTo(snap),
-  }), [collapsedOffset, closeOffset, expandedOffset, onClose, position, reduceMotion, snap]);
+  }; return { handle: PanResponder.create({ ...callbacks, onStartShouldSetPanResponder: () => true }), content: PanResponder.create({ ...callbacks, onStartShouldSetPanResponder: () => false, onMoveShouldSetPanResponder: () => false, onMoveShouldSetPanResponderCapture: (_, gesture) => contentAtTop.current && Math.abs(gesture.dy) > Math.abs(gesture.dx) && (gesture.dy > 16 || (snap === 'collapsed' && gesture.dy < -16)) }) };
+  }, [collapsedOffset, closeOffset, expandedOffset, onClose, position, reduceMotion, snap]);
 
   return (
     <Modal visible={visible} transparent statusBarTranslucent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={close} onShow={() => { const target = findNodeHandle(headingRef.current); if (target) AccessibilityInfo.setAccessibilityFocus(target); }}>
@@ -133,19 +141,19 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
         style={styles.modalSurface}
       >
         <View style={styles.backdrop} onLayout={event => setLayoutHeight(event.nativeEvent.layout.height)}>
-          <Pressable accessibilityRole="button" accessibilityLabel="关闭底部抽屉" style={StyleSheet.absoluteFill} onPress={close} />
+          <Pressable accessible={false} importantForAccessibility="no" style={StyleSheet.absoluteFill} onPress={close} />
           <Animated.View style={[styles.sheet, { top: position, bottom: 0 }]}>
             <View testID="bottom-sheet-surface" onFocus={() => { ownsFocus.current = true; setInputFocus(true); }} onBlur={() => { ownsFocus.current = false; setInputFocus(false); }} onAccessibilityEscape={close} style={[styles.surface, { paddingBottom: !keyboardOpen ? Math.max(12, insets.bottom) : 12 }]} accessibilityViewIsModal>
-              <View accessibilityLabel="拖动调整抽屉高度" accessibilityRole="adjustable" accessibilityValue={{ text: snap === 'expanded' ? '全屏' : '半屏' }} accessibilityActions={[{ name: 'increment', label: '展开' }, { name: 'decrement', label: '收起' }]} onAccessibilityAction={event => animateTo(event.nativeEvent.actionName === 'increment' ? 'expanded' : 'collapsed')} style={styles.handleHitArea} {...panResponder.panHandlers}>
+              <View accessibilityLabel="拖动调整抽屉高度" accessibilityRole="adjustable" accessibilityValue={{ text: snap === 'expanded' ? '全屏' : '半屏' }} accessibilityActions={[{ name: 'increment', label: '展开' }, { name: 'decrement', label: '收起' }]} onAccessibilityAction={event => animateTo(event.nativeEvent.actionName === 'increment' ? 'expanded' : 'collapsed')} style={styles.handleHitArea} {...responders.handle.panHandlers}>
                 <View style={styles.handle} />
               </View>
               <View style={styles.header}>
-                <Text ref={headingRef} accessibilityRole="header" style={styles.title}>{title}</Text>
+                <View collapsable={false} style={{ flex: 1 }} {...responders.handle.panHandlers} onStartShouldSetResponderCapture={() => true}><Text pointerEvents="none" ref={headingRef} accessibilityRole="header" style={styles.title}>{title}</Text></View>
                 <Pressable accessibilityRole="button" accessibilityLabel={`关闭${title}`} onPress={close} style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}>
                   <AppIcon name="close" size={24} color={COLORS.textMuted} />
                 </Pressable>
               </View>
-              <View style={styles.content}>{children}</View>
+              <SheetScrollContext.Provider value={offset => { contentAtTop.current = offset <= 0; }}><View style={styles.content} {...responders.content.panHandlers}>{children}</View></SheetScrollContext.Provider>
               {footer ? <View testID="bottom-sheet-footer" style={styles.footer}>{footer}</View> : null}
             </View>
           </Animated.View>

@@ -1,6 +1,13 @@
 import React from 'react';
 import { Alert, StyleSheet, Text } from 'react-native';
-import { act, create } from 'react-test-renderer';
+import { act, create as createRenderer } from 'react-test-renderer';
+
+const mountedTrees: ReturnType<typeof createRenderer>[] = [];
+function create(element: React.ReactElement) {
+  const tree = createRenderer(element);
+  mountedTrees.push(tree);
+  return tree;
+}
 
 const mockBack = jest.fn();
 const mockCopy = jest.fn(async (_value: string) => undefined);
@@ -20,6 +27,7 @@ const task = {
 };
 
 jest.mock('expo-router', () => ({
+  useFocusEffect: (effect: () => void) => { require('react').useEffect(effect, [effect]); },
   useLocalSearchParams: () => ({ id: 'task-1' }),
   useRouter: () => ({ back: mockBack }),
 }));
@@ -40,6 +48,7 @@ jest.mock('../media/VideoPlayer', () => ({
   VideoPlayer: (props: Record<string, unknown>) => require('react').createElement('View', { ...props, testID: 'video-player-mock' }),
 }));
 
+import { taskProjectionEvents } from '../tasks/taskProjectionEvents';
 import VideoDetailScreen from '../../app/video/[id]';
 
 describe('video detail screen', () => {
@@ -61,14 +70,40 @@ describe('video detail screen', () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   });
 
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => { act(() => { for (const tree of mountedTrees.splice(0)) tree.unmount(); }); jest.restoreAllMocks(); });
+
+  it('observes asynchronous export completion and failure, then allows retry', async () => {
+    mockGet.mockResolvedValue({ ...task, exportState: 'QUEUED' });
+    let tree!: ReturnType<typeof create>;
+    await act(async () => { tree = create(<VideoDetailScreen />); });
+    expect(tree.root.findByProps({ accessibilityLabel: '保存到系统相册' }).props.disabled).toBe(true);
+    mockGet.mockResolvedValue({ ...task, exportState: 'EXPORT_FAILED', exportError: '相册权限不足' });
+    await act(async () => taskProjectionEvents.invalidate());
+    expect(tree.root.findByProps({ accessibilityLabel: '重试保存到系统相册' }).props.disabled).toBe(false);
+    expect(tree.root.findAllByType(Text).some(node => node.props.children === '相册权限不足')).toBe(true);
+    mockGet.mockResolvedValue({ ...task, exportState: 'EXPORTED' });
+    await act(async () => taskProjectionEvents.invalidate());
+    expect(tree.root.findAllByProps({ accessibilityLabel: '保存到系统相册' })).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
+  it('distinguishes read failures from deleted works and can retry', async () => {
+    mockGet.mockRejectedValueOnce(new Error('SQLITE_BUSY'));
+    let tree!: ReturnType<typeof create>;
+    await act(async () => { tree = create(<VideoDetailScreen />); });
+    expect(tree.root.findByProps({ accessibilityLabel: '重试读取作品' })).toBeTruthy();
+    expect(tree.root.findAllByType(Text).some(node => node.props.children === '作品不存在或已删除')).toBe(false);
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '重试读取作品' }).props.onPress());
+    expect(tree.root.findByProps({ testID: 'video-player-mock' })).toBeTruthy();
+    act(() => tree.unmount());
+  });
 
   it('keeps long prompts in an independent scroll area and keeps actions reachable', async () => {
     let tree: ReturnType<typeof create>;
     await act(async () => { tree = create(<VideoDetailScreen />); });
     expect(tree!.root.findByProps({ accessibilityLabel: '滚动 Prompt' })).toBeTruthy();
     expect(tree!.root.findByProps({ accessibilityLabel: '复制 Prompt' })).toBeTruthy();
-    expect(tree!.root.findByProps({ accessibilityLabel: '返回画廊' })).toBeTruthy();
+    expect(tree!.root.findByProps({ accessibilityLabel: '返回上一页' })).toBeTruthy();
     expect(mockList).not.toHaveBeenCalled();
     expect(mockGet).toHaveBeenCalledWith('task-1');
   });
@@ -79,7 +114,7 @@ describe('video detail screen', () => {
     expect(tree!.root.findByProps({ testID: 'video-player-mock' }).props.source).toBe('https://example/video.mp4');
     await act(async () => tree!.root.findByProps({ accessibilityLabel: '复制 Prompt' }).props.onPress());
     expect(mockCopy).toHaveBeenCalledWith(task.prompt);
-    expect(Alert.alert).toHaveBeenCalledWith('已复制', 'Prompt 已复制到剪贴板');
+    expect(tree!.root.findAllByType(Text).some(node => node.props.children === 'Prompt 已复制到剪贴板')).toBe(true);
   });
 
   it('warns when the native clipboard does not retain the complete prompt', async () => {
@@ -87,8 +122,8 @@ describe('video detail screen', () => {
     let tree: ReturnType<typeof create>;
     await act(async () => { tree = create(<VideoDetailScreen />); });
     await act(async () => tree!.root.findByProps({ accessibilityLabel: '复制 Prompt' }).props.onPress());
-    expect(mockReadClipboard).toHaveBeenCalledTimes(1);
-    expect(Alert.alert).toHaveBeenCalledWith('复制不完整', '系统剪贴板未保留完整 Prompt，可能是键盘剪贴板或目标应用的长度限制。');
+    expect(mockReadClipboard).not.toHaveBeenCalled();
+    expect(tree!.root.findAllByType(Text).some(node => node.props.children === 'Prompt 已复制到剪贴板')).toBe(true);
   });
 
   it('manually saves a downloaded private video to the gallery', async () => {

@@ -7,12 +7,12 @@ export function ToolTimeline({ steps }: { steps: ToolTimelineStep[] }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <View style={styles.toolTimeline}>
-      <Pressable
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded }}
         accessibilityLabel={expanded ? '收起处理过程' : '展开处理过程'}
         onPress={() => setExpanded((value) => !value)}
         style={styles.toolSummary}
       >
-        <Text style={styles.toolChevron}>{expanded ? '⌄' : '›'}</Text>
+        <Text accessible={false} importantForAccessibility="no" style={styles.toolChevron}>{expanded ? '⌄' : '›'}</Text>
         <Text style={styles.toolSummaryText}>{toolTimelineSummary(steps)}</Text>
       </Pressable>
       {expanded ? (

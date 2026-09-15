@@ -46,6 +46,7 @@ export function createSqliteMediaStore(database: SqlDatabase): MediaStore {
   };
   const all = async <T>(sql: string, ...params: any[]): Promise<T[]> => typeof (database as any).getAllAsync === 'function' ? ((await (database as any).getAllAsync(sql, ...params)) ?? []) : (database.getAllSync?.<T>(sql, ...params) ?? []);
   return {
+    async updatePoster(id, localPath, poster) { await run('UPDATE media_assets SET poster_path=? WHERE id=? AND local_path=?', poster, id, localPath); },
     async upsert(asset) {
       await run('INSERT OR REPLACE INTO media_assets (id, task_id, title, prompt, source_url, local_path, poster_path, mime_type, width, height, duration_ms, status, created_at, updated_at, artifact_id, job_id, workflow_id, kind, export_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', asset.id, asset.taskId, asset.title, asset.prompt, asset.sourceUrl, asset.localPath ?? null, asset.posterPath ?? null, asset.mimeType, asset.width ?? null, asset.height ?? null, asset.durationMs ?? null, asset.status, asset.createdAt, asset.updatedAt, asset.artifactId ?? null, asset.jobId ?? null, asset.workflowId ?? null, asset.kind ?? 'video', asset.exportStatus ?? null);
     },
@@ -54,14 +55,14 @@ export function createSqliteMediaStore(database: SqlDatabase): MediaStore {
     },
     async list(options: { query?: string; status?: MediaStatus; kind?: MediaAsset['kind'] } = {}) {
       const query = options.query?.trim().toLowerCase() || undefined;
-      const rows = await all<Record<string, unknown>>('SELECT * FROM media_assets WHERE (? IS NULL OR status = ?) AND (? IS NULL OR kind = ?) AND (? IS NULL OR lower(title) LIKE ? OR lower(prompt) LIKE ? OR lower(task_id) LIKE ?) ORDER BY created_at DESC', options.status ?? null, options.status ?? null, options.kind ?? null, options.kind ?? null, query ?? null, query ? `%${query}%` : null, query ? `%${query}%` : null, query ? `%${query}%` : null);
+      const rows = await all<Record<string, unknown>>('SELECT * FROM media_assets WHERE (? IS NULL OR status = ? OR (status=\'queued\' AND ?=\'downloading\')) AND (? IS NULL OR kind = ?) AND (? IS NULL OR lower(title) LIKE ? OR lower(prompt) LIKE ? OR lower(task_id) LIKE ?) ORDER BY created_at DESC', options.status ?? null, options.status ?? null, options.status ?? null, options.kind ?? null, options.kind ?? null, query ?? null, query ? `%${query}%` : null, query ? `%${query}%` : null, query ? `%${query}%` : null);
       return rows.map(toAsset);
     },
     async listPage(options: MediaPageOptions = {}) {
       const limit = Math.max(1, Math.min(100, options.limit ?? 40));
       const query = options.query?.trim().toLowerCase() || undefined;
       const cursor = options.cursor;
-      const rows = await all<Record<string, unknown>>('SELECT id, task_id, title, prompt, source_url, local_path, poster_path, mime_type, width, height, duration_ms, status, created_at, updated_at, artifact_id, job_id, workflow_id, kind, export_status FROM media_assets WHERE (? IS NULL OR status = ?) AND (? IS NULL OR kind = ?) AND (? IS NULL OR lower(title) LIKE ? OR lower(prompt) LIKE ? OR lower(task_id) LIKE ?) AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?)) ORDER BY created_at DESC, id DESC LIMIT ?', options.status ?? null, options.status ?? null, options.kind ?? null, options.kind ?? null, query ?? null, query ? `%${query}%` : null, query ? `%${query}%` : null, query ? `%${query}%` : null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.id ?? null, limit + 1);
+      const rows = await all<Record<string, unknown>>('SELECT id, task_id, title, prompt, source_url, local_path, poster_path, mime_type, width, height, duration_ms, status, created_at, updated_at, artifact_id, job_id, workflow_id, kind, export_status FROM media_assets WHERE (? IS NULL OR status = ? OR (status=\'queued\' AND ?=\'downloading\')) AND (? IS NULL OR kind = ?) AND (? IS NULL OR lower(title) LIKE ? OR lower(prompt) LIKE ? OR lower(task_id) LIKE ?) AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?)) ORDER BY created_at DESC, id DESC LIMIT ?', options.status ?? null, options.status ?? null, options.status ?? null, options.kind ?? null, options.kind ?? null, query ?? null, query ? `%${query}%` : null, query ? `%${query}%` : null, query ? `%${query}%` : null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.id ?? null, limit + 1);
       const hasMore = rows.length > limit;
       const items = rows.slice(0, limit).map(toAsset);
       const last = items[items.length - 1];
@@ -75,7 +76,37 @@ export function createSqliteMediaStore(database: SqlDatabase): MediaStore {
       const rows = await all<Record<string, unknown>>("SELECT * FROM media_assets WHERE task_id = ? AND kind = 'video' ORDER BY updated_at DESC, id ASC LIMIT 1", taskId);
       return rows[0] ? toAsset(rows[0]) : null;
     },
-    async remove(id) { assertAppDatabaseWritable(database as never); const rows = database.getAllSync?.<Record<string, unknown>>('SELECT local_path, poster_path FROM media_assets WHERE id = ? LIMIT 1', id) ?? []; database.runSync?.('DELETE FROM media_deliveries WHERE asset_id = ?', id); database.runSync?.('DELETE FROM media_assets WHERE id = ?', id); for (const row of rows) for (const uri of [row.local_path, row.poster_path]) await removePrivateFile(uri); },
+    async remove(id) {
+      assertAppDatabaseWritable(database as never);
+      const rows = await all<Record<string, unknown>>('SELECT * FROM media_assets WHERE id=? LIMIT 1', id);
+      if (!rows.length) return;
+      const work = async (db: any) => {
+        const row = rows[0];
+        await db.runAsync('INSERT OR IGNORE INTO media_asset_tombstones(id,task_id,artifact_id,kind,deleted_at) VALUES(?,?,?,?,?)', id, row.task_id, row.artifact_id ?? null, row.kind ?? 'video', Date.now());
+        await db.runAsync("UPDATE workflow_operations SET state='BLOCKED',lease_owner=NULL,lease_expires_at=NULL,last_error_json=?,updated_at=? WHERE job_id=? AND kind IN ('ARTIFACT_DOWNLOAD','EXPORT') AND state IN ('PENDING','CLAIMED') AND json_valid(payload_json) AND (json_extract(payload_json,'$.artifact.id')=? OR json_extract(payload_json,'$.assetId')=?)", JSON.stringify({ code: 'USER_REMOVED_MEDIA', message: '作品已删除' }), Date.now(), row.task_id, row.artifact_id ?? '', id);
+        await db.runAsync("DELETE FROM artifact_blob_refs WHERE owner_type IN ('workflow_artifact','workflow_artifact_original') AND owner_id=?", `${row.task_id}:${row.artifact_id}`);
+        await db.runAsync('DELETE FROM media_deliveries WHERE asset_id=?', id);
+        await db.runAsync('DELETE FROM media_assets WHERE id=?', id);
+      };
+      if (typeof (database as any).withExclusiveTransactionAsync === 'function') {
+        await (database as any).withExclusiveTransactionAsync(work);
+      } else {
+        // Legacy synchronous adapters still commit deletion intent with the index removal.
+        transaction(database, () => {
+          const row = rows[0];
+          database.runSync?.('INSERT OR IGNORE INTO media_asset_tombstones(id,task_id,artifact_id,kind,deleted_at) VALUES(?,?,?,?,?)', id, row.task_id, row.artifact_id ?? null, row.kind ?? 'video', Date.now());
+          database.runSync?.("UPDATE workflow_operations SET state='BLOCKED',lease_owner=NULL,lease_expires_at=NULL,last_error_json=?,updated_at=? WHERE job_id=? AND kind IN ('ARTIFACT_DOWNLOAD','EXPORT') AND state IN ('PENDING','CLAIMED') AND json_valid(payload_json) AND (json_extract(payload_json,'$.artifact.id')=? OR json_extract(payload_json,'$.assetId')=?)", JSON.stringify({ code: 'USER_REMOVED_MEDIA', message: '作品已删除' }), Date.now(), row.task_id, row.artifact_id ?? '', id);
+          database.runSync?.("DELETE FROM artifact_blob_refs WHERE owner_type IN ('workflow_artifact','workflow_artifact_original') AND owner_id=?", `${row.task_id}:${row.artifact_id}`);
+          database.runSync?.('DELETE FROM media_deliveries WHERE asset_id=?', id);
+          database.runSync?.('DELETE FROM media_assets WHERE id=?', id);
+        });
+      }
+      for (const row of rows) for (const uri of [row.local_path, row.poster_path]) {
+        if (typeof uri !== 'string' || /\/cas\/sha256\//.test(uri)) continue;
+        const owners = await all('SELECT id FROM media_assets WHERE local_path=? OR poster_path=? LIMIT 1', uri, uri);
+        if (!owners.length) await removePrivateFile(uri);
+      }
+    },
     async upsertDelivery(delivery) {
       assertAppDatabaseWritable(database as never);
       transaction(database, () => {

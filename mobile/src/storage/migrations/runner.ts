@@ -6,7 +6,10 @@ import { v5Registry } from './v5Registry';
 import { v6DurableExecutor } from './v6DurableExecutor';
 import { v7RegistryRelease } from './v7RegistryRelease';
 import { v8TaskRefresh } from './v8TaskRefresh';
+import { v10MediaDeletion } from './v10MediaDeletion';
 import { v9AgentRecords } from './v9AgentRecords';
+import { v11TaskMonitor } from './v11TaskMonitor';
+import { v12MonitorFailures } from './v12MonitorFailures';
 
 export type AppDatabaseMigrationOptions = {
   backup?: (db: AppDatabase, fromVersion: number, toVersion: number) => void;
@@ -19,6 +22,9 @@ const steps = new Map<number, MigrationStep>([
   [v7RegistryRelease.fromVersion, v7RegistryRelease],
   [v8TaskRefresh.fromVersion, v8TaskRefresh],
   [v9AgentRecords.fromVersion, v9AgentRecords],
+  [v10MediaDeletion.fromVersion, v10MediaDeletion],
+  [v11TaskMonitor.fromVersion, v11TaskMonitor],
+  [v12MonitorFailures.fromVersion, v12MonitorFailures],
 ]);
 
 function version(db: AppDatabase): number {

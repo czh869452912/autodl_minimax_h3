@@ -14,19 +14,19 @@ export function WorkflowParameterFields({ definition, values, onChange, disabled
     if (!schema) return null;
     return <View key={target} style={{ gap: 8 }}>
       <Text style={{ color: colors.ink }}>{schema.title ?? labels[target]}</Text>
-      <TextInput accessibilityLabel={labels[target]} editable={!disabled}
+      <TextInput accessibilityLabel={String(schema.title ?? labels[target])} editable={!disabled}
         keyboardType={schema.type === 'integer' || schema.type === 'number' ? 'number-pad' : 'default'}
         placeholder={`工作流默认${schema.default === undefined ? '' : `：${schema.default}`}`}
         placeholderTextColor={colors.placeholder} value={String(values[target] ?? '')}
         onChangeText={text => onChange(target, text)}
-        style={{ minHeight: 46, borderWidth: 1, borderColor: colors.line, borderRadius: 8, padding: 12, color: colors.ink }} />
-      {Array.isArray(schema.enum) && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{schema.enum.map((value: unknown) =>
-        <Pressable key={String(value)} accessibilityRole="button" accessibilityLabel={String(value)} disabled={disabled}
-          onPress={() => onChange(target, value)} style={{ padding: 12, minHeight: 44, borderWidth: 1, borderColor: colors.line, borderRadius: 8 }}>
+        style={{ minHeight: 46, borderWidth: 1, borderColor: colors.controlLine, borderRadius: 8, padding: 12, color: colors.ink }} />
+      {Array.isArray(schema.enum) && <View accessibilityRole="radiogroup" accessibilityLabel={`${schema.title ?? labels[target]}预设选项`} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{schema.enum.map((value: unknown) =>
+        <Pressable key={String(value)} accessibilityRole="radio" accessibilityState={{ checked: values[target] === value, disabled: Boolean(disabled) }} accessibilityLabel={String(value)} disabled={disabled}
+          onPress={() => onChange(target, value)} style={{ padding: 12, minHeight: 44, borderWidth: 1, borderColor: values[target] === value ? colors.accent : colors.controlLine, backgroundColor: values[target] === value ? '#e5f1ed' : colors.surface, borderRadius: 8 }}>
           <Text style={{ color: colors.ink }}>{String(value)}</Text>
         </Pressable>)}</View>}
       {(schema.minimum !== undefined || schema.maximum !== undefined) && <Text style={{ color: colors.muted }}>{schema.minimum ?? '不限'}–{schema.maximum ?? '不限'}</Text>}
-      {target === 'seed' && <Pressable accessibilityRole="button" accessibilityLabel="使用随机种子" disabled={disabled} onPress={() => onChange(target, '')} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.ink }}>使用随机值</Text></Pressable>}
+      {target === 'seed' && <Pressable accessibilityRole="button" accessibilityLabel="使用随机种子" disabled={disabled} onPress={() => onChange(target, '')} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.ink }}>留空，每次使用随机种子</Text></Pressable>}
     </View>;
   })}</View>;
 }

@@ -19,7 +19,7 @@ jest.mock('../tasks/taskServices', () => ({ getTaskServices: () => ({
 }) }));
 jest.mock('../settings/storage', () => ({ readSettings: async () => ({ keepPrivateCopy: false }) }));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
-jest.mock('../native/taskMonitor', () => ({ getTaskMonitorStatus: async () => ({ running: false }), startTaskMonitor: (ids: string[]) => mockMonitor(ids), stopTaskMonitor: async () => true }));
+jest.mock('../native/taskMonitor', () => ({ getTaskMonitorStatus: async () => ({ running: false }), subscribeTaskMonitorStatus: () => () => undefined, startTaskMonitor: (ids: string[]) => mockMonitor(ids), stopTaskMonitor: async () => true }));
 import TasksScreen from '../../app/(tabs)/tasks';
 import { executorEvents } from '../tasks/executorEvents';
 import { taskProjectionEvents } from '../tasks/taskProjectionEvents';
@@ -67,4 +67,14 @@ test('automatic failure retains cards with a nonmodal stale indicator; manual fa
   expect(texts()).toContain('hello');
   expect(texts()).toContain('状态可能已过期：offline');
   expect(alert).toHaveBeenCalledTimes(1);
+});
+
+
+test('initial background read does not activate pull-to-refresh', async () => {
+  let release!: (value: any) => void;
+  mockRead.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
+  act(() => { tree = create(<TasksScreen />); });
+  expect(tree.root.findByType(FlatList).props.refreshing).toBe(false);
+  await act(async () => release({ revision: 1, items: [mockCard], activity: mockActivity }));
+  expect(tree.root.findByType(FlatList).props.refreshing).toBe(false);
 });

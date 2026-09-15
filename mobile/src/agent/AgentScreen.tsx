@@ -1,6 +1,6 @@
 import { CopilotChat } from '@copilotkit/react-native';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getDatabase } from '../storage/databaseClient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { readSettings } from '../settings/storage';
@@ -37,7 +37,7 @@ export default function AgentScreen() {
     let mounted = true;
     const report = (reason: unknown) => { if (mounted) setPersistenceIssue(reason instanceof Error ? reason.message : '会话保存失败'); else console.error('Prompt session persistence failed', reason); };
     const subscription = AppState.addEventListener('change', state => {
-      if (state !== 'active') void promptRuntimeRegistry.flushAll().catch(report);
+      if (state !== 'active') void promptRuntimeRegistry.flushAll().then(() => { if (mounted) setPersistenceIssue(undefined); }).catch(report);
     });
     return () => { mounted = false; subscription.remove(); void promptRuntimeRegistry.disposeAll().catch(report); };
   }, []);
@@ -102,7 +102,6 @@ export default function AgentScreen() {
     <ReadyAgent
       key={`${config.endpoint}\u0000${config.model}\u0000${config.apiKey}\u0000${config.timeoutMs}\u0000${config.maxRetries}`}
       config={config}
-      onError={setError}
       persistenceIssue={persistenceIssue}
     />
   );
@@ -110,13 +109,12 @@ export default function AgentScreen() {
 
 function ReadyAgent({
   config,
-  onError,
   persistenceIssue,
 }: {
   config: AgentConfig;
-  onError: (message: string) => void;
   persistenceIssue?: string;
 }) {
+  const [operationIssue, onError] = useState<string>();
   const router = useRouter();
   const catalog = useMemo(() => createAppWorkflowCatalog(), []);
   const [workflow, setWorkflow] = useState<{ record: RegistryRecord; definition: WorkflowDefinition }>();
@@ -126,7 +124,7 @@ function ReadyAgent({
   useEffect(() => workflowCatalogEvents.subscribe(() => setWorkflowReload(value => value + 1)), []);
   useFocusEffect(useCallback(() => {
     let current = true;
-    setWorkflow(undefined); setWorkflowLoadIssue(undefined);
+    setWorkflowLoadIssue(undefined);
     void (async () => {
       await catalog.bootstrap();
       const records = await catalog.listActive();
@@ -205,7 +203,7 @@ function ReadyAgent({
       })
       .catch((reason) => {
         if (active)
-          onError(
+          setLoadIssue(
             reason instanceof Error ? reason.message : '无法恢复本地助手会话',
           );
       });
@@ -214,6 +212,7 @@ function ReadyAgent({
     };
   }, [threadStore, onError]);
   const createSession = useCallback(async () => {
+    onError(undefined);
     const now = Date.now();
     const snapshot: LocalThreadSnapshot = {
       threadId: `h3-${now}-${Math.random().toString(36).slice(2, 8)}`,
@@ -232,6 +231,7 @@ function ReadyAgent({
   }, [onError, threadStore]);
   const deleteSession = useCallback(
     async (threadId: string) => {
+      onError(undefined);
       try {
         await promptRuntimeRegistry.evictThread(threadId);
         await threadStore.remove(threadId);
@@ -264,7 +264,7 @@ function ReadyAgent({
             : item)),
         ));
       } catch (reason) {
-        onError(reason instanceof Error ? reason.message : '重命名会话失败');
+        throw reason;
       }
     },
     [onError, threadStore],
@@ -284,11 +284,11 @@ function ReadyAgent({
     setHistoryQuery(query); setHasMoreThreads(page.length === 50);
     setThreads(current => more ? [...current, ...page.filter(row => !current.some(old => old.threadId === row.threadId))] : page);
   }, [threadStore, threads.length]);
-  if (loadIssue) return <View style={{ flex: 1, padding: 20, backgroundColor: COLORS.background }}>
-    <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{loadIssue}</Text>
+  if (loadIssue) return <ScrollView style={{ flex: 1, padding: 20, backgroundColor: COLORS.background }}>
+    <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{operationIssue ?? loadIssue}</Text>
     <Pressable accessibilityRole="button" style={{ minHeight: 48, justifyContent: 'center' }} onPress={createSession}><Text style={{ color: COLORS.primaryActive }}>新建对话</Text></Pressable>
-    {threads.map(thread => <Pressable accessibilityRole="button" key={thread.threadId} style={{ minHeight: 48, justifyContent: 'center' }} onPress={() => setActiveThreadId(thread.threadId)}><Text style={{ color: COLORS.text }}>{thread.customTitle ?? thread.summary?.title ?? thread.threadId}</Text></Pressable>)}
-  </View>;
+    {threads.map(thread => <Pressable accessibilityRole="button" key={thread.threadId} style={{ minHeight: 48, justifyContent: 'center' }} onPress={() => setActiveThreadId(thread.threadId)}><Text style={{ color: COLORS.text }}>{thread.customTitle ?? thread.summary?.title ?? '未命名对话'}</Text></Pressable>)}
+  </ScrollView>;
   if (!activeSnapshot || activeSnapshot.threadId !== activeThreadId) return <StatusView loading message="正在准备本地助手会话…" />;
   return (
     <AgentSession
@@ -299,6 +299,7 @@ function ReadyAgent({
       workflows={workflows}
       workflowLoadIssue={workflowLoadIssue}
       onReloadWorkflow={() => setWorkflowReload(value => value + 1)}
+      operationIssue={operationIssue}
       persistenceIssue={persistenceIssue}
       threadStore={threadStore}
       threads={threads}
@@ -307,8 +308,8 @@ function ReadyAgent({
       onNew={createSession}
       onDelete={deleteSession}
       onRename={renameSession}
-      onSearchHistory={query => { void searchHistory(query).catch(reason => onError(String(reason))); }}
-      onLoadMoreHistory={hasMoreThreads ? () => { void searchHistory(historyQuery, true).catch(reason => onError(String(reason))); } : undefined}
+      onSearchHistory={query => searchHistory(query)}
+      onLoadMoreHistory={hasMoreThreads ? () => searchHistory(historyQuery, true) : undefined}
       onExportPrompt={async (prompt) => {
         await requireCurrentWorkflow();
         const draft = await draftStore.save({ prompt, attachmentIds: [] });
@@ -333,6 +334,7 @@ function AgentSession({
   threadStore,
   onExportPrompt,
   onExportHandoff,
+  operationIssue,
   persistenceIssue,
   ...uiProps
 }: {
@@ -342,6 +344,7 @@ function AgentSession({
   workflows?: WorkflowChoice[];
   workflowLoadIssue?: string;
   onReloadWorkflow: () => void;
+  operationIssue?: string;
   persistenceIssue?: string;
   threadStore: LocalThreadStore;
   threads: LocalThreadSnapshot[];
@@ -349,9 +352,9 @@ function AgentSession({
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
-  onRename: (id: string, title: string) => void;
-  onSearchHistory?: (query: string) => void;
-  onLoadMoreHistory?: () => void;
+  onRename: (id: string, title: string) => void | Promise<void>;
+  onSearchHistory?: (query: string) => void | Promise<void>;
+  onLoadMoreHistory?: () => void | Promise<void>;
   onExportPrompt: (prompt: string) => Promise<void>;
   onExportHandoff: (handoff: PromptHandoff) => Promise<void>;
 }) {
@@ -395,7 +398,7 @@ function AgentSession({
           transcriptRevision={liveSnapshot.transcriptRevision}
           onClientStateChange={runtime.patchClientState}
           isVisible={isVisible}
-          notice={persistenceIssue ?? notice}
+          persistentNotice={Boolean(persistenceIssue)} notice={persistenceIssue ?? operationIssue ?? notice}
           runIssue={runIssue}
           onRunIssueChange={setRunIssue}
           onAccept={async input => {

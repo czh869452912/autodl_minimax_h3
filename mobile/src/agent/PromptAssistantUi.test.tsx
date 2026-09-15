@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import * as Clipboard from 'expo-clipboard';
-import { Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { pickAssistantImages } from './assistantImagePicker';
 import { DraggableBottomSheet } from '../ui/DraggableSheet';
 
@@ -61,6 +61,39 @@ function renderedText(tree: ReturnType<typeof create>): string[] {
 }
 
 describe('Prompt assistant UI primitives', () => {
+  it('keeps expanded edits and cursor position when returning to the compact composer', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} />); });
+    expect(renderedText(tree).some(text => text.includes('4,000'))).toBe(false);
+    act(() => tree.root.findByProps({ accessibilityLabel: '全屏编辑' }).props.onPress());
+    const editor = tree.root.findByProps({ accessibilityLabel: '全屏编辑创作想法' });
+    act(() => editor.props.onChangeText('雨夜\n街灯与倒影'));
+    act(() => editor.props.onSelectionChange({ nativeEvent: { selection: { start: 3, end: 3 } } }));
+    act(() => tree.root.findByProps({ accessibilityLabel: '完成编辑' }).props.onPress());
+    const input = tree.root.findByProps({ accessibilityLabel: '创作想法' });
+    expect(input.props.value).toBe('雨夜\n街灯与倒影');
+    expect(input.props.selection).toEqual({ start: 3, end: 3 });
+    act(() => input.props.onChangeText('字'.repeat(3600)));
+    expect(renderedText(tree)).toContain('3,600 / 4,000');
+    act(() => input.props.onChangeText('字'.repeat(4001)));
+    expect(renderedText(tree)).toContain('超出 1 字');
+    expect(tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.disabled).toBe(true);
+    act(() => tree.unmount());
+  });
+
+  it('reserves the measured floating composer height so the last message can scroll clear', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} />); });
+    const actions = tree.root.findByProps({ testID: 'composer-actions' });
+    const dock = actions.parent!;
+    act(() => dock.props.onLayout({ nativeEvent: { layout: { height: 246 } } }));
+    const list = tree.root.findByType(FlatList);
+    expect(list.props.ListFooterComponent.props.style.paddingBottom).toBe(246);
+    expect(list.props.scrollIndicatorInsets.bottom).toBe(246);
+    expect(dock.props.pointerEvents).toBe('box-none');
+    act(() => tree.unmount());
+  });
+
   it('cancels mention-origin picking without leaking into a later normal picker', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     let tree!: ReturnType<typeof create>;
@@ -149,11 +182,11 @@ describe('Prompt assistant UI primitives', () => {
     act(() => { tree = create(render([])); });
     const scroll = jest.spyOn(tree.root.findByType(FlatList).instance, 'scrollToEnd').mockImplementation(() => undefined);
     try {
-      act(() => tree.root.findByType(FlatList).props.onScrollBeginDrag());
+      act(() => { const list = tree.root.findByType(FlatList); list.props.onScrollBeginDrag(); list.props.onScroll({ nativeEvent: { contentSize: { height: 1200 }, layoutMeasurement: { height: 400 }, contentOffset: { y: 100 } } }); });
       act(() => tree.update(render(['第一条消息'])));
       expect(scroll).toHaveBeenCalled();
       expect(tree.root.findAllByProps({ accessibilityLabel: '回到最新消息' })).toHaveLength(0);
-      act(() => tree.root.findByType(FlatList).props.onScrollBeginDrag());
+      act(() => { const list = tree.root.findByType(FlatList); list.props.onScrollBeginDrag(); list.props.onScroll({ nativeEvent: { contentSize: { height: 1200 }, layoutMeasurement: { height: 400 }, contentOffset: { y: 100 } } }); });
       scroll.mockClear();
       act(() => tree.update(render(['第一条消息', '第二条消息'])));
       act(() => tree.root.findByType(FlatList).props.onContentSizeChange(350, 1200));
@@ -300,10 +333,10 @@ describe('Prompt assistant UI primitives', () => {
     act(() => { tree = create(<AttachmentStrip attachments={[{ id: 'image', status: 'ready', displayName: '图片1', source: { value: 'file:///image.png' } }]} onOpenPicker={async () => undefined} />); });
     act(() => tree.root.findByProps({ accessibilityLabel: '查看附件 图片1' }).props.onPress());
     expect(tree.root.findByType(ReferenceImagePreview).props.uri).toBe('file:///image.png');
-    expect(tree.root.findByType(Modal).props.animationType).toBe('none');
+    expect(tree.root.findByType(Modal).props.animationType).toBe('fade');
     const close = tree.root.findByProps({ accessibilityLabel: '关闭图片预览' });
     expect(close.props.accessibilityRole).toBe('button');
-    expect(close.props.style).toMatchObject({ width: 48, height: 48 });
+    expect(close.props.style).toMatchObject({ minHeight: 48 });
     act(() => close.props.onPress());
     expect(tree.root.findByType(ReferenceImagePreview).props.uri).toBeNull();
     act(() => tree.unmount());
@@ -345,11 +378,11 @@ describe('Prompt assistant UI primitives', () => {
       const rows = normalizeMessages([{ id: 'a', role: 'assistant', content: 'Answer' }]);
       act(() => { tree = create(<ConversationTimeline rows={rows} isRunning={false} onExportPrompt={async () => undefined} />); });
       jest.mocked(Clipboard.setStringAsync).mockRejectedValueOnce(new Error('clipboard unavailable'));
-      await act(async () => tree.root.findByProps({ accessibilityLabel: '复制回答 a' }).props.onPress());
+      await act(async () => tree.root.findByProps({ accessibilityLabel: '复制回答 Answer' }).props.onPress());
       expect(renderedText(tree)).toContain('复制失败，请重试');
       let resolve!: (value: boolean) => void;
       jest.mocked(Clipboard.setStringAsync).mockImplementationOnce(() => new Promise(done => { resolve = done; }));
-      act(() => tree.root.findByProps({ accessibilityLabel: '复制回答 a' }).props.onPress());
+      act(() => tree.root.findByProps({ accessibilityLabel: '复制回答 Answer' }).props.onPress());
       act(() => tree.unmount());
       schedule.mockClear();
       await act(async () => resolve(true));
@@ -388,6 +421,38 @@ describe('Prompt assistant UI primitives', () => {
     expect(reload).toHaveBeenCalledTimes(1);
     act(() => tree.update(<PromptAssistantUi {...basePromptProps} clientState={state} workflowDefinition={definition} />));
     expect(tree.root.findByType(PromptVersionPanel).props.workflowDefinition).toBe(definition);
+    act(() => tree.unmount());
+  });
+
+  it('does not offer a false stop while submission is pending', async () => {
+    let release!: () => void;
+    const accepted = new Promise<void>(resolve => { release = resolve; });
+    const abortRun = jest.fn();
+    const issue = jest.fn();
+    mockChatContext = { ...mockChatContext, agent: { abortRun } };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => { tree = create(<PromptAssistantUi {...basePromptProps} onAccept={() => accepted} onRunIssueChange={issue} />); });
+    act(() => tree.root.findByType(Composer).props.onChangeText('hello'));
+    act(() => { void tree.root.findByType(Composer).props.onSubmit('hello'); });
+    expect(tree.root.findByProps({ accessibilityLabel: '发送中' }).props.disabled).toBe(true);
+    expect(tree.root.findAllByProps({ accessibilityLabel: '停止生成' })).toHaveLength(0);
+    act(() => tree.root.findByType(Composer).props.onCancel());
+    expect(abortRun).not.toHaveBeenCalled();
+    expect(issue).not.toHaveBeenCalledWith(expect.objectContaining({ kind: 'aborted' }));
+    await act(async () => release());
+    act(() => tree.unmount());
+  });
+
+  it('retains long pasted content and prevents sending until shortened', () => {
+    const onAccept = jest.fn();
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} onAccept={onAccept} />); });
+    act(() => tree.root.findByType(Composer).props.onChangeText('a'.repeat(4001)));
+    expect(tree.root.findByProps({ accessibilityLabel: '创作想法' }).props.maxLength).toBeUndefined();
+    expect(tree.root.findByType(Composer).props.value).toHaveLength(4001);
+    expect(tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.disabled).toBe(true);
+    act(() => { void tree.root.findByType(Composer).props.onSubmit('a'.repeat(4001)); });
+    expect(onAccept).not.toHaveBeenCalled();
     act(() => tree.unmount());
   });
 
@@ -491,7 +556,7 @@ describe('Prompt assistant UI primitives', () => {
     let tree!: ReturnType<typeof create>;
     const rows = normalizeMessages([{ id: 'u', role: 'user', content: [{ type: 'text', text: '@图片1' }, { type: 'image_url', image_url: { url: 'file:///reference.png' } }] }]);
     act(() => { tree = create(<ConversationTimeline rows={rows} isRunning={false} onExportPrompt={async () => undefined} />); });
-    act(() => tree.root.findByProps({ accessibilityLabel: '查看参考图片 u 图片1' }).props.onPress());
+    act(() => tree.root.findByProps({ accessibilityLabel: '查看参考图片 图片1' }).props.onPress());
     expect(tree.root.findByProps({ testID: 'reference-image-preview' }).props.source.uri).toBe('file:///reference.png');
     act(() => tree.unmount());
   });
@@ -602,7 +667,10 @@ describe('Prompt assistant UI primitives', () => {
       );
     });
     act(() => tree.root.findByProps({ accessibilityLabel: '打开对话历史' }).props.onPress());
-    act(() => tree.root.findByProps({ accessibilityLabel: '管理会话 t1' }).props.onPress());
+    const manageAlert = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => undefined);
+    act(() => tree.root.findAll(node => String(node.props.accessibilityLabel).startsWith('管理会话 '))[0].props.onPress());
+    act(() => { (manageAlert.mock.calls.at(-1)?.[2] as any[]).find(button => button.text === '重命名').onPress(); });
+    manageAlert.mockRestore();
     expect(tree.root.findAllByType(Modal).some((node) => node.props.visible)).toBe(true);
     expect(tree.root.findAllByType(KeyboardAvoidingView).length).toBeGreaterThanOrEqual(2);
     act(() => tree.unmount());
@@ -776,7 +844,10 @@ describe('Prompt assistant UI primitives', () => {
       act(() => { tree = create(<PromptAssistantUi threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]} activeThreadId="t1" onSelect={() => undefined} onNew={() => undefined} onDelete={() => undefined} onRename={() => undefined} onExportPrompt={async () => undefined} />); });
       const root = () => tree.root.findAllByType(KeyboardAvoidingView)[0];
       expect(root().props.enabled).toBe(true);
-      act(() => tree.root.findByProps({ accessibilityLabel: '管理会话 t1' }).props.onPress());
+      const manageAlert = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => undefined);
+    act(() => tree.root.findAll(node => String(node.props.accessibilityLabel).startsWith('管理会话 '))[0].props.onPress());
+    act(() => { (manageAlert.mock.calls.at(-1)?.[2] as any[]).find(button => button.text === '重命名').onPress(); });
+    manageAlert.mockRestore();
       expect(root().props.enabled).toBe(false);
       act(() => tree.root.findAllByType(Modal).find(node => node.props.visible)!.props.onRequestClose());
       expect(root().props.enabled).toBe(true);
@@ -826,7 +897,7 @@ describe('Prompt assistant UI primitives', () => {
       tree = create(<ConversationTimeline rows={normalizeMessages([{ id: 'u1', role: 'user', content: '历史消息' }])} isRunning onExportPrompt={() => Promise.resolve()} />);
     });
     const list = tree.root.findByType(FlatList);
-    act(() => list.props.onScrollBeginDrag());
+    act(() => { list.props.onScrollBeginDrag(); list.props.onScroll({ nativeEvent: { contentSize: { height: 1200 }, layoutMeasurement: { height: 400 }, contentOffset: { y: 100 } } }); });
     expect(tree.root.findByProps({ accessibilityLabel: '回到最新消息' })).toBeTruthy();
 
     act(() => list.props.onContentSizeChange(320, 1200));
@@ -840,7 +911,7 @@ describe('Prompt assistant UI primitives', () => {
       tree = create(<ConversationTimeline rows={normalizeMessages([{ id: 'u1', role: 'user', content: '历史消息' }])} isRunning onExportPrompt={() => Promise.resolve()} />);
     });
     let list = tree.root.findByType(FlatList);
-    act(() => list.props.onScrollBeginDrag());
+    act(() => { list.props.onScrollBeginDrag(); list.props.onScroll({ nativeEvent: { contentSize: { height: 1200 }, layoutMeasurement: { height: 400 }, contentOffset: { y: 100 } } }); });
     act(() => list.props.onScrollEndDrag({
       nativeEvent: {
         contentOffset: { y: 500 },
@@ -851,7 +922,7 @@ describe('Prompt assistant UI primitives', () => {
     expect(tree.root.findAllByProps({ accessibilityLabel: '回到最新消息' })).toHaveLength(0);
 
     list = tree.root.findByType(FlatList);
-    act(() => list.props.onScrollBeginDrag());
+    act(() => { list.props.onScrollBeginDrag(); list.props.onScroll({ nativeEvent: { contentSize: { height: 1200 }, layoutMeasurement: { height: 400 }, contentOffset: { y: 100 } } }); });
     act(() => tree.root.findByProps({ accessibilityLabel: '回到最新消息' }).props.onPress());
     expect(tree.root.findAllByProps({ accessibilityLabel: '回到最新消息' })).toHaveLength(0);
     act(() => tree.unmount());
@@ -862,7 +933,7 @@ describe('Prompt assistant UI primitives', () => {
     act(() => { tree = create(<ConversationTimeline rows={[]} isRunning={false} onExportPrompt={() => Promise.resolve()} />); });
     const list = tree.root.findByType(FlatList);
     act(() => list.props.onLayout({ nativeEvent: { layout: { width: 350, height: 420 } } }));
-    act(() => list.props.onScrollBeginDrag());
+    act(() => { list.props.onScrollBeginDrag(); list.props.onScroll({ nativeEvent: { contentSize: { height: 1200 }, layoutMeasurement: { height: 400 }, contentOffset: { y: 100 } } }); });
     expect(tree.root.findAllByProps({ accessibilityLabel: '回到最新消息' })).toHaveLength(0);
     expect(renderedText(tree)).toContain('试试这个灵感');
     act(() => tree.unmount());
@@ -917,7 +988,7 @@ describe('Prompt assistant UI primitives', () => {
     const send = tree.root.findByProps({ accessibilityLabel: '发送消息' });
     act(() => { send.props.onPress(); send.props.onPress(); });
     expect(submitMessage).toHaveBeenCalledTimes(1);
-    expect(tree.root.findByProps({ accessibilityLabel: '停止生成' })).toBeTruthy();
+    expect(tree.root.findByProps({ accessibilityLabel: '发送中' }).props.disabled).toBe(true);
     await act(async () => { resolve(); });
     act(() => tree.unmount());
   });
@@ -1080,7 +1151,7 @@ describe('Prompt assistant UI primitives', () => {
       );
     });
     await act(async () => {
-      tree.root.findByProps({ accessibilityLabel: '复制回答 a2' }).props.onPress();
+      tree.root.findByProps({ accessibilityLabel: '复制回答 第二条' }).props.onPress();
     });
     expect(Clipboard.setStringAsync).toHaveBeenCalledWith('第二条');
     act(() => tree.unmount());

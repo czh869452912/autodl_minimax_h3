@@ -24,3 +24,5 @@ export function UnifiedVideoView(props: UnifiedVideoViewProps) {
 export async function openExternalVideo(source: string): Promise<void> {
   await NativeModules.AutoDLMedia.openExternalVideo(source);
 }
+
+export async function shareVideo(source: string): Promise<void> { await NativeModules.AutoDLMedia.shareVideo(source); }

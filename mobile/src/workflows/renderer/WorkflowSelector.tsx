@@ -1,3 +1,5 @@
+import { SheetScrollView } from '../../ui/DraggableSheet';
+import { DraggableBottomSheet } from '../../ui/DraggableSheet';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { WorkflowDefinition } from '../schema/types';
@@ -22,7 +24,7 @@ export function WorkflowSelector({ definitions, selectedId, onSelect, disabled =
       <Text numberOfLines={2} style={styles.title}>{selected?.metadata.title ?? (definitions.length ? '请选择工作流' : '暂无可用工作流')}</Text>
       <AppIcon name={expanded ? 'expand_less' : 'expand_more'} size={22} />
     </Pressable>
-    {expanded && <ScrollView style={styles.menu} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+    {expanded && <DraggableBottomSheet visible title="选择生成工作流" onClose={() => setOpen(false)}><SheetScrollView style={styles.menu} nestedScrollEnabled keyboardShouldPersistTaps="handled">
       <View accessibilityRole="radiogroup" accessibilityLabel="可用工作流">
         {definitions.map(definition => {
           const checked = selectedId === definition.id;
@@ -38,7 +40,7 @@ export function WorkflowSelector({ definitions, selectedId, onSelect, disabled =
           </Pressable>;
         })}
       </View>
-    </ScrollView>}
+    </SheetScrollView></DraggableBottomSheet>}
   </View>;
 }
 
@@ -49,7 +51,7 @@ const styles = StyleSheet.create({
   open: { borderColor: COLORS.primaryActive },
   disabled: { opacity: 0.5 },
   title: { color: COLORS.text, flexShrink: 1, flexGrow: 1 },
-  menu: { maxHeight: 240, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.surface },
+  menu: { maxHeight: 520, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.surface },
   option: { minHeight: 56, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
   optionText: { flex: 1, gap: 4 },
   selected: { backgroundColor: COLORS.primarySoft },

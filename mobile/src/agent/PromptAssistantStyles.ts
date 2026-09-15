@@ -1,6 +1,13 @@
 import { StyleSheet } from 'react-native';
 import { COLORS, LIGHT_PROMPT_COLORS } from '../ui/theme';
 
+// A quiet outer ring separates floating controls from the scrolling transcript.
+const floatingSurface = {
+  borderWidth: 1,
+  borderColor: '#AFBFB5',
+  boxShadow: '0 0 0 3px rgba(245,247,246,0.94), 0 4px 12px rgba(30,50,40,0.10)',
+};
+
 export const sentStyles = {
   sentAttachments: { gap: 7, marginBottom: 7 },
   sentAttachment: { width: 54, height: 54, borderRadius: 11 },
@@ -44,7 +51,7 @@ export const styles = StyleSheet.create({
   },
   headerTitleWrap: { flex: 1, paddingHorizontal: 10 },
   eyebrow: {
-    fontSize: 10,
+    fontSize: 13,
     letterSpacing: 1.3,
     color: LIGHT_PROMPT_COLORS.muted,
     fontWeight: '700',
@@ -74,7 +81,7 @@ export const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#FFF4D6',
   },
-  noticeText: { flex: 1, color: '#8A5A00', fontSize: 12, lineHeight: 17 },
+  noticeText: { flex: 1, color: '#8A5A00', fontSize: 13, lineHeight: 17 },
   timeline: { flex: 1 },
   timelineContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 18 },
   runningIndicator: {
@@ -115,7 +122,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#F3D9D2',
   },
-  runIssueActionText: { color: '#743026', fontSize: 12, fontWeight: '700' },
+  runIssueActionText: { color: '#743026', fontSize: 13, fontWeight: '700' },
   runningDot: {
     width: 8,
     height: 8,
@@ -211,7 +218,7 @@ export const styles = StyleSheet.create({
   },
   assistantCopyText: {
     color: LIGHT_PROMPT_COLORS.muted,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
   },
   toolTimeline: {
@@ -227,7 +234,7 @@ export const styles = StyleSheet.create({
     gap: 6,
   },
   toolChevron: { color: LIGHT_PROMPT_COLORS.muted, fontSize: 20 },
-  toolSummaryText: { color: LIGHT_PROMPT_COLORS.muted, fontSize: 12 },
+  toolSummaryText: { color: LIGHT_PROMPT_COLORS.muted, fontSize: 13 },
   toolSteps: { paddingBottom: 8 },
   toolStep: {
     minHeight: 24,
@@ -238,13 +245,13 @@ export const styles = StyleSheet.create({
   },
   stepDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#68856D' },
   stepDotFailed: { backgroundColor: '#B35E53' },
-  stepName: { color: LIGHT_PROMPT_COLORS.ink, fontSize: 12, flex: 1 },
-  stepStatus: { color: LIGHT_PROMPT_COLORS.muted, fontSize: 11 },
+  stepName: { color: LIGHT_PROMPT_COLORS.ink, fontSize: 13, flex: 1 },
+  stepStatus: { color: LIGHT_PROMPT_COLORS.muted, fontSize: 13 },
   stepSummary: {
     width: '100%',
     paddingLeft: 13,
     color: LIGHT_PROMPT_COLORS.muted,
-    fontSize: 11,
+    fontSize: 13,
   },
   promptCard: {
     marginTop: 12,
@@ -261,7 +268,7 @@ export const styles = StyleSheet.create({
   },
   promptCardEyebrow: {
     color: LIGHT_PROMPT_COLORS.muted,
-    fontSize: 10,
+    fontSize: 13,
     letterSpacing: 1,
     fontWeight: '700',
   },
@@ -291,7 +298,7 @@ export const styles = StyleSheet.create({
   },
   secondaryActionText: {
     color: LIGHT_PROMPT_COLORS.ink,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
   },
   primaryAction: {
@@ -305,25 +312,24 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
-  primaryActionText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
+  primaryActionText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   primaryActionArrow: { color: '#FFFFFF', fontSize: 16 },
-  composerDock: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 7 },
+  composerDock: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 2, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 7, backgroundColor: 'transparent' },
   composerActions: { flexDirection: 'row', gap: 8, paddingBottom: 6 },
   composerActionCompact: { flexShrink: 1, paddingHorizontal: 10, gap: 4 },
-  composerAction: { minHeight: 44, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 24, backgroundColor: '#ECEFEC' },
+  composerAction: { ...floatingSurface, minHeight: 44, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 24, backgroundColor: '#ECEFEC' },
   composerActionPressed: { backgroundColor: COLORS.primarySoft },
   composerActionText: { flexShrink: 1, fontSize: 13, lineHeight: 18, fontWeight: '600', color: LIGHT_PROMPT_COLORS.ink },
-  versionCount: { minWidth: 20, textAlign: 'center', paddingHorizontal: 5, borderRadius: 5, backgroundColor: COLORS.primarySoft, color: COLORS.primary, fontSize: 12, lineHeight: 20, fontWeight: '700' },
+  versionCount: { minWidth: 20, textAlign: 'center', paddingHorizontal: 5, borderRadius: 5, backgroundColor: COLORS.primarySoft, color: COLORS.primary, fontSize: 13, lineHeight: 20, fontWeight: '700' },
   composer: {
+    ...floatingSurface,
     padding: 10,
     borderRadius: 24,
-    shadowColor: '#24362E',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 16,
-    elevation: 2,
     backgroundColor: LIGHT_PROMPT_COLORS.surface,
   },
+  composerFocused: { borderColor: COLORS.primary, boxShadow: '0 0 0 3px rgba(24,111,93,0.13), 0 4px 12px rgba(30,50,40,0.10)' },
+  latestButton: { ...floatingSurface, position: 'absolute', alignSelf: 'center', width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: LIGHT_PROMPT_COLORS.surface },
+  latestUnreadDot: { position: 'absolute', top: 4, right: 4, width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary, borderWidth: 1.5, borderColor: LIGHT_PROMPT_COLORS.surface },
   composerRow: {
     minHeight: 44,
     flexDirection: 'row',
@@ -331,13 +337,28 @@ export const styles = StyleSheet.create({
     gap: 7,
   },
   inputArea: {
-    minHeight: 40,
+    minHeight: 44,
     maxHeight: 120,
     position: 'relative',
     flexDirection: 'column',
     overflow: 'hidden',
   },
   toolbarSpacer: { flex: 1 },
+  expandEditor: { position: 'absolute', right: 0, top: 0, width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  characterCount: { flexShrink: 1, fontSize: 12, lineHeight: 18, color: LIGHT_PROMPT_COLORS.muted, fontVariant: ['tabular-nums'] },
+  characterCountError: { color: COLORS.danger },
+  editorRoot: { flex: 1, backgroundColor: LIGHT_PROMPT_COLORS.background },
+  editorSurface: { flex: 1, width: '100%', maxWidth: 820, alignSelf: 'center', paddingHorizontal: 16 },
+  editorHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 16 },
+  editorClose: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: LIGHT_PROMPT_COLORS.surface },
+  editorTitle: { flex: 1, fontSize: 18, fontWeight: '600', color: LIGHT_PROMPT_COLORS.ink },
+  editorDone: { minHeight: 44, paddingHorizontal: 20, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary },
+  editorDonePressed: { backgroundColor: COLORS.primaryActive },
+  editorDoneText: { color: COLORS.onPrimary, fontSize: 14, fontWeight: '600' },
+  editorPaper: { ...floatingSurface, flex: 1, borderRadius: 24, backgroundColor: LIGHT_PROMPT_COLORS.surface, padding: 18 },
+  editorInput: { flex: 1, padding: 0, fontSize: 17, lineHeight: 28, color: LIGHT_PROMPT_COLORS.ink },
+  editorFooter: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 6, paddingTop: 12 },
+  editorHint: { flex: 1, color: LIGHT_PROMPT_COLORS.muted, fontSize: 12, lineHeight: 18 },
   addButton: {
     width: 44,
     height: 44,
@@ -353,6 +374,7 @@ export const styles = StyleSheet.create({
     paddingBottom: 7,
     color: LIGHT_PROMPT_COLORS.ink,
     paddingHorizontal: 6,
+    paddingRight: 48,
     fontSize: 17,
     lineHeight: 24,
   },
@@ -444,7 +466,7 @@ export const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 5,
     color: LIGHT_PROMPT_COLORS.muted,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
   },
   historyItem: {
@@ -466,8 +488,8 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  historyMeta: { color: LIGHT_PROMPT_COLORS.muted, fontSize: 10, marginTop: 3 },
-  more: { color: LIGHT_PROMPT_COLORS.muted, fontSize: 12 },
+  historyMeta: { color: LIGHT_PROMPT_COLORS.muted, fontSize: 13, marginTop: 3 },
+  more: { color: LIGHT_PROMPT_COLORS.muted, fontSize: 13 },
   modalBackdrop: {
     flex: 1,
     justifyContent: 'flex-end',

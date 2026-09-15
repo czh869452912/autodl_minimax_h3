@@ -28,6 +28,7 @@ export interface MediaAsset {
 }
 
 export interface MediaStore {
+  updatePoster?(id: string, localPath: string, poster: string): Promise<void>;
   upsert(asset: MediaAsset): Promise<void>;
   upsertArtifactProjection?(asset: MediaAsset): Promise<void>;
   list(options?: { query?: string; status?: MediaStatus; kind?: MediaKind }): Promise<MediaAsset[]>;

@@ -3,6 +3,7 @@ import type { DownloadState, ExportState, TaskStatus } from './types';
 import type { TaskCard, TaskCursor } from './taskCard';
 
 type TaskCardRow = {
+  can_cancel?: number;
   id: string;
   prompt: string;
   status: TaskStatus;
@@ -66,6 +67,7 @@ export class ProjectionChangedDuringRead extends Error {
 }
 
 const taskCardColumns = [
+  "EXISTS(SELECT 1 FROM workflow_operations c WHERE c.job_id=tasks.id AND c.kind='SUBMIT' AND c.state='PENDING' AND c.attempt=0) AS can_cancel",
   'id', 'prompt', 'status', 'resolution', 'duration',
   'video_url', 'local_uri', 'thumbnail_url',
   'download_state', 'download_error', 'download_progress',
@@ -86,6 +88,7 @@ function optionalNumber(value: number | null | undefined): number | undefined {
 function toTaskCard(row: TaskCardRow): TaskCard {
   return {
     id: row.id,
+    canCancel: Boolean(row.can_cancel),
     prompt: row.prompt,
     status: row.status,
     resolution: row.resolution,
@@ -119,7 +122,7 @@ function boundedAttempts(maxAttempts: number): number {
   return Math.max(1, Math.floor(maxAttempts));
 }
 
-export function createTaskProjectionRepository(db: AppDatabase) {
+export function createTaskProjectionRepository(db: AppDatabase, filter: 'all' | 'active' | 'failed' = 'all'): TaskProjectionRepository {
   const readRevision = async (): Promise<number> => {
     const row = await db.getFirstAsync<RevisionRow>(
       'SELECT revision FROM task_projection_state WHERE singleton = 1 LIMIT 1',
@@ -132,7 +135,7 @@ export function createTaskProjectionRepository(db: AppDatabase) {
     const rows = await db.getAllAsync<TaskCardRow>(
       `SELECT ${taskCardColumns}
        FROM tasks
-       WHERE (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
+       WHERE (${filter === 'active' ? "status IN ('QUEUED','RUNNING','UNKNOWN') OR download_state IN ('ENQUEUED','DOWNLOADING') OR export_state IN ('QUEUED','EXPORTING')" : filter === 'failed' ? "status='FAILED' OR download_state='DOWNLOAD_FAILED' OR export_state='EXPORT_FAILED'" : '1=1'}) AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
        ORDER BY created_at DESC, id DESC
        LIMIT ?`,
       cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.id ?? null, bounded + 1,
@@ -195,7 +198,13 @@ export function createTaskProjectionRepository(db: AppDatabase) {
     return new ProjectionChangedDuringRead(attempts);
   };
 
-  return { readRevision, readWindow, readActivity, readConsistentWindow };
+  return { readRevision, readWindow, readActivity, readConsistentWindow, forFilter: (next: 'all' | 'active' | 'failed'): TaskProjectionRepository => createTaskProjectionRepository(db, next) };
 }
 
-export type TaskProjectionRepository = ReturnType<typeof createTaskProjectionRepository>;
+export interface TaskProjectionRepository {
+  readRevision(): Promise<number>;
+  readWindow(limit?: number, cursor?: TaskCursor): Promise<TaskProjectionWindow>;
+  readActivity(now: number): Promise<TaskProjectionActivity>;
+  readConsistentWindow(limit?: number, maxAttempts?: number): Promise<ConsistentTaskProjectionWindow | ProjectionChangedDuringRead>;
+  forFilter(filter: 'all' | 'active' | 'failed'): TaskProjectionRepository;
+}

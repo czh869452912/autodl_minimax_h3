@@ -12,7 +12,7 @@ describe('native app shell contract', () => {
       const values = hex.slice(1).match(/../g)!.map(v => parseInt(v, 16) / 255).map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
       return values[0] * 0.2126 + values[1] * 0.7152 + values[2] * 0.0722;
     };
-    for (const [foreground, background] of [[COLORS.text, COLORS.background], [COLORS.textMuted, COLORS.surface], [COLORS.textSubtle, COLORS.surface], [COLORS.onPrimary, COLORS.primary], [COLORS.primaryActive, COLORS.primarySoft]]) {
+    for (const [foreground, background] of [[COLORS.text, COLORS.background], [COLORS.textMuted, COLORS.surface], [COLORS.textSubtle, COLORS.surface], [COLORS.textSubtle, COLORS.surfaceRaised], [COLORS.onPrimary, COLORS.primary], [COLORS.primaryActive, COLORS.primarySoft], [COLORS.success, COLORS.successSoft]]) {
       const a = luminance(foreground), b = luminance(background);
       expect((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)).toBeGreaterThanOrEqual(4.5);
     }

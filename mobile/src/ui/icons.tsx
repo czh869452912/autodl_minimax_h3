@@ -3,7 +3,7 @@ import type { ComponentProps } from 'react';
 import { COLORS } from './theme';
 
 export const ICON_NAMES = [
-  'movie_filter', 'list_alt', 'grid_view', 'settings',
+  'movie_filter', 'list_alt', 'grid_view', 'settings', 'open_in_full', 'close_fullscreen', 'arrow_downward',
   'add_photo_alternate', 'alternate_email', 'library_music', 'close', 'delete', 'play_arrow',
   'pause', 'search', 'filter_list', 'download', 'refresh', 'info', 'bolt', 'add', 'send', 'auto_awesome', 'key', 'smart_toy', 'save', 'content_copy', 'expand_more', 'expand_less', 'notifications', 'notifications_active',
 ] as const;
@@ -11,6 +11,9 @@ export type IconName = (typeof ICON_NAMES)[number];
 
 const ICON_MAP: Record<IconName, ComponentProps<typeof MaterialCommunityIcons>['name']> = {
   movie_filter: 'movie-open-outline',
+  open_in_full: 'arrow-expand',
+  close_fullscreen: 'arrow-collapse',
+  arrow_downward: 'arrow-down',
   smart_toy: 'robot-outline',
   list_alt: 'format-list-bulleted-square',
   grid_view: 'view-grid-outline',

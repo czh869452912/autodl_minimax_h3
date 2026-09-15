@@ -27,7 +27,7 @@ const expoRestoreBackupDeps: RestoreBackupDeps = {
   backup: (options) => backupDatabaseSync(options),
 };
 
-const FULL_BACKUP_NAME = /^autodl-h3-(?:v\d+-to-v\d+|release-[A-Za-z0-9._-]+-[0-9a-f]{12})-(\d+)\.backup\.db$/;
+const FULL_BACKUP_NAME = /^autodl-h3-(?:manual|v\d+-to-v\d+|release-[A-Za-z0-9._-]+-[0-9a-f]{12})-(\d+)\.backup\.db$/;
 
 export function databaseDirectoryUri(directory: string): string {
   return directory.startsWith('file://') ? directory : `file://${directory}`;
@@ -93,4 +93,11 @@ export function restoreFullDatabaseBackup(
   } finally {
     source.closeSync();
   }
+}
+
+export function createUserDatabaseBackup(source: AppDatabase, deps: BackupDeps = expoBackupDeps): string {
+  const name = `autodl-h3-manual-${deps.now()}.backup.db`;
+  const destination = deps.open(name);
+  try { deps.backup({ sourceDatabase: maintenanceDatabase(source), destDatabase: destination }); return name; }
+  finally { destination.closeSync(); }
 }

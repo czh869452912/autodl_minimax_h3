@@ -57,7 +57,7 @@ test('requires confirmation before restoring the newest full backup', async () =
       onRestore={onRestore}
     />);
   });
-  const button = tree.root.findAll((node) => node.props.accessibilityLabel === '恢复最新完整备份')[0];
+  const button = tree.root.findAll((node) => node.props.accessibilityLabel === '恢复选中的完整备份')[0];
   act(() => button.props.onPress());
   const actions = alert.mock.calls.at(-1)?.[2]!;
   await act(async () => { await actions[1].onPress?.(); });
@@ -77,10 +77,28 @@ test('keeps recovery mode visible and localizes restore failures', async () => {
       onRestore={jest.fn(async () => { throw new Error('private path'); })}
     />);
   });
-  act(() => tree.root.findAll((node) => node.props.accessibilityLabel === '恢复最新完整备份')[0].props.onPress());
+  act(() => tree.root.findAll((node) => node.props.accessibilityLabel === '恢复选中的完整备份')[0].props.onPress());
   const actions = alert.mock.calls.at(-1)?.[2]!;
   await act(async () => { await actions[1].onPress?.(); });
   expect(text(tree)).toContain('完整备份恢复失败');
   expect(text(tree)).not.toContain('private path');
   act(() => tree.unmount());
+});
+
+
+test('blocks reset and exit while restore is unresolved', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  let tree!: ReturnType<typeof create>;
+  await act(async () => { tree = create(<DatabaseRecoveryScreen diagnostic="failed" allowReset onReset={jest.fn()} backupNames={['backup']} onRestore={() => pending} />); });
+  act(() => tree.root.findByProps({ accessibilityLabel: '恢复选中的完整备份' }).props.onPress());
+  expect(alert.mock.calls.at(-1)?.[1]).toContain('请重新打开应用');
+  act(() => { void alert.mock.calls.at(-1)?.[2]?.[1].onPress?.(); });
+  expect(tree.root.findByProps({ accessibilityLabel: '清除应用数据' }).props.disabled).toBe(true);
+  expect(tree.root.findByProps({ accessibilityLabel: '退出应用' }).props.disabled).toBe(true);
+  await act(async () => release());
+  expect(tree.root.findByProps({ accessibilityLabel: '退出应用' }).props.disabled).toBe(false);
+  act(() => tree.unmount());
+  alert.mockRestore();
 });

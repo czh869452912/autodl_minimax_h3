@@ -1,3 +1,4 @@
+jest.mock('expo-network', () => ({ addNetworkStateListener: jest.fn(() => ({ remove: jest.fn() })) }));
 import React, { Component } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 

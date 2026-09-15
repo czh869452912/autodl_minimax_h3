@@ -1,3 +1,4 @@
+jest.mock('expo-network', () => ({ addNetworkStateListener: jest.fn(() => ({ remove: jest.fn() })) }));
 import React, { Suspense, startTransition } from 'react';
 import { NativeModules } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
@@ -160,4 +161,37 @@ describe('unified video player', () => {
 
     expect(NativeModules.AutoDLMedia.openExternalVideo).toHaveBeenCalledWith('file:///video.mp4');
   });
+});
+
+
+test('retries a failed remote source only once after offline-to-online and removes the subscription', () => {
+  const network = require('expo-network');
+  let tree!: ReactTestRenderer;
+  act(() => { tree = create(<VideoPlayer source="https://example.test/reconnect.mp4" />); });
+  const listener = network.addNetworkStateListener.mock.calls.at(-1)[0];
+  const subscription = network.addNetworkStateListener.mock.results.at(-1).value;
+  const token = () => tree.root.findByProps({ testID: 'unified-video-view' }).props.retryToken;
+  emit(tree, 'sourceUnavailable');
+  act(() => listener({ isConnected: true }));
+  expect(token()).toBe(0);
+  act(() => listener({ isConnected: false }));
+  act(() => listener({ isConnected: true }));
+  expect(token()).toBe(1);
+  emit(tree, 'sourceUnavailable');
+  act(() => listener({ isConnected: false }));
+  act(() => listener({ isConnected: true }));
+  expect(token()).toBe(1);
+  act(() => tree.unmount());
+  expect(subscription.remove).toHaveBeenCalledTimes(1);
+});
+
+test.each(['file:///local.mp4', 'https://example.test/decode.mp4'])('does not retry a decode failure after reconnect: %s', source => {
+  let tree!: ReactTestRenderer;
+  act(() => { tree = create(<VideoPlayer source={source} />); });
+  const listener = require('expo-network').addNetworkStateListener.mock.calls.at(-1)[0];
+  emit(tree, 'decodeFailed');
+  act(() => listener({ isConnected: false }));
+  act(() => listener({ isConnected: true }));
+  expect(tree.root.findByProps({ testID: 'unified-video-view' }).props.retryToken).toBe(0);
+  act(() => tree.unmount());
 });

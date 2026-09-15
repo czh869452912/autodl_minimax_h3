@@ -4,18 +4,22 @@ import { pickImagesFromGallery } from '../native/imagePicker';
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
-export async function pickTaskMedia(kind: 'image' | 'audio', remaining: number, source: 'gallery' | 'file' = 'file', acceptedMimes?: string[]): Promise<TaskMediaInput[]> {
+export async function pickTaskMedia(kind: 'image' | 'audio', remaining: number, source: 'gallery' | 'file' = 'file', acceptedMimes?: string[], onSkipped?: (messages: string[]) => void, budget = MAX_BYTES): Promise<TaskMediaInput[]> {
   if (remaining <= 0) return [];
-  if (kind === 'image' && source === 'gallery') {
-    const selected = await pickImagesFromGallery(remaining);
-    if (acceptedMimes && selected.some(asset => !acceptedMimes.includes(asset.mimeType))) throw new Error('所选图片格式不受当前工作流支持');
-    if (selected.some((asset) => asset.size > MAX_BYTES)) throw new Error('单个参考素材不能超过 50MB');
-    return selected.map((asset) => ({ uri: asset.uri, name: asset.name, size: asset.size, mime: asset.mimeType }));
+  let candidates: TaskMediaInput[];
+  if (kind === 'image' && source === 'gallery') candidates = (await pickImagesFromGallery(remaining)).map(asset => ({ uri: asset.uri, name: asset.name, size: asset.size, mime: asset.mimeType }));
+  else {
+    const result = await DocumentPicker.getDocumentAsync({ type: acceptedMimes ?? (kind === 'image' ? 'image/*' : 'audio/*'), multiple: true, copyToCacheDirectory: true });
+    if (result.canceled) return [];
+    candidates = result.assets.map(asset => ({ uri: asset.uri, name: asset.name, size: asset.size, mime: asset.mimeType }));
   }
-  const result = await DocumentPicker.getDocumentAsync({ type: acceptedMimes ?? (kind === 'image' ? 'image/*' : 'audio/*'), multiple: true, copyToCacheDirectory: true });
-  if (result.canceled) return [];
-  const selected = result.assets.slice(0, remaining);
-  if (acceptedMimes && selected.some(asset => !asset.mimeType || !acceptedMimes.includes(asset.mimeType))) throw new Error('所选素材格式不受当前工作流支持，请选择标注格式的文件');
-  if (selected.some((asset) => (asset.size || 0) > MAX_BYTES)) throw new Error('单个参考素材不能超过 50MB');
-  return selected.map((asset) => ({ uri: asset.uri, name: asset.name, size: asset.size, mime: asset.mimeType || (kind === 'image' ? 'image/png' : 'audio/mpeg') }));
+  const accepted: TaskMediaInput[] = [], skipped: string[] = [];
+  let bytes = 0;
+  for (const item of candidates) {
+    const reason = acceptedMimes && (!item.mime || !acceptedMimes.includes(item.mime)) ? '格式不支持' : (item.size ?? 0) > MAX_BYTES ? '单个文件超过 50MB' : accepted.length >= remaining ? '超过数量上限' : bytes + (item.size ?? 0) > budget ? '全部素材超过 50MB' : '';
+    if (reason) skipped.push(`${item.name || '未命名文件'}：${reason}`);
+    else { accepted.push(item); bytes += item.size ?? 0; }
+  }
+  if (skipped.length) onSkipped?.(skipped);
+  return accepted;
 }

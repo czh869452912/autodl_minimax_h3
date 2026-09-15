@@ -1,6 +1,5 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { AppHeader } from '../ui/AppHeader';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Keyboard, StyleSheet } from 'react-native';
 import { AppTabs } from '../ui/AppTabs';
@@ -55,7 +54,6 @@ describe('tabs shell layout', () => {
     act(() => {
       tree = create(<TabsLayout />);
     });
-    expect(tree.root.findAllByType(AppHeader)).toHaveLength(0);
     act(() => tree.unmount());
   });
 

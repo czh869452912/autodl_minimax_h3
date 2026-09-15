@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Text } from 'react-native';
+import { Alert, Pressable, Text } from 'react-native';
 import { TaskCardRow } from './TaskCardRow';
 import type { TaskCard } from './taskCard';
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
@@ -50,4 +50,37 @@ test('conversion failure offers saving the untouched original', () => {
   act(() => button.props.onPress());
   expect(onExport).toHaveBeenCalledWith(item);
   act(() => tree.unmount());
+});
+
+
+test('shows zero download progress in Chinese and disables duplicate downloads', () => {
+  const item: TaskCard = { id: 'a', prompt: 'p', status: 'SUCCESS', resolution: '768p', duration: 5, createdAt: 1, updatedAt: 2, downloadState: 'DOWNLOADING', downloadProgress: 0, exportState: 'NOT_REQUESTED' };
+  let tree!: ReturnType<typeof create>;
+  act(() => { tree = create(<TaskCardRow item={item} busy={false} onDownload={jest.fn()} onExport={jest.fn()} onRemove={jest.fn()} onOpen={jest.fn()} />); });
+  expect(tree.root.findAllByType(Text).some(node => node.props.children === '下载中 0%')).toBe(true);
+  expect(tree.root.findByProps({ accessibilityLabel: '下载进度' }).props.accessibilityValue.now).toBe(0);
+  expect(tree.root.findByProps({ accessibilityLabel: '下载视频' }).props.disabled).toBe(true);
+  act(() => tree.unmount());
+});
+
+
+test('local cancellation requires confirmation and disappears once submission starts', () => {
+  const item: TaskCard = { id: 'queued', prompt: 'p', status: 'QUEUED', canCancel: true, downloadState: 'IDLE', exportState: 'NOT_REQUESTED', resolution: '768p', duration: 5, createdAt: 1, updatedAt: 2 };
+  const onCancel = jest.fn();
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const props = { item, busy: false, onCancel, onDownload: jest.fn(), onExport: jest.fn(), onRemove: jest.fn(), onOpen: jest.fn() };
+  let tree!: ReturnType<typeof create>;
+  try {
+    act(() => { tree = create(<TaskCardRow {...props} />); });
+    const cancel = () => tree.root.findAllByProps({ accessibilityLabel: '取消本地排队' })[0];
+    act(() => cancel().props.onPress());
+    expect(onCancel).not.toHaveBeenCalled();
+    const confirm = alert.mock.calls.at(-1)![2]!.find(button => button.text === '确认取消')!;
+    act(() => confirm.onPress!());
+    expect(onCancel).toHaveBeenCalledWith('queued');
+    act(() => tree.update(<TaskCardRow {...props} busy />));
+    expect(cancel().props.disabled).toBe(true);
+    act(() => tree.update(<TaskCardRow {...props} item={{ ...item, canCancel: false }} />));
+    expect(cancel()).toBeUndefined();
+  } finally { act(() => tree.unmount()); alert.mockRestore(); }
 });

@@ -1,3 +1,4 @@
+import { WorkflowForm } from '../workflows/renderer/WorkflowForm';
 import { buildAutodlSubmitRequest } from '../workflows/providers/autodl/mapping';
 import { resolveDraftPrompt } from './draftPrompt';
 import { RESOLUTION_OPTIONS } from './resolutions';
@@ -137,7 +138,8 @@ describe('create form contracts', () => {
     expect(queue).toHaveBeenCalledTimes(expectedQueues);
     expect(readSettings).toHaveBeenCalledTimes(expectedQueues);
     if (expectedQueues === 0) {
-      expect(alert).toHaveBeenCalledWith('参数设置不合法', expect.stringContaining('最多 10,000 个字符'));
+      expect(alert).not.toHaveBeenCalled();
+      expect(tree.root.findByType(WorkflowForm).props.errors).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'prompt' })]));
     }
   });
 

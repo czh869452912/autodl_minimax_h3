@@ -158,6 +158,8 @@ class ArtifactTransferPolicyTest {
   }
 
   @Test fun `benchmark DNS answers get a distinct error without allowing private mixtures`() {
+    val pure = ArtifactTransferPolicy { listOf(address("198.18.0.1"), address("198.19.255.255")) }
+    expectCode("ARTIFACT_VIRTUAL_DNS") { pure.validate(request().url, request()) }
     listOf("198.18.0.0", "198.19.255.255").forEach { ip ->
       val policy = ArtifactTransferPolicy { listOf(address("93.184.216.34"), address(ip)) }
       expectCode("ARTIFACT_VIRTUAL_DNS") { policy.validate(request().url, request()) }

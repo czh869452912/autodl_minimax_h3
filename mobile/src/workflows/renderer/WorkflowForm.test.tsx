@@ -72,3 +72,21 @@ test('shows the schema limit and field error without truncating the prompt', () 
   expect(tree.root.findByType(TextInput).props.maxLength).toBeUndefined();
   expect(tree.root.findAllByType(Text).some((node) => node.props.children === 'Prompt（视频描述）最多 10,000 个字符，当前 10,001 个。')).toBe(true);
 });
+
+
+test('locked workflow controls cannot emit changes and regain editing after unlock', () => {
+  const change = jest.fn();
+  let tree!: ReturnType<typeof create>;
+  act(() => { tree = create(<WorkflowForm definition={definition} value={{ prompt: 'keep', mode: 'image' }} disabled onChange={change} />); });
+  expect(tree.root.findByType(TextInput).props.editable).toBe(false);
+  act(() => tree.root.findByType(TextInput).props.onChangeText('lost'));
+  const option = tree.root.findAll(node => node.props.accessibilityRole === 'radio')[0];
+  expect(option.props.disabled).toBe(true);
+  act(() => option.props.onPress());
+  expect(change).not.toHaveBeenCalled();
+  act(() => tree.update(<WorkflowForm definition={definition} value={{ prompt: 'keep', mode: 'image' }} onChange={change} />));
+  expect(tree.root.findByType(TextInput).props.editable).toBe(true);
+  act(() => tree.root.findByType(TextInput).props.onChangeText('new'));
+  expect(change).toHaveBeenCalledWith({ prompt: 'new', mode: 'image' });
+  act(() => tree.unmount());
+});

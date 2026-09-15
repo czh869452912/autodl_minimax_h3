@@ -1,3 +1,4 @@
+jest.mock('expo-secure-store', () => ({ getItemAsync: jest.fn(async () => undefined), setItemAsync: jest.fn(async () => undefined) }));
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { Alert, BackHandler, Text } from 'react-native';
@@ -17,7 +18,7 @@ const mockNetworkRemove = jest.fn();
 jest.mock('../storage/databaseClient', () => ({ getDatabase: jest.fn(() => mockDatabase), getDatabaseStartupState: () => mockStartupState() }));
 jest.mock('expo-router', () => ({ Stack: (props: { children?: React.ReactNode }) => <>{props.children}</> }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: (props: { children?: React.ReactNode }) => <>{props.children}</> }));
-jest.mock('../tasks/background', () => ({ registerBackgroundSync: jest.fn(async () => undefined), unusedOldSync: jest.fn(async () => undefined), resumeTaskSyncAfterReconnect: jest.fn(async () => undefined) }));
+jest.mock('../tasks/background', () => ({ registerBackgroundSync: jest.fn(async () => undefined), backgroundRegistration: { resume: jest.fn(), pause: jest.fn(), stop: jest.fn() }, unusedOldSync: jest.fn(async () => undefined), resumeTaskSyncAfterReconnect: jest.fn(async () => undefined) }));
 jest.mock('expo-network', () => ({ addNetworkStateListener: jest.fn((listener) => { mockNetworkListener = listener; return { remove: mockNetworkRemove }; }) }));
 jest.mock('../storage/database', () => ({ ensureAppDatabase: jest.fn(), isLegacyAppDatabase: jest.fn(() => true), resetAppDatabase: jest.fn() }));
 jest.mock('../storage/DatabaseRecoveryScreen', () => ({ DatabaseRecoveryScreen: (props: { diagnostic: string }) => mockRecoveryScreen(props) }));
@@ -47,14 +48,19 @@ test('blocks old databases until the user explicitly clears or exits', async () 
   actions[0].onPress?.();
   expect(exit).toHaveBeenCalled();
 
+  const reset = require('../storage/database').resetAppDatabase;
+  reset.mockClear();
   await act(async () => { actions[1].onPress?.(); });
-  expect(require('../storage/database').resetAppDatabase).toHaveBeenCalled();
+  expect(reset).not.toHaveBeenCalled();
+  expect(alert.mock.calls.at(-1)?.[0]).toBe('确认永久清除旧数据？');
+  await act(async () => { alert.mock.calls.at(-1)?.[2]?.find(button => button.text === '确认清除')?.onPress?.(); });
+  expect(reset).toHaveBeenCalledTimes(1);
   act(() => tree.unmount());
 });
 
 test('renders readonly recovery without registering background work', async () => {
   mockStartupState.mockReturnValue({ mode: 'readonly', diagnostic: 'MIGRATION_5_TO_6_FAILED', allowReset: true });
-  const register = require('../tasks/background').registerBackgroundSync;
+  const register = require('../tasks/background').backgroundRegistration.resume;
   const sync = require('../tasks/background').unusedOldSync;
   register.mockClear();
   sync.mockClear();
@@ -100,3 +106,22 @@ test('resumes once after an observed offline-to-online edge and removes the list
 });
 
 jest.mock('../tasks/foregroundRuntime', () => ({ startForegroundTaskExecution: jest.fn(() => ({ stop: jest.fn() })) }));
+
+
+test('a corrupt maintenance request can be discarded without restoring or clearing data', async () => {
+  const secure = require('expo-secure-store');
+  secure.getItemAsync.mockResolvedValueOnce('{broken');
+  mockStartupState.mockReturnValue({ mode: 'writable' });
+  jest.mocked(require('../storage/database').isLegacyAppDatabase).mockReturnValue(false);
+  const reset = require('../storage/database').resetAppDatabase;
+  const restore = require('../storage/backup').restoreFullDatabaseBackup;
+  reset.mockClear(); restore.mockClear();
+  let tree!: ReturnType<typeof create>;
+  await act(async () => { tree = create(<RootLayout />); });
+  expect(tree.root.findAllByType(require('expo-router').Stack)).toHaveLength(0);
+  await act(async () => tree.root.findByProps({ accessibilityLabel: '丢弃损坏的维护请求' }).props.onPress());
+  expect(secure.setItemAsync).toHaveBeenCalledWith('database.pendingMaintenance', '');
+  expect(reset).not.toHaveBeenCalled(); expect(restore).not.toHaveBeenCalled();
+  expect(tree.root.findAllByType(require('expo-router').Stack)).toHaveLength(1);
+  act(() => tree.unmount());
+});

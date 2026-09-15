@@ -32,10 +32,26 @@ class UnifiedVideoView(context: Context) : FrameLayout(context), LifecycleEventL
   private var disposed = false
   private var hostPaused = false
   private var fullscreen: Dialog? = null
+  private var muted = false
+  private val loadingIndicator = android.widget.ProgressBar(context)
+  private val muteButton = android.widget.Button(context).apply {
+    text = "静音"
+    contentDescription = "静音"
+    setOnClickListener {
+      muted = !muted
+      playbackPlayer?.volume = if (muted) 0f else 1f
+      text = if (muted) "开启声音" else "静音"
+      contentDescription = text
+    }
+  }
 
   init {
     addView(playerView, LayoutParams(-1, -1))
     playerView.setFullscreenButtonClickListener(::setFullscreen)
+    val unit = resources.displayMetrics.density
+    playerView.overlayFrameLayout?.addView(loadingIndicator, LayoutParams((48 * unit).toInt(), (48 * unit).toInt(), android.view.Gravity.CENTER))
+    loadingIndicator.contentDescription = "正在加载视频"
+    playerView.overlayFrameLayout?.addView(muteButton, LayoutParams((100 * unit).toInt(), (48 * unit).toInt(), android.view.Gravity.TOP or android.view.Gravity.END))
     (context as? ReactContext)?.addLifecycleEventListener(this)
   }
 
@@ -70,6 +86,7 @@ class UnifiedVideoView(context: Context) : FrameLayout(context), LifecycleEventL
       val current = playbackPlayer ?: MpvPlayer(context).also { player ->
         playbackPlayer = player
         player.onPlaybackEvent = { status, position ->
+          loadingIndicator.visibility = if (status == "loading") View.VISIBLE else View.GONE
           // Recovery actions belong to the React host. Reveal them before emitting failure.
           if (status == "decodeFailed" || status == "sourceUnavailable") setFullscreen(false)
           onPlaybackEvent?.invoke(status, position)
@@ -86,6 +103,7 @@ class UnifiedVideoView(context: Context) : FrameLayout(context), LifecycleEventL
             }
           }
         })
+        player.volume = if (muted) 0f else 1f
         playerView.player = player
         player.setHostPaused(hostPaused || !isAttachedToWindow || !isShown)
       }

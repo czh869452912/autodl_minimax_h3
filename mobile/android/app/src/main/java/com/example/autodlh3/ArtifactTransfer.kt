@@ -232,6 +232,7 @@ class ArtifactTransfer(
       }
     } catch (error: ArtifactTransferException) {
       if (ownsPart) part.delete()
+      if (active.isCancelled()) fail("ARTIFACT_CANCELLED")
       throw error
     } catch (error: Exception) {
       if (ownsPart) part.delete()
