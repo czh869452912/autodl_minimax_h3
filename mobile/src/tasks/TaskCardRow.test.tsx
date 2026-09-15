@@ -84,3 +84,20 @@ test('local cancellation requires confirmation and disappears once submission st
     expect(cancel()).toBeUndefined();
   } finally { act(() => tree.unmount()); alert.mockRestore(); }
 });
+
+
+test('opens details from the visible action and separates failure status from metadata', () => {
+  const item: TaskCard = { id: 'failed-download', prompt: 'A video', status: 'SUCCESS', resolution: '768p', duration: 5, createdAt: 1, updatedAt: 2, downloadState: 'DOWNLOAD_FAILED', downloadError: '连接失败', exportState: 'NOT_REQUESTED' };
+  const onOpen = jest.fn();
+  let tree!: ReturnType<typeof create>;
+  act(() => { tree = create(<TaskCardRow item={item} busy={false} onDownload={jest.fn()} onExport={jest.fn()} onRemove={jest.fn()} onOpen={onOpen} />); });
+  const details = tree.root.findByProps({ accessibilityLabel: '查看任务详情' });
+  expect(details.findByType(Text).props.children).toBe('查看详情 ›');
+  act(() => details.props.onPress());
+  expect(onOpen).toHaveBeenCalledWith(item.id);
+  const texts = tree.root.findAllByType(Text).map(node => [node.props.children].flat().join(''));
+  expect(texts).toContain('768p · 5s');
+  expect(texts).toContain('下载失败');
+  expect(texts).not.toContain('成功');
+  act(() => tree.unmount());
+});

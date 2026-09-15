@@ -18,6 +18,7 @@ const mockMediaGet = jest.fn();
 const mockResolveLocal = jest.fn(async (..._args: unknown[]): Promise<string | undefined> => undefined);
 const mockSync = jest.fn(async (..._args: unknown[]) => ({ tasks: [], summary: { operations: { remainingDue: 0, remainingScheduled: 0, budgetExhausted: false } } }));
 const mockRequestExport = jest.fn(async (_taskId: string, _policy: { keepPrivateCopy: boolean }) => ({ status: 'queued' as const }));
+const mockRequestDownload = jest.fn(async (_taskId: string) => ({ status: 'queued' as const }));
 const mockRequestRedownload = jest.fn(async (_taskId: string) => ({ status: 'queued' as const }));
 const mockProbeVideoStructure = jest.fn(async (_source: string) => undefined);
 const task = {
@@ -39,6 +40,7 @@ jest.mock('../tasks/taskServices', () => ({ getTaskServices: () => ({
   },
 
   taskCommandService: { requestExport: (taskId: string, policy: { keepPrivateCopy: boolean }) => mockRequestExport(taskId, policy),
+  requestDownload: (taskId: string) => mockRequestDownload(taskId),
   requestRedownload: (taskId: string) => mockRequestRedownload(taskId) },
 }) }));
 jest.mock('../native/media', () => ({ probeVideoStructure: (source: string) => mockProbeVideoStructure(source) }));
@@ -65,6 +67,7 @@ describe('video detail screen', () => {
     mockResolveLocal.mockResolvedValue(undefined);
     mockSync.mockClear();
     mockRequestExport.mockClear();
+    mockRequestDownload.mockClear();
     mockRequestRedownload.mockClear();
     mockProbeVideoStructure.mockClear();
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -73,6 +76,7 @@ describe('video detail screen', () => {
   afterEach(() => { act(() => { for (const tree of mountedTrees.splice(0)) tree.unmount(); }); jest.restoreAllMocks(); });
 
   it('observes asynchronous export completion and failure, then allows retry', async () => {
+    mockResolveLocal.mockResolvedValue('file:///private.mp4');
     mockGet.mockResolvedValue({ ...task, exportState: 'QUEUED' });
     let tree!: ReturnType<typeof create>;
     await act(async () => { tree = create(<VideoDetailScreen />); });
@@ -177,7 +181,8 @@ describe('video detail screen', () => {
     let tree: ReturnType<typeof create>;
     await act(async () => { tree = create(<VideoDetailScreen />); });
 
-    expect(tree!.root.findByProps({ testID: 'video-player-mock' }).props.source).toBe(task.videoUrl);
+    expect(tree!.root.findAllByProps({ testID: 'video-player-mock' })).toHaveLength(0);
+    expect(tree!.root.findAllByProps({ accessibilityLabel: '保存到系统相册' })).toHaveLength(0);
     const texts = tree!.root.findAllByType(Text).map((node) => [node.props.children].flat(Infinity).join(''));
     expect(texts.some((text) => text.includes('下载失败'))).toBe(true);
   });
@@ -188,6 +193,46 @@ describe('video detail screen', () => {
     await act(async () => { tree = create(<VideoDetailScreen />); });
     expect(tree!.root.findByProps({ accessibilityLabel: '视频源不可用' })).toBeTruthy();
     expect(tree!.root.findAllByProps({ testID: 'video-player-mock' })).toHaveLength(0);
+  });
+
+  it('groups download failure recovery and restores playback after download completes', async () => {
+    mockGet.mockResolvedValue({ ...task, downloadState: 'DOWNLOAD_FAILED', downloadError: '下载连接失败' });
+    let tree!: ReturnType<typeof create>;
+    await act(async () => { tree = create(<VideoDetailScreen />); });
+    expect(tree.root.findAllByProps({ testID: 'video-player-mock' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ accessibilityLabel: '保存到系统相册' })).toHaveLength(0);
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '复制诊断详情' }).props.onPress());
+    expect(mockCopy).toHaveBeenCalledWith('下载连接失败');
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '重试下载视频' }).props.onPress());
+    expect(mockRequestDownload).toHaveBeenCalledWith('task-1');
+    mockGet.mockResolvedValue({ ...task, downloadState: 'DOWNLOADED' });
+    mockResolveLocal.mockResolvedValue('file:///private.mp4');
+    await act(async () => taskProjectionEvents.invalidate());
+    expect(tree.root.findByProps({ testID: 'video-player-mock' }).props.source).toBe('file:///private.mp4');
+    expect(tree.root.findByProps({ accessibilityLabel: '保存到系统相册' })).toBeTruthy();
+    expect(tree.root.findAllByProps({ accessibilityLabel: '重试下载视频' })).toHaveLength(0);
+  });
+
+  it('disables repeat downloads while queued and omits unsupported-media retry', async () => {
+    mockGet.mockResolvedValue({ ...task, downloadState: 'ENQUEUED' });
+    let tree!: ReturnType<typeof create>;
+    await act(async () => { tree = create(<VideoDetailScreen />); });
+    expect(tree.root.findByProps({ accessibilityLabel: '下载视频' }).props.disabled).toBe(true);
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '下载视频' }).props.onPress());
+    expect(mockRequestDownload).not.toHaveBeenCalled();
+    mockGet.mockResolvedValue({ ...task, downloadState: 'DOWNLOAD_FAILED', downloadError: 'ARTIFACT_MEDIA_UNSUPPORTED' });
+    await act(async () => taskProjectionEvents.invalidate());
+    expect(tree.root.findAllByProps({ accessibilityLabel: '重试下载视频' })).toHaveLength(0);
+    expect(tree.root.findByProps({ accessibilityLabel: '复制诊断详情' })).toBeTruthy();
+  });
+
+  it('does not offer playback or downloads for a failed generation with a stale URL', async () => {
+    mockGet.mockResolvedValue({ ...task, status: 'FAILED', syncError: '生成失败' });
+    let tree!: ReturnType<typeof create>;
+    await act(async () => { tree = create(<VideoDetailScreen />); });
+    expect(tree.root.findByProps({ accessibilityLabel: '视频生成失败' })).toBeTruthy();
+    expect(tree.root.findAllByProps({ testID: 'video-player-mock' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ accessibilityLabel: '下载视频' })).toHaveLength(0);
   });
 
   it('expands media through available height and pins the bounded prompt section below it', async () => {
