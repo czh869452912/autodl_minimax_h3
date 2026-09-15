@@ -148,6 +148,7 @@ export function PromptAssistantUi({
   const [galleryAttachments, setGalleryAttachments] = useState<AssistantImageAttachment[]>(initialComposer.attachments);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [briefOpen, setBriefOpen] = useState(false);
+  const [composerHeight, setComposerHeight] = useState(154);
   const versionSheet = useRef<DraggableBottomSheetHandle>(null);
   const briefSheet = useRef<DraggableBottomSheetHandle>(null);
   const [brief, setBrief] = useState({ subject: '', camera: '', style: '', duration: '' });
@@ -376,6 +377,7 @@ export function PromptAssistantUi({
             </View>
           ) : null}
           <ConversationTimeline
+            bottomInset={composerHeight}
             rows={rows}
             isRunning={isRunning || submitting}
             onExportPrompt={async (prompt, artifactId) => {
@@ -393,8 +395,8 @@ export function PromptAssistantUi({
             onRetry={onRetry}
             onSelectSuggestion={applySuggestion}
           />
-          <View style={styles.composerDock}>
-            <View testID="composer-actions" style={styles.composerActions}>
+          <View pointerEvents="box-none" style={styles.composerDock} onLayout={({ nativeEvent }) => setComposerHeight(nativeEvent.layout.height)}>
+            <View pointerEvents="box-none" testID="composer-actions" style={styles.composerActions}>
               <Pressable accessibilityRole="button" accessibilityLabel="补充创作信息" accessibilityState={{ expanded: briefOpen }} onPress={() => setBriefOpen(true)} style={({ pressed }) => [styles.composerAction, compactActions && styles.composerActionCompact, pressed && styles.composerActionPressed]}>
                 <AppIcon name="filter_list" size={18} color={LIGHT_PROMPT_COLORS.muted} />
                 <Text style={styles.composerActionText}>{compactActions ? '创作信息' : '补充创作信息'}</Text>
@@ -494,6 +496,7 @@ export function ConversationTimeline({
   completedMessageIds = [],
   runs = [],
   latestVersionMessageId,
+  bottomInset = 0,
 }: {
   rows: ReturnType<typeof normalizeMessages>;
   onResend?: () => Promise<void>;
@@ -506,6 +509,7 @@ export function ConversationTimeline({
   completedMessageIds?: readonly string[];
   runs?: PromptRun[];
   latestVersionMessageId?: string;
+  bottomInset?: number;
 }) {
   const listRef = useRef<FlatList<ReturnType<typeof projectRunTimeline>[number]>>(null);
   const [visibleCount, setVisibleCount] = useState(50);
@@ -557,6 +561,7 @@ export function ConversationTimeline({
           keyExtractor={(item) => item.id}
           style={styles.timeline}
           contentContainerStyle={styles.timelineContent}
+          scrollIndicatorInsets={{ bottom: bottomInset }}
           keyboardShouldPersistTaps="handled"
           scrollEventThrottle={16}
           onScrollBeginDrag={() =>
@@ -578,13 +583,15 @@ export function ConversationTimeline({
             isRunning ? (
               <RunningIndicator />
             ) : (
-              <EmptyTimeline viewportHeight={viewportHeight} onSelectSuggestion={onSelectSuggestion} />
+              <EmptyTimeline viewportHeight={Math.max(0, viewportHeight - bottomInset)} onSelectSuggestion={onSelectSuggestion} />
             )
           }
           ListFooterComponent={
-            runIssue ? <RunIssueRow issue={runIssue} onRetry={runIssue.kind === 'submit' ? onResend ?? (async () => undefined) : onRetry} onDismiss={onDismissIssue} disabled={isRunning} /> : !runs.length && allRows.length > 0 && isRunning ? (
+            <View style={{ paddingBottom: bottomInset }}>
+            {runIssue ? <RunIssueRow issue={runIssue} onRetry={runIssue.kind === 'submit' ? onResend ?? (async () => undefined) : onRetry} onDismiss={onDismissIssue} disabled={isRunning} /> : !runs.length && allRows.length > 0 && isRunning ? (
               <RunningIndicator compact />
-            ) : null
+            ) : null}
+            </View>
           }
           renderItem={({ item }) =>
         item.kind === 'run' ? <RunTimelineRow run={item.run} entries={item.entries} disabled={isRunning} onRetry={onRetry} onInspect={inspectProcess} /> : <TimelineMessageRow
@@ -603,23 +610,15 @@ export function ConversationTimeline({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="回到最新消息"
+            accessibilityHint={unread ? '有新内容，点击滚动到最新消息' : '滚动到对话底部'}
             onPress={() => {
               setUnread(false); setFollow(nextFollowState(followingLatestRef.current, { type: 'back-to-latest' }));
               listRef.current?.scrollToEnd({ animated: true });
             }}
-            style={{
-              position: 'absolute',
-              right: 16,
-              bottom: 12,
-              flexDirection: 'row',
-              gap: 4,
-              padding: 10,
-              borderRadius: 18,
-              backgroundColor: LIGHT_PROMPT_COLORS.surface,
-            }}
+            style={({ pressed }) => [styles.latestButton, { bottom: bottomInset + 8 }, pressed && styles.composerActionPressed]}
           >
-            <AppIcon name="download" size={16} color={LIGHT_PROMPT_COLORS.ink} />
-            <Text>{unread ? '有新内容 · 回到最新' : '回到最新'}</Text>
+            <AppIcon name="arrow_downward" size={22} color={LIGHT_PROMPT_COLORS.ink} />
+            {unread ? <View pointerEvents="none" style={styles.latestUnreadDot} /> : null}
           </Pressable>
         ) : null}
         <ReferenceImagePreview uri={previewImage} onClose={() => setPreviewImage(null)} />
@@ -1096,15 +1095,47 @@ export function Composer({
   onSelectionChange?: (event: { nativeEvent: { selection: { start: number; end: number } } }) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const insets = useSafeAreaInsets();
+  const editorRef = useRef<TextInput>(null);
+  const nearLimit = value.length >= 3600;
+  const overLimit = value.length > 4000;
+  const closeEditor = () => setEditing(false);
+  const counter = nearLimit ? (
+    <Text accessibilityLabel={overLimit ? `已超出 ${value.length - 4000} 字，请缩短后发送，草稿已保留` : `已输入 ${value.length} 字，上限 4000 字`}
+      style={[styles.characterCount, overLimit && styles.characterCountError]}>
+      {overLimit ? `超出 ${value.length - 4000} 字` : `${value.length.toLocaleString()} / 4,000`}
+    </Text>
+  ) : null;
   const uploading = attachments.some((item) => item.status === 'uploading');
   const disabled =
     submitting || value.length > 4000 ||
     uploading ||
     (!value.trim() && !attachments.some((item) => item.status === 'ready'));
   return (
-    <View style={styles.composer}>
-      <Modal visible={editing} animationType="slide" onRequestClose={() => setEditing(false)}><KeyboardAvoidingView behavior="padding" style={{ flex: 1, padding: 24, backgroundColor: COLORS.background }}><Text style={{ fontSize: 20 }}>编辑创作想法</Text><TextInput accessibilityLabel="全屏编辑创作想法" multiline value={value} onChangeText={onChangeText} textAlignVertical="top" style={{ flex: 1, fontSize: 16, color: COLORS.text }} /><Text>{value.length.toLocaleString()} / 4,000 字符</Text><Pressable accessibilityRole="button" onPress={() => setEditing(false)} style={{ minHeight: 48, justifyContent: 'center' }}><Text>完成编辑</Text></Pressable></KeyboardAvoidingView></Modal>
-      <Pressable accessibilityRole="button" accessibilityLabel="全屏编辑" onPress={() => setEditing(true)} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-end' }}><Text>展开编辑</Text></Pressable>
+    <View style={[styles.composer, focused && styles.composerFocused]}>
+      <Modal visible={editing} animationType="slide" onRequestClose={closeEditor} onShow={() => editorRef.current?.focus()}>
+        <KeyboardAvoidingView behavior="padding" style={styles.editorRoot}>
+          <View style={[styles.editorSurface, { paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 12) }]}>
+            <View style={styles.editorHeader}>
+              <Pressable accessibilityRole="button" accessibilityLabel="收起编辑" onPress={closeEditor} style={({ pressed }) => [styles.editorClose, pressed && styles.composerActionPressed]}>
+                <AppIcon name="close_fullscreen" size={21} color={LIGHT_PROMPT_COLORS.muted} />
+              </Pressable>
+              <Text style={styles.editorTitle}>创作想法</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="完成编辑" onPress={closeEditor} style={({ pressed }) => [styles.editorDone, pressed && styles.editorDonePressed]}>
+                <Text style={styles.editorDoneText}>完成</Text>
+              </Pressable>
+            </View>
+            <View style={styles.editorPaper}>
+              <TextInput ref={editorRef} accessibilityLabel="全屏编辑创作想法" multiline value={value} onChangeText={onChangeText}
+                placeholder="描述你想生成的画面…" placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder}
+                selection={selection} onSelectionChange={onSelectionChange} scrollEnabled textAlignVertical="top"
+                selectionColor={COLORS.primary} style={styles.editorInput} />
+            </View>
+            <View style={styles.editorFooter}><Text style={styles.editorHint}>收起后保留草稿</Text>{counter}</View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
       {uploading ? <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator /><Text>图片上传中，完成后可发送；可移除附件取消上传。</Text></View> : null}
       <AttachmentStrip
         attachments={attachments}
@@ -1117,6 +1148,8 @@ export function Composer({
           value={value}
           onChangeText={onChangeText}
           accessibilityLabel="创作想法"
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           placeholder="描述你想生成的画面…"
           placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder}
           multiline
@@ -1127,10 +1160,10 @@ export function Composer({
           selection={selection}
           onSelectionChange={onSelectionChange}
         />
+        <Pressable accessibilityRole="button" accessibilityLabel="全屏编辑" accessibilityHint="展开编辑长文本" onPress={() => setEditing(true)} style={({ pressed }) => [styles.expandEditor, pressed && styles.composerActionPressed]}>
+          <AppIcon name="open_in_full" size={19} color={LIGHT_PROMPT_COLORS.muted} />
+        </Pressable>
       </View>
-      <Text accessibilityLiveRegion="polite" style={{ color: value.length > 4000 ? COLORS.danger : LIGHT_PROMPT_COLORS.muted, fontSize: 13 }}>
-        {value.length.toLocaleString()} / 4,000 字符{value.length > 4000 ? ' · 请缩短后发送，内容已保留' : ''}
-      </Text>
       <View style={styles.composerRow}>
         <Pressable
           accessibilityLabel="添加图片附件"
@@ -1155,6 +1188,7 @@ export function Composer({
           />
         </Pressable>
         <View testID="composer-toolbar-spacer" style={styles.toolbarSpacer} />
+        {counter}
         <Pressable
           accessibilityLabel={isRunning ? '停止生成' : submitting ? '发送中' : '发送消息'}
           accessibilityState={{ disabled: !isRunning && disabled, busy: submitting }}

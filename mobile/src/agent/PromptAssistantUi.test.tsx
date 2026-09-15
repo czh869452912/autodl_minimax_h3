@@ -61,6 +61,39 @@ function renderedText(tree: ReturnType<typeof create>): string[] {
 }
 
 describe('Prompt assistant UI primitives', () => {
+  it('keeps expanded edits and cursor position when returning to the compact composer', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} />); });
+    expect(renderedText(tree).some(text => text.includes('4,000'))).toBe(false);
+    act(() => tree.root.findByProps({ accessibilityLabel: '全屏编辑' }).props.onPress());
+    const editor = tree.root.findByProps({ accessibilityLabel: '全屏编辑创作想法' });
+    act(() => editor.props.onChangeText('雨夜\n街灯与倒影'));
+    act(() => editor.props.onSelectionChange({ nativeEvent: { selection: { start: 3, end: 3 } } }));
+    act(() => tree.root.findByProps({ accessibilityLabel: '完成编辑' }).props.onPress());
+    const input = tree.root.findByProps({ accessibilityLabel: '创作想法' });
+    expect(input.props.value).toBe('雨夜\n街灯与倒影');
+    expect(input.props.selection).toEqual({ start: 3, end: 3 });
+    act(() => input.props.onChangeText('字'.repeat(3600)));
+    expect(renderedText(tree)).toContain('3,600 / 4,000');
+    act(() => input.props.onChangeText('字'.repeat(4001)));
+    expect(renderedText(tree)).toContain('超出 1 字');
+    expect(tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.disabled).toBe(true);
+    act(() => tree.unmount());
+  });
+
+  it('reserves the measured floating composer height so the last message can scroll clear', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} />); });
+    const actions = tree.root.findByProps({ testID: 'composer-actions' });
+    const dock = actions.parent!;
+    act(() => dock.props.onLayout({ nativeEvent: { layout: { height: 246 } } }));
+    const list = tree.root.findByType(FlatList);
+    expect(list.props.ListFooterComponent.props.style.paddingBottom).toBe(246);
+    expect(list.props.scrollIndicatorInsets.bottom).toBe(246);
+    expect(dock.props.pointerEvents).toBe('box-none');
+    act(() => tree.unmount());
+  });
+
   it('cancels mention-origin picking without leaking into a later normal picker', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     let tree!: ReturnType<typeof create>;
