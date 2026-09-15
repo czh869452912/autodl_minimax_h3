@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View }
 import { router } from 'expo-router';
 import { AppIcon } from '../../src/ui/icons';
 import { ListAction, ListEmptyState, ListFilters, listUI } from '../../src/ui/ListPageUI';
+import { usePageLayout } from '../../src/ui/adaptiveLayout';
 import { COLORS, SPACING } from '../../src/ui/theme';
 import { getTaskServices } from '../../src/tasks/taskServices';
 import { useTaskListSession } from '../../src/tasks/useTaskListSession';
@@ -15,6 +16,7 @@ import { useTaskMonitorStatus } from '../../src/native/useTaskMonitorStatus';
 import { backgroundRegistration } from '../../src/tasks/background';
 
 export default function TasksScreen() {
+  const layout = usePageLayout(900);
   const [filter, setFilter] = useState<'all' | 'active' | 'failed'>('all');
   const { session, snapshot } = useTaskListSession(undefined, filter);
   const [pageBusy, setPageBusy] = useState(false);
@@ -62,7 +64,7 @@ export default function TasksScreen() {
     } catch (error) { Alert.alert('开启失败', String(error)); } finally { monitorLock.current = false; setMonitorBusy(false); }
   };
   const updated = snapshot.read.lastCheckedAt == null ? '' : new Date(snapshot.read.lastCheckedAt).toTimeString().slice(0, 5);
-  return <View style={styles.container}>
+  return <View style={[styles.container, layout.contentStyle]}>
     <View style={styles.heading}>
       <Text style={styles.title}>任务队列</Text>
       <View style={styles.headingActions}>

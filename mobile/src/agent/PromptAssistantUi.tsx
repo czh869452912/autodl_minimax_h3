@@ -1,3 +1,4 @@
+import { isCompactLayout as isCompactPromptLayout } from '../ui/adaptiveLayout';
 import { ImagePreview } from '../ui/ImagePreview';
 import { styles, sentStyles, markdownStyles } from './PromptAssistantStyles';
 import { HistoryList, type HistoryProps } from './HistoryList';
@@ -70,10 +71,6 @@ type AttachmentLike = {
 };
 
 export type RunIssue = { kind: 'error' | 'aborted' | 'submit' | 'validation'; message: string; runId?: string };
-
-function isCompactPromptLayout(width: number, fontScale: number): boolean {
-  return width < 400 || fontScale > 1.15;
-}
 
 export function applyComposerSuggestion(
   value: string,

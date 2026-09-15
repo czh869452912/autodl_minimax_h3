@@ -46,6 +46,28 @@ describe('gallery navigation', () => {
     act(() => { renderer!.unmount(); jest.runOnlyPendingTimers(); });
   });
 
+  it('reflows on folding and large text without losing the selected video', async () => {
+    const rn = require('react-native');
+    const dimensions = jest.spyOn(rn, 'useWindowDimensions').mockReturnValue({ width: 840, height: 900, scale: 2, fontScale: 1 });
+    let tree!: ReturnType<typeof create>;
+    try {
+      await act(async () => { tree = create(<GalleryScreen />); });
+      const list = () => tree.root.findByType(rn.FlatList);
+      act(() => list().props.onLayout({ nativeEvent: { layout: { width: 792 } } }));
+      expect(list().props.numColumns).toBe(4);
+      act(() => tree.root.findByProps({ accessibilityLabel: '打开视频 cinematic city' }).props.onLongPress());
+      dimensions.mockReturnValue({ width: 360, height: 900, scale: 3, fontScale: 1.5 });
+      act(() => tree.update(<GalleryScreen />));
+      act(() => list().props.onLayout({ nativeEvent: { layout: { width: 336 } } }));
+      expect(list().props.numColumns).toBe(1);
+      expect(list().props.columnWrapperStyle).toBeUndefined();
+      expect(tree.root.findByProps({ accessibilityLabel: '打开视频 cinematic city' }).props.accessibilityState.selected).toBe(true);
+    } finally {
+      act(() => tree?.unmount());
+      dimensions.mockRestore();
+    }
+  });
+
   it('downgrades a downloaded asset whose private file is missing', async () => {
     mockResolveLocal.mockResolvedValueOnce(undefined);
     let renderer: ReturnType<typeof create>;

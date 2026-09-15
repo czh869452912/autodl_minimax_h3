@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import type { TaskMediaInput } from '../media/types';
 import { AppIcon } from '../ui/icons';
 import { COLORS, SPACING } from '../ui/theme';
+import { usePageLayout } from '../ui/adaptiveLayout';
 import { AudioPreviewList, ImagePreviewGrid } from './AttachmentPreview';
 import { pickTaskMedia } from './MediaPicker';
 import { RESOLUTION_OPTIONS } from './resolutions';
@@ -80,6 +81,7 @@ export function CreateForm({
   submissionDependencies?: CreateFormSubmissionDependencies;
   draftDependencies?: CreateFormDraftDependencies;
 }) {
+  const layout = usePageLayout();
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const mediaRef = useRef<View>(null);
@@ -379,7 +381,7 @@ export function CreateForm({
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView ref={scrollRef}
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, layout.contentStyle]}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
     >
@@ -396,7 +398,7 @@ export function CreateForm({
       {handoffNotice ? <Text accessibilityLiveRegion="polite" style={styles.help}>{handoffNotice}</Text> : null}
       {loadingDraft ? <Text style={styles.help}>正在读取交接草稿和保存参考图片…</Text> : null}
       {handoffError ? <Text accessibilityRole="alert" style={styles.help}>{handoffError}</Text> : null}
-      {handoffError && draftId && <View style={{ flexDirection: 'row', gap: 12 }}>
+      {handoffError && draftId && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
         <Pressable accessibilityRole="button" accessibilityLabel="重新应用交接草稿" disabled={!definition || loadingDraft} onPress={() => {
           draftStart.current = { id: draftId, revision: editRevision.current };
           appliedIds.current.delete(draftId); consumedIds.current.delete(draftId);
@@ -441,7 +443,7 @@ export function CreateForm({
           <Pressable
             disabled={images.length >= imageRules.maximum || picking || switching || submitting}
             onPress={addImage}
-            style={[styles.mediaButton, (images.length >= imageRules.maximum || picking || switching || submitting) && styles.disabled]}
+            style={[styles.mediaButton, styles.mediaRowButton, (images.length >= imageRules.maximum || picking || switching || submitting) && styles.disabled]}
           >
             <AppIcon
               name="add_photo_alternate"
@@ -453,7 +455,7 @@ export function CreateForm({
           <Pressable
             disabled={audios.length >= audioRules.maximum || picking || switching || submitting}
             onPress={() => void addMedia('audio')}
-            style={[styles.mediaButton, (audios.length >= audioRules.maximum || picking || switching || submitting) && styles.disabled]}
+            style={[styles.mediaButton, styles.mediaRowButton, (audios.length >= audioRules.maximum || picking || switching || submitting) && styles.disabled]}
           >
             <AppIcon
               name="library_music"
@@ -539,9 +541,10 @@ const styles = StyleSheet.create({
   sectionTitle: { color: COLORS.text, fontWeight: '800', fontSize: 16 },
   help: { color: COLORS.textMuted, fontSize: 13, marginTop: 4 },
   count: { flexShrink: 0, color: COLORS.primaryActive, fontSize: 13, fontFamily: 'monospace', textAlign: 'right' },
-  mediaButtons: { flexDirection: 'row', gap: SPACING.sm },
+  mediaButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
+  mediaRowButton: { flexGrow: 1, flexBasis: 140 },
   mediaButton: {
-    flex: 1,
+    padding: 12,
     minHeight: 48,
     borderRadius: 12,
     borderWidth: 1,
@@ -552,7 +555,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
-  mediaText: { color: '#c7d2fe', fontSize: 12, fontWeight: '700' },
+  mediaText: { flexShrink: 1, color: '#c7d2fe', fontSize: 12, fontWeight: '700' },
   disabled: { opacity: 0.45 },
   submit: {
     minHeight: 56,
@@ -567,7 +570,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 5,
   },
-  submitText: { color: COLORS.onPrimary, fontSize: 16, fontWeight: '800' },
+  submitText: { flexShrink: 1, textAlign: 'center', color: COLORS.onPrimary, fontSize: 16, fontWeight: '800' },
   footnote: {
     color: COLORS.textSubtle,
     fontFamily: 'monospace',

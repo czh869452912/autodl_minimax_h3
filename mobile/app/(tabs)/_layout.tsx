@@ -8,7 +8,7 @@ export default function TabsLayout() {
   const router = useRouter();
   const activeId = ((pathname.split('/').filter(Boolean).pop() || 'create')) as AppTabId;
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: COLORS.background }}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: COLORS.background }}>
       <Tabs
         tabBar={() => <AppTabs activeId={activeId} onSelect={(id) => router.navigate(`/(tabs)/${id}`)} />}
         screenOptions={{
