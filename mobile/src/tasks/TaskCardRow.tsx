@@ -31,7 +31,7 @@ const styles = StyleSheet.create({
   id: { color: COLORS.textMuted, fontSize: 12, flex: 1, fontFamily: 'monospace' },
   status: { color: COLORS.warning, fontSize: 12, fontWeight: '700', backgroundColor: COLORS.surfaceRaised, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, overflow: 'hidden' },
   running: { color: COLORS.primaryActive, backgroundColor: COLORS.primarySoft },
-  success: { color: COLORS.success, backgroundColor: COLORS.primarySoft },
+  success: { color: COLORS.success, backgroundColor: COLORS.successSoft },
   failure: { color: COLORS.danger, backgroundColor: COLORS.dangerSoft },
   details: { minHeight: 60, justifyContent: 'center' },
   prompt: { color: COLORS.text, marginTop: 11, fontSize: 14, lineHeight: 22 },

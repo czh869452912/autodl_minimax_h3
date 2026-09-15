@@ -92,7 +92,7 @@ export default function GalleryScreen() {
     } },
   ]);
   const openAsset = (asset: MediaAsset) => { if (navigating.current) return; navigating.current = true; router.push({ pathname: '/video/[id]', params: { id: asset.id } }); };
-  const clearFilters = () => { generation.current++; changeQuery(''); setFilter('all'); setSelected([]); };
+  const clearFilters = () => { generation.current++; changeQuery(''); setFilter('all'); setSelected([]); setPageError(''); };
   return <View style={styles.container}>
     <Text style={styles.title}>结果</Text><Text style={styles.subtitle}>浏览与播放作品，长按可选择多个作品。</Text>
     {selected.length > 0 ? <View style={styles.selectionPanel}>
@@ -101,7 +101,7 @@ export default function GalleryScreen() {
     </View> : null}
     <View style={styles.search}><AppIcon name="search" size={21} color={COLORS.textSubtle} /><TextInput accessibilityLabel="搜索作品" value={query} onChangeText={changeQuery} placeholder="搜索 Prompt 或任务 ID..." placeholderTextColor={COLORS.textSubtle} style={styles.searchInput} />{query ? <Pressable accessibilityRole="button" accessibilityLabel="清除作品搜索" onPress={() => changeQuery('')} style={({ pressed }) => [styles.clearSearch, pressed && listUI.pressed]}><AppIcon name="close" size={18} color={COLORS.textMuted} /></Pressable> : null}</View>
     <ListFilters label="作品状态" options={filters} value={filter} onChange={value => { if (value === filter) return; generation.current++; setSelected([]); setFilter(value); }} />
-    {error ? <View style={listUI.notice}><Text accessibilityRole="alert" style={styles.deleteText}>{error}</Text><ListAction secondary icon="refresh" label="重试读取作品列表" onPress={() => void load()} /></View> : null}
+    {error ? <View style={listUI.notice}><Text accessibilityRole="alert" style={styles.errorText}>{error}</Text><ListAction secondary icon="refresh" label="重试读取作品列表" onPress={() => void load()} /></View> : null}
     <FlatList data={assets} numColumns={2} keyExtractor={item => item.id} columnWrapperStyle={styles.row} contentContainerStyle={styles.list} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled" refreshing={loading && assets.length > 0} onRefresh={() => void load()} onEndReached={() => { if (!pageError) void loadMore(); }} onEndReachedThreshold={0.6}
       ListFooterComponent={loadingMore ? <ActivityIndicator color={COLORS.primaryActive} /> : pageError ? <ListAction secondary icon="refresh" label={pageError} onPress={() => void loadMore()} /> : assets.length && !cursor ? <Text style={listUI.footer}>已显示全部作品</Text> : null}
       renderItem={({ item }) => <GalleryCard asset={item} selected={selected.includes(item.id)} onLongPress={() => toggle(item.id)} onPress={() => selected.length ? toggle(item.id) : openAsset(item)} />}
@@ -123,6 +123,7 @@ const styles = StyleSheet.create({
   selectionActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   deleteAll: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, backgroundColor: COLORS.dangerSoft, borderWidth: 1, borderColor: COLORS.danger },
   deleteText: { color: COLORS.danger, fontSize: 13, fontWeight: '700', lineHeight: 20 },
+  errorText: { color: COLORS.danger, fontSize: 13, lineHeight: 20 },
   search: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.surface, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 13 },
   searchInput: { flex: 1, minWidth: 0, color: COLORS.text, minHeight: 50, fontSize: 14 },
   clearSearch: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
