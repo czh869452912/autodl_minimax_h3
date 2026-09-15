@@ -3,6 +3,7 @@ package com.example.autodlh3
 import android.app.Activity
 import android.app.Dialog
 import android.content.Context
+import android.media.AudioManager
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -32,18 +33,7 @@ class UnifiedVideoView(context: Context) : FrameLayout(context), LifecycleEventL
   private var disposed = false
   private var hostPaused = false
   private var fullscreen: Dialog? = null
-  private var muted = false
   private val loadingIndicator = android.widget.ProgressBar(context)
-  private val muteButton = android.widget.Button(context).apply {
-    text = "静音"
-    contentDescription = "静音"
-    setOnClickListener {
-      muted = !muted
-      playbackPlayer?.volume = if (muted) 0f else 1f
-      text = if (muted) "开启声音" else "静音"
-      contentDescription = text
-    }
-  }
 
   init {
     addView(playerView, LayoutParams(-1, -1))
@@ -51,7 +41,6 @@ class UnifiedVideoView(context: Context) : FrameLayout(context), LifecycleEventL
     val unit = resources.displayMetrics.density
     playerView.overlayFrameLayout?.addView(loadingIndicator, LayoutParams((48 * unit).toInt(), (48 * unit).toInt(), android.view.Gravity.CENTER))
     loadingIndicator.contentDescription = "正在加载视频"
-    playerView.overlayFrameLayout?.addView(muteButton, LayoutParams((100 * unit).toInt(), (48 * unit).toInt(), android.view.Gravity.TOP or android.view.Gravity.END))
     (context as? ReactContext)?.addLifecycleEventListener(this)
   }
 
@@ -103,7 +92,6 @@ class UnifiedVideoView(context: Context) : FrameLayout(context), LifecycleEventL
             }
           }
         })
-        player.volume = if (muted) 0f else 1f
         playerView.player = player
         player.setHostPaused(hostPaused || !isAttachedToWindow || !isShown)
       }
@@ -140,6 +128,7 @@ class UnifiedVideoView(context: Context) : FrameLayout(context), LifecycleEventL
     if (fullscreen != null) return
     val activity = (context as? Activity) ?: (context as? ReactContext)?.currentActivity ?: return
     val dialog = Dialog(activity, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+    dialog.setVolumeControlStream(AudioManager.STREAM_MUSIC)
     fullscreen = dialog
     removeView(playerView)
     dialog.setContentView(playerView)
