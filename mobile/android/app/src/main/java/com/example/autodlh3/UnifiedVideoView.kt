@@ -34,10 +34,12 @@ class UnifiedVideoView(context: Context) : FrameLayout(context), LifecycleEventL
   private var hostPaused = false
   private var fullscreen: Dialog? = null
   private val loadingIndicator = android.widget.ProgressBar(context)
+  private val fullscreenBack = playerView.findViewById<View>(R.id.player_fullscreen_back)
 
   init {
     addView(playerView, LayoutParams(-1, -1))
     playerView.setFullscreenButtonClickListener(::setFullscreen)
+    fullscreenBack.setOnClickListener { setFullscreen(false) }
     val unit = resources.displayMetrics.density
     playerView.overlayFrameLayout?.addView(loadingIndicator, LayoutParams((48 * unit).toInt(), (48 * unit).toInt(), android.view.Gravity.CENTER))
     loadingIndicator.contentDescription = "正在加载视频"
@@ -136,11 +138,14 @@ class UnifiedVideoView(context: Context) : FrameLayout(context), LifecycleEventL
       (playerView.parent as? ViewGroup)?.removeView(playerView)
       if (!disposed) addView(playerView, LayoutParams(-1, -1))
       playerView.setFullscreenButtonState(false)
+      fullscreenBack.visibility = View.GONE
       fullscreen = null
     }
     dialog.show()
     dialog.window?.setLayout(-1, -1)
     playerView.setFullscreenButtonState(true)
+    fullscreenBack.visibility = View.VISIBLE
+    playerView.showController()
   }
 
   private fun updateVisibility() { playbackPlayer?.setHostPaused(hostPaused || !isAttachedToWindow || !isShown) }
