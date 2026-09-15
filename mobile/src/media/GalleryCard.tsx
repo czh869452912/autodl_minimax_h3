@@ -5,11 +5,11 @@ import { mediaExportStatusLabel, mediaStatusLabel } from '../gallery/presentatio
 import { AppIcon } from '../ui/icons';
 import { COLORS } from '../ui/theme';
 
-export function GalleryCard({ asset, onPress, selected = false, onLongPress }: { asset: MediaAsset; onPress: () => void; selected?: boolean; onLongPress?: () => void }) {
+export function GalleryCard({ asset, onPress, selected = false, onLongPress, width }: { width?: number; asset: MediaAsset; onPress: () => void; selected?: boolean; onLongPress?: () => void }) {
   const poster = asset.posterPath;
   const publication = mediaExportStatusLabel(asset.exportStatus);
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`打开视频 ${asset.title}`} accessibilityState={{ selected }} accessibilityActions={onLongPress ? [{ name: 'longpress', label: selected ? '取消选择' : '选择作品' }] : undefined} onAccessibilityAction={() => onLongPress?.()} onPress={onPress} onLongPress={onLongPress} style={({ pressed }) => [styles.card, selected && styles.selected, pressed && styles.pressed]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`打开视频 ${asset.title}`} accessibilityState={{ selected }} accessibilityActions={onLongPress ? [{ name: 'longpress', label: selected ? '取消选择' : '选择作品' }] : undefined} onAccessibilityAction={() => onLongPress?.()} onPress={onPress} onLongPress={onLongPress} style={({ pressed }) => [styles.card, width !== undefined && { width, flex: 0, maxWidth: '100%' }, selected && styles.selected, pressed && styles.pressed]}>
       {poster ? <Image source={{ uri: poster }} style={styles.poster} resizeMode="contain" /> : <View style={styles.posterFallback}><AppIcon name="movie_filter" size={28} color={COLORS.textMuted} /><Text style={styles.fallbackText}>{asset.sourceUrl || asset.localPath ? '正在准备首帧…' : '视频源不可用'}</Text></View>}
       {selected && <View style={styles.check}><Text style={styles.checkText}>✓</Text></View>}<View style={styles.footer}><Text numberOfLines={2} style={styles.title}>{asset.title || asset.taskId}</Text><Text style={styles.meta}>{asset.durationMs ? `${Math.round(asset.durationMs / 1000)}s` : '—'} · {publication || mediaStatusLabel(asset.status)}</Text></View>
     </Pressable>

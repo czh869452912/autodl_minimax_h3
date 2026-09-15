@@ -73,7 +73,7 @@ describe('tabs shell layout', () => {
       tree = create(<TabsLayout />);
     });
     const safeArea = tree.root.findByType(SafeAreaView);
-    expect(safeArea.props.edges).toEqual(['top']);
+    expect(safeArea.props.edges).toEqual(['top', 'left', 'right']);
     act(() => tree.unmount());
   });
 });

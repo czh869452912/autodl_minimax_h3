@@ -2,6 +2,7 @@ package com.example.autodlh3
 
 import android.os.Build
 import android.os.Bundle
+import android.media.AudioManager
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -17,6 +18,7 @@ class MainActivity : ReactActivity() {
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
     super.onCreate(null)
+    volumeControlStream = AudioManager.STREAM_MUSIC
   }
 
   /**

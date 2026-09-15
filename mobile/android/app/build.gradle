@@ -112,8 +112,8 @@ android {
         // dev.jdtech.mpv:libmpv:1.0.0 declares and supports Android API 26+.
         minSdkVersion Math.max(26, rootProject.ext.minSdkVersion as int)
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 36
-        versionName "1.4.26"
+        versionCode 37
+        versionName "1.4.27"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "boolean", "ARTIFACT_DOH_PROTOTYPE", "${findProperty('artifactDohPrototype') == 'true'}"
 

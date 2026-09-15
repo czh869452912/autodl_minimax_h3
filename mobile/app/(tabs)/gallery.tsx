@@ -8,12 +8,18 @@ import { createSqliteMediaStore } from '../../src/media/repository';
 import { extractPoster } from '../../src/native/media';
 import { AppIcon } from '../../src/ui/icons';
 import { ListAction, ListEmptyState, ListFilters, listUI } from '../../src/ui/ListPageUI';
+import { usePageLayout, galleryColumns } from '../../src/ui/adaptiveLayout';
 import { COLORS, SPACING } from '../../src/ui/theme';
 import { resolveLocalVideoSource } from '../../src/tasks/localMedia';
 
 const filters: Array<{ id: 'all' | MediaStatus; label: string }> = [{ id: 'all', label: '全部' }, { id: 'downloaded', label: '已下载' }, { id: 'downloading', label: '准备中' }, { id: 'failed', label: '失败' }];
 
 export default function GalleryScreen() {
+  const layout = usePageLayout(1200);
+  const [listWidth, setListWidth] = useState(0);
+  const availableWidth = listWidth || Math.max(0, Math.min(layout.width, 1200) - layout.gutter * 2);
+  const columns = galleryColumns(availableWidth, layout.fontScale);
+  const cardWidth = Math.max(0, (availableWidth - 13 * (columns - 1)) / columns);
   const router = useRouter();
   const [mediaStore] = useState(() => createSqliteMediaStore(getDatabase()));
   const [query, setQuery] = useState('');
@@ -93,7 +99,7 @@ export default function GalleryScreen() {
   ]);
   const openAsset = (asset: MediaAsset) => { if (navigating.current) return; navigating.current = true; router.push({ pathname: '/video/[id]', params: { id: asset.id } }); };
   const clearFilters = () => { generation.current++; changeQuery(''); setFilter('all'); setSelected([]); setPageError(''); };
-  return <View style={styles.container}>
+  return <View style={[styles.container, layout.contentStyle]}>
     <Text style={styles.title}>结果</Text><Text style={styles.subtitle}>浏览与播放作品，长按可选择多个作品。</Text>
     {selected.length > 0 ? <View style={styles.selectionPanel}>
       <View style={styles.selectionHeading}><Text accessibilityLiveRegion="polite" style={styles.selectionTitle}>已选择 {selected.length} 项</Text><ListAction secondary label="取消选择" onPress={() => setSelected([])} /></View>
@@ -102,9 +108,9 @@ export default function GalleryScreen() {
     <View style={styles.search}><AppIcon name="search" size={21} color={COLORS.textSubtle} /><TextInput accessibilityLabel="搜索作品" value={query} onChangeText={changeQuery} placeholder="搜索 Prompt 或任务 ID..." placeholderTextColor={COLORS.textSubtle} style={styles.searchInput} />{query ? <Pressable accessibilityRole="button" accessibilityLabel="清除作品搜索" onPress={() => changeQuery('')} style={({ pressed }) => [styles.clearSearch, pressed && listUI.pressed]}><AppIcon name="close" size={18} color={COLORS.textMuted} /></Pressable> : null}</View>
     <ListFilters label="作品状态" options={filters} value={filter} onChange={value => { if (value === filter) return; generation.current++; setSelected([]); setFilter(value); }} />
     {error ? <View style={listUI.notice}><Text accessibilityRole="alert" style={styles.errorText}>{error}</Text><ListAction secondary icon="refresh" label="重试读取作品列表" onPress={() => void load()} /></View> : null}
-    <FlatList data={assets} numColumns={2} keyExtractor={item => item.id} columnWrapperStyle={styles.row} contentContainerStyle={styles.list} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled" refreshing={loading && assets.length > 0} onRefresh={() => void load()} onEndReached={() => { if (!pageError) void loadMore(); }} onEndReachedThreshold={0.6}
+    <FlatList key={columns} onLayout={event => setListWidth(event.nativeEvent.layout.width)} data={assets} numColumns={columns} keyExtractor={item => item.id} columnWrapperStyle={columns > 1 ? styles.row : undefined} contentContainerStyle={styles.list} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled" refreshing={loading && assets.length > 0} onRefresh={() => void load()} onEndReached={() => { if (!pageError) void loadMore(); }} onEndReachedThreshold={0.6}
       ListFooterComponent={loadingMore ? <ActivityIndicator color={COLORS.primaryActive} /> : pageError ? <ListAction secondary icon="refresh" label={pageError} onPress={() => void loadMore()} /> : assets.length && !cursor ? <Text style={listUI.footer}>已显示全部作品</Text> : null}
-      renderItem={({ item }) => <GalleryCard asset={item} selected={selected.includes(item.id)} onLongPress={() => toggle(item.id)} onPress={() => selected.length ? toggle(item.id) : openAsset(item)} />}
+      renderItem={({ item }) => <GalleryCard width={cardWidth} asset={item} selected={selected.includes(item.id)} onLongPress={() => toggle(item.id)} onPress={() => selected.length ? toggle(item.id) : openAsset(item)} />}
       ListEmptyComponent={error ? null : <ListEmptyState icon={query || filter !== 'all' ? 'search' : 'movie_filter'} loading={loading}
         title={loading ? '正在加载作品' : query || filter !== 'all' ? '没有符合条件的作品' : '还没有视频作品'}
         description={loading ? '正在整理视频与封面，请稍候。' : query || filter !== 'all' ? '试试其他关键词，或清除筛选查看全部作品。' : '生成的视频会汇集在这里，随时浏览、播放与管理。'}

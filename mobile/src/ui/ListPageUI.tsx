@@ -40,11 +40,11 @@ export function ListEmptyState({ icon, title, description, loading = false, acti
 
 export const listUI = StyleSheet.create({
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 16 },
-  filter: { flexGrow: 1, minHeight: 48, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center' },
+  filter: { flexGrow: 1, maxWidth: '100%', minHeight: 48, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center' },
   filterActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  filterText: { color: COLORS.textMuted, fontSize: 13, fontWeight: '700' },
+  filterText: { textAlign: 'center', color: COLORS.textMuted, fontSize: 13, fontWeight: '700' },
   filterTextActive: { color: COLORS.onPrimary },
-  action: { minHeight: 48, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, backgroundColor: COLORS.primary, borderWidth: 1, borderColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  action: { maxWidth: '100%', minHeight: 48, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, backgroundColor: COLORS.primary, borderWidth: 1, borderColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   actionText: { color: COLORS.onPrimary, fontSize: 14, fontWeight: '700', flexShrink: 1, textAlign: 'center' },
   secondaryAction: { backgroundColor: COLORS.surface, borderColor: COLORS.border },
   secondaryText: { color: COLORS.primaryActive },
