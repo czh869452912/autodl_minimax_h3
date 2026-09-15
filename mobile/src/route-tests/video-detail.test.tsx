@@ -24,7 +24,7 @@ const mockProbeVideoStructure = jest.fn(async (_source: string) => undefined);
 const task = {
   id: 'task-1', prompt: 'A very long prompt. '.repeat(300), status: 'SUCCESS' as const,
   resolution: '768p竖', duration: 5, videoUrl: 'https://example/video.mp4',
-  downloadState: 'DOWNLOADING' as const, createdAt: 1, updatedAt: 2,
+  downloadState: 'IDLE' as const, createdAt: 1, updatedAt: 2,
 };
 
 jest.mock('expo-router', () => ({
@@ -224,6 +224,28 @@ describe('video detail screen', () => {
     await act(async () => taskProjectionEvents.invalidate());
     expect(tree.root.findAllByProps({ accessibilityLabel: '重试下载视频' })).toHaveLength(0);
     expect(tree.root.findByProps({ accessibilityLabel: '复制诊断详情' })).toBeTruthy();
+  });
+
+  it.each(['ENQUEUED', 'DOWNLOADING'] as const)('shows %s progress instead of playing either remote URL, then restores local playback', async (downloadState) => {
+    mockGet.mockResolvedValue({ ...task, downloadState, downloadProgress: 0.42 });
+    mockMediaGet.mockResolvedValue({ taskId: task.id, sourceUrl: 'https://example/asset.mp4' });
+    let tree!: ReturnType<typeof create>;
+    await act(async () => { tree = create(<VideoDetailScreen />); });
+    expect(tree.root.findAllByProps({ testID: 'video-player-mock' })).toHaveLength(0);
+    expect(tree.root.findByProps({ accessibilityLabel: downloadState === 'ENQUEUED' ? '等待下载' : '下载中 42%' })).toBeTruthy();
+    expect(tree.root.findByProps({ accessibilityLabel: '下载视频' }).props.disabled).toBe(true);
+    mockResolveLocal.mockResolvedValue('file:///private.mp4');
+    mockGet.mockResolvedValue({ ...task, downloadState: 'DOWNLOADED' });
+    await act(async () => taskProjectionEvents.invalidate());
+    expect(tree.root.findByProps({ testID: 'video-player-mock' }).props.source).toBe('file:///private.mp4');
+  });
+
+  it('keeps an available local video playable while a download is queued', async () => {
+    mockGet.mockResolvedValue({ ...task, downloadState: 'ENQUEUED' });
+    mockResolveLocal.mockResolvedValue('file:///private.mp4');
+    let tree!: ReturnType<typeof create>;
+    await act(async () => { tree = create(<VideoDetailScreen />); });
+    expect(tree.root.findByProps({ testID: 'video-player-mock' }).props.source).toBe('file:///private.mp4');
   });
 
   it('does not offer playback or downloads for a failed generation with a stale URL', async () => {

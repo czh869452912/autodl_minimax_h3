@@ -68,11 +68,12 @@ export default function VideoDetailScreen() {
 
   const generated = task.status === 'SUCCESS' || task.status === 'PARTIAL_SUCCESS';
   const downloadFailed = task.downloadState === 'DOWNLOAD_FAILED' && !localSource;
-  const source = localSource || (generated && !downloadFailed ? asset?.sourceUrl || task.videoUrl : '') || '';
   const mediaBusy = redownloading || task.downloadState === 'DOWNLOADING' || task.downloadState === 'ENQUEUED';
+  const source = localSource || (generated && !downloadFailed && !mediaBusy ? asset?.sourceUrl || task.videoUrl : '') || '';
   const canDownload = generated && !localSource && task.downloadError !== 'ARTIFACT_MEDIA_UNSUPPORTED';
   const errors = [task.syncError, !localSource ? task.downloadError : undefined, task.exportError].filter(Boolean);
-  const emptyTitle = downloadFailed ? '视频下载失败' : task.status === 'FAILED' ? '视频生成失败' : task.status === 'CANCELLED' ? '任务已取消' : !generated ? `生成${formatTaskStatus(task.status)}` : '视频源不可用';
+  const downloadPending = generated && mediaBusy;
+  const emptyTitle = downloadPending ? (redownloading ? '正在准备下载…' : formatDownloadStatus(task.downloadState, task.downloadProgress)) : downloadFailed ? '视频下载失败' : task.status === 'FAILED' ? '视频生成失败' : task.status === 'CANCELLED' ? '任务已取消' : !generated ? `生成${formatTaskStatus(task.status)}` : '视频源不可用';
   const copyPrompt = async () => {
     if (!task.prompt.trim()) { Alert.alert('无法复制', '当前作品没有 Prompt'); return; }
     try {
@@ -107,7 +108,7 @@ export default function VideoDetailScreen() {
   return <SafeAreaView style={styles.safe} edges={['top', 'bottom']}><ScrollView testID="detail-content" style={styles.container} contentContainerStyle={styles.content}>
     <View style={styles.header}><Pressable accessibilityRole="button" accessibilityLabel="返回上一页" onPress={() => router.back()} hitSlop={10} style={styles.back}><Text style={[styles.backGlyph, { color: COLORS.primaryActive }]}>‹</Text><Text style={styles.backText}>返回上一页</Text></Pressable><Text style={styles.title}>视频详情</Text></View>
     {loadError ? <Pressable accessibilityRole="button" accessibilityLabel="重试读取作品" onPress={() => void reloadTaskAndAsset()}><Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{loadError} · 点击重试</Text></Pressable> : null}
-    <View testID="adaptive-media-region" style={source ? styles.mediaRegion : styles.emptyMediaRegion}><View testID="video-frame" style={styles.player}>{source ? <VideoPlayer source={source} poster={[asset?.posterPath, task.thumbnailUrl].find(uri => uri?.includes('/posters/sw-v3-'))} validateSource={localSource && source === localSource ? probeVideoStructure : undefined} onInvalidSource={localSource && source === localSource ? redownloadInvalidSource : undefined} recovering={redownloading} /> : <View accessibilityLabel={emptyTitle} style={styles.sourceEmpty}><AppIcon name="movie_filter" size={30} color={COLORS.textSubtle} /><Text style={styles.sourceEmptyText}>{emptyTitle}</Text><Text style={styles.sourceEmptyHint}>{downloadFailed ? '视频已生成，下载完成后即可播放和保存' : generated ? '请等待下载完成或重新下载视频' : '可在任务队列查看生成进度和状态'}</Text></View>}</View></View>
+    <View testID="adaptive-media-region" style={source ? styles.mediaRegion : styles.emptyMediaRegion}><View testID="video-frame" style={styles.player}>{source ? <VideoPlayer source={source} poster={[asset?.posterPath, task.thumbnailUrl].find(uri => uri?.includes('/posters/sw-v3-'))} validateSource={localSource && source === localSource ? probeVideoStructure : undefined} onInvalidSource={localSource && source === localSource ? redownloadInvalidSource : undefined} recovering={redownloading} /> : <View accessibilityLabel={emptyTitle} accessibilityLiveRegion="polite" style={styles.sourceEmpty}>{downloadPending ? <ActivityIndicator color={COLORS.primaryActive} /> : <AppIcon name="movie_filter" size={30} color={COLORS.textSubtle} />}<Text style={styles.sourceEmptyText}>{emptyTitle}</Text><Text style={styles.sourceEmptyHint}>{downloadPending || downloadFailed ? '视频已生成，下载完成后即可播放和保存' : generated ? '请等待下载完成或重新下载视频' : '可在任务队列查看生成进度和状态'}</Text></View>}</View></View>
     {actionNotice ? <Text accessibilityLiveRegion="polite" style={styles.muted}>{actionNotice}</Text> : null}
     {(errors.length > 0 || canDownload) ? <View style={styles.recoveryCard}>
       <Text style={styles.sectionTitle}>{downloadFailed ? '下载未完成' : errors.length ? '任务异常' : '下载到应用'}</Text>

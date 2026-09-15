@@ -1,7 +1,8 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Alert, Pressable, Text } from 'react-native';
+import { Alert, StyleSheet, Text } from 'react-native';
 import { TaskCardRow } from './TaskCardRow';
+import { COLORS } from '../ui/theme';
 import type { TaskCard } from './taskCard';
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
@@ -99,5 +100,25 @@ test('opens details from the visible action and separates failure status from me
   expect(texts).toContain('768p · 5s');
   expect(texts).toContain('下载失败');
   expect(texts).not.toContain('成功');
+  act(() => tree.unmount());
+});
+
+
+test.each([
+  ['PARTIAL_SUCCESS', 'DOWNLOADED', 'NOT_REQUESTED', '部分成功', COLORS.warning],
+  ['PARTIAL_SUCCESS', 'DOWNLOAD_FAILED', 'NOT_REQUESTED', '部分成功 · 下载失败', COLORS.danger],
+  ['PARTIAL_SUCCESS', 'DOWNLOADED', 'EXPORT_FAILED', '部分成功 · 保存失败', COLORS.danger],
+  ['RUNNING', 'DOWNLOAD_FAILED', 'NOT_REQUESTED', '执行中', COLORS.primaryActive],
+  ['RUNNING', 'IDLE', 'EXPORT_FAILED', '执行中', COLORS.primaryActive],
+  ['QUEUED', 'DOWNLOAD_FAILED', 'EXPORT_FAILED', '排队中', COLORS.warning],
+  ['SUCCESS', 'DOWNLOAD_FAILED', 'NOT_REQUESTED', '下载失败', COLORS.danger],
+  ['SUCCESS', 'DOWNLOADED', 'EXPORT_FAILED', '保存失败', COLORS.danger],
+] as const)('keeps the status label and color consistent for %s / %s / %s', (status, downloadState, exportState, label, color) => {
+  const item: TaskCard = { id: 'status-test', prompt: 'A video', status, downloadState, exportState, resolution: '768p', duration: 5, createdAt: 1, updatedAt: 2 };
+  let tree!: ReturnType<typeof create>;
+  act(() => { tree = create(<TaskCardRow item={item} busy={false} onDownload={jest.fn()} onExport={jest.fn()} onRemove={jest.fn()} onOpen={jest.fn()} />); });
+  const badge = tree.root.findAllByType(Text).find(node => node.props.children === label)!;
+  expect(badge).toBeDefined();
+  expect(StyleSheet.flatten(badge.props.style).color).toBe(color);
   act(() => tree.unmount());
 });
