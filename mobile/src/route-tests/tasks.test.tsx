@@ -19,7 +19,7 @@ jest.mock('../tasks/taskServices', () => ({ getTaskServices: () => ({
 }) }));
 jest.mock('../settings/storage', () => ({ readSettings: async () => ({ keepPrivateCopy: false }) }));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
-jest.mock('../native/taskMonitor', () => ({ getTaskMonitorStatus: async () => ({ running: false }), startTaskMonitor: (ids: string[]) => mockMonitor(ids), stopTaskMonitor: async () => true }));
+jest.mock('../native/taskMonitor', () => ({ getTaskMonitorStatus: async () => ({ running: false }), subscribeTaskMonitorStatus: () => () => undefined, startTaskMonitor: (ids: string[]) => mockMonitor(ids), stopTaskMonitor: async () => true }));
 import TasksScreen from '../../app/(tabs)/tasks';
 import { executorEvents } from '../tasks/executorEvents';
 import { taskProjectionEvents } from '../tasks/taskProjectionEvents';

@@ -234,7 +234,7 @@ test.each([
   );
   try {
     expect(() => runAppMigrations(db as never, { backup: jest.fn(), now: () => 12 }))
-      .toThrow('MIGRATION_6_TO_10_FAILED');
+      .toThrow('MIGRATION_6_TO_12_FAILED');
     expect(userVersion(db)).toBe(6);
     expect(columnNames(db, 'workflow_registry')).not.toContain('hash_scheme');
     expect(tableNames(db)).not.toContain('workflow_registry_releases');
@@ -365,9 +365,9 @@ test('opens a future schema readonly without mutating it', () => {
   const db = createRealSqliteTestDb();
   const backup = jest.fn();
   try {
-    db.execSync('PRAGMA user_version = 11');
-    expect(runAppMigrations(db as never, { backup })).toEqual({ mode: 'future', fromVersion: 11 });
-    expect(userVersion(db)).toBe(11);
+    db.execSync(`PRAGMA user_version = ${APP_SCHEMA_VERSION + 1}`);
+    expect(runAppMigrations(db as never, { backup })).toEqual({ mode: 'future', fromVersion: APP_SCHEMA_VERSION + 1 });
+    expect(userVersion(db)).toBe(APP_SCHEMA_VERSION + 1);
     expect(backup).not.toHaveBeenCalled();
   } finally {
     db.close();
@@ -380,13 +380,13 @@ test('records v7 backup failure without applying the v8 projection migration', (
     expect(() => runAppMigrations(db as never, {
       backup: () => { throw new Error('private backup path must not escape'); },
       now: () => 71,
-    })).toThrow('BACKUP_7_TO_10_FAILED');
+    })).toThrow('BACKUP_7_TO_12_FAILED');
     expect(userVersion(db)).toBe(7);
     expect(tableNames(db)).not.toContain('task_projection_state');
     expect(tableNames(db)).not.toContain('executor_wake_state');
     expect(getRecoveryState(db as never)).toEqual({
       readonly: true,
-      diagnostic: 'BACKUP_7_TO_10_FAILED',
+      diagnostic: 'BACKUP_7_TO_12_FAILED',
       createdAt: 71,
     });
   } finally {
@@ -400,12 +400,12 @@ test('records backup failure before migration starts', () => {
     expect(() => runAppMigrations(db as never, {
       backup: () => { throw new Error('private path and token must not escape'); },
       now: () => 41,
-    })).toThrow('BACKUP_5_TO_10_FAILED');
+    })).toThrow('BACKUP_5_TO_12_FAILED');
     expect(userVersion(db)).toBe(5);
     expect(tableNames(db)).not.toContain('workflow_operations');
     expect(getRecoveryState(db as never)).toEqual({
       readonly: true,
-      diagnostic: 'BACKUP_5_TO_10_FAILED',
+      diagnostic: 'BACKUP_5_TO_12_FAILED',
       createdAt: 41,
     });
   } finally {
@@ -420,12 +420,12 @@ test('rolls back migration DDL and records a redacted recovery marker', () => {
     if (sql.includes('artifact_blobs')) throw new Error('Authorization: Bearer secret');
     return execSync(sql);
   });
-  expect(() => runAppMigrations(db as never, { backup: jest.fn(), now: () => 99 })).toThrow('MIGRATION_5_TO_10_FAILED');
+  expect(() => runAppMigrations(db as never, { backup: jest.fn(), now: () => 99 })).toThrow('MIGRATION_5_TO_12_FAILED');
   expect(userVersion(db)).toBe(5);
   expect(tableNames(db)).not.toContain('workflow_operations');
   expect(getRecoveryState(db as never)).toEqual({
     readonly: true,
-    diagnostic: 'MIGRATION_5_TO_10_FAILED',
+    diagnostic: 'MIGRATION_5_TO_12_FAILED',
     createdAt: 99,
   });
   db.close();
@@ -440,10 +440,10 @@ test('a failed fresh v0 remains readonly on the next cold start', () => {
     return execSync(sql);
   });
   try {
-    expect(() => runAppMigrations(db as never, { now: () => 52 })).toThrow('MIGRATION_0_TO_10_FAILED');
+    expect(() => runAppMigrations(db as never, { now: () => 52 })).toThrow('MIGRATION_0_TO_12_FAILED');
     expect(userVersion(db)).toBe(0);
     expect(() => runAppMigrations(db as never, { now: () => 53 })).toThrow(
-      new AppMigrationError('MIGRATION_0_TO_10_FAILED', 0),
+      new AppMigrationError('MIGRATION_0_TO_12_FAILED', 0),
     );
     expect(getRecoveryState(db as never)?.createdAt).toBe(52);
   } finally {
@@ -454,8 +454,8 @@ test('a failed fresh v0 remains readonly on the next cold start', () => {
 test('a recovery-only v0 reopens readonly instead of as legacy', () => {
   const db = createRealSqliteTestDb();
   try {
-    markRecovery(db as never, 'MIGRATION_0_TO_10_FAILED', 61);
-    expect(() => runAppMigrations(db as never)).toThrow('MIGRATION_0_TO_10_FAILED');
+    markRecovery(db as never, 'MIGRATION_0_TO_12_FAILED', 61);
+    expect(() => runAppMigrations(db as never)).toThrow('MIGRATION_0_TO_12_FAILED');
     expect(userVersion(db)).toBe(0);
   } finally {
     db.close();

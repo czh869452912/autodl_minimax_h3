@@ -38,6 +38,10 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   private val integrity = MediaIntegrity(context)
   private val compatibility = VideoCompatibility(context)
   private val transferPolicy = ArtifactTransferPolicy()
+  private val dohPrototype = if (BuildConfig.DEBUG && BuildConfig.ARTIFACT_DOH_PROTOTYPE) DohTransferPrototype(
+    File(context.filesDir, "cas/parts"), { source, checkCancelled -> integrity.sha256(source, checkCancelled) },
+    { context.getSystemService(android.net.ConnectivityManager::class.java).activeNetwork?.let { ArtifactNetworkBinding(it.networkHandle.toString(), it.socketFactory) } },
+  ) else null
   private val artifactTransfer = ArtifactTransfer(
     partsDir = File(context.filesDir, "cas/parts"),
     httpClient = OkHttpClient(),
@@ -48,6 +52,7 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   override fun getName() = "AutoDLMedia"
 
   override fun invalidate() {
+    dohPrototype?.close()
     compatibility.close()
     executors.shutdown()
     super.invalidate()
@@ -140,7 +145,8 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   fun transferArtifact(options: ReadableMap, promise: Promise) {
     executors.executeMedia {
       try {
-        val result = artifactTransfer.transfer(transferRequest(options))
+        val request = transferRequest(options)
+        val result = dohPrototype?.transfer(request) ?: artifactTransfer.transfer(request)
         promise.resolve(Arguments.createMap().apply {
           putString("partUri", result.partUri)
           putString("finalUrl", result.finalUrl)
@@ -168,7 +174,7 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
       ) {
         promise.reject("ARTIFACT_TRANSFER_REQUEST_INVALID", "operation identity is invalid")
       } else {
-        promise.resolve(artifactTransfer.cancel(operationId.trim(), operationAttempt.toInt()))
+        promise.resolve(dohPrototype?.cancel(operationId.trim(), operationAttempt.toInt()) ?: artifactTransfer.cancel(operationId.trim(), operationAttempt.toInt()))
       }
     }
   }

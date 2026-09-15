@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { AppIcon } from '../../src/ui/icons';
@@ -10,6 +10,8 @@ import { taskProjectionEvents } from '../../src/tasks/taskProjectionEvents';
 import type { TaskCard } from '../../src/tasks/taskCard';
 import { readSettings } from '../../src/settings/storage';
 import { getTaskMonitorStatus, startTaskMonitor, stopTaskMonitor } from '../../src/native/taskMonitor';
+import { useTaskMonitorStatus } from '../../src/native/useTaskMonitorStatus';
+import { backgroundRegistration } from '../../src/tasks/background';
 
 export default function TasksScreen() {
   const [filter, setFilter] = useState<'all' | 'active' | 'failed'>('all');
@@ -19,12 +21,13 @@ export default function TasksScreen() {
   const [maintenanceError, setMaintenanceError] = useState('');
   const monitorLock = useRef(false);
   const [monitorBusy, setMonitorBusy] = useState(false);
-  const [monitoring, setMonitoring] = useState(false);
+  const { status: monitor, setStatus: setMonitor } = useTaskMonitorStatus();
+  const monitoring = monitor.running;
+  const background = useSyncExternalStore(backgroundRegistration.subscribe, backgroundRegistration.getSnapshot);
   const [refreshing, setRefreshing] = useState(false);
   const refreshLock = useRef(false);
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
   const busy = useRef(new Set<string>());
-  useEffect(() => { let active = true; void getTaskMonitorStatus().then(value => { if (active) setMonitoring(value.running); }).catch(() => undefined); return () => { active = false; }; }, []);
   const refresh = useCallback(() => {
     if (refreshLock.current) return;
     refreshLock.current = true; setRefreshing(true);
@@ -49,10 +52,12 @@ export default function TasksScreen() {
     if (monitorLock.current) return;
     monitorLock.current = true; setMonitorBusy(true);
     try {
-      if (monitoring) { await stopTaskMonitor(); setMonitoring(false); return; }
+      const current = await getTaskMonitorStatus();
+      if (current.running) { await stopTaskMonitor(); setMonitor(await getTaskMonitorStatus()); return; }
       const result = await startTaskMonitor(await getTaskServices().listActiveTaskIds());
-      if (result.started) setMonitoring(true);
-      else Alert.alert('无法开启持续监控', result.reason === 'no-active-tasks' ? '当前没有可监控的任务。' : '请检查通知权限或稍后重试。');
+      setMonitor(await getTaskMonitorStatus());
+      if (result.started && !result.notificationsEnabled) Alert.alert('持续监控已开启', result.permissionRequestFailed ? '通知权限请求未完成，监控仍会运行；可到系统设置开启通知以接收完成提醒。' : '通知权限未开启，监控仍会运行，但无法显示普通完成提醒。');
+      else if (!result.started) Alert.alert('无法开启持续监控', result.reason === 'no-active-tasks' ? '当前没有可监控的任务。' : '系统未能启动持续监控，请保持应用在前台后重试。');
     } catch (error) { Alert.alert('开启失败', String(error)); } finally { monitorLock.current = false; setMonitorBusy(false); }
   };
   const updated = snapshot.read.lastCheckedAt == null ? '' : new Date(snapshot.read.lastCheckedAt).toTimeString().slice(0, 5);
@@ -67,6 +72,8 @@ export default function TasksScreen() {
       <Pressable accessibilityRole="button" accessibilityLabel="刷新任务" accessibilityState={{ busy: refreshing }} onPress={refresh} style={styles.refresh}>{refreshing ? <ActivityIndicator size="small" /> : <AppIcon name="refresh" size={20} color={COLORS.textMuted} />}</Pressable>
     </View></View>
     {maintenanceError ? <Text accessibilityRole="alert" style={styles.syncError}>{maintenanceError}</Text> : null}
+    {background.phase === 'failed' ? <View><Text accessibilityRole="alert" style={styles.syncError}>后台同步注册失败，回到应用时会重试；前台任务仍可继续。</Text><Pressable accessibilityRole="button" accessibilityLabel="重试后台同步注册" style={{ minHeight: 48, justifyContent: 'center' }} onPress={() => { void backgroundRegistration.retry(); }}><Text>重试后台同步注册</Text></Pressable></View> : null}
+    {monitoring ? <Text style={styles.syncStatus}>持续监控所有任务；任务及下载、保存操作完成后自动停止。系统可能延迟或终止后台执行。{monitor.notificationsEnabled === false ? '完成通知未开启。' : ''}</Text> : monitor.stopReason === 'user' ? <Text style={styles.syncStatus}>持续监控已由你停止。</Text> : monitor.stopReason === 'timeout' ? <Text style={styles.syncError}>已达到系统后台运行时限，持续监控已停止；可重新开启。</Text> : monitor.stopReason === 'complete' ? <Text style={styles.syncStatus}>任务及相关操作已完成，持续监控已自动停止。</Text> : monitor.enabled ? <Text style={styles.syncError}>持续监控当前未运行，可重新开启。</Text> : monitor.stopReason === 'headless-failed' || monitor.stopReason === 'start-failed' ? <Text style={styles.syncError}>持续监控启动失败，请重试。</Text> : null}
     <View accessibilityRole="radiogroup" accessibilityLabel="任务筛选" style={{ flexDirection: 'row', gap: 12 }}>{(['all','active','failed'] as const).map(value => <Pressable key={value} accessibilityRole="radio" accessibilityState={{ checked: filter === value }} onPress={() => { setFilter(value); setPageError(''); }} style={{ minHeight: 48, justifyContent: 'center' }}><Text>{value === 'all' ? '全部' : value === 'active' ? '进行中' : '失败'}{filter === value ? ' ✓' : ''}</Text></Pressable>)}</View>
     <FlatList keyboardDismissMode="on-drag" data={snapshot.items} initialNumToRender={12} maxToRenderPerBatch={8} windowSize={7} updateCellsBatchingPeriod={50} removeClippedSubviews
       keyExtractor={item => item.id} contentContainerStyle={styles.list} refreshing={refreshing} onRefresh={refresh}

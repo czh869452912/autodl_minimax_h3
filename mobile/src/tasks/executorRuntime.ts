@@ -34,6 +34,7 @@ import { createExecutorWakeRepository } from './executorWakeRepository';
 import { createExecutorSettingsCache } from './syncPolicy';
 import { projectTerminalNotifications } from './terminalEvents';
 import { repairStaleTaskStatuses } from './taskProjectionRepair';
+import { createMonitorQueue } from './monitorQueue';
 
 function createApplicationExecutor(database: AppDatabase) {
   const taskStore = createTaskRepository(database);
@@ -170,7 +171,7 @@ function createApplicationExecutor(database: AppDatabase) {
       const result = await cycle.run({ reason: request.trigger === 'background' ? 'background' : request.trigger === 'service' ? 'service' : 'foreground' });
       return { ...result, budgetExhausted: result.budgetExhausted || repair.hasMore };
     },
-    pendingSummary: request => operations.pendingSummary({ now: Date.now(), ...(request.taskIds ? { jobIds: [...request.taskIds] } : {}) }),
+    pendingSummary: () => operations.pendingSummary({ now: Date.now() }),
     maintain: async () => {
       await repairTaskProjections(32);
       await reconcileMediaState({ db: database, fileExists: async uri => { const info = await FileSystem.getInfoAsync(uri); return info.exists && !info.isDirectory; }, removeCasPath });
@@ -196,4 +197,11 @@ export const executorRunner: ExecutorRunner = {
 };
 export async function readTerminalNotifications(taskIds: string[]) {
   return (await currentExecutor()).readTerminalNotifications(taskIds);
+}
+
+export async function getMonitorQueue() {
+  const db = getDatabase();
+  await assertAppDatabaseWritableAsync(db);
+  if (await readPendingMaintenance()) throw new Error('DATABASE_MAINTENANCE_PENDING');
+  return createMonitorQueue(db);
 }

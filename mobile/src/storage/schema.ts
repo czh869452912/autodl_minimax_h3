@@ -1,7 +1,8 @@
-export const APP_SCHEMA_VERSION = 10;
+export const APP_SCHEMA_VERSION = 12;
 export const RECOVERY_TABLE = 'app_database_recovery';
 
 export const APP_TABLES = [
+  'task_monitor_events',
   'media_asset_tombstones', 'workflow_artifacts', 'workflow_jobs', 'workflow_operations', 'workflow_job_events',
   'artifact_blob_refs', 'artifact_blobs', 'media_deliveries', 'media_assets', 'tasks',
   'workflow_registry_releases', 'workflow_registry_active', 'workflow_registry', 'prompt_drafts', 'agent_threads',
@@ -79,4 +80,15 @@ export const V10_SCHEMA_STATEMENTS = [
   "CREATE TRIGGER IF NOT EXISTS media_deliveries_respect_deletion BEFORE INSERT ON media_deliveries WHEN EXISTS(SELECT 1 FROM media_asset_tombstones WHERE id=NEW.asset_id) BEGIN SELECT RAISE(IGNORE); END",
 ] as const;
 
-export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS] as const;
+export const V11_SCHEMA_STATEMENTS = [
+  'CREATE TABLE IF NOT EXISTS task_monitor_events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE)',
+  "CREATE TRIGGER IF NOT EXISTS task_monitor_event_insert AFTER INSERT ON workflow_job_events WHEN NEW.event_type IN ('STATUS_RECONCILED','cancelled') BEGIN INSERT INTO task_monitor_events(event_id) VALUES(NEW.id); END",
+  'CREATE TRIGGER IF NOT EXISTS task_monitor_event_delete AFTER DELETE ON workflow_job_events BEGIN DELETE FROM task_monitor_events WHERE event_id=OLD.id; END',
+] as const;
+
+export const V12_SCHEMA_STATEMENTS = [
+  'DROP TRIGGER IF EXISTS task_monitor_event_insert',
+  "CREATE TRIGGER task_monitor_event_insert AFTER INSERT ON workflow_job_events WHEN NEW.event_type IN ('STATUS_RECONCILED','cancelled','SUBMIT_FAILED','STATUS_SYNC_FAILED') BEGIN INSERT INTO task_monitor_events(event_id) VALUES(NEW.id); END",
+] as const;
+
+export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS] as const;

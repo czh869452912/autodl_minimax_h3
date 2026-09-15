@@ -5,6 +5,7 @@ import { createInitializedRealSqliteTestDb } from '../../test/realSqlite';
 import { createJobStateRepository } from '../../tasks/jobStateStore';
 import { createOperationRepository } from './operationRepository';
 import { createDurableExecutor } from './durableExecutor';
+import { createMonitorQueue } from '../../tasks/monitorQueue';
 
 const workflow = { id: 'demo', version: '1.0.0', outputs: { artifacts: [{ kind: 'video', from: 'result.video' }] } } as never;
 const draft = { workflowId: 'demo', workflowVersion: '1.0.0', contentHash: 'hash', inputs: { prompt: 'hello' } } as never;
@@ -39,6 +40,27 @@ function setup() {
   });
   return { db, jobs, operations, adapter, runtime, service, setNow: (value: number) => { clock = value; } };
 }
+
+test.each(['submit', 'status'] as const)('terminal %s failure reaches the real monitor stream without a status payload', async stage => {
+  const value = setup();
+  try {
+    const queue = createMonitorQueue(value.db as never);
+    const cursor = await queue.cursor();
+    const job = await value.service.queueSubmission(input(`failure-${stage}`));
+    if (stage === 'submit') value.adapter.validateCredentials.mockResolvedValueOnce({ ok: false });
+    const [submit] = await claimOperations(value.operations, { kind: 'SUBMIT', owner: 'worker', now: 100, leaseMs: 50, limit: 1 });
+    await value.service.handle(submit, 'worker');
+    if (stage === 'status') {
+      value.adapter.getStatus.mockRejectedValueOnce(new ProviderError('demo', 'status', 'http', 'rejected', 400));
+      const [poll] = await claimOperations(value.operations, { kind: 'STATUS_SYNC', owner: 'worker', now: 10000, leaseMs: 50, limit: 1 });
+      await value.service.handle(poll, 'worker');
+    }
+    expect((await value.jobs.get(job.id))?.status).toBe('FAILED');
+    const batch = await queue.read(cursor);
+    expect(batch.events).toEqual([expect.objectContaining({ taskId: job.id, status: 'FAILED' })]);
+    expect((await queue.read(batch.cursor)).events).toEqual([]);
+  } finally { value.db.close(); }
+});
 
 test('duplicate queueing returns one job and one submit operation without provider calls', async () => {
   const value = setup();

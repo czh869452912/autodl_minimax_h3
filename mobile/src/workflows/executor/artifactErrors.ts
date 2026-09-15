@@ -62,6 +62,8 @@ function knownCode(value: unknown): value is ArtifactErrorCode {
 }
 
 export function artifactNetworkMessage(code: string | undefined, reason?: unknown): string | undefined {
+  if (code === 'ARTIFACT_PRIVATE_NETWORK') return '下载域名指向私有或保留地址，已停止连接。请检查下载来源和 DNS 配置后手动重试。';
+  if (code === 'ARTIFACT_NETWORK' || code === 'ARTIFACT_CONNECT_TIMEOUT' || code === 'ARTIFACT_IDLE_TIMEOUT') return '下载连接失败或超时，将自动重试。请检查网络和代理连接。';
   if (code === 'ARTIFACT_VIRTUAL_DNS') {
     return '下载域名解析到疑似 VPN Fake-IP 地址，请将下载域名设为真实 DNS 解析后重试。';
   }
@@ -71,6 +73,24 @@ export function artifactNetworkMessage(code: string | undefined, reason?: unknow
     return `下载域名解析失败，将自动重试。${safeReason}`;
   }
   return undefined;
+}
+
+export const ARTIFACT_NETWORK_HELP_CODES = [
+  'ARTIFACT_VIRTUAL_DNS', 'ARTIFACT_DNS_FAILED', 'ARTIFACT_PRIVATE_NETWORK',
+  'ARTIFACT_NETWORK', 'ARTIFACT_CONNECT_TIMEOUT', 'ARTIFACT_IDLE_TIMEOUT', 'ARTIFACT_HTTP_RETRYABLE',
+] as const satisfies readonly ArtifactErrorCode[];
+
+export function hasArtifactNetworkHelp(error?: string): boolean {
+  if (!error) return false;
+  // Current stored projections contain display text; derive matching from the
+  // same formatter so editing copy cannot silently remove the help affordance.
+  if (ARTIFACT_NETWORK_HELP_CODES.some(code => {
+    const message = artifactNetworkMessage(code);
+    return error === code || error.startsWith(`${code} `) || error.startsWith(`${code}:`)
+      || Boolean(message && error.startsWith(message));
+  })) return true;
+  // Compatibility for historical Chinese projections and previous UI mappings.
+  return /Fake-IP|域名解析|私有或保留地址|下载连接|网络连接失败/.test(error);
 }
 
 export function artifactError(cause: unknown): ArtifactOperationError {

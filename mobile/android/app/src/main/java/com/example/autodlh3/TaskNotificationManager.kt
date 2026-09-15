@@ -77,10 +77,10 @@ class TaskNotificationManager(private val context: Context) {
     ))
   }
 
-  fun ongoing(taskCount: Int): Notification = NotificationCompat.Builder(context, MONITOR_CHANNEL_ID)
+  fun ongoing(): Notification = NotificationCompat.Builder(context, MONITOR_CHANNEL_ID)
     .setSmallIcon(android.R.drawable.stat_notify_sync)
     .setContentTitle("AutoDL H3")
-    .setContentText(TaskNotificationPolicy.monitorText(taskCount))
+    .setContentText("正在持续监控所有任务及下载、保存操作")
     .setOngoing(true)
     .setContentIntent(tasksIntent(MONITOR_REQUEST_CODE))
     .build()

@@ -5,11 +5,12 @@ import { useEffect, useRef, useState } from 'react';
 import { getDatabase, getDatabaseStartupState, type DatabaseStartupState } from '../src/storage/databaseClient';
 import { isLegacyAppDatabase, resetAppDatabase } from '../src/storage/database';
 import { DatabaseRecoveryScreen } from '../src/storage/DatabaseRecoveryScreen';
-import { registerBackgroundSync } from '../src/tasks/background';
+import { backgroundRegistration } from '../src/tasks/background';
 import { startForegroundTaskExecution } from '../src/tasks/foregroundRuntime';
 import { resumeTaskSyncAfterReconnect } from '../src/tasks/background';
 import * as Network from 'expo-network';
 import { createConnectivityEdgeDetector } from '../src/tasks/networkRecovery';
+import { stopTaskMonitor } from '../src/native/taskMonitor';
 import { COLORS } from '../src/ui/theme';
 import { InvalidMaintenanceRequestError, readPendingMaintenance, scheduleMaintenance } from '../src/storage/pendingMaintenance';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
@@ -31,6 +32,7 @@ export default function RootLayout() {
     void (async () => {
       const request = await readPendingMaintenance();
       if (request) {
+        await stopTaskMonitor();
         if (request.kind === 'restore') restoreFullDatabaseBackup(startupDatabase, request.backup);
         else { createUserDatabaseBackup(startupDatabase); resetAppDatabase(startupDatabase); }
         await scheduleMaintenance();
@@ -71,17 +73,18 @@ export default function RootLayout() {
       );
       return;
     }
-    void registerBackgroundSync();
+    backgroundRegistration.resume();
     let foreground = startForegroundTaskExecution();
     const subscription = AppState.addEventListener('change', (state) => {
       foreground.stop();
-      if (state === 'active') foreground = startForegroundTaskExecution();
+      backgroundRegistration.pause();
+      if (state === 'active') { backgroundRegistration.resume(); foreground = startForegroundTaskExecution(); }
     });
     const networkSubscription = Network.addNetworkStateListener((state) => {
       const reachable = state.isInternetReachable ?? state.isConnected;
-      if (connectivity.current.observe(reachable)) void resumeTaskSyncAfterReconnect();
+      if (connectivity.current.observe(reachable)) void resumeTaskSyncAfterReconnect().catch(() => undefined);
     });
-    return () => { foreground.stop(); subscription.remove(); networkSubscription.remove(); };
+    return () => { backgroundRegistration.stop(); foreground.stop(); subscription.remove(); networkSubscription.remove(); };
   }, [startupState, maintenanceReady]);
   if (!maintenanceReady) return <View style={{ flex: 1, justifyContent: 'center', padding: 24, backgroundColor: COLORS.background }}>{maintenanceError ? <><Text accessibilityRole="alert">{maintenanceError}</Text><Pressable accessibilityRole="button" style={{ minHeight: 48 }} onPress={() => { setMaintenanceError(''); setMaintenanceAttempt(value => value + 1); }}><Text>重试数据维护</Text></Pressable>{invalidMaintenance ? <Pressable accessibilityRole="button" accessibilityLabel="丢弃损坏的维护请求" style={{ minHeight: 48 }} onPress={() => { void scheduleMaintenance().then(() => { setInvalidMaintenance(false); setMaintenanceError(''); setMaintenanceAttempt(value => value + 1); }).catch(() => setMaintenanceError('无法丢弃维护请求，请重试；应用数据未清除。')); }}><Text>丢弃损坏的维护请求（保留应用数据）</Text></Pressable> : null}<Pressable accessibilityRole="button" style={{ minHeight: 48 }} onPress={() => BackHandler.exitApp()}><Text>退出应用</Text></Pressable></> : <ActivityIndicator accessibilityLabel="正在准备数据" />}</View>;
   if (startupState.mode === 'readonly') {
