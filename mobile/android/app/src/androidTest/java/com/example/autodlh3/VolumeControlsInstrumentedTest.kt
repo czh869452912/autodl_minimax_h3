@@ -18,6 +18,21 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class VolumeControlsInstrumentedTest {
+  private fun awaitState(
+    scenario: ActivityScenario<CodecPlaybackTestActivity>,
+    description: String,
+    condition: (CodecPlaybackTestActivity) -> Boolean,
+  ) {
+    val deadline = SystemClock.uptimeMillis() + 10_000
+    do {
+      var matched = false
+      scenario.onActivity { matched = condition(it) }
+      if (matched) return
+      SystemClock.sleep(50)
+    } while (SystemClock.uptimeMillis() < deadline)
+    fail("Timed out waiting for $description")
+  }
+
   @Test fun integratedVolumeControlsRestoreLevelAndSurviveFullscreen() {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     val context = instrumentation.targetContext
@@ -30,7 +45,7 @@ class VolumeControlsInstrumentedTest {
         Intent(context, CodecPlaybackTestActivity::class.java)
           .putExtra("sourceBeforeAttach", source.toURI().toString()),
       ).use { scenario ->
-        SystemClock.sleep(1500)
+        awaitState(scenario, "playback to start") { (it.video.playbackPlayer?.currentPosition ?: 0) > 0 }
         scenario.onActivity {
           val video = it.video
           (video.parent as android.view.ViewGroup).setBackgroundColor(android.graphics.Color.rgb(24, 24, 24))
@@ -60,13 +75,18 @@ class VolumeControlsInstrumentedTest {
           ))
           assertEquals(0.64f, player.volume, 0.001f)
         }
-        SystemClock.sleep(400)
+        awaitState(scenario, "inline layout and controller") {
+          it.video.playerView.height == (220 * it.resources.displayMetrics.density).toInt() &&
+            it.video.playerView.isControllerFullyVisible
+        }
         val screenshot = instrumentation.uiAutomation.takeScreenshot()
         File(context.getExternalFilesDir(null), "volume-controls-inline.png").outputStream().use {
           screenshot.compress(Bitmap.CompressFormat.PNG, 100, it)
         }
         screenshot.recycle()
-        SystemClock.sleep(3100)
+        awaitState(scenario, "volume panel to collapse") {
+          it.video.playerView.findViewById<View>(R.id.player_volume_panel).visibility == View.GONE
+        }
         scenario.onActivity {
           val view = it.video.playerView
           assertEquals(View.GONE, view.findViewById<View>(R.id.player_volume_panel).visibility)
@@ -76,7 +96,9 @@ class VolumeControlsInstrumentedTest {
           view.findViewById<ImageButton>(R.id.player_volume_button).performLongClick()
           assertEquals(0.64f, view.player!!.volume, 0.001f)
         }
-        SystemClock.sleep(400)
+        awaitState(scenario, "fullscreen layout and controller") {
+          it.video.playerView.height > it.video.height && it.video.playerView.isControllerFullyVisible
+        }
         val fullscreen = instrumentation.uiAutomation.takeScreenshot()
         File(context.getExternalFilesDir(null), "volume-controls-fullscreen.png").outputStream().use {
           fullscreen.compress(Bitmap.CompressFormat.PNG, 100, it)
@@ -91,7 +113,7 @@ class VolumeControlsInstrumentedTest {
           assertEquals(position, player.currentPosition)
         }
         // Dialog dispatches onDismiss asynchronously before reattaching the player.
-        instrumentation.waitForIdleSync()
+        awaitState(scenario, "player to return inline") { it.video.playerView.parent === it.video }
         scenario.onActivity {
           val view = it.video.playerView
           assertSame(it.video, view.parent)
@@ -100,7 +122,9 @@ class VolumeControlsInstrumentedTest {
           view.findViewById<ImageButton>(R.id.player_volume_button).performLongClick()
           view.hideController()
         }
-        SystemClock.sleep(500)
+        awaitState(scenario, "hidden controller to close the volume panel") {
+          it.video.playerView.findViewById<View>(R.id.player_volume_panel).visibility == View.GONE
+        }
         scenario.onActivity {
           assertEquals(View.GONE, it.video.playerView.findViewById<View>(R.id.player_volume_panel).visibility)
         }

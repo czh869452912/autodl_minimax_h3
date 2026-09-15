@@ -1,0 +1,7 @@
+<resources>
+    <dimen name="player_volume_panel_width">220dp</dimen>
+    <dimen name="player_volume_panel_side_margin">12dp</dimen>
+    <dimen name="player_volume_panel_bottom_margin">64dp</dimen>
+    <dimen name="player_volume_panel_top_margin">8dp</dimen>
+    <dimen name="player_volume_compact_height">300dp</dimen>
+</resources>
