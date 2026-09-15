@@ -25,6 +25,24 @@ jest.mock('react-native-safe-area-context', () => require('react-native-safe-are
 import { readSettings, saveSettings } from '../settings/storage';
 import SettingsScreen from '../../app/(tabs)/settings';
 
+it('shows diagnostic information only while its switch is enabled', async () => {
+  let tree!: ReturnType<typeof create>;
+  try {
+    await act(async () => { tree = create(<SettingsScreen />); });
+    const toggle = () => tree.root.findByProps({ accessibilityLabel: '显示诊断信息' });
+    const metrics = () => tree.root.findAllByType(Text).filter(node => typeof node.props.children === 'string' && node.props.children.startsWith('窗口：'));
+    expect(toggle().props.value).toBe(false);
+    expect(metrics()).toHaveLength(0);
+    act(() => toggle().props.onValueChange(true));
+    expect(toggle().props.value).toBe(true);
+    expect(metrics()).toHaveLength(1);
+    expect(metrics()[0].props.children).toContain('字体缩放：');
+    act(() => toggle().props.onValueChange(false));
+    expect(metrics()).toHaveLength(0);
+    expect(tree.root.findAllByType(Text).find(node => node.props.children === '系统设置')!.props.onLongPress).toBeUndefined();
+  } finally { act(() => tree?.unmount()); }
+});
+
 it('resets none when switching to an OpenAI model that cannot disable reasoning', async () => {
   jest.mocked(readSettings).mockResolvedValueOnce({ token: '', llmEndpoint: 'https://api.openai.com/v1', llmModel: 'gpt-5.1', llmApiKey: 'key', llmReasoningEffort: 'none', llmTimeoutSeconds: '600', llmMaxRetries: '2', autoExportToGallery: true, keepPrivateCopy: true });
   let tree!: ReturnType<typeof create>;
