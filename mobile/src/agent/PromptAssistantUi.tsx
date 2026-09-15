@@ -1102,9 +1102,9 @@ export function Composer({
   const overLimit = value.length > 4000;
   const closeEditor = () => setEditing(false);
   const counter = nearLimit ? (
-    <Text accessibilityLabel={overLimit ? `已超出 ${value.length - 4000} 字，请缩短后发送，草稿已保留` : `已输入 ${value.length} 字，上限 4000 字`}
+    <Text accessibilityLiveRegion="polite" accessibilityLabel={overLimit ? `已超出 ${value.length - 4000} 字，请缩短后发送，草稿已保留` : `已输入 ${value.length} 字，上限 4000 字`}
       style={[styles.characterCount, overLimit && styles.characterCountError]}>
-      {overLimit ? `超出 ${value.length - 4000} 字` : `${value.length.toLocaleString()} / 4,000`}
+      {overLimit ? `超出 ${value.length - 4000} 字` : `${value.length.toLocaleString()} / ${(4000).toLocaleString()}`}
     </Text>
   ) : null;
   const uploading = attachments.some((item) => item.status === 'uploading');
