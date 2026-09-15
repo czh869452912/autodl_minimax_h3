@@ -84,3 +84,26 @@ it('discards a slow old search after a new query and completes a query cleared d
   expect(tree.root.findByType(require('react-native').FlatList).props.refreshing).toBe(false);
   act(() => tree.unmount()); jest.useRealTimers();
 });
+
+it('clears both search and status from an empty filtered result and still opens creation', async () => {
+  jest.useFakeTimers();
+  mockPage.mockImplementation(() => ({ items: [] }));
+  let tree!: ReturnType<typeof create>;
+  try {
+    await act(async () => { tree = create(<GalleryScreen />); });
+    await act(async () => tree.root.findByProps({ accessibilityRole: 'radio', accessibilityLabel: '失败' }).props.onPress());
+    act(() => tree.root.findByProps({ accessibilityLabel: '搜索作品' }).props.onChangeText('missing'));
+    await act(async () => { jest.advanceTimersByTime(300); });
+    await act(async () => tree.root.findByProps({ accessibilityRole: 'button', accessibilityLabel: '清除筛选' }).props.onPress());
+    await act(async () => { jest.advanceTimersByTime(300); });
+    expect(tree.root.findByProps({ accessibilityLabel: '搜索作品' }).props.value).toBe('');
+    expect(tree.root.findByProps({ accessibilityRole: 'radio', accessibilityLabel: '全部' }).props.accessibilityState.checked).toBe(true);
+    expect(mockPage).toHaveBeenLastCalledWith(expect.objectContaining({ query: '', status: undefined }));
+    act(() => tree.root.findByProps({ accessibilityRole: 'button', accessibilityLabel: '去生成视频' }).props.onPress());
+    expect(mockPush).toHaveBeenLastCalledWith('/(tabs)/create');
+  } finally {
+    act(() => tree?.unmount());
+    mockPage.mockReset();
+    jest.useRealTimers();
+  }
+});

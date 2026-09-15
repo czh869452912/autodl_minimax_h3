@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { AppIcon } from '../../src/ui/icons';
+import { ListAction, ListEmptyState, ListFilters, listUI } from '../../src/ui/ListPageUI';
 import { COLORS, SPACING } from '../../src/ui/theme';
 import { getTaskServices } from '../../src/tasks/taskServices';
 import { useTaskListSession } from '../../src/tasks/useTaskListSession';
@@ -62,24 +63,43 @@ export default function TasksScreen() {
   };
   const updated = snapshot.read.lastCheckedAt == null ? '' : new Date(snapshot.read.lastCheckedAt).toTimeString().slice(0, 5);
   return <View style={styles.container}>
-    <View style={styles.heading}><View><Text style={styles.title}>任务队列</Text><Text style={styles.subtitle}>任务状态、下载进度和本地媒体统一管理。</Text>
-      <Text style={styles.syncStatus}>{refreshing ? '正在刷新…' : snapshot.activity.activeTaskCount > 0 ? '正在自动同步任务' : updated ? '已检查 ' + updated : ''}</Text>
-      {snapshot.work.phase === 'running' ? <Text style={styles.syncStatus}>后台处理中…</Text> : null}
-      {snapshot.work.phase === 'backoff' ? <Text style={styles.syncStatus}>后台处理将在稍后重试</Text> : null}
-      {snapshot.phase === 'stale' ? <Text style={styles.syncError}>{'状态可能已过期：' + snapshot.read.error}</Text> : null}
-    </View><View style={styles.headingActions}>
-      <Pressable accessibilityRole="button" accessibilityLabel={monitoring ? '停止持续监控' : '开启持续监控'} disabled={monitorBusy} accessibilityState={{ checked: monitoring, busy: monitorBusy }} onPress={() => void toggleMonitoring()} style={[styles.refresh, monitoring && styles.monitoring]}><AppIcon name={monitoring ? "notifications_active" : "notifications"} size={20} color={COLORS.textMuted} /></Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="刷新任务" accessibilityState={{ busy: refreshing }} onPress={refresh} style={styles.refresh}>{refreshing ? <ActivityIndicator size="small" /> : <AppIcon name="refresh" size={20} color={COLORS.textMuted} />}</Pressable>
-    </View></View>
+    <View style={styles.heading}>
+      <Text style={styles.title}>任务队列</Text>
+      <View style={styles.headingActions}>
+        <Pressable accessibilityRole="button" accessibilityLabel={monitoring ? '停止持续监控' : '开启持续监控'} disabled={monitorBusy} accessibilityState={{ checked: monitoring, busy: monitorBusy }} onPress={() => void toggleMonitoring()} style={({ pressed }) => [styles.refresh, monitoring && styles.monitoring, pressed && listUI.pressed, monitorBusy && listUI.disabled]}><AppIcon name={monitoring ? 'notifications_active' : 'notifications'} size={20} color={monitoring ? COLORS.primaryActive : COLORS.textMuted} /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="刷新任务" accessibilityState={{ busy: refreshing }} onPress={refresh} style={({ pressed }) => [styles.refresh, pressed && listUI.pressed]}>{refreshing ? <ActivityIndicator size="small" color={COLORS.primaryActive} /> : <AppIcon name="refresh" size={20} color={COLORS.textMuted} />}</Pressable>
+      </View>
+    </View>
+    <Text style={styles.subtitle}>任务状态、下载进度和本地媒体统一管理。</Text>
+    {refreshing || snapshot.activity.activeTaskCount > 0 || updated ? <Text style={styles.syncStatus}>{refreshing ? '正在刷新…' : snapshot.activity.activeTaskCount > 0 ? '正在自动同步任务' : '已检查 ' + updated}</Text> : null}
+    {snapshot.work.phase === 'running' ? <Text style={styles.syncStatus}>后台处理中…</Text> : null}
+    {snapshot.work.phase === 'backoff' ? <Text style={styles.syncStatus}>后台处理将在稍后重试</Text> : null}
+    {snapshot.phase === 'stale' ? <Text style={styles.syncError}>{'状态可能已过期：' + snapshot.read.error}</Text> : null}
     {maintenanceError ? <Text accessibilityRole="alert" style={styles.syncError}>{maintenanceError}</Text> : null}
-    {background.phase === 'failed' ? <View><Text accessibilityRole="alert" style={styles.syncError}>后台同步注册失败，回到应用时会重试；前台任务仍可继续。</Text><Pressable accessibilityRole="button" accessibilityLabel="重试后台同步注册" style={{ minHeight: 48, justifyContent: 'center' }} onPress={() => { void backgroundRegistration.retry(); }}><Text>重试后台同步注册</Text></Pressable></View> : null}
+    {background.phase === 'failed' ? <View style={listUI.notice}><Text accessibilityRole="alert" style={styles.syncError}>后台同步注册失败，回到应用时会重试；前台任务仍可继续。</Text><ListAction secondary icon="refresh" label="重试后台同步注册" onPress={() => { void backgroundRegistration.retry(); }} /></View> : null}
     {monitoring ? <Text style={styles.syncStatus}>持续监控所有任务；任务及下载、保存操作完成后自动停止。系统可能延迟或终止后台执行。{monitor.notificationsEnabled === false ? '完成通知未开启。' : ''}</Text> : monitor.stopReason === 'user' ? <Text style={styles.syncStatus}>持续监控已由你停止。</Text> : monitor.stopReason === 'timeout' ? <Text style={styles.syncError}>已达到系统后台运行时限，持续监控已停止；可重新开启。</Text> : monitor.stopReason === 'complete' ? <Text style={styles.syncStatus}>任务及相关操作已完成，持续监控已自动停止。</Text> : monitor.enabled ? <Text style={styles.syncError}>持续监控当前未运行，可重新开启。</Text> : monitor.stopReason === 'headless-failed' || monitor.stopReason === 'start-failed' ? <Text style={styles.syncError}>持续监控启动失败，请重试。</Text> : null}
-    <View accessibilityRole="radiogroup" accessibilityLabel="任务筛选" style={{ flexDirection: 'row', gap: 12 }}>{(['all','active','failed'] as const).map(value => <Pressable key={value} accessibilityRole="radio" accessibilityState={{ checked: filter === value }} onPress={() => { setFilter(value); setPageError(''); }} style={{ minHeight: 48, justifyContent: 'center' }}><Text>{value === 'all' ? '全部' : value === 'active' ? '进行中' : '失败'}{filter === value ? ' ✓' : ''}</Text></Pressable>)}</View>
+    <ListFilters label="任务筛选" options={[{ id: 'all', label: '全部' }, { id: 'active', label: '进行中' }, { id: 'failed', label: '失败' }]} value={filter} onChange={value => { setFilter(value); setPageError(''); }} />
     <FlatList keyboardDismissMode="on-drag" data={snapshot.items} initialNumToRender={12} maxToRenderPerBatch={8} windowSize={7} updateCellsBatchingPeriod={50} removeClippedSubviews
       keyExtractor={item => item.id} contentContainerStyle={styles.list} refreshing={refreshing} onRefresh={refresh}
       onEndReached={() => { if (pageBusy || pageError || !snapshot.nextCursor) return; setPageBusy(true); void session.loadMore().catch(() => setPageError('加载更多失败')).finally(() => setPageBusy(false)); }}
-      ListFooterComponent={pageBusy ? <ActivityIndicator /> : pageError ? <Pressable accessibilityRole="button" style={{ minHeight: 48 }} onPress={() => { setPageError(''); setPageBusy(true); void session.loadMore().catch(() => setPageError('加载更多失败')).finally(() => setPageBusy(false)); }}><Text>加载更多失败，点击重试</Text></Pressable> : !snapshot.nextCursor && snapshot.items.length ? <Text>已显示全部任务</Text> : null} onEndReachedThreshold={0.6}
-      ListEmptyComponent={<View><Text style={styles.empty}>{snapshot.phase === 'stale' ? '任务读取失败，请点击右上角刷新重试' : snapshot.phase === 'cold' ? '正在读取任务…' : '暂无任务'}</Text>{snapshot.phase === 'cold' ? <ActivityIndicator /> : <Pressable accessibilityRole="button" style={{ minHeight: 48 }} onPress={() => snapshot.phase === 'stale' ? refresh() : router.push('/(tabs)/create')}><Text>{snapshot.phase === 'stale' ? '重试读取任务' : '去生成视频'}</Text></Pressable>}</View>} renderItem={renderItem} />
+      ListFooterComponent={pageBusy ? <ActivityIndicator color={COLORS.primaryActive} /> : pageError ? <ListAction secondary icon="refresh" label="加载更多失败，点击重试" onPress={() => { setPageError(''); setPageBusy(true); void session.loadMore().catch(() => setPageError('加载更多失败')).finally(() => setPageBusy(false)); }} /> : !snapshot.nextCursor && snapshot.items.length ? <Text style={listUI.footer}>已显示全部任务</Text> : null} onEndReachedThreshold={0.6}
+      ListEmptyComponent={<ListEmptyState icon={snapshot.phase === 'stale' ? 'info' : 'list_alt'}
+        loading={snapshot.phase === 'cold'}
+        title={snapshot.phase === 'stale' ? '任务读取失败' : snapshot.phase === 'cold' ? '正在读取任务…' : filter === 'active' ? '暂无进行中的任务' : filter === 'failed' ? '暂无失败任务' : '暂无任务'}
+        description={snapshot.phase === 'stale' ? '请检查连接后重试，任务记录会保留。' : snapshot.phase === 'cold' ? '正在同步任务状态，请稍候。' : filter === 'active' ? '新提交的任务会在这里显示生成与下载进度。' : filter === 'failed' ? '出现异常的任务会集中显示在这里，方便查看和处理。' : '从一个灵感开始，生成后可在这里查看进度、下载和保存视频。'}
+        action={snapshot.phase === 'cold' ? undefined : snapshot.phase === 'stale' ? { label: '重试读取任务', icon: 'refresh', onPress: refresh } : { label: '去生成视频', icon: 'movie_filter', onPress: () => router.push('/(tabs)/create') }}
+        secondaryAction={snapshot.phase !== 'cold' && snapshot.phase !== 'stale' && filter !== 'all' ? { label: '查看全部任务', onPress: () => setFilter('all') } : undefined} />} renderItem={renderItem} />
   </View>;
 }
-const styles = StyleSheet.create({ container: { flex: 1, backgroundColor: COLORS.background, padding: SPACING.xl }, heading: { position: 'relative', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingRight: 112 }, headingActions: { position: 'absolute', right: 0, top: 0, flexDirection: 'row', gap: 8, flexShrink: 0 }, title: { color: COLORS.text, fontSize: 29, fontWeight: '800' }, subtitle: { color: COLORS.textMuted, marginTop: 7, lineHeight: 20 }, syncStatus: { color: COLORS.primaryActive, marginTop: 5, fontSize: 11 }, syncError: { color: COLORS.danger, marginTop: 8, fontSize: 11 }, refresh: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border }, refreshing: { borderColor: COLORS.primaryActive, opacity: 0.8 }, monitoring: { borderColor: COLORS.primaryActive }, list: { gap: SPACING.md, paddingTop: SPACING.xl, paddingBottom: 130 }, empty: { color: COLORS.textSubtle, textAlign: 'center', marginTop: 64 }, card: { backgroundColor: COLORS.surface, borderColor: COLORS.border, borderWidth: 1, borderRadius: 16, padding: SPACING.lg }, header: { flexDirection: 'row', justifyContent: 'space-between', gap: SPACING.md }, id: { color: COLORS.primaryActive, fontSize: 11, flex: 1, fontFamily: 'monospace' }, status: { color: COLORS.warning, fontSize: 11, fontWeight: '800' }, running: { color: COLORS.primaryActive }, success: { color: COLORS.success }, failure: { color: COLORS.danger }, prompt: { color: COLORS.text, marginTop: 11, lineHeight: 20 }, meta: { color: COLORS.textSubtle, marginTop: 11, fontSize: 12 }, timing: { gap: 4, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border }, timingText: { color: COLORS.textMuted, fontSize: 12, fontFamily: 'monospace' }, downloadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 13, paddingTop: 11, borderTopWidth: 1, borderTopColor: COLORS.border }, downloadText: { color: COLORS.textMuted, fontSize: 12, flex: 1 }, action: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 8, backgroundColor: COLORS.primarySoft }, actionText: { color: COLORS.primaryActive, fontSize: 12, fontWeight: '700' }, remove: { alignSelf: 'flex-end', marginTop: 12 }, removeText: { color: COLORS.textSubtle, fontSize: 12 }, disabled: { opacity: 0.5 } });
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background, padding: SPACING.xl },
+  heading: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', alignItems: 'center' },
+  headingActions: { flexDirection: 'row', gap: 8 },
+  title: { color: COLORS.text, fontSize: 29, fontWeight: '800' },
+  subtitle: { color: COLORS.textMuted, marginTop: 7, lineHeight: 20 },
+  syncStatus: { color: COLORS.primaryActive, marginTop: 5, fontSize: 12, lineHeight: 18 },
+  syncError: { color: COLORS.danger, marginTop: 8, fontSize: 12, lineHeight: 18 },
+  refresh: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
+  monitoring: { borderColor: COLORS.primaryActive, backgroundColor: COLORS.primarySoft },
+  list: { gap: SPACING.md, paddingBottom: 130 },
+});

@@ -7,6 +7,7 @@ import type { MediaAsset, MediaStatus } from '../../src/media/types';
 import { createSqliteMediaStore } from '../../src/media/repository';
 import { extractPoster } from '../../src/native/media';
 import { AppIcon } from '../../src/ui/icons';
+import { ListAction, ListEmptyState, ListFilters, listUI } from '../../src/ui/ListPageUI';
 import { COLORS, SPACING } from '../../src/ui/theme';
 import { resolveLocalVideoSource } from '../../src/tasks/localMedia';
 
@@ -91,17 +92,40 @@ export default function GalleryScreen() {
     } },
   ]);
   const openAsset = (asset: MediaAsset) => { if (navigating.current) return; navigating.current = true; router.push({ pathname: '/video/[id]', params: { id: asset.id } }); };
+  const clearFilters = () => { generation.current++; changeQuery(''); setFilter('all'); setSelected([]); };
   return <View style={styles.container}>
     <Text style={styles.title}>结果</Text><Text style={styles.subtitle}>浏览与播放作品，长按可选择多个作品。</Text>
-    {selected.length > 0 ? <View style={styles.filters}><Text accessibilityLiveRegion="polite">已选择 {selected.length} 项</Text><Pressable accessibilityRole="button" onPress={() => setSelected([])} style={styles.filter}><Text>取消选择</Text></Pressable><Pressable accessibilityRole="button" onPress={() => setSelected(assets.map(item => item.id))} style={styles.filter}><Text>选择已加载作品</Text></Pressable><Pressable accessibilityRole="button" disabled={removing} onPress={removeSelected} style={styles.deleteAll}><Text style={styles.deleteText}>删除 {selected.length}</Text></Pressable></View> : null}
-    <View style={styles.search}><AppIcon name="search" size={21} color={COLORS.textSubtle} /><TextInput accessibilityLabel="搜索作品" value={query} onChangeText={changeQuery} placeholder="搜索 Prompt 或任务 ID..." placeholderTextColor={COLORS.textSubtle} style={styles.searchInput} />{query ? <Pressable accessibilityRole="button" accessibilityLabel="清除作品搜索" onPress={() => changeQuery('')} style={styles.filter}><Text>清除</Text></Pressable> : null}</View>
-    <View accessibilityRole="radiogroup" accessibilityLabel="作品状态" style={styles.filters}>{filters.map(item => <Pressable key={item.id} accessibilityRole="radio" accessibilityLabel={item.label} accessibilityState={{ checked: filter === item.id }} onPress={() => { if (item.id === filter) return; generation.current++; setSelected([]); setFilter(item.id); }} style={[styles.filter, filter === item.id && styles.filterActive]}><Text style={styles.filterText}>{item.label}</Text></Pressable>)}</View>
-    {error ? <Pressable accessibilityRole="button" accessibilityLabel="重试读取作品列表" onPress={() => void load()} style={styles.filter}><Text accessibilityRole="alert" style={styles.deleteText}>{error}</Text></Pressable> : null}
+    {selected.length > 0 ? <View style={styles.selectionPanel}>
+      <View style={styles.selectionHeading}><Text accessibilityLiveRegion="polite" style={styles.selectionTitle}>已选择 {selected.length} 项</Text><ListAction secondary label="取消选择" onPress={() => setSelected([])} /></View>
+      <View style={styles.selectionActions}><ListAction secondary label="选择已加载作品" onPress={() => setSelected(assets.map(item => item.id))} /><Pressable accessibilityRole="button" accessibilityState={{ disabled: removing, busy: removing }} disabled={removing} onPress={removeSelected} style={({ pressed }) => [styles.deleteAll, pressed && listUI.pressed, removing && listUI.disabled]}><AppIcon name="delete" size={18} color={COLORS.danger} /><Text style={styles.deleteText}>{removing ? '正在删除…' : `删除 ${selected.length}`}</Text></Pressable></View>
+    </View> : null}
+    <View style={styles.search}><AppIcon name="search" size={21} color={COLORS.textSubtle} /><TextInput accessibilityLabel="搜索作品" value={query} onChangeText={changeQuery} placeholder="搜索 Prompt 或任务 ID..." placeholderTextColor={COLORS.textSubtle} style={styles.searchInput} />{query ? <Pressable accessibilityRole="button" accessibilityLabel="清除作品搜索" onPress={() => changeQuery('')} style={({ pressed }) => [styles.clearSearch, pressed && listUI.pressed]}><AppIcon name="close" size={18} color={COLORS.textMuted} /></Pressable> : null}</View>
+    <ListFilters label="作品状态" options={filters} value={filter} onChange={value => { if (value === filter) return; generation.current++; setSelected([]); setFilter(value); }} />
+    {error ? <View style={listUI.notice}><Text accessibilityRole="alert" style={styles.deleteText}>{error}</Text><ListAction secondary icon="refresh" label="重试读取作品列表" onPress={() => void load()} /></View> : null}
     <FlatList data={assets} numColumns={2} keyExtractor={item => item.id} columnWrapperStyle={styles.row} contentContainerStyle={styles.list} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled" refreshing={loading && assets.length > 0} onRefresh={() => void load()} onEndReached={() => { if (!pageError) void loadMore(); }} onEndReachedThreshold={0.6}
-      ListFooterComponent={loadingMore ? <ActivityIndicator /> : pageError ? <Pressable accessibilityRole="button" onPress={() => void loadMore()} style={styles.filter}><Text>{pageError}</Text></Pressable> : assets.length && !cursor ? <Text style={styles.empty}>已显示全部作品</Text> : null}
+      ListFooterComponent={loadingMore ? <ActivityIndicator color={COLORS.primaryActive} /> : pageError ? <ListAction secondary icon="refresh" label={pageError} onPress={() => void loadMore()} /> : assets.length && !cursor ? <Text style={listUI.footer}>已显示全部作品</Text> : null}
       renderItem={({ item }) => <GalleryCard asset={item} selected={selected.includes(item.id)} onLongPress={() => toggle(item.id)} onPress={() => selected.length ? toggle(item.id) : openAsset(item)} />}
-      ListEmptyComponent={loading ? <ActivityIndicator accessibilityLabel="正在加载作品" /> : error ? null : <View><Text style={styles.empty}>{query || filter !== 'all' ? '没有符合条件的作品' : '还没有视频作品'}</Text><Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/create')} style={styles.filter}><Text>去生成视频</Text></Pressable></View>} />
+      ListEmptyComponent={error ? null : <ListEmptyState icon={query || filter !== 'all' ? 'search' : 'movie_filter'} loading={loading}
+        title={loading ? '正在加载作品' : query || filter !== 'all' ? '没有符合条件的作品' : '还没有视频作品'}
+        description={loading ? '正在整理视频与封面，请稍候。' : query || filter !== 'all' ? '试试其他关键词，或清除筛选查看全部作品。' : '生成的视频会汇集在这里，随时浏览、播放与管理。'}
+        action={loading ? undefined : query || filter !== 'all' ? { label: '清除筛选', icon: 'refresh', onPress: clearFilters } : { label: '去生成视频', icon: 'movie_filter', onPress: () => router.push('/(tabs)/create') }}
+        secondaryAction={!loading && (query || filter !== 'all') ? { label: '去生成视频', icon: 'movie_filter', onPress: () => router.push('/(tabs)/create') } : undefined} />} />
   </View>;
 }
 
-const styles = StyleSheet.create({ container: { flex: 1, backgroundColor: COLORS.background, padding: SPACING.xl }, heading: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start' }, title: { color: COLORS.text, fontSize: 29, fontWeight: '800' }, subtitle: { color: COLORS.textMuted, marginTop: 6, marginBottom: SPACING.lg, lineHeight: 20 }, deleteAll: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 8, borderRadius: 9, backgroundColor: COLORS.dangerSoft }, deleteText: { color: COLORS.danger, fontSize: 12, fontWeight: '700' }, search: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.surface, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 13 }, searchInput: { flex: 1, color: COLORS.text, height: 50, fontSize: 14 }, filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 15 }, filter: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 15, paddingVertical: 9, borderRadius: 10, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border }, filterActive: { backgroundColor: COLORS.primarySoft, borderColor: COLORS.primaryActive }, filterText: { color: COLORS.textMuted, fontSize: 12, fontWeight: '700' }, filterTextActive: { color: COLORS.primaryActive }, list: { gap: 13, paddingBottom: 130 }, row: { gap: 13 }, empty: { color: COLORS.textSubtle, textAlign: 'center', marginTop: 64 } });
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background, padding: SPACING.xl },
+  title: { color: COLORS.text, fontSize: 29, fontWeight: '800' },
+  subtitle: { color: COLORS.textMuted, marginTop: 6, marginBottom: SPACING.lg, lineHeight: 20 },
+  selectionPanel: { padding: 12, borderRadius: 16, backgroundColor: COLORS.primarySoft, borderWidth: 1, borderColor: COLORS.border, gap: 8, marginBottom: 16 },
+  selectionHeading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  selectionTitle: { color: COLORS.primaryActive, fontSize: 14, fontWeight: '700' },
+  selectionActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  deleteAll: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, backgroundColor: COLORS.dangerSoft, borderWidth: 1, borderColor: COLORS.danger },
+  deleteText: { color: COLORS.danger, fontSize: 13, fontWeight: '700', lineHeight: 20 },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.surface, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 13 },
+  searchInput: { flex: 1, minWidth: 0, color: COLORS.text, minHeight: 50, fontSize: 14 },
+  clearSearch: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  list: { gap: 13, paddingBottom: 130 },
+  row: { gap: 13 },
+});
