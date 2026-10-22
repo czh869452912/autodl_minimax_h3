@@ -37,12 +37,13 @@ export function createExecutorCycle(deps: CycleDeps) {
     const maxOperationsTotal = Math.max(1, Math.min(32, options.maxOperationsTotal ?? 32));
     const result = emptySummary();
     let startedAt: number | undefined;
+    let deadline = options.deadline;
     let timeExhausted = false;
 
     while (result.passes < maxPasses && result.claimed < maxOperationsTotal) {
       const observedNow = deps.now?.() ?? Date.now();
       const timestamp = options.now ?? observedNow;
-      if (startedAt == null) startedAt = observedNow;
+      if (startedAt == null) { startedAt = observedNow; deadline ??= Date.now() + 2_000; }
       else if (observedNow - startedAt >= 2_000) {
         timeExhausted = true;
         break;
@@ -52,6 +53,7 @@ export function createExecutorCycle(deps: CycleDeps) {
         reason: options.reason,
         maxOperations: remainingOperationBudget,
         now: timestamp,
+        deadline,
       });
       result.passes += 1;
       result.claimed += Math.min(pass.claimed, remainingOperationBudget);

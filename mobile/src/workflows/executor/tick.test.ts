@@ -213,3 +213,28 @@ test('expired leases and retry timestamps survive a real database reopen', async
     fs.rmSync(file, { force: true });
   }
 });
+
+
+test('unexpected handler failures persist diagnostics and back off instead of looping', async () => {
+  const value = setup();
+  try {
+    enqueue(value.operations, 'STATUS_SYNC', 0);
+    value.executor.handle.mockRejectedValue(new Error('private failure details'));
+    await value.tick.run({ reason: 'service', now: 100 });
+    const op = await value.operations.get('STATUS_SYNC-0');
+    expect(op).toMatchObject({ state:'PENDING', lastError:{code:'EXECUTOR_UNEXPECTED_ERROR'} });
+    expect(op!.nextRetryAt).toBeGreaterThan(100);
+    await value.tick.run({reason:'service',now:100});
+    expect(value.executor.handle).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(op)).not.toContain('private failure details');
+  } finally { value.db.close(); }
+});
+
+test('expired deadline leaves operations unclaimed', async () => {
+  const value = setup();
+  try {
+    enqueue(value.operations, 'SUBMIT', 0);
+    expect(await value.tick.run({reason:'background',now:100,deadline:0})).toMatchObject({claimed:0,remainingDue:1});
+    expect(value.executor.handle).not.toHaveBeenCalled();
+  } finally { value.db.close(); }
+});

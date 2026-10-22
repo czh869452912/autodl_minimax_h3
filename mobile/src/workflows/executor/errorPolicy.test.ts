@@ -12,8 +12,10 @@ test.each([
 });
 
 test.each([
-  [new ProviderError('autodl', 'status', 'auth', 'secret', 401), 'TERMINAL'],
-  [new ProviderError('autodl', 'status', 'http', 'missing', 404), 'TERMINAL'],
+  [new ProviderError('autodl', 'status', 'http', 'rate limited', 429), 'RETRYABLE'],
+  [new ProviderError('autodl', 'status', 'http', 'timeout', 408), 'RETRYABLE'],
+  [new ProviderError('autodl', 'status', 'auth', 'secret', 401), 'BLOCKED'],
+  [new ProviderError('autodl', 'status', 'http', 'missing', 404), 'BLOCKED'],
   [new ProviderError('autodl', 'status', 'timeout', 'timeout'), 'RETRYABLE'],
   [new ProviderError('autodl', 'status', 'network', 'offline'), 'RETRYABLE'],
   [new ProviderError('autodl', 'status', 'http', 'upstream', 503), 'RETRYABLE'],

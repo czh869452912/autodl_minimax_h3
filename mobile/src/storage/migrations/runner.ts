@@ -9,6 +9,7 @@ import { v8TaskRefresh } from './v8TaskRefresh';
 import { v10MediaDeletion } from './v10MediaDeletion';
 import { v9AgentRecords } from './v9AgentRecords';
 import { v11TaskMonitor } from './v11TaskMonitor';
+import { v13TaskArchives } from './v13TaskArchives';
 import { v12MonitorFailures } from './v12MonitorFailures';
 
 export type AppDatabaseMigrationOptions = {
@@ -25,6 +26,7 @@ const steps = new Map<number, MigrationStep>([
   [v10MediaDeletion.fromVersion, v10MediaDeletion],
   [v11TaskMonitor.fromVersion, v11TaskMonitor],
   [v12MonitorFailures.fromVersion, v12MonitorFailures],
+  [v13TaskArchives.fromVersion, v13TaskArchives],
 ]);
 
 function version(db: AppDatabase): number {

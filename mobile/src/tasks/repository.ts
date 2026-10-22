@@ -76,6 +76,8 @@ export function createTaskRepository(db: AppDatabase) {
       let rows: any[] = [];
       let assets: any[] = [];
       transaction(db, () => {
+        const active = db.getFirstSync<{ status: string }>('SELECT status FROM tasks WHERE id=?', id);
+        if (active && ['QUEUED','RUNNING','UNKNOWN'].includes(active.status)) throw new Error('活跃任务请使用归档，以保留服务端追踪记录');
         const activeOperation = db.getFirstSync<{ id: string }>(
           "SELECT id FROM workflow_operations WHERE job_id=? AND state='CLAIMED' LIMIT 1",
           id,

@@ -51,8 +51,28 @@ export function runTaskMonitorHeadless(sessionId: string): Promise<void> {
     if (!status.running || status.sessionId !== sessionId || !module?.publishSessionEvents || !module.stopSession) return;
     const { getMonitorQueue } = require('../tasks/executorRuntime') as typeof import('../tasks/executorRuntime');
     const queue = await getMonitorQueue();
-    const result = await runTaskMonitorTick();
+    // Drain already committed notifications while a long native transfer runs.
+    let publishing = false;
+    let publication: Promise<void> | undefined;
+    let publicationFailed = false;
     let cursor = status.cursor ?? 0;
+    const publish = async () => {
+      if (publishing) return;
+      publishing = true;
+      try {
+        const current = await getTaskMonitorStatus();
+        if (!current.running || current.sessionId !== sessionId) return;
+        const batch = await queue.read(cursor);
+        if (batch.cursor > cursor && !await module.publishSessionEvents!(sessionId, batch.cursor, batch.events)) { publicationFailed = true; return; }
+        cursor = batch.cursor;
+      } catch { publicationFailed = true; }
+      finally { publishing = false; }
+    };
+    const notifications = setInterval(() => { if (!publishing) publication = publish(); }, 5000);
+    let result;
+    try { result = await runTaskMonitorTick(); }
+    finally { clearInterval(notifications); await publication; }
+    if (publicationFailed) return;
     // Bound notification draining; the next tick resumes from the durable cursor.
     for (let page = 0; page < 4; page++) {
       const batch = await queue.read(cursor);

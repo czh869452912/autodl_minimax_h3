@@ -88,3 +88,19 @@ test('notification drain stops after four pages and the next tick uses the durab
   expect(mockQueue.read).toHaveBeenLastCalledWith(268);
   expect(module.stopSession).toHaveBeenCalledWith('s1');
 });
+
+
+test('publishes committed notifications before a long executor slice finishes', async () => {
+  jest.useFakeTimers();
+  let finish!: (value: {}) => void;
+  mockRun.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const running = runTaskMonitorHeadless('s1');
+  try {
+    await jest.advanceTimersByTimeAsync(5000);
+    expect(module.publishSessionEvents).toHaveBeenCalledWith('s1',13,expect.any(Array));
+    expect(module.stopSession).not.toHaveBeenCalled();
+    finish({});
+    await running;
+    expect(jest.getTimerCount()).toBe(0);
+  } finally { finish?.({}); await running; jest.useRealTimers(); }
+});

@@ -107,7 +107,18 @@ android {
     if (findProperty('codecReviewAssets')) {
         sourceSets.androidTest.assets.srcDir(file(findProperty('codecReviewAssets')))
     }
+    // Keep generated C++ object paths below Ninja's Windows MAX_PATH limit.
+    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+        externalNativeBuild {
+            cmake {
+                buildStagingDirectory file(System.getProperty('user.home') + '/.h3-cxx/' + Integer.toHexString(rootDir.absolutePath.hashCode()))
+            }
+        }
+    }
     defaultConfig {
+        if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+            externalNativeBuild { cmake { arguments '-DCMAKE_OBJECT_PATH_MAX=240' } }
+        }
         applicationId 'com.example.autodlh3'
         // dev.jdtech.mpv:libmpv:1.0.0 declares and supports Android API 26+.
         minSdkVersion Math.max(26, rootProject.ext.minSdkVersion as int)

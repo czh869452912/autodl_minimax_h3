@@ -122,7 +122,7 @@ function boundedAttempts(maxAttempts: number): number {
   return Math.max(1, Math.floor(maxAttempts));
 }
 
-export function createTaskProjectionRepository(db: AppDatabase, filter: 'all' | 'active' | 'failed' = 'all'): TaskProjectionRepository {
+export function createTaskProjectionRepository(db: AppDatabase, filter: 'all' | 'active' | 'failed' | 'archived' = 'all'): TaskProjectionRepository {
   const readRevision = async (): Promise<number> => {
     const row = await db.getFirstAsync<RevisionRow>(
       'SELECT revision FROM task_projection_state WHERE singleton = 1 LIMIT 1',
@@ -135,7 +135,7 @@ export function createTaskProjectionRepository(db: AppDatabase, filter: 'all' | 
     const rows = await db.getAllAsync<TaskCardRow>(
       `SELECT ${taskCardColumns}
        FROM tasks
-       WHERE (${filter === 'active' ? "status IN ('QUEUED','RUNNING','UNKNOWN') OR download_state IN ('ENQUEUED','DOWNLOADING') OR export_state IN ('QUEUED','EXPORTING')" : filter === 'failed' ? "status='FAILED' OR download_state='DOWNLOAD_FAILED' OR export_state='EXPORT_FAILED'" : '1=1'}) AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
+       WHERE ${filter === 'archived' ? '' : 'NOT'} EXISTS(SELECT 1 FROM task_archives a WHERE a.task_id=tasks.id) AND (${filter === 'active' ? "status IN ('QUEUED','RUNNING','UNKNOWN') OR download_state IN ('ENQUEUED','DOWNLOADING') OR export_state IN ('QUEUED','EXPORTING')" : filter === 'failed' ? "status='FAILED' OR download_state='DOWNLOAD_FAILED' OR export_state='EXPORT_FAILED'" : '1=1'}) AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
        ORDER BY created_at DESC, id DESC
        LIMIT ?`,
       cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.id ?? null, bounded + 1,
@@ -198,7 +198,7 @@ export function createTaskProjectionRepository(db: AppDatabase, filter: 'all' | 
     return new ProjectionChangedDuringRead(attempts);
   };
 
-  return { readRevision, readWindow, readActivity, readConsistentWindow, forFilter: (next: 'all' | 'active' | 'failed'): TaskProjectionRepository => createTaskProjectionRepository(db, next) };
+  return { readRevision, readWindow, readActivity, readConsistentWindow, forFilter: (next: 'all' | 'active' | 'failed' | 'archived'): TaskProjectionRepository => createTaskProjectionRepository(db, next) };
 }
 
 export interface TaskProjectionRepository {
@@ -206,5 +206,5 @@ export interface TaskProjectionRepository {
   readWindow(limit?: number, cursor?: TaskCursor): Promise<TaskProjectionWindow>;
   readActivity(now: number): Promise<TaskProjectionActivity>;
   readConsistentWindow(limit?: number, maxAttempts?: number): Promise<ConsistentTaskProjectionWindow | ProjectionChangedDuringRead>;
-  forFilter(filter: 'all' | 'active' | 'failed'): TaskProjectionRepository;
+  forFilter(filter: 'all' | 'active' | 'failed' | 'archived'): TaskProjectionRepository;
 }

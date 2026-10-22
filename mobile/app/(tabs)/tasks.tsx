@@ -17,7 +17,7 @@ import { backgroundRegistration } from '../../src/tasks/background';
 
 export default function TasksScreen() {
   const layout = usePageLayout(900);
-  const [filter, setFilter] = useState<'all' | 'active' | 'failed'>('all');
+  const [filter, setFilter] = useState<'all' | 'active' | 'failed' | 'archived'>('all');
   const { session, snapshot } = useTaskListSession(undefined, filter);
   const [pageBusy, setPageBusy] = useState(false);
   const [pageError, setPageError] = useState('');
@@ -50,7 +50,7 @@ export default function TasksScreen() {
   const exportTask = useCallback((item: TaskCard) => { void action(item, true); }, [action]);
   const remove = useCallback((id: string) => { void getTaskServices().taskStore.remove(id).then(() => taskProjectionEvents.invalidate()).catch(error => Alert.alert('移除失败', String(error))); }, []);
   const open = useCallback((id: string) => router.push({ pathname: '/video/[id]', params: { id } }), []);
-  const renderItem = useCallback(({ item }: { item: TaskCard }) => <TaskCardRow item={item} busy={busyIds.has(item.id)} onDownload={download} onExport={exportTask} onRemove={remove} onOpen={open} onCancel={id => { void getTaskServices().taskCommandService.requestCancel(id).catch(error => Alert.alert('无法取消', error.message)); }} onCancelMedia={(id, kind) => { void getTaskServices().taskCommandService.requestCancelMedia(id, kind).catch(error => Alert.alert('无法取消', error.message)); }} />, [busyIds, download, exportTask, remove, open]);
+  const renderItem = useCallback(({ item }: { item: TaskCard }) => <TaskCardRow archived={filter === 'archived'} onArchive={(id, archived) => { void getTaskServices().taskCommandService.setArchived(id, archived).catch(error => Alert.alert('归档失败', String(error))); }} onReplace={id => { void getTaskServices().taskCommandService.replaceUnknownAfterConfirmation(id).catch(error => Alert.alert('重新创建失败', String(error))); }} item={item} busy={busyIds.has(item.id)} onDownload={download} onExport={exportTask} onRemove={remove} onOpen={open} onCancel={id => { void getTaskServices().taskCommandService.requestCancel(id).catch(error => Alert.alert('无法取消', error.message)); }} onCancelMedia={(id, kind) => { void getTaskServices().taskCommandService.requestCancelMedia(id, kind).catch(error => Alert.alert('无法取消', error.message)); }} />, [busyIds, download, exportTask, remove, open, filter]);
   const toggleMonitoring = async () => {
     if (monitorLock.current) return;
     monitorLock.current = true; setMonitorBusy(true);
@@ -73,14 +73,14 @@ export default function TasksScreen() {
       </View>
     </View>
     <Text style={styles.subtitle}>任务状态、下载进度和本地媒体统一管理。</Text>
-    {refreshing || snapshot.activity.activeTaskCount > 0 || updated ? <Text style={styles.syncStatus}>{refreshing ? '正在刷新…' : snapshot.activity.activeTaskCount > 0 ? '正在自动同步任务' : '已检查 ' + updated}</Text> : null}
+    {refreshing || snapshot.activity.activeTaskCount > 0 || updated ? <Text style={styles.syncStatus}>{refreshing ? '正在刷新…' : snapshot.work.phase === 'running' ? '正在同步任务' : snapshot.activity.remainingDue + snapshot.activity.remainingScheduled > 0 ? '等待下一次同步' : snapshot.activity.activeTaskCount > 0 ? '同步已暂停，请检查设置后刷新重试' : '已检查 ' + updated}</Text> : null}
     {snapshot.work.phase === 'running' ? <Text style={styles.syncStatus}>后台处理中…</Text> : null}
     {snapshot.work.phase === 'backoff' ? <Text style={styles.syncStatus}>后台处理将在稍后重试</Text> : null}
     {snapshot.phase === 'stale' ? <Text style={styles.syncError}>{'状态可能已过期：' + snapshot.read.error}</Text> : null}
     {maintenanceError ? <Text accessibilityRole="alert" style={styles.syncError}>{maintenanceError}</Text> : null}
     {background.phase === 'failed' ? <View style={listUI.notice}><Text accessibilityRole="alert" style={styles.syncError}>后台同步注册失败，回到应用时会重试；前台任务仍可继续。</Text><ListAction secondary icon="refresh" label="重试后台同步注册" onPress={() => { void backgroundRegistration.retry(); }} /></View> : null}
     {monitoring ? <Text style={styles.syncStatus}>持续监控所有任务；任务及下载、保存操作完成后自动停止。系统可能延迟或终止后台执行。{monitor.notificationsEnabled === false ? '完成通知未开启。' : ''}</Text> : monitor.stopReason === 'user' ? <Text style={styles.syncStatus}>持续监控已由你停止。</Text> : monitor.stopReason === 'timeout' ? <Text style={styles.syncError}>已达到系统后台运行时限，持续监控已停止；可重新开启。</Text> : monitor.stopReason === 'complete' ? <Text style={styles.syncStatus}>任务及相关操作已完成，持续监控已自动停止。</Text> : monitor.enabled ? <Text style={styles.syncError}>持续监控当前未运行，可重新开启。</Text> : monitor.stopReason === 'headless-failed' || monitor.stopReason === 'start-failed' ? <Text style={styles.syncError}>持续监控启动失败，请重试。</Text> : null}
-    <ListFilters label="任务筛选" options={[{ id: 'all', label: '全部' }, { id: 'active', label: '进行中' }, { id: 'failed', label: '失败' }]} value={filter} onChange={value => { setFilter(value); setPageError(''); }} />
+    <ListFilters label="任务筛选" options={[{ id: 'all', label: '全部' }, { id: 'active', label: '进行中' }, { id: 'failed', label: '失败' }, { id: 'archived', label: '已归档' }]} value={filter} onChange={value => { setFilter(value); setPageError(''); }} />
     <FlatList keyboardDismissMode="on-drag" data={snapshot.items} initialNumToRender={12} maxToRenderPerBatch={8} windowSize={7} updateCellsBatchingPeriod={50} removeClippedSubviews
       keyExtractor={item => item.id} contentContainerStyle={styles.list} refreshing={refreshing} onRefresh={refresh}
       onEndReached={() => { if (pageBusy || pageError || !snapshot.nextCursor) return; setPageBusy(true); void session.loadMore().catch(() => setPageError('加载更多失败')).finally(() => setPageBusy(false)); }}

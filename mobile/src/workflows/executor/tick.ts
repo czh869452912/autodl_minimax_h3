@@ -12,7 +12,7 @@ export type TickSummary = {
   remainingScheduled: number;
   nextWakeAt?: number;
 };
-export type TickOptions = { reason: 'foreground' | 'background' | 'service'; maxOperations?: number; now?: number };
+export type TickOptions = { reason: 'foreground' | 'background' | 'service'; maxOperations?: number; now?: number; deadline?: number };
 
 const laneOrder = OPERATION_LANES;
 const concurrency: Record<OperationKind, number> = { SUBMIT: 1, STATUS_SYNC: 4, ARTIFACT_DOWNLOAD: 1, EXPORT: 1 };
@@ -74,14 +74,18 @@ export function createExecutorTick(deps: TickDeps) {
       let cursor = 0;
       const worker = async () => {
         while (cursor < items.length) {
+          if (options.deadline != null && Date.now() >= options.deadline) break;
           const candidate = items[cursor++];
-          const claimed = await deps.operations.claimById(candidate.id, owner, timestamp, deps.leaseMs ?? 120_000);
+          const claimed = await deps.operations.claimById(candidate.id, owner, options.now == null ? Date.now() : timestamp, deps.leaseMs ?? 120_000);
           if (!claimed) continue;
           summary.claimed += 1;
           try {
             await deps.executor.handle(claimed, owner);
           } catch {
-            await deps.operations.release(claimed.id, owner, timestamp);
+            const failedAt = Date.now();
+            const error = { code: 'EXECUTOR_UNEXPECTED_ERROR', message: '后台操作异常，请刷新重试。', retryable: claimed.attempt < 5 };
+            if (claimed.attempt >= 5) await deps.operations.finish(claimed.id, owner, 'BLOCKED', failedAt, error);
+            else await deps.operations.retry(claimed.id, owner, { now: failedAt, nextRetryAt: failedAt + Math.min(60000, 1000 * 2 ** Math.min(claimed.attempt, 6)) + Math.floor(Math.random() * 250), error });
           }
           const current = await deps.operations.get(claimed.id);
           if (current?.state === 'CLAIMED') {

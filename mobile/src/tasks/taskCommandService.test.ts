@@ -57,3 +57,47 @@ test('download cancellation clears leases and pending delivery intent before nat
     expect(db.getFirstSync('SELECT download_state,export_state FROM tasks')).toEqual({ download_state: 'DOWNLOAD_FAILED', export_state: 'NOT_REQUESTED' });
   } finally { db.close(); }
 });
+
+
+test('archive preserves remote tracking and restore exposes the same task', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    db.runSync("INSERT INTO tasks(id,prompt,status,resolution,duration,created_at,updated_at) VALUES('a','p','RUNNING','720p',5,1,1)");
+    const commands = createTaskCommandService({ db: db as never, fileExists: async () => false, resolveCasUri: p => p, invalidate: () => undefined });
+    const { createTaskProjectionRepository } = require('./projectionRepository');
+    await commands.setArchived('a', true);
+    expect((await createTaskProjectionRepository(db).readWindow()).items).toHaveLength(0);
+    expect((await createTaskProjectionRepository(db, 'archived').readWindow()).items).toHaveLength(1);
+    expect(db.getFirstSync('SELECT status FROM tasks')).toEqual({ status: 'RUNNING' });
+    await commands.setArchived('a', false);
+    expect((await createTaskProjectionRepository(db).readWindow()).items).toHaveLength(1);
+  } finally { db.close(); }
+});
+
+test('refresh resumes blocked queries without resubmitting uncertain generation', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    for (const kind of ['SUBMIT','STATUS_SYNC']) db.runSync("INSERT INTO workflow_operations(id,kind,job_id,idempotency_key,payload_json,state,next_retry_at,created_at,updated_at) VALUES(?,?, 'j',?,'{}','BLOCKED',1,1,1)", kind, kind, kind);
+    const commands = createTaskCommandService({ db: db as never, fileExists: async () => false, resolveCasUri: p => p, invalidate: () => undefined, signal: () => undefined });
+    await commands.requestRefresh({ maintenance: 'force-next-slice' });
+    expect(db.getFirstSync("SELECT state FROM workflow_operations WHERE kind='SUBMIT'")).toEqual({state:'BLOCKED'});
+    expect(db.getFirstSync("SELECT state FROM workflow_operations WHERE kind='STATUS_SYNC'")).toEqual({state:'PENDING'});
+  } finally { db.close(); }
+});
+
+
+test('confirmed replacement creates exactly one new intent and preserves original uncertainty', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  const ids = jest.spyOn(require('../ids'), 'createId').mockReturnValue('replacement');
+  try {
+    db.runSync("INSERT INTO tasks(id,prompt,status,resolution,duration,created_at,updated_at) VALUES('u','p','UNKNOWN','720p',5,1,1)");
+    db.runSync("INSERT INTO workflow_jobs(id,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,status,created_at,updated_at) VALUES('u','h3','1','hash','a','1','{}','UNKNOWN',1,1)");
+    db.runSync(`INSERT INTO workflow_operations(id,kind,job_id,idempotency_key,payload_json,state,next_retry_at,created_at,updated_at) VALUES('submit','SUBMIT','u','submit:u','{"prepared":{"requestInput":{"prompt":"p"}}}','BLOCKED',1,1,1)`);
+    const commands = createTaskCommandService({ db: db as never, fileExists: async () => false, resolveCasUri: p => p, invalidate: () => undefined, signal: () => undefined });
+    await expect(commands.replaceUnknownAfterConfirmation('u')).resolves.toBe('job:replacement');
+    await expect(commands.replaceUnknownAfterConfirmation('u')).rejects.toThrow('已为此任务');
+    expect(db.getFirstSync("SELECT status FROM workflow_jobs WHERE id='u'")).toEqual({status:'UNKNOWN'});
+    expect(db.getFirstSync("SELECT status FROM workflow_jobs WHERE id='job:replacement'")).toEqual({status:'READY_TO_SUBMIT'});
+    expect(db.getAllSync("SELECT id FROM workflow_operations WHERE state='PENDING'")).toHaveLength(1);
+  } finally { ids.mockRestore(); db.close(); }
+});

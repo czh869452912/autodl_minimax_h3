@@ -19,7 +19,7 @@ test.each([5, 6, 7, 8])('frozen v%s upgrades to fresh schema including constrain
     historical.runSync("INSERT INTO tasks(id,prompt,status,resolution,duration,created_at,updated_at) VALUES('preserved','original','RUNNING','768p',5,1,2)");
     ensureAppDatabase(historical as never);
     expect(fresh.getFirstSync('PRAGMA user_version')).toEqual({ user_version: APP_SCHEMA_VERSION });
-    const v10Names = new Set(['task_monitor_events', 'task_monitor_event_insert', 'task_monitor_event_delete', 'media_asset_tombstones', 'idx_media_tombstones_task', 'media_assets_respect_deletion', 'media_refs_respect_deletion', 'media_deliveries_respect_deletion']);
+    const v10Names = new Set(['task_archives', 'archive_revision_insert', 'archive_revision_delete', 'archive_task_delete', 'task_monitor_events', 'task_monitor_event_insert', 'task_monitor_event_delete', 'media_asset_tombstones', 'idx_media_tombstones_task', 'media_assets_respect_deletion', 'media_refs_respect_deletion', 'media_deliveries_respect_deletion']);
     expect(schema(fresh).filter(row => !v10Names.has(row.name))).toEqual(terminalSchema.objects);
     expect(schema(historical).filter(row => !v10Names.has(row.name))).toEqual(terminalSchema.objects);
     expect(schema(historical)).toEqual(schema(fresh));
@@ -83,5 +83,21 @@ test('already-installed v11 upgrades the trigger without resetting its cursor or
     expect(db.getAllSync('SELECT event_id FROM task_monitor_events')).toEqual([{ event_id: 'existing' }]);
     insert('submit', 'SUBMIT_FAILED'); insert('poll', 'STATUS_SYNC_FAILED'); insert('uncertain', 'SUBMIT_UNKNOWN');
     expect(db.getAllSync('SELECT event_id FROM task_monitor_events WHERE sequence>? ORDER BY sequence', cursor)).toEqual([{ event_id: 'submit' }, { event_id: 'poll' }]);
+  } finally { db.close(); }
+});
+
+
+test('v12 upgrade adds reversible archives without changing task state', () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    db.execSync('DROP TRIGGER archive_task_delete; DROP TABLE task_archives; PRAGMA user_version=12');
+    db.runSync("INSERT INTO tasks(id,prompt,status,resolution,duration,created_at,updated_at) VALUES('preserved','p','RUNNING','720p',5,1,1)");
+    ensureAppDatabase(db as never);
+    expect(db.getFirstSync('PRAGMA user_version')).toEqual({user_version:APP_SCHEMA_VERSION});
+    expect(db.getFirstSync('SELECT status FROM tasks')).toEqual({status:'RUNNING'});
+    expect(db.getAllSync('SELECT * FROM task_archives')).toEqual([]);
+    db.runSync("INSERT INTO task_archives VALUES('preserved',2)");
+    db.runSync("DELETE FROM tasks WHERE id='preserved'");
+    expect(db.getAllSync('SELECT * FROM task_archives')).toEqual([]);
   } finally { db.close(); }
 });

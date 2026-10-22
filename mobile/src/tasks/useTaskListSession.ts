@@ -3,7 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import { createTaskListSession, type TaskListSession } from './taskListSession';
 import { getTaskServices } from './taskServices';
 
-export function useTaskListSession(provided?: TaskListSession, filter: 'all' | 'active' | 'failed' = 'all') {
+export function useTaskListSession(provided?: TaskListSession, filter: 'all' | 'active' | 'failed' | 'archived' = 'all') {
   const owned = useMemo(() => { const repository = getTaskServices().taskProjectionRepository; return provided ? undefined : createTaskListSession({ repository: repository.forFilter?.(filter) ?? repository }); }, [provided, filter]);
   const currentOwned = useRef(owned); currentOwned.current = owned;
   const session = provided ?? owned!;

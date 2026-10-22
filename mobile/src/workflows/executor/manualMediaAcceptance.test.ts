@@ -124,6 +124,9 @@ test('manual save joins a claimed download and publication recovery commits one 
     const cycle = createExecutorCycle({ runTick: (options) => tick.run(options), now: () => 100 });
 
     await cycle.run({ reason: 'foreground', maxPasses: 4, maxOperationsTotal: 8 });
+    const deferred = operations.list('EXPORT')[0];
+    expect(deferred).toMatchObject({ state: 'PENDING', lastError: { code: 'EXECUTOR_UNEXPECTED_ERROR' } });
+    await cycle.run({ reason: 'foreground', now: deferred.nextRetryAt, maxPasses: 4, maxOperationsTotal: 8 });
 
     expect(operations.list('ARTIFACT_DOWNLOAD')).toHaveLength(1);
     expect(operations.list('EXPORT')).toMatchObject([{ state: 'SUCCEEDED', attempt: 2, payload: { keepPrivateCopy: false } }]);

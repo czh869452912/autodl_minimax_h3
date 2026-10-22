@@ -1,8 +1,8 @@
-export const APP_SCHEMA_VERSION = 12;
+export const APP_SCHEMA_VERSION = 13;
 export const RECOVERY_TABLE = 'app_database_recovery';
 
 export const APP_TABLES = [
-  'task_monitor_events',
+  'task_archives', 'task_monitor_events',
   'media_asset_tombstones', 'workflow_artifacts', 'workflow_jobs', 'workflow_operations', 'workflow_job_events',
   'artifact_blob_refs', 'artifact_blobs', 'media_deliveries', 'media_assets', 'tasks',
   'workflow_registry_releases', 'workflow_registry_active', 'workflow_registry', 'prompt_drafts', 'agent_threads',
@@ -91,4 +91,11 @@ export const V12_SCHEMA_STATEMENTS = [
   "CREATE TRIGGER task_monitor_event_insert AFTER INSERT ON workflow_job_events WHEN NEW.event_type IN ('STATUS_RECONCILED','cancelled','SUBMIT_FAILED','STATUS_SYNC_FAILED') BEGIN INSERT INTO task_monitor_events(event_id) VALUES(NEW.id); END",
 ] as const;
 
-export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS] as const;
+export const V13_SCHEMA_STATEMENTS = [
+  'CREATE TABLE IF NOT EXISTS task_archives (task_id TEXT PRIMARY KEY NOT NULL, archived_at INTEGER NOT NULL)',
+  'CREATE TRIGGER IF NOT EXISTS archive_revision_insert AFTER INSERT ON task_archives BEGIN UPDATE task_projection_state SET revision=revision+1 WHERE singleton=1; END',
+  'CREATE TRIGGER IF NOT EXISTS archive_revision_delete AFTER DELETE ON task_archives BEGIN UPDATE task_projection_state SET revision=revision+1 WHERE singleton=1; END',
+  'CREATE TRIGGER IF NOT EXISTS archive_task_delete AFTER DELETE ON tasks BEGIN DELETE FROM task_archives WHERE task_id=OLD.id; END',
+] as const;
+
+export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS, ...V13_SCHEMA_STATEMENTS] as const;

@@ -55,9 +55,9 @@ test.each(['submit', 'status'] as const)('terminal %s failure reaches the real m
       const [poll] = await claimOperations(value.operations, { kind: 'STATUS_SYNC', owner: 'worker', now: 10000, leaseMs: 50, limit: 1 });
       await value.service.handle(poll, 'worker');
     }
-    expect((await value.jobs.get(job.id))?.status).toBe('FAILED');
+    expect((await value.jobs.get(job.id))?.status).toBe(stage === 'submit' ? 'FAILED' : 'QUEUED');
     const batch = await queue.read(cursor);
-    expect(batch.events).toEqual([expect.objectContaining({ taskId: job.id, status: 'FAILED' })]);
+    expect(batch.events).toEqual(stage === 'submit' ? [expect.objectContaining({ taskId: job.id, status: 'FAILED' })] : []);
     expect((await queue.read(batch.cursor)).events).toEqual([]);
   } finally { value.db.close(); }
 });
@@ -224,5 +224,21 @@ test('explicit replacement preserves the original UNKNOWN snapshot and audit', a
     expect((await value.jobs.get(original.id))).toMatchObject({ status: 'UNKNOWN' });
     expect((await value.jobs.listEvents(original.id))).toHaveLength(auditLength);
     expect(value.operations.list('SUBMIT')).toHaveLength(2);
+  } finally { value.db.close(); }
+});
+
+
+test.each([401,429,408,503])('query HTTP %s preserves remote handle and generation status', async code => {
+  const value = setup();
+  try {
+    const job = await value.service.queueSubmission(input('query-error'));
+    const [submit] = await claimOperations(value.operations, {kind:'SUBMIT',owner:'worker',now:100,leaseMs:50,limit:1});
+    await value.service.handle(submit,'worker');
+    value.adapter.getStatus.mockRejectedValueOnce(new ProviderError('demo','status',code === 401 ? 'auth' : 'http','private error',code));
+    const [poll] = await claimOperations(value.operations,{kind:'STATUS_SYNC',owner:'worker',now:10000,leaseMs:50,limit:1});
+    await value.service.handle(poll,'worker');
+    expect(await value.jobs.get(job.id)).toMatchObject({status:'QUEUED',providerHandle:{providerJobId:'remote-1'}});
+    expect(await value.operations.get(poll.id)).toMatchObject({state:code === 401 ? 'BLOCKED' : 'PENDING'});
+    expect(value.adapter.submit).toHaveBeenCalledTimes(1);
   } finally { value.db.close(); }
 });

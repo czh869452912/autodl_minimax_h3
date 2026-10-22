@@ -204,7 +204,14 @@ export function createDurableExecutor(deps: DurableExecutorDeps) {
           event: { id: eventId(job, 'status-retry'), type: 'STATUS_RETRY_SCHEDULED', payload: { code: failure.error.code }, createdAt: timestamp },
         }));
         await deps.operations.retry(operation.id, owner, { now: timestamp, nextRetryAt, error: failure.error });
-      } else await finishFailure(operation, owner, (await deps.jobs.get(job.id)) ?? job, failure.error, 'TERMINAL');
+      } else {
+        // Query failure does not establish remote generation failure.
+        await deps.jobs.transition({ jobId: job.id, expectedRevision: job.revision,
+          patch: { lastError: failure.error, nextSyncAt: undefined, updatedAt: timestamp },
+          event: { id: eventId(job, 'sync-blocked'), type: 'STATUS_SYNC_BLOCKED', payload: { code: failure.error.code }, createdAt: timestamp },
+        });
+        await deps.operations.finish(operation.id, owner, 'BLOCKED', timestamp, failure.error);
+      }
     }
   };
 
