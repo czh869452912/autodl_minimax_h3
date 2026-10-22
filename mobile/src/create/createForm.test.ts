@@ -1,3 +1,4 @@
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 import { WorkflowForm } from '../workflows/renderer/WorkflowForm';
 import { buildAutodlSubmitRequest } from '../workflows/providers/autodl/mapping';
 import { resolveDraftPrompt } from './draftPrompt';
@@ -94,7 +95,7 @@ describe('create form contracts', () => {
 
 
   it.each([
-    ['rejects 10,001 prompt characters before credentials or queue access', 10_001, 0],
+    ['rejects 10,001 prompt characters before submission credential refresh or queue access', 10_001, 0],
     ['accepts exactly 10,000 prompt characters and queues once', 10_000, 1],
   ])('%s', async (_name, promptLength, expectedQueues) => {
     const definition = builtinWorkflowDefinitions[1];
@@ -125,6 +126,9 @@ describe('create form contracts', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+    // The mount-time readiness check is separate from submission validation.
+    expect(readSettings).toHaveBeenCalledTimes(1);
+    readSettings.mockClear();
     const promptInput = tree.root.findAllByType(TextInput).find((node) => node.props.multiline);
     expect(promptInput).toBeDefined();
     act(() => { promptInput?.props.onChangeText('a'.repeat(promptLength)); });

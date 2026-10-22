@@ -1,3 +1,5 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { settingsEvents } from '../settings/events';
 import { defaultDraftDependencies, defaultSubmissionDependencies, type CreateFormDraftDependencies, type CreateFormSubmissionDependencies } from './createServices';
 export type { CreateFormDraftDependencies, CreateFormSubmissionDependencies } from './createServices';
 import { useEffect, useRef, useState } from 'react';
@@ -5,7 +7,6 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -82,7 +83,23 @@ export function CreateForm({
   draftDependencies?: CreateFormDraftDependencies;
 }) {
   const layout = usePageLayout();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [settingsNotice, setSettingsNotice] = useState('');
+  useEffect(() => {
+    let active = true;
+    let revision = 0;
+    const check = async () => {
+      const current = ++revision;
+      try {
+        const settings = await submissionDependencies.readSettings();
+        if (active && current === revision) setSettingsNotice(settings && !settings.token?.trim() ? '尚未配置 AutoDL Token，保存后即可生成视频。' : '');
+      } catch { if (active && current === revision) setSettingsNotice('无法读取生成配置，请前往设置检查后重试。'); }
+    };
+    void check();
+    const unsubscribe = settingsEvents.subscribe(() => { void check(); });
+    return () => { active = false; unsubscribe(); };
+  }, [submissionDependencies]);
   const scrollRef = useRef<ScrollView>(null);
   const mediaRef = useRef<View>(null);
   const [incomingPrompt, setIncomingPrompt] = useState('');
@@ -378,8 +395,10 @@ export function CreateForm({
       if (acquired) { submissionGate.release(); setSubmitting(false); }
     }
   };
+  const submitDisabled = submitting || switching || picking || loadingDraft || awaitingDraft || Boolean(appliedDraft && acknowledgedDraft !== appliedDraft) || !definition || !activeRecord;
+  const summary = definition ? canonicalInputs(definition, workflowValues) : {};
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView ref={scrollRef}
+    <KeyboardAvoidingView style={styles.container} behavior="padding" keyboardVerticalOffset={insets.top}><ScrollView ref={scrollRef}
       style={styles.container}
       contentContainerStyle={[styles.content, layout.contentStyle]}
       keyboardShouldPersistTaps="handled"
@@ -387,12 +406,13 @@ export function CreateForm({
     >
       {incomingPrompt ? <View style={styles.card}><Text>收到新的提示词，请选择如何带入。当前编辑内容已保留。</Text>{(['替换','追加','取消'] as const).map(action => <Pressable key={action} accessibilityRole="button" disabled={submitting || switching} style={styles.mediaButton} onPress={() => { if (action !== '取消') { const field = definition ? inputField(definition, 'prompt') : 'prompt'; setWorkflowValues(current => ({ ...current, [field]: action === '追加' ? [String(current[field] ?? ''), incomingPrompt].filter(Boolean).join('\n') : incomingPrompt })); editRevision.current++; } setIncomingPrompt(''); }}><Text>{action}</Text></Pressable>)}</View> : null}
       {catalogLoading ? <ActivityIndicator accessibilityLabel="正在加载工作流" /> : !definition && !loadError ? <Pressable accessibilityRole="button" onPress={() => router.navigate('/(tabs)/settings')} style={styles.mediaButton}><Text>暂无工作流，前往设置同步</Text></Pressable> : null}
-      <Text style={styles.title}>{definition?.metadata.title ?? '工作流创建'}</Text>
+      <Text style={styles.title}>生成视频</Text>
       <Text style={styles.subtitle}>
-        {loadError ?? definition?.metadata.description ?? '正在加载本地活动工作流…'}
+        {loadError ?? (definition ? '描述画面、选择素材，然后生成你的视频。' : '正在加载工作流…')}
       </Text>
       {loadError ? <Pressable accessibilityRole="button" accessibilityLabel="重试加载工作流" onPress={() => setCatalogRevision(value => value + 1)} style={styles.mediaButton}><Text style={styles.mediaText}>重试加载工作流</Text></Pressable> : null}
       {submitting || switching ? <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator /><Text style={styles.help}>{submitting ? '正在提交，参数暂时锁定…' : '正在切换工作流…'}</Text></View> : null}
+      {settingsNotice ? <View style={styles.card}><Text accessibilityRole="alert" style={styles.help}>{settingsNotice}</Text><Pressable accessibilityRole="button" accessibilityLabel="前往设置配置生成" style={styles.mediaButton} onPress={() => router.navigate('/(tabs)/settings')}><Text style={styles.mediaText}>前往设置</Text></Pressable></View> : null}
       <WorkflowSelector definitions={records.map(registryRecordToDefinition)} selectedId={definition?.id} onSelect={id => void selectWorkflow(id)} disabled={submitting || switching || picking || loadingDraft || awaitingDraft || Boolean(appliedDraft && acknowledgedDraft !== appliedDraft)} />
       {alignmentNotices.map((notice, index) => <Text key={index} style={styles.help}>{notice}</Text>)}
       {handoffNotice ? <Text accessibilityLiveRegion="polite" style={styles.help}>{handoffNotice}</Text> : null}
@@ -495,28 +515,35 @@ export function CreateForm({
         <Text style={styles.help}>音频格式：{audioRules.mimes.map(mime => mime.replace('audio/', '')).join(' / ')}</Text>
         {definition && fieldErrors.filter(error => error.path.startsWith(`/${imageRules.field}`) || error.path.startsWith(`/${audioRules.field}`)).map((error, index) => <Text key={index} accessibilityRole="alert" style={{ color: COLORS.danger }}>{formatSubmissionFieldError(error, definition)}</Text>)}
       </View>
+    </ScrollView>
+    <View style={styles.submitBar}><View style={[layout.contentStyle, styles.submitContent]}>
+      <Text style={styles.help}>{[summary.resolution, summary.duration != null ? String(summary.duration) + ' 秒' : '', '图片 ' + images.length + ' · 音频 ' + audios.length].filter(Boolean).join(' · ')}</Text>
+      {fieldErrors.length ? <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>请检查表单中标出的 {fieldErrors.length} 项参数</Text> : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="提交 AutoDL 任务生成"
-        disabled={submitting || switching || picking || loadingDraft || awaitingDraft || Boolean(appliedDraft && acknowledgedDraft !== appliedDraft) || !definition || !activeRecord}
+        disabled={submitDisabled}
+        accessibilityState={{ disabled: submitDisabled, busy: submitting }}
         onPress={() => void submit()}
-        style={[styles.submit, (submitting || loadingDraft || Boolean(appliedDraft && acknowledgedDraft !== appliedDraft) || !definition || !activeRecord) && styles.disabled]}
+        style={[styles.submit, submitDisabled && styles.disabled]}
       >
-        <AppIcon name="bolt" size={20} color={COLORS.text} />
+        <AppIcon name="bolt" size={20} color={COLORS.onPrimary} />
         <Text style={styles.submitText}>
-          {submitting ? '提交中…' : '提交 AutoDL 任务生成'}
+          {submitting ? '提交中…' : '生成视频'}
         </Text>
       </Pressable>
       <Text style={styles.footnote}>
-        提交后保存至任务队列，成功后自动下载 MP4 至本地。
+        提交后可在任务页查看进度
       </Text>
-    </ScrollView></KeyboardAvoidingView>
+    </View></View></KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  content: { padding: SPACING.xl, paddingBottom: 140, gap: SPACING.lg },
+  content: { padding: SPACING.xl, paddingBottom: 24, gap: SPACING.lg },
+  submitBar: { backgroundColor: COLORS.surface, borderTopWidth: 1, borderTopColor: COLORS.border },
+  submitContent: { width: '100%', paddingHorizontal: SPACING.xl, paddingVertical: 10, gap: 8 },
   title: {
     color: COLORS.text,
     fontSize: 29,
@@ -548,14 +575,14 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#6366f155',
-    backgroundColor: '#312e811c',
+    borderColor: COLORS.primaryActive,
+    backgroundColor: COLORS.primarySoft,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
   },
-  mediaText: { flexShrink: 1, color: '#c7d2fe', fontSize: 12, fontWeight: '700' },
+  mediaText: { flexShrink: 1, color: COLORS.primaryActive, fontSize: 12, fontWeight: '700' },
   disabled: { opacity: 0.45 },
   submit: {
     minHeight: 56,

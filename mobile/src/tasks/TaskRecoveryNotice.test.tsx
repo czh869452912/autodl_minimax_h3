@@ -1,0 +1,35 @@
+import React from 'react';
+import { act, create } from 'react-test-renderer';
+import { Alert, Text } from 'react-native';
+import { TaskRecoveryNotice } from './TaskRecoveryNotice';
+import type { TaskCard } from './taskCard';
+const item: TaskCard = { id: 'job:local', prompt: 'A sunset', status: 'RUNNING', resolution: '720p', duration: 5, createdAt: 1, updatedAt: 2, downloadState: 'IDLE', exportState: 'NOT_REQUESTED' };
+afterEach(() => jest.restoreAllMocks());
+test('authentication repair and refresh are separate from retryable failures', () => {
+  const settings = jest.fn(), refresh = jest.fn();
+  let tree!: ReturnType<typeof create>;
+  act(() => { tree = create(<TaskRecoveryNotice item={{ ...item, syncState: 'BLOCKED', syncErrorCode: 'AUTODL_STATUS_AUTH_401' }} busy={false} onSettings={settings} onRefresh={refresh} />); });
+  act(() => tree.root.findByProps({ accessibilityLabel: '修改 AutoDL 凭据' }).props.onPress());
+  expect(settings).toHaveBeenCalledTimes(1);
+  expect(refresh).not.toHaveBeenCalled();
+  act(() => tree.root.findByProps({ accessibilityLabel: '刷新同步' }).props.onPress());
+  expect(refresh).toHaveBeenCalledTimes(1);
+  act(() => tree.update(<TaskRecoveryNotice item={{ ...item, syncState: 'PENDING', syncError: 'offline', syncErrorCode: 'AUTODL_STATUS_NETWORK' }} busy={false} onSettings={settings} onRefresh={refresh} />));
+  expect(tree.root.findAllByProps({ accessibilityLabel: '修改 AutoDL 凭据' })).toHaveLength(0);
+  expect(tree.root.findAllByType(Text).some(node => String(node.props.children).includes('系统将稍后重试'))).toBe(true);
+  act(() => tree.unmount());
+});
+test('unknown submission exposes verification and never recreates without confirmation', () => {
+  const replace = jest.fn();
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  let tree!: ReturnType<typeof create>;
+  act(() => { tree = create(<TaskRecoveryNotice item={{ ...item, status: 'UNKNOWN' }} busy={false} onReplace={replace} />); });
+  act(() => tree.root.findByProps({ accessibilityLabel: '核查原任务' }).props.onPress());
+  expect(alert.mock.calls[0][1]).toContain('本地编号不是服务端任务编号');
+  expect(replace).not.toHaveBeenCalled();
+  act(() => tree.root.findByProps({ accessibilityLabel: '确认后重新创建' }).props.onPress());
+  expect(replace).not.toHaveBeenCalled();
+  act(() => alert.mock.calls[1][2]!.find(button => button.text === '确认创建新任务')!.onPress!());
+  expect(replace).toHaveBeenCalledWith(item.id);
+  act(() => tree.unmount());
+});

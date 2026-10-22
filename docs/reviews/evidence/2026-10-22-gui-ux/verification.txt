@@ -1,0 +1,16 @@
+TypeScript: npm run typecheck — passed
+
+Test Suites: 1 skipped, 172 passed, 172 of 173 total
+Tests:       2 skipped, 1258 passed, 1260 total
+Snapshots:   0 total
+Time:        58.528 s, estimated 85 s
+Ran all test suites.
+
+Android build:
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 1m 10s
+359 actionable tasks: 23 executed, 336 up-to-date
+
+AndroidRuntime:E / ReactNativeJS:E: no output
+Original emulator database restored and byte verified; font_scale restored to 1.0.

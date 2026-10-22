@@ -255,3 +255,20 @@ it('saves edits to an applied form and restores them after leaving and reopening
   expect(tree.root.findByType(WorkflowForm).props.value.prompt).toBe('Recovered edit');
   act(() => tree.unmount());
 });
+
+test('missing token is surfaced before submission and clears after settings are saved', async () => {
+  const { settingsEvents } = require('../settings/events');
+  const context = setup();
+  context.submissionDependencies.readSettings.mockResolvedValue({ token: '' });
+  let tree!: ReturnType<typeof create>;
+  await act(async () => { tree = create(<CreateForm submissionDependencies={context.submissionDependencies} draftDependencies={context.drafts} />); });
+  expect(tree.root.findByProps({ accessibilityLabel: '前往设置配置生成' })).toBeDefined();
+  expect(context.queue).not.toHaveBeenCalled();
+  context.submissionDependencies.readSettings.mockResolvedValue({ token: 'configured' });
+  await act(async () => settingsEvents.publish());
+  expect(tree.root.findAllByProps({ accessibilityLabel: '前往设置配置生成' })).toHaveLength(0);
+  const button = tree.root.findByProps({ accessibilityLabel: '提交 AutoDL 任务生成' });
+  let parent = button.parent;
+  while (parent) { expect(parent.type).not.toBe(require('react-native').ScrollView); parent = parent.parent; }
+  act(() => tree.unmount());
+});

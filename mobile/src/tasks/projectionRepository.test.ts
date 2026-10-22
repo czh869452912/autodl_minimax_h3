@@ -200,3 +200,15 @@ test('returns a typed conflict after the revision changes during both fenced att
     expect(result).toMatchObject({ attempts: 2 });
   } finally { db.close(); }
 });
+
+test('projects structured sync state and error code without interpreting localized messages', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    insertTask(db, 1, { status: 'RUNNING', syncError: 'localized message' });
+    db.runSync("INSERT INTO workflow_operations (id,kind,job_id,idempotency_key,payload_json,state,attempt,next_retry_at,last_error_json,created_at,updated_at) VALUES ('sync','STATUS_SYNC','task-0001','sync','{}','BLOCKED',1,1,?,1,1)", JSON.stringify({ code: 'AUTODL_STATUS_AUTH_401' }));
+    const window = await createTaskProjectionRepository(db as never).readWindow();
+    expect(window.items[0]).toMatchObject({ syncState: 'BLOCKED', syncErrorCode: 'AUTODL_STATUS_AUTH_401' });
+    db.runSync("UPDATE workflow_operations SET last_error_json='invalid-json'");
+    expect((await createTaskProjectionRepository(db as never).readWindow()).items[0].syncErrorCode).toBeUndefined();
+  } finally { db.close(); }
+});

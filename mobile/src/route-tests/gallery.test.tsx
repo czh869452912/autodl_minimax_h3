@@ -129,3 +129,21 @@ it('clears both search and status from an empty filtered result and still opens 
     jest.useRealTimers();
   }
 });
+
+test('explicit management mode selects instead of navigating even with zero selected items', async () => {
+  mockPush.mockClear();
+  let tree!: ReturnType<typeof create>;
+  await act(async () => { tree = create(<GalleryScreen />); });
+  act(() => tree.root.findByProps({ accessibilityLabel: '管理作品' }).props.onPress());
+  const press = () => tree.root.findByProps({ accessibilityLabel: '打开视频 cinematic city' }).props.onPress();
+  act(press);
+  expect(mockPush).not.toHaveBeenCalled();
+  expect(tree.root.findByProps({ accessibilityLabel: '打开视频 cinematic city' }).props.accessibilityState.selected).toBe(true);
+  act(press);
+  expect(tree.root.findByProps({ accessibilityLabel: '打开视频 cinematic city' }).props.accessibilityState.selected).toBe(false);
+  expect(tree.root.findByProps({ accessibilityLabel: '取消选择' })).toBeDefined();
+  act(() => tree.root.findByProps({ accessibilityLabel: '取消选择' }).props.onPress());
+  act(press);
+  expect(mockPush).toHaveBeenCalledTimes(1);
+  act(() => tree.unmount());
+});

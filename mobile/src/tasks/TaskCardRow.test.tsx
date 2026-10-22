@@ -122,3 +122,15 @@ test.each([
   expect(StyleSheet.flatten(badge.props.style).color).toBe(color);
   act(() => tree.unmount());
 });
+
+test('active removal is visibly disabled and archival has a full touch target', () => {
+  const item: TaskCard = { id: 'job:123456789', prompt: 'p', status: 'RUNNING', resolution: '720p', duration: 5, createdAt: 1, updatedAt: 2, downloadState: 'IDLE', exportState: 'NOT_REQUESTED' };
+  let tree!: ReturnType<typeof create>;
+  act(() => { tree = create(<TaskCardRow item={item} busy={false} onDownload={jest.fn()} onExport={jest.fn()} onRemove={jest.fn()} onOpen={jest.fn()} onArchive={jest.fn()} />); });
+  const remove = tree.root.findByProps({ accessibilityLabel: '移除任务记录' });
+  expect(remove.props.disabled).toBe(true);
+  expect(StyleSheet.flatten(remove.props.style({ pressed: false })).opacity).toBe(0.45);
+  const archive = tree.root.findByProps({ accessibilityLabel: '归档任务' });
+  expect(StyleSheet.flatten(archive.props.style({ pressed: false })).minHeight).toBeGreaterThanOrEqual(48);
+  act(() => tree.unmount());
+});

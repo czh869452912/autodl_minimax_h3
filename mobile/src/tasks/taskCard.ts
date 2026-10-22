@@ -27,5 +27,7 @@ export type TaskCard = Readonly<{
   startedAt?: number;
   executionDuration?: number;
   syncError?: string;
+  syncErrorCode?: string;
+  syncState?: 'PENDING' | 'CLAIMED' | 'BLOCKED' | 'SUCCEEDED' | 'FAILED';
   lastSyncAt?: number;
 }>;

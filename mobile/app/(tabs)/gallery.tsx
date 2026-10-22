@@ -32,6 +32,7 @@ export default function GalleryScreen() {
   const [error, setError] = useState('');
   const [pageError, setPageError] = useState('');
   const [cursor, setCursor] = useState<{ createdAt: number; id: string }>();
+  const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [removing, setRemoving] = useState(false);
   const generation = useRef(0);
@@ -86,11 +87,11 @@ export default function GalleryScreen() {
     finally { if (token === generation.current) { paging.current = false; setLoadingMore(false); } }
   };
   useFocusEffect(useCallback(() => { navigating.current = false; void load(); return () => { generation.current++; }; }, [load]));
-  const changeQuery = (value: string) => { if (value === query) return; generation.current++; setQuery(value); setSelected([]); };
-  const toggle = (id: string) => setSelected(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
+  const changeQuery = (value: string) => { if (removing || value === query) return; generation.current++; setQuery(value); setSelected([]); };
+  const toggle = (id: string) => { if (removing) return; setSelected(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]); };
   const removeSelected = () => Alert.alert('删除作品', `删除 ${selected.length} 个应用内作品和私有副本，系统相册视频会保留。此操作无法撤销。`, [
     { text: '取消', style: 'cancel' }, { text: '删除', style: 'destructive', onPress: async () => {
-      if (removing) return;
+      if (removing || !selected.length) return;
       generation.current++; setRemoving(true);
       try { for (const id of selected) await mediaStore.remove(id); setSelected([]); await load(); }
       catch { setError('部分作品未能删除，请刷新后重试'); }
@@ -100,17 +101,17 @@ export default function GalleryScreen() {
   const openAsset = (asset: MediaAsset) => { if (navigating.current) return; navigating.current = true; router.push({ pathname: '/video/[id]', params: { id: asset.id } }); };
   const clearFilters = () => { generation.current++; changeQuery(''); setFilter('all'); setSelected([]); setPageError(''); };
   return <View style={[styles.container, layout.contentStyle]}>
-    <Text style={styles.title}>结果</Text><Text style={styles.subtitle}>浏览与播放作品，长按可选择多个作品。</Text>
-    {selected.length > 0 ? <View style={styles.selectionPanel}>
-      <View style={styles.selectionHeading}><Text accessibilityLiveRegion="polite" style={styles.selectionTitle}>已选择 {selected.length} 项</Text><ListAction secondary label="取消选择" onPress={() => setSelected([])} /></View>
-      <View style={styles.selectionActions}><ListAction secondary label="选择已加载作品" onPress={() => setSelected(assets.map(item => item.id))} /><Pressable accessibilityRole="button" accessibilityState={{ disabled: removing, busy: removing }} disabled={removing} onPress={removeSelected} style={({ pressed }) => [styles.deleteAll, pressed && listUI.pressed, removing && listUI.disabled]}><AppIcon name="delete" size={18} color={COLORS.danger} /><Text style={styles.deleteText}>{removing ? '正在删除…' : `删除 ${selected.length}`}</Text></Pressable></View>
+    <View style={styles.selectionHeading}><Text style={styles.title}>结果</Text>{!selecting && !selected.length ? <ListAction secondary label="管理作品" onPress={() => setSelecting(true)} /> : null}</View><Text style={styles.subtitle}>浏览、播放与管理生成的作品。</Text>
+    {selecting || selected.length > 0 ? <View style={styles.selectionPanel}>
+      <View style={styles.selectionHeading}><Text accessibilityLiveRegion="polite" style={styles.selectionTitle}>已选择 {selected.length} 项</Text><ListAction secondary disabled={removing} label="取消选择" onPress={() => { setSelected([]); setSelecting(false); }} /></View>
+      <View style={styles.selectionActions}><ListAction secondary disabled={removing || !assets.length} label="选择已加载作品" onPress={() => setSelected(assets.map(item => item.id))} /><Pressable accessibilityRole="button" accessibilityState={{ disabled: removing || !selected.length, busy: removing }} disabled={removing || !selected.length} onPress={removeSelected} style={({ pressed }) => [styles.deleteAll, pressed && listUI.pressed, (removing || !selected.length) && listUI.disabled]}><AppIcon name="delete" size={18} color={COLORS.danger} /><Text style={styles.deleteText}>{removing ? '正在删除…' : `删除 ${selected.length}`}</Text></Pressable></View>
     </View> : null}
     <View style={styles.search}><AppIcon name="search" size={21} color={COLORS.textSubtle} /><TextInput accessibilityLabel="搜索作品" value={query} onChangeText={changeQuery} placeholder="搜索 Prompt 或任务 ID..." placeholderTextColor={COLORS.textSubtle} style={styles.searchInput} />{query ? <Pressable accessibilityRole="button" accessibilityLabel="清除作品搜索" onPress={() => changeQuery('')} style={({ pressed }) => [styles.clearSearch, pressed && listUI.pressed]}><AppIcon name="close" size={18} color={COLORS.textMuted} /></Pressable> : null}</View>
-    <ListFilters label="作品状态" options={filters} value={filter} onChange={value => { if (value === filter) return; generation.current++; setSelected([]); setFilter(value); }} />
+    <ListFilters label="作品状态" options={filters} value={filter} onChange={value => { if (removing || value === filter) return; generation.current++; setSelected([]); setFilter(value); }} />
     {error ? <View style={listUI.notice}><Text accessibilityRole="alert" style={styles.errorText}>{error}</Text><ListAction secondary icon="refresh" label="重试读取作品列表" onPress={() => void load()} /></View> : null}
     <FlatList key={columns} onLayout={event => setListWidth(event.nativeEvent.layout.width)} data={assets} numColumns={columns} keyExtractor={item => item.id} columnWrapperStyle={columns > 1 ? styles.row : undefined} contentContainerStyle={styles.list} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled" refreshing={loading && assets.length > 0} onRefresh={() => void load()} onEndReached={() => { if (!pageError) void loadMore(); }} onEndReachedThreshold={0.6}
       ListFooterComponent={loadingMore ? <ActivityIndicator color={COLORS.primaryActive} /> : pageError ? <ListAction secondary icon="refresh" label={pageError} onPress={() => void loadMore()} /> : assets.length && !cursor ? <Text style={listUI.footer}>已显示全部作品</Text> : null}
-      renderItem={({ item }) => <GalleryCard width={cardWidth} asset={item} selected={selected.includes(item.id)} onLongPress={() => toggle(item.id)} onPress={() => selected.length ? toggle(item.id) : openAsset(item)} />}
+      renderItem={({ item }) => <GalleryCard width={cardWidth} asset={item} selected={selected.includes(item.id)} onLongPress={() => { setSelecting(true); toggle(item.id); }} onPress={() => selecting || selected.length ? toggle(item.id) : openAsset(item)} />}
       ListEmptyComponent={error ? null : <ListEmptyState icon={query || filter !== 'all' ? 'search' : 'movie_filter'} loading={loading}
         title={loading ? '正在加载作品' : query || filter !== 'all' ? '没有符合条件的作品' : '还没有视频作品'}
         description={loading ? '正在整理视频与封面，请稍候。' : query || filter !== 'all' ? '试试其他关键词，或清除筛选查看全部作品。' : '生成的视频会汇集在这里，随时浏览、播放与管理。'}

@@ -1,3 +1,4 @@
+import { settingsEvents } from './events';
 import { VIDEO_DECODE_MODE_KEY, normalizeVideoDecodeMode, publishVideoDecodeMode, type VideoDecodeMode } from './videoDecodeMode';
 import * as SecureStore from 'expo-secure-store';
 import type { ReasoningEffort } from '../config/llmReasoning';
@@ -69,4 +70,5 @@ export async function saveSettings(values: Partial<AppSettings>): Promise<void> 
     values.llmReasoningEffort === undefined ? undefined : SecureStore.setItemAsync(keys.llmReasoningEffort, values.llmReasoningEffort),
   ].filter((value): value is Promise<void> => Boolean(value)));
   if (values.videoDecodeMode !== undefined) publishVideoDecodeMode(normalizeVideoDecodeMode(values.videoDecodeMode));
+  settingsEvents.publish();
 }
