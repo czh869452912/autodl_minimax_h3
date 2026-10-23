@@ -12,6 +12,7 @@ export type CreativeCommand = import('./story').StoryCommand
   | { name: 'project.create'; payload: { title: string; brief?: string } }
   | { name: 'project.update'; payload: { id: string; expectedRevision: number; title: string; brief: string } }
   | { name: 'project.archive'; payload: { id: string; expectedRevision: number; archived: boolean } }
+  | {name:'project.setCover';payload:{id:string;expectedRevision:number;versionId:string|null}}
   | { name: 'asset.import'; payload: { title: string; kind: CreativeAsset['kind']; blobSha256: string; projectId?: string; sourceUri?: string; metadata?: Record<string,string> } }
   | { name: 'asset.setDefaultVersion'; payload: { id: string; versionId: string; expectedRevision: number } }
   | { name: 'asset.linkToProject'; payload: { assetId: string; projectId: string; versionId: string | null } }

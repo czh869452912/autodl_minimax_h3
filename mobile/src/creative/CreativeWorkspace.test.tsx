@@ -2,7 +2,7 @@ import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { CreativeWorkspace } from './CreativeWorkspace';
 const mockExecute = jest.fn(async () => ({ status: 'completed', receiptId: 'r', value: {} }));
-const mockService = { projects: jest.fn(async () => []), assets: jest.fn(async () => []), execute: mockExecute };
+const mockService = { covers:jest.fn(async()=>[]),projects: jest.fn(async () => []), assets: jest.fn(async () => []), execute: mockExecute };
 jest.mock('./runtime', () => ({ creativeService: () => mockService, importCreativeImage: jest.fn() }));
 jest.mock('../native/imagePicker', () => ({ pickImagesFromGallery: jest.fn(async () => []) }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }), useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]) }));

@@ -27,6 +27,7 @@ const schemas = {
   'project.create': z.object({ title, brief: z.string().max(20000).optional() }).strict(),
   'project.update': z.object({ id, expectedRevision: revision, title, brief: z.string().max(20000) }).strict(),
   'project.archive': z.object({ id, expectedRevision: revision, archived: z.boolean() }).strict(),
+  'project.setCover':z.object({id,expectedRevision:revision,versionId:id.nullable()}).strict(),
   'asset.import': z.object({ title, kind: z.enum(['image','video','audio','prompt','document']), blobSha256: z.string().regex(/^[a-f0-9]{64}$/), projectId: id.optional(), metadata: z.record(z.string().max(100),z.string().max(524288)).refine(value=>JSON.stringify(value).length<=524288).optional(), sourceUri: z.string().max(4000).regex(/^(file|content):\/\//).optional() }).strict(),
   'asset.setDefaultVersion': z.object({ id, versionId: id, expectedRevision: revision }).strict(),
   'asset.linkToProject': z.object({ assetId: id, projectId: id, versionId: id.nullable() }).strict(),
@@ -56,6 +57,9 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
     drafts: (projectId?: string) => db.getAllAsync<import('./drafts').CreativeDraft>("SELECT * FROM creative_generation_drafts WHERE (? IS NULL OR project_id=?) AND state!='DISCARDED' ORDER BY updated_at DESC,id DESC LIMIT 100", projectId ?? null, projectId ?? null),
     async projects(archived = false): Promise<CreativeProject[]> { return (await db.getAllAsync<Row>('SELECT * FROM creative_projects WHERE (archived_at IS NOT NULL)=? ORDER BY updated_at DESC,id DESC', archived ? 1 : 0)).map(project); },
     async project(id: string) { const row = await db.getFirstAsync<Row>('SELECT * FROM creative_projects WHERE id=?', id); return row ? project(row) : undefined; },
+    async covers(){return db.getAllAsync<{project_id:string;version_id:string;relative_path:string|null;state:string|null}>("SELECT c.*,b.relative_path,f.state FROM creative_project_covers c LEFT JOIN creative_version_files f ON f.version_id=c.version_id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256");},
+    async projectTab(id:string){return (await db.getFirstAsync<{tab:'brief'|'shots'|'assets'|'plans'|'activity'}>('SELECT tab FROM creative_project_views WHERE project_id=?',id))?.tab??'brief';},
+    async saveProjectTab(projectId:string,tab:'brief'|'shots'|'assets'|'plans'|'activity'){await withWriteTransaction(db,tx=>tx.runAsync('INSERT INTO creative_project_views VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET tab=excluded.tab',projectId,tab).then(()=>undefined));},
     async description(assetId:string){return db.getFirstAsync<{description:string;tags_json:string}>('SELECT * FROM creative_asset_descriptions WHERE asset_id=?',assetId);},
     async assets(options: { projectId?: string; query?: string; inbox?: boolean; trash?:boolean } = {}): Promise<CreativeAsset[]> {
       const rows = await db.getAllAsync<Row>(`SELECT a.* FROM creative_assets a WHERE EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=a.id)=? AND (? IS NULL OR EXISTS(SELECT 1 FROM creative_project_assets p WHERE p.asset_id=a.id AND p.project_id=?)) AND (?=0 OR NOT EXISTS(SELECT 1 FROM creative_project_assets p WHERE p.asset_id=a.id)) AND instr(lower(a.title || COALESCE((SELECT description || tags_json FROM creative_asset_descriptions WHERE asset_id=a.id),'')),lower(?))>0 ORDER BY a.updated_at DESC,a.id DESC LIMIT 100`, options.trash ? 1 : 0, options.projectId ?? null, options.projectId ?? null, options.inbox ? 1 : 0, options.query ?? '');
@@ -79,6 +83,14 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
         let value: Record<string, string> = {};
         let execution: AsyncExecutionRef | undefined;
         switch (command.name) {
+          case 'project.setCover':{
+            await requireProject(tx,p.id);
+            if(p.versionId&&!await tx.getFirstAsync("SELECT v.id FROM creative_asset_versions v JOIN creative_assets a ON a.id=v.asset_id AND a.kind='image' JOIN creative_project_assets l ON l.asset_id=a.id AND l.project_id=? JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' AND f.state='AVAILABLE' WHERE v.id=? AND NOT EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=a.id)",p.id,p.versionId))throw new Error('COVER_VERSION_UNAVAILABLE');
+            changed(await tx.runAsync('UPDATE creative_projects SET revision=revision+1,updated_at=? WHERE id=? AND revision=?',now,p.id,p.expectedRevision));
+            if(p.versionId)await tx.runAsync('INSERT INTO creative_project_covers VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET version_id=excluded.version_id',p.id,p.versionId);
+            else await tx.runAsync('DELETE FROM creative_project_covers WHERE project_id=?',p.id);
+            value={projectId:p.id};break;
+          }
           case 'asset.authorText': value=await applyAuthoredText(tx,p,now,deps.id);break;
           case 'asset.export': {
             const existing = await tx.getFirstAsync<{ id: string; operation_id: string }>("SELECT id,operation_id FROM creative_deliveries WHERE version_id=? AND file_role='original' AND generation=?", p.versionId, p.generation);
@@ -128,6 +140,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
             if (await tx.getFirstAsync('SELECT asset_id FROM creative_project_assets WHERE project_id=? AND asset_id=?', p.projectId, p.assetId)) throw new Error('PROJECT_ASSET_ALREADY_LINKED');
             await tx.runAsync('INSERT INTO creative_project_assets VALUES(?,?,?,0)', p.projectId, p.assetId, p.versionId); value = { assetId: p.assetId, projectId: p.projectId }; break;
           case 'asset.unlinkFromProject':
+            if(await tx.getFirstAsync('SELECT c.project_id FROM creative_project_covers c JOIN creative_asset_versions v ON v.id=c.version_id WHERE c.project_id=? AND v.asset_id=?',p.projectId,p.assetId))throw new Error('请先更换或移除项目封面');
             changed(await tx.runAsync('DELETE FROM creative_project_assets WHERE project_id=? AND asset_id=? AND revision=?', p.projectId, p.assetId, p.expectedRevision)); value = { assetId: p.assetId, projectId: p.projectId }; break;
           default: value = command.name in planSchemas ? await applyPlanCommand(tx,command.name,p,now,deps.id,key) : command.name in lifecycleSchemas ? await applyAssetLifecycle(tx,command.name,p,now) : command.name in draftSchemas ? await applyDraftCommand(tx, command.name, p, now, deps.id) : await applyStoryCommand(tx, command.name, p, now, deps.id);
         }

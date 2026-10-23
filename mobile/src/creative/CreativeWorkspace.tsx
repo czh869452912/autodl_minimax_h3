@@ -20,6 +20,7 @@ import { VideoPlayer } from '../media/VideoPlayer';
 export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
   const router = useRouter();
   const [projects, setProjects] = useState<CreativeProject[]>([]);
+  const [covers,setCovers]=useState<Record<string,{version_id:string;relative_path:string|null;state:string|null}>>({});
   const [selected, setSelected] = useState<string>();
   const [projectView, setProjectView] = useState<'brief' | 'shots' | 'assets' | 'plans' | 'activity'>('brief');
   const [assets, setAssets] = useState<CreativeAsset[]>([]);
@@ -54,9 +55,10 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
     const generation = ++readGeneration.current;
     const service = creativeService();
     const projects = await service.projects(archived);
+    const covers=await service.covers();
     const assets = await service.assets({ projectId: mode === 'projects' ? selected : undefined, query, inbox: mode === 'assets' && inbox,trash });
     if (generation !== readGeneration.current) return;
-    setProjects(projects); setAssets(assets);
+    setProjects(projects); setAssets(assets);setCovers(Object.fromEntries(covers.map(c=>[c.project_id,c])));
   }, [selected, mode, query, archived, inbox,trash]);
   useFocusEffect(useCallback(() => { void refresh().catch(e => setError(String(e.message))); }, [refresh]));
   const run = async (work: () => Promise<unknown>) => {
@@ -66,6 +68,8 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
     try { await work(); await refresh(); } catch (e) { setError(e instanceof Error ? e.message : '操作失败，请重试'); } finally { writeLock.current = false; setBusy(false); }
   };
   const command = (input: CreativeCommand) => creativeService().execute(input, createId());
+  const openProject=async(p:CreativeProject)=>{const tab=await creativeService().projectTab(p.id);setProjectView(tab);setSelected(p.id);setTitle(p.title);setBrief(p.brief);};
+  const changeProjectView=(tab:typeof projectView)=>{setProjectView(tab);if(selected)void creativeService().saveProjectTab(selected,tab).catch(()=>setError('页签保存失败'));};
   const inspect = async (asset: CreativeAsset) => {
     const description=await creativeService().description(asset.id);setAssetTitle(asset.title);setAssetDescription(description?.description??'');setAssetTags(description?JSON.parse(description.tags_json).join(', '):'');
     for (const version of await creativeService().versions(asset.id)) await creativeFiles().verify(version.id);
@@ -80,10 +84,10 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
     {action('创作草稿', () => router.push('/creative-drafts'))}
     {action('NovelAI 新图片', () => void run(async () => { const result = await command({ name: 'draft.createImage', payload: { projectId: mode === 'projects' ? selected : undefined } }); if (result.status === 'completed') router.push({ pathname: '/image-draft/[id]', params: { id: result.value.draftId } }); }), false)}
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-    {mode === 'projects' && selected && !activeAsset ? <View style={styles.row}>{action('简报', () => setProjectView('brief'))}{action('镜头', () => setProjectView('shots'))}{action('素材', () => setProjectView('assets'))}</View> : null}
+    {mode === 'projects' && selected && !activeAsset ? <View style={styles.row}>{action('简报', () => changeProjectView('brief'))}{action('镜头', () => changeProjectView('shots'))}{action('素材', () => changeProjectView('assets'))}</View> : null}
     {mode === 'projects' && !activeAsset ? <>
       <View style={styles.row}>{action(archived ? '查看进行中项目' : '查看归档项目', () => { setArchived(!archived); setSelected(undefined); })}{selected ? action('全部项目', () => { setSelected(undefined); setTitle(''); setBrief(''); }) : null}</View>
-      {!selected ? projects.map(p => <Pressable accessibilityRole="button" accessibilityLabel={`打开项目 ${p.title}`} key={p.id} style={styles.card} onPress={() => { setSelected(p.id); setTitle(p.title); setBrief(p.brief); }}><Text style={styles.title}>{p.title}</Text><Text style={styles.body} numberOfLines={3}>{p.brief || '尚未填写创作简报'}</Text></Pressable>) : null}
+      {!selected ? projects.map(p => <Pressable accessibilityRole="button" accessibilityLabel={`打开项目 ${p.title}`} key={p.id} style={styles.card} onPress={() => void run(()=>openProject(p))}>{covers[p.id]?.state==='AVAILABLE'&&covers[p.id]?.relative_path?<Image accessibilityLabel={`${p.title} 封面`} source={{uri:`${FileSystem.documentDirectory}${covers[p.id].relative_path}`}} style={{height:140,width:'100%'}} resizeMode="cover"/>:null}<Text style={styles.title}>{p.title}</Text><Text style={styles.body} numberOfLines={3}>{p.brief || '尚未填写创作简报'}</Text></Pressable>) : null}
       {!projects.length ? <Text style={styles.body}>创建项目，将创作简报与素材组织在一起。</Text> : null}
       {!selected || projectView === 'brief' ? <View style={styles.card}><Text style={styles.title}>{selected ? '项目简报' : '新建项目'}</Text>
         <TextInput accessibilityLabel="项目名称" placeholder="项目名称" value={title} onChangeText={setTitle} style={styles.input} />
@@ -94,11 +98,12 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
         }), false)}
         {current ? action(current.archivedAt ? '恢复项目' : '归档项目', () => void run(async () => { await command({ name: 'project.archive', payload: { id: current.id, archived: !current.archivedAt, expectedRevision: current.revision } }); setSelected(undefined); setTitle(''); setBrief(''); })) : null}
       </View> : null}
+      {current&&covers[current.id]?action('移除项目封面',()=>void run(()=>command({name:'project.setCover',payload:{id:current.id,expectedRevision:current.revision,versionId:null}}))):null}
     </> : null}
     {mode === 'projects' && selected && projectView === 'shots' && !activeAsset ? <ProjectShots key={selected} projectId={selected} archived={Boolean(current?.archivedAt)} /> : null}
-    {mode === 'projects' && selected && !activeAsset ? action('选图与视频计划',()=>setProjectView('plans')) : null}
+    {mode === 'projects' && selected && !activeAsset ? action('选图与视频计划',()=>changeProjectView('plans')) : null}
     {mode === 'projects' && selected && projectView === 'plans' && !activeAsset ? <ProjectPlans key={selected} projectId={selected} archived={Boolean(current?.archivedAt)} /> : null}
-    {mode === 'projects' && selected && !activeAsset ? action('项目活动与任务',()=>setProjectView('activity')) : null}
+    {mode === 'projects' && selected && !activeAsset ? action('项目活动与任务',()=>changeProjectView('activity')) : null}
     {mode === 'projects' && selected && projectView === 'activity' && !activeAsset ? <ProjectActivity key={selected} projectId={selected} /> : null}
     {activeAsset ? <View style={styles.card}>
       {action('返回素材列表', () => setActiveAsset(undefined))}<Text style={styles.title}>{activeAsset.title}</Text>
@@ -128,6 +133,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
         {v.state === 'AVAILABLE' && activeAsset.kind === 'image' ? action('从此版本创建视频草稿', () => void run(async () => { const result = await command({ name: 'draft.createVideo', payload: { versionId: v.id, ...(mode === 'projects' && selected ? { projectId: selected } : {}) } }); if (result.status === 'completed') router.push({ pathname: '/creative-draft/[id]', params: { id: result.value.draftId } }); })) : null}
         {projects.filter(p => !p.archivedAt && !links.some(l => l.project_id === p.id)).map(p => <View key={p.id}>{action(`加入 ${p.title}（固定此版本）`, () => void run(async () => { await command({ name: 'asset.linkToProject', payload: { assetId: activeAsset.id, projectId: p.id, versionId: v.id } }); await inspect(activeAsset); }))}</View>)}
         {links.filter(l => l.pinned_version_id !== v.id).map(l => <View key={l.project_id}>{action(`将 ${l.title} 固定到此版本`, () => void run(async () => { await command({ name: 'asset.pinProjectVersion', payload: { assetId: activeAsset.id, projectId: l.project_id, expectedRevision: l.revision, versionId: v.id } }); await inspect(activeAsset); }))}</View>)}
+        {activeAsset.kind==='image'&&v.state==='AVAILABLE'?links.map(l=>{const p=projects.find(p=>p.id===l.project_id);return p&&!p.archivedAt?<View key={`cover-${p.id}`}>{action(`设为 ${p.title} 封面`,()=>void run(async()=>{await creativeFiles().verify(v.id);await command({name:'project.setCover',payload:{id:p.id,expectedRevision:p.revision,versionId:v.id}});} ))}</View>:null;}):null}
       </View>)}
       <Text style={styles.title}>使用位置</Text>
       {links.map(link => <View key={link.project_id}><Text style={styles.body}>{link.title} · {link.pinned_version_id ? '固定版本' : '跟随默认'}</Text>{action(`从 ${link.title} 移出`, () => void run(async () => { await command({ name: 'asset.unlinkFromProject', payload: { assetId: activeAsset.id, projectId: link.project_id, expectedRevision: link.revision } }); await inspect(activeAsset); }))}</View>)}
