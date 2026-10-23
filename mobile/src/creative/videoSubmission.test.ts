@@ -11,6 +11,7 @@ import { createTaskRepository } from '../tasks/repository';
 import { quarantineRestoredExecution } from '../storage/restoreIsolation';
 import type { WorkflowOperation } from '../workflows/executor/types';
 import type { ProviderAdapter } from '../workflows/providers/registry';
+import {createTaskCommandService} from '../tasks/taskCommandService';
 
 async function fixture() {
   const db = createInitializedRealSqliteTestDb(), service = createCreativeService(db as never);
@@ -56,6 +57,22 @@ test('draft submission commits receipt, job, frozen inputs and budget atomically
     await expect(submitCreativeVideo(f.db as never, { ...f.input, prepared: { ...f.input.prepared, requestInput: { altered: true } } }, 101)).rejects.toThrow('IDEMPOTENCY_CONFLICT');
     expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
   } finally { f.db.close(); }
+});
+test('unknown creative requests cannot escape account binding through legacy replacement',async()=>{
+  const f=await fixture();try{
+    const task=await f.submit();f.db.runSync("UPDATE workflow_jobs SET status='UNKNOWN' WHERE id=?",task.id);
+    const commands=createTaskCommandService({db:f.db as never,fileExists:async()=>false,resolveCasUri:p=>p});
+    await expect(commands.replaceUnknownAfterConfirmation(task.id)).rejects.toThrow('重新授权');
+    const result=await f.service.execute({name:'draft.copySubmitted',payload:{id:f.draft.id}},'copy');
+    expect(result).toMatchObject({status:'completed',value:{supersedesJobId:task.id,provider:'autodl'}});
+    if(result.status!=='completed')throw new Error('expected');
+    const copied=await f.service.draft(result.value.draftId);
+    expect(copied).toMatchObject({state:'EDITING',job_id:null,input_json:f.draft.input_json});
+    expect(await f.service.execute({name:'draft.copySubmitted',payload:{id:f.draft.id}},'copy')).toEqual(result);
+    expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toHaveLength(1);
+    expect(f.db.getAllSync('SELECT * FROM creative_authorizations')).toHaveLength(1);
+    expect(f.db.getAllSync('SELECT * FROM creative_budget_reservations')).toHaveLength(1);
+  }finally{f.db.close();}
 });
 
 test('agent replay returns original job after restart or restore, without new seed, authorization or dispatch', async () => {

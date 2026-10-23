@@ -7,6 +7,7 @@ import { creativeService } from './runtime';
 import { novelAiDraftInput, NOVELAI_MODELS, type NovelAiDraftInput } from './novelAiProtocol';
 import { prepareCreativeImage, confirmCreativeImage } from './novelAiRuntime';
 import { CreativeAccountPanel } from './CreativeAccountPanel';
+import { CopySubmittedDraft } from './CopySubmittedDraft';
 import type { CreativeDraft } from './drafts';
 import type { AssetVersion } from './types';
 import { createId } from '../ids';
@@ -91,6 +92,7 @@ export function ImageDraftScreen({ id }: { id: string }) {
         {draft?.state === 'EDITING' ? <CreativeAccountPanel /> : <Text style={{ color: COLORS.text }}>已提交；生成结果会进入本页和资产库。</Text>}
       </> : null}
       <ListAction label="查看任务" secondary disabled={dirty || busy} onPress={() => router.push('/(tabs)/tasks')} />
+      {draft?.state==='SUBMITTED'?<CopySubmittedDraft id={id}/>:null}
     </ScrollView>
     <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: COLORS.border }}>
       {draft?.state === 'EDITING' ? <ListAction label={busy ? '处理中…' : dirty ? '保存修改' : '生成 1 张 · 费用待确认'} disabled={busy} onPress={() => void (dirty ? save() : submit())} /> : <ListAction label="返回资产库" onPress={() => router.push('/(tabs)/assets')} />}

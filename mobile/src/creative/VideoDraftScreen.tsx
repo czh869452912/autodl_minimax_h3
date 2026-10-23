@@ -11,6 +11,7 @@ import { ListAction } from '../ui/ListPageUI';
 import { COLORS } from '../ui/theme';
 import { RESOLUTION_OPTIONS } from '../create/resolutions';
 import { CreativeAccountPanel } from './CreativeAccountPanel';
+import { CopySubmittedDraft } from './CopySubmittedDraft';
 import { prepareCreativeVideo, confirmCreativeVideo } from './videoRuntime';
 
 export function VideoDraftScreen({ id }: { id: string }) {
@@ -82,6 +83,7 @@ export function VideoDraftScreen({ id }: { id: string }) {
       <ListAction label={busy ? '正在保存…' : dirty ? '立即保存草稿' : '草稿已保存'} disabled={busy || !dirty || draft?.state !== 'EDITING'} onPress={() => void save()} />
       {draft?.state === 'EDITING' ? <><CreativeAccountPanel provider="autodl" /><ListAction label="确认并生成 H3 视频" disabled={busy || dirty} onPress={() => void submit()} /></> : <Text style={{ color: COLORS.text }}>已提交到任务队列</Text>}
       {notice ? <Text style={{ color: COLORS.textMuted }}>{notice}</Text> : null}
+      {draft?.state==='SUBMITTED'?<CopySubmittedDraft id={id}/>:null}
       <ListAction label="查看全部创作草稿" secondary disabled={dirty || busy} onPress={() => router.push('/creative-drafts')} />
     </> : null}
   </ScrollView></KeyboardAvoidingView>;

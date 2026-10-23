@@ -33,6 +33,7 @@ export function createTaskCommandService(options: {
     async replaceUnknownAfterConfirmation(taskId: string) {
       const replacement = 'job:' + createId();
       await withWriteTransaction(options.db, async db => {
+        if(await db.getFirstAsync('SELECT job_id FROM creative_job_contexts WHERE job_id=?',taskId))throw new Error('请打开原创作草稿，复制为新草稿后重新授权；不能沿用旧授权或当前默认账号直接重建');
         const job = await db.getFirstAsync<{ status: string }>('SELECT status FROM workflow_jobs WHERE id=?', taskId);
         if (job?.status !== 'UNKNOWN') throw new Error('只有待确认任务可以重新创建');
         const already = await db.getFirstAsync('SELECT 1 FROM workflow_job_events WHERE id=?', taskId + ':replacement-confirmed');

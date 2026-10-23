@@ -6,6 +6,7 @@ import { novelAiDraftInput, defaultNovelAiDraft } from './novelAiProtocol';
 const id = z.string().min(1).max(200), revision = z.number().int().nonnegative();
 export const videoDraftInput = z.object({ schemaVersion: z.literal(1).default(1), prompt: z.string().max(10000), resolution: z.enum(RESOLUTION_OPTIONS), duration: z.number().int().min(1).max(15), seed: z.string().regex(/^$|^\d{1,15}$/) }).strict();
 export const draftSchemas = {
+  'draft.copySubmitted':z.object({id}).strict(),
   'draft.createImage': z.object({ projectId: id.optional(), input: novelAiDraftInput.optional(), fromVersionId: id.optional() }).strict(),
   'draft.updateImage': z.object({ id, expectedRevision: revision, input: novelAiDraftInput }).strict(),
   'draft.createVideo': z.object({ projectId: id.optional(), shotId: id.optional(), versionId: id.optional(), prompt: z.string().max(10000).default('') }).strict(),
@@ -26,6 +27,16 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
       await tx.runAsync("INSERT INTO creative_draft_inputs VALUES(?,'image',?,?)", draftId, ordinal, versionId);
     }
   };
+  if(name==='draft.copySubmitted'){
+    const source=await readCreativeDraft(tx,p.id);
+    if(!source||source.state!=='SUBMITTED'||!source.job_id)throw new Error('SUBMITTED_DRAFT_REQUIRED');
+    await project(source.project_id);
+    if(source.shot_id&&!await tx.getFirstAsync('SELECT id FROM creative_shots WHERE id=? AND deleted_at IS NULL',source.shot_id))throw new Error('SHOT_NOT_AVAILABLE');
+    const draftId=makeId();
+    await tx.runAsync("INSERT INTO creative_generation_drafts SELECT ?,project_id,shot_id,target_asset_id,provider_id,workflow_id,input_json,0,'EDITING',NULL,?,? FROM creative_generation_drafts WHERE id=?",draftId,now,now,p.id);
+    await tx.runAsync('INSERT INTO creative_draft_inputs SELECT ?,role,ordinal,version_id FROM creative_draft_inputs WHERE draft_id=?',draftId,p.id);
+    return {draftId,provider:source.provider_id,supersedesJobId:source.job_id};
+  }
   if (name === 'draft.createImage') {
     await project(p.projectId);
     let input = p.input ?? defaultNovelAiDraft, assetId: string | null = null;
