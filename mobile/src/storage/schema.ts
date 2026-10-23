@@ -47,7 +47,7 @@ export const CREATIVE_FILE_SCHEMA = [
   "CREATE TABLE IF NOT EXISTS creative_recovery_sources(id TEXT PRIMARY KEY,resource_id TEXT NOT NULL REFERENCES creative_file_resources(id) ON DELETE RESTRICT,kind TEXT NOT NULL CHECK(kind IN ('provider_artifact','import_uri','backup')),locator_json TEXT NOT NULL CHECK(json_valid(locator_json)),persisted_permission INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL)",
   "CREATE TABLE IF NOT EXISTS creative_file_attempts(id TEXT PRIMARY KEY,resource_id TEXT NOT NULL REFERENCES creative_file_resources(id) ON DELETE RESTRICT,state TEXT NOT NULL CHECK(state IN ('RESTORING','SUCCEEDED','FAILED')),started_at INTEGER NOT NULL,completed_at INTEGER,error_code TEXT)",
   "INSERT OR IGNORE INTO creative_file_resources(id,version_id,role,expected_sha256,blob_sha256,state,last_verified_at,created_at,updated_at) SELECT f.version_id||':'||f.role,f.version_id,f.role,f.blob_sha256,f.blob_sha256,f.state,b.verified_at,b.created_at,b.verified_at FROM creative_version_files f JOIN artifact_blobs b ON b.sha256=f.blob_sha256",
-  "CREATE TRIGGER IF NOT EXISTS creative_resource_for_file AFTER INSERT ON creative_version_files BEGIN INSERT INTO creative_file_resources(id,version_id,role,expected_sha256,blob_sha256,state,last_verified_at,created_at,updated_at) SELECT NEW.version_id||':'||NEW.role,NEW.version_id,NEW.role,NEW.blob_sha256,NEW.blob_sha256,NEW.state,b.verified_at,b.created_at,b.verified_at FROM artifact_blobs b WHERE b.sha256=NEW.blob_sha256; END",
+  "CREATE TRIGGER IF NOT EXISTS creative_resource_for_file AFTER INSERT ON creative_version_files BEGIN INSERT INTO creative_file_resources(id,version_id,role,expected_sha256,blob_sha256,state,last_verified_at,created_at,updated_at) SELECT NEW.version_id||':'||NEW.role,NEW.version_id,NEW.role,NEW.blob_sha256,NEW.blob_sha256,NEW.state,b.verified_at,b.created_at,b.verified_at FROM artifact_blobs b WHERE b.sha256=NEW.blob_sha256 ON CONFLICT(version_id,role) DO UPDATE SET expected_sha256=excluded.expected_sha256,blob_sha256=excluded.blob_sha256,state=excluded.state,last_verified_at=excluded.last_verified_at,updated_at=excluded.updated_at WHERE creative_file_resources.expected_sha256 IS NULL; END",
   "CREATE TRIGGER IF NOT EXISTS creative_resource_hash_immutable BEFORE UPDATE OF expected_sha256 ON creative_file_resources WHEN OLD.expected_sha256 IS NOT NULL AND NEW.expected_sha256 IS NOT OLD.expected_sha256 BEGIN SELECT RAISE(ABORT,'RESOURCE_HASH_IMMUTABLE'); END",
   "CREATE TRIGGER IF NOT EXISTS creative_resource_available BEFORE UPDATE ON creative_file_resources WHEN NEW.state='AVAILABLE' AND NOT EXISTS(SELECT 1 FROM creative_version_files f WHERE f.version_id=NEW.version_id AND f.role=NEW.role AND f.blob_sha256=NEW.blob_sha256) BEGIN SELECT RAISE(ABORT,'RESOURCE_ATTACHMENT_REQUIRED'); END",
   "CREATE TRIGGER IF NOT EXISTS creative_file_state_projection AFTER UPDATE OF state ON creative_file_resources BEGIN UPDATE creative_version_files SET state=CASE WHEN NEW.state='AVAILABLE' THEN 'AVAILABLE' ELSE 'MISSING' END WHERE version_id=NEW.version_id AND role=NEW.role; END",
@@ -79,10 +79,17 @@ export const CREATIVE_DRAFT_SCHEMA = [
   "CREATE TRIGGER IF NOT EXISTS creative_job_context_immutable BEFORE UPDATE ON creative_job_contexts BEGIN SELECT RAISE(ABORT,'JOB_CONTEXT_IMMUTABLE'); END",
   'CREATE INDEX IF NOT EXISTS creative_drafts_recent ON creative_generation_drafts(project_id,updated_at DESC)',
 ] as const;
-export const APP_SCHEMA_VERSION = 21;
+export const CREATIVE_LEGACY_SCHEMA = [
+  'DROP TRIGGER IF EXISTS creative_resource_for_file',
+  CREATIVE_FILE_SCHEMA.find(sql => sql.startsWith("CREATE TRIGGER IF NOT EXISTS creative_resource_for_file"))!,
+  'CREATE TABLE IF NOT EXISTS creative_legacy_assets(source_id TEXT PRIMARY KEY,asset_id TEXT NOT NULL REFERENCES creative_assets(id) ON DELETE RESTRICT,version_id TEXT NOT NULL REFERENCES creative_asset_versions(id) ON DELETE RESTRICT,epoch INTEGER NOT NULL,applied_revision INTEGER NOT NULL,deleted INTEGER NOT NULL DEFAULT 0)',
+  'CREATE TABLE IF NOT EXISTS creative_asset_trash(asset_id TEXT PRIMARY KEY REFERENCES creative_assets(id) ON DELETE RESTRICT,reason TEXT NOT NULL,deleted_at INTEGER NOT NULL)',
+] as const;
+export const APP_SCHEMA_VERSION = 22;
 export const RECOVERY_TABLE = 'app_database_recovery';
 
 export const APP_TABLES = [
+  'creative_legacy_assets','creative_asset_trash',
   'creative_output_links','creative_job_inputs','creative_job_contexts','creative_draft_inputs','creative_generation_drafts',
   'creative_shot_assets','creative_shots',
   'creative_budget_events','creative_budget_reservations','creative_authorizations','creative_default_accounts','creative_credential_generations','creative_account_bindings',
@@ -186,4 +193,4 @@ export const V13_SCHEMA_STATEMENTS = [
   'CREATE TRIGGER IF NOT EXISTS archive_task_delete AFTER DELETE ON tasks BEGIN DELETE FROM task_archives WHERE task_id=OLD.id; END',
 ] as const;
 
-export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS, ...V13_SCHEMA_STATEMENTS, ...CREATIVE_CAPTURE_SCHEMA, ...RESTORE_SAFETY_SCHEMA, ...CREATIVE_DOMAIN_SCHEMA, ...CREATIVE_DELIVERY_SCHEMA, ...CREATIVE_FILE_SCHEMA, ...CREATIVE_AUTHORIZATION_SCHEMA, ...CREATIVE_SHOT_SCHEMA, ...CREATIVE_DRAFT_SCHEMA] as const;
+export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS, ...V13_SCHEMA_STATEMENTS, ...CREATIVE_CAPTURE_SCHEMA, ...RESTORE_SAFETY_SCHEMA, ...CREATIVE_DOMAIN_SCHEMA, ...CREATIVE_DELIVERY_SCHEMA, ...CREATIVE_FILE_SCHEMA, ...CREATIVE_AUTHORIZATION_SCHEMA, ...CREATIVE_SHOT_SCHEMA, ...CREATIVE_DRAFT_SCHEMA, ...CREATIVE_LEGACY_SCHEMA] as const;

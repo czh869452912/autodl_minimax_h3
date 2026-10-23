@@ -3,6 +3,7 @@ import { creativeAccounts } from '../creative/accountRuntime';
 import { readCreativeJobBinding, bindCreativeAdapter } from '../creative/boundExecution';
 import { createCreativeBudget } from '../creative/budget';
 import { archiveCreativeOutput } from '../creative/archiveOutput';
+import { migrateCreativeHistory } from '../creative/runtime';
 import { executeCreativeExport } from '../creative/exportExecution';
 import { exportCreativeImage, lookupCreativeImage } from '../native/creativeMedia';
 import { retireVideoConversion } from '../media/retireVideoConversion';
@@ -207,6 +208,7 @@ function createApplicationExecutor(database: AppDatabase) {
     },
     pendingSummary: () => operations.pendingSummary({ now: Date.now() }),
     maintain: async () => {
+      await migrateCreativeHistory(database);
       await repairTaskProjections(32);
       await reconcileMediaState({ db: database, fileExists: async uri => { const info = await FileSystem.getInfoAsync(uri); return info.exists && !info.isDirectory; }, removeCasPath });
     },

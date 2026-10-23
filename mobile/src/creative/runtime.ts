@@ -8,6 +8,14 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { sha256File } from '../native/media';
 import { createFileResources } from './fileResources';
 import { findCreativeBackupFile } from '../storage/creativeBackupRuntime';
+import { migrateLegacyCreativeBatch } from './legacyMigration';
+
+export function migrateCreativeHistory(db = getDatabase()) {
+  return migrateLegacyCreativeBatch(db, { importLocal: async (uri, mimeType) => {
+    const staged = await createAttachmentStore(db).externalize({ uri, mimeType, name: 'historical-media' });
+    return { hash: staged.hashes[0] ?? '', release: staged.releaseStaging };
+  } }, 5);
+}
 
 export const creativeService = () => createCreativeService(getDatabase());
 export const creativeFiles = () => createFileResources(getDatabase(), { now: Date.now, verify: async (path, hash) => await sha256File(`${FileSystem.documentDirectory}${path}`) === hash });
