@@ -1,3 +1,4 @@
+import {PdfVersionPreview} from './PdfVersionPreview';
 import { AudioVersionPreview } from './AudioVersionPreview';
 import { TextVersionEditor } from './TextVersionEditor';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -123,6 +124,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
         <Text style={styles.body}>版本 {v.versionNo} · {activeAsset.currentVersionId === v.id ? '默认版本' : '候选版本'} · {v.state === 'AVAILABLE' ? '本地可用' : '文件待恢复'}</Text>
         {v.relativePath && v.mime?.startsWith('image/') ? <Image accessibilityLabel={`版本 ${v.versionNo} 预览`} source={{ uri: `${FileSystem.documentDirectory}${v.relativePath}` }} style={styles.preview} resizeMode="contain" /> : null}
         {v.state === 'AVAILABLE' && v.relativePath && v.mime?.startsWith('video/') ? <VideoPlayer source={`${FileSystem.documentDirectory}${v.relativePath}`} /> : null}
+        {v.state==='AVAILABLE'&&v.mime==='application/pdf'?<PdfVersionPreview key={v.id} version={v}/>:null}
         {v.state==='AVAILABLE'&&v.mime?.startsWith('audio/')?<AudioVersionPreview version={v}/>:null}
         {v.state==='AVAILABLE'&&['text/plain','text/markdown','application/json'].includes(v.mime??'')?<TextVersionPreview version={v}/>:null}
         {!trash&&v.state==='AVAILABLE'&&['text/plain','text/markdown'].includes(v.mime??'')?<TextVersionEditor key={`${v.id}:${activeAsset.revision}`} asset={activeAsset} version={v} onSaved={async()=>{setActiveAsset(undefined);await refresh();}}/>:null}

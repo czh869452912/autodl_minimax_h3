@@ -53,6 +53,7 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
     check(android.os.Build.VERSION.SDK_INT>=29){"Creative export requires Android 10 or newer"}
     return if(mime.startsWith("image/"))creativePublisher else if(mime.startsWith("video/"))creativeVideoPublisher else creativeFilePublisher
   }
+  private val pdfPreview = CreativePdfPreview(context)
   private val integrity = MediaIntegrity(context)
   private val novelAi = NovelAiTransport(File(context.filesDir, "creative-responses"))
   private val compatibility = VideoCompatibility(context)
@@ -68,6 +69,16 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
     dns = { host, _ -> transferPolicy.resolvePublic(host) },
     durableSha256 = { source, checkCancelled -> integrity.sha256(source, checkCancelled) },
   )
+  @ReactMethod
+  fun renderCreativePdf(source:String,sha256:String,pageIndex:Double,promise:Promise) {
+    if(!pageIndex.isFinite()||pageIndex<0||pageIndex>Int.MAX_VALUE||pageIndex%1.0!=0.0){promise.reject("PDF_PAGE_INVALID","PDF_PAGE_INVALID");return}
+    executors.executeMedia {
+      try {
+        val page=pdfPreview.render(source,sha256,pageIndex.toInt())
+        promise.resolve(Arguments.createMap().apply { putString("uri",page.uri);putInt("pageCount",page.pageCount);putInt("width",page.width);putInt("height",page.height) })
+      } catch(error:Exception){promise.reject("PDF_PREVIEW_FAILED","无法预览此 PDF，请保存原件后打开。",error)}
+    }
+  }
   override fun getName() = "AutoDLMedia"
 
   override fun invalidate() {
