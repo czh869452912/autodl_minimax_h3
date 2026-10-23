@@ -9,7 +9,7 @@ import {executorWakePort} from '../tasks/executorEvents';
 import {createId} from '../ids';
 import {ListAction} from '../ui/ListPageUI';
 import {COLORS} from '../ui/theme';
-import type {CreativePlan,CreativeDecision,CreativePlanStep} from './plans';
+import {planVideoSummary,type CreativePlan,type CreativeDecision,type CreativePlanStep} from './plans';
 import type {CreativeShot} from './story';
 type Card={plan:CreativePlan;decision:CreativeDecision;step:CreativePlanStep;candidates:Array<{version_id:string;title:string;relative_path:string|null}>};
 export function ProjectPlans({projectId,archived=false}:{projectId:string;archived?:boolean}){
@@ -31,7 +31,7 @@ export function ProjectPlans({projectId,archived=false}:{projectId:string;archiv
   const action=(label:string,fn:()=>void)=><ListAction label={label} secondary disabled={busy||archived} onPress={fn}/>;
   const authorize=(card:Card)=>void work(async()=>{
     const account=(await creativeAccounts().list()).find(a=>a.provider_id==='autodl');if(!account)throw new Error('请先在创作账号面板连接 AutoDL');
-    Alert.alert('授权此计划继续生成','固定使用已选图片与计划提示词，最多生成 1 次 H3 视频，15 分钟有效。费用未知，无金额上限。网络结果不明不会自动重发。',[
+    Alert.alert('授权此计划继续生成',`${planVideoSummary(card.step.input_binding_json)}。固定使用已选图片与计划提示词，最多生成 1 次视频，15 分钟有效。费用未知，无金额上限。网络结果不明不会自动重发。`,[
       {text:'取消',style:'cancel'},{text:'授权并继续',onPress:()=>void work(async()=>{
         const authorizationId=await creativeBudget().grant({provider:'autodl',generationId:account.credential_generation_id,projectId,operations:['video.generate'],requestLimit:1,amountLimit:null,allowUnknownCost:true,maxUnknownRequests:1,expiresAt:Date.now()+15*60000});
         await creativeService().execute({name:'plan.resume',payload:{id:card.plan.id,expectedRevision:card.plan.revision,authorizationId}},createId());
@@ -44,11 +44,11 @@ export function ProjectPlans({projectId,archived=false}:{projectId:string;archiv
     {cards.map(card=><View key={card.plan.id} style={{borderWidth:1,borderColor:COLORS.border,borderRadius:12,padding:12,gap:8}}>
       <Text style={{color:COLORS.text,fontWeight:'700'}}>{card.plan.title}</Text>
       <Text style={{color:COLORS.textMuted}}>{({ACTIVE:'进行中',COMPLETED:'已归档视频候选',CANCELLED:'已取消',QUARANTINED:'备份恢复后已隔离，不会自动生成'} as Record<string,string>)[card.plan.state]} · {({PENDING:'等待选图',READY:'等待提交',BLOCKED:'待处理',DISPATCHED:'已提交任务',SUCCEEDED:'完成',FAILED:'任务未完成',CANCELLED:'已取消'} as Record<string,string>)[card.step.state]}</Text>
-      <Text style={{color:COLORS.textMuted}}>视频提示词：{JSON.parse(card.step.input_binding_json).prompt}</Text>
+      <Text style={{color:COLORS.textMuted}}>{planVideoSummary(card.step.input_binding_json)}{'\n'}视频提示词：{JSON.parse(card.step.input_binding_json).prompt}</Text>
       {card.step.error_json?<Text style={{color:COLORS.textMuted}}>{JSON.parse(card.step.error_json).message}</Text>:null}
       {card.plan.state==='ACTIVE'&&card.decision.state==='WAITING'?card.candidates.map(c=><View key={c.version_id} style={{gap:6}}>
         {c.relative_path?<Image accessibilityLabel={c.title} source={{uri:`${FileSystem.documentDirectory}${c.relative_path}`}} style={{height:160,width:'100%'}} resizeMode="contain"/>:null}
-        {action(`选定 ${c.title} 并继续`,()=>Alert.alert('选定并继续',card.plan.authorization_id?'将固定此版本为镜头图片，并在有效授权范围内提交 H3。':'将固定此版本为镜头图片。后续需授权一次 H3 生成才能继续。',[{text:'取消',style:'cancel'},{text:'选定',onPress:()=>void work(async()=>{
+        {action(`选定 ${c.title} 并继续`,()=>Alert.alert('选定并继续',`${planVideoSummary(card.step.input_binding_json)}。${card.plan.authorization_id?'将固定此版本为镜头图片，并在有效授权范围内提交 H3。':'将固定此版本为镜头图片。后续需授权一次 H3 生成才能继续。'}`,[{text:'取消',style:'cancel'},{text:'选定',onPress:()=>void work(async()=>{
           await creativeFiles().verify(c.version_id);
           await creativeService().execute({name:'plan.resolveSelection',payload:{decisionId:card.decision.id,versionId:c.version_id,expectedRevision:card.decision.revision}},`selection:${card.decision.id}:${c.version_id}`);
         })}]))}

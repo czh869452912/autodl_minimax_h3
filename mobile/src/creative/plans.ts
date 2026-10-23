@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { AppDatabase } from '../storage/appDatabase';
-import { applyDraftCommand } from './drafts';
+import { applyDraftCommand, videoDraftInput } from './drafts';
 import { applyStoryCommand } from './story';
 const id=z.string().min(1).max(200), revision=z.number().int().nonnegative();
 export const planSchemas={
@@ -13,6 +13,15 @@ export type PlanCommand={[K in keyof typeof planSchemas]:{name:K;payload:z.input
 export type CreativePlan={id:string;project_id:string;shot_id:string;title:string;revision:number;state:string;execution_epoch:string;authorization_id:string|null};
 export type CreativePlanStep={id:string;plan_id:string;kind:string;revision:number;state:string;draft_id:string|null;job_id:string|null;input_binding_json:string;result_binding_json:string;error_json:string|null};
 export type CreativeDecision={id:string;plan_id:string;step_id:string;revision:number;plan_revision:number;step_revision:number;expected_shot_revision:number;state:string;selected_version_id:string|null};
+export function planVideoInput(bindingJson:string){
+  const binding=JSON.parse(bindingJson);
+  // v25 plans stored only the prompt; preserve their original defaults.
+  return videoDraftInput.parse(binding.videoInput??{schemaVersion:1,prompt:binding.prompt,resolution:'480p竖',duration:5,seed:''});
+}
+export function planVideoSummary(bindingJson:string){
+  const input=planVideoInput(bindingJson);
+  return `H3 · ${input.resolution} · ${input.duration} 秒 · ${input.seed?'种子 '+input.seed:'随机种子'}`;
+}
 async function epoch(tx:AppDatabase){const r=await tx.getFirstAsync<{epoch:string}>('SELECT epoch FROM creative_execution_state WHERE id=1');if(!r)throw new Error('EXECUTION_EPOCH_MISSING');return r.epoch;}
 async function activePlan(tx:AppDatabase,id:string){
   const p=await tx.getFirstAsync<CreativePlan>('SELECT * FROM creative_plans WHERE id=?',id);
@@ -36,7 +45,7 @@ export async function applyPlanCommand(tx:AppDatabase,name:string,p:any,now:numb
     const planId=makeId(),selectionId=makeId(),videoId=makeId(),decisionId=makeId(),executionEpoch=await epoch(tx);
     await tx.runAsync("INSERT INTO creative_plans VALUES(?,?,?,?,0,'ACTIVE',?,?,?,?)",planId,p.projectId,p.shotId,p.title,executionEpoch,p.authorizationId??null,now,now);
     await tx.runAsync("INSERT INTO creative_plan_steps VALUES(?,?,'selection',0,'WAITING_DECISION',NULL,NULL,'{}','{}',NULL)",selectionId,planId);
-    await tx.runAsync("INSERT INTO creative_plan_steps VALUES(?,?,'video',0,'PENDING',NULL,NULL,?,'{}',NULL)",videoId,planId,JSON.stringify({prompt:p.videoPrompt}));
+    await tx.runAsync("INSERT INTO creative_plan_steps VALUES(?,?,'video',0,'PENDING',NULL,NULL,?,'{}',NULL)",videoId,planId,JSON.stringify({prompt:p.videoPrompt,videoInput:planVideoInput(JSON.stringify({prompt:p.videoPrompt}))}));
     await tx.runAsync('INSERT INTO creative_plan_dependencies VALUES(?,?)',videoId,selectionId);
     await tx.runAsync("INSERT INTO creative_decision_requests VALUES(?,?,?,0,0,0,?,'WAITING',NULL,NULL,?,?)",decisionId,planId,selectionId,p.expectedShotRevision,now,now);
     for(const versionId of p.candidateVersionIds)await tx.runAsync('INSERT INTO creative_decision_candidates VALUES(?,?)',decisionId,versionId);
@@ -54,6 +63,7 @@ export async function applyPlanCommand(tx:AppDatabase,name:string,p:any,now:numb
     const next=await tx.getFirstAsync<CreativePlanStep>("SELECT s.* FROM creative_plan_steps s JOIN creative_plan_dependencies d ON d.step_id=s.id WHERE d.depends_on_step_id=? AND s.kind='video' AND s.state='PENDING'",d.step_id);
     if(!next)throw new Error('PLAN_DEPENDENCY_INVALID');
     const draft=await applyDraftCommand(tx,'draft.createVideo',{projectId:plan.project_id,shotId:plan.shot_id,versionId:p.versionId,prompt:JSON.parse(next.input_binding_json).prompt},now,makeId);
+    await applyDraftCommand(tx,'draft.updateVideo',{id:draft.draftId,expectedRevision:0,input:planVideoInput(next.input_binding_json)},now,makeId);
     const binding=JSON.stringify({versionId:p.versionId});
     await tx.runAsync("UPDATE creative_plan_steps SET state='SUCCEEDED',revision=revision+1,result_binding_json=? WHERE id=?",binding,d.step_id);
     await tx.runAsync("UPDATE creative_plan_steps SET state='READY',revision=revision+1,draft_id=?,input_binding_json=? WHERE id=?",draft.draftId,JSON.stringify({...JSON.parse(next.input_binding_json),versionId:p.versionId}),next.id);

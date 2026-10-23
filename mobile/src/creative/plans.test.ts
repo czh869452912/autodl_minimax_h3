@@ -1,3 +1,4 @@
+import {planVideoInput,planVideoSummary} from './plans';
 import {createInitializedRealSqliteTestDb} from '../test/realSqlite';
 import {createCreativeService} from './service';
 import {quarantineRestoredExecution} from '../storage/restoreIsolation';
@@ -142,5 +143,19 @@ test('restore after selection quarantines READY steps including those without a 
     expect(f.db.getFirstSync('SELECT consumed_at FROM creative_selection_outbox')).toEqual({consumed_at:null});
     expect(f.db.getFirstSync("SELECT entity_id FROM creative_restore_quarantine WHERE entity_kind='plan'")).toEqual({entity_id:f.plan.planId});
     await expect(f.execute({name:'plan.resume',payload:{id:f.plan.planId,expectedRevision:1,authorizationId:'old'}})).rejects.toThrow('PLAN_NOT_ACTIVE');
+  }finally{f.db.close();}
+});
+
+
+test('plan confirmation and resulting draft use the persisted video specification',async()=>{
+  const f=await fixture();try{
+    const persisted=f.db.getFirstSync<{input_binding_json:string}>("SELECT input_binding_json FROM creative_plan_steps WHERE kind='video'")!;
+    expect(planVideoSummary(persisted.input_binding_json)).toBe('H3 · 480p竖 · 5 秒 · 随机种子');
+    const binding=JSON.parse(persisted.input_binding_json);
+    binding.videoInput.duration=8;binding.videoInput.seed='123';
+    f.db.runSync("UPDATE creative_plan_steps SET input_binding_json=? WHERE kind='video'",JSON.stringify(binding));
+    const result=await f.execute(f.selection);
+    expect(JSON.parse((await f.service.draft(result.draftId))!.input_json)).toEqual(binding.videoInput);
+    expect(planVideoInput(JSON.stringify({prompt:'legacy'}))).toMatchObject({prompt:'legacy',resolution:'480p竖',duration:5,seed:''});
   }finally{f.db.close();}
 });
