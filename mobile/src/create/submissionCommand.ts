@@ -13,7 +13,8 @@ import { assertAppDatabaseWritableAsync } from '../storage/database';
 import { attachmentHashes, createAttachmentStore } from '../media/attachments';
 
 export async function persistSubmissionCommand(database: AppDatabase, submissionId: string, prepared: PreparedWorkflowSubmission,
-  media: { images: TaskMediaInput[]; audios: TaskMediaInput[]; handoffId?: string }, now = Date.now()): Promise<TaskRecord> {
+  media: { images: TaskMediaInput[]; audios: TaskMediaInput[]; handoffId?: string }, now = Date.now(),
+  bind?: (tx: AppDatabase, job: JobRecord, inserted: boolean) => Promise<void>): Promise<TaskRecord> {
   const job: JobRecord = { id: `job:${submissionId}`, revision: 0, workflowId: prepared.workflowId, workflowVersion: prepared.workflowVersion,
     workflowContentHash: prepared.workflowContentHash, adapterId: prepared.adapterId, adapterVersion: prepared.adapterVersion,
     inputSnapshot: prepared.inputSnapshot, outputMapping: prepared.outputMapping, status: 'READY_TO_SUBMIT', createdAt: now, updatedAt: now };
@@ -24,6 +25,7 @@ export async function persistSubmissionCommand(database: AppDatabase, submission
       (id,revision,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,output_mapping_json,status,created_at,updated_at)
       VALUES(?,0,?,?,?,?,?,?,?,'READY_TO_SUBMIT',?,?)`, job.id, job.workflowId, job.workflowVersion, job.workflowContentHash, job.adapterId, job.adapterVersion,
     JSON.stringify(job.inputSnapshot), job.outputMapping ? JSON.stringify(job.outputMapping) : null, now, now);
+    if (bind) await bind(db, job, Boolean(inserted.changes));
     if (inserted.changes) {
       const assets = createAttachmentStore(db);
       await assets.retain(db, 'task_input', task.id, attachmentHashes([media.images, media.audios, prepared.inputSnapshot]));

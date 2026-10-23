@@ -110,7 +110,8 @@ async function enqueueGallery(transaction: AppDatabase, input: ArtifactCommitInp
     deliveryId, assetId, input.now, input.now);
 }
 
-export function createSqliteArtifactCommitter(db: AppDatabase, clock: () => number = Date.now): ArtifactCommitter {
+export function createSqliteArtifactCommitter(db: AppDatabase, clock: () => number = Date.now,
+  onOriginal?: (tx: AppDatabase, input: ArtifactCommitInput) => Promise<void>): ArtifactCommitter {
   const assertGcIdle = async (transaction: AppDatabase) => {
     const gcLease = await transaction.getFirstAsync<{ expires_at: number }>(
       "SELECT expires_at FROM app_scheduler_leases WHERE lease_key='cas-gc' LIMIT 1",
@@ -152,6 +153,7 @@ export function createSqliteArtifactCommitter(db: AppDatabase, clock: () => numb
         }
         await enqueueGallery(transaction, effective, input.blob, input.localUri);
       }
+      if (!input.compatible) await onOriginal?.(transaction, input);
       const result = await transaction.runAsync("UPDATE workflow_operations SET state = 'SUCCEEDED', lease_owner = NULL, lease_expires_at = NULL, last_error_json = NULL, updated_at = ? WHERE id = ? AND state = 'CLAIMED' AND lease_owner = ?", input.now, input.operationId, input.owner);
       if (Number(result.changes ?? 0) !== 1) throw new Error('artifact operation lease lost');
     });
@@ -201,6 +203,7 @@ export function createSqliteArtifactCommitter(db: AppDatabase, clock: () => numb
         );
         if (!claim) throw new Error('artifact operation lease lost');
         const currentPayload = JSON.parse(claim.payload_json);
+        await onOriginal?.(transaction, input);
         await transaction.runAsync('INSERT OR IGNORE INTO artifact_blob_refs (blob_sha256,owner_type,owner_id,created_at) VALUES (?,?,?,?)',
           input.blob.sha256, 'workflow_artifact_original', `${input.jobId}:${input.artifact.id}`, input.now);
         await transaction.runAsync('DELETE FROM artifact_blob_refs WHERE blob_sha256=? AND owner_type=? AND owner_id=?', input.blob.sha256, reservationOwnerType(input.operationId), input.owner);

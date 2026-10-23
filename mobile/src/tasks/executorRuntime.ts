@@ -1,4 +1,8 @@
 import { readPendingMaintenance } from '../storage/pendingMaintenance';
+import { creativeAccounts } from '../creative/accountRuntime';
+import { readCreativeJobBinding, bindCreativeAdapter } from '../creative/boundExecution';
+import { createCreativeBudget } from '../creative/budget';
+import { archiveCreativeOutput } from '../creative/archiveOutput';
 import { executeCreativeExport } from '../creative/exportExecution';
 import { exportCreativeImage, lookupCreativeImage } from '../native/creativeMedia';
 import { retireVideoConversion } from '../media/retireVideoConversion';
@@ -46,7 +50,7 @@ function createApplicationExecutor(database: AppDatabase) {
   const operations = createOperationRepository(database);
   const blobs = createCasRepository(database);
   const cas = createArtifactCas();
-  const commitArtifact = createSqliteArtifactCommitter(database);
+  const commitArtifact = createSqliteArtifactCommitter(database, Date.now, archiveCreativeOutput);
   const exportStore = createSqliteExportStore(database);
 
   const executorSettingsCache = createExecutorSettingsCache((settings) => {
@@ -86,7 +90,26 @@ function createApplicationExecutor(database: AppDatabase) {
         });
         return;
       }
-      if (operation.kind !== 'ARTIFACT_DOWNLOAD') return current.durable.handle(operation, owner);
+      if (operation.kind !== 'ARTIFACT_DOWNLOAD') {
+        const binding = operation.jobId ? await readCreativeJobBinding(database, operation.jobId) : null;
+        if (!binding) return current.durable.handle(operation, owner);
+        let exact: Awaited<ReturnType<ReturnType<typeof creativeAccounts>['resolveExact']>>;
+        try { exact = await creativeAccounts(database).resolveExact(binding.credential_generation_id, operation.kind === 'SUBMIT' ? 'dispatch' : 'query'); }
+        catch {
+          await operations.finish(operation.id, owner, 'BLOCKED', Date.now(), { code: 'CREATIVE_CREDENTIAL_UNAVAILABLE', message: '绑定的凭据不可用；未改用其他账号。' });
+          return;
+        }
+        const adapters = createBuiltinProviderAdapters({ resolveCredential: kind => kind === 'autodl-token' && exact.provider === 'autodl' ? exact.token : undefined });
+        for (const [id, adapter] of adapters) adapters.set(id, bindCreativeAdapter(database, adapter, binding, exact, operation, owner));
+        const durable = createDurableExecutor({ jobs, operations, adapters, runtime: createWorkflowRuntime({ adapters }), credentials: { get: async () => ({ ok: true }) } });
+        await durable.handle(operation, owner);
+        const job = operation.jobId ? await jobs.get(operation.jobId) : null;
+        if (job && ['UNKNOWN','FAILED','SUCCEEDED','PARTIAL_SUCCEEDED','CANCELLED'].includes(job.status)) {
+          const reservation = await readCreativeJobBinding(database, job.id);
+          if (reservation?.state === 'DISPATCHED') await createCreativeBudget(database).transition(binding.id, { key: `outcome:${binding.id}`, to: 'UNKNOWN_HELD', evidence: '服务商未返回可核验费用；保留本次消费占用。' });
+        }
+        return;
+      }
       if (operation.payload.compatibilityOnly === true) {
         await operations.finish(operation.id, owner, 'FAILED', Date.now(), { code: 'ARTIFACT_CONVERSION_RETIRED', message: 'Original playback replaces conversion.', retryable: false });
         return;

@@ -4,7 +4,9 @@ import { createCreativeAccounts, type CreativeProvider } from './accounts';
 import { createCreativeBudget } from './budget';
 
 async function verifyAccount(provider: CreativeProvider, token: string) {
-  if (provider !== 'novelai') throw new Error('此服务的账号验证尚未接入');
+  // ComfyUI documents no non-consuming account identity endpoint. Bind the exact
+  // credential locally, record verified_at=0, and never claim remote validation.
+  if (provider === 'autodl') return { namespace: 'https://www.autodl.art/api', authenticated: false };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20000);
   try {
@@ -20,7 +22,7 @@ async function verifyAccount(provider: CreativeProvider, token: string) {
     throw new Error('无法验证 NovelAI 账号，请检查网络与令牌');
   } finally { clearTimeout(timer); }
 }
-export const creativeAccounts = () => createCreativeAccounts(getDatabase(), {
+export const creativeAccounts = (db = getDatabase()) => createCreativeAccounts(db, {
   now: Date.now, verify: verifyAccount,
   secrets: { get: SecureStore.getItemAsync, set: (key, value) => SecureStore.setItemAsync(key, value, { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY }), remove: SecureStore.deleteItemAsync },
 });

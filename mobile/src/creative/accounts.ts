@@ -4,7 +4,7 @@ import type { AppDatabase } from '../storage/appDatabase';
 import { withWriteTransaction } from '../storage/sqliteBusy';
 
 export type CreativeProvider = 'novelai' | 'autodl';
-export type VerifiedIdentity = { namespace: string; principalId?: string };
+export type VerifiedIdentity = { namespace: string; principalId?: string; authenticated?: boolean };
 type Deps = {
   now(): number;
   verify(provider: CreativeProvider, token: string): Promise<VerifiedIdentity>;
@@ -21,7 +21,8 @@ export function createCreativeAccounts(db: AppDatabase, deps: Deps) {
       const now = deps.now();
       // Persist a retired record first: a crash cannot make an unwritten secret active.
       await withWriteTransaction(db, async tx => {
-        await tx.runAsync('INSERT INTO creative_account_bindings VALUES(?,?,?,?,?,?,?)', accountId, provider, identity.namespace, identity.principalId ?? null, identity.principalId ? 'provider_verified' : 'credential_bound', now, now);
+        if (identity.authenticated === false && identity.principalId) throw new Error('UNVERIFIED_PRINCIPAL');
+        await tx.runAsync('INSERT INTO creative_account_bindings VALUES(?,?,?,?,?,?,?)', accountId, provider, identity.namespace, identity.principalId ?? null, identity.principalId ? 'provider_verified' : 'credential_bound', now, identity.authenticated === false ? 0 : now);
         await tx.runAsync("INSERT INTO creative_credential_generations VALUES(?,?,?,?,1,'retired',?,?)", generationId, accountId, key, CryptoJS.SHA256(token).toString(), now, now);
       });
       try {

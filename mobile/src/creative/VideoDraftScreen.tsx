@@ -10,6 +10,8 @@ import { createId } from '../ids';
 import { ListAction } from '../ui/ListPageUI';
 import { COLORS } from '../ui/theme';
 import { RESOLUTION_OPTIONS } from '../create/resolutions';
+import { CreativeAccountPanel } from './CreativeAccountPanel';
+import { prepareCreativeVideo, confirmCreativeVideo } from './videoRuntime';
 
 export function VideoDraftScreen({ id }: { id: string }) {
   const router = useRouter();
@@ -52,6 +54,20 @@ export function VideoDraftScreen({ id }: { id: string }) {
     return () => clearTimeout(timer);
   }, [input, draft, busy, error, dirty]);
   const update = (patch: Partial<z.output<typeof videoDraftInput>>) => { setInput(value => value ? { ...value, ...patch } : value); setNotice('修改尚未保存'); setError(''); };
+  const submit = async () => {
+    if (lock.current || dirty) return;
+    lock.current = true; setBusy(true); setError('');
+    const release = () => { lock.current = false; setBusy(false); };
+    try {
+      const preview = await prepareCreativeVideo(id);
+      Alert.alert('确认生成 1 个 H3 视频', `使用 AutoDL 凭据 ${preview.account.credential_generation_id.slice(-8)}。费用暂不可预估，本次允许提交 1 次，授权 15 分钟内有效。结果不明时不会自动重发。`, [
+        { text: '取消', style: 'cancel', onPress: release },
+        { text: '授权并生成', onPress: () => {
+          void confirmCreativeVideo(preview).then(async () => { await load(); setNotice('任务已加入队列，可在全局任务页查看。生成结果保留为候选，不自动替换镜头选定版本。'); }).catch(e => setError(e instanceof Error ? e.message : '提交失败')).finally(release);
+        } },
+      ], { cancelable: false });
+    } catch (e) { setError(e instanceof Error ? e.message : '无法准备生成'); release(); }
+  };
   const style = { borderWidth: 1, borderColor: COLORS.controlBorder, color: COLORS.text, borderRadius: 8, padding: 12 };
   return <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, gap: 12 }} style={{ backgroundColor: COLORS.background }}>
     <Text accessibilityRole="header" style={{ color: COLORS.text, fontSize: 22, fontWeight: '700' }}>H3 视频草稿</Text>
@@ -64,6 +80,7 @@ export function VideoDraftScreen({ id }: { id: string }) {
       <TextInput accessibilityLabel="视频种子" placeholder="Seed 留空则提交时生成" keyboardType="number-pad" value={input.seed} editable={draft?.state === 'EDITING'} onChangeText={seed => update({ seed })} style={style} />
       {references.map((ref, index) => <View key={`${ref.version_id}:${index}`}><Text style={{ color: COLORS.textMuted }}>参考图 {index + 1} · {ref.state === 'AVAILABLE' ? '本地可用' : '文件待恢复'}</Text>{ref.state === 'AVAILABLE' ? <Image source={{ uri: `${FileSystem.documentDirectory}${ref.relative_path}` }} style={{ height: 190, width: '100%' }} resizeMode="contain" /> : null}</View>)}
       <ListAction label={busy ? '正在保存…' : dirty ? '立即保存草稿' : '草稿已保存'} disabled={busy || !dirty || draft?.state !== 'EDITING'} onPress={() => void save()} />
+      {draft?.state === 'EDITING' ? <><CreativeAccountPanel provider="autodl" /><ListAction label="确认并生成 H3 视频" disabled={busy || dirty} onPress={() => void submit()} /></> : <Text style={{ color: COLORS.text }}>已提交到任务队列</Text>}
       {notice ? <Text style={{ color: COLORS.textMuted }}>{notice}</Text> : null}
       <ListAction label="查看全部创作草稿" secondary disabled={dirty || busy} onPress={() => router.push('/creative-drafts')} />
     </> : null}

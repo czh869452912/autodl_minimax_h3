@@ -9,6 +9,7 @@ import { createId } from '../ids';
 import { COLORS } from '../ui/theme';
 import { ListAction } from '../ui/ListPageUI';
 import { ProjectShots } from './ProjectShots';
+import { VideoPlayer } from '../media/VideoPlayer';
 
 export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
   const router = useRouter();
@@ -90,6 +91,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
       {versions.map(v => <View key={v.id} style={styles.card}>
         <Text style={styles.body}>版本 {v.versionNo} · {activeAsset.currentVersionId === v.id ? '默认版本' : '候选版本'} · {v.state === 'AVAILABLE' ? '本地可用' : '文件待恢复'}</Text>
         {v.relativePath && v.mime?.startsWith('image/') ? <Image accessibilityLabel={`版本 ${v.versionNo} 预览`} source={{ uri: `${FileSystem.documentDirectory}${v.relativePath}` }} style={styles.preview} resizeMode="contain" /> : null}
+        {v.state === 'AVAILABLE' && v.relativePath && v.mime?.startsWith('video/') ? <VideoPlayer source={`${FileSystem.documentDirectory}${v.relativePath}`} /> : null}
         {v.state === 'AVAILABLE' && ['image/png','image/jpeg','image/webp'].includes(v.mime ?? '') ? action('保存到系统相册', () => void run(() => exportCreativeVersion(v.id))) : null}
         {v.state !== 'AVAILABLE' ? <><Text style={styles.body}>版本记录仍保留。请重新选择原始图片；内容不同会拒绝替换。</Text>{action('重新定位原图', () => void run(async () => { const [image] = await pickImagesFromGallery(1); if (image) { await restoreCreativeImage(v.id, image); await inspect(activeAsset); } }))}</> : null}
         {v.state !== 'AVAILABLE' ? action('从文件备份找回', () => void run(async () => { await restoreCreativeImageFromBackup(v.id); await inspect(activeAsset); })) : null}
