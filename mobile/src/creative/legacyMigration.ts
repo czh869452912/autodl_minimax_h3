@@ -1,3 +1,4 @@
+import { trashUnadoptedLegacyAssetSql } from './legacyDeletion';
 import type { AppDatabase } from '../storage/appDatabase';
 import { withWriteTransaction } from '../storage/sqliteBusy';
 import { createCreativeCapture } from '../storage/creativeCapture';
@@ -55,7 +56,7 @@ export async function migrateLegacyCreativeBatch(db: AppDatabase, deps: Dependen
         }
         // A legacy deletion must never resurrect in the inbox. Already adopted
         // creative outputs retain their independent project/shot lifecycle.
-        if (deleted && !output) await tx.runAsync("INSERT OR IGNORE INTO creative_asset_trash VALUES(?,'legacy_deleted',?)", assetId, now);
+        if (deleted && !output) await tx.runAsync(trashUnadoptedLegacyAssetSql, now, assetId);
         await tx.runAsync('INSERT INTO creative_legacy_assets VALUES(?,?,?,?,?,?) ON CONFLICT(source_id) DO UPDATE SET epoch=excluded.epoch,applied_revision=excluded.applied_revision,deleted=excluded.deleted', head.entity_id, assetId, versionId, head.epoch, head.applied_revision, deleted ? 1 : 0);
         imported++;
       });

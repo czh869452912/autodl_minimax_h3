@@ -1,3 +1,4 @@
+import { legacyDeletionStatements } from '../creative/legacyDeletion';
 import type { MediaAsset, MediaExportStatus, MediaStatus, MediaStore } from './types';
 import * as FileSystem from 'expo-file-system/legacy';
 import { assertAppDatabaseWritable } from '../storage/database';
@@ -87,6 +88,7 @@ export function createSqliteMediaStore(database: SqlDatabase): MediaStore {
         await db.runAsync("DELETE FROM artifact_blob_refs WHERE owner_type IN ('workflow_artifact','workflow_artifact_original') AND owner_id=?", `${row.task_id}:${row.artifact_id}`);
         await db.runAsync('DELETE FROM media_deliveries WHERE asset_id=?', id);
         await db.runAsync('DELETE FROM media_assets WHERE id=?', id);
+        for(const statement of legacyDeletionStatements(id,Date.now())) await db.runAsync(statement.sql,...statement.params);
       };
       if (typeof (database as any).withExclusiveTransactionAsync === 'function') {
         await (database as any).withExclusiveTransactionAsync(work);
@@ -99,6 +101,7 @@ export function createSqliteMediaStore(database: SqlDatabase): MediaStore {
           database.runSync?.("DELETE FROM artifact_blob_refs WHERE owner_type IN ('workflow_artifact','workflow_artifact_original') AND owner_id=?", `${row.task_id}:${row.artifact_id}`);
           database.runSync?.('DELETE FROM media_deliveries WHERE asset_id=?', id);
           database.runSync?.('DELETE FROM media_assets WHERE id=?', id);
+          for(const statement of legacyDeletionStatements(id,Date.now())) database.runSync?.(statement.sql,...statement.params);
         });
       }
       for (const row of rows) for (const uri of [row.local_path, row.poster_path]) {

@@ -1,3 +1,4 @@
+import {createSqliteMediaStore} from '../media/repository';
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { createCreativeService } from './service';
 import { migrateLegacyCreativeBatch } from './legacyMigration';
@@ -78,5 +79,31 @@ test('legacy mutation during file copy cannot attach stale bytes before journal 
     expect(await f.service.assets()).toHaveLength(0);expect(release).toHaveBeenCalledTimes(1);
     await migrateLegacyCreativeBatch(f.db as never,{importLocal:async uri=>{expect(uri).toBe('file:///new.mp4');return {hash:f.hash,release};}},30);
     const a=(await f.service.assets())[0];expect((await f.service.versions(a.id))[0].recipe.prompt).toBe('new prompt');
+  }finally{f.db.close();}
+});
+
+
+test.each([false,true])('legacy deletion is atomic and preserves adopted creative assets (adopted=%s)',async(adopted)=>{
+  const f=fixture();try{
+    f.insert('a');f.retain('a');await f.migrate();
+    const asset=(await f.service.assets())[0];
+    if(adopted){
+      const project=await f.service.execute({name:'project.create',payload:{title:'film'}},'project');
+      if(project.status!=='completed')throw new Error('expected');
+      await f.service.execute({name:'asset.linkToProject',payload:{assetId:asset.id,projectId:project.value.projectId,versionId:null}},'adopt');
+    }
+    const store=createSqliteMediaStore(f.db as never);
+    f.db.execSync("CREATE TRIGGER reject_legacy_delete BEFORE UPDATE OF deleted ON creative_legacy_assets BEGIN SELECT RAISE(ABORT,'injected'); END");
+    await expect(store.remove('a')).rejects.toThrow('injected');
+    expect(f.db.getAllSync('SELECT * FROM media_assets')).toHaveLength(1);
+    expect(f.db.getAllSync('SELECT * FROM media_asset_tombstones')).toHaveLength(0);
+    expect(await f.service.assets()).toHaveLength(1);
+    f.db.execSync('DROP TRIGGER reject_legacy_delete');
+    await store.remove('a');
+    expect(await f.service.assets()).toHaveLength(adopted?1:0);
+    expect(f.db.getFirstSync('SELECT deleted FROM creative_legacy_assets')).toEqual({deleted:1});
+    await f.migrate();
+    expect(await f.service.assets()).toHaveLength(adopted?1:0);
+    expect(f.db.getAllSync("SELECT * FROM artifact_blob_refs WHERE owner_type='creative_version'")).toHaveLength(1);
   }finally{f.db.close();}
 });
