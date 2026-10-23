@@ -1,3 +1,4 @@
+import {readScopedCreativeText} from './agentTextRead';
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { createCreativeService } from './service';
 import type { CreativeAgentOrigin } from './agentScope';
@@ -53,5 +54,21 @@ test('agent-authored text enforces project scope for new assets and existing ver
     const other=await f.service.execute({...command,payload:{...command.payload,projectId:f.other}},'other-text');if(other.status!=='completed')throw new Error('expected');
     await expect(f.service.execute({...command,payload:{...command.payload,assetId:other.value.assetId,expectedRevision:0}},'cross-version',f.origin)).rejects.toThrow('ASSET_SCOPE_MISMATCH');
     expect(f.db.getAllSync('SELECT * FROM creative_asset_versions')).toHaveLength(2);
+  }finally{f.db.close();}
+});
+
+
+test('text reads enforce scope before and after I/O and return bounded reference data',async()=>{
+  const f=await fixture();try{
+    const hash='b'.repeat(64);f.db.runSync('INSERT INTO artifact_blobs VALUES(?,20,?,?,1,1)',hash,'text/plain','cas/text');
+    const result=await f.service.execute({name:'asset.authorText',payload:{title:'reference',kind:'document',blobSha256:hash,projectId:f.projectId}},'reference');
+    if(result.status!=='completed')throw new Error('expected');
+    const read=jest.fn(async()=> 'x'.repeat(13000));
+    expect(await readScopedCreativeText(f.db as never,f.origin,result.value.versionId,0,read)).toMatchObject({content:'x'.repeat(12000),nextOffset:12000,trust:'untrusted_asset_content'});
+    await expect(readScopedCreativeText(f.db as never,f.origin,result.value.versionId,0,async()=>{f.db.runSync('UPDATE creative_agent_scopes SET revision=1');return 'sensitive';})).rejects.toThrow('SCOPE_CHANGED');
+    f.db.runSync('UPDATE creative_agent_scopes SET revision=0');
+    f.db.runSync('DELETE FROM creative_project_assets');read.mockClear();
+    await expect(readScopedCreativeText(f.db as never,f.origin,result.value.versionId,0,read)).rejects.toThrow('ASSET_SCOPE_MISMATCH');
+    expect(read).not.toHaveBeenCalled();
   }finally{f.db.close();}
 });
