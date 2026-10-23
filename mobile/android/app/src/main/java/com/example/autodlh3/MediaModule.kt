@@ -44,6 +44,7 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
     },
   )
   private val integrity = MediaIntegrity(context)
+  private val novelAi = NovelAiTransport(File(context.filesDir, "creative-responses"))
   private val compatibility = VideoCompatibility(context)
   private val transferPolicy = ArtifactTransferPolicy()
   private val dohPrototype = if (BuildConfig.DEBUG && BuildConfig.ARTIFACT_DOH_PROTOTYPE) DohTransferPrototype(
@@ -290,6 +291,22 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
     executors.executeMedia {
       try { promise.resolve(creativePublisher.lookup(key, mime, hash)) }
       catch (error: Exception) { promise.reject("CREATIVE_LOOKUP_FAILED", "无法核对图片保存结果", error) }
+    }
+  }
+
+  @ReactMethod
+  fun generateNovelAi(key: String, requestJson: String, hash: String, token: String, promise: Promise) {
+    executors.executeMedia {
+      try { promise.resolve(Uri.fromFile(novelAi.generate(key, requestJson, hash, token)).toString()) }
+      catch (error: Exception) { promise.reject("NOVELAI_GENERATION_UNCONFIRMED", "生成结果未确认，请先核对任务；不会自动重发") }
+    }
+  }
+
+  @ReactMethod
+  fun lookupNovelAi(key: String, hash: String, promise: Promise) {
+    executors.executeMedia {
+      try { promise.resolve(novelAi.lookup(key, hash)?.let { Uri.fromFile(it).toString() }) }
+      catch (error: Exception) { promise.reject("NOVELAI_RESPONSE_UNAVAILABLE", "保存的生成回执不可用") }
     }
   }
 
