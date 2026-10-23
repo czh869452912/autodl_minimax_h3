@@ -11,6 +11,7 @@ import { findCreativeBackupFile } from '../storage/creativeBackupRuntime';
 import { migrateLegacyCreativeBatch } from './legacyMigration';
 import { NativeModules } from 'react-native';
 import { stageCreativeFile } from './fileImport';
+import * as DocumentPicker from 'expo-document-picker';
 
 export function migrateCreativeHistory(db = getDatabase()) {
   return migrateLegacyCreativeBatch(db, { importLocal: async (uri, mimeType) => {
@@ -33,6 +34,26 @@ export async function restoreCreativeImageFromBackup(versionId: string) {
   const file = await findCreativeBackupFile(resource.expected_sha256);
   if (!file) throw new Error('备份中未找到完好的原图，请重新选择原始文件');
   return restoreCreativeImage(versionId, { uri: file.uri, mimeType: resource.mime, size: file.size, name: 'restored-image' }, file.backupId);
+}
+export async function restoreCreativeFile(versionId:string,file:{uri:string;mimeType:string},backupId?:string){
+  const db=getDatabase();
+  return creativeFiles().restore(versionId,{sourceUri:file.uri,backupId,importFile:async()=>{
+    const staged=await createAttachmentStore(db,{importImage:stageCreativeFile}).externalize({type:'url',value:file.uri,mimeType:file.mimeType});
+    return {hash:staged.hashes[0]??'',release:staged.releaseStaging};
+  }});
+}
+export async function locateCreativeFile(versionId:string){
+  const resource=await creativeFiles().read(versionId);
+  if(!resource?.expected_sha256||!resource.mime)throw new Error('原件哈希未知，无法确认替换文件；请作为新资产导入');
+  const result=await DocumentPicker.getDocumentAsync({type:resource.mime,multiple:false,copyToCacheDirectory:true});
+  if(!result.canceled&&result.assets[0])await restoreCreativeFile(versionId,{uri:result.assets[0].uri,mimeType:resource.mime});
+}
+export async function restoreCreativeFileFromBackup(versionId:string){
+  const resource=await creativeFiles().read(versionId);
+  if(!resource?.expected_sha256||!resource.mime)throw new Error('原件哈希未知，无法确定备份文件');
+  const file=await findCreativeBackupFile(resource.expected_sha256);
+  if(!file)throw new Error('未找到内容匹配的完整备份文件');
+  return restoreCreativeFile(versionId,{uri:file.uri,mimeType:resource.mime},file.backupId);
 }
 export async function exportCreativeVersion(versionId: string, generation = 1) {
   const result = await creativeService().execute({ name: 'asset.export', payload: { versionId, generation } }, `export:${versionId}:${generation}`);

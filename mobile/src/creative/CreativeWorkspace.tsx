@@ -13,6 +13,8 @@ import { ProjectPlans } from './ProjectPlans';
 import { ProjectActivity } from './ProjectActivityPanel';
 import { TextAssetEditor } from './TextAssetEditor';
 import { TextVersionPreview } from './TextVersionPreview';
+import { VersionComparison } from './VersionComparison';
+import { locateCreativeFile,restoreCreativeFileFromBackup } from './runtime';
 import { pickCreativeFiles } from './fileImport';
 import { CREATIVE_FILE_MIMES,creativeExportTarget } from './fileFormats';
 import { VideoPlayer } from '../media/VideoPlayer';
@@ -114,6 +116,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
         {action('保存说明与标签',()=>void run(async()=>{await command({name:'asset.describe',payload:{id:activeAsset.id,expectedRevision:activeAsset.revision,title:assetTitle,description:assetDescription,tags:assetTags.split(/[,，]/).map(s=>s.trim()).filter(Boolean)}});setActiveAsset({...activeAsset,title:assetTitle,revision:activeAsset.revision+1});}))}
         {action('移入回收站',()=>Alert.alert('移入回收站','仍被项目、镜头或草稿引用的资产会阻止此操作。回收站保留文件，可恢复。',[{text:'取消',style:'cancel'},{text:'移入',onPress:()=>void run(async()=>{await command({name:'asset.trash',payload:{id:activeAsset.id,expectedRevision:activeAsset.revision}});setActiveAsset(undefined);})}]))}
       </>}
+      <VersionComparison key={activeAsset.id} versions={versions}/>
       {versions.map(v => <View key={v.id} style={styles.card}>
         <Text style={styles.body}>版本 {v.versionNo} · {activeAsset.currentVersionId === v.id ? '默认版本' : '候选版本'} · {v.state === 'AVAILABLE' ? '本地可用' : '文件待恢复'}</Text>
         {v.relativePath && v.mime?.startsWith('image/') ? <Image accessibilityLabel={`版本 ${v.versionNo} 预览`} source={{ uri: `${FileSystem.documentDirectory}${v.relativePath}` }} style={styles.preview} resizeMode="contain" /> : null}
@@ -129,7 +132,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
         {Array.isArray(v.recipe.notices) ? v.recipe.notices.map((notice,i)=><Text key={i} style={styles.body}>{String(notice)}</Text>) : null}
         {activeAsset.kind === 'image' && v.recipe.input ? action('恢复参数并继续出图', () => void run(async () => { const result=await command({name:'draft.createImage',payload:{fromVersionId:v.id,projectId:mode==='projects'?selected:undefined}}); if(result.status==='completed')router.push({pathname:'/image-draft/[id]',params:{id:result.value.draftId}}); })) : null}
         {activeAsset.kind === 'image' && !v.recipe.input ? <Text style={styles.body}>没有可完整恢复的生成参数；保留原文件，不猜测原始提示词。</Text> : null}
-        {v.state !== 'AVAILABLE' && activeAsset.kind !== 'image' ? <Text style={styles.body}>原件尚不可用。版本与来源保留，可从任务页检查下载状态。</Text> : null}
+        {v.state !== 'AVAILABLE' && activeAsset.kind !== 'image' ? <><Text style={styles.body}>原件尚不可用。版本与来源保留，只接受与已记录哈希相同的文件。</Text>{action('重新定位原文件',()=>void run(async()=>{await locateCreativeFile(v.id);await inspect(activeAsset);}))}{action('从备份恢复原文件',()=>void run(async()=>{await restoreCreativeFileFromBackup(v.id);await inspect(activeAsset);}))}</> : null}
         {v.state === 'AVAILABLE' && activeAsset.kind === 'image' ? action('从此版本创建视频草稿', () => void run(async () => { const result = await command({ name: 'draft.createVideo', payload: { versionId: v.id, ...(mode === 'projects' && selected ? { projectId: selected } : {}) } }); if (result.status === 'completed') router.push({ pathname: '/creative-draft/[id]', params: { id: result.value.draftId } }); })) : null}
         {projects.filter(p => !p.archivedAt && !links.some(l => l.project_id === p.id)).map(p => <View key={p.id}>{action(`加入 ${p.title}（固定此版本）`, () => void run(async () => { await command({ name: 'asset.linkToProject', payload: { assetId: activeAsset.id, projectId: p.id, versionId: v.id } }); await inspect(activeAsset); }))}</View>)}
         {links.filter(l => l.pinned_version_id !== v.id).map(l => <View key={l.project_id}>{action(`将 ${l.title} 固定到此版本`, () => void run(async () => { await command({ name: 'asset.pinProjectVersion', payload: { assetId: activeAsset.id, projectId: l.project_id, expectedRevision: l.revision, versionId: v.id } }); await inspect(activeAsset); }))}</View>)}
