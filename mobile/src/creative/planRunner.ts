@@ -16,6 +16,10 @@ export async function runCreativePlans(db:AppDatabase,prepare:(draftId:string)=>
       await withWriteTransaction(db,tx=>tx.runAsync("UPDATE creative_plan_steps SET state='BLOCKED',revision=revision+1,error_json=? WHERE id=? AND state='READY' AND job_id IS NULL",JSON.stringify({message:e instanceof Error?e.message.slice(0,300):'PLAN_PREPARATION_FAILED'}),step.id).then(()=>undefined));
     }
   }
+  await reconcileCreativePlans(db,now);
+  return {scanned:steps.length};
+}
+export async function reconcileCreativePlans(db:AppDatabase,now=Date.now()){
   await withWriteTransaction(db,async tx=>{
     const pending=await tx.getAllAsync<CreativePlanStep & {job_status:string}>(`SELECT s.*,j.status AS job_status FROM creative_plan_steps s JOIN workflow_jobs j ON j.id=s.job_id JOIN creative_plans p ON p.id=s.plan_id JOIN creative_execution_state e ON e.epoch=p.execution_epoch WHERE p.state='ACTIVE' AND s.state='DISPATCHED' LIMIT 20`);
     for(const step of pending){
@@ -26,5 +30,4 @@ export async function runCreativePlans(db:AppDatabase,prepare:(draftId:string)=>
       }else if(['FAILED','CANCELLED'].includes(step.job_status))await tx.runAsync("UPDATE creative_plan_steps SET state='FAILED',revision=revision+1,error_json=? WHERE id=?",JSON.stringify({message:'生成未完成，请检查原任务。计划不会自动重新消费。'}),step.id);
     }
   });
-  return {scanned:steps.length};
 }

@@ -59,6 +59,7 @@ export async function applyPlanCommand(tx:AppDatabase,name:string,p:any,now:numb
     await tx.runAsync("UPDATE creative_plan_steps SET state='READY',revision=revision+1,draft_id=?,input_binding_json=? WHERE id=?",draft.draftId,JSON.stringify({...JSON.parse(next.input_binding_json),versionId:p.versionId}),next.id);
     await tx.runAsync("UPDATE creative_decision_requests SET state='RESOLVED',revision=revision+1,selected_version_id=?,resolved_command_id=?,updated_at=? WHERE id=?",p.versionId,commandId,now,d.id);
     await tx.runAsync('INSERT INTO creative_selection_outbox VALUES(?,?,?,NULL,?)',`selection:${d.id}`,next.id,plan.execution_epoch,now);
+    await tx.runAsync('UPDATE executor_wake_state SET generation=generation+1,requested_at=? WHERE singleton=1',now);
     return {planId:plan.id,draftId:draft.draftId,stepId:next.id};
   }
   const plan=await activePlan(tx,p.id);
@@ -73,6 +74,7 @@ export async function applyPlanCommand(tx:AppDatabase,name:string,p:any,now:numb
     if(!step||!await tx.getFirstAsync("SELECT id FROM creative_authorizations WHERE id=? AND project_id=? AND provider_id='autodl' AND revoked_at IS NULL AND expires_at>? AND execution_epoch=?",p.authorizationId,plan.project_id,now,plan.execution_epoch))throw new Error('PLAN_RESUME_REQUIRES_AUTHORIZATION');
     await tx.runAsync('UPDATE creative_plans SET authorization_id=?,revision=revision+1,updated_at=? WHERE id=?',p.authorizationId,now,plan.id);
     await tx.runAsync("UPDATE creative_plan_steps SET state='READY',revision=revision+1,error_json=NULL WHERE id=?",step.id);
+    await tx.runAsync('UPDATE executor_wake_state SET generation=generation+1,requested_at=? WHERE singleton=1',now);
   }else throw new Error('UNKNOWN_CREATIVE_COMMAND');
   return {planId:plan.id};
 }

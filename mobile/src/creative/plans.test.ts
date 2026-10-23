@@ -2,7 +2,7 @@ import {createInitializedRealSqliteTestDb} from '../test/realSqlite';
 import {createCreativeService} from './service';
 import {quarantineRestoredExecution} from '../storage/restoreIsolation';
 import type {CreativeCommand} from './types';
-import {runCreativePlans} from './planRunner';
+import {runCreativePlans,reconcileCreativePlans} from './planRunner';
 import {createCreativeAccounts} from './accounts';
 import {createCreativeBudget} from './budget';
 import {H3_WORKFLOW_ID} from '../workflows/providers/autodl/metadata';
@@ -94,7 +94,9 @@ test('ordinary submit cannot bypass a frozen plan and no completion before outpu
     expect(f.db.getFirstSync('SELECT state FROM creative_plans')).toEqual({state:'ACTIVE'});
     const job=f.db.getFirstSync<{id:string}>('SELECT id FROM workflow_jobs')!;
     f.db.runSync("INSERT INTO creative_output_links VALUES(?,'output','v2')",job.id);
-    await runCreativePlans(f.db as never,f.prepare,400);
+    f.prepare.mockClear();
+    await reconcileCreativePlans(f.db as never,400);
+    expect(f.prepare).not.toHaveBeenCalled();
     expect(f.db.getFirstSync('SELECT state FROM creative_plans')).toEqual({state:'COMPLETED'});
     expect((await f.service.shots(f.projectId))[0].selected_video).toBeNull();
   }finally{f.db.close();}
