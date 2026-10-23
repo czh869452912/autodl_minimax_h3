@@ -13,11 +13,23 @@ export const CREATIVE_CAPTURE_SCHEMA = [
   "CREATE TRIGGER IF NOT EXISTS creative_cutover_readiness BEFORE UPDATE OF phase ON creative_migration_state WHEN NEW.phase='PRIMARY' AND OLD.writer_ready!=1 BEGIN SELECT RAISE(ABORT,'CREATIVE_WRITERS_NOT_READY'); END",
 ] as const;
 
-export const APP_SCHEMA_VERSION = 14;
+export const RESTORE_SAFETY_SCHEMA = [
+  'CREATE TABLE IF NOT EXISTS creative_execution_state(id INTEGER PRIMARY KEY CHECK(id=1),epoch TEXT NOT NULL)',
+  'INSERT OR IGNORE INTO creative_execution_state(id,epoch) VALUES(1,lower(hex(randomblob(16))))',
+  'CREATE TABLE IF NOT EXISTS creative_restore_quarantine(entity_kind TEXT NOT NULL,entity_id TEXT NOT NULL,restore_epoch TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(entity_kind,entity_id))',
+  `CREATE TRIGGER IF NOT EXISTS creative_restore_operation_insert AFTER INSERT ON workflow_operations
+    WHEN EXISTS(SELECT 1 FROM creative_restore_quarantine WHERE (entity_kind='job' AND entity_id=NEW.job_id) OR (entity_kind='operation' AND entity_id=NEW.id))
+    BEGIN UPDATE workflow_operations SET state='BLOCKED',lease_owner=NULL,lease_expires_at=NULL,last_error_json='{"code":"RESTORED_EXECUTION_REQUIRES_REVIEW","message":"恢复的任务需要重新确认，未自动执行"}' WHERE id=NEW.id; END`,
+  `CREATE TRIGGER IF NOT EXISTS creative_restore_operation_update BEFORE UPDATE OF state ON workflow_operations
+    WHEN NEW.state IN ('PENDING','CLAIMED') AND EXISTS(SELECT 1 FROM creative_restore_quarantine WHERE (entity_kind='job' AND entity_id=NEW.job_id) OR (entity_kind='operation' AND entity_id=NEW.id))
+    BEGIN SELECT RAISE(ABORT,'RESTORED_EXECUTION_REQUIRES_REVIEW'); END`,
+] as const;
+export const APP_SCHEMA_VERSION = 15;
 export const RECOVERY_TABLE = 'app_database_recovery';
 
 export const APP_TABLES = [
   ...CREATIVE_CAPTURE_TABLES,
+  'creative_restore_quarantine', 'creative_execution_state',
   'task_archives', 'task_monitor_events',
   'media_asset_tombstones', 'workflow_artifacts', 'workflow_jobs', 'workflow_operations', 'workflow_job_events',
   'artifact_blob_refs', 'artifact_blobs', 'media_deliveries', 'media_assets', 'tasks',
@@ -114,4 +126,4 @@ export const V13_SCHEMA_STATEMENTS = [
   'CREATE TRIGGER IF NOT EXISTS archive_task_delete AFTER DELETE ON tasks BEGIN DELETE FROM task_archives WHERE task_id=OLD.id; END',
 ] as const;
 
-export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS, ...V13_SCHEMA_STATEMENTS, ...CREATIVE_CAPTURE_SCHEMA] as const;
+export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS, ...V13_SCHEMA_STATEMENTS, ...CREATIVE_CAPTURE_SCHEMA, ...RESTORE_SAFETY_SCHEMA] as const;

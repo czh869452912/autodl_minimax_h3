@@ -1,3 +1,4 @@
+import { v15RestoreSafety } from './v15RestoreSafety';
 import { v14CreativeCapture } from './v14CreativeCapture';
 import type { AppDatabase } from '../appDatabase';
 import { APP_SCHEMA_VERSION, APP_TABLES, CURRENT_SCHEMA_STATEMENTS } from '../schema';
@@ -29,6 +30,7 @@ const steps = new Map<number, MigrationStep>([
   [v12MonitorFailures.fromVersion, v12MonitorFailures],
   [v13TaskArchives.fromVersion, v13TaskArchives],
   [v14CreativeCapture.fromVersion, v14CreativeCapture],
+  [v15RestoreSafety.fromVersion, v15RestoreSafety],
 ]);
 
 function version(db: AppDatabase): number {

@@ -2,6 +2,9 @@ import { backupDatabaseSync, defaultDatabaseDirectory, openDatabaseSync, type SQ
 import { Directory } from 'expo-file-system';
 import { maintenanceDatabase, didResetDatabase } from './databaseAccess';
 import type { AppDatabase } from './appDatabase';
+import { ensureAppDatabase } from './database';
+import { quarantineRestoredExecution } from './restoreIsolation';
+import { createId } from '../ids';
 
 export type BackupDeps = {
   now(): number;
@@ -85,12 +88,23 @@ export function restoreFullDatabaseBackup(
     throw new Error('REGISTRY_RELEASE_BACKUP_NOT_FOUND');
   }
   const source = deps.open(backupName);
+  let staging: SQLiteDatabase | undefined;
   try {
     const check = source.getFirstSync<{ integrity_check: string }>('PRAGMA integrity_check');
     if (check?.integrity_check !== 'ok') throw new Error('REGISTRY_RELEASE_BACKUP_INVALID');
-    deps.backup({ sourceDatabase: source, destDatabase: maintenanceDatabase(destination) });
+    const epoch = createId();
+    staging = deps.open(`autodl-h3-restore-stage-${epoch}.db`);
+    deps.backup({ sourceDatabase: source, destDatabase: staging });
+    const migration = ensureAppDatabase(staging);
+    if (migration?.mode !== 'writable') throw new Error('RESTORE_SCHEMA_UNSUPPORTED');
+    quarantineRestoredExecution(staging, epoch);
+    if (staging.getFirstSync<{ integrity_check: string }>('PRAGMA integrity_check')?.integrity_check !== 'ok'
+      || staging.getAllSync('PRAGMA foreign_key_check').length) throw new Error('RESTORE_STAGING_INVALID');
+    // Never publish a snapshot whose old PENDING operations remain runnable.
+    deps.backup({ sourceDatabase: staging, destDatabase: maintenanceDatabase(destination) });
     didResetDatabase(destination);
   } finally {
+    staging?.closeSync();
     source.closeSync();
   }
 }

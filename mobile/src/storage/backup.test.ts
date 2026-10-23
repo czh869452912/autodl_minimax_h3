@@ -7,6 +7,7 @@ import {
   type BackupDeps,
   type RestoreBackupDeps,
 } from './backup';
+import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 
 test('normalizes the native SQLite directory path for the filesystem URI API', () => {
   expect(databaseDirectoryUri('/data/user/0/app/databases')).toBe('file:///data/user/0/app/databases');
@@ -65,21 +66,42 @@ test('lists only recognized full backups newest first', () => {
 
 function restoreFixture(integrity = 'ok') {
   const source = { getFirstSync: jest.fn(() => ({ integrity_check: integrity })), closeSync: jest.fn() };
+  let stage: ReturnType<typeof createInitializedRealSqliteTestDb> & { closeSync: jest.Mock };
   const deps: RestoreBackupDeps = {
     listNames: () => ['autodl-h3-v6-to-v7-200.backup.db'],
-    open: jest.fn(() => source as never),
+    open: jest.fn(name => {
+      if (name.includes('restore-stage')) {
+        const db = createInitializedRealSqliteTestDb();
+        stage = { ...db, closeSync: jest.fn(() => db.close()) };
+        return stage as never;
+      }
+      return source as never;
+    }),
     backup: jest.fn(),
   };
-  return { source, deps };
+  return { source, deps, getStage: () => stage };
 }
 
 test('restores a verified complete database and closes the source', () => {
   const destination = {} as never;
-  const { source, deps } = restoreFixture();
+  const { source, deps, getStage } = restoreFixture();
   restoreFullDatabaseBackup(destination, 'autodl-h3-v6-to-v7-200.backup.db', deps);
   expect(source.getFirstSync).toHaveBeenCalledWith('PRAGMA integrity_check');
-  expect(deps.backup).toHaveBeenCalledWith({ sourceDatabase: source, destDatabase: destination });
+  expect(deps.backup).toHaveBeenNthCalledWith(1, { sourceDatabase: source, destDatabase: getStage() });
+  expect(deps.backup).toHaveBeenNthCalledWith(2, { sourceDatabase: getStage(), destDatabase: destination });
+  expect(getStage().closeSync).toHaveBeenCalledTimes(1);
   expect(source.closeSync).toHaveBeenCalledTimes(1);
+});
+
+test('a failed staging restore never overwrites live data', () => {
+  const { deps } = restoreFixture();
+  const destination = {} as never;
+  deps.backup = jest.fn(({ destDatabase }) => {
+    destDatabase.execSync("CREATE TRIGGER injected BEFORE UPDATE ON creative_execution_state BEGIN SELECT RAISE(ABORT,'injected'); END");
+  });
+  expect(() => restoreFullDatabaseBackup(destination, 'autodl-h3-v6-to-v7-200.backup.db', deps)).toThrow('injected');
+  expect(deps.backup).toHaveBeenCalledTimes(1);
+  expect(deps.backup).not.toHaveBeenCalledWith(expect.objectContaining({ destDatabase: destination }));
 });
 
 test('rejects missing or invalid backups without overwriting the destination', () => {
