@@ -382,17 +382,20 @@ class ArtifactTransferTest {
     assertTrue(partsDir.listFiles().isNullOrEmpty())
   }
 
-  @Test fun `throttles progress until one second or five MiB advances`() {
+  @Test fun `throttles progress until five MiB advances when the clock is fixed`() {
     val chunk = ByteArray(64 * 1024) { 7 }
     val body = ByteArray(6 * 1024 * 1024) { chunk[it % chunk.size] }
     server.enqueue(MockResponse().setHeader("Content-Type", "video/mp4").setBody(okio.Buffer().write(body)))
-    var now = 10_000L
+    val now = 10_000L
     val progress = mutableListOf<Long>()
 
     transfer(clock = { now }).transfer(request(maxBytes = body.size.toLong() + 1)) { bytes -> progress += bytes }
 
-    assertEquals(listOf(5L * 1024 * 1024), progress)
-    now += 1_000
+    // Socket reads may split the threshold across buffers. Report the first
+    // actual byte count at/after 5 MiB, not an artificially rounded milestone.
+    assertEquals(1, progress.size)
+    assertTrue(progress.single() >= 5L * 1024 * 1024)
+    assertTrue(progress.single() < 5L * 1024 * 1024 + 64 * 1024)
   }
 
   @Test fun `cancellation work remains runnable while both transfer workers are occupied`() {

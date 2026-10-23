@@ -1,0 +1,13 @@
+// Optional Windows build support: keep generated Prefab/CMake paths below the
+// legacy path limit used by the SDK's Ninja. No source or old cache is removed.
+gradle.beforeProject { project ->
+    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+        ['com.android.application', 'com.android.library'].each { pluginId ->
+            project.plugins.withId(pluginId) {
+                def checkout = Integer.toUnsignedString(project.rootDir.canonicalPath.hashCode(), 16)
+                def cache = new File(System.getProperty('java.io.tmpdir'), "h3-cxx-${checkout}/${project.name}")
+                project.android.externalNativeBuild.cmake.buildStagingDirectory = cache
+            }
+        }
+    }
+}
