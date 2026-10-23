@@ -1,3 +1,4 @@
+import {auditCreativeMigration} from './migrationAudit';
 import { getDatabase } from '../storage/databaseClient';
 import { createCreativeService } from './service';
 import { createAttachmentStore } from '../media/attachments';
@@ -13,11 +14,12 @@ import { NativeModules } from 'react-native';
 import { stageCreativeFile } from './fileImport';
 import * as DocumentPicker from 'expo-document-picker';
 
-export function migrateCreativeHistory(db = getDatabase()) {
-  return migrateLegacyCreativeBatch(db, { importLocal: async (uri, mimeType) => {
+export async function migrateCreativeHistory(db = getDatabase()) {
+  const result=await migrateLegacyCreativeBatch(db, { importLocal: async (uri, mimeType) => {
     const staged = await createAttachmentStore(db,{importImage:stageCreativeFile}).externalize({ type:'url',value:uri,mimeType });
     return { hash: staged.hashes[0] ?? '', release: staged.releaseStaging };
   } }, 5);
+  return {...result,audit:await auditCreativeMigration(db)};
 }
 
 export const creativeService = () => createCreativeService(getDatabase());

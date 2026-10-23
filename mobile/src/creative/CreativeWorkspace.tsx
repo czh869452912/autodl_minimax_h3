@@ -157,7 +157,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
       {!assets.length ? <Text style={styles.body}>还没有素材。导入图片后可加入多个项目，文件只保留一份。</Text> : null}
       {assets.map(a => <Pressable accessibilityRole="button" accessibilityLabel={`打开资产 ${a.title}`} key={a.id} style={styles.card} onPress={() => void run(() => inspect(a))}><Text style={styles.title}>{a.title}</Text><Text style={styles.body}>{a.kind} · {a.currentVersionId ? '已选默认版本' : '待选定版本'}</Text></Pressable>)}
       <Text style={styles.body}>最近 100 项；已有视频仍可从“历史视频”访问。</Text>
-      {action('迁入历史作品（可中断）', () => void run(async () => { const result = await migrateCreativeHistory(); setMigrationNotice(`本批迁入或更新 ${result.imported} 项。${result.pending ? '还有记录，点击继续迁入。' : '已追平当前历史记录。'}`); }))}
+      {action('迁入历史作品（可中断）', () => void run(async () => { const result = await migrateCreativeHistory(); setMigrationNotice(`本批迁入或更新 ${result.imported} 项。${result.pending ? '还有记录，点击继续迁入。' : '已追平当前历史记录。'} 待处理变更 ${result.audit.pendingJournal}，未迁入 ${result.audit.unmapped}，待更新映射 ${result.audit.staleMappings}，原件不可用 ${result.audit.unavailableFiles}。${result.audit.missingPins||result.audit.brokenMappings||result.audit.foreignKeyViolations?'检测到一致性异常，请保留备份并停止清理文件。':''}${result.audit.writersReady?'':'旧入口仍处于兼容追平阶段，尚未切换写入源。'}`); }))}
       {migrationNotice ? <Text accessibilityLiveRegion="polite" style={styles.body}>{migrationNotice}</Text> : null}
     </> : null}
   </ScrollView>;
