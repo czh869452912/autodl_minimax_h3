@@ -150,3 +150,24 @@ test('output candidates are pinned atomically and never overwrite selected/defau
     expect(f.db.getAllSync("SELECT * FROM artifact_blob_refs WHERE owner_type='creative_version'")).toHaveLength(1);
   } finally { f.db.close(); }
 });
+
+
+test('late project archive or target trash rejects submission without a job or reservation', async () => {
+  const f=await fixture();try {
+    f.db.runSync("INSERT INTO creative_projects VALUES('project','p','',0,1,1,1)");
+    f.db.runSync("UPDATE creative_generation_drafts SET project_id='project'");
+    await expect(f.submit()).rejects.toThrow('PROJECT_NOT_AVAILABLE');
+    f.db.runSync("UPDATE creative_generation_drafts SET project_id=NULL");
+    f.db.runSync("INSERT INTO creative_assets VALUES('target','video','target',NULL,0,1,1)");
+    f.db.runSync("UPDATE creative_generation_drafts SET target_asset_id='target'");
+    f.db.runSync("INSERT INTO creative_asset_trash VALUES('target','user',1)");
+    await expect(f.submit()).rejects.toThrow('TARGET_ASSET_TRASHED');
+    expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toHaveLength(0);
+    expect(f.db.getAllSync('SELECT * FROM creative_budget_reservations')).toHaveLength(0);
+    f.db.runSync('DELETE FROM creative_asset_trash');
+    await f.submit();
+    f.db.runSync("INSERT INTO creative_asset_trash VALUES('target','user',1)");
+    await expect(f.service.execute({name:'draft.copySubmitted',payload:{id:f.draft.id}},'copy-trashed')).rejects.toThrow('TARGET_ASSET_TRASHED');
+    expect(f.db.getAllSync('SELECT * FROM creative_generation_drafts')).toHaveLength(1);
+  }finally{f.db.close();}
+});

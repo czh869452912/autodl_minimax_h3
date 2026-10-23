@@ -31,6 +31,7 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     const source=await readCreativeDraft(tx,p.id);
     if(!source||source.state!=='SUBMITTED'||!source.job_id)throw new Error('SUBMITTED_DRAFT_REQUIRED');
     await project(source.project_id);
+    if(source.target_asset_id&&await tx.getFirstAsync('SELECT asset_id FROM creative_asset_trash WHERE asset_id=?',source.target_asset_id))throw new Error('TARGET_ASSET_TRASHED');
     if(source.shot_id&&!await tx.getFirstAsync('SELECT id FROM creative_shots WHERE id=? AND deleted_at IS NULL',source.shot_id))throw new Error('SHOT_NOT_AVAILABLE');
     const draftId=makeId();
     await tx.runAsync("INSERT INTO creative_generation_drafts SELECT ?,project_id,shot_id,target_asset_id,provider_id,workflow_id,input_json,0,'EDITING',NULL,?,? FROM creative_generation_drafts WHERE id=?",draftId,now,now,p.id);
