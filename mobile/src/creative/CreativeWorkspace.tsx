@@ -67,6 +67,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
     <View style={styles.row}><Text accessibilityRole="header" style={styles.heading}>{mode === 'projects' ? '项目' : '创作资产'}</Text>
       {action('任务', () => router.push('/(tabs)/tasks'))}{action('设置', () => router.push('/(tabs)/settings'))}</View>
     <View style={styles.row}>{action('项目', () => router.push('/(tabs)/projects'))}{action('资产库', () => router.push('/(tabs)/assets'))}{action('历史视频', () => router.push('/(tabs)/gallery'))}</View>
+    {action('创作草稿', () => router.push('/creative-drafts'))}
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     {mode === 'projects' && selected && !activeAsset ? <View style={styles.row}>{action('简报', () => setProjectView('brief'))}{action('镜头', () => setProjectView('shots'))}{action('素材', () => setProjectView('assets'))}</View> : null}
     {mode === 'projects' && !activeAsset ? <>
@@ -95,6 +96,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
         {deliveries[v.id] ? <Text style={styles.body}>{({ QUEUED: '等待保存', PUBLISHING: '正在保存', EXPORTED: '已保存到系统相册', FAILED: '保存失败，请检查源文件', DELIVERY_UNKNOWN: '保存结果不确定，请先检查系统相册', QUARANTINED: '恢复的保存操作已隔离，未重新执行' } as Record<string, string>)[deliveries[v.id]!.status]}</Text> : null}
         {deliveries[v.id] && ['EXPORTED','FAILED','DELIVERY_UNKNOWN','QUARANTINED'].includes(deliveries[v.id]!.status) ? action('另存一份', () => Alert.alert('另存一份图片', '这会发起新的保存操作，系统相册中可能出现重复图片。', [{ text: '取消', style: 'cancel' }, { text: '继续保存', onPress: () => void run(() => exportCreativeVersion(v.id, deliveries[v.id]!.generation + 1)) }])) : null}
         {v.state === 'AVAILABLE' ? action('设为默认版本', () => void run(async () => { await command({ name: 'asset.setDefaultVersion', payload: { id: activeAsset.id, versionId: v.id, expectedRevision: activeAsset.revision } }); const updated = (await creativeService().assets()).find(a => a.id === activeAsset.id); if (updated) await inspect(updated); })) : null}
+        {v.state === 'AVAILABLE' && activeAsset.kind === 'image' ? action('从此版本创建视频草稿', () => void run(async () => { const result = await command({ name: 'draft.createVideo', payload: { versionId: v.id, ...(mode === 'projects' && selected ? { projectId: selected } : {}) } }); if (result.status === 'completed') router.push({ pathname: '/creative-draft/[id]', params: { id: result.value.draftId } }); })) : null}
         {projects.filter(p => !p.archivedAt && !links.some(l => l.project_id === p.id)).map(p => <View key={p.id}>{action(`加入 ${p.title}（固定此版本）`, () => void run(async () => { await command({ name: 'asset.linkToProject', payload: { assetId: activeAsset.id, projectId: p.id, versionId: v.id } }); await inspect(activeAsset); }))}</View>)}
         {links.filter(l => l.pinned_version_id !== v.id).map(l => <View key={l.project_id}>{action(`将 ${l.title} 固定到此版本`, () => void run(async () => { await command({ name: 'asset.pinProjectVersion', payload: { assetId: activeAsset.id, projectId: l.project_id, expectedRevision: l.revision, versionId: v.id } }); await inspect(activeAsset); }))}</View>)}
       </View>)}

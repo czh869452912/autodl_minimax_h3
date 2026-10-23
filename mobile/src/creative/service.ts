@@ -1,5 +1,6 @@
 import CryptoJS from 'crypto-js';
 import { storySchemas, applyStoryCommand, listCreativeShots } from './story';
+import { draftSchemas, applyDraftCommand, readCreativeDraft, readDraftInputs } from './drafts';
 import { z } from 'zod';
 import type { AppDatabase } from '../storage/appDatabase';
 import { withWriteTransaction } from '../storage/sqliteBusy';
@@ -12,6 +13,7 @@ const title = z.string().trim().min(1).max(200);
 const revision = z.number().int().nonnegative();
 const schemas = {
   ...storySchemas,
+  ...draftSchemas,
   'asset.export': z.object({ versionId: id, generation: z.number().int().positive().default(1) }).strict(),
   'project.create': z.object({ title, brief: z.string().max(20000).optional() }).strict(),
   'project.update': z.object({ id, expectedRevision: revision, title, brief: z.string().max(20000) }).strict(),
@@ -40,6 +42,9 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
   };
   return {
     shots: (projectId: string) => listCreativeShots(db, projectId),
+    draft: (id: string) => readCreativeDraft(db, id),
+    draftInputs: (id: string) => readDraftInputs(db, id),
+    drafts: (projectId?: string) => db.getAllAsync<import('./drafts').CreativeDraft>("SELECT * FROM creative_generation_drafts WHERE (? IS NULL OR project_id=?) AND state!='DISCARDED' ORDER BY updated_at DESC,id DESC LIMIT 100", projectId ?? null, projectId ?? null),
     async projects(archived = false): Promise<CreativeProject[]> { return (await db.getAllAsync<Row>('SELECT * FROM creative_projects WHERE (archived_at IS NOT NULL)=? ORDER BY updated_at DESC,id DESC', archived ? 1 : 0)).map(project); },
     async project(id: string) { const row = await db.getFirstAsync<Row>('SELECT * FROM creative_projects WHERE id=?', id); return row ? project(row) : undefined; },
     async assets(options: { projectId?: string; query?: string; inbox?: boolean } = {}): Promise<CreativeAsset[]> {
@@ -112,7 +117,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
             await tx.runAsync('INSERT INTO creative_project_assets VALUES(?,?,?,0)', p.projectId, p.assetId, p.versionId); value = { assetId: p.assetId, projectId: p.projectId }; break;
           case 'asset.unlinkFromProject':
             changed(await tx.runAsync('DELETE FROM creative_project_assets WHERE project_id=? AND asset_id=? AND revision=?', p.projectId, p.assetId, p.expectedRevision)); value = { assetId: p.assetId, projectId: p.projectId }; break;
-          default: value = await applyStoryCommand(tx, command.name, p, now, deps.id);
+          default: value = command.name in draftSchemas ? await applyDraftCommand(tx, command.name, p, now, deps.id) : await applyStoryCommand(tx, command.name, p, now, deps.id);
         }
         const receiptId = deps.id(), originId = deps.id();
         const epoch = await tx.getFirstAsync<{ epoch: string }>('SELECT epoch FROM creative_execution_state WHERE id=1');

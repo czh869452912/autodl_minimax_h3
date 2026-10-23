@@ -70,10 +70,20 @@ export const CREATIVE_SHOT_SCHEMA = [
   "CREATE TABLE IF NOT EXISTS creative_shot_assets(shot_id TEXT NOT NULL REFERENCES creative_shots(id) ON DELETE RESTRICT,slot TEXT NOT NULL CHECK(slot IN ('reference_image','reference_audio','selected_image','selected_video')),ordinal INTEGER NOT NULL,version_id TEXT NOT NULL REFERENCES creative_asset_versions(id) ON DELETE RESTRICT,PRIMARY KEY(shot_id,slot,ordinal),CHECK(ordinal>=0 AND (slot NOT IN ('selected_image','selected_video') OR ordinal=0)))",
   'CREATE INDEX IF NOT EXISTS creative_shots_order ON creative_shots(project_id,sort_key,id)',
 ] as const;
-export const APP_SCHEMA_VERSION = 20;
+export const CREATIVE_DRAFT_SCHEMA = [
+  "CREATE TABLE IF NOT EXISTS creative_generation_drafts(id TEXT PRIMARY KEY,project_id TEXT REFERENCES creative_projects(id) ON DELETE RESTRICT,shot_id TEXT REFERENCES creative_shots(id) ON DELETE RESTRICT,target_asset_id TEXT REFERENCES creative_assets(id) ON DELETE RESTRICT,provider_id TEXT NOT NULL,workflow_id TEXT NOT NULL,input_json TEXT NOT NULL CHECK(json_valid(input_json)),revision INTEGER NOT NULL DEFAULT 0,state TEXT NOT NULL CHECK(state IN ('EDITING','SUBMITTED','DISCARDED')),job_id TEXT REFERENCES workflow_jobs(id) ON DELETE RESTRICT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS creative_draft_inputs(draft_id TEXT NOT NULL REFERENCES creative_generation_drafts(id) ON DELETE RESTRICT,slot TEXT NOT NULL,ordinal INTEGER NOT NULL,version_id TEXT NOT NULL REFERENCES creative_asset_versions(id) ON DELETE RESTRICT,PRIMARY KEY(draft_id,slot,ordinal))",
+  "CREATE TABLE IF NOT EXISTS creative_job_contexts(job_id TEXT PRIMARY KEY REFERENCES workflow_jobs(id) ON DELETE RESTRICT,draft_id TEXT REFERENCES creative_generation_drafts(id) ON DELETE RESTRICT,draft_revision INTEGER NOT NULL,project_id TEXT REFERENCES creative_projects(id) ON DELETE RESTRICT,shot_id TEXT REFERENCES creative_shots(id) ON DELETE RESTRICT,target_asset_id TEXT NOT NULL REFERENCES creative_assets(id) ON DELETE RESTRICT,input_snapshot_json TEXT NOT NULL,request_hash TEXT NOT NULL,reservation_id TEXT REFERENCES creative_budget_reservations(id) ON DELETE RESTRICT,execution_epoch TEXT NOT NULL,created_at INTEGER NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS creative_job_inputs(job_id TEXT NOT NULL REFERENCES workflow_jobs(id) ON DELETE RESTRICT,slot TEXT NOT NULL,ordinal INTEGER NOT NULL,version_id TEXT NOT NULL REFERENCES creative_asset_versions(id) ON DELETE RESTRICT,PRIMARY KEY(job_id,slot,ordinal))",
+  "CREATE TABLE IF NOT EXISTS creative_output_links(job_id TEXT NOT NULL REFERENCES workflow_jobs(id) ON DELETE RESTRICT,artifact_id TEXT NOT NULL,version_id TEXT NOT NULL UNIQUE REFERENCES creative_asset_versions(id) ON DELETE RESTRICT,PRIMARY KEY(job_id,artifact_id))",
+  "CREATE TRIGGER IF NOT EXISTS creative_job_context_immutable BEFORE UPDATE ON creative_job_contexts BEGIN SELECT RAISE(ABORT,'JOB_CONTEXT_IMMUTABLE'); END",
+  'CREATE INDEX IF NOT EXISTS creative_drafts_recent ON creative_generation_drafts(project_id,updated_at DESC)',
+] as const;
+export const APP_SCHEMA_VERSION = 21;
 export const RECOVERY_TABLE = 'app_database_recovery';
 
 export const APP_TABLES = [
+  'creative_output_links','creative_job_inputs','creative_job_contexts','creative_draft_inputs','creative_generation_drafts',
   'creative_shot_assets','creative_shots',
   'creative_budget_events','creative_budget_reservations','creative_authorizations','creative_default_accounts','creative_credential_generations','creative_account_bindings',
   'creative_file_attempts', 'creative_recovery_sources', 'creative_file_resources', 'creative_deliveries',
@@ -176,4 +186,4 @@ export const V13_SCHEMA_STATEMENTS = [
   'CREATE TRIGGER IF NOT EXISTS archive_task_delete AFTER DELETE ON tasks BEGIN DELETE FROM task_archives WHERE task_id=OLD.id; END',
 ] as const;
 
-export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS, ...V13_SCHEMA_STATEMENTS, ...CREATIVE_CAPTURE_SCHEMA, ...RESTORE_SAFETY_SCHEMA, ...CREATIVE_DOMAIN_SCHEMA, ...CREATIVE_DELIVERY_SCHEMA, ...CREATIVE_FILE_SCHEMA, ...CREATIVE_AUTHORIZATION_SCHEMA, ...CREATIVE_SHOT_SCHEMA] as const;
+export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS, ...V13_SCHEMA_STATEMENTS, ...CREATIVE_CAPTURE_SCHEMA, ...RESTORE_SAFETY_SCHEMA, ...CREATIVE_DOMAIN_SCHEMA, ...CREATIVE_DELIVERY_SCHEMA, ...CREATIVE_FILE_SCHEMA, ...CREATIVE_AUTHORIZATION_SCHEMA, ...CREATIVE_SHOT_SCHEMA, ...CREATIVE_DRAFT_SCHEMA] as const;

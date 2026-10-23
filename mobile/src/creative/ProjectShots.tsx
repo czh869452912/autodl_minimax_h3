@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Text, TextInput, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { creativeService, creativeFiles } from './runtime';
 import { createId } from '../ids';
 import { ListAction } from '../ui/ListPageUI';
@@ -8,6 +9,7 @@ import type { CreativeShot } from './story';
 import type { CreativeCommand } from './types';
 
 export function ProjectShots({ projectId, archived = false }: { projectId: string; archived?: boolean }) {
+  const router = useRouter();
   const [shots, setShots] = useState<CreativeShot[]>([]);
   const [editing, setEditing] = useState<CreativeShot>();
   const [title, setTitle] = useState(''); const [description, setDescription] = useState('');
@@ -49,6 +51,7 @@ export function ProjectShots({ projectId, archived = false }: { projectId: strin
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {action('编辑镜头', () => { setEditing(shot); setTitle(shot.title); setDescription(shot.description); })}
         {action('选定图片', () => void choose(shot, 'selected_image'))}{action('选定视频', () => void choose(shot, 'selected_video'))}
+        {action('创建 H3 草稿', () => void work(async () => { const result = await command({ name: 'draft.createVideo', payload: { shotId: shot.id, projectId } }); if (result.status === 'completed') router.push({ pathname: '/creative-draft/[id]', params: { id: result.value.draftId } }); }))}
         {index > 0 ? action('上移', () => void reorder(index, -1)) : null}{index < shots.length - 1 ? action('下移', () => void reorder(index, 1)) : null}
         {action('移除镜头', () => Alert.alert('移除镜头', '素材和版本仍保留在资产库。', [{ text: '取消', style: 'cancel' }, { text: '移除', onPress: () => void work(async () => { await command({ name: 'shot.delete', payload: { id: shot.id, expectedRevision: shot.revision } }); if (editing?.id === shot.id) { setEditing(undefined); setTitle(''); setDescription(''); } }) }]))}
       </View>
