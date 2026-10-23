@@ -105,6 +105,7 @@ export default function SettingsScreen() {
     <View style={styles.card}><Text style={styles.cardTitle}>视频解码</Text><Text style={styles.help}>默认使用自动模式；遇到黑屏或播放异常时可尝试其他模式。保存后对应用内播放生效。</Text><View style={styles.effortOptions} accessibilityRole="radiogroup" accessibilityLabel="视频解码模式">{videoDecodeOptions.map(option => <Pressable key={option.value} accessibilityRole="radio" accessibilityLabel={`视频解码：${option.label}`} accessibilityState={{ checked: (values.videoDecodeMode ?? 'auto') === option.value }} onPress={() => update('videoDecodeMode', option.value)} style={[styles.effortOption, (values.videoDecodeMode ?? 'auto') === option.value && styles.effortSelected]}><Text style={styles.effortText}>{option.label}</Text></Pressable>)}</View><Text style={styles.help}>{videoDecodeOptions.find(option => option.value === (values.videoDecodeMode ?? 'auto'))?.help}</Text><Text style={styles.help}>此选项不会修改视频原件，也不会影响系统相册中的视频。</Text></View>
     <WorkflowSyncPanel />
     <CreativeAccountPanel />
+    <CreativeAccountPanel provider="autodl" />
     <DataManagementPanel />
     <DisplayDiagnostics />
   </ScrollView><View style={styles.saveBar}><View style={[layout.contentStyle, styles.saveContent]}>
