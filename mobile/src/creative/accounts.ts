@@ -22,8 +22,8 @@ export function createCreativeAccounts(db: AppDatabase, deps: Deps) {
       // Persist a retired record first: a crash cannot make an unwritten secret active.
       await withWriteTransaction(db, async tx => {
         if (identity.authenticated === false && identity.principalId) throw new Error('UNVERIFIED_PRINCIPAL');
-        await tx.runAsync('INSERT INTO creative_account_bindings VALUES(?,?,?,?,?,?,?)', accountId, provider, identity.namespace, identity.principalId ?? null, identity.principalId ? 'provider_verified' : 'credential_bound', now, identity.authenticated === false ? 0 : now);
-        await tx.runAsync("INSERT INTO creative_credential_generations VALUES(?,?,?,?,1,'retired',?,?)", generationId, accountId, key, CryptoJS.SHA256(token).toString(), now, now);
+        await tx.runAsync('INSERT INTO creative_account_bindings VALUES(?,?,?,?,?,?,?)', accountId, provider, identity.namespace, identity.principalId ?? null, identity.principalId ? 'provider_verified' : 'credential_bound', identity.authenticated === false ? 0 : now, now);
+        await tx.runAsync("INSERT INTO creative_credential_generations VALUES(?,?,?,?,1,'retired',?,?)", generationId, accountId, key, CryptoJS.SHA256(token).toString(), now, identity.authenticated === false ? 0 : now);
       });
       try {
         if (await deps.secrets.get(key) != null) throw new Error('CREDENTIAL_SLOT_ALREADY_EXISTS');

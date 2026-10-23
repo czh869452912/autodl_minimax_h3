@@ -47,6 +47,8 @@ test('draft submission commits receipt, job, frozen inputs and budget atomically
     expect((await f.service.draft(f.draft.id))?.state).toBe('EDITING');
     f.db.execSync('DROP TRIGGER reject_creative_receipt');
     const task = await f.submit();
+    expect(f.db.getFirstSync('SELECT verified_at,created_at FROM creative_account_bindings')).toEqual({ verified_at: 0, created_at: 100 });
+    expect(f.db.getFirstSync('SELECT verified_at FROM creative_credential_generations')).toEqual({ verified_at: 0 });
     expect((await f.submit()).id).toBe(task.id);
     expect(f.db.getAllSync('SELECT * FROM workflow_operations')).toHaveLength(1);
     expect(f.db.getAllSync('SELECT * FROM creative_budget_reservations')).toHaveLength(1);
