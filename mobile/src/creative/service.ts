@@ -7,6 +7,7 @@ import { guardCreativeAgentCommand, type CreativeAgentOrigin } from './agentScop
 import { lifecycleSchemas,applyAssetLifecycle } from './assetLifecycle';
 import { planSchemas,applyPlanCommand } from './plans';
 import { CREATIVE_FILE_MIMES,creativeExportTarget } from './fileFormats';
+import { authoredTextSchemas,applyAuthoredText } from './authoredText';
 import type { AppDatabase } from '../storage/appDatabase';
 import { withWriteTransaction } from '../storage/sqliteBusy';
 import { createId } from '../ids';
@@ -17,6 +18,7 @@ const id = z.string().min(1).max(200);
 const title = z.string().trim().min(1).max(200);
 const revision = z.number().int().nonnegative();
 const schemas = {
+  ...authoredTextSchemas,
   ...planSchemas,
   ...lifecycleSchemas,
   ...storySchemas,
@@ -77,6 +79,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
         let value: Record<string, string> = {};
         let execution: AsyncExecutionRef | undefined;
         switch (command.name) {
+          case 'asset.authorText': value=await applyAuthoredText(tx,p,now,deps.id);break;
           case 'asset.export': {
             const existing = await tx.getFirstAsync<{ id: string; operation_id: string }>("SELECT id,operation_id FROM creative_deliveries WHERE version_id=? AND file_role='original' AND generation=?", p.versionId, p.generation);
             if (existing) { execution = { kind: 'export', deliveryId: existing.id, operationId: existing.operation_id }; break; }

@@ -37,3 +37,18 @@ export async function pickCreativeFiles(projectId?:string){
   const picked=await DocumentPicker.getDocumentAsync({type:[...CREATIVE_FILE_MIMES],multiple:false,copyToCacheDirectory:true});
   if(!picked.canceled)for(const file of picked.assets)await importCreativeFile(file,projectId);
 }
+export async function saveCreativeText(input:{title:string;kind:'prompt'|'document';content:string;projectId?:string;assetId?:string;expectedRevision?:number}){
+  const bytes=CryptoJS.enc.Utf8.parse(input.content).sigBytes;
+  if(bytes<1||bytes>100*1024)throw new Error('文本不能为空，且不能超过 100KB');
+  const uri=`${FileSystem.cacheDirectory}creative-text-${createId()}.txt`;
+  await FileSystem.writeAsStringAsync(uri,input.content,{encoding:FileSystem.EncodingType.UTF8});
+  const db=getDatabase();
+  try{
+    const staged=await createAttachmentStore(db,{importImage:stageCreativeFile}).externalize({type:'url',value:uri,mimeType:'text/plain'});
+    try{
+      if(!staged.hashes[0])throw new Error('TEXT_IMPORT_FAILED');
+      const {content:_,...payload}=input;
+      return await createCreativeService(db).execute({name:'asset.authorText',payload:{...payload,blobSha256:staged.hashes[0]}},createId());
+    }finally{await staged.releaseStaging();}
+  }finally{await FileSystem.deleteAsync(uri,{idempotent:true});}
+}

@@ -11,6 +11,8 @@ import { ListAction } from '../ui/ListPageUI';
 import { ProjectShots } from './ProjectShots';
 import { ProjectPlans } from './ProjectPlans';
 import { ProjectActivity } from './ProjectActivityPanel';
+import { TextAssetEditor } from './TextAssetEditor';
+import { TextVersionPreview } from './TextVersionPreview';
 import { pickCreativeFiles } from './fileImport';
 import { CREATIVE_FILE_MIMES,creativeExportTarget } from './fileFormats';
 import { VideoPlayer } from '../media/VideoPlayer';
@@ -111,6 +113,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
         <Text style={styles.body}>版本 {v.versionNo} · {activeAsset.currentVersionId === v.id ? '默认版本' : '候选版本'} · {v.state === 'AVAILABLE' ? '本地可用' : '文件待恢复'}</Text>
         {v.relativePath && v.mime?.startsWith('image/') ? <Image accessibilityLabel={`版本 ${v.versionNo} 预览`} source={{ uri: `${FileSystem.documentDirectory}${v.relativePath}` }} style={styles.preview} resizeMode="contain" /> : null}
         {v.state === 'AVAILABLE' && v.relativePath && v.mime?.startsWith('video/') ? <VideoPlayer source={`${FileSystem.documentDirectory}${v.relativePath}`} /> : null}
+        {v.state==='AVAILABLE'&&['text/plain','text/markdown','application/json'].includes(v.mime??'')?<TextVersionPreview version={v}/>:null}
         {v.state === 'AVAILABLE' && (CREATIVE_FILE_MIMES as readonly string[]).includes(v.mime ?? '') ? action(creativeExportTarget(v.mime??'')==='system-gallery'?'保存到系统相册':'保存到下载文件夹', () => void run(() => exportCreativeVersion(v.id))) : null}
         {v.state !== 'AVAILABLE' && activeAsset.kind === 'image' ? <><Text style={styles.body}>版本记录仍保留。请重新选择原始图片；内容不同会拒绝替换。</Text>{action('重新定位原图', () => void run(async () => { const [image] = await pickImagesFromGallery(1); if (image) { await restoreCreativeImage(v.id, image); await inspect(activeAsset); } }))}</> : null}
         {v.state !== 'AVAILABLE' && activeAsset.kind === 'image' ? action('从文件备份找回', () => void run(async () => { await restoreCreativeImageFromBackup(v.id); await inspect(activeAsset); })) : null}
@@ -133,6 +136,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
     </View> : mode === 'assets' || (selected && projectView === 'assets') ? <>
       <View style={styles.row}>{action('导入图片', () => void addImages(), false)}{mode === 'assets' ? action(inbox ? '全部资产' : '收件箱', () => setInbox(!inbox)) : null}</View>
       {action('导入视频、音频或文档（最多 100MB）',()=>void run(()=>pickCreativeFiles(mode==='projects'?selected:undefined)))}
+      <TextAssetEditor projectId={mode==='projects'?selected:undefined} onSaved={refresh}/>
       <TextInput accessibilityLabel="搜索资产" placeholder="搜索资产名称" value={query} onChangeText={setQuery} style={styles.input} />
       {mode==='assets'?action(trash?'返回全部资产':'回收站',()=>{setTrash(!trash);setInbox(false);}):null}
       {!assets.length ? <Text style={styles.body}>还没有素材。导入图片后可加入多个项目，文件只保留一份。</Text> : null}
