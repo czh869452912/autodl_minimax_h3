@@ -4,6 +4,9 @@ import { readCreativeJobBinding, bindCreativeAdapter } from '../creative/boundEx
 import { createCreativeBudget } from '../creative/budget';
 import { archiveCreativeOutput } from '../creative/archiveOutput';
 import { migrateCreativeHistory } from '../creative/runtime';
+import { createNovelAiAdapter } from '../creative/novelAiAdapter';
+import { novelAiResponseStore } from '../creative/novelAiRuntime';
+import { recoverNovelAiResponses } from '../creative/novelAiRecovery';
 import { executeCreativeExport } from '../creative/exportExecution';
 import { exportCreativeImage, lookupCreativeImage } from '../native/creativeMedia';
 import { retireVideoConversion } from '../media/retireVideoConversion';
@@ -65,7 +68,10 @@ function createApplicationExecutor(database: AppDatabase) {
   });
 
   const executor = {
-    async recover(now: number) { await (await executorForCurrentSettings()).durable.recover(now); },
+    async recover(now: number) {
+      await (await executorForCurrentSettings()).durable.recover(now);
+      await recoverNovelAiResponses(database, jobs, novelAiResponseStore(database), now);
+    },
     async handle(operation: WorkflowOperation, owner: string) {
       const current = await executorForCurrentSettings();
       if (operation.kind === 'EXPORT') {
@@ -94,13 +100,20 @@ function createApplicationExecutor(database: AppDatabase) {
       if (operation.kind !== 'ARTIFACT_DOWNLOAD') {
         const binding = operation.jobId ? await readCreativeJobBinding(database, operation.jobId) : null;
         if (!binding) return current.durable.handle(operation, owner);
+        const boundJob = await jobs.get(operation.jobId!);
+        const novelAi = boundJob?.adapterId === 'novelai-image';
         let exact: Awaited<ReturnType<ReturnType<typeof creativeAccounts>['resolveExact']>>;
-        try { exact = await creativeAccounts(database).resolveExact(binding.credential_generation_id, operation.kind === 'SUBMIT' ? 'dispatch' : 'query'); }
+        try {
+          exact = novelAi && operation.kind === 'STATUS_SYNC'
+            ? { token: '', accountId: binding.account_binding_id, generationId: binding.credential_generation_id, provider: 'novelai' }
+            : await creativeAccounts(database).resolveExact(binding.credential_generation_id, operation.kind === 'SUBMIT' ? 'dispatch' : 'query');
+        }
         catch {
           await operations.finish(operation.id, owner, 'BLOCKED', Date.now(), { code: 'CREATIVE_CREDENTIAL_UNAVAILABLE', message: '绑定的凭据不可用；未改用其他账号。' });
           return;
         }
         const adapters = createBuiltinProviderAdapters({ resolveCredential: kind => kind === 'autodl-token' && exact.provider === 'autodl' ? exact.token : undefined });
+        if (novelAi) adapters.set('novelai-image', createNovelAiAdapter(operation.jobId!, exact.token, novelAiResponseStore(database)));
         for (const [id, adapter] of adapters) adapters.set(id, bindCreativeAdapter(database, adapter, binding, exact, operation, owner));
         const durable = createDurableExecutor({ jobs, operations, adapters, runtime: createWorkflowRuntime({ adapters }), credentials: { get: async () => ({ ok: true }) } });
         await durable.handle(operation, owner);
@@ -109,6 +122,20 @@ function createApplicationExecutor(database: AppDatabase) {
           const reservation = await readCreativeJobBinding(database, job.id);
           if (reservation?.state === 'DISPATCHED') await createCreativeBudget(database).transition(binding.id, { key: `outcome:${binding.id}`, to: 'UNKNOWN_HELD', evidence: '服务商未返回可核验费用；保留本次消费占用。' });
         }
+        return;
+      }
+      const localArtifact = operation.payload.artifact as ArtifactRecord | undefined;
+      if (localArtifact?.uri?.startsWith('asset://') && operation.jobId) {
+        const job = await jobs.get(operation.jobId), task = await taskStore.get(operation.jobId);
+        if (job?.adapterId !== 'novelai-image' || !task) throw new Error('LOCAL_ARTIFACT_SCOPE_INVALID');
+        const hash = localArtifact.uri.slice(8);
+        const blob = await database.getFirstAsync<{ sha256: string; byte_size: number; mime: string; relative_path: string; created_at: number; verified_at: number }>('SELECT * FROM artifact_blobs WHERE sha256=?', hash);
+        if (!blob || await sha256File(`${FileSystem.documentDirectory}${blob.relative_path}`) !== hash) throw new Error('LOCAL_ARTIFACT_MISSING');
+        if (!await operations.renew(operation.id, owner, Date.now(), 120_000)) throw new Error('LOCAL_ARTIFACT_LEASE_LOST');
+        await materializeJobArtifacts(job, [localArtifact], mediaStore, task);
+        await commitArtifact({ operationId: operation.id, owner, jobId: operation.jobId, artifact: localArtifact,
+          blob: { sha256: hash, byteSize: blob.byte_size, mime: blob.mime, relativePath: blob.relative_path, createdAt: blob.created_at, verifiedAt: blob.verified_at },
+          localUri: `${FileSystem.documentDirectory}${blob.relative_path}`, now: Date.now(), deliveryPolicy: { autoExportToGallery: false, keepPrivateCopy: true } });
         return;
       }
       if (operation.payload.compatibilityOnly === true) {

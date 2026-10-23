@@ -70,6 +70,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
       {action('任务', () => router.push('/(tabs)/tasks'))}{action('设置', () => router.push('/(tabs)/settings'))}</View>
     <View style={styles.row}>{action('项目', () => router.push('/(tabs)/projects'))}{action('资产库', () => router.push('/(tabs)/assets'))}{action('历史视频', () => router.push('/(tabs)/gallery'))}</View>
     {action('创作草稿', () => router.push('/creative-drafts'))}
+    {action('NovelAI 新图片', () => void run(async () => { const result = await command({ name: 'draft.createImage', payload: { projectId: mode === 'projects' ? selected : undefined } }); if (result.status === 'completed') router.push({ pathname: '/image-draft/[id]', params: { id: result.value.draftId } }); }), false)}
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     {mode === 'projects' && selected && !activeAsset ? <View style={styles.row}>{action('简报', () => setProjectView('brief'))}{action('镜头', () => setProjectView('shots'))}{action('素材', () => setProjectView('assets'))}</View> : null}
     {mode === 'projects' && !activeAsset ? <>

@@ -2,16 +2,19 @@ import { z } from 'zod';
 import type { AppDatabase } from '../storage/appDatabase';
 import { H3_WORKFLOW_ID } from '../workflows/providers/autodl/metadata';
 import { RESOLUTION_OPTIONS } from '../create/resolutions';
+import { novelAiDraftInput, defaultNovelAiDraft } from './novelAiProtocol';
 const id = z.string().min(1).max(200), revision = z.number().int().nonnegative();
 export const videoDraftInput = z.object({ schemaVersion: z.literal(1).default(1), prompt: z.string().max(10000), resolution: z.enum(RESOLUTION_OPTIONS), duration: z.number().int().min(1).max(15), seed: z.string().regex(/^$|^\d{1,15}$/) }).strict();
 export const draftSchemas = {
+  'draft.createImage': z.object({ projectId: id.optional(), input: novelAiDraftInput.optional(), fromVersionId: id.optional() }).strict(),
+  'draft.updateImage': z.object({ id, expectedRevision: revision, input: novelAiDraftInput }).strict(),
   'draft.createVideo': z.object({ projectId: id.optional(), shotId: id.optional(), versionId: id.optional(), prompt: z.string().max(10000).default('') }).strict(),
   'draft.updateVideo': z.object({ id, expectedRevision: revision, input: videoDraftInput }).strict(),
   'draft.replaceInputs': z.object({ id, expectedRevision: revision, versionIds: z.array(id).max(9) }).strict(),
   'draft.discard': z.object({ id, expectedRevision: revision }).strict(),
 };
 export type DraftCommand = { [K in keyof typeof draftSchemas]: { name: K; payload: z.input<typeof draftSchemas[K]> } }[keyof typeof draftSchemas];
-export type CreativeDraft = { id: string; project_id: string | null; shot_id: string | null; provider_id: string; workflow_id: string; input_json: string; revision: number; state: string; job_id: string | null };
+export type CreativeDraft = { id: string; project_id: string | null; shot_id: string | null; target_asset_id: string | null; provider_id: string; workflow_id: string; input_json: string; revision: number; state: string; job_id: string | null };
 export function readCreativeDraft(db: AppDatabase, id: string) { return db.getFirstAsync<CreativeDraft>('SELECT * FROM creative_generation_drafts WHERE id=?', id); }
 export function readDraftInputs(db: AppDatabase, id: string) { return db.getAllAsync<{ version_id: string; ordinal: number; blob_sha256: string; relative_path: string; mime: string; byte_size: number; state: string }>(`SELECT i.*,f.blob_sha256,f.state,b.relative_path,b.mime,b.byte_size FROM creative_draft_inputs i JOIN creative_version_files f ON f.version_id=i.version_id AND f.role='original' JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE draft_id=? ORDER BY ordinal`, id); }
 export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, now: number, makeId: () => string): Promise<Record<string,string>> {
@@ -23,6 +26,21 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
       await tx.runAsync("INSERT INTO creative_draft_inputs VALUES(?,'image',?,?)", draftId, ordinal, versionId);
     }
   };
+  if (name === 'draft.createImage') {
+    await project(p.projectId);
+    let input = p.input ?? defaultNovelAiDraft, assetId: string | null = null;
+    if (p.fromVersionId) {
+      const version = await tx.getFirstAsync<{ asset_id: string; recipe_json: string }>("SELECT v.* FROM creative_asset_versions v JOIN creative_assets a ON a.id=v.asset_id AND a.kind='image' WHERE v.id=?", p.fromVersionId);
+      if (!version) throw new Error('IMAGE_VERSION_NOT_FOUND');
+      const recipe = JSON.parse(version.recipe_json);
+      if (!p.input) input = novelAiDraftInput.parse(recipe.input);
+      assetId = version.asset_id;
+    }
+    const draftId = makeId();
+    await tx.runAsync("INSERT INTO creative_generation_drafts VALUES(?,?,NULL,?,'novelai','novelai-image-basic',?,0,'EDITING',NULL,?,?)", draftId, p.projectId ?? null, assetId, JSON.stringify(input), now, now);
+    if (p.fromVersionId) await tx.runAsync("INSERT INTO creative_draft_inputs VALUES(?,'base',0,?)", draftId, p.fromVersionId);
+    return { draftId };
+  }
   if (name === 'draft.createVideo') {
     let projectId = p.projectId ?? null, selectedVersion = p.versionId;
     let prompt = p.prompt;
@@ -40,8 +58,8 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
   const draft = await readCreativeDraft(tx, p.id);
   if (!draft || draft.revision !== p.expectedRevision || draft.state !== 'EDITING') throw new Error('DRAFT_REVISION_CONFLICT');
   await project(draft.project_id);
-  if (name === 'draft.updateVideo') {
-    if (draft.provider_id !== 'autodl') throw new Error('DRAFT_PROVIDER_MISMATCH');
+  if (name === 'draft.updateVideo' || name === 'draft.updateImage') {
+    if (draft.provider_id !== (name === 'draft.updateVideo' ? 'autodl' : 'novelai')) throw new Error('DRAFT_PROVIDER_MISMATCH');
     await tx.runAsync('UPDATE creative_generation_drafts SET input_json=?,revision=revision+1,updated_at=? WHERE id=?', JSON.stringify(p.input), now, p.id);
   } else if (name === 'draft.replaceInputs') {
     await tx.runAsync('DELETE FROM creative_draft_inputs WHERE draft_id=?', p.id);
