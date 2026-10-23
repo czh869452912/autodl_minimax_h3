@@ -76,7 +76,7 @@ export function createTaskRepository(db: AppDatabase) {
       let rows: any[] = [];
       let assets: any[] = [];
       transaction(db, () => {
-        if (db.getFirstSync('SELECT job_id FROM creative_job_contexts WHERE job_id=?', id)) throw new Error('创作任务保留资产与消费记录，请使用归档');
+        if (db.getFirstSync('SELECT job_id FROM creative_job_contexts WHERE job_id=? UNION ALL SELECT job_id FROM creative_output_links WHERE job_id=? LIMIT 1', id,id)) throw new Error('创作任务保留资产与消费记录，请使用归档');
         const active = db.getFirstSync<{ status: string }>('SELECT status FROM tasks WHERE id=?', id);
         if (active && ['QUEUED','RUNNING','UNKNOWN'].includes(active.status)) throw new Error('活跃任务请使用归档，以保留服务端追踪记录');
         const activeOperation = db.getFirstSync<{ id: string }>(

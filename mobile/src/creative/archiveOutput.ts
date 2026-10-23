@@ -4,11 +4,27 @@ import { createId } from '../ids';
 
 /** Part of the download commit transaction: never adopt the output automatically. */
 export async function archiveCreativeOutput(tx: AppDatabase, input: ArtifactCommitInput) {
-  const context = await tx.getFirstAsync<{ target_asset_id: string; input_snapshot_json: string; execution_epoch: string }>('SELECT * FROM creative_job_contexts WHERE job_id=?', input.jobId);
-  if (!context) return;
+  let context = await tx.getFirstAsync<{ target_asset_id: string; input_snapshot_json: string; execution_epoch: string }>('SELECT * FROM creative_job_contexts WHERE job_id=?', input.jobId);
   if (!['video','image'].includes(input.artifact.kind)) return;
   const old = await tx.getFirstAsync<{ blob_sha256: string }>("SELECT f.blob_sha256 FROM creative_output_links l JOIN creative_version_files f ON f.version_id=l.version_id AND f.role='original' WHERE l.job_id=? AND l.artifact_id=?", input.jobId, input.artifact.id);
   if (old) { if (old.blob_sha256 !== input.blob.sha256) throw new Error('CREATIVE_OUTPUT_CONTENT_CHANGED'); return; }
+  if(!context){
+    if(await tx.getFirstAsync('SELECT id FROM media_asset_tombstones WHERE task_id=? AND artifact_id=?',input.jobId,input.artifact.id))return;
+    const job=await tx.getFirstAsync<{input_json:string}>('SELECT input_json FROM workflow_jobs WHERE id=?',input.jobId);
+    if(!job)return;
+    const mapped=await tx.getFirstAsync<{version_id:string;asset_id:string;blob_sha256:string|null}>(`SELECT m.version_id,m.asset_id,f.blob_sha256 FROM creative_legacy_assets m JOIN media_assets a ON a.id=m.source_id
+      LEFT JOIN creative_version_files f ON f.version_id=m.version_id AND f.role='original' WHERE a.task_id=? AND a.artifact_id=?`,input.jobId,input.artifact.id);
+    if(mapped){
+      if(mapped.blob_sha256&&mapped.blob_sha256!==input.blob.sha256)throw new Error('CREATIVE_OUTPUT_CONTENT_CHANGED');
+      if(!mapped.blob_sha256)await tx.runAsync("INSERT INTO creative_version_files VALUES(?,'original',?,'AVAILABLE')",mapped.version_id,input.blob.sha256);
+      await tx.runAsync("INSERT OR IGNORE INTO artifact_blob_refs VALUES(?,'creative_version',?,?)",input.blob.sha256,mapped.version_id,input.now);
+      await tx.runAsync('INSERT INTO creative_output_links VALUES(?,?,?)',input.jobId,input.artifact.id,mapped.version_id);
+      return;
+    }
+    const assetId=createId();
+    await tx.runAsync('INSERT INTO creative_assets VALUES(?,?,?,NULL,0,?,?)',assetId,input.artifact.kind,'历史入口生成成果',input.now,input.now);
+    context={target_asset_id:assetId,input_snapshot_json:job.input_json,execution_epoch:''};
+  }
   const versionId = createId();
   const next = await tx.getFirstAsync<{ n: number }>('SELECT COALESCE(MAX(version_no),0)+1 AS n FROM creative_asset_versions WHERE asset_id=?', context.target_asset_id);
   const snapshot = JSON.parse(context.input_snapshot_json);
