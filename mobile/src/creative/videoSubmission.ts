@@ -7,6 +7,21 @@ import { reserveCreativeBudget } from './budget';
 import { readCreativeDraft, readDraftInputs } from './drafts';
 import { createId } from '../ids';
 import { assertCreativeAgentScope, type CreativeAgentOrigin } from './agentScope';
+import { withWriteTransaction } from '../storage/sqliteBusy';
+
+/** Read-only replay: never re-prepare a random seed or resurrect a restored job. */
+export async function readSubmittedCreativeDraft(db: AppDatabase, draftId: string, authorizationId: string, origin: CreativeAgentOrigin) {
+  return withWriteTransaction(db, async tx => {
+    await assertCreativeAgentScope(tx, origin);
+    const draft = await readCreativeDraft(tx, draftId);
+    if (!origin.projectId || draft?.project_id !== origin.projectId) throw new Error('AGENT_PROJECT_SCOPE_MISMATCH');
+    if (draft.state !== 'SUBMITTED') return null;
+    const binding = await tx.getFirstAsync<{ job_id: string; authorization_id: string }>(
+      'SELECT c.job_id,r.authorization_id FROM creative_job_contexts c JOIN creative_budget_reservations r ON r.id=c.reservation_id WHERE c.job_id=? AND c.draft_id=? AND c.project_id=?', draft.job_id, draftId, origin.projectId);
+    if (!binding || binding.authorization_id !== authorizationId) throw new Error('SUBMISSION_AUTHORIZATION_CONFLICT');
+    return binding.job_id;
+  });
+}
 
 export const creativeRequestHash = (prepared: PreparedWorkflowSubmission) => CryptoJS.SHA256(JSON.stringify(prepared)).toString();
 export async function submitCreativeVideo(db: AppDatabase, input: {
@@ -20,8 +35,9 @@ export async function submitCreativeVideo(db: AppDatabase, input: {
   return persistSubmissionCommand(db, commandId, input.prepared, { images: input.images, audios: [] }, now, async (tx, job, inserted) => {
     if (input.origin) await assertCreativeAgentScope(tx, input.origin);
     if (!inserted) {
-      const old = await tx.getFirstAsync<{ request_hash: string }>('SELECT request_hash FROM creative_job_contexts WHERE job_id=?', job.id);
-      if (!old || old.request_hash !== requestHash) throw new Error('SUBMISSION_IDEMPOTENCY_CONFLICT');
+      const old = await tx.getFirstAsync<{ request_hash: string; project_id: string | null; authorization_id: string }>('SELECT c.request_hash,c.project_id,r.authorization_id FROM creative_job_contexts c JOIN creative_budget_reservations r ON r.id=c.reservation_id WHERE c.job_id=?', job.id);
+      if (!old || old.request_hash !== requestHash || old.authorization_id !== input.authorizationId) throw new Error('SUBMISSION_IDEMPOTENCY_CONFLICT');
+      if (input.origin && (!input.origin.projectId || old.project_id !== input.origin.projectId)) throw new Error('AGENT_PROJECT_SCOPE_MISMATCH');
       return;
     }
     const draft = await readCreativeDraft(tx, input.draftId);

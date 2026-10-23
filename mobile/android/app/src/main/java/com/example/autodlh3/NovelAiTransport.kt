@@ -38,7 +38,9 @@ class NovelAiTransport(
     lookup(key, requestHash)?.let { return it }
     require(token.length in 8..4096 && !token.contains('\n') && !token.contains('\r')) { "NOVELAI_CREDENTIAL_INVALID" }
     val dir = directory(key); val marker = File(dir, "sent")
-    check(!marker.exists()) { "NOVELAI_OUTCOME_UNKNOWN" }
+    // Atomic across module instances/processes. An empty marker after a crash also
+    // closes the send gate; it must never be overwritten by another worker.
+    check(marker.createNewFile()) { "NOVELAI_OUTCOME_UNKNOWN" }
     // Commit before opening the HTTP connection; even auth/transport errors do not replay.
     FileOutputStream(marker).use { it.write(requestHash.toByteArray()); it.fd.sync() }
     val request = Request.Builder().url(endpoint).header("Authorization", "Bearer $token")

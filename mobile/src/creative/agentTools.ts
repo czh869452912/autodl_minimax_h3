@@ -9,7 +9,7 @@ import { draftSchemas } from './drafts';
 import { storySchemas } from './story';
 import { prepareCreativeImage } from './novelAiRuntime';
 import { prepareCreativeVideo } from './videoRuntime';
-import { submitCreativeVideo } from './videoSubmission';
+import { readSubmittedCreativeDraft, submitCreativeVideo } from './videoSubmission';
 import type { CreativeCommand } from './types';
 
 const id = z.string().min(1).max(200);
@@ -70,6 +70,8 @@ export function createCreativeAgentTools() {
     tool(async ({draftId,authorizationId},config:any)=>{
       try {
         const origin=await originFor(config),db=getDatabase();
+        const existingJobId = await readSubmittedCreativeDraft(db,draftId,authorizationId,origin);
+        if (existingJobId) return JSON.stringify({status:'accepted',execution:{kind:'generation',jobId:existingJobId},replayed:true,message:'Existing request only. Query its status; this call did not enqueue or resend.'});
         const draft=await createCreativeService(db).draft(draftId);
         if (!origin.projectId || draft?.project_id!==origin.projectId) throw new Error('AGENT_PROJECT_SCOPE_MISMATCH');
         const preview=draft.provider_id==='novelai' ? await prepareCreativeImage(draftId) : await prepareCreativeVideo(draftId);

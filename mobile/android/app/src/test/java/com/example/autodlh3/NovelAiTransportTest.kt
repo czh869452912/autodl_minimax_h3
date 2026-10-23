@@ -9,6 +9,30 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NovelAiTransportTest {
+  @Test fun independentWorkersShareAnAtomicSendGate() {
+    val dir = Files.createTempDirectory("nai-race").toFile(); val server = MockWebServer(); server.start()
+    val pool = java.util.concurrent.Executors.newFixedThreadPool(12)
+    try {
+      repeat(12) { server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("{}")) }
+      val start = java.util.concurrent.CountDownLatch(1)
+      val workers = (1..12).map { pool.submit<Boolean> {
+        start.await()
+        try { NovelAiTransport(dir, endpoint = server.url("/").toString()).generate(key, request, hash, "private-token"); true }
+        catch (_: Exception) { false }
+      } }
+      start.countDown()
+      assertTrue(workers.map { it.get(10, java.util.concurrent.TimeUnit.SECONDS) }.any { it })
+      assertEquals(1, server.requestCount)
+      assertNotNull(NovelAiTransport(dir).lookup(key, hash))
+    } finally { pool.shutdownNow(); server.shutdown(); dir.deleteRecursively() }
+  }
+  @Test fun crashAfterGateCreationCannotResend() {
+    val dir = Files.createTempDirectory("nai-empty-marker").toFile()
+    try {
+      java.io.File(dir, key).mkdirs(); java.io.File(dir, "$key/sent").createNewFile()
+      assertThrows(IllegalArgumentException::class.java) { NovelAiTransport(dir).generate(key, request, hash, "private-token") }
+    } finally { dir.deleteRecursively() }
+  }
   private val key = "a".repeat(64)
   private val request = "{\"input\":\"observatory\"}"
   private val hash = MessageDigest.getInstance("SHA-256").digest(request.toByteArray()).joinToString("") { "%02x".format(it) }

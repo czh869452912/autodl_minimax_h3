@@ -2,7 +2,7 @@ import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { createCreativeService } from './service';
 import { createCreativeAccounts } from './accounts';
 import { createCreativeBudget } from './budget';
-import { submitCreativeVideo } from './videoSubmission';
+import { readSubmittedCreativeDraft, submitCreativeVideo } from './videoSubmission';
 import { bindCreativeAdapter, readCreativeJobBinding } from './boundExecution';
 import { archiveCreativeOutput } from './archiveOutput';
 import { H3_WORKFLOW_ID } from '../workflows/providers/autodl/metadata';
@@ -56,6 +56,29 @@ test('draft submission commits receipt, job, frozen inputs and budget atomically
     await expect(submitCreativeVideo(f.db as never, { ...f.input, prepared: { ...f.input.prepared, requestInput: { altered: true } } }, 101)).rejects.toThrow('IDEMPOTENCY_CONFLICT');
     expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
   } finally { f.db.close(); }
+});
+
+test('agent replay returns original job after restart or restore, without new seed, authorization or dispatch', async () => {
+  const f = await fixture();
+  try {
+    f.db.runSync("INSERT INTO creative_projects VALUES('project','p','',0,NULL,1,1)");
+    f.db.runSync("UPDATE creative_generation_drafts SET project_id='project'");
+    f.db.runSync("UPDATE creative_authorizations SET project_id='project'");
+    f.db.runSync("INSERT INTO agent_runs VALUES('thread','run',0,'{\"status\":\"running\"}')");
+    f.db.runSync("INSERT INTO creative_agent_scopes VALUES('thread','project',0,1)");
+    const origin = {threadId:'thread',runId:'run',toolCallId:'call',projectId:'project',scopeRevision:0};
+    expect(await readSubmittedCreativeDraft(f.db as never,f.draft.id,f.input.authorizationId,origin)).toBeNull();
+    const task=await f.submit();
+    expect(await readSubmittedCreativeDraft(f.db as never,f.draft.id,f.input.authorizationId,origin)).toBe(task.id);
+    quarantineRestoredExecution(f.db as never,'c'.repeat(32));
+    expect(await readSubmittedCreativeDraft(f.db as never,f.draft.id,f.input.authorizationId,origin)).toBe(task.id);
+    await expect(readSubmittedCreativeDraft(f.db as never,f.draft.id,'different',origin)).rejects.toThrow('AUTHORIZATION_CONFLICT');
+    await expect(f.service.execute({name:'project.create',payload:{title:'other'}},'other')).resolves.toBeDefined();
+    f.db.runSync("UPDATE creative_agent_scopes SET project_id=(SELECT id FROM creative_projects WHERE title='other')");
+    await expect(readSubmittedCreativeDraft(f.db as never,f.draft.id,f.input.authorizationId,origin)).rejects.toThrow('SCOPE_CHANGED');
+    expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toHaveLength(1);
+    expect(f.db.getAllSync('SELECT * FROM creative_budget_reservations')).toHaveLength(1);
+  } finally {f.db.close();}
 });
 
 test('dispatch binds exact request and credential generation; a switched account sends nothing', async () => {
