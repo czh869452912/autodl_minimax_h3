@@ -44,3 +44,14 @@ test('actual LangChain tool uses runtime identity and shared command receipts; m
     expect(tools.some(t=>/grant|connect|token/.test(t.name))).toBe(false);
   }finally{f.db.close();}
 });
+test('agent-authored text enforces project scope for new assets and existing versions',async()=>{
+  const f=await fixture();try{
+    const hash='b'.repeat(64);f.db.runSync('INSERT INTO artifact_blobs VALUES(?,20,?,?,1,1)',hash,'text/plain','cas/text');
+    const command={name:'asset.authorText' as const,payload:{title:'setting',kind:'document' as const,blobSha256:hash,projectId:f.projectId}};
+    await expect(f.service.execute({...command,payload:{...command.payload,projectId:f.other}},'cross-text',f.origin)).rejects.toThrow('SCOPE_MISMATCH');
+    const r=await f.service.execute(command,'text',f.origin);expect(r).toMatchObject({status:'completed'});
+    const other=await f.service.execute({...command,payload:{...command.payload,projectId:f.other}},'other-text');if(other.status!=='completed')throw new Error('expected');
+    await expect(f.service.execute({...command,payload:{...command.payload,assetId:other.value.assetId,expectedRevision:0}},'cross-version',f.origin)).rejects.toThrow('ASSET_SCOPE_MISMATCH');
+    expect(f.db.getAllSync('SELECT * FROM creative_asset_versions')).toHaveLength(2);
+  }finally{f.db.close();}
+});

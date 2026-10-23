@@ -8,6 +8,7 @@ import {getDatabase} from '../storage/databaseClient';
 import {createCreativeService} from './service';
 import {createId} from '../ids';
 import {CREATIVE_FILE_MIMES,creativeFileKind} from './fileFormats';
+import type {CreativeAgentOrigin} from './agentScope';
 const MAX_BYTES=100*1024*1024;
 export async function stageCreativeFile(uri:string,mimeHint?:string){
   const mime=mimeHint??'';creativeFileKind(mime);
@@ -37,7 +38,7 @@ export async function pickCreativeFiles(projectId?:string){
   const picked=await DocumentPicker.getDocumentAsync({type:[...CREATIVE_FILE_MIMES],multiple:false,copyToCacheDirectory:true});
   if(!picked.canceled)for(const file of picked.assets)await importCreativeFile(file,projectId);
 }
-export async function saveCreativeText(input:{title:string;kind:'prompt'|'document';content:string;projectId?:string;assetId?:string;expectedRevision?:number}){
+export async function saveCreativeText(input:{title:string;kind:'prompt'|'document';content:string;projectId?:string;assetId?:string;expectedRevision?:number},commandKey=createId(),origin?:CreativeAgentOrigin){
   const bytes=CryptoJS.enc.Utf8.parse(input.content).sigBytes;
   if(bytes<1||bytes>100*1024)throw new Error('文本不能为空，且不能超过 100KB');
   const uri=`${FileSystem.cacheDirectory}creative-text-${createId()}.txt`;
@@ -48,7 +49,7 @@ export async function saveCreativeText(input:{title:string;kind:'prompt'|'docume
     try{
       if(!staged.hashes[0])throw new Error('TEXT_IMPORT_FAILED');
       const {content:_,...payload}=input;
-      return await createCreativeService(db).execute({name:'asset.authorText',payload:{...payload,blobSha256:staged.hashes[0]}},createId());
+      return await createCreativeService(db).execute({name:'asset.authorText',payload:{...payload,blobSha256:staged.hashes[0]}},commandKey,origin);
     }finally{await staged.releaseStaging();}
   }finally{await FileSystem.deleteAsync(uri,{idempotent:true});}
 }

@@ -38,6 +38,10 @@ export async function guardCreativeAgentCommand(tx: AppDatabase, origin: Creativ
     const shot = await tx.getFirstAsync<{project_id:string}>('SELECT project_id FROM creative_shots WHERE id=?', p.id as string);
     requireProject(shot?.project_id); await version(p.versionId);
   } else if (command.name === 'asset.export') await version(p.versionId);
+  else if(command.name==='asset.authorText'){
+    requireProject(p.projectId);
+    if(p.assetId&&!await tx.getFirstAsync('SELECT asset_id FROM creative_project_assets WHERE project_id=? AND asset_id=?',origin.projectId,p.assetId as string))throw new Error('AGENT_ASSET_SCOPE_MISMATCH');
+  }
   else if (command.name === 'asset.pinProjectVersion' || command.name === 'asset.unlinkFromProject') requireProject(p.projectId);
   else throw new Error('AGENT_COMMAND_NOT_ALLOWED');
 }
