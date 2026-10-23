@@ -2,6 +2,7 @@ import CryptoJS from 'crypto-js';
 import { storySchemas, applyStoryCommand, listCreativeShots } from './story';
 import { draftSchemas, applyDraftCommand, readCreativeDraft, readDraftInputs } from './drafts';
 import { z } from 'zod';
+import { guardCreativeAgentCommand, type CreativeAgentOrigin } from './agentScope';
 import type { AppDatabase } from '../storage/appDatabase';
 import { withWriteTransaction } from '../storage/sqliteBusy';
 import { createId } from '../ids';
@@ -56,12 +57,13 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
     },
     async links(assetId: string) { return db.getAllAsync<{ project_id: string; title: string; pinned_version_id: string | null; revision: number }>('SELECT p.*,j.title FROM creative_project_assets p JOIN creative_projects j ON j.id=p.project_id WHERE asset_id=?', assetId); },
     async deliveries(versionId: string) { return db.getAllAsync<{ id: string; status: string; generation: number; destination_uri: string | null; error_code: string | null }>('SELECT * FROM creative_deliveries WHERE version_id=? ORDER BY generation DESC', versionId); },
-    async execute(command: CreativeCommand, key: string): Promise<CommandResult<Record<string, string>>> {
+    async execute(command: CreativeCommand, key: string, origin?: CreativeAgentOrigin): Promise<CommandResult<Record<string, string>>> {
       id.parse(key);
       if (!(command.name in schemas)) throw new Error('UNKNOWN_CREATIVE_COMMAND');
       const payload = schemas[command.name].parse(command.payload);
       const hash = CryptoJS.SHA256(stable({ name: command.name, payload })).toString();
       return withWriteTransaction(db, async tx => {
+        if (origin) await guardCreativeAgentCommand(tx, origin, command);
         const old = await tx.getFirstAsync<{ payload_hash: string; result_json: string }>('SELECT * FROM creative_command_receipts WHERE idempotency_key=?', key);
         if (old) { if (old.payload_hash !== hash) throw new Error('IDEMPOTENCY_CONFLICT'); return JSON.parse(old.result_json); }
         const now = deps.now(); const p = payload as any;
@@ -124,7 +126,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
         if (!epoch) throw new Error('EXECUTION_EPOCH_MISSING');
         const lineage = await tx.getFirstAsync<{ namespace: string }>('SELECT namespace FROM creative_lineage WHERE id=1');
         if (!lineage) throw new Error('SOURCE_NAMESPACE_MISSING');
-        await tx.runAsync("INSERT INTO creative_execution_origins VALUES(?,'user',?,NULL,NULL,NULL,?,?)", originId, lineage.namespace, command.name, now);
+        await tx.runAsync('INSERT INTO creative_execution_origins VALUES(?,?,?,?,?,?,?,?)', originId, origin ? 'agent' : 'user', lineage.namespace, origin?.threadId ?? null, origin?.runId ?? null, origin?.toolCallId ?? null, command.name, now);
         const result: CommandResult<Record<string,string>> = execution ? { status: 'accepted', receiptId, execution } : { status: 'completed', receiptId, value };
         await tx.runAsync('INSERT INTO creative_command_receipts VALUES(?,?,?,?,?,?,?,?)', receiptId, key, command.name, hash, originId, epoch.epoch, JSON.stringify(result), now);
         return result;

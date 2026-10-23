@@ -226,7 +226,7 @@ export class H3AgUiAgent extends AbstractAgent {
     const prepared = workspaceAdapter?.prepareWorkspaceRun(baseWorkspace, modelInput, this.execution.budget);
     let workspace = baseWorkspace;
     const revision = Math.max(0, Number(state.h3Workspace?.revision) || 0) + 1;
-    const rawStream = await this.graph.stream(prepared?.input ?? { messages: modelInput, files: getOfficialH3SkillFiles() }, { configurable: { thread_id: input.threadId }, context: prepared?.context, signal, streamMode: workspaceAdapter ? ['messages', 'values'] : 'messages' });
+    const rawStream = await this.graph.stream(prepared?.input ?? { messages: modelInput, files: getOfficialH3SkillFiles() }, { configurable: { thread_id: input.threadId, creative_run_id: input.runId }, context: prepared?.context, signal, streamMode: workspaceAdapter ? ['messages', 'values'] : 'messages' });
     const stream = (async function* () {
       for await (const value of rawStream) {
         if (signal.aborted) return;

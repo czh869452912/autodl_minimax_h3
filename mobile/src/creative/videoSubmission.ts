@@ -6,22 +6,26 @@ import { persistSubmissionCommand } from '../create/submissionCommand';
 import { reserveCreativeBudget } from './budget';
 import { readCreativeDraft, readDraftInputs } from './drafts';
 import { createId } from '../ids';
+import { assertCreativeAgentScope, type CreativeAgentOrigin } from './agentScope';
 
 export const creativeRequestHash = (prepared: PreparedWorkflowSubmission) => CryptoJS.SHA256(JSON.stringify(prepared)).toString();
 export async function submitCreativeVideo(db: AppDatabase, input: {
   draftId: string; expectedRevision: number; draftInputJson: string; authorizationId: string;
   prepared: PreparedWorkflowSubmission; images: TaskMediaInput[]; versionIds: string[];
+  origin?: CreativeAgentOrigin;
 }, now = Date.now()) {
   const image = input.prepared.adapterId === 'novelai-image';
   const commandId = `creative-${image ? 'image' : 'video'}:${input.draftId}:${input.expectedRevision}`;
   const requestHash = creativeRequestHash(input.prepared);
   return persistSubmissionCommand(db, commandId, input.prepared, { images: input.images, audios: [] }, now, async (tx, job, inserted) => {
+    if (input.origin) await assertCreativeAgentScope(tx, input.origin);
     if (!inserted) {
       const old = await tx.getFirstAsync<{ request_hash: string }>('SELECT request_hash FROM creative_job_contexts WHERE job_id=?', job.id);
       if (!old || old.request_hash !== requestHash) throw new Error('SUBMISSION_IDEMPOTENCY_CONFLICT');
       return;
     }
     const draft = await readCreativeDraft(tx, input.draftId);
+    if (input.origin && (!input.origin.projectId || draft?.project_id !== input.origin.projectId)) throw new Error('AGENT_PROJECT_SCOPE_MISMATCH');
     if (!draft || draft.revision !== input.expectedRevision || draft.state !== 'EDITING' || draft.input_json !== input.draftInputJson) throw new Error('DRAFT_REVISION_CONFLICT');
     if (draft.provider_id !== (image ? 'novelai' : 'autodl') || draft.workflow_id !== input.prepared.workflowId) throw new Error('DRAFT_PROVIDER_MISMATCH');
     if (draft.shot_id && !await tx.getFirstAsync('SELECT id FROM creative_shots WHERE id=? AND deleted_at IS NULL', draft.shot_id)) throw new Error('SHOT_NOT_AVAILABLE');
@@ -42,7 +46,7 @@ export async function submitCreativeVideo(db: AppDatabase, input: {
     const lineage = await tx.getFirstAsync<{ namespace: string }>('SELECT namespace FROM creative_lineage WHERE id=1');
     if (!lineage) throw new Error('SOURCE_NAMESPACE_MISSING');
     const commandName = image ? 'draft.submitImage' : 'draft.submitVideo';
-    await tx.runAsync("INSERT INTO creative_execution_origins VALUES(?,'user',?,NULL,NULL,NULL,?,?)", originId, lineage.namespace, commandName, now);
+    await tx.runAsync('INSERT INTO creative_execution_origins VALUES(?,?,?,?,?,?,?,?)', originId, input.origin ? 'agent' : 'user', lineage.namespace, input.origin?.threadId ?? null, input.origin?.runId ?? null, input.origin?.toolCallId ?? null, commandName, now);
     await tx.runAsync('INSERT INTO creative_command_receipts VALUES(?,?,?,?,?,?,?,?)', receiptId, commandId, commandName, requestHash, originId, reservation.execution_epoch, JSON.stringify({ status: 'accepted', receiptId, execution: { kind: 'generation', jobId: job.id } }), now);
   });
 }

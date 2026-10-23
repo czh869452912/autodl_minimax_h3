@@ -28,6 +28,7 @@ import { createAppWorkflowCatalog } from '../workflows/registry/builtin';
 import { registryRecordToDefinition } from '../workflows/registry/catalog';
 import type { RegistryRecord } from '../workflows/registry/types';
 import type { WorkflowDefinition } from '../workflows/schema/types';
+import { AgentCreativePanel } from '../creative/AgentCreativePanel';
 
 type AgentConfig = H3AgentConfig;
 
@@ -385,6 +386,7 @@ function AgentSession({
         setRunIssue({ kind: 'error', message: reason.message })
       }
     >
+      <AgentCreativePanel threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />
       <CopilotChat
         agentId={agent.agentId}
         attachments={{ enabled: false }}
