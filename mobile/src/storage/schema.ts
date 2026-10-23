@@ -65,10 +65,16 @@ export const CREATIVE_AUTHORIZATION_SCHEMA = [
   "CREATE TRIGGER IF NOT EXISTS creative_credential_identity_immutable BEFORE UPDATE OF account_binding_id,secure_store_key,token_digest,generation_no ON creative_credential_generations BEGIN SELECT RAISE(ABORT,'CREDENTIAL_IDENTITY_IMMUTABLE'); END",
   'CREATE INDEX IF NOT EXISTS creative_budget_by_authorization ON creative_budget_reservations(authorization_id,state)',
 ] as const;
-export const APP_SCHEMA_VERSION = 19;
+export const CREATIVE_SHOT_SCHEMA = [
+  "CREATE TABLE IF NOT EXISTS creative_shots(id TEXT PRIMARY KEY,project_id TEXT NOT NULL REFERENCES creative_projects(id) ON DELETE RESTRICT,title TEXT NOT NULL,description TEXT NOT NULL,sort_key INTEGER NOT NULL,editorial_status TEXT NOT NULL CHECK(editorial_status IN ('planned','working','review','approved')),revision INTEGER NOT NULL DEFAULT 0,deleted_at INTEGER,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS creative_shot_assets(shot_id TEXT NOT NULL REFERENCES creative_shots(id) ON DELETE RESTRICT,slot TEXT NOT NULL CHECK(slot IN ('reference_image','reference_audio','selected_image','selected_video')),ordinal INTEGER NOT NULL,version_id TEXT NOT NULL REFERENCES creative_asset_versions(id) ON DELETE RESTRICT,PRIMARY KEY(shot_id,slot,ordinal),CHECK(ordinal>=0 AND (slot NOT IN ('selected_image','selected_video') OR ordinal=0)))",
+  'CREATE INDEX IF NOT EXISTS creative_shots_order ON creative_shots(project_id,sort_key,id)',
+] as const;
+export const APP_SCHEMA_VERSION = 20;
 export const RECOVERY_TABLE = 'app_database_recovery';
 
 export const APP_TABLES = [
+  'creative_shot_assets','creative_shots',
   'creative_budget_events','creative_budget_reservations','creative_authorizations','creative_default_accounts','creative_credential_generations','creative_account_bindings',
   'creative_file_attempts', 'creative_recovery_sources', 'creative_file_resources', 'creative_deliveries',
   ...CREATIVE_DOMAIN_TABLES,
@@ -170,4 +176,4 @@ export const V13_SCHEMA_STATEMENTS = [
   'CREATE TRIGGER IF NOT EXISTS archive_task_delete AFTER DELETE ON tasks BEGIN DELETE FROM task_archives WHERE task_id=OLD.id; END',
 ] as const;
 
-export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS, ...V13_SCHEMA_STATEMENTS, ...CREATIVE_CAPTURE_SCHEMA, ...RESTORE_SAFETY_SCHEMA, ...CREATIVE_DOMAIN_SCHEMA, ...CREATIVE_DELIVERY_SCHEMA, ...CREATIVE_FILE_SCHEMA, ...CREATIVE_AUTHORIZATION_SCHEMA] as const;
+export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS, ...V13_SCHEMA_STATEMENTS, ...CREATIVE_CAPTURE_SCHEMA, ...RESTORE_SAFETY_SCHEMA, ...CREATIVE_DOMAIN_SCHEMA, ...CREATIVE_DELIVERY_SCHEMA, ...CREATIVE_FILE_SCHEMA, ...CREATIVE_AUTHORIZATION_SCHEMA, ...CREATIVE_SHOT_SCHEMA] as const;

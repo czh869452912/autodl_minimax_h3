@@ -2,6 +2,7 @@ import { v16CreativeDomain } from './v16CreativeDomain';
 import { v17CreativeDeliveries } from './v17CreativeDeliveries';
 import { v18CreativeFiles } from './v18CreativeFiles';
 import { v19CreativeAuthorization } from './v19CreativeAuthorization';
+import { v20CreativeShots } from './v20CreativeShots';
 import { v15RestoreSafety } from './v15RestoreSafety';
 import { v14CreativeCapture } from './v14CreativeCapture';
 import type { AppDatabase } from '../appDatabase';
@@ -39,6 +40,7 @@ const steps = new Map<number, MigrationStep>([
   [v17CreativeDeliveries.fromVersion, v17CreativeDeliveries],
   [v18CreativeFiles.fromVersion, v18CreativeFiles],
   [v19CreativeAuthorization.fromVersion, v19CreativeAuthorization],
+  [v20CreativeShots.fromVersion, v20CreativeShots],
 ]);
 
 function version(db: AppDatabase): number {
