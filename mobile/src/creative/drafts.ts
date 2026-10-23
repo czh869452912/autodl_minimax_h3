@@ -16,13 +16,13 @@ export const draftSchemas = {
 export type DraftCommand = { [K in keyof typeof draftSchemas]: { name: K; payload: z.input<typeof draftSchemas[K]> } }[keyof typeof draftSchemas];
 export type CreativeDraft = { id: string; project_id: string | null; shot_id: string | null; target_asset_id: string | null; provider_id: string; workflow_id: string; input_json: string; revision: number; state: string; job_id: string | null };
 export function readCreativeDraft(db: AppDatabase, id: string) { return db.getFirstAsync<CreativeDraft>('SELECT * FROM creative_generation_drafts WHERE id=?', id); }
-export function readDraftInputs(db: AppDatabase, id: string) { return db.getAllAsync<{ version_id: string; ordinal: number; blob_sha256: string; relative_path: string; mime: string; byte_size: number; state: string }>(`SELECT i.*,f.blob_sha256,f.state,b.relative_path,b.mime,b.byte_size FROM creative_draft_inputs i JOIN creative_version_files f ON f.version_id=i.version_id AND f.role='original' JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE draft_id=? ORDER BY ordinal`, id); }
+export function readDraftInputs(db: AppDatabase, id: string) { return db.getAllAsync<{ version_id: string; ordinal: number; blob_sha256: string; relative_path: string; mime: string; byte_size: number; state: string }>(`SELECT i.*,f.blob_sha256,f.state,b.relative_path,b.mime,b.byte_size FROM creative_draft_inputs i LEFT JOIN creative_version_files f ON f.version_id=i.version_id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE draft_id=? ORDER BY ordinal`, id); }
 export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, now: number, makeId: () => string): Promise<Record<string,string>> {
   if (!(name in draftSchemas)) throw new Error('UNKNOWN_CREATIVE_COMMAND');
   const project = async (id: string | null | undefined) => { if (id && !await tx.getFirstAsync('SELECT id FROM creative_projects WHERE id=? AND archived_at IS NULL', id)) throw new Error('PROJECT_NOT_AVAILABLE'); };
   const inputs = async (draftId: string, versions: string[]) => {
     for (const [ordinal, versionId] of versions.entries()) {
-      if (!await tx.getFirstAsync("SELECT v.id FROM creative_asset_versions v JOIN creative_assets a ON a.id=v.asset_id AND a.kind='image' JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' AND f.state='AVAILABLE' WHERE v.id=?", versionId)) throw new Error('DRAFT_INPUT_NOT_AVAILABLE');
+      if (!await tx.getFirstAsync("SELECT v.id FROM creative_asset_versions v JOIN creative_assets a ON a.id=v.asset_id AND a.kind='image' JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' AND f.state='AVAILABLE' WHERE v.id=? AND NOT EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=v.asset_id)", versionId)) throw new Error('DRAFT_INPUT_NOT_AVAILABLE');
       await tx.runAsync("INSERT INTO creative_draft_inputs VALUES(?,'image',?,?)", draftId, ordinal, versionId);
     }
   };
@@ -30,7 +30,7 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     await project(p.projectId);
     let input = p.input ?? defaultNovelAiDraft, assetId: string | null = null;
     if (p.fromVersionId) {
-      const version = await tx.getFirstAsync<{ asset_id: string; recipe_json: string }>("SELECT v.* FROM creative_asset_versions v JOIN creative_assets a ON a.id=v.asset_id AND a.kind='image' WHERE v.id=?", p.fromVersionId);
+      const version = await tx.getFirstAsync<{ asset_id: string; recipe_json: string }>("SELECT v.* FROM creative_asset_versions v JOIN creative_assets a ON a.id=v.asset_id AND a.kind='image' WHERE v.id=? AND NOT EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=a.id)", p.fromVersionId);
       if (!version) throw new Error('IMAGE_VERSION_NOT_FOUND');
       const recipe = JSON.parse(version.recipe_json);
       if (!p.input) input = novelAiDraftInput.parse(recipe.input);

@@ -22,6 +22,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
   const [query, setQuery] = useState('');
   const [archived, setArchived] = useState(false);
   const [inbox, setInbox] = useState(false);
+  const [trash,setTrash]=useState(false),[assetTitle,setAssetTitle]=useState(''),[assetDescription,setAssetDescription]=useState(''),[assetTags,setAssetTags]=useState('');
   const [busy, setBusy] = useState(false);
   const writeLock = useRef(false);
   const readGeneration = useRef(0);
@@ -47,10 +48,10 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
     const generation = ++readGeneration.current;
     const service = creativeService();
     const projects = await service.projects(archived);
-    const assets = await service.assets({ projectId: mode === 'projects' ? selected : undefined, query, inbox: mode === 'assets' && inbox });
+    const assets = await service.assets({ projectId: mode === 'projects' ? selected : undefined, query, inbox: mode === 'assets' && inbox,trash });
     if (generation !== readGeneration.current) return;
     setProjects(projects); setAssets(assets);
-  }, [selected, mode, query, archived, inbox]);
+  }, [selected, mode, query, archived, inbox,trash]);
   useFocusEffect(useCallback(() => { void refresh().catch(e => setError(String(e.message))); }, [refresh]));
   const run = async (work: () => Promise<unknown>) => {
     if (writeLock.current) return;
@@ -60,6 +61,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
   };
   const command = (input: CreativeCommand) => creativeService().execute(input, createId());
   const inspect = async (asset: CreativeAsset) => {
+    const description=await creativeService().description(asset.id);setAssetTitle(asset.title);setAssetDescription(description?.description??'');setAssetTags(description?JSON.parse(description.tags_json).join(', '):'');
     for (const version of await creativeService().versions(asset.id)) await creativeFiles().verify(version.id);
     setActiveAsset(asset); setVersions(await creativeService().versions(asset.id)); setLinks(await creativeService().links(asset.id));
   };
@@ -90,6 +92,13 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
     {mode === 'projects' && selected && projectView === 'shots' && !activeAsset ? <ProjectShots key={selected} projectId={selected} archived={Boolean(current?.archivedAt)} /> : null}
     {activeAsset ? <View style={styles.card}>
       {action('返回素材列表', () => setActiveAsset(undefined))}<Text style={styles.title}>{activeAsset.title}</Text>
+      {trash ? action('从回收站恢复',()=>void run(async()=>{await command({name:'asset.restore',payload:{id:activeAsset.id,expectedRevision:activeAsset.revision}});setActiveAsset(undefined);})) : <>
+        <TextInput accessibilityLabel="资产名称" value={assetTitle} onChangeText={setAssetTitle} style={styles.input} />
+        <TextInput accessibilityLabel="资产说明" placeholder="创作说明" multiline value={assetDescription} onChangeText={setAssetDescription} style={styles.input} />
+        <TextInput accessibilityLabel="资产标签" placeholder="标签，用逗号分隔" value={assetTags} onChangeText={setAssetTags} style={styles.input} />
+        {action('保存说明与标签',()=>void run(async()=>{await command({name:'asset.describe',payload:{id:activeAsset.id,expectedRevision:activeAsset.revision,title:assetTitle,description:assetDescription,tags:assetTags.split(/[,，]/).map(s=>s.trim()).filter(Boolean)}});setActiveAsset({...activeAsset,title:assetTitle,revision:activeAsset.revision+1});}))}
+        {action('移入回收站',()=>Alert.alert('移入回收站','仍被项目、镜头或草稿引用的资产会阻止此操作。回收站保留文件，可恢复。',[{text:'取消',style:'cancel'},{text:'移入',onPress:()=>void run(async()=>{await command({name:'asset.trash',payload:{id:activeAsset.id,expectedRevision:activeAsset.revision}});setActiveAsset(undefined);})}]))}
+      </>}
       {versions.map(v => <View key={v.id} style={styles.card}>
         <Text style={styles.body}>版本 {v.versionNo} · {activeAsset.currentVersionId === v.id ? '默认版本' : '候选版本'} · {v.state === 'AVAILABLE' ? '本地可用' : '文件待恢复'}</Text>
         {v.relativePath && v.mime?.startsWith('image/') ? <Image accessibilityLabel={`版本 ${v.versionNo} 预览`} source={{ uri: `${FileSystem.documentDirectory}${v.relativePath}` }} style={styles.preview} resizeMode="contain" /> : null}
@@ -116,6 +125,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
     </View> : mode === 'assets' || (selected && projectView === 'assets') ? <>
       <View style={styles.row}>{action('导入图片', () => void addImages(), false)}{mode === 'assets' ? action(inbox ? '全部资产' : '收件箱', () => setInbox(!inbox)) : null}</View>
       <TextInput accessibilityLabel="搜索资产" placeholder="搜索资产名称" value={query} onChangeText={setQuery} style={styles.input} />
+      {mode==='assets'?action(trash?'返回全部资产':'回收站',()=>{setTrash(!trash);setInbox(false);}):null}
       {!assets.length ? <Text style={styles.body}>还没有素材。导入图片后可加入多个项目，文件只保留一份。</Text> : null}
       {assets.map(a => <Pressable accessibilityRole="button" accessibilityLabel={`打开资产 ${a.title}`} key={a.id} style={styles.card} onPress={() => void run(() => inspect(a))}><Text style={styles.title}>{a.title}</Text><Text style={styles.body}>{a.kind} · {a.currentVersionId ? '已选默认版本' : '待选定版本'}</Text></Pressable>)}
       <Text style={styles.body}>最近 100 项；已有视频仍可从“历史视频”访问。</Text>
