@@ -1,7 +1,23 @@
-export const APP_SCHEMA_VERSION = 13;
+const fields = ['id', 'task_id', 'title', 'prompt', 'source_url', 'local_path', 'poster_path', 'mime_type', 'width', 'height', 'duration_ms', 'status', 'created_at', 'updated_at', 'artifact_id', 'job_id', 'workflow_id', 'kind', 'export_status'] as const;
+export const CREATIVE_CAPTURE_TABLES = ['creative_projection_heads', 'creative_legacy_changes', 'creative_migration_state'] as const;
+export const CREATIVE_CAPTURE_SCHEMA = [
+  "CREATE TABLE IF NOT EXISTS creative_migration_state (id INTEGER PRIMARY KEY CHECK(id=1), phase TEXT NOT NULL CHECK(phase IN ('CAPTURE','BACKFILL','CATCHUP','PRIMARY')), epoch INTEGER NOT NULL DEFAULT 1, backfill_cursor TEXT, replay_sequence INTEGER NOT NULL DEFAULT 0, cutover_sequence INTEGER, writer_ready INTEGER NOT NULL DEFAULT 0 CHECK(writer_ready IN (0,1)))",
+  "INSERT OR IGNORE INTO creative_migration_state(id,phase) VALUES(1,'CAPTURE')",
+  "CREATE TABLE IF NOT EXISTS creative_legacy_changes(sequence INTEGER PRIMARY KEY AUTOINCREMENT, source_id TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('UPSERT','DELETE')), snapshot_json TEXT NOT NULL CHECK(json_valid(snapshot_json)))",
+  "CREATE TABLE IF NOT EXISTS creative_projection_heads(projection_kind TEXT NOT NULL,entity_id TEXT NOT NULL,epoch INTEGER NOT NULL,applied_revision INTEGER NOT NULL,tombstoned INTEGER NOT NULL CHECK(tombstoned IN(0,1)),snapshot_json TEXT NOT NULL CHECK(json_valid(snapshot_json)),PRIMARY KEY(projection_kind,entity_id))",
+  ...(['INSERT', 'UPDATE', 'DELETE'] as const).map(event => {
+    const alias = event === 'DELETE' ? 'OLD' : 'NEW';
+    return `CREATE TRIGGER IF NOT EXISTS creative_capture_media_${event.toLowerCase()} AFTER ${event} ON media_assets WHEN (SELECT phase FROM creative_migration_state WHERE id=1)!='PRIMARY' BEGIN INSERT INTO creative_legacy_changes(source_id,kind,snapshot_json) VALUES(${alias}.id,'${event === 'DELETE' ? 'DELETE' : 'UPSERT'}',json_object(${fields.map(field => `'${field}',${alias}.${field}`).join(',')})); END`;
+  }),
+  // Primary activation is intentionally unavailable until every legacy writer is bridged.
+  "CREATE TRIGGER IF NOT EXISTS creative_cutover_readiness BEFORE UPDATE OF phase ON creative_migration_state WHEN NEW.phase='PRIMARY' AND OLD.writer_ready!=1 BEGIN SELECT RAISE(ABORT,'CREATIVE_WRITERS_NOT_READY'); END",
+] as const;
+
+export const APP_SCHEMA_VERSION = 14;
 export const RECOVERY_TABLE = 'app_database_recovery';
 
 export const APP_TABLES = [
+  ...CREATIVE_CAPTURE_TABLES,
   'task_archives', 'task_monitor_events',
   'media_asset_tombstones', 'workflow_artifacts', 'workflow_jobs', 'workflow_operations', 'workflow_job_events',
   'artifact_blob_refs', 'artifact_blobs', 'media_deliveries', 'media_assets', 'tasks',
@@ -98,4 +114,4 @@ export const V13_SCHEMA_STATEMENTS = [
   'CREATE TRIGGER IF NOT EXISTS archive_task_delete AFTER DELETE ON tasks BEGIN DELETE FROM task_archives WHERE task_id=OLD.id; END',
 ] as const;
 
-export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS, ...V13_SCHEMA_STATEMENTS] as const;
+export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS, ...V13_SCHEMA_STATEMENTS, ...CREATIVE_CAPTURE_SCHEMA] as const;
