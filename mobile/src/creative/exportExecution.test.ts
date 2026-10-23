@@ -103,3 +103,19 @@ test('restoring a queued snapshot quarantines export and rejects old worker', as
     expect((await f.operations.get(f.opId))?.state).toBe('BLOCKED');
   } finally { f.db.close(); }
 });
+
+
+test('asset trashed during file verification never crosses the publication boundary',async()=>{
+  const f=await fixture();try{
+    f.deps.verify.mockImplementationOnce(async()=>{
+      const asset=f.db.getFirstSync<{id:string;revision:number}>('SELECT id,revision FROM creative_assets')!;
+      await f.service.execute({name:'asset.trash',payload:{id:asset.id,expectedRevision:asset.revision}},'trash-during-export');
+      return true;
+    });
+    await f.run();expect(f.status()).toBe('FAILED');
+    expect(f.deps.publish).not.toHaveBeenCalled();
+    expect(f.db.getFirstSync('SELECT error_code FROM creative_deliveries')).toEqual({error_code:'EXPORT_ASSET_TRASHED'});
+    expect(f.db.getAllSync("SELECT * FROM artifact_blob_refs WHERE owner_type='creative_delivery'")).toHaveLength(0);
+    expect(f.db.getAllSync("SELECT * FROM artifact_blob_refs WHERE owner_type='creative_version'")).toHaveLength(1);
+  }finally{f.db.close();}
+});

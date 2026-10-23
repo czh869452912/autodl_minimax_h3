@@ -49,6 +49,12 @@ export async function executeCreativeExport(db: AppDatabase, operation: Workflow
   }
   await withWriteTransaction(db, async tx => {
     if (!await authorized(tx)) throw new Error('EXPORT_LEASE_LOST');
+    if (await tx.getFirstAsync('SELECT t.asset_id FROM creative_asset_trash t JOIN creative_asset_versions v ON v.asset_id=t.asset_id WHERE v.id=?', delivery.version_id)) {
+      await tx.runAsync("UPDATE creative_deliveries SET status='FAILED',error_code='EXPORT_ASSET_TRASHED',updated_at=? WHERE id=?", deps.now(), deliveryId);
+      await tx.runAsync("UPDATE workflow_operations SET state='FAILED',lease_owner=NULL,lease_expires_at=NULL,last_error_json=?,updated_at=? WHERE id=?", JSON.stringify({code:'EXPORT_ASSET_TRASHED',message:'资产已移入回收站'}), deps.now(), operation.id);
+      await tx.runAsync("DELETE FROM artifact_blob_refs WHERE owner_type='creative_delivery' AND owner_id=?", deliveryId);
+      return;
+    }
     const r = await tx.runAsync("UPDATE creative_deliveries SET status='PUBLISHING',updated_at=? WHERE id=? AND status='QUEUED'", deps.now(), deliveryId);
     if (Number(r.changes) !== 1) throw new Error('EXPORT_ALREADY_STARTED');
   });
