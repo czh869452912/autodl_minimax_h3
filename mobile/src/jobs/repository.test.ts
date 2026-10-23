@@ -110,8 +110,8 @@ test('uses the exclusive transaction connection for artifact replacement', async
   await store.replaceArtifacts('local-1', [{ id: 'a', jobId: 'local-1', kind: 'video', uri: 'https://cdn/video' }]);
   expect(db.withExclusiveTransactionAsync).toHaveBeenCalledTimes(1);
   expect(db.withTransactionAsync).not.toHaveBeenCalled();
-  expect(transaction.runAsync).toHaveBeenNthCalledWith(1, 'DELETE FROM workflow_artifacts WHERE job_id = ?', 'local-1');
-  expect(transaction.runAsync).toHaveBeenNthCalledWith(2, expect.stringContaining('INSERT INTO workflow_artifacts'), 'a', 'local-1', 'video', 'https://cdn/video', null, null);
+  expect(transaction.runAsync).toHaveBeenNthCalledWith(2, 'DELETE FROM workflow_artifacts WHERE job_id = ? AND id NOT IN (?)', 'local-1', 'a');
+  expect(transaction.runAsync).toHaveBeenNthCalledWith(1, expect.stringContaining('INSERT INTO workflow_artifacts'), 'a', 'local-1', 'video', 'https://cdn/video', null, null);
 });
 
 test('keeps overlapping artifact replacements on their own exclusive connections', async () => {

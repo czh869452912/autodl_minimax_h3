@@ -1,3 +1,4 @@
+import { artifactSnapshotStatements } from './artifactStatements';
 import type { AppDatabase } from '../storage/appDatabase';
 import type { JobRecord, JobRepository, ArtifactRecord, JobStatus } from './types';
 import { assertAppDatabaseWritable } from '../storage/database';
@@ -28,8 +29,8 @@ export function createJobRepository(db: AppDatabase | undefined): JobRepository 
   const first = async <T>(sql: string, ...params: any[]): Promise<T | null> => typeof (database as any)?.getFirstAsync === 'function' ? ((await (database as any).getFirstAsync(sql, ...params)) ?? null) : database ? ((database.getFirstSync<JobRow>(sql, ...params) as unknown as T | null) ?? null) : null;
   return {
     async upsert(job) {
-      if (!database) jobs.set(job.id, job);
-      else await run('INSERT OR REPLACE INTO workflow_jobs (id,revision,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,output_mapping_json,provider_handle_json,remote_json,status,last_error_json,error_json,next_sync_at,created_at,updated_at,started_at,execution_duration) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', job.id, job.revision, job.workflowId, job.workflowVersion, job.workflowContentHash, job.adapterId, job.adapterVersion, JSON.stringify(job.inputSnapshot), job.outputMapping ? JSON.stringify(job.outputMapping) : null, job.providerHandle ? JSON.stringify(job.providerHandle) : job.remote ? JSON.stringify(job.remote) : null, job.remote ? JSON.stringify(job.remote) : job.providerHandle ? JSON.stringify(job.providerHandle) : null, job.status, job.lastError ? JSON.stringify(job.lastError) : job.error ? JSON.stringify(job.error) : null, job.error ? JSON.stringify(job.error) : job.lastError ? JSON.stringify(job.lastError) : null, job.nextSyncAt ?? null, job.createdAt, job.updatedAt, job.startedAt ?? null, job.executionDuration ?? null);
+      if (!database) jobs.set(job.id, { ...job, createdAt: jobs.get(job.id)?.createdAt ?? job.createdAt });
+      else await run('INSERT INTO workflow_jobs (id,revision,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,output_mapping_json,provider_handle_json,remote_json,status,last_error_json,error_json,next_sync_at,created_at,updated_at,started_at,execution_duration) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,workflow_id=excluded.workflow_id,workflow_version=excluded.workflow_version,workflow_hash=excluded.workflow_hash,adapter_id=excluded.adapter_id,adapter_version=excluded.adapter_version,input_json=excluded.input_json,output_mapping_json=excluded.output_mapping_json,provider_handle_json=excluded.provider_handle_json,remote_json=excluded.remote_json,status=excluded.status,last_error_json=excluded.last_error_json,error_json=excluded.error_json,next_sync_at=excluded.next_sync_at,updated_at=excluded.updated_at,started_at=excluded.started_at,execution_duration=excluded.execution_duration', job.id, job.revision, job.workflowId, job.workflowVersion, job.workflowContentHash, job.adapterId, job.adapterVersion, JSON.stringify(job.inputSnapshot), job.outputMapping ? JSON.stringify(job.outputMapping) : null, job.providerHandle ? JSON.stringify(job.providerHandle) : job.remote ? JSON.stringify(job.remote) : null, job.remote ? JSON.stringify(job.remote) : job.providerHandle ? JSON.stringify(job.providerHandle) : null, job.status, job.lastError ? JSON.stringify(job.lastError) : job.error ? JSON.stringify(job.error) : null, job.error ? JSON.stringify(job.error) : job.lastError ? JSON.stringify(job.lastError) : null, job.nextSyncAt ?? null, job.createdAt, job.updatedAt, job.startedAt ?? null, job.executionDuration ?? null);
     },
     async get(id) {
       if (!database) return jobs.get(id);
@@ -51,6 +52,7 @@ export function createJobRepository(db: AppDatabase | undefined): JobRepository 
       return (await all<JobRow>("SELECT * FROM workflow_jobs WHERE status IN ('QUEUED','RUNNING','UNKNOWN') ORDER BY updated_at ASC, id ASC")).map(fromJob);
     },
     async replaceArtifacts(jobId, values) {
+      const statements = artifactSnapshotStatements(jobId, values);
       if (!database) { artifacts.set(jobId, values); return; }
       assertAppDatabaseWritable(database);
       const transaction = (database as unknown as { withTransactionSync?: (fn: () => void) => void }).withTransactionSync;
@@ -60,13 +62,11 @@ export function createJobRepository(db: AppDatabase | undefined): JobRepository 
         ) => Promise<void>;
       }).withExclusiveTransactionAsync;
       const replace = () => {
-        database.runSync('DELETE FROM workflow_artifacts WHERE job_id = ?', jobId);
-        for (const value of values) database.runSync('INSERT INTO workflow_artifacts (id,job_id,kind,uri,mime,metadata_json) VALUES (?,?,?,?,?,?)', value.id, jobId, value.kind, value.uri ?? null, value.mime ?? null, value.metadata ? JSON.stringify(value.metadata) : null);
+        for (const statement of statements) database.runSync(statement.sql, ...statement.params);
       };
       if (exclusiveTransaction) {
         await exclusiveTransaction.call(database, async (exclusive) => {
-          await exclusive.runAsync('DELETE FROM workflow_artifacts WHERE job_id = ?', jobId);
-          for (const value of values) await exclusive.runAsync('INSERT INTO workflow_artifacts (id,job_id,kind,uri,mime,metadata_json) VALUES (?,?,?,?,?,?)', value.id, jobId, value.kind, value.uri ?? null, value.mime ?? null, value.metadata ? JSON.stringify(value.metadata) : null);
+          for (const statement of statements) await exclusive.runAsync(statement.sql, ...statement.params);
         });
         return;
       }

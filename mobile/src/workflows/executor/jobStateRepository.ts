@@ -1,3 +1,4 @@
+import { artifactSnapshotStatements } from '../../jobs/artifactStatements';
 import { insertWorkflowOperation } from './operationInsert';
 import { withWriteTransaction } from '../../storage/sqliteBusy';
 import type { AppDatabase } from '../../storage/appDatabase';
@@ -77,17 +78,8 @@ async function insertEvent(db: AppDatabase, jobId: string, sequence: number, eve
 }
 
 async function replaceArtifacts(db: AppDatabase, jobId: string, artifacts: ArtifactRecord[]): Promise<void> {
-  await db.runAsync('DELETE FROM workflow_artifacts WHERE job_id = ?', jobId);
-  for (const artifact of artifacts) {
-    await db.runAsync(
-      'INSERT INTO workflow_artifacts (id,job_id,kind,uri,mime,metadata_json) VALUES (?,?,?,?,?,?)',
-      artifact.id,
-      jobId,
-      artifact.kind,
-      artifact.uri ?? null,
-      artifact.mime ?? null,
-      artifact.metadata ? JSON.stringify(artifact.metadata) : null,
-    );
+  for (const statement of artifactSnapshotStatements(jobId, artifacts)) {
+    await db.runAsync(statement.sql, ...statement.params);
   }
 }
 
