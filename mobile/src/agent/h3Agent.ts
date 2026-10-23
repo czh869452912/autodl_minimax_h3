@@ -16,7 +16,7 @@ const H3_SYSTEM_POLICY = [
   'Read the complete matching SKILL.md and referenced files through filesystem tools before drafting.',
   'Iterate through multiple model and tool rounds when needed; do not use a fixed application template or skill branch table.',
   'This APK has no MiniMax Hub canvas tools. If a selected skill requires them, return a clearly marked pre-production package and never claim final generation occurred.',
-  'Return the final H3 prompt in a fenced h3-prompt code block. Follow the selected official skill output rules: include a non-empty integrated_multimodal_description for the base format, or all six official Ref2VA fields for Ref2VA.',
+  'When the user asks for H3 prompt authoring, return the final H3 prompt in a fenced h3-prompt code block. Follow the selected official skill output rules: include a non-empty integrated_multimodal_description for the base format, or all six official Ref2VA fields for Ref2VA.',
 ].join('\n');
 
 export type H3AgentDependencies = {

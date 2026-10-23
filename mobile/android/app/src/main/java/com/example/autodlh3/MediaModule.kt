@@ -295,6 +295,18 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   }
 
   @ReactMethod
+  fun readCreativePngMetadata(source: String, promise: Promise) {
+    executors.executeMedia {
+      try {
+        val uri=Uri.parse(source);require(uri.scheme in listOf("file","content"))
+        val stream=if(uri.scheme=="file")File(requireNotNull(uri.path)).inputStream() else requireNotNull(context.contentResolver.openInputStream(uri))
+        val metadata=stream.use{CreativePngMetadata.read(it)}
+        promise.resolve(Arguments.createMap().apply{metadata.forEach{(key,value)->putString(key,value)}})
+      }catch(error:Exception){promise.reject("CREATIVE_METADATA_UNAVAILABLE","无法可靠读取图片元数据")}
+    }
+  }
+
+  @ReactMethod
   fun generateNovelAi(key: String, requestJson: String, hash: String, token: String, promise: Promise) {
     executors.executeMedia {
       try { promise.resolve(Uri.fromFile(novelAi.generate(key, requestJson, hash, token)).toString()) }

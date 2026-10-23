@@ -9,6 +9,7 @@ import { sha256File } from '../native/media';
 import { createFileResources } from './fileResources';
 import { findCreativeBackupFile } from '../storage/creativeBackupRuntime';
 import { migrateLegacyCreativeBatch } from './legacyMigration';
+import { NativeModules } from 'react-native';
 
 export function migrateCreativeHistory(db = getDatabase()) {
   return migrateLegacyCreativeBatch(db, { importLocal: async (uri, mimeType) => {
@@ -43,6 +44,8 @@ export async function importCreativeImage(image: NativeImageAsset, projectId?: s
   try {
     const blobSha256 = stored.hashes[0];
     if (!blobSha256) throw new Error('图片导入失败');
-    return await createCreativeService(db).execute({ name: 'asset.import', payload: { title: image.name, kind: 'image', blobSha256, sourceUri: image.uri, ...(projectId ? { projectId } : {}) } }, createId());
+    let metadata: Record<string,string> | undefined;
+    try { metadata = await NativeModules.AutoDLMedia?.readCreativePngMetadata?.(image.uri); } catch { /* Keep original bytes even when metadata is corrupt. */ }
+    return await createCreativeService(db).execute({ name: 'asset.import', payload: { title: image.name, kind: 'image', blobSha256, sourceUri: image.uri, metadata, ...(projectId ? { projectId } : {}) } }, createId());
   } finally { await stored.releaseStaging(); }
 }
