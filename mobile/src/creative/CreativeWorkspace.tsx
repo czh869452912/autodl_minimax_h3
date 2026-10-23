@@ -1,3 +1,4 @@
+import { AudioVersionPreview } from './AudioVersionPreview';
 import { TextVersionEditor } from './TextVersionEditor';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -122,6 +123,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
         <Text style={styles.body}>版本 {v.versionNo} · {activeAsset.currentVersionId === v.id ? '默认版本' : '候选版本'} · {v.state === 'AVAILABLE' ? '本地可用' : '文件待恢复'}</Text>
         {v.relativePath && v.mime?.startsWith('image/') ? <Image accessibilityLabel={`版本 ${v.versionNo} 预览`} source={{ uri: `${FileSystem.documentDirectory}${v.relativePath}` }} style={styles.preview} resizeMode="contain" /> : null}
         {v.state === 'AVAILABLE' && v.relativePath && v.mime?.startsWith('video/') ? <VideoPlayer source={`${FileSystem.documentDirectory}${v.relativePath}`} /> : null}
+        {v.state==='AVAILABLE'&&v.mime?.startsWith('audio/')?<AudioVersionPreview version={v}/>:null}
         {v.state==='AVAILABLE'&&['text/plain','text/markdown','application/json'].includes(v.mime??'')?<TextVersionPreview version={v}/>:null}
         {!trash&&v.state==='AVAILABLE'&&['text/plain','text/markdown'].includes(v.mime??'')?<TextVersionEditor key={`${v.id}:${activeAsset.revision}`} asset={activeAsset} version={v} onSaved={async()=>{setActiveAsset(undefined);await refresh();}}/>:null}
         {v.state === 'AVAILABLE' && (CREATIVE_FILE_MIMES as readonly string[]).includes(v.mime ?? '') ? action(creativeExportTarget(v.mime??'')==='system-gallery'?'保存到系统相册':'保存到下载文件夹', () => void run(() => exportCreativeVersion(v.id))) : null}

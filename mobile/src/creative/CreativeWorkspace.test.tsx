@@ -1,3 +1,4 @@
+jest.mock('./AudioVersionPreview',()=>({AudioVersionPreview:()=>null}));
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { CreativeWorkspace } from './CreativeWorkspace';
