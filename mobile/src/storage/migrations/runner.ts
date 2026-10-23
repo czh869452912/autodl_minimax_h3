@@ -1,3 +1,4 @@
+import { v16CreativeDomain } from './v16CreativeDomain';
 import { v15RestoreSafety } from './v15RestoreSafety';
 import { v14CreativeCapture } from './v14CreativeCapture';
 import type { AppDatabase } from '../appDatabase';
@@ -31,6 +32,7 @@ const steps = new Map<number, MigrationStep>([
   [v13TaskArchives.fromVersion, v13TaskArchives],
   [v14CreativeCapture.fromVersion, v14CreativeCapture],
   [v15RestoreSafety.fromVersion, v15RestoreSafety],
+  [v16CreativeDomain.fromVersion, v16CreativeDomain],
 ]);
 
 function version(db: AppDatabase): number {

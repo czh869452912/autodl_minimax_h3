@@ -1,3 +1,18 @@
+
+export const CREATIVE_DOMAIN_TABLES = ['creative_command_receipts','creative_execution_origins','creative_project_assets','creative_version_files','creative_asset_versions','creative_assets','creative_projects','creative_lineage'] as const;
+export const CREATIVE_DOMAIN_SCHEMA = [
+  'CREATE TABLE IF NOT EXISTS creative_lineage(id INTEGER PRIMARY KEY CHECK(id=1),namespace TEXT NOT NULL)',
+  'INSERT OR IGNORE INTO creative_lineage VALUES(1,lower(hex(randomblob(16))))',
+  'CREATE TABLE IF NOT EXISTS creative_projects(id TEXT PRIMARY KEY,title TEXT NOT NULL,brief TEXT NOT NULL,revision INTEGER NOT NULL,archived_at INTEGER,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)',
+  "CREATE TABLE IF NOT EXISTS creative_assets(id TEXT PRIMARY KEY,kind TEXT NOT NULL CHECK(kind IN ('image','video','audio','prompt','document')),title TEXT NOT NULL,current_version_id TEXT,revision INTEGER NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS creative_asset_versions(id TEXT PRIMARY KEY,asset_id TEXT NOT NULL REFERENCES creative_assets(id) ON DELETE RESTRICT,version_no INTEGER NOT NULL,source TEXT NOT NULL CHECK(source IN ('import','generated','authored')),recipe_json TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(asset_id,version_no),UNIQUE(asset_id,id))",
+  "CREATE TABLE IF NOT EXISTS creative_version_files(version_id TEXT NOT NULL REFERENCES creative_asset_versions(id) ON DELETE RESTRICT,role TEXT NOT NULL CHECK(role IN ('original','preview','thumbnail','sidecar')),blob_sha256 TEXT NOT NULL REFERENCES artifact_blobs(sha256) ON DELETE RESTRICT,state TEXT NOT NULL CHECK(state IN ('AVAILABLE','MISSING','PENDING')),PRIMARY KEY(version_id,role))",
+  'CREATE TABLE IF NOT EXISTS creative_project_assets(project_id TEXT NOT NULL REFERENCES creative_projects(id) ON DELETE RESTRICT,asset_id TEXT NOT NULL REFERENCES creative_assets(id) ON DELETE RESTRICT,pinned_version_id TEXT,revision INTEGER NOT NULL,PRIMARY KEY(project_id,asset_id),FOREIGN KEY(asset_id,pinned_version_id) REFERENCES creative_asset_versions(asset_id,id) ON DELETE RESTRICT)',
+  "CREATE TABLE IF NOT EXISTS creative_execution_origins(id TEXT PRIMARY KEY,origin_kind TEXT NOT NULL CHECK(origin_kind IN ('user','agent','system')),source_namespace TEXT NOT NULL,thread_id TEXT,run_id TEXT,tool_call_id TEXT,intent_summary TEXT NOT NULL,created_at INTEGER NOT NULL,CHECK(origin_kind!='agent' OR (thread_id IS NOT NULL AND run_id IS NOT NULL)))",
+  'CREATE TABLE IF NOT EXISTS creative_command_receipts(id TEXT PRIMARY KEY,idempotency_key TEXT NOT NULL UNIQUE,command_name TEXT NOT NULL,payload_hash TEXT NOT NULL,execution_origin_id TEXT NOT NULL REFERENCES creative_execution_origins(id) ON DELETE RESTRICT,execution_epoch TEXT NOT NULL,result_json TEXT NOT NULL,created_at INTEGER NOT NULL)',
+  'CREATE INDEX IF NOT EXISTS creative_projects_recent ON creative_projects(updated_at DESC,id DESC)',
+  'CREATE INDEX IF NOT EXISTS creative_assets_recent ON creative_assets(updated_at DESC,id DESC)',
+] as const;
 const fields = ['id', 'task_id', 'title', 'prompt', 'source_url', 'local_path', 'poster_path', 'mime_type', 'width', 'height', 'duration_ms', 'status', 'created_at', 'updated_at', 'artifact_id', 'job_id', 'workflow_id', 'kind', 'export_status'] as const;
 export const CREATIVE_CAPTURE_TABLES = ['creative_projection_heads', 'creative_legacy_changes', 'creative_migration_state'] as const;
 export const CREATIVE_CAPTURE_SCHEMA = [
@@ -24,10 +39,11 @@ export const RESTORE_SAFETY_SCHEMA = [
     WHEN NEW.state IN ('PENDING','CLAIMED') AND EXISTS(SELECT 1 FROM creative_restore_quarantine WHERE (entity_kind='job' AND entity_id=NEW.job_id) OR (entity_kind='operation' AND entity_id=NEW.id))
     BEGIN SELECT RAISE(ABORT,'RESTORED_EXECUTION_REQUIRES_REVIEW'); END`,
 ] as const;
-export const APP_SCHEMA_VERSION = 15;
+export const APP_SCHEMA_VERSION = 16;
 export const RECOVERY_TABLE = 'app_database_recovery';
 
 export const APP_TABLES = [
+  ...CREATIVE_DOMAIN_TABLES,
   ...CREATIVE_CAPTURE_TABLES,
   'creative_restore_quarantine', 'creative_execution_state',
   'task_archives', 'task_monitor_events',
@@ -126,4 +142,4 @@ export const V13_SCHEMA_STATEMENTS = [
   'CREATE TRIGGER IF NOT EXISTS archive_task_delete AFTER DELETE ON tasks BEGIN DELETE FROM task_archives WHERE task_id=OLD.id; END',
 ] as const;
 
-export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS, ...V13_SCHEMA_STATEMENTS, ...CREATIVE_CAPTURE_SCHEMA, ...RESTORE_SAFETY_SCHEMA] as const;
+export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS, ...V13_SCHEMA_STATEMENTS, ...CREATIVE_CAPTURE_SCHEMA, ...RESTORE_SAFETY_SCHEMA, ...CREATIVE_DOMAIN_SCHEMA] as const;

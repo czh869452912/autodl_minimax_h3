@@ -32,18 +32,18 @@ describe('tabs shell layout', () => {
     act(() => { tree = create(<AppTabs activeId="agent" onSelect={select} />); });
     const getTabs = () => tree.root.findAll(node => typeof node.type === 'string' && node.props.accessibilityRole === 'tab');
     const tabs = getTabs();
-    expect(tabs).toHaveLength(5);
+    expect(tabs).toHaveLength(4);
     tabs.forEach((tab, index) => {
       expect(tab.props.accessibilityLabel).toBe(APP_TABS[index].label);
       expect(tab.props.accessibilityState.selected).toBe(APP_TABS[index].id === 'agent');
       expect(StyleSheet.flatten(tab.props.style).minHeight).toBeGreaterThanOrEqual(48);
     });
     act(() => tree.root.findAll(node => node.props.accessibilityLabel === APP_TABS[2].label && typeof node.props.onPress === 'function')[0].props.onPress());
-    expect(select).toHaveBeenCalledWith('tasks');
+    expect(select).toHaveBeenCalledWith('create');
     act(() => (callbacks.get('keyboardWillShow') ?? callbacks.get('keyboardDidShow'))!());
     expect(getTabs()).toHaveLength(0);
     act(() => (callbacks.get('keyboardWillHide') ?? callbacks.get('keyboardDidHide'))!());
-    expect(getTabs()).toHaveLength(5);
+    expect(getTabs()).toHaveLength(4);
     act(() => tree.unmount());
     expect(remove).toHaveBeenCalledTimes(2);
     listener.mockRestore();

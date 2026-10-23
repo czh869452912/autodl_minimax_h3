@@ -2,9 +2,9 @@ import { APP_TABS, COLORS } from './theme';
 import { ICON_NAMES } from './icons';
 
 describe('native app shell contract', () => {
-  it('keeps all five application destinations', () => {
-    expect(APP_TABS).toHaveLength(5);
-    expect(APP_TABS.map((tab) => tab.id)).toEqual(['create', 'agent', 'tasks', 'gallery', 'settings']);
+  it('keeps four creative application destinations', () => {
+    expect(APP_TABS).toHaveLength(4);
+    expect(APP_TABS.map((tab) => tab.id)).toEqual(['projects', 'assets', 'create', 'agent']);
   });
 
   it('provides readable text for light surfaces and filled primary buttons', () => {

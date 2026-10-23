@@ -26,7 +26,7 @@ export function AppTabs({ activeId, onSelect }: { activeId: AppTabId; onSelect: 
         // remaining space equally within each row, rather than fixing tab widths.
         return <Pressable key={tab.id} accessibilityLabel={tab.label} accessibilityRole="tab" accessibilityState={{ selected: active }} onPress={() => onSelect(tab.id)} style={({ pressed }) => [styles.item, { flexBasis: Math.max(48, 30 * layout.fontScale) }, active && styles.activeItem, pressed && styles.pressed]}>
           <AppIcon name={tab.icon} size={25} color={active ? COLORS.primaryActive : COLORS.textMuted} />
-          <Text style={[styles.label, active && styles.activeLabel]}>{compact ? tab.id === 'agent' ? '助手' : tab.id === 'tasks' ? '任务' : tab.label : tab.label}</Text>
+          <Text style={[styles.label, active && styles.activeLabel]}>{compact ? tab.id === 'agent' ? '助手' : tab.label : tab.label}</Text>
         </Pressable>;
       })}
     </View>

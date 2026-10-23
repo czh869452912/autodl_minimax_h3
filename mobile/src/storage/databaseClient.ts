@@ -1,4 +1,5 @@
-import { openDatabaseSync } from 'expo-sqlite';
+import { openDatabaseAsync, openDatabaseSync } from 'expo-sqlite';
+import { withForeignKeyConnections } from './foreignKeyConnection';
 import type { AppDatabase } from './appDatabase';
 import { ensureAppDatabase } from './database';
 import { createPreMigrationBackup } from './backup';
@@ -30,7 +31,8 @@ export function getDatabase(): AppDatabase {
       startupState = { mode: 'readonly', diagnostic: error.diagnostic, allowReset: true };
     }
     let retired = false;
-    sharedDatabase = protectDatabase(withRetryingQueries(raw), {
+    const configured = withForeignKeyConnections(raw, () => openDatabaseAsync('autodl-h3.db', { useNewConnection: true }));
+    sharedDatabase = protectDatabase(withRetryingQueries(configured), {
       startupDiagnostic: () => retired ? 'DATABASE_HANDLE_RETIRED' : startupState.mode === 'readonly' ? startupState.diagnostic : startupState.mode === 'legacy' ? 'LEGACY_DATABASE_REQUIRES_RESET' : undefined,
       didReset: () => { retired = true; sharedDatabase = undefined; startupState = { mode: 'writable' }; },
     });
