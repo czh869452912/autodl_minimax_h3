@@ -8,6 +8,7 @@ import { readCreativeDraft, readDraftInputs } from './drafts';
 import { createId } from '../ids';
 import { assertCreativeAgentScope, type CreativeAgentOrigin } from './agentScope';
 import { withWriteTransaction } from '../storage/sqliteBusy';
+import { checkPlanSubmission, recordPlanSubmission } from './planDispatch';
 
 /** Read-only replay: never re-prepare a random seed or resurrect a restored job. */
 export async function readSubmittedCreativeDraft(db: AppDatabase, draftId: string, authorizationId: string, origin: CreativeAgentOrigin) {
@@ -28,12 +29,14 @@ export async function submitCreativeVideo(db: AppDatabase, input: {
   draftId: string; expectedRevision: number; draftInputJson: string; authorizationId: string;
   prepared: PreparedWorkflowSubmission; images: TaskMediaInput[]; versionIds: string[];
   origin?: CreativeAgentOrigin;
+  planStepId?: string;
 }, now = Date.now()) {
   const image = input.prepared.adapterId === 'novelai-image';
   const commandId = `creative-${image ? 'image' : 'video'}:${input.draftId}:${input.expectedRevision}`;
   const requestHash = creativeRequestHash(input.prepared);
   return persistSubmissionCommand(db, commandId, input.prepared, { images: input.images, audios: [] }, now, async (tx, job, inserted) => {
     if (input.origin) await assertCreativeAgentScope(tx, input.origin);
+    await checkPlanSubmission(tx,input.draftId,input.planStepId,input.authorizationId,job.id,inserted);
     if (!inserted) {
       const old = await tx.getFirstAsync<{ request_hash: string; project_id: string | null; authorization_id: string }>('SELECT c.request_hash,c.project_id,r.authorization_id FROM creative_job_contexts c JOIN creative_budget_reservations r ON r.id=c.reservation_id WHERE c.job_id=?', job.id);
       if (!old || old.request_hash !== requestHash || old.authorization_id !== input.authorizationId) throw new Error('SUBMISSION_IDEMPOTENCY_CONFLICT');
@@ -64,5 +67,6 @@ export async function submitCreativeVideo(db: AppDatabase, input: {
     const commandName = image ? 'draft.submitImage' : 'draft.submitVideo';
     await tx.runAsync('INSERT INTO creative_execution_origins VALUES(?,?,?,?,?,?,?,?)', originId, input.origin ? 'agent' : 'user', lineage.namespace, input.origin?.threadId ?? null, input.origin?.runId ?? null, input.origin?.toolCallId ?? null, commandName, now);
     await tx.runAsync('INSERT INTO creative_command_receipts VALUES(?,?,?,?,?,?,?,?)', receiptId, commandId, commandName, requestHash, originId, reservation.execution_epoch, JSON.stringify({ status: 'accepted', receiptId, execution: { kind: 'generation', jobId: job.id } }), now);
+    if(input.planStepId)await recordPlanSubmission(tx,input.planStepId,job.id,now);
   });
 }

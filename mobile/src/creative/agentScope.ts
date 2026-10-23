@@ -20,6 +20,13 @@ export async function guardCreativeAgentCommand(tx: AppDatabase, origin: Creativ
     if (!await tx.getFirstAsync('SELECT v.id FROM creative_asset_versions v JOIN creative_project_assets p ON p.asset_id=v.asset_id WHERE v.id=? AND p.project_id=?', versionId, origin.projectId)) throw new Error('AGENT_ASSET_SCOPE_MISMATCH');
   };
   if (command.name.startsWith('project.')) requireProject(p.id);
+  else if(command.name==='plan.createSelection'){
+    requireProject(p.projectId);
+    if(!await tx.getFirstAsync('SELECT id FROM creative_shots WHERE id=? AND project_id=?',p.shotId as string,origin.projectId))throw new Error('AGENT_SHOT_SCOPE_MISMATCH');
+    for(const v of p.candidateVersionIds as string[])await version(v);
+  }else if(command.name==='plan.cancel'){
+    const plan=await tx.getFirstAsync<{project_id:string}>('SELECT project_id FROM creative_plans WHERE id=?',p.id as string);requireProject(plan?.project_id);
+  }
   else if (command.name === 'draft.createImage' || command.name === 'draft.createVideo' || command.name === 'shot.create' || command.name === 'shot.reorder') {
     requireProject(p.projectId); await version(p.versionId); await version(p.fromVersionId);
     if (typeof p.shotId === 'string' && !await tx.getFirstAsync('SELECT id FROM creative_shots WHERE id=? AND project_id=?', p.shotId, origin.projectId)) throw new Error('AGENT_SHOT_SCOPE_MISMATCH');

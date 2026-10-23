@@ -7,6 +7,7 @@ import { createCreativeService } from './service';
 import { assertCreativeAgentScope, type CreativeAgentOrigin } from './agentScope';
 import { draftSchemas } from './drafts';
 import { storySchemas } from './story';
+import { planSchemas } from './plans';
 import { prepareCreativeImage } from './novelAiRuntime';
 import { prepareCreativeVideo } from './videoRuntime';
 import { readSubmittedCreativeDraft, submitCreativeVideo } from './videoSubmission';
@@ -28,6 +29,8 @@ const commandSchemas = {
   'project.create': z.object({ title: z.string().min(1).max(200), brief: z.string().max(20000).optional() }).strict(),
   'project.update': z.object({ id, expectedRevision:z.number().int().nonnegative(),title:z.string().min(1).max(200),brief:z.string().max(20000) }).strict(),
   ...draftSchemas, ...storySchemas,
+  'plan.createSelection':planSchemas['plan.createSelection'],
+  'plan.cancel':planSchemas['plan.cancel'],
 };
 export function createCreativeAgentTools() {
   const commands = Object.entries(commandSchemas).map(([name,schema]) => tool(async (payload: any, config: any) => {
@@ -46,6 +49,8 @@ export function createCreativeAgentTools() {
           await assertCreativeAgentScope(tx,origin);
           const service = createCreativeService(tx);
           return JSON.stringify({ projectId:origin.projectId, project:origin.projectId ? await service.project(origin.projectId) : null,
+            shots: origin.projectId ? await service.shots(origin.projectId) : [],
+            plans: origin.projectId ? await tx.getAllAsync('SELECT id,title,state,revision FROM creative_plans WHERE project_id=? ORDER BY updated_at DESC LIMIT 20',origin.projectId) : [],
             authorizations: origin.projectId ? await tx.getAllAsync('SELECT id,provider_id,request_limit,expires_at,allow_unknown_cost FROM creative_authorizations WHERE project_id=? AND revoked_at IS NULL AND expires_at>?',origin.projectId,Date.now()) : [],
             instruction: origin.projectId ? 'All creative reads and writes are restricted to this project.' : 'User must select a project before reading assets or generating. You may create a new project.' });
         });

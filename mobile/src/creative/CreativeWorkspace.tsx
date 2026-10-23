@@ -9,13 +9,14 @@ import { createId } from '../ids';
 import { COLORS } from '../ui/theme';
 import { ListAction } from '../ui/ListPageUI';
 import { ProjectShots } from './ProjectShots';
+import { ProjectPlans } from './ProjectPlans';
 import { VideoPlayer } from '../media/VideoPlayer';
 
 export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
   const router = useRouter();
   const [projects, setProjects] = useState<CreativeProject[]>([]);
   const [selected, setSelected] = useState<string>();
-  const [projectView, setProjectView] = useState<'brief' | 'shots' | 'assets'>('brief');
+  const [projectView, setProjectView] = useState<'brief' | 'shots' | 'assets' | 'plans'>('brief');
   const [assets, setAssets] = useState<CreativeAsset[]>([]);
   const [title, setTitle] = useState('');
   const [brief, setBrief] = useState('');
@@ -90,6 +91,8 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
       </View> : null}
     </> : null}
     {mode === 'projects' && selected && projectView === 'shots' && !activeAsset ? <ProjectShots key={selected} projectId={selected} archived={Boolean(current?.archivedAt)} /> : null}
+    {mode === 'projects' && selected && !activeAsset ? action('选图与视频计划',()=>setProjectView('plans')) : null}
+    {mode === 'projects' && selected && projectView === 'plans' && !activeAsset ? <ProjectPlans key={selected} projectId={selected} archived={Boolean(current?.archivedAt)} /> : null}
     {activeAsset ? <View style={styles.card}>
       {action('返回素材列表', () => setActiveAsset(undefined))}<Text style={styles.title}>{activeAsset.title}</Text>
       {trash ? action('从回收站恢复',()=>void run(async()=>{await command({name:'asset.restore',payload:{id:activeAsset.id,expectedRevision:activeAsset.revision}});setActiveAsset(undefined);})) : <>

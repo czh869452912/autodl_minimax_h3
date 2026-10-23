@@ -4,6 +4,7 @@ import { readCreativeJobBinding, bindCreativeAdapter } from '../creative/boundEx
 import { createCreativeBudget } from '../creative/budget';
 import { archiveCreativeOutput } from '../creative/archiveOutput';
 import { migrateCreativeHistory } from '../creative/runtime';
+import { resumeCreativePlans } from '../creative/planRuntime';
 import { createNovelAiAdapter } from '../creative/novelAiAdapter';
 import { novelAiResponseStore } from '../creative/novelAiRuntime';
 import { recoverNovelAiResponses } from '../creative/novelAiRecovery';
@@ -228,6 +229,7 @@ function createApplicationExecutor(database: AppDatabase) {
   const executorRunner = createExecutorRunner({
     db: database, wakes: createExecutorWakeRepository(database),
     runCycle: async request => {
+      await resumeCreativePlans(database);
       await retireVideoConversion(database, { now: Date.now(), resolveUri: path => `${FileSystem.documentDirectory ?? ''}${path}`, fileExists: async uri => { const info = await FileSystem.getInfoAsync(uri); return info.exists && !info.isDirectory; } });
       const repair = await repairStaleTaskStatuses(database);
       const result = await cycle.run({ reason: request.trigger === 'background' ? 'background' : request.trigger === 'service' ? 'service' : 'foreground' });
