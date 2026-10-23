@@ -42,11 +42,21 @@ export const RESTORE_SAFETY_SCHEMA = [
 export const CREATIVE_DELIVERY_SCHEMA = [
   "CREATE TABLE IF NOT EXISTS creative_deliveries(id TEXT PRIMARY KEY,version_id TEXT NOT NULL REFERENCES creative_asset_versions(id) ON DELETE RESTRICT,file_role TEXT NOT NULL,target TEXT NOT NULL,generation INTEGER NOT NULL CHECK(generation>0),status TEXT NOT NULL CHECK(status IN ('QUEUED','PUBLISHING','EXPORTED','FAILED','DELIVERY_UNKNOWN','QUARANTINED')),operation_id TEXT NOT NULL UNIQUE REFERENCES workflow_operations(id) ON DELETE RESTRICT,publication_key TEXT NOT NULL UNIQUE,execution_epoch TEXT NOT NULL,destination_uri TEXT,error_code TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,UNIQUE(version_id,file_role,target,generation))",
 ] as const;
-export const APP_SCHEMA_VERSION = 17;
+export const CREATIVE_FILE_SCHEMA = [
+  "CREATE TABLE IF NOT EXISTS creative_file_resources(id TEXT PRIMARY KEY,version_id TEXT NOT NULL REFERENCES creative_asset_versions(id) ON DELETE RESTRICT,role TEXT NOT NULL,expected_sha256 TEXT,blob_sha256 TEXT REFERENCES artifact_blobs(sha256) ON DELETE RESTRICT,state TEXT NOT NULL CHECK(state IN ('PENDING','IMPORTING','AVAILABLE','MISSING','RESTORING','FAILED','EXTERNAL_ONLY')),last_verified_at INTEGER,error_code TEXT,revision INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,UNIQUE(version_id,role),CHECK(state!='AVAILABLE' OR (blob_sha256 IS NOT NULL AND expected_sha256 IS NOT NULL AND expected_sha256=blob_sha256)))",
+  "CREATE TABLE IF NOT EXISTS creative_recovery_sources(id TEXT PRIMARY KEY,resource_id TEXT NOT NULL REFERENCES creative_file_resources(id) ON DELETE RESTRICT,kind TEXT NOT NULL CHECK(kind IN ('provider_artifact','import_uri','backup')),locator_json TEXT NOT NULL CHECK(json_valid(locator_json)),persisted_permission INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS creative_file_attempts(id TEXT PRIMARY KEY,resource_id TEXT NOT NULL REFERENCES creative_file_resources(id) ON DELETE RESTRICT,state TEXT NOT NULL CHECK(state IN ('RESTORING','SUCCEEDED','FAILED')),started_at INTEGER NOT NULL,completed_at INTEGER,error_code TEXT)",
+  "INSERT OR IGNORE INTO creative_file_resources(id,version_id,role,expected_sha256,blob_sha256,state,last_verified_at,created_at,updated_at) SELECT f.version_id||':'||f.role,f.version_id,f.role,f.blob_sha256,f.blob_sha256,f.state,b.verified_at,b.created_at,b.verified_at FROM creative_version_files f JOIN artifact_blobs b ON b.sha256=f.blob_sha256",
+  "CREATE TRIGGER IF NOT EXISTS creative_resource_for_file AFTER INSERT ON creative_version_files BEGIN INSERT INTO creative_file_resources(id,version_id,role,expected_sha256,blob_sha256,state,last_verified_at,created_at,updated_at) SELECT NEW.version_id||':'||NEW.role,NEW.version_id,NEW.role,NEW.blob_sha256,NEW.blob_sha256,NEW.state,b.verified_at,b.created_at,b.verified_at FROM artifact_blobs b WHERE b.sha256=NEW.blob_sha256; END",
+  "CREATE TRIGGER IF NOT EXISTS creative_resource_hash_immutable BEFORE UPDATE OF expected_sha256 ON creative_file_resources WHEN OLD.expected_sha256 IS NOT NULL AND NEW.expected_sha256 IS NOT OLD.expected_sha256 BEGIN SELECT RAISE(ABORT,'RESOURCE_HASH_IMMUTABLE'); END",
+  "CREATE TRIGGER IF NOT EXISTS creative_resource_available BEFORE UPDATE ON creative_file_resources WHEN NEW.state='AVAILABLE' AND NOT EXISTS(SELECT 1 FROM creative_version_files f WHERE f.version_id=NEW.version_id AND f.role=NEW.role AND f.blob_sha256=NEW.blob_sha256) BEGIN SELECT RAISE(ABORT,'RESOURCE_ATTACHMENT_REQUIRED'); END",
+  "CREATE TRIGGER IF NOT EXISTS creative_file_state_projection AFTER UPDATE OF state ON creative_file_resources BEGIN UPDATE creative_version_files SET state=CASE WHEN NEW.state='AVAILABLE' THEN 'AVAILABLE' ELSE 'MISSING' END WHERE version_id=NEW.version_id AND role=NEW.role; END",
+] as const;
+export const APP_SCHEMA_VERSION = 18;
 export const RECOVERY_TABLE = 'app_database_recovery';
 
 export const APP_TABLES = [
-  'creative_deliveries',
+  'creative_file_attempts', 'creative_recovery_sources', 'creative_file_resources', 'creative_deliveries',
   ...CREATIVE_DOMAIN_TABLES,
   ...CREATIVE_CAPTURE_TABLES,
   'creative_restore_quarantine', 'creative_execution_state',
@@ -146,4 +156,4 @@ export const V13_SCHEMA_STATEMENTS = [
   'CREATE TRIGGER IF NOT EXISTS archive_task_delete AFTER DELETE ON tasks BEGIN DELETE FROM task_archives WHERE task_id=OLD.id; END',
 ] as const;
 
-export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS, ...V13_SCHEMA_STATEMENTS, ...CREATIVE_CAPTURE_SCHEMA, ...RESTORE_SAFETY_SCHEMA, ...CREATIVE_DOMAIN_SCHEMA, ...CREATIVE_DELIVERY_SCHEMA] as const;
+export const CURRENT_SCHEMA_STATEMENTS = [...V5_SCHEMA_STATEMENTS, ...V6_SCHEMA_STATEMENTS, ...V7_SCHEMA_STATEMENTS, ...V8_SCHEMA_STATEMENTS, ...V9_SCHEMA_STATEMENTS, ...V10_SCHEMA_STATEMENTS, ...V11_SCHEMA_STATEMENTS, ...V12_SCHEMA_STATEMENTS, ...V13_SCHEMA_STATEMENTS, ...CREATIVE_CAPTURE_SCHEMA, ...RESTORE_SAFETY_SCHEMA, ...CREATIVE_DOMAIN_SCHEMA, ...CREATIVE_DELIVERY_SCHEMA, ...CREATIVE_FILE_SCHEMA] as const;

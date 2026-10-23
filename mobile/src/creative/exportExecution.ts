@@ -43,7 +43,7 @@ export async function executeCreativeExport(db: AppDatabase, operation: Workflow
   if (!valid) {
     await withWriteTransaction(db, async tx => {
       if (!await authorized(tx)) throw new Error('EXPORT_LEASE_LOST');
-      await tx.runAsync("UPDATE creative_version_files SET state='MISSING' WHERE version_id=? AND role='original'", delivery.version_id);
+      await tx.runAsync("UPDATE creative_file_resources SET state='MISSING',error_code='EXPORT_SOURCE_MISSING',revision=revision+1,updated_at=? WHERE version_id=? AND role='original'", deps.now(), delivery.version_id);
     });
     await finish('FAILED', null, 'EXPORT_SOURCE_MISSING'); return;
   }

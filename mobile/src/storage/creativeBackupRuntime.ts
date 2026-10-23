@@ -74,3 +74,20 @@ export async function listCreativeFileBackups() {
   }
   return result.sort((a, b) => b.createdAt - a.createdAt);
 }
+
+/** Locate verified bytes only; this never activates the backup's database. */
+export async function findCreativeBackupFile(hash: string): Promise<{ backupId: string; uri: string; size: number } | undefined> {
+  if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('INVALID_CONTENT_HASH');
+  const { root, files } = runtimeFiles();
+  for (const backup of await listCreativeFileBackups()) {
+    try {
+      const manifest = parseCreativeBackup(await files.read(`creative-backups/${backup.id}/manifest.json`), backup.id);
+      if (manifest.sourceRoot !== root) continue;
+      for (const entry of manifest.files.filter(file => file.sha256 === hash)) {
+        const path = `creative-backups/${backup.id}/files/${entry.path}`;
+        if (await files.size(path) === entry.size && await files.hash(path) === hash) return { backupId: backup.id, uri: `${root}${path}`, size: entry.size };
+      }
+    } catch { /* Try another complete package after corruption or removal. */ }
+  }
+  return undefined;
+}

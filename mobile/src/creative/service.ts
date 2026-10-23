@@ -14,7 +14,7 @@ const schemas = {
   'project.create': z.object({ title, brief: z.string().max(20000).optional() }).strict(),
   'project.update': z.object({ id, expectedRevision: revision, title, brief: z.string().max(20000) }).strict(),
   'project.archive': z.object({ id, expectedRevision: revision, archived: z.boolean() }).strict(),
-  'asset.import': z.object({ title, kind: z.enum(['image','video','audio','prompt','document']), blobSha256: z.string().regex(/^[a-f0-9]{64}$/), projectId: id.optional() }).strict(),
+  'asset.import': z.object({ title, kind: z.enum(['image','video','audio','prompt','document']), blobSha256: z.string().regex(/^[a-f0-9]{64}$/), projectId: id.optional(), sourceUri: z.string().max(4000).regex(/^(file|content):\/\//).optional() }).strict(),
   'asset.setDefaultVersion': z.object({ id, versionId: id, expectedRevision: revision }).strict(),
   'asset.linkToProject': z.object({ assetId: id, projectId: id, versionId: id.nullable() }).strict(),
   'asset.unlinkFromProject': z.object({ assetId: id, projectId: id, expectedRevision: revision }).strict(),
@@ -93,6 +93,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
             await tx.runAsync('INSERT INTO creative_assets VALUES(?,?,?,?,0,?,?)', assetId, p.kind, p.title, versionId, now, now);
             await tx.runAsync("INSERT INTO creative_asset_versions VALUES(?,?,1,'import','{}',?)", versionId, assetId, now);
             await tx.runAsync("INSERT INTO creative_version_files VALUES(?,'original',?,'AVAILABLE')", versionId, p.blobSha256);
+            if (p.sourceUri) await tx.runAsync("INSERT INTO creative_recovery_sources(id,resource_id,kind,locator_json,persisted_permission,created_at) VALUES(?,?,'import_uri',?,0,?)", deps.id(), `${versionId}:original`, JSON.stringify({ uri: p.sourceUri }), now);
             await tx.runAsync("INSERT INTO artifact_blob_refs VALUES(?,'creative_version',?,?)", p.blobSha256, versionId, now);
             if (p.projectId) await tx.runAsync('INSERT INTO creative_project_assets VALUES(?,?,?,0)', p.projectId, assetId, versionId);
             value = { assetId, versionId }; break;

@@ -8,7 +8,7 @@ export type CreativeCommand =
   | { name: 'project.create'; payload: { title: string; brief?: string } }
   | { name: 'project.update'; payload: { id: string; expectedRevision: number; title: string; brief: string } }
   | { name: 'project.archive'; payload: { id: string; expectedRevision: number; archived: boolean } }
-  | { name: 'asset.import'; payload: { title: string; kind: CreativeAsset['kind']; blobSha256: string; projectId?: string } }
+  | { name: 'asset.import'; payload: { title: string; kind: CreativeAsset['kind']; blobSha256: string; projectId?: string; sourceUri?: string } }
   | { name: 'asset.setDefaultVersion'; payload: { id: string; versionId: string; expectedRevision: number } }
   | { name: 'asset.linkToProject'; payload: { assetId: string; projectId: string; versionId: string | null } }
   | { name: 'asset.unlinkFromProject'; payload: { assetId: string; projectId: string; expectedRevision: number } };
