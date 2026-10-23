@@ -34,7 +34,7 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     if(source.shot_id&&!await tx.getFirstAsync('SELECT id FROM creative_shots WHERE id=? AND deleted_at IS NULL',source.shot_id))throw new Error('SHOT_NOT_AVAILABLE');
     const draftId=makeId();
     await tx.runAsync("INSERT INTO creative_generation_drafts SELECT ?,project_id,shot_id,target_asset_id,provider_id,workflow_id,input_json,0,'EDITING',NULL,?,? FROM creative_generation_drafts WHERE id=?",draftId,now,now,p.id);
-    await tx.runAsync('INSERT INTO creative_draft_inputs SELECT ?,role,ordinal,version_id FROM creative_draft_inputs WHERE draft_id=?',draftId,p.id);
+    await tx.runAsync('INSERT INTO creative_draft_inputs SELECT ?,slot,ordinal,version_id FROM creative_draft_inputs WHERE draft_id=?',draftId,p.id);
     return {draftId,provider:source.provider_id,supersedesJobId:source.job_id};
   }
   if (name === 'draft.createImage') {
