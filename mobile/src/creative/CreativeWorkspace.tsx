@@ -10,6 +10,8 @@ import { COLORS } from '../ui/theme';
 import { ListAction } from '../ui/ListPageUI';
 import { ProjectShots } from './ProjectShots';
 import { ProjectPlans } from './ProjectPlans';
+import { pickCreativeFiles } from './fileImport';
+import { CREATIVE_FILE_MIMES,creativeExportTarget } from './fileFormats';
 import { VideoPlayer } from '../media/VideoPlayer';
 
 export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
@@ -106,11 +108,11 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
         <Text style={styles.body}>版本 {v.versionNo} · {activeAsset.currentVersionId === v.id ? '默认版本' : '候选版本'} · {v.state === 'AVAILABLE' ? '本地可用' : '文件待恢复'}</Text>
         {v.relativePath && v.mime?.startsWith('image/') ? <Image accessibilityLabel={`版本 ${v.versionNo} 预览`} source={{ uri: `${FileSystem.documentDirectory}${v.relativePath}` }} style={styles.preview} resizeMode="contain" /> : null}
         {v.state === 'AVAILABLE' && v.relativePath && v.mime?.startsWith('video/') ? <VideoPlayer source={`${FileSystem.documentDirectory}${v.relativePath}`} /> : null}
-        {v.state === 'AVAILABLE' && ['image/png','image/jpeg','image/webp'].includes(v.mime ?? '') ? action('保存到系统相册', () => void run(() => exportCreativeVersion(v.id))) : null}
+        {v.state === 'AVAILABLE' && (CREATIVE_FILE_MIMES as readonly string[]).includes(v.mime ?? '') ? action(creativeExportTarget(v.mime??'')==='system-gallery'?'保存到系统相册':'保存到下载文件夹', () => void run(() => exportCreativeVersion(v.id))) : null}
         {v.state !== 'AVAILABLE' && activeAsset.kind === 'image' ? <><Text style={styles.body}>版本记录仍保留。请重新选择原始图片；内容不同会拒绝替换。</Text>{action('重新定位原图', () => void run(async () => { const [image] = await pickImagesFromGallery(1); if (image) { await restoreCreativeImage(v.id, image); await inspect(activeAsset); } }))}</> : null}
         {v.state !== 'AVAILABLE' && activeAsset.kind === 'image' ? action('从文件备份找回', () => void run(async () => { await restoreCreativeImageFromBackup(v.id); await inspect(activeAsset); })) : null}
-        {deliveries[v.id] ? <Text style={styles.body}>{({ QUEUED: '等待保存', PUBLISHING: '正在保存', EXPORTED: '已保存到系统相册', FAILED: '保存失败，请检查源文件', DELIVERY_UNKNOWN: '保存结果不确定，请先检查系统相册', QUARANTINED: '恢复的保存操作已隔离，未重新执行' } as Record<string, string>)[deliveries[v.id]!.status]}</Text> : null}
-        {deliveries[v.id] && ['EXPORTED','FAILED','DELIVERY_UNKNOWN','QUARANTINED'].includes(deliveries[v.id]!.status) ? action('另存一份', () => Alert.alert('另存一份图片', '这会发起新的保存操作，系统相册中可能出现重复图片。', [{ text: '取消', style: 'cancel' }, { text: '继续保存', onPress: () => void run(() => exportCreativeVersion(v.id, deliveries[v.id]!.generation + 1)) }])) : null}
+        {deliveries[v.id] ? <Text style={styles.body}>{({ QUEUED: '等待保存', PUBLISHING: '正在保存', EXPORTED: '文件已保存', FAILED: '保存失败，请检查源文件', DELIVERY_UNKNOWN: '保存结果不确定，请先检查相册或下载文件夹', QUARANTINED: '恢复的保存操作已隔离，未重新执行' } as Record<string, string>)[deliveries[v.id]!.status]}</Text> : null}
+        {deliveries[v.id] && ['EXPORTED','FAILED','DELIVERY_UNKNOWN','QUARANTINED'].includes(deliveries[v.id]!.status) ? action('另存一份', () => Alert.alert('另存一份文件', '这会发起新的保存操作，目标文件夹中可能出现重复文件。', [{ text: '取消', style: 'cancel' }, { text: '继续保存', onPress: () => void run(() => exportCreativeVersion(v.id, deliveries[v.id]!.generation + 1)) }])) : null}
         {v.state === 'AVAILABLE' ? action('设为默认版本', () => void run(async () => { await command({ name: 'asset.setDefaultVersion', payload: { id: activeAsset.id, versionId: v.id, expectedRevision: activeAsset.revision } }); const updated = (await creativeService().assets()).find(a => a.id === activeAsset.id); if (updated) await inspect(updated); })) : null}
         {typeof v.recipe.jobId === 'string' ? <Text style={styles.body}>来源任务：{v.recipe.jobId}</Text> : null}
         {Array.isArray(v.recipe.notices) ? v.recipe.notices.map((notice,i)=><Text key={i} style={styles.body}>{String(notice)}</Text>) : null}
@@ -127,6 +129,7 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
       {links.filter(l => l.pinned_version_id).map(l => <View key={l.project_id}>{action(`让 ${l.title} 跟随默认版本`, () => void run(async () => { await command({ name: 'asset.pinProjectVersion', payload: { assetId: activeAsset.id, projectId: l.project_id, expectedRevision: l.revision, versionId: null } }); await inspect(activeAsset); }))}</View>)}
     </View> : mode === 'assets' || (selected && projectView === 'assets') ? <>
       <View style={styles.row}>{action('导入图片', () => void addImages(), false)}{mode === 'assets' ? action(inbox ? '全部资产' : '收件箱', () => setInbox(!inbox)) : null}</View>
+      {action('导入视频、音频或文档（最多 100MB）',()=>void run(()=>pickCreativeFiles(mode==='projects'?selected:undefined)))}
       <TextInput accessibilityLabel="搜索资产" placeholder="搜索资产名称" value={query} onChangeText={setQuery} style={styles.input} />
       {mode==='assets'?action(trash?'返回全部资产':'回收站',()=>{setTrash(!trash);setInbox(false);}):null}
       {!assets.length ? <Text style={styles.body}>还没有素材。导入图片后可加入多个项目，文件只保留一份。</Text> : null}

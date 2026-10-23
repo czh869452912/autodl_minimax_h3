@@ -37,12 +37,22 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   private val publisher = MediaStorePublisher(context.contentResolver)
   private val creativePublisher = CreativeImagePublisher(
     AndroidMediaStoreGateway(context.contentResolver, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI),
-    { source ->
+    sourceOpener = { source ->
       val uri = Uri.parse(source)
       require(uri.scheme == "file") { "Expected private image file" }
       File(requireNotNull(uri.path)).inputStream()
     },
   )
+  private val creativeVideoPublisher = CreativeImagePublisher(AndroidMediaStoreGateway(context.contentResolver), "Movies/AutoDL-H3/") { source ->
+    val uri=Uri.parse(source);require(uri.scheme=="file");File(requireNotNull(uri.path)).inputStream()
+  }
+  private val creativeFilePublisher by lazy { CreativeImagePublisher(AndroidMediaStoreGateway(context.contentResolver,android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI), "Download/AutoDL-H3/") { source ->
+    val uri=Uri.parse(source);require(uri.scheme=="file");File(requireNotNull(uri.path)).inputStream()
+  } }
+  private fun creativePublisherFor(mime:String):CreativeImagePublisher {
+    check(android.os.Build.VERSION.SDK_INT>=29){"Creative export requires Android 10 or newer"}
+    return if(mime.startsWith("image/"))creativePublisher else if(mime.startsWith("video/"))creativeVideoPublisher else creativeFilePublisher
+  }
   private val integrity = MediaIntegrity(context)
   private val novelAi = NovelAiTransport(File(context.filesDir, "creative-responses"))
   private val compatibility = VideoCompatibility(context)
@@ -281,16 +291,16 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   @ReactMethod
   fun exportCreativeImage(source: String, key: String, mime: String, hash: String, promise: Promise) {
     executors.executeMedia {
-      try { promise.resolve(creativePublisher.publish(source, key, mime, hash)) }
-      catch (error: Exception) { promise.reject("CREATIVE_EXPORT_FAILED", "图片保存结果需核对", error) }
+      try { promise.resolve(creativePublisherFor(mime).publish(source, key, mime, hash)) }
+      catch (error: Exception) { promise.reject("CREATIVE_EXPORT_FAILED", "文件保存结果需核对", error) }
     }
   }
 
   @ReactMethod
   fun lookupCreativeImage(key: String, mime: String, hash: String, promise: Promise) {
     executors.executeMedia {
-      try { promise.resolve(creativePublisher.lookup(key, mime, hash)) }
-      catch (error: Exception) { promise.reject("CREATIVE_LOOKUP_FAILED", "无法核对图片保存结果", error) }
+      try { promise.resolve(creativePublisherFor(mime).lookup(key, mime, hash)) }
+      catch (error: Exception) { promise.reject("CREATIVE_LOOKUP_FAILED", "无法核对文件保存结果", error) }
     }
   }
 

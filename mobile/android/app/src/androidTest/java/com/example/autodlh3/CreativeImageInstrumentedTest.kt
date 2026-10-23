@@ -13,6 +13,23 @@ import java.util.UUID
 
 @RunWith(AndroidJUnit4::class)
 class CreativeImageInstrumentedTest {
+  @Test fun standaloneDocumentPublishesToDownloadsAndRecoversWithoutSource() {
+    val context=InstrumentationRegistry.getInstrumentation().targetContext
+    val source=File(context.cacheDir,"creative-${UUID.randomUUID()}.txt")
+    source.writeText("天文台设定\nCamera orbit, soft daylight.")
+    val hash=source.inputStream().use(MediaIntegrity::sha256)
+    val key=MediaIntegrity.sha256(UUID.randomUUID().toString().byteInputStream())
+    val gateway=AndroidMediaStoreGateway(context.contentResolver,MediaStore.Downloads.EXTERNAL_CONTENT_URI)
+    val publisher=CreativeImagePublisher(gateway,"Download/AutoDL-H3/"){File(Uri.parse(it).path!!).inputStream()}
+    var uri:String?=null
+    try{
+      uri=publisher.publish(Uri.fromFile(source).toString(),key,"text/plain",hash)
+      assertEquals(uri,publisher.publish(Uri.fromFile(source).toString(),key,"text/plain",hash))
+      assertEquals(hash,gateway.openInput(uri)!!.use(MediaIntegrity::sha256))
+      assertEquals(1,gateway.query("creative-$key.txt","Download/AutoDL-H3/").size)
+      source.delete();assertEquals(uri,publisher.lookup(key,"text/plain",hash))
+    }finally{uri?.let(gateway::delete);source.delete()}
+  }
   @Test fun exportsAndReconcilesStandaloneImageWithoutDuplicatingIt() {
     val context = InstrumentationRegistry.getInstrumentation().targetContext
     val source = File(context.cacheDir, "creative-${UUID.randomUUID()}.png")

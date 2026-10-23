@@ -4,13 +4,13 @@ import { createOperationRepository } from '../workflows/executor/operationReposi
 import { executeCreativeExport } from './exportExecution';
 import { quarantineRestoredExecution } from '../storage/restoreIsolation';
 
-async function fixture() {
+async function fixture(mime='image/png',kind:'image'|'video'|'audio'|'document'='image') {
   const db = createInitializedRealSqliteTestDb(); db.execSync('PRAGMA foreign_keys=ON');
   let next = 0, now = 100;
   const hash = 'a'.repeat(64);
   const service = createCreativeService(db as never, { id: () => `export-${++next}`, now: () => now });
-  db.runSync('INSERT INTO artifact_blobs VALUES(?,10,?,?,1,1)', hash, 'image/png', `cas/${hash}`);
-  const imported = await service.execute({ name: 'asset.import', payload: { title: 'standalone', kind: 'image', blobSha256: hash } }, 'import');
+  db.runSync('INSERT INTO artifact_blobs VALUES(?,10,?,?,1,1)', hash, mime, `cas/${hash}`);
+  const imported = await service.execute({ name: 'asset.import', payload: { title: 'standalone', kind, blobSha256: hash } }, 'import');
   if (imported.status !== 'completed') throw new Error('expected import');
   const command = { name: 'asset.export' as const, payload: { versionId: imported.value.versionId } };
   const result = await service.execute(command, 'save');
@@ -41,6 +41,16 @@ test('standalone export uses no job; repeated commands and scheduler wakes publi
     expect(f.db.getAllSync("SELECT * FROM artifact_blob_refs WHERE owner_type='creative_delivery'")).toEqual([]);
     expect(f.db.getAllSync("SELECT * FROM artifact_blob_refs WHERE owner_type='creative_version'")).toHaveLength(1);
   } finally { f.db.close(); }
+});
+
+test.each([['video/mp4','video','system-gallery'],['audio/mpeg','audio','system-downloads'],['application/pdf','document','system-downloads'],['text/plain','document','system-downloads']] as const)('standalone %s export requires no generation task and preserves its original',async(mime,kind,target)=>{
+  const f=await fixture(mime,kind);try{
+    expect(f.db.getFirstSync('SELECT target FROM creative_deliveries')).toEqual({target});
+    await f.run();expect(f.status()).toBe('EXPORTED');
+    expect(f.deps.publish).toHaveBeenCalledWith(expect.any(String),expect.any(String),mime,'a'.repeat(64));
+    expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toEqual([]);
+    expect(f.db.getAllSync("SELECT * FROM artifact_blob_refs WHERE owner_type='creative_version'")).toHaveLength(1);
+  }finally{f.db.close();}
 });
 
 test.each([true, false])('lost receipt recovers via lookup only (found=%s)', async found => {

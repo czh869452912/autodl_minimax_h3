@@ -5,12 +5,18 @@ import java.io.InputStream
 /** Stable publication identity is independent from user-supplied image titles. */
 class CreativeImagePublisher(
   private val gateway: MediaStoreGateway,
+  private val relativePath: String = "Pictures/AutoDL-H3/",
   private val sourceOpener: (String) -> InputStream,
 ) {
-  private val relativePath = "Pictures/AutoDL-H3/"
   private fun name(key: String, mime: String): String {
     require(Regex("[a-f0-9]{64}").matches(key)) { "Invalid publication key" }
-    val extension = when (mime) { "image/png" -> "png"; "image/jpeg" -> "jpg"; "image/webp" -> "webp"; else -> throw IllegalArgumentException("Unsupported image type") }
+    val extension = when (mime) {
+      "image/png" -> "png"; "image/jpeg" -> "jpg"; "image/webp" -> "webp"
+      "video/mp4" -> "mp4"; "video/webm" -> "webm"
+      "audio/mpeg" -> "mp3"; "audio/mp4" -> "m4a"; "audio/wav" -> "wav"; "audio/ogg" -> "ogg"
+      "text/plain" -> "txt"; "text/markdown" -> "md"; "application/json" -> "json"; "application/pdf" -> "pdf"
+      else -> throw IllegalArgumentException("Unsupported creative file type")
+    }
     return "creative-$key.$extension"
   }
   fun lookup(key: String, mime: String, hash: String): String? {

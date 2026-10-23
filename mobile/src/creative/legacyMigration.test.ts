@@ -67,3 +67,16 @@ test('migration mapping failure rolls back versions and pins and can resume', as
     expect(await f.service.assets()).toHaveLength(1);
   } finally { f.db.close(); }
 });
+test('legacy mutation during file copy cannot attach stale bytes before journal replay',async()=>{
+  const f=fixture();try{
+    f.insert('a');f.db.runSync("UPDATE media_assets SET local_path='file:///old.mp4' WHERE id='a'");
+    const release=jest.fn(async()=>undefined);
+    await migrateLegacyCreativeBatch(f.db as never,{importLocal:async()=>{
+      f.db.runSync("UPDATE media_assets SET local_path='file:///new.mp4',prompt='new prompt',updated_at=2 WHERE id='a'");
+      return {hash:f.hash,release};
+    }},30);
+    expect(await f.service.assets()).toHaveLength(0);expect(release).toHaveBeenCalledTimes(1);
+    await migrateLegacyCreativeBatch(f.db as never,{importLocal:async uri=>{expect(uri).toBe('file:///new.mp4');return {hash:f.hash,release};}},30);
+    const a=(await f.service.assets())[0];expect((await f.service.versions(a.id))[0].recipe.prompt).toBe('new prompt');
+  }finally{f.db.close();}
+});

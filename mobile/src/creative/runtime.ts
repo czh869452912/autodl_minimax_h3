@@ -10,10 +10,11 @@ import { createFileResources } from './fileResources';
 import { findCreativeBackupFile } from '../storage/creativeBackupRuntime';
 import { migrateLegacyCreativeBatch } from './legacyMigration';
 import { NativeModules } from 'react-native';
+import { stageCreativeFile } from './fileImport';
 
 export function migrateCreativeHistory(db = getDatabase()) {
   return migrateLegacyCreativeBatch(db, { importLocal: async (uri, mimeType) => {
-    const staged = await createAttachmentStore(db).externalize({ uri, mimeType, name: 'historical-media' });
+    const staged = await createAttachmentStore(db,{importImage:stageCreativeFile}).externalize({ type:'url',value:uri,mimeType });
     return { hash: staged.hashes[0] ?? '', release: staged.releaseStaging };
   } }, 5);
 }

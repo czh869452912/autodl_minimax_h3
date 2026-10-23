@@ -29,6 +29,9 @@ export async function migrateLegacyCreativeBatch(db: AppDatabase, deps: Dependen
       await withWriteTransaction(db, async tx => {
         const current = await tx.getFirstAsync<Head>("SELECT * FROM creative_projection_heads WHERE projection_kind='legacy_media' AND entity_id=?", head.entity_id);
         if (!current || current.epoch !== head.epoch || current.applied_revision !== head.applied_revision) return;
+        // File copying occurs outside this transaction. A concurrent legacy writer
+        // may have changed the source before its journal event reaches the head.
+        if(await tx.getFirstAsync('SELECT sequence FROM creative_legacy_changes WHERE source_id=? AND sequence>? LIMIT 1',head.entity_id,head.applied_revision))return;
         const map = await tx.getFirstAsync<{ asset_id: string; version_id: string; epoch: number; applied_revision: number; deleted: number }>('SELECT * FROM creative_legacy_assets WHERE source_id=?', head.entity_id);
         if (map && map.epoch === head.epoch && map.applied_revision >= head.applied_revision) return;
         const live = await tx.getFirstAsync<{ id: string }>('SELECT id FROM media_assets WHERE id=?', head.entity_id);
