@@ -1,6 +1,6 @@
 # 综合创作 App 实施记录
 
-基线：[交互与数据设计 v1.3](creative-app-interaction-data-design.md)。2026-10-23 开始实施。数据库当前为 v27，交付版本为 1.5.0-preview.2。已实现首条创作链及下列增量；整体路线尚未全部完成，旧媒体迁移仍为 CATCHUP，真实服务及手机交互验收未通过前不视为正式发布。
+基线：[交互与数据设计 v1.3](creative-app-interaction-data-design.md)。2026-10-23 开始实施。数据库当前为 v27，交付版本为 1.5.0-preview.3。已实现首条创作链及下列增量；整体路线尚未全部完成，旧媒体迁移仍为 CATCHUP，真实服务及手机交互验收未通过前不视为正式发布。
 
 ## 增量 01：任务与输出引用兼容
 
@@ -332,3 +332,11 @@
 - 在一致数据库快照内核对待回放 journal、未迁入记录、迟到映射、映射归属、原件 pin、文件状态及 FK。页面展示具体计数。
 - 数据追平不等于写入源可切换；writer_ready 未满足时 canCutover 始终为 false，保留 PRIMARY 保护。文件状态计数不冒充实际文件逐个校验。
 - 类型检查及 9 项对账/迁移/页面测试通过，覆盖丢失 pin 与追平后的新旧写入。
+
+## 增量 45：第三个预览包回归与安装
+
+- 版本 1.5.0-preview.3 / versionCode 41，数据库 v27。包含增量 33–44。
+- 类型检查通过；203 套 / 1382 项 JS 测试通过，1 套 / 2 项既有跳过；64 项原生 JVM 测试通过。PDF 实际渲染仪器测试已通过，2 项图片/文本发布仪器测试在此前预览验证。5 个进程恢复场景 / 10 个进程通过；36 个技能包文件和 2 个固定工作流包校验通过。
+- ARM64+x86_64 APK 构建成功并覆盖安装 emulator-5554（Success）。交付路径：`build/creative-preview/creative-app-1.5.0-preview.3.apk`，SHA-256：`269bb5e36467536b96ad916be8667e8951f2ec802258ece102d24f32186d0e04`。
+- 进程恢复证据目录：`C:/Users/czh86/AppData/Local/Temp/h3-process-recovery-nPateG`。日志保留 mobile/test-creative-preview3.log、build-creative-preview3.log、test-creative-process-preview3.log、test-creative-pdf-native.log（日志不入 Git）。
+- 尚无新版 app 实际生成验收，等待用户在设备安全输入凭据。未完成项仍以预览验收说明为准，不将此包标为整条路线完成。

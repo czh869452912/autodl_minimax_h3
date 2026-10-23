@@ -1,6 +1,6 @@
 # 综合创作预览版验收与复测索引
 
-交付版本：`1.5.0-preview.2`，Android versionCode 40，SQLite v27，分支 `codex/creative-app`。
+交付版本：`1.5.0-preview.3`，Android versionCode 41，SQLite v27，分支 `codex/creative-app`。
 
 这是可安装的开发预览，不是整条 6–10 周路线的正式发布。每个实现增量均独立提交，详见 [实施记录](creative-app-implementation-status.md)。设计 v1.3 保留为原始基线；此文件记录实际交付边界。
 
@@ -61,3 +61,5 @@ $env:NODE_ENV='production'
 最终测试统计、APK SHA-256 和交付路径以实施记录末尾为准。
 
 第二个预览新增：项目固定封面/页签恢复、非图片重新定位恢复、双版本对照、Prompt/文档创建与 Agent 写入、项目/镜头 Agent 修改前后审阅、旧入口成果事务归档及提交草稿的显式复制。复制新草稿不会继承消费授权。
+
+第三个预览新增：明确的视频计划规格、提交/导出与回收竞争保护、旧删除采用保护、人工文本修订、Agent 文本分段读取、参数字段差异、音频试听、离线 PDF 翻页、补下载状态恢复及迁移一致性对账。以上自动化验证不代替真实账号联调。
