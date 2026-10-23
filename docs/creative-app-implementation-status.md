@@ -340,3 +340,8 @@
 - ARM64+x86_64 APK 构建成功并覆盖安装 emulator-5554（Success）。交付路径：`build/creative-preview/creative-app-1.5.0-preview.3.apk`，SHA-256：`269bb5e36467536b96ad916be8667e8951f2ec802258ece102d24f32186d0e04`。
 - 进程恢复证据目录：`C:/Users/czh86/AppData/Local/Temp/h3-process-recovery-nPateG`。日志保留 mobile/test-creative-preview3.log、build-creative-preview3.log、test-creative-process-preview3.log、test-creative-pdf-native.log（日志不入 Git）。
 - 尚无新版 app 实际生成验收，等待用户在设备安全输入凭据。未完成项仍以预览验收说明为准，不将此包标为整条路线完成。
+
+## 增量 46：旧刷新下载入口绑定原账号
+
+- 创作任务从旧任务中心刷新远端下载地址时，按原请求凭据代次只读查询；账号切换后不会改用默认设置。凭据撤销/身份不符立即拒绝，不兜底。无创作绑定的历史任务保留原设置路径。
+- 类型检查及提交/旧命令/设置共 30 项测试通过，新增验证换账号后仍读原账号、身份不符拒绝、断开拒绝和纯旧任务兼容。

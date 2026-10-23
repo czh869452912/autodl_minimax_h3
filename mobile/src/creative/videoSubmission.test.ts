@@ -1,3 +1,4 @@
+import {resolveCreativeQueryCredential} from './queryCredential';
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { createCreativeService } from './service';
 import { createCreativeAccounts } from './accounts';
@@ -187,5 +188,19 @@ test('verified redownload restores missing output state, rejects different bytes
     expect(f.db.getFirstSync('SELECT state,error_code FROM creative_file_resources')).toEqual({state:'AVAILABLE',error_code:null});
     expect(f.db.getFirstSync('SELECT id FROM creative_asset_versions')).toEqual(before);
     expect(f.db.getAllSync('SELECT * FROM creative_asset_versions')).toHaveLength(1);
+  }finally{f.db.close();}
+});
+
+
+test('legacy source refresh for creative tasks resolves the original query account, never a replacement default',async()=>{
+  const f=await fixture();try{
+    const task=await f.submit();await f.accounts.connect('autodl','replacement-secret');
+    const resolve=jest.fn((id:string,use:'query')=>f.accounts.resolveExact(id,use));
+    const result=await resolveCreativeQueryCredential(f.db as never,task.id,resolve);
+    expect(result?.token).toBe('original-secret');expect(resolve).toHaveBeenCalledWith(f.identity.generationId,'query');
+    await expect(resolveCreativeQueryCredential(f.db as never,task.id,async()=>({token:'wrong',accountId:'other',generationId:'other',provider:'autodl'}))).rejects.toThrow('IDENTITY_MISMATCH');
+    await f.accounts.disconnect('autodl');
+    await expect(resolveCreativeQueryCredential(f.db as never,task.id,resolve)).rejects.toThrow('INACTIVE');
+    expect(await resolveCreativeQueryCredential(f.db as never,'unbound-legacy',resolve)).toBeNull();
   }finally{f.db.close();}
 });
