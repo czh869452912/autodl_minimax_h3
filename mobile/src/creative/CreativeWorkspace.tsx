@@ -1,8 +1,8 @@
-import { useCallback, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
-import { creativeService, importCreativeImage } from './runtime';
+import { creativeService, importCreativeImage, exportCreativeVersion } from './runtime';
 import type { AssetVersion, CreativeAsset, CreativeCommand, CreativeProject } from './types';
 import { pickImagesFromGallery } from '../native/imagePicker';
 import { createId } from '../ids';
@@ -25,6 +25,18 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
   const [error, setError] = useState('');
   const [activeAsset, setActiveAsset] = useState<CreativeAsset>();
   const [versions, setVersions] = useState<AssetVersion[]>([]);
+  const [deliveries, setDeliveries] = useState<Record<string, { status: string; generation: number } | undefined>>({});
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      if (!activeAsset) return;
+      const rows = await Promise.all(versions.map(async v => [v.id, (await creativeService().deliveries(v.id))[0]] as const));
+      if (!cancelled) setDeliveries(Object.fromEntries(rows));
+    };
+    void poll().catch(() => undefined);
+    const timer = setInterval(() => { void poll().catch(() => undefined); }, 2000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [activeAsset, versions]);
   const [links, setLinks] = useState<Array<{ project_id: string; title: string; pinned_version_id: string | null; revision: number }>>([]);
   const current = projects.find(p => p.id === selected);
   const refresh = useCallback(async () => {
@@ -72,6 +84,9 @@ export function CreativeWorkspace({ mode }: { mode: 'projects' | 'assets' }) {
       {versions.map(v => <View key={v.id} style={styles.card}>
         <Text style={styles.body}>版本 {v.versionNo} · {activeAsset.currentVersionId === v.id ? '默认版本' : '候选版本'} · {v.state === 'AVAILABLE' ? '本地可用' : '文件待恢复'}</Text>
         {v.relativePath && v.mime?.startsWith('image/') ? <Image accessibilityLabel={`版本 ${v.versionNo} 预览`} source={{ uri: `${FileSystem.documentDirectory}${v.relativePath}` }} style={styles.preview} resizeMode="contain" /> : null}
+        {v.state === 'AVAILABLE' && ['image/png','image/jpeg','image/webp'].includes(v.mime ?? '') ? action('保存到系统相册', () => void run(() => exportCreativeVersion(v.id))) : null}
+        {deliveries[v.id] ? <Text style={styles.body}>{({ QUEUED: '等待保存', PUBLISHING: '正在保存', EXPORTED: '已保存到系统相册', FAILED: '保存失败，请检查源文件', DELIVERY_UNKNOWN: '保存结果不确定，请先检查系统相册', QUARANTINED: '恢复的保存操作已隔离，未重新执行' } as Record<string, string>)[deliveries[v.id]!.status]}</Text> : null}
+        {deliveries[v.id] && ['EXPORTED','FAILED','DELIVERY_UNKNOWN','QUARANTINED'].includes(deliveries[v.id]!.status) ? action('另存一份', () => Alert.alert('另存一份图片', '这会发起新的保存操作，系统相册中可能出现重复图片。', [{ text: '取消', style: 'cancel' }, { text: '继续保存', onPress: () => void run(() => exportCreativeVersion(v.id, deliveries[v.id]!.generation + 1)) }])) : null}
         {v.state === 'AVAILABLE' ? action('设为默认版本', () => void run(async () => { await command({ name: 'asset.setDefaultVersion', payload: { id: activeAsset.id, versionId: v.id, expectedRevision: activeAsset.revision } }); const updated = (await creativeService().assets()).find(a => a.id === activeAsset.id); if (updated) await inspect(updated); })) : null}
         {projects.filter(p => !p.archivedAt && !links.some(l => l.project_id === p.id)).map(p => <View key={p.id}>{action(`加入 ${p.title}（固定此版本）`, () => void run(async () => { await command({ name: 'asset.linkToProject', payload: { assetId: activeAsset.id, projectId: p.id, versionId: v.id } }); await inspect(activeAsset); }))}</View>)}
       </View>)}

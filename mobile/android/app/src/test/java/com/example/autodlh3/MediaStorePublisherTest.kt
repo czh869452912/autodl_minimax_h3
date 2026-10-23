@@ -39,6 +39,31 @@ private class FakeMediaStoreGateway(
 }
 
 class MediaStorePublisherTest {
+  @Test fun creativePublicationUsesStableIdentityAndVerifiedLookup() {
+    val bytes = "image contents".toByteArray()
+    val gateway = FakeMediaStoreGateway()
+    val publisher = CreativeImagePublisher(gateway) { ByteArrayInputStream(bytes) }
+    val hash = MediaIntegrity.sha256(ByteArrayInputStream(bytes))
+    val key = "a".repeat(64)
+    val uri = publisher.publish("ignored", key, "image/png", hash)
+    assertEquals(uri, publisher.lookup(key, "image/png", hash))
+    assertEquals(uri, publisher.publish("ignored", key, "image/png", hash))
+    assertEquals(1, gateway.inserts)
+    assertEquals(null, publisher.lookup(key, "image/png", "b".repeat(64)))
+    assertEquals(emptyList<String>(), gateway.deleted)
+  }
+
+  @Test fun creativePublicationDoesNotOverwriteAmbiguousTargets() {
+    val bytes = "image contents".toByteArray()
+    val gateway = FakeMediaStoreGateway(listOf(MediaStoreEntry("content://pending", true)))
+    val publisher = CreativeImagePublisher(gateway) { ByteArrayInputStream(bytes) }
+    try {
+      publisher.publish("ignored", "a".repeat(64), "image/webp", MediaIntegrity.sha256(ByteArrayInputStream(bytes)))
+      throw AssertionError("expected reconciliation")
+    } catch (_: IllegalStateException) { }
+    assertEquals(0, gateway.inserts)
+    assertEquals(emptyList<String>(), gateway.deleted)
+  }
   private val sourceBytes = "new-video-content".toByteArray()
   private fun publisher(gateway: FakeMediaStoreGateway) = MediaStorePublisher(gateway) { ByteArrayInputStream(sourceBytes) }
 

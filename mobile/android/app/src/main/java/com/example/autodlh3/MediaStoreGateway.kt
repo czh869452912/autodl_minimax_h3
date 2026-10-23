@@ -19,11 +19,11 @@ interface MediaStoreGateway {
   fun delete(uri: String)
 }
 
-class AndroidMediaStoreGateway(private val resolver: ContentResolver) : MediaStoreGateway {
+class AndroidMediaStoreGateway(private val resolver: ContentResolver, private val collection: Uri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI) : MediaStoreGateway {
   override fun query(displayName: String, relativePath: String): List<MediaStoreEntry> {
     val results = mutableListOf<MediaStoreEntry>()
     resolver.query(
-      MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+      collection,
       arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.IS_PENDING),
       "${MediaStore.Video.Media.DISPLAY_NAME} = ? AND ${MediaStore.Video.Media.RELATIVE_PATH} = ?",
       arrayOf(displayName, relativePath),
@@ -33,7 +33,7 @@ class AndroidMediaStoreGateway(private val resolver: ContentResolver) : MediaSto
       val pendingColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.IS_PENDING)
       while (cursor.moveToNext()) {
         results += MediaStoreEntry(
-          ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, cursor.getLong(idColumn)).toString(),
+          ContentUris.withAppendedId(collection, cursor.getLong(idColumn)).toString(),
           cursor.getInt(pendingColumn) != 0,
         )
       }
@@ -48,7 +48,7 @@ class AndroidMediaStoreGateway(private val resolver: ContentResolver) : MediaSto
       put(MediaStore.Video.Media.RELATIVE_PATH, relativePath)
       put(MediaStore.Video.Media.IS_PENDING, 1)
     }
-    return resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)?.toString()
+    return resolver.insert(collection, values)?.toString()
       ?: throw IllegalStateException("无法创建系统媒体文件")
   }
 

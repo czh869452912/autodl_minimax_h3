@@ -3,12 +3,14 @@ import { z } from 'zod';
 import type { AppDatabase } from '../storage/appDatabase';
 import { withWriteTransaction } from '../storage/sqliteBusy';
 import { createId } from '../ids';
-import type { AssetVersion, CommandResult, CreativeAsset, CreativeCommand, CreativeProject } from './types';
+import type { AssetVersion, AsyncExecutionRef, CommandResult, CreativeAsset, CreativeCommand, CreativeProject } from './types';
+import { insertWorkflowOperation } from '../workflows/executor/operationInsert';
 
 const id = z.string().min(1).max(200);
 const title = z.string().trim().min(1).max(200);
 const revision = z.number().int().nonnegative();
 const schemas = {
+  'asset.export': z.object({ versionId: id, generation: z.number().int().positive().default(1) }).strict(),
   'project.create': z.object({ title, brief: z.string().max(20000).optional() }).strict(),
   'project.update': z.object({ id, expectedRevision: revision, title, brief: z.string().max(20000) }).strict(),
   'project.archive': z.object({ id, expectedRevision: revision, archived: z.boolean() }).strict(),
@@ -45,6 +47,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
       return (await db.getAllAsync<Row>(`SELECT v.*,f.blob_sha256,f.state,b.relative_path,b.mime FROM creative_asset_versions v LEFT JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE v.asset_id=? ORDER BY v.version_no DESC`, assetId)).map(r => ({ id: r.id, assetId: r.asset_id, versionNo: r.version_no, source: r.source, recipe: JSON.parse(r.recipe_json), blobSha256: r.blob_sha256 ?? undefined, relativePath: r.relative_path ?? undefined, mime: r.mime ?? undefined, state: r.state ?? 'PENDING' }));
     },
     async links(assetId: string) { return db.getAllAsync<{ project_id: string; title: string; pinned_version_id: string | null; revision: number }>('SELECT p.*,j.title FROM creative_project_assets p JOIN creative_projects j ON j.id=p.project_id WHERE asset_id=?', assetId); },
+    async deliveries(versionId: string) { return db.getAllAsync<{ id: string; status: string; generation: number; destination_uri: string | null; error_code: string | null }>('SELECT * FROM creative_deliveries WHERE version_id=? ORDER BY generation DESC', versionId); },
     async execute(command: CreativeCommand, key: string): Promise<CommandResult<Record<string, string>>> {
       id.parse(key);
       if (!(command.name in schemas)) throw new Error('UNKNOWN_CREATIVE_COMMAND');
@@ -54,8 +57,25 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
         const old = await tx.getFirstAsync<{ payload_hash: string; result_json: string }>('SELECT * FROM creative_command_receipts WHERE idempotency_key=?', key);
         if (old) { if (old.payload_hash !== hash) throw new Error('IDEMPOTENCY_CONFLICT'); return JSON.parse(old.result_json); }
         const now = deps.now(); const p = payload as any;
-        let value: Record<string, string>;
+        let value: Record<string, string> = {};
+        let execution: AsyncExecutionRef | undefined;
         switch (command.name) {
+          case 'asset.export': {
+            const existing = await tx.getFirstAsync<{ id: string; operation_id: string }>("SELECT id,operation_id FROM creative_deliveries WHERE version_id=? AND file_role='original' AND target='system-gallery' AND generation=?", p.versionId, p.generation);
+            if (existing) { execution = { kind: 'export', deliveryId: existing.id, operationId: existing.operation_id }; break; }
+            const file = await tx.getFirstAsync<{ blob_sha256: string; mime: string }>("SELECT f.blob_sha256,b.mime FROM creative_version_files f JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE f.version_id=? AND f.role='original' AND f.state='AVAILABLE'", p.versionId);
+            if (!file) throw new Error('VERSION_NOT_AVAILABLE');
+            if (!['image/png','image/jpeg','image/webp'].includes(file.mime)) throw new Error('EXPORT_MIME_UNSUPPORTED');
+            const epoch = await tx.getFirstAsync<{ epoch: string }>('SELECT epoch FROM creative_execution_state WHERE id=1');
+            if (!epoch) throw new Error('EXECUTION_EPOCH_MISSING');
+            const deliveryId = deps.id(), operationId = deps.id();
+            const publicationKey = CryptoJS.SHA256(deliveryId).toString();
+            await insertWorkflowOperation(tx, { id: operationId, kind: 'EXPORT', idempotencyKey: deliveryId, payload: { kind: 'creative_version', deliveryId }, now }, 'error');
+            await tx.runAsync("INSERT INTO creative_deliveries VALUES(?,?,'original','system-gallery',?,'QUEUED',?,?,?,NULL,NULL,?,?)", deliveryId, p.versionId, p.generation, operationId, publicationKey, epoch.epoch, now, now);
+            await tx.runAsync("INSERT INTO artifact_blob_refs VALUES(?,'creative_delivery',?,?)", file.blob_sha256, deliveryId, now);
+            await tx.runAsync('UPDATE executor_wake_state SET generation=generation+1,requested_at=? WHERE singleton=1', now);
+            execution = { kind: 'export', deliveryId, operationId }; break;
+          }
           case 'project.create': {
             const projectId = deps.id();
             await tx.runAsync('INSERT INTO creative_projects VALUES(?,?,?,0,NULL,?,?)', projectId, p.title, p.brief ?? '', now, now);
@@ -96,7 +116,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
         const lineage = await tx.getFirstAsync<{ namespace: string }>('SELECT namespace FROM creative_lineage WHERE id=1');
         if (!lineage) throw new Error('SOURCE_NAMESPACE_MISSING');
         await tx.runAsync("INSERT INTO creative_execution_origins VALUES(?,'user',?,NULL,NULL,NULL,?,?)", originId, lineage.namespace, command.name, now);
-        const result: CommandResult<Record<string,string>> = { status: 'completed', receiptId, value };
+        const result: CommandResult<Record<string,string>> = execution ? { status: 'accepted', receiptId, execution } : { status: 'completed', receiptId, value };
         await tx.runAsync('INSERT INTO creative_command_receipts VALUES(?,?,?,?,?,?,?,?)', receiptId, key, command.name, hash, originId, epoch.epoch, JSON.stringify(result), now);
         return result;
       });

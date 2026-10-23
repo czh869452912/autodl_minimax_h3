@@ -16,6 +16,7 @@ export function quarantineRestoredExecution(db: AppDatabase, epoch: string): voi
     db.runSync("UPDATE workflow_jobs SET status='UNKNOWN',last_error_json=?,error_json=? WHERE status NOT IN ('SUCCEEDED','PARTIAL_SUCCEEDED','FAILED','CANCELLED')", error, error);
     db.runSync("UPDATE tasks SET status='UNKNOWN',sync_error=? WHERE status IN ('QUEUED','RUNNING','UNKNOWN')", reason);
     db.runSync("UPDATE tasks SET export_state='NOT_REQUESTED',download_error=? WHERE export_state IN ('QUEUED','EXPORTING') OR download_state='DOWNLOADING'", reason);
+    db.runSync("UPDATE creative_deliveries SET status='QUARANTINED',error_code=? WHERE status IN ('QUEUED','PUBLISHING')", reason);
     db.execSync('COMMIT');
   } catch (error) { db.execSync('ROLLBACK'); throw error; }
 }

@@ -1,4 +1,6 @@
 import { readPendingMaintenance } from '../storage/pendingMaintenance';
+import { executeCreativeExport } from '../creative/exportExecution';
+import { exportCreativeImage, lookupCreativeImage } from '../native/creativeMedia';
 import { retireVideoConversion } from '../media/retireVideoConversion';
 import { readSettings } from '../settings/storage';
 import { artifactNetworkMessage } from '../workflows/executor/artifactErrors';
@@ -25,7 +27,7 @@ import { createSqliteMediaStore } from '../media/repository';
 import { materializeJobArtifacts } from '../media/materializer';
 import type { ArtifactRecord } from '../jobs/types';
 import { assertLocalExportSource, createSqliteExportStore, handleExport } from '../workflows/executor/exportOperation';
-import { exportVideo, probeVideoStructure } from '../native/media';
+import { exportVideo, probeVideoStructure, sha256File } from '../native/media';
 import * as FileSystem from 'expo-file-system/legacy';
 import { removeCasPath } from '../media/cas';
 import { reconcileMediaState } from '../media/reconciliation';
@@ -62,6 +64,15 @@ function createApplicationExecutor(database: AppDatabase) {
     async handle(operation: WorkflowOperation, owner: string) {
       const current = await executorForCurrentSettings();
       if (operation.kind === 'EXPORT') {
+        if (operation.payload.kind === 'creative_version') {
+          await executeCreativeExport(database, operation, owner, {
+            now: Date.now,
+            verify: async (path, hash) => await sha256File(`${FileSystem.documentDirectory}${path}`) === hash,
+            lookup: lookupCreativeImage,
+            publish: (path, key, mime, hash) => exportCreativeImage(`${FileSystem.documentDirectory}${path}`, key, mime, hash),
+          });
+          return;
+        }
         await handleExport(operation, owner, {
           now: Date.now,
           assertSource: assertLocalExportSource,

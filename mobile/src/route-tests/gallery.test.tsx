@@ -12,7 +12,7 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
   useFocusEffect: (effect: () => void) => { require('react').useEffect(effect, [effect]); },
 }));
-jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn(() => ({})) }));
+jest.mock('../storage/databaseClient', () => ({ getDatabase: jest.fn(() => ({})) }));
 jest.mock('../tasks/repository', () => ({
   createTaskRepository: jest.fn(() => ({
     list: jest.fn(async () => []),

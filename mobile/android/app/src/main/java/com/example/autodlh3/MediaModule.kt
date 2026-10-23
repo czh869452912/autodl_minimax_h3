@@ -35,6 +35,14 @@ internal class MediaWorkExecutors(
 class MediaModule(private val context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
   private val executors = MediaWorkExecutors()
   private val publisher = MediaStorePublisher(context.contentResolver)
+  private val creativePublisher = CreativeImagePublisher(
+    AndroidMediaStoreGateway(context.contentResolver, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI),
+    { source ->
+      val uri = Uri.parse(source)
+      require(uri.scheme == "file") { "Expected private image file" }
+      File(requireNotNull(uri.path)).inputStream()
+    },
+  )
   private val integrity = MediaIntegrity(context)
   private val compatibility = VideoCompatibility(context)
   private val transferPolicy = ArtifactTransferPolicy()
@@ -266,6 +274,22 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
       } catch (error: Exception) {
         promise.reject("EXPORT_FAILED", error.message ?: "保存到系统相册失败", error)
       }
+    }
+  }
+
+  @ReactMethod
+  fun exportCreativeImage(source: String, key: String, mime: String, hash: String, promise: Promise) {
+    executors.executeMedia {
+      try { promise.resolve(creativePublisher.publish(source, key, mime, hash)) }
+      catch (error: Exception) { promise.reject("CREATIVE_EXPORT_FAILED", "图片保存结果需核对", error) }
+    }
+  }
+
+  @ReactMethod
+  fun lookupCreativeImage(key: String, mime: String, hash: String, promise: Promise) {
+    executors.executeMedia {
+      try { promise.resolve(creativePublisher.lookup(key, mime, hash)) }
+      catch (error: Exception) { promise.reject("CREATIVE_LOOKUP_FAILED", "无法核对图片保存结果", error) }
     }
   }
 

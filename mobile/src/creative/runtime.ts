@@ -3,8 +3,14 @@ import { createCreativeService } from './service';
 import { createAttachmentStore } from '../media/attachments';
 import type { NativeImageAsset } from '../native/imagePicker';
 import { createId } from '../ids';
+import { executorWakePort } from '../tasks/executorEvents';
 
 export const creativeService = () => createCreativeService(getDatabase());
+export async function exportCreativeVersion(versionId: string, generation = 1) {
+  const result = await creativeService().execute({ name: 'asset.export', payload: { versionId, generation } }, `export:${versionId}:${generation}`);
+  executorWakePort.signal('command');
+  return result;
+}
 export async function importCreativeImage(image: NativeImageAsset, projectId?: string) {
   const db = getDatabase();
   const stored = await createAttachmentStore(db).externalize({ uri: image.uri, mimeType: image.mimeType, name: image.name });
