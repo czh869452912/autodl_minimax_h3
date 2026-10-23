@@ -171,3 +171,21 @@ test('late project archive or target trash rejects submission without a job or r
     expect(f.db.getAllSync('SELECT * FROM creative_generation_drafts')).toHaveLength(1);
   }finally{f.db.close();}
 });
+
+
+test('verified redownload restores missing output state, rejects different bytes and preserves version identity',async()=>{
+  const f=await fixture();try{
+    const task=await f.submit(),hash='d'.repeat(64);
+    f.db.runSync('INSERT INTO artifact_blobs VALUES(?,10,?,?,1,1)',hash,'video/mp4','cas/restored');
+    const input={jobId:task.id,artifact:{id:'clip',kind:'video'},blob:{sha256:hash},now:200} as Parameters<typeof archiveCreativeOutput>[1];
+    await withWriteTransaction(f.db as never,tx=>archiveCreativeOutput(tx,input));
+    const before=f.db.getFirstSync('SELECT id FROM creative_asset_versions');
+    f.db.runSync("UPDATE creative_file_resources SET state='MISSING',error_code='missing'");
+    await expect(withWriteTransaction(f.db as never,tx=>archiveCreativeOutput(tx,{...input,blob:{...input.blob,sha256:'e'.repeat(64)}}))).rejects.toThrow('CONTENT_CHANGED');
+    expect(f.db.getFirstSync('SELECT state FROM creative_version_files')).toEqual({state:'MISSING'});
+    await withWriteTransaction(f.db as never,tx=>archiveCreativeOutput(tx,input));
+    expect(f.db.getFirstSync('SELECT state,error_code FROM creative_file_resources')).toEqual({state:'AVAILABLE',error_code:null});
+    expect(f.db.getFirstSync('SELECT id FROM creative_asset_versions')).toEqual(before);
+    expect(f.db.getAllSync('SELECT * FROM creative_asset_versions')).toHaveLength(1);
+  }finally{f.db.close();}
+});

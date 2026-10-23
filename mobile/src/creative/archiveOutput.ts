@@ -6,8 +6,13 @@ import { createId } from '../ids';
 export async function archiveCreativeOutput(tx: AppDatabase, input: ArtifactCommitInput) {
   let context = await tx.getFirstAsync<{ target_asset_id: string; input_snapshot_json: string; execution_epoch: string }>('SELECT * FROM creative_job_contexts WHERE job_id=?', input.jobId);
   if (!['video','image'].includes(input.artifact.kind)) return;
-  const old = await tx.getFirstAsync<{ blob_sha256: string }>("SELECT f.blob_sha256 FROM creative_output_links l JOIN creative_version_files f ON f.version_id=l.version_id AND f.role='original' WHERE l.job_id=? AND l.artifact_id=?", input.jobId, input.artifact.id);
-  if (old) { if (old.blob_sha256 !== input.blob.sha256) throw new Error('CREATIVE_OUTPUT_CONTENT_CHANGED'); return; }
+  const old = await tx.getFirstAsync<{ version_id:string; blob_sha256: string }>("SELECT f.version_id,f.blob_sha256 FROM creative_output_links l JOIN creative_version_files f ON f.version_id=l.version_id AND f.role='original' WHERE l.job_id=? AND l.artifact_id=?", input.jobId, input.artifact.id);
+  if (old) {
+    if (old.blob_sha256 !== input.blob.sha256) throw new Error('CREATIVE_OUTPUT_CONTENT_CHANGED');
+    await tx.runAsync("UPDATE creative_file_resources SET state='AVAILABLE',error_code=NULL,last_verified_at=?,updated_at=?,revision=revision+1 WHERE version_id=? AND role='original'",input.now,input.now,old.version_id);
+    await tx.runAsync("INSERT OR IGNORE INTO artifact_blob_refs VALUES(?,'creative_version',?,?)",input.blob.sha256,old.version_id,input.now);
+    return;
+  }
   if(!context){
     if(await tx.getFirstAsync('SELECT id FROM media_asset_tombstones WHERE task_id=? AND artifact_id=?',input.jobId,input.artifact.id))return;
     const job=await tx.getFirstAsync<{input_json:string}>('SELECT input_json FROM workflow_jobs WHERE id=?',input.jobId);
