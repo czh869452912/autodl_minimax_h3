@@ -56,6 +56,7 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     return { draftId };
   }
   const draft = await readCreativeDraft(tx, p.id);
+  if(await tx.getFirstAsync("SELECT s.id FROM creative_plan_steps s JOIN creative_plans p ON p.id=s.plan_id WHERE s.draft_id=? AND p.state IN ('ACTIVE','QUARANTINED')",p.id))throw new Error('PLAN_DRAFT_FROZEN');
   if (!draft || draft.revision !== p.expectedRevision || draft.state !== 'EDITING') throw new Error('DRAFT_REVISION_CONFLICT');
   await project(draft.project_id);
   if (name === 'draft.updateVideo' || name === 'draft.updateImage') {

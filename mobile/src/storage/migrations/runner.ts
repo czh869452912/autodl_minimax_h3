@@ -7,6 +7,7 @@ import { v21CreativeDrafts } from './v21CreativeDrafts';
 import { v22CreativeLegacy } from './v22CreativeLegacy';
 import { v23CreativeAgent } from './v23CreativeAgent';
 import { v24CreativeAssetDetails } from './v24CreativeAssetDetails';
+import { v25CreativePlans } from './v25CreativePlans';
 import { v15RestoreSafety } from './v15RestoreSafety';
 import { v14CreativeCapture } from './v14CreativeCapture';
 import type { AppDatabase } from '../appDatabase';
@@ -49,6 +50,7 @@ const steps = new Map<number, MigrationStep>([
   [v22CreativeLegacy.fromVersion, v22CreativeLegacy],
   [v23CreativeAgent.fromVersion, v23CreativeAgent],
   [v24CreativeAssetDetails.fromVersion, v24CreativeAssetDetails],
+  [v25CreativePlans.fromVersion, v25CreativePlans],
 ]);
 
 function version(db: AppDatabase): number {

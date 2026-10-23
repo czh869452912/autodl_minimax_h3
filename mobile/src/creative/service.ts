@@ -5,6 +5,7 @@ import { draftSchemas, applyDraftCommand, readCreativeDraft, readDraftInputs } f
 import { z } from 'zod';
 import { guardCreativeAgentCommand, type CreativeAgentOrigin } from './agentScope';
 import { lifecycleSchemas,applyAssetLifecycle } from './assetLifecycle';
+import { planSchemas,applyPlanCommand } from './plans';
 import type { AppDatabase } from '../storage/appDatabase';
 import { withWriteTransaction } from '../storage/sqliteBusy';
 import { createId } from '../ids';
@@ -15,6 +16,7 @@ const id = z.string().min(1).max(200);
 const title = z.string().trim().min(1).max(200);
 const revision = z.number().int().nonnegative();
 const schemas = {
+  ...planSchemas,
   ...lifecycleSchemas,
   ...storySchemas,
   ...draftSchemas,
@@ -123,7 +125,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
             await tx.runAsync('INSERT INTO creative_project_assets VALUES(?,?,?,0)', p.projectId, p.assetId, p.versionId); value = { assetId: p.assetId, projectId: p.projectId }; break;
           case 'asset.unlinkFromProject':
             changed(await tx.runAsync('DELETE FROM creative_project_assets WHERE project_id=? AND asset_id=? AND revision=?', p.projectId, p.assetId, p.expectedRevision)); value = { assetId: p.assetId, projectId: p.projectId }; break;
-          default: value = command.name in lifecycleSchemas ? await applyAssetLifecycle(tx,command.name,p,now) : command.name in draftSchemas ? await applyDraftCommand(tx, command.name, p, now, deps.id) : await applyStoryCommand(tx, command.name, p, now, deps.id);
+          default: value = command.name in planSchemas ? await applyPlanCommand(tx,command.name,p,now,deps.id,key) : command.name in lifecycleSchemas ? await applyAssetLifecycle(tx,command.name,p,now) : command.name in draftSchemas ? await applyDraftCommand(tx, command.name, p, now, deps.id) : await applyStoryCommand(tx, command.name, p, now, deps.id);
         }
         const receiptId = deps.id(), originId = deps.id();
         const epoch = await tx.getFirstAsync<{ epoch: string }>('SELECT epoch FROM creative_execution_state WHERE id=1');

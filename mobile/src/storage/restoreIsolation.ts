@@ -20,6 +20,10 @@ export function quarantineRestoredExecution(db: AppDatabase, epoch: string): voi
     db.runSync('UPDATE creative_authorizations SET revoked_at=COALESCE(revoked_at,?),revision=revision+1', Date.now());
     db.runSync("UPDATE creative_credential_generations SET status='retired' WHERE status='active'");
     db.runSync('DELETE FROM creative_default_accounts');
+    db.runSync("INSERT INTO creative_restore_quarantine(entity_kind,entity_id,restore_epoch,reason) SELECT 'plan',id,?,? FROM creative_plans WHERE true ON CONFLICT(entity_kind,entity_id) DO UPDATE SET restore_epoch=excluded.restore_epoch,reason=excluded.reason",epoch,reason);
+    db.runSync("UPDATE creative_plans SET state='QUARANTINED',revision=revision+1 WHERE state='ACTIVE'");
+    db.runSync("UPDATE creative_plan_steps SET state='BLOCKED',revision=revision+1,error_json=? WHERE state IN ('PENDING','WAITING_DECISION','READY','DISPATCHED')",error);
+    db.runSync("UPDATE creative_decision_requests SET state='STALE',revision=revision+1 WHERE state='WAITING'");
     db.execSync('COMMIT');
   } catch (error) { db.execSync('ROLLBACK'); throw error; }
 }
