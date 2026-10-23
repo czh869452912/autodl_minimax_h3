@@ -1,6 +1,6 @@
 # 综合创作 App 实施记录
 
-基线：[交互与数据设计 v1.3](creative-app-interaction-data-design.md)。2026-10-23 开始实施。数据库当前为 v27，交付版本为 1.5.0-preview.3。已实现首条创作链及下列增量；整体路线尚未全部完成，旧媒体迁移仍为 CATCHUP，真实服务及手机交互验收未通过前不视为正式发布。
+基线：[交互与数据设计 v1.3](creative-app-interaction-data-design.md)。2026-10-23 开始实施。数据库当前为 v27，交付版本为 1.5.0-preview.4。已实现首条创作链及下列增量；整体路线尚未全部完成，旧媒体迁移仍为 CATCHUP，真实接口已通过，Android 原生全链路与手机交互验收未通过前不视为正式发布。
 
 ## 增量 01：任务与输出引用兼容
 
@@ -363,3 +363,11 @@
 - 显式执行脚本保存发送标记、请求、响应与原件；已有结果离线复用，发送不明不重试。分别禁用网络重跑 image/video 成功。凭据不进入日志与仓库。
 - 真实图片与视频响应分别在隔离 SQLite 回放，验证重复归档不新增版本、候选不自动采用、图转视频版本/哈希固定和 FK 完整性。类型检查通过；图片执行 4 项、视频提交/账号验证 14 项测试通过（含两个 opt-in 样本回放）。普通测试不会进行真实消费。
 - 这是生产协议真实接口测试与离线入库测试，不标记 Android 原生/界面端到端通过。下一包需包含增量 46–48 的账号修复。
+
+## 增量 50：第四个预览包构建、回归与安装
+
+- 1.5.0-preview.4 / versionCode 42，SQLite v27，纳入增量 46–48 的生产修复。支持 ARM64 与 x86_64，内置 JS bundle。
+- 类型检查通过。整套 JS 回归 204 套、1386 项通过；4 项跳过包含 2 项明确 opt-in 的真实响应离线回放（两项均已单独执行通过）和既有 2 项。将大 Buffer 对比改为文件哈希校验后，图片回放耗时由约 17 秒降至约 33 毫秒，4 项图片执行测试重新通过。
+- Android 构建成功并覆盖安装 emulator-5554，包管理器确认 versionCode=42、versionName=1.5.0-preview.4。没有新增原生逻辑，本次未重复既已通过的原生故障注入与 MediaStore 测试。
+- APK：build/creative-preview/creative-app-1.5.0-preview.4.apk；SHA-256：e37e263402c97fd8cbebfbf8d12447e84c68f4f83eabbed8168b778793fff27e。
+- 日志：mobile/build-creative-preview4.log、mobile/test-creative-preview4.log（Git 忽略）。凭据未写入 APK；使用本地 .env 的接口测试不等于已在 app 的 SecureStore 中配置账号。后续仍需 Android 全链路、旧媒体 PRIMARY 切换及高级 NovelAI 能力等既定工作，未宣称全路线完成。

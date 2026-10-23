@@ -109,7 +109,7 @@ test('missing response remains unknown and restoring backup never resumes the re
   const hash = createHash('sha256').update(bytes).digest('hex');
   const evidence = JSON.parse(fs.readFileSync(path.join(folder, 'novelai.evidence.json'), 'utf8'));
   expect(hash).toBe(evidence.sha256);
-  expect(fs.readFileSync(path.join(folder, 'observatory.png'))).toEqual(bytes);
+  expect(createHash('sha256').update(fs.readFileSync(path.join(folder, 'observatory.png'))).digest('hex')).toBe(hash);
   const f = await fixture();
   try {
     f.db.runSync('INSERT INTO artifact_blobs VALUES(?,?,?,?,1,1)', hash, bytes.length, 'image/png', 'observatory.png');
