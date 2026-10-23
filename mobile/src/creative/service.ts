@@ -8,6 +8,7 @@ import { lifecycleSchemas,applyAssetLifecycle } from './assetLifecycle';
 import { planSchemas,applyPlanCommand } from './plans';
 import { CREATIVE_FILE_MIMES,creativeExportTarget } from './fileFormats';
 import { authoredTextSchemas,applyAuthoredText } from './authoredText';
+import { reviewSchemas,proposeCreativeChange,resolveCreativeChange } from './changeReview';
 import type { AppDatabase } from '../storage/appDatabase';
 import { withWriteTransaction } from '../storage/sqliteBusy';
 import { createId } from '../ids';
@@ -18,6 +19,7 @@ const id = z.string().min(1).max(200);
 const title = z.string().trim().min(1).max(200);
 const revision = z.number().int().nonnegative();
 const schemas = {
+  ...reviewSchemas,
   ...authoredTextSchemas,
   ...planSchemas,
   ...lifecycleSchemas,
@@ -83,6 +85,8 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
         let value: Record<string, string> = {};
         let execution: AsyncExecutionRef | undefined;
         switch (command.name) {
+          case 'change.resolve':value=await resolveCreativeChange(tx,p,now,deps.id);break;
+          case 'shot.update':value=origin?await proposeCreativeChange(tx,'shot.update',p,now,deps.id):await applyStoryCommand(tx,'shot.update',p,now,deps.id);break;
           case 'project.setCover':{
             await requireProject(tx,p.id);
             if(p.versionId&&!await tx.getFirstAsync("SELECT v.id FROM creative_asset_versions v JOIN creative_assets a ON a.id=v.asset_id AND a.kind='image' JOIN creative_project_assets l ON l.asset_id=a.id AND l.project_id=? JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' AND f.state='AVAILABLE' WHERE v.id=? AND NOT EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=a.id)",p.id,p.versionId))throw new Error('COVER_VERSION_UNAVAILABLE');
@@ -114,6 +118,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
             value = { projectId }; break;
           }
           case 'project.update':
+            if(origin){value=await proposeCreativeChange(tx,'project.update',p,now,deps.id);break;}
             changed(await tx.runAsync('UPDATE creative_projects SET title=?,brief=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?', p.title, p.brief, now, p.id, p.expectedRevision)); value = { projectId: p.id }; break;
           case 'project.archive':
             changed(await tx.runAsync('UPDATE creative_projects SET archived_at=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?', p.archived ? now : null, now, p.id, p.expectedRevision)); value = { projectId: p.id }; break;
