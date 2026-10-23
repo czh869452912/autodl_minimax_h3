@@ -13,6 +13,10 @@ import { quarantineRestoredExecution } from '../storage/restoreIsolation';
 import type { WorkflowOperation } from '../workflows/executor/types';
 import type { ProviderAdapter } from '../workflows/providers/registry';
 import {createTaskCommandService} from '../tasks/taskCommandService';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { createHash } from 'node:crypto';
+import { normalizeAutodlStatus, parseAutodlResult } from '../workflows/providers/autodl/mapping';
 
 async function fixture() {
   const db = createInitializedRealSqliteTestDb(), service = createCreativeService(db as never);
@@ -38,6 +42,34 @@ async function fixture() {
   };
   return { db, service, draft, accounts, identity, input, submit, claim };
 }
+
+(process.env.CREATIVE_LIVE_EVIDENCE ? test : test.skip)('saved live H3 output archives once with verified original bytes', async () => {
+  const folder = path.resolve(process.env.CREATIVE_LIVE_EVIDENCE!);
+  const status = JSON.parse(fs.readFileSync(path.join(folder, 'autodl.status.json'), 'utf8'));
+  expect(normalizeAutodlStatus(status.status)).toBe('SUCCEEDED');
+  const artifacts = parseAutodlResult({ results: status.results });
+  expect(artifacts.filter(a => a.kind === 'video')).toHaveLength(1);
+  const bytes = fs.readFileSync(path.join(folder, 'observatory.mp4'));
+  const hash = createHash('sha256').update(bytes).digest('hex');
+  const evidence = JSON.parse(fs.readFileSync(path.join(folder, 'autodl.evidence.json'), 'utf8'));
+  expect(hash).toBe(evidence.video.sha256);
+  expect(bytes.subarray(4, 8).toString()).toBe('ftyp');
+  const f = await fixture();
+  try {
+    const task = await f.submit();
+    f.db.runSync('INSERT INTO artifact_blobs VALUES(?,?,?,?,1,1)', hash, bytes.length, 'video/mp4', 'observatory.mp4');
+    const commit = { jobId: task.id, artifact: artifacts.find(a => a.kind === 'video')!, blob: { sha256: hash }, now: 200 };
+    await withWriteTransaction(f.db as never, tx => archiveCreativeOutput(tx, commit as never));
+    await withWriteTransaction(f.db as never, tx => archiveCreativeOutput(tx, commit as never));
+    expect(f.db.getAllSync('SELECT * FROM creative_asset_versions')).toHaveLength(1);
+    expect(f.db.getFirstSync('SELECT current_version_id FROM creative_assets')).toEqual({ current_version_id: null });
+    expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
+    fs.writeFileSync(path.join(folder, 'video-archive-replay.evidence.json'), JSON.stringify({
+      mode: 'offline-response-replay-real-sqlite', sha256: hash, duplicateArchiveVersionCount: 1,
+      candidateAutoAdopted: false, foreignKeyViolations: 0, androidUiTested: false, at: new Date().toISOString(),
+    }, null, 2));
+  } finally { f.db.close(); }
+});
 
 test('draft submission commits receipt, job, frozen inputs and budget atomically; duplicate never queues twice', async () => {
   const f = await fixture();
