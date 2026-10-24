@@ -12,6 +12,7 @@ export type CommandReceipt = Readonly<{ status: 'accepted' | 'coalesced' | 'alre
 export function createTaskCommandService(options: {
   db: AppDatabase; fileExists(uri: string): Promise<boolean>; resolveCasUri(path: string): string;
   refreshArtifactSources?: (taskId: string) => Promise<void>;
+  prepareReplacement?: (taskId:string)=>Promise<void>;
   now?: () => number; invalidate?: () => void; signal?: () => void;
 }) {
   const now = options.now ?? Date.now;
@@ -31,6 +32,8 @@ export function createTaskCommandService(options: {
   };
   return {
     async replaceUnknownAfterConfirmation(taskId: string) {
+      if(await options.db.getFirstAsync('SELECT job_id FROM creative_job_contexts WHERE job_id=?',taskId))throw new Error('请打开原创作草稿，核查后重新授权；不能沿用旧授权直接重建');
+      await options.prepareReplacement?.(taskId);
       const replacement = 'job:' + createId();
       await withWriteTransaction(options.db, async db => {
         if(await db.getFirstAsync('SELECT job_id FROM creative_job_contexts WHERE job_id=?',taskId))throw new Error('请打开原创作草稿，复制为新草稿后重新授权；不能沿用旧授权或当前默认账号直接重建');

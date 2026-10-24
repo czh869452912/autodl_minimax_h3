@@ -3,7 +3,7 @@ import {createAppWorkflowCatalog} from '../workflows/registry/builtin';
 import {registryRecordToDefinition} from '../workflows/registry/catalog';
 import {createWorkflowRegistry} from '../workflows/registry/repository';
 import {getDatabase} from '../storage/databaseClient';
-import {creativeAccounts} from './accountRuntime';
+import {defaultAutodlCredential} from './accountRuntime';
 import {creativeVideoWorkflowId} from './videoWorkflow';
 import {alignVideoState,videoWorkflowReason,workflowVideoInput} from './videoDraftState';
 import type {CreativeDraft} from './drafts';
@@ -19,7 +19,7 @@ export async function listVideoWorkflows():Promise<VideoWorkflowEntry[]>{
   const catalog=createAppWorkflowCatalog();await catalog.bootstrap();
   return (await catalog.listActive()).map(record=>({record,definition:registryRecordToDefinition(record)})).filter(item=>item.definition.outputs.artifacts.some(output=>output.kind==='video')).map(item=>({...item,reason:videoWorkflowReason(item.definition)}));
 }
-export async function videoAccountReady(){return (await creativeAccounts(getDatabase()).list()).some(account=>account.provider_id==='autodl');}
+export async function videoAccountReady(){try{return Boolean(await defaultAutodlCredential(getDatabase()));}catch{return false;}}
 export async function rememberVideoWorkflow(id:string){await SecureStore.setItemAsync(preference,id);}
 export async function preferredVideoWorkflow(){return SecureStore.getItemAsync(preference);}
 export async function createVideoWorkbenchDraft(prompt:string){

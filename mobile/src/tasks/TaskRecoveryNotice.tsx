@@ -9,7 +9,7 @@ export function TaskRecoveryNotice({ item, busy, onSettings, onRefresh, onReplac
   const unknown = item.status === 'UNKNOWN';
   const active = item.status === 'RUNNING' || item.status === 'QUEUED';
   if (!unknown && (!active || (!item.syncError && item.syncState !== 'BLOCKED'))) return null;
-  const auth = /_AUTH(?:_|$)/.test(item.syncErrorCode ?? '');
+  const auth = /_AUTH(?:_|$)|CREDENTIAL/.test(item.syncErrorCode ?? '');
   const blocked = item.syncState === 'BLOCKED';
   const check = () => Alert.alert('核查原任务', '请在 AutoDL 任务记录中按提交时间和描述核查。这里的本地编号不是服务端任务编号。\n\n本地编号：' + item.id + '\n创建时间：' + new Date(item.createdAt).toLocaleString() + '\n描述：' + (item.prompt || '无'), [
     { text: '关闭', style: 'cancel' },
@@ -23,7 +23,7 @@ export function TaskRecoveryNotice({ item, busy, onSettings, onRefresh, onReplac
       {unknown || (blocked && !auth) ? action('核查原任务', check) : null}
       {auth && onSettings ? action('修改 AutoDL 凭据', onSettings) : null}
       {!unknown && onRefresh ? action('刷新同步', onRefresh, auth) : null}
-      {unknown && onReplace ? action('确认后重新创建', () => Alert.alert('确认重新创建？', '请先核查 AutoDL 任务记录。原任务可能仍在执行，新尝试可能重复消耗额度。', [{ text: '返回核查', style: 'cancel', onPress: check }, { text: '确认创建新任务', onPress: () => onReplace(item.id) }]), true) : null}
+      {unknown && onReplace ? action('核查与继续创作', () => onReplace(item.id), true) : null}
     </View>
   </View>;
 }

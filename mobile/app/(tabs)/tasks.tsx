@@ -1,3 +1,4 @@
+import {getDatabase} from '../../src/storage/databaseClient';
 import { useCallback, useRef, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -49,8 +50,12 @@ export default function TasksScreen() {
   const download = useCallback((item: TaskCard) => { void action(item, false); }, [action]);
   const exportTask = useCallback((item: TaskCard) => { void action(item, true); }, [action]);
   const remove = useCallback((id: string) => { void getTaskServices().taskStore.remove(id).then(() => taskProjectionEvents.invalidate()).catch(error => Alert.alert('移除失败', String(error))); }, []);
-  const open = useCallback((id: string) => router.push({ pathname: '/video/[id]', params: { id } }), []);
-  const renderItem = useCallback(({ item }: { item: TaskCard }) => <TaskCardRow onSettings={() => router.push('/(tabs)/settings')} onRefresh={refresh} archived={filter === 'archived'} onArchive={(id, archived) => { void getTaskServices().taskCommandService.setArchived(id, archived).catch(error => Alert.alert('归档失败', String(error))); }} onReplace={id => { void getTaskServices().taskCommandService.replaceUnknownAfterConfirmation(id).catch(error => Alert.alert('重新创建失败', String(error))); }} item={item} busy={busyIds.has(item.id)} onDownload={download} onExport={exportTask} onRemove={remove} onOpen={item.adapterId === 'novelai-image' ? id => router.push({pathname:'/creative-task/[id]',params:{id}}) : open} onCancel={id => { void getTaskServices().taskCommandService.requestCancel(id).catch(error => Alert.alert('无法取消', error.message)); }} onCancelMedia={(id, kind) => { void getTaskServices().taskCommandService.requestCancelMedia(id, kind).catch(error => Alert.alert('无法取消', error.message)); }} />, [busyIds, download, exportTask, remove, open, filter, refresh]);
+  const open = useCallback((id:string)=>{void getDatabase().getFirstAsync('SELECT job_id FROM creative_job_contexts WHERE job_id=?',id).then(bound=>router.push({pathname:bound?'/creative-task/[id]':'/video/[id]',params:{id}})).catch(()=>Alert.alert('读取失败','请重新打开任务'));},[]);
+  const recover=useCallback((id:string)=>{void getDatabase().getFirstAsync('SELECT job_id FROM creative_job_contexts WHERE job_id=?',id).then(bound=>{
+    if(bound){router.push({pathname:'/creative-task/[id]',params:{id}});return;}
+    Alert.alert('创建新的尝试？','请先核查 AutoDL 任务记录。新任务可能重复消耗额度；参考素材必须仍然可用。',[{text:'取消',style:'cancel'},{text:'已核查，创建新任务',onPress:()=>{void getTaskServices().taskCommandService.replaceUnknownAfterConfirmation(id).catch(error=>Alert.alert('无法创建新尝试',String(error)));}}]);
+  }).catch(()=>Alert.alert('读取失败','请重新打开任务'));},[]);
+  const renderItem = useCallback(({ item }: { item: TaskCard }) => <TaskCardRow onSettings={() => router.push({pathname:'/(tabs)/settings',params:{section:'accounts'}})} onRefresh={refresh} archived={filter === 'archived'} onArchive={(id, archived) => { void getTaskServices().taskCommandService.setArchived(id, archived).catch(error => Alert.alert('归档失败', String(error))); }} onReplace={recover} item={item} busy={busyIds.has(item.id)} onDownload={download} onExport={exportTask} onRemove={remove} onOpen={item.adapterId === 'novelai-image' ? id => router.push({pathname:'/creative-task/[id]',params:{id}}) : open} onCancel={id => { void getTaskServices().taskCommandService.requestCancel(id).catch(error => Alert.alert('无法取消', error.message)); }} onCancelMedia={(id, kind) => { void getTaskServices().taskCommandService.requestCancelMedia(id, kind).catch(error => Alert.alert('无法取消', error.message)); }} />, [busyIds, download, exportTask, remove, open, recover, filter, refresh]);
   const toggleMonitoring = async () => {
     if (monitorLock.current) return;
     monitorLock.current = true; setMonitorBusy(true);

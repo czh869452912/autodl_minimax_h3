@@ -1,5 +1,5 @@
 import type { NormalizedError } from '../../jobs/types';
-import { ProviderError } from '../providers/errors';
+import { ProviderError,ProviderPreflightError } from '../providers/errors';
 import type { OperationKind } from './types';
 
 export type FailureDisposition = 'TERMINAL' | 'RETRYABLE' | 'UNKNOWN' | 'BLOCKED';
@@ -26,6 +26,7 @@ function disposition(kind: OperationKind, error: ProviderError): FailureDisposit
 }
 
 export function classifyProviderFailure(kind: OperationKind, cause: unknown): ClassifiedProviderFailure {
+  if(cause instanceof ProviderPreflightError)return {disposition:'TERMINAL',error:{code:cause.code,message:cause.message,retryable:false}};
   const operation = operationName(kind);
   if (!(cause instanceof ProviderError)) {
     const unknown = kind === 'SUBMIT';

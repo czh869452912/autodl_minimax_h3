@@ -1,3 +1,6 @@
+jest.mock('../storage/databaseClient',()=>({getDatabase:()=>({})}));
+jest.mock('./taskRecovery',()=>({unknownTaskReviewed:async()=>mockReviewed}));
+let mockReviewed=false;
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { VideoDraftScreen } from './VideoDraftScreen';
@@ -32,7 +35,7 @@ jest.mock('./CopySubmittedDraft', () => ({ CopySubmittedDraft: () => null }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
 jest.mock('expo-router/react-navigation', () => ({ useNavigation: () => ({}), usePreventRemove: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));
-beforeEach(()=>{jest.clearAllMocks();mockPrevious=[];const definition=require('../workflows/definitions/autodl/minimax-h3-i2v-15s-v1.0.1.json');mockEntries=[{definition,record:{workflowId:definition.id,version:definition.version,contentHash:'hash'},reason:''}];mockDraft={id:'d',provider_id:'autodl',workflow_id:definition.id,state:'EDITING',revision:1,project_id:null,shot_id:null,target_asset_id:null,input_json:JSON.stringify({schemaVersion:1,prompt:'',resolution:RESOLUTION_OPTIONS[0],duration:5,seed:''})};});
+beforeEach(()=>{jest.clearAllMocks();mockReviewed=false;mockPrevious=[];const definition=require('../workflows/definitions/autodl/minimax-h3-i2v-15s-v1.0.1.json');mockEntries=[{definition,record:{workflowId:definition.id,version:definition.version,contentHash:'hash'},reason:''}];mockDraft={id:'d',provider_id:'autodl',workflow_id:definition.id,state:'EDITING',revision:1,project_id:null,shot_id:null,target_asset_id:null,input_json:JSON.stringify({schemaVersion:1,prompt:'',resolution:RESOLUTION_OPTIONS[0],duration:5,seed:''})};});
 
 test('reference import locks duplicate taps and editing until picker cancellation', async () => {
   let release!: (images: unknown[]) => void;
@@ -128,5 +131,17 @@ test('switching back to an immutable legacy submission restores its own input in
     expect(mockDraft.state).toBe('EDITING');expect(JSON.parse(mockDraft.input_json)).toMatchObject({duration:7,seed:'42'});
     expect(mockPrevious.find(row=>row.id==='d')).toMatchObject({state:'SUBMITTED',job_id:'original-job'});
     expect(mockConfirm).not.toHaveBeenCalled();
+  }finally{act(()=>tree?.unmount());}
+});
+
+
+test('an explicitly reviewed unknown request no longer blocks the next manual generation after reopening',async()=>{
+  mockReviewed=true;mockDraft={...mockDraft,state:'SUBMITTED',job_id:'unknown',target_asset_id:'asset',input_json:JSON.stringify({schemaVersion:1,prompt:'Next camera pan',resolution:RESOLUTION_OPTIONS[0],duration:5,seed:''})};let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<VideoDraftScreen id="d"/>);});
+    await act(async()=>tree.root.findByType(require('./CreativeResults').CreativeResults).props.onJobStatus('UNKNOWN'));
+    await act(async()=>tree.root.findAll(n=>n.props.accessibilityLabel==='调整后再生成'&&typeof n.props.onPress==='function')[0].props.onPress());
+    const button=tree.root.findAll(n=>n.props.accessibilityLabel==='生成视频'&&typeof n.props.onPress==='function')[0];
+    expect(button.props.disabled).toBe(false);expect(mockPrepare).not.toHaveBeenCalled();expect(mockConfirm).not.toHaveBeenCalled();
   }finally{act(()=>tree?.unmount());}
 });

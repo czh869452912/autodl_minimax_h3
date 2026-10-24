@@ -93,7 +93,7 @@ export function CreateForm({
       const current = ++revision;
       try {
         const settings = await submissionDependencies.readSettings();
-        if (active && current === revision) setSettingsNotice(settings && !settings.token?.trim() ? '尚未配置 AutoDL Token，保存后即可生成视频。' : '');
+        if (active && current === revision) setSettingsNotice(settings && !settings.token?.trim() ? '尚未连接 AutoDL，请在设置的创作账号中连接。' : '');
       } catch { if (active && current === revision) setSettingsNotice('无法读取生成配置，请前往设置检查后重试。'); }
     };
     void check();
@@ -374,7 +374,7 @@ export function CreateForm({
       }
       setFieldErrors([]);
       const settings = await submissionDependencies.readSettings();
-      if (!settings.token) throw new Error('请先在设置中保存 AutoDL Token');
+      if (!settings.token) throw new Error('请先在设置的创作账号中连接 AutoDL');
       const task = await submissionDependencies.queue({ definition, activeRecord, inputSnapshot, images, audios, token: settings.token, foregroundTick, ...(acknowledgedDraft ? { handoffId: acknowledgedDraft } : {}) });
       if (acknowledgedDraft) {
         setImages([]); setAudios([]);

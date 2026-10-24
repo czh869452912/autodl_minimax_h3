@@ -19,7 +19,7 @@ test('authentication repair and refresh are separate from retryable failures', (
   expect(tree.root.findAllByType(Text).some(node => String(node.props.children).includes('系统将稍后重试'))).toBe(true);
   act(() => tree.unmount());
 });
-test('unknown submission exposes verification and never recreates without confirmation', () => {
+test('unknown submission opens recovery without pretending that a new task was submitted', () => {
   const replace = jest.fn();
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   let tree!: ReturnType<typeof create>;
@@ -27,9 +27,7 @@ test('unknown submission exposes verification and never recreates without confir
   act(() => tree.root.findByProps({ accessibilityLabel: '核查原任务' }).props.onPress());
   expect(alert.mock.calls[0][1]).toContain('本地编号不是服务端任务编号');
   expect(replace).not.toHaveBeenCalled();
-  act(() => tree.root.findByProps({ accessibilityLabel: '确认后重新创建' }).props.onPress());
-  expect(replace).not.toHaveBeenCalled();
-  act(() => alert.mock.calls[1][2]!.find(button => button.text === '确认创建新任务')!.onPress!());
+  act(() => tree.root.findByProps({ accessibilityLabel: '核查与继续创作' }).props.onPress());
   expect(replace).toHaveBeenCalledWith(item.id);
   act(() => tree.unmount());
 });

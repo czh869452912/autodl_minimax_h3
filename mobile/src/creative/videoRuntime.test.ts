@@ -7,11 +7,15 @@ import type {WorkflowDefinition} from '../workflows/schema/types';
 import type {RegistryRecord} from '../workflows/registry/types';
 let mockDb: ReturnType<typeof createInitializedRealSqliteTestDb>;
 let mockAccounts:any[]=[];
+const mockResolve=jest.fn(async()=>({token:'test-only',provider:'autodl'}));
+const mockRead=jest.fn(async(..._args:any[])=> 'YXVkaW8=');
 const mockGetActive = jest.fn(async (id: string) => id === definition.id ? { workflowId: definition.id, version: definition.version, contentHash: 'test', definitionJson: JSON.stringify(definition) } : undefined);
+afterEach(()=>{mockAccounts=[];mockResolve.mockReset().mockResolvedValue({token:'test-only',provider:'autodl'});mockRead.mockReset().mockResolvedValue('YXVkaW8=');});
 jest.mock('../storage/databaseClient', () => ({ getDatabase: () => mockDb }));
 jest.mock('../workflows/registry/builtin', () => ({ createAppWorkflowCatalog: () => ({ bootstrap: async () => undefined, getActive: (id: string) => mockGetActive(id) }) }));
+jest.mock('../media/inputReader',()=>({createInputReader:()=>(...args:any[])=>mockRead(...args)}));
 jest.mock('./runtime', () => ({ creativeFiles: () => ({ verify: jest.fn() }) }));
-jest.mock('./accountRuntime', () => ({ creativeAccounts: () => ({ list: async () => mockAccounts }) }));
+jest.mock('./accountRuntime', () => ({ creativeAccounts: () => ({ list: async () => mockAccounts,resolveExact:()=>mockResolve() }) }));
 
 test('a compatible non-H3 workflow uses its bound field names and includes imported audio in the prepared request',async()=>{
   mockDb=createInitializedRealSqliteTestDb();
@@ -66,4 +70,14 @@ test.each([false, true])('new and legacy video drafts resolve H3 and reach the a
     expect(mockGetActive).toHaveBeenLastCalledWith(definition.id);
     expect(mockDb.getAllSync('SELECT * FROM workflow_jobs')).toHaveLength(0);
   } finally { mockDb.close(); }
+});
+
+
+test('a missing stored secret prevents job, authorization and reservation creation',async()=>{
+  mockDb=createInitializedRealSqliteTestDb();try{
+    mockAccounts=[{provider_id:'autodl',credential_generation_id:'generation'}];mockResolve.mockRejectedValueOnce(new Error('CREDENTIAL_MISSING'));
+    const result=await createCreativeService(mockDb as never).execute({name:'draft.createVideo',payload:{prompt:'Pan left'}},'no-secret');if(result.status!=='completed')throw new Error('Expected draft');
+    await expect(prepareCreativeVideo(result.value.draftId)).rejects.toThrow('CREDENTIAL_MISSING');
+    for(const table of ['workflow_jobs','creative_authorizations','creative_budget_reservations'])expect(mockDb.getAllSync('SELECT * FROM '+table)).toEqual([]);
+  }finally{mockDb.close();}
 });

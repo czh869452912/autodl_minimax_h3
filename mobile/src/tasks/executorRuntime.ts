@@ -1,5 +1,7 @@
+import {recoverUnsentCreativeJobs} from '../creative/unsentRecovery';
 import { readPendingMaintenance } from '../storage/pendingMaintenance';
-import { creativeAccounts } from '../creative/accountRuntime';
+import {createInputReader} from '../media/inputReader';
+import { creativeAccounts,defaultAutodlCredential } from '../creative/accountRuntime';
 import { readCreativeJobBinding, bindCreativeAdapter } from '../creative/boundExecution';
 import { createCreativeBudget } from '../creative/budget';
 import { archiveCreativeOutput } from '../creative/archiveOutput';
@@ -60,7 +62,7 @@ function createApplicationExecutor(database: AppDatabase) {
   const exportStore = createSqliteExportStore(database);
 
   const executorSettingsCache = createExecutorSettingsCache((settings) => {
-    const adapters = createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? settings.token : undefined });
+    const adapters = createBuiltinProviderAdapters({ readBase64:createInputReader(database),resolveCredential: (kind) => kind === 'autodl-token' ? settings.token : undefined });
     const runtime = createWorkflowRuntime({ adapters });
     return {
       settings,
@@ -72,6 +74,7 @@ function createApplicationExecutor(database: AppDatabase) {
   const executor = {
     async recover(now: number) {
       await (await executorForCurrentSettings()).durable.recover(now);
+      await recoverUnsentCreativeJobs(database,now);
       await recoverNovelAiResponses(database, jobs, novelAiResponseStore(database), now);
     },
     async handle(operation: WorkflowOperation, owner: string) {
@@ -111,10 +114,16 @@ function createApplicationExecutor(database: AppDatabase) {
             : await creativeAccounts(database).resolveExact(binding.credential_generation_id, operation.kind === 'SUBMIT' ? 'dispatch' : 'query');
         }
         catch {
-          await operations.finish(operation.id, owner, 'BLOCKED', Date.now(), { code: 'CREATIVE_CREDENTIAL_UNAVAILABLE', message: '绑定的凭据不可用；未改用其他账号。' });
+          const error={code:'CREATIVE_CREDENTIAL_UNAVAILABLE',message:'本次绑定的凭据不可用，请在创作账号中检查连接。',retryable:false};
+          const unsent=operation.kind==='SUBMIT'&&binding.state==='RESERVED'&&boundJob&&!boundJob.providerHandle;
+          if(unsent){
+            const result=await jobs.transition({jobId:boundJob.id,expectedRevision:boundJob.revision,patch:{status:'FAILED',lastError:error,updatedAt:Date.now()},event:{id:operation.id+':credential-unavailable',type:'SUBMISSION_FAILED',payload:{code:error.code},createdAt:Date.now()}});
+            if(result.ok)await createCreativeBudget(database).transition(binding.id,{key:'release:'+binding.id,to:'RELEASED',evidence:'本地凭据检查失败，未发送请求。'});
+          }
+          await operations.finish(operation.id, owner, unsent?'FAILED':'BLOCKED', Date.now(), error);
           return;
         }
-        const adapters = createBuiltinProviderAdapters({ resolveCredential: kind => kind === 'autodl-token' && exact.provider === 'autodl' ? exact.token : undefined });
+        const adapters = createBuiltinProviderAdapters({ readBase64:createInputReader(database),resolveCredential: kind => kind === 'autodl-token' && exact.provider === 'autodl' ? exact.token : undefined });
         if (novelAi) adapters.set('novelai-image', createNovelAiAdapter(operation.jobId!, exact.token, novelAiResponseStore(database)));
         for (const [id, adapter] of adapters) adapters.set(id, bindCreativeAdapter(database, adapter, binding, exact, operation, owner));
         const durable = createDurableExecutor({ jobs, operations, adapters, runtime: createWorkflowRuntime({ adapters }), credentials: { get: async () => ({ ok: true }) } });
@@ -122,6 +131,7 @@ function createApplicationExecutor(database: AppDatabase) {
         const job = operation.jobId ? await jobs.get(operation.jobId) : null;
         if (job && ['UNKNOWN','FAILED','SUCCEEDED','PARTIAL_SUCCEEDED','CANCELLED'].includes(job.status)) {
           const reservation = await readCreativeJobBinding(database, job.id);
+          if(reservation?.state==='RESERVED'&&['FAILED','CANCELLED'].includes(job.status))await createCreativeBudget(database).transition(binding.id,{key:'release:'+binding.id,to:'RELEASED',evidence:'本地准备失败或取消，未发送请求。'});
           if (reservation?.state === 'DISPATCHED') await createCreativeBudget(database).transition(binding.id, { key: `outcome:${binding.id}`, to: 'UNKNOWN_HELD', evidence: '服务商未返回可核验费用；保留本次消费占用。' });
         }
         return;
@@ -208,7 +218,9 @@ function createApplicationExecutor(database: AppDatabase) {
   const cycle = createExecutorCycle({ runTick: (options) => tick.run(options) });
 
   async function executorForCurrentSettings() {
-    return executorSettingsCache.getOrCreate(await readSettings());
+    const settings=await readSettings();
+    let token='';try{token=(await defaultAutodlCredential(database))?.token??'';}catch{/* Bound jobs report their exact credential failure separately. */}
+    return executorSettingsCache.getOrCreate({...settings,token});
   }
 
   async function repairTaskProjections(limit = 32): Promise<number> {

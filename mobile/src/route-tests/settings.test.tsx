@@ -7,7 +7,7 @@ import { Alert, Linking, ScrollView, Text } from 'react-native';
 
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(),
-  setItemAsync: jest.fn(),
+  setItemAsync: jest.fn(),deleteItemAsync:jest.fn(),
 }));
 jest.mock('../settings/storage', () => ({
   readSettings: jest.fn(async () => ({
@@ -26,6 +26,7 @@ jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 
 import { readSettings, saveSettings } from '../settings/storage';
+jest.mock('../creative/accountRuntime',()=>({creativeAccounts:()=>({list:async()=>[]})}));
 import SettingsScreen from '../../app/(tabs)/settings';
 
 it('shows diagnostic information only while its switch is enabled', async () => {
@@ -43,7 +44,7 @@ it('shows diagnostic information only while its switch is enabled', async () => 
     expect(metrics()[0].props.children).toContain('字体缩放：');
     act(() => toggle().props.onValueChange(false));
     expect(metrics()).toHaveLength(0);
-    expect(tree.root.findAllByType(Text).find(node => node.props.children === '系统设置')!.props.onLongPress).toBeUndefined();
+    expect(tree.root.findAllByType(Text).find(node => node.props.children === '显示与诊断')!.props.onLongPress).toBeUndefined();
   } finally { act(() => tree?.unmount()); }
 });
 
@@ -92,6 +93,7 @@ describe('Prompt assistant advanced LLM settings', () => {
     let renderer: ReturnType<typeof create>;
     await act(async () => { renderer = create(<SettingsScreen />); });
 
+    await act(async()=>renderer!.root.findAll(n=>n.props.accessibilityLabel==='连接 AutoDL'&&typeof n.props.onPress==='function')[0].props.onPress());
     const link = renderer!.root.findByProps({ accessibilityLabel: '打开 AutoDL Token 获取页面' });
     expect(link).toBeTruthy();
     await act(async () => link.props.onPress());
@@ -118,7 +120,7 @@ it('edits and saves DeepSeek effort and output budget, and restores advanced def
     act(() => tree.root.findByProps({ accessibilityLabel: '恢复 LLM 高级设置默认值' }).props.onPress());
     expect(input().props.value).toBe('4096');
     await act(async () => tree.root.findByProps({ accessibilityLabel: '保存设置' }).props.onPress());
-    expect(saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ token: 'keep-token', llmApiKey: 'keep-key', llmModel: 'deepseek-v4-flash', llmReasoningEffort: 'default', llmMaxOutputTokens: '4096' }));
+    expect(saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ llmApiKey: 'keep-key', llmModel: 'deepseek-v4-flash', llmReasoningEffort: 'default', llmMaxOutputTokens: '4096' }));
   } finally { act(() => tree?.unmount()); alert.mockRestore(); }
 });
 
@@ -173,13 +175,13 @@ test('does not overwrite edits made while an earlier snapshot is saving', async 
 
 
 it.each(['{broken', '{"token":42}', '{"futureSetting":"new"}'])('isolates an unreadable draft (%s) and allows recovery without blocking saved settings', async raw => {
-  mockSection='legacy';
+  mockSection='assistant';
   const secure = require('expo-secure-store');
   secure.getItemAsync.mockResolvedValueOnce(raw);
   secure.setItemAsync.mockClear();
   let tree!: ReturnType<typeof create>;
   await act(async () => { tree = create(<SettingsScreen />); });
-  expect(tree.root.findByProps({ accessibilityLabel: 'ComfyUI Token' }).props.value).toBe('');
+  expect(tree.root.findByProps({ accessibilityLabel: 'LLM 模型' }).props.value).toBe('gpt-4o-mini');
   expect(tree.root.findAllByProps({ accessibilityLabel: '重试读取设置' })).toHaveLength(0);
   expect(secure.setItemAsync).not.toHaveBeenCalled();
   secure.setItemAsync.mockRejectedValueOnce(new Error('locked'));
@@ -188,7 +190,7 @@ it.each(['{broken', '{"token":42}', '{"futureSetting":"new"}'])('isolates an unr
   await act(async () => tree.root.findByProps({ accessibilityLabel: '丢弃无法读取的草稿' }).props.onPress());
   expect(tree.root.findAllByProps({ accessibilityLabel: '丢弃无法读取的草稿' })).toHaveLength(0);
   expect(secure.setItemAsync).toHaveBeenCalledWith('settings.pendingDraft', '');
-  await act(async () => tree.root.findByProps({ accessibilityLabel: 'ComfyUI Token' }).props.onChangeText('edited'));
+  await act(async () => tree.root.findByProps({ accessibilityLabel: 'LLM 模型' }).props.onChangeText('edited'));
   expect(secure.setItemAsync).toHaveBeenLastCalledWith('settings.pendingDraft', expect.stringContaining('edited'));
   act(() => tree.unmount());
 });
@@ -198,7 +200,7 @@ it.each(['{broken', '{"token":42}', '{"futureSetting":"new"}'])('isolates an unr
   try{await act(async()=>{tree=create(<SettingsScreen />);});
     expect(tree.root.findAllByProps({accessibilityLabel:'LLM API Key'})).toHaveLength(0);
     expect(tree.root.findAllByProps({accessibilityLabel:'ComfyUI Token'})).toHaveLength(0);
-    act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='助手模型，两个工作台共用的文字模型' && typeof n.props.onPress==='function')[0].props.onPress());
+    act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='助手模型，提示词与创作辅助' && typeof n.props.onPress==='function')[0].props.onPress());
     expect(tree.root.findByProps({accessibilityLabel:'LLM API Key'})).toBeTruthy();
     act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='返回设置分类' && typeof n.props.onPress==='function')[0].props.onPress());
     expect(tree.root.findAllByProps({accessibilityLabel:'LLM API Key'})).toHaveLength(0);

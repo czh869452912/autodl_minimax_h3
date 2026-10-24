@@ -140,7 +140,7 @@ export function CreativeResults({ draft, disabled = false, dock = false, canvas=
     </View></View>
     {current.state==='AVAILABLE' && current.relativePath?image?<Pressable accessibilityRole="button" accessibilityLabel="全屏查看图片" onPress={()=>setFullScreen(true)} style={{flex:1,minHeight:120}}><Image accessibilityLabel={`当前图片，版本 ${current.versionNo}`} source={{uri:`${FileSystem.documentDirectory}${current.relativePath}`}} resizeMode="contain" style={{flex:1,width:'100%'}} /></Pressable>:<View style={{flex:1,minHeight:180}}><VideoPlayer source={`${FileSystem.documentDirectory}${current.relativePath}`} /></View>:<Text style={s.muted}>原文件尚不可用，请在素材详情中恢复。</Text>}
     {original?<TextAction label="对照原图与结果" onPress={()=>setFullScreen(true)} />:null}
-    </>:<View style={{flex:1,alignItems:'center',justifyContent:'center',gap:6}}><Text style={{fontSize:15,color:COLORS.textMuted}}>{draft.job_id?'正在等待结果':'写下描述，开始创作'}</Text></View>}
+    </>:<View style={{flex:1,alignItems:'center',justifyContent:'center',gap:6}}><Text style={{fontSize:15,color:COLORS.textMuted}}>{draft.job_id?(status==='UNKNOWN'?'结果待核查':status==='FAILED'?'本次生成未完成':status==='CANCELLED'?'本次生成已取消':'正在等待结果'):'写下描述，开始创作'}</Text></View>}
     {saveStatus}{error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}
   </View>;
   if(!previewVisible)return null;

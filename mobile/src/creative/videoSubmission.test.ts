@@ -1,3 +1,7 @@
+import {acknowledgeUnknownTask,unknownTaskReviewed} from './taskRecovery';
+import {recoverUnsentCreativeJobs} from './unsentRecovery';
+import {ProviderPreflightError} from '../workflows/providers/errors';
+import {classifyProviderFailure} from '../workflows/executor/errorPolicy';
 import {resolveCreativeQueryCredential} from './queryCredential';
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { createCreativeService } from './service';
@@ -270,4 +274,39 @@ test('legacy drafts with the remote H3 id submit through the local catalog ident
     expect(job.workflowId).toBe('autodl.minimax-h3.i2v-15s');
     expect((await f.service.draft(f.draft.id))?.state).toBe('SUBMITTED');
   } finally { f.db.close(); }
+});
+
+
+test('local preparation fails before the dispatch marker and interrupted unsent jobs recover without a permanent hold',async()=>{
+  const f=await fixture();try{
+    const c=await f.claim(),remote=jest.fn(),prepareInput=jest.fn(async()=>{throw new ProviderPreflightError('LOCAL_INPUT_UNAVAILABLE','参考素材原件缺失');});
+    const adapter=bindCreativeAdapter(f.db as never,{submit:remote,prepareInput} as unknown as ProviderAdapter,c.binding,f.identity,c.operation,'worker',()=>200);
+    try{await adapter.submit(f.input.prepared.requestInput,f.input.prepared.target);throw new Error('expected preflight rejection');}
+    catch(error){expect(classifyProviderFailure('SUBMIT',error)).toMatchObject({disposition:'TERMINAL',error:{code:'LOCAL_INPUT_UNAVAILABLE'}});}
+    expect(remote).not.toHaveBeenCalled();expect((await readCreativeJobBinding(f.db as never,c.task.id))?.state).toBe('RESERVED');
+    f.db.runSync("UPDATE workflow_jobs SET status='UNKNOWN' WHERE id=?",c.task.id);
+    f.db.runSync("UPDATE workflow_operations SET state='BLOCKED' WHERE job_id=?",c.task.id);
+    await recoverUnsentCreativeJobs(f.db as never,300);await recoverUnsentCreativeJobs(f.db as never,301);
+    expect(f.db.getFirstSync<{status:string}>('SELECT status FROM workflow_jobs WHERE id=?',c.task.id)?.status).toBe('FAILED');
+    expect((await readCreativeJobBinding(f.db as never,c.task.id))?.state).toBe('RELEASED');
+    expect(f.db.getAllSync('SELECT id FROM workflow_jobs')).toHaveLength(1);expect(remote).not.toHaveBeenCalled();
+  }finally{f.db.close();}
+});
+
+test('reviewing an unknown dispatched request permits another draft without rewriting facts, releasing cost or sending again',async()=>{
+  const f=await fixture();try{
+    const c=await f.claim();await c.adapter.submit(f.input.prepared.requestInput,f.input.prepared.target);
+    f.db.runSync("UPDATE workflow_jobs SET status='UNKNOWN' WHERE id=?",c.task.id);
+    f.db.runSync("UPDATE workflow_operations SET state='BLOCKED' WHERE job_id=?",c.task.id);
+    await recoverUnsentCreativeJobs(f.db as never,300);
+    expect((await readCreativeJobBinding(f.db as never,c.task.id))?.state).toBe('DISPATCHED');
+    await acknowledgeUnknownTask(f.db as never,c.task.id,400);await acknowledgeUnknownTask(f.db as never,c.task.id,401);
+    expect(await unknownTaskReviewed(f.db as never,c.task.id)).toBe(true);
+    expect(f.db.getFirstSync<{status:string}>('SELECT status FROM workflow_jobs WHERE id=?',c.task.id)?.status).toBe('UNKNOWN');
+    expect((await readCreativeJobBinding(f.db as never,c.task.id))?.state).toBe('DISPATCHED');
+    expect(f.db.getAllSync('SELECT id FROM workflow_operations WHERE job_id=?',c.task.id)).toHaveLength(1);
+    expect(c.remote).toHaveBeenCalledTimes(1);
+    const copy=await f.service.execute({name:'draft.copySubmitted',payload:{id:f.draft.id}},'copy-after-review');expect(copy.status).toBe('completed');
+    expect(f.db.getAllSync('SELECT id FROM workflow_jobs')).toHaveLength(1);
+  }finally{f.db.close();}
 });

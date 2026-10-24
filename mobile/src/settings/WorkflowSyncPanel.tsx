@@ -27,11 +27,12 @@ export function WorkflowSyncPanel() {
   return <View style={styles.card}>
     <Text style={styles.title}>工作流</Text>
     <Text style={styles.note}>仅点击时从官方仓库同步。已安装版本可离线使用，现有任务保持原版本。</Text>
-    {records.map(record => <Text key={record.workflowId} style={styles.row}>{record.workflowId} · {record.version} · {record.source === 'remote' ? '官方同步' : '内置/本地'}</Text>)}
+    {records.map(record => <View key={record.workflowId} style={{paddingVertical:10,borderBottomWidth:1,borderBottomColor:COLORS.border,gap:4}}><Text style={styles.row}>{workflowTitle(record)}</Text><Text style={styles.note}>v{record.version} · {record.source === 'remote' ? '官方同步' : '内置/本地'}</Text></View>)}
     {records.length === 0 && <Text style={styles.note}>暂无已激活工作流</Text>}
     <Pressable testID="workflow-sync-button" accessibilityRole="button" disabled={busy} onPress={sync} style={[styles.button, busy && { opacity: 0.5 }]}><Text style={styles.buttonText}>{busy ? '同步中…' : '同步工作流'}</Text></Pressable>
     {result && <Text accessibilityRole={result.status === 'success' ? undefined : 'alert'} accessibilityLiveRegion="polite" style={[styles.note, result.status !== 'success' && { color: COLORS.danger }]}>{result.status === 'success' ? '同步完成' : result.status === 'partial' ? '部分同步完成' : '同步失败'} · {new Date(result.at).toLocaleString()} · 新增 {result.installed}，跳过 {result.skipped}{result.errors.length ? `\n${result.errors.slice(0, 3).join('\n')}` : ''}</Text>}
     {!!error && <Text accessibilityRole="alert" style={[styles.note, { color: COLORS.danger }]}>{error}</Text>}
   </View>;
 }
-const styles = StyleSheet.create({ card: { padding: 16, marginVertical: 12, borderRadius: 16, backgroundColor: COLORS.surface, gap: 10 }, title: { color: COLORS.text, fontSize: 18, fontWeight: '600' }, note: { color: COLORS.textMuted, fontSize: 13, lineHeight: 20 }, row: { color: COLORS.text, fontSize: 13 }, button: { minHeight: 48, justifyContent: 'center', backgroundColor: COLORS.primary, borderRadius: 10, padding: 12, alignItems: 'center' }, buttonText: { color: COLORS.onPrimary, fontWeight: '600' } });
+function workflowTitle(record:RegistryRecord){try{return JSON.parse(record.definitionJson).metadata?.title||record.workflowId;}catch{return record.workflowId;}}
+const styles = StyleSheet.create({ card: { padding: 12, borderRadius: 10, backgroundColor: COLORS.surface, gap: 10 }, title: { color: COLORS.text, fontSize: 15, fontWeight: '600' }, note: { color: COLORS.textMuted, fontSize: 13, lineHeight: 20 }, row: { color: COLORS.text, fontSize: 13 }, button: { minHeight: 40, justifyContent: 'center', backgroundColor: COLORS.primary, borderRadius: 10, padding: 12, alignItems: 'center' }, buttonText: { color: COLORS.onPrimary, fontWeight: '600' } });

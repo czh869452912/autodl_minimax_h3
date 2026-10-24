@@ -11,7 +11,6 @@ import { CompactWorkbench, IconAction, ParameterSheet, SegmentedChoices, TextAct
 import { MediaPreview } from './MediaPreview';
 import { ImageDraftScreen } from './ImageDraftScreen';
 import { VideoDraftScreen } from './VideoDraftScreen';
-import { CreativeAccountPanel } from './CreativeAccountPanel';
 import { groupWorkbenchDrafts, recentWorkbenchDraft, type WorkbenchMode } from './workbenchSessions';
 import type { AssetVersion } from './types';
 import { COLORS } from '../ui/theme';
@@ -37,7 +36,7 @@ export function CreativeHome({ onLegacyVideo }: { onLegacyVideo: () => void }) {
   const [idea,setIdea]=useState<CreativeIdea>({mode:'image',image:'',video:''});
   const [ready,setReady]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const [active,setActive]=useState<Partial<Record<WorkbenchMode,CreativeDraft>>>({});
-  const [drafts,setDrafts]=useState<CreativeDraft[]>([]),[records,setRecords]=useState(false),[account,setAccount]=useState(false);
+  const [drafts,setDrafts]=useState<CreativeDraft[]>([]),[records,setRecords]=useState(false);
   const lock=useRef(false),leave=useRef<()=>Promise<boolean>>(async()=>true),activeRef=useRef(active);activeRef.current=active;
   const navigation=useMemo(()=>({register:(guard:()=>Promise<boolean>)=>{leave.current=guard;return()=>{if(leave.current===guard)leave.current=async()=>true;};}}),[]);
   const refresh=async()=>{const rows=await creativeService().drafts();setDrafts(rows);return rows;};
@@ -65,7 +64,7 @@ export function CreativeHome({ onLegacyVideo }: { onLegacyVideo: () => void }) {
   const chooseMode=(mode:WorkbenchMode)=>{if(mode===idea.mode)return;void change(async()=>{const rows=await refresh(),restored=await recentWorkbenchDraft(mode,rows),row=restored??await createDraft(mode);const next=restored?{...idea,mode}:{...idea,mode,[mode]:''};await writeCreativeIdea(next);setActive(old=>({...old,[mode]:row}));setIdea(next);});};
   const mode=idea.mode,groups=groupWorkbenchDrafts(drafts,mode),current=active[mode];
   return <CompactWorkbench><View style={s.screen}>
-    <View style={{flexDirection:'row',alignItems:'center',gap:4,paddingHorizontal:8,borderBottomWidth:1,borderBottomColor:COLORS.border}}><View style={{flex:1}}><SegmentedChoices label="创作类型" options={[{id:'image',label:'图片'},{id:'video',label:'视频'}]} value={mode} disabled={!ready || busy} onChange={chooseMode} /></View><IconAction label="新建创作" icon="add" disabled={busy || !ready} onPress={()=>void change(async()=>{const row=await createDraft(mode);setActive(old=>({...old,[mode]:row}));})} /><IconAction label="创作记录与导航" icon="grid_view" onPress={()=>{setRecords(true);void refresh().catch(()=>setError('创作记录读取失败'));}} /><IconAction label="创作账号" icon="key" onPress={()=>setAccount(true)} /></View>
+    <View style={{flexDirection:'row',alignItems:'center',gap:4,paddingHorizontal:8,borderBottomWidth:1,borderBottomColor:COLORS.border}}><View style={{flex:1}}><SegmentedChoices label="创作类型" options={[{id:'image',label:'图片'},{id:'video',label:'视频'}]} value={mode} disabled={!ready || busy} onChange={chooseMode} /></View><IconAction label="新建创作" icon="add" disabled={busy || !ready} onPress={()=>void change(async()=>{const row=await createDraft(mode);setActive(old=>({...old,[mode]:row}));})} /><IconAction label="创作记录与导航" icon="grid_view" onPress={()=>{setRecords(true);void refresh().catch(()=>setError('创作记录读取失败'));}} /><IconAction label="创作账号" icon="key" onPress={()=>router.push({pathname:'/(tabs)/settings',params:{section:'accounts'}})} /></View>
     {error?<View style={{paddingHorizontal:12,paddingVertical:4}}><Text accessibilityRole="alert" style={s.error}>{error}</Text>{!current?<TextAction label="重试恢复工作区" onPress={()=>{setReady(false);void readCreativeIdea().then(value=>{setIdea(value);setError('');setReady(true);}).catch(()=>setError('工作区恢复失败'));}} />:null}</View>:null}
     <WorkbenchNavigationContext.Provider value={navigation}>{current?mode==='image'?<ImageDraftScreen key={current.id} id={current.id} embedded />:<VideoDraftScreen key={current.id} id={current.id} embedded />:<View style={{flex:1,alignItems:'center',justifyContent:'center'}}><ActivityIndicator /><Text style={s.muted}>正在恢复工作区…</Text></View>}</WorkbenchNavigationContext.Provider>
     {records?<ParameterSheet title="创作记录" description={mode==='image'?'图片创作 · 每组包含输入、任务和版本':'视频创作 · 每组包含输入、任务和版本'} onClose={()=>setRecords(false)}>
@@ -78,6 +77,6 @@ export function CreativeHome({ onLegacyVideo }: { onLegacyVideo: () => void }) {
       <TextAction label="设置" onPress={()=>{setRecords(false);router.push('/(tabs)/settings');}} />
       <TextAction label="工作流视频编辑器" onPress={()=>void change(async()=>{setRecords(false);onLegacyVideo();})} />
     </ParameterSheet>:null}
-    {account?<ParameterSheet title="创作账号" onClose={()=>setAccount(false)}><CreativeAccountPanel provider={mode==='image'?'novelai':'autodl'} /></ParameterSheet>:null}
+
   </View></CompactWorkbench>;
 }

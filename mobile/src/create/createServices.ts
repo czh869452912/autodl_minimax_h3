@@ -1,5 +1,7 @@
 import { getDatabase } from '../storage/databaseClient';
 import { assertAppDatabaseWritable } from '../storage/database';
+import {defaultAutodlCredential} from '../creative/accountRuntime';
+import {createInputReader} from '../media/inputReader';
 import { readSettings } from '../settings/storage';
 import type { TaskMediaInput } from '../media/types';
 import { createPromptDraftStore } from '../handoff/promptDraft';
@@ -61,14 +63,17 @@ export const defaultSubmissionDependencies: CreateFormSubmissionDependencies = {
     listActive: () => getWorkflowCatalog().listActive(),
     getActive: id => getWorkflowCatalog().getActive(id),
   },
-  readSettings,
-  async queue({ definition, activeRecord, inputSnapshot, images, audios, token, foregroundTick, handoffId }) {
+  readSettings: async()=>({...await readSettings(),token:(await defaultAutodlCredential())?.token??''}),
+  async queue({ definition, activeRecord, inputSnapshot, images, audios, foregroundTick, handoffId }) {
     const database = getDatabase();
-    const adapters = createBuiltinProviderAdapters({ resolveCredential: (kind) => kind === 'autodl-token' ? token : undefined });
+    const credential=await defaultAutodlCredential(database);
+    if(!credential)throw new Error('请先在创作账号中连接 AutoDL');
+    const adapters = createBuiltinProviderAdapters({ readBase64:createInputReader(database),resolveCredential: (kind) => kind === 'autodl-token' ? credential.token : undefined });
     const runtime = createWorkflowRuntime({ adapters });
     const prepared = runtime.prepareSubmission(definition,
       { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord.contentHash, inputs: inputSnapshot, source: 'user', status: 'ready' },
       { workflowId: activeRecord.workflowId, workflowVersion: activeRecord.version, contentHash: activeRecord.contentHash });
+    await adapters.get(prepared.adapterId)?.prepareInput?.(prepared.requestInput,prepared.target);
     const task = await persistSubmissionCommand(database, 'submission-' + Date.now() + '-' + Math.random().toString(16).slice(2), prepared, { images, audios, handoffId });
     notifyListeners([foregroundTick]);
     return task;

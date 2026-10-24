@@ -18,6 +18,7 @@ export type ProviderStatusUpdate = {
 export type ProviderAdapter = {
   manifest(): PlatformAdapterManifest;
   validateCredentials(): Promise<{ ok: boolean }>;
+  prepareInput?(input:Record<string,unknown>,target?:ProviderTarget):Promise<Record<string,unknown>>;
   submit(input: Record<string, unknown>, target?: ProviderTarget): Promise<ProviderHandle>;
   getStatus(handle: ProviderHandle): Promise<ProviderStatusUpdate>;
 };
@@ -28,7 +29,7 @@ export function getBuiltinArtifactDownloadPolicy(adapterId?: string) {
   return builtinManifests.find((manifest) => manifest.id === adapterId)?.artifactDownloadPolicy;
 }
 
-export function createBuiltinProviderAdapters({ resolveCredential, transport = getNativeHttpTransport(), additional = [] }: { resolveCredential: (kind: string) => string | undefined; transport?: HttpTransport; additional?: ProviderAdapter[] }): Map<string, ProviderAdapter> {
-  const builtins: ProviderAdapter[] = [createAutodlComfyUiAdapter({ token: resolveCredential('autodl-token') ?? '', transport }), ...additional];
+export function createBuiltinProviderAdapters({ resolveCredential, transport = getNativeHttpTransport(), additional = [],readBase64 }: { resolveCredential: (kind: string) => string | undefined; transport?: HttpTransport; additional?: ProviderAdapter[];readBase64?:(uri:string)=>Promise<string> }): Map<string, ProviderAdapter> {
+  const builtins: ProviderAdapter[] = [createAutodlComfyUiAdapter({ token: resolveCredential('autodl-token') ?? '', transport,readBase64 }), ...additional];
   return new Map(builtins.map((adapter) => [adapter.manifest().id, adapter]));
 }

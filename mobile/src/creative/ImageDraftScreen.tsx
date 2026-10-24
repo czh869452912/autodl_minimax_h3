@@ -15,7 +15,6 @@ import { WorkbenchScope } from './WorkbenchScope';
 import { creativeError } from './creativeError';
 import { useDraftSync } from './useDraftSync';
 import { CreativeResults } from './CreativeResults';
-import { CreativeAccountPanel } from './CreativeAccountPanel';
 import { CreativeAssetPicker } from './CreativeAssetPicker';
 import { NovelAiPromptEditor } from './NovelAiPromptEditor';
 import { NovelAiSettings } from './NovelAiSettings';
@@ -37,7 +36,7 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
   const router=useRouter(),navigation=useNavigation();
   const [id,setId]=useState(initialId),[draft,setDraft]=useState<CreativeDraft>(),[input,setInput]=useState<NovelAiDraftInput>(),[baseline,setBaseline]=useState('');
   const [busy,setBusy]=useState(false),[saving,setSaving]=useState(false),[error,setError]=useState(''),[jobStatus,setJobStatus]=useState('');
-  const [editor,setEditor]=useState<string>(),[settings,setSettings]=useState(false),[account,setAccount]=useState(false),[picking,setPicking]=useState<'source'|'mask'>();
+  const [editor,setEditor]=useState<string>(),[settings,setSettings]=useState(false),[picking,setPicking]=useState<'source'|'mask'>();
   const [currentVersion,setCurrentVersion]=useState<AssetVersion>(),[historySignal,setHistorySignal]=useState(0);
   const [resultDraft,setResultDraft]=useState<CreativeDraft>(),[assist,setAssist]=useState(false),[undoInput,setUndoInput]=useState<NovelAiDraftInput>();
   const [promptSelection,setPromptSelection]=useState<{start:number;end:number}|undefined>({start:0,end:0});
@@ -55,14 +54,13 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
     }
   },[draft?.id,draft?.state,draft?.input_json]);
   const closePanel=useCallback(()=>{
-    if(account){setAccount(false);return true;}
     if(picking){setPicking(undefined);return true;}
     if(assist){setAssist(false);return true;}
     if(editor){setEditor(undefined);return true;}
     if(settings){Keyboard.dismiss();setSettings(false);return true;}
     if(processing){exitTool();return true;}
     return false;
-  },[account,picking,assist,editor,settings,processing,exitTool]);
+  },[picking,assist,editor,settings,processing,exitTool]);
   useFocusEffect(useCallback(()=>{const sub=BackHandler.addEventListener('hardwareBackPress',closePanel);return()=>sub.remove();},[closePanel]));
   usePreventRemove(dirty || busy || saving || Boolean(settings || processing),({data})=>{
     if(closePanel())return;
@@ -178,7 +176,7 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
     </>:<Text style={s.muted}>从文字开始创作。V5 的底图支持图生图与局部重绘；Vibe 和 Precise Reference 不适用于 V5。</Text>}
   </View>:null;
   return <SafeAreaView edges={embedded?[]:['top','bottom','left','right']} style={s.screen}><KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'} style={{flex:1}}>
-    {!embedded?<View style={c.header}><IconAction label="返回" icon="arrow_back" disabled={busy || saving} onPress={()=>{if(!closePanel())router.canGoBack()?router.back():router.replace('/(tabs)/create');}} /><Text style={c.headerTitle}>图片创作</Text><Text numberOfLines={1} style={c.caption}>{activeInput?novelAiModelName(activeInput.model):'读取中…'}</Text><IconAction label="创作账号" icon="key" onPress={()=>setAccount(true)} /></View>:null}
+    {!embedded?<View style={c.header}><IconAction label="返回" icon="arrow_back" disabled={busy || saving} onPress={()=>{if(!closePanel())router.canGoBack()?router.back():router.replace('/(tabs)/create');}} /><Text style={c.headerTitle}>图片创作</Text><Text numberOfLines={1} style={c.caption}>{activeInput?novelAiModelName(activeInput.model):'读取中…'}</Text><IconAction label="创作账号" icon="key" onPress={()=>router.push({pathname:'/(tabs)/settings',params:{section:'accounts'}})} /></View>:null}
     {conflict?<View style={c.notice}><Text style={s.error}>草稿已在其他入口更新，本页输入已保留。</Text><TextAction label="载入最新草稿" disabled={busy || saving} onPress={()=>Alert.alert('载入最新草稿','这会放弃本页尚未保存的修改。',[{text:'保留本页',style:'cancel'},{text:'载入最新',onPress:()=>void reload().catch(e=>setError(e.message))}])} /></View>:null}
     {error?<View style={c.notice}><Text accessibilityRole="alert" style={s.error}>{error}</Text>{dirty?<TextAction label="重试保存草稿" disabled={busy || saving} onPress={()=>void save()} />:null}</View>:null}
     <WorkbenchScope draft={draft} />
@@ -200,7 +198,7 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
     {activeInput && editor && !picking?<NovelAiPromptEditor input={activeInput} update={updateActive} editable={editable} tab={editor} setTab={setEditor} onClose={()=>setEditor(undefined)} description={processing==='enhance'?'调整本次增强使用的提示词与角色':'提示词、角色与底图自动保存在本草稿'} references={processing==='enhance'?<Text style={s.muted}>使用打开 Enhance 时选中的原图。关闭增强后可切换生成方式。</Text>:references} />:null}
     {picking?<CreativeAssetPicker kind="image" projectId={draft?.project_id??undefined} onClose={()=>setPicking(undefined)} onChoose={async version=>choose(version.id,picking)} />:null}
     {assist && activeInput?<PromptAssistSheet prompt={activeInput.prompt} kind="image" onApply={prompt=>{setUndoInput(activeInput);updateActive({prompt});}} onClose={()=>setAssist(false)} />:null}
-    {account?<ParameterSheet title="创作账号" onClose={()=>setAccount(false)}><CreativeAccountPanel /></ParameterSheet>:null}
+
   </KeyboardAvoidingView></SafeAreaView>;
 }
 

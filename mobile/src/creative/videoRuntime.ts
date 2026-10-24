@@ -1,3 +1,4 @@
+import {createInputReader} from '../media/inputReader';
 import { creativeVideoWorkflowId } from './videoWorkflow';
 import { getDatabase } from '../storage/databaseClient';
 import { readCreativeDraft, readDraftInputs, editableVideoInput } from './drafts';
@@ -40,6 +41,8 @@ export async function prepareCreativeVideo(id: string) {
   const prepared = runtime.prepareSubmission(definition, { ...provenance, inputs: snapshot, source: 'user', status: 'ready' }, provenance);
   const account = (await creativeAccounts(db).list()).find(a => a.provider_id === 'autodl');
   if (!account) throw new Error('请先绑定 AutoDL 创作凭据');
+  await creativeAccounts(db).resolveExact(account.credential_generation_id);
+  await createBuiltinProviderAdapters({resolveCredential:()=>undefined,readBase64:createInputReader(db)}).get(prepared.adapterId)?.prepareInput?.(prepared.requestInput,prepared.target);
   return { db, draft, images,audios, versionIds: refs.map(r => r.version_id), prepared, account };
 }
 
@@ -47,6 +50,7 @@ export async function confirmCreativeVideo(preview: Awaited<ReturnType<typeof pr
   if (preview.db !== getDatabase()) throw new Error('数据库已恢复或切换，请重新打开草稿');
   const active=await createAppWorkflowCatalog().getActive(preview.prepared.workflowId);
   if(!active||active.version!==preview.prepared.workflowVersion||active.contentHash!==preview.prepared.workflowContentHash)throw new Error('工作流版本已变化，请核对后再生成');
+  await creativeAccounts(preview.db).resolveExact(preview.account.credential_generation_id);
   const authorizationId = await creativeBudget().grant({ provider: 'autodl', generationId: preview.account.credential_generation_id,
     projectId: preview.draft.project_id ?? undefined, operations: ['video.generate'], requestLimit: 1,
     amountLimit: null, allowUnknownCost: true, maxUnknownRequests: 1, expiresAt: Date.now() + 15 * 60_000 });

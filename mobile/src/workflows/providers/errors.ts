@@ -1,5 +1,8 @@
 export type ProviderErrorKind = 'network' | 'timeout' | 'auth' | 'http' | 'provider' | 'response';
 
+/** A local failure before a provider request can be sent. */
+export class ProviderPreflightError extends Error {constructor(public readonly code:string,message:string){super(message);this.name='ProviderPreflightError';}}
+
 export class ProviderError extends Error {
   constructor(
     public readonly provider: string,

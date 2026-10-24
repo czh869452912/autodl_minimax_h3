@@ -101,3 +101,14 @@ test('confirmed replacement creates exactly one new intent and preserves origina
     expect(db.getAllSync("SELECT id FROM workflow_operations WHERE state='PENDING'")).toHaveLength(1);
   } finally { ids.mockRestore(); db.close(); }
 });
+
+
+test('replacement preflight failure preserves only the original unknown task and never enqueues a placeholder',async()=>{
+  const db=createInitializedRealSqliteTestDb();try{
+    db.runSync("INSERT INTO workflow_jobs(id,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,status,created_at,updated_at) VALUES('u','h3','1','hash','a','1','{}','UNKNOWN',1,1)");
+    const signal=jest.fn(),commands=createTaskCommandService({db:db as never,fileExists:async()=>false,resolveCasUri:p=>p,signal,prepareReplacement:async()=>{throw new Error('参考素材原件不可用');}});
+    await expect(commands.replaceUnknownAfterConfirmation('u')).rejects.toThrow('参考素材原件不可用');
+    expect(db.getAllSync('SELECT id,status FROM workflow_jobs')).toEqual([{id:'u',status:'UNKNOWN'}]);
+    expect(db.getAllSync('SELECT id FROM workflow_operations')).toEqual([]);expect(signal).not.toHaveBeenCalled();
+  }finally{db.close();}
+});
