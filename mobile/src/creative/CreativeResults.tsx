@@ -1,10 +1,10 @@
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, NativeModules, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getDatabase } from '../storage/databaseClient';
-import { creativeService, exportCreativeVersion } from './runtime';
+import { creativeFiles, creativeService, exportCreativeVersion } from './runtime';
 import type { CreativeDraft } from './drafts';
 import type { AssetVersion } from './types';
 import { VideoPlayer } from '../media/VideoPlayer';
@@ -16,6 +16,7 @@ import { SectionHeading, TextAction } from './WorkbenchUI';
 import { MediaPreview } from './MediaPreview';
 import { defaultNovelAiDraft, novelAiDraftInput } from './novelAiProtocol';
 import {ImageMetadataPanel} from './ImageMetadataPanel';
+import { createEnhanceInput } from './novelAiEnhancement';
 
 export const creativeJobLabel = (status: string) => ({ DRAFT: '准备中', VALIDATING: '检查生成条件', READY_TO_SUBMIT: '等待提交', SUBMITTING: '正在提交', QUEUED: '排队中', RUNNING: '正在生成', SUCCEEDED: '生成已完成', PARTIAL_SUCCEEDED: '部分生成完成', FAILED: '生成未完成，请查看原因', CANCELLED: '已取消', UNKNOWN: '暂时无法确认结果，请核查原任务' }[status] ?? '正在读取进度');
 
@@ -50,9 +51,17 @@ export function CreativeResults({ draft, disabled = false }: { draft: CreativeDr
   const continueWith = async (video: boolean, action?: 'img2img'|'infill', enhance=false) => {
     if (!current) return;
     const parsed=novelAiDraftInput.safeParse(current.recipe.input), recipe=parsed.success?parsed.data:defaultNovelAiDraft;
+    let enhancementInput;
+    if (enhance) {
+      if (!parsed.success) throw new Error('图片生成参数不完整，请先恢复参数后再增强');
+      if (!current.relativePath || (await creativeFiles().verify(current.id))?.state !== 'AVAILABLE') throw new Error('底图原件缺失，请先恢复');
+      if (!NativeModules.AutoDLMedia?.readCreativeImageInfo) throw new Error('请安装支持增强的新版 Android 应用');
+      const info = await NativeModules.AutoDLMedia.readCreativeImageInfo(`${FileSystem.documentDirectory}${current.relativePath}`);
+      enhancementInput = createEnhanceInput(recipe, current.id, info.width, info.height);
+    }
     const result = await creativeService().execute(video
       ? { name: 'draft.createVideo', payload: { versionId: current.id, projectId: draft.project_id ?? undefined, shotId: draft.shot_id ?? undefined } }
-      : { name: 'draft.createImage', payload: { fromVersionId: current.id, projectId: draft.project_id ?? undefined, shotId: draft.shot_id ?? undefined, ...(action ? {input:{...recipe,action,enhance,sourceVersionId:current.id,maskVersionId:null,maskStrokes:[],...(enhance?{samples:1,strength:0.2,noise:0,seed:null}: {})}} : {}) } }, createId());
+      : { name: 'draft.createImage', payload: { fromVersionId: current.id, projectId: draft.project_id ?? undefined, shotId: draft.shot_id ?? undefined, ...(action ? {input:enhancementInput ?? {...recipe,action,enhance:false,enhancement:null,sourceVersionId:current.id,maskVersionId:null,maskStrokes:[]}} : {}) } }, createId());
     if (result.status === 'completed') {
       const target = { pathname: video ? '/creative-draft/[id]' as const : '/image-draft/[id]' as const, params: { id: result.value.draftId } };
       if (video) router.push(target); else router.replace(target);
@@ -72,6 +81,7 @@ export function CreativeResults({ draft, disabled = false }: { draft: CreativeDr
       <SectionHeading title={draft.state === 'EDITING' ? '参考结果' : '创作结果'} detail={`版本 ${current.versionNo}`} />
       {current.state === 'AVAILABLE' && current.relativePath ? current.mime?.startsWith('video/') ? <VideoPlayer source={`${FileSystem.documentDirectory}${current.relativePath}`} /> : <Pressable accessibilityRole="button" accessibilityLabel="全屏查看图片" onPress={()=>setFullScreen(true)}><Image accessibilityLabel={`当前图片，版本 ${current.versionNo}`} source={{ uri: `${FileSystem.documentDirectory}${current.relativePath}` }} style={{width:'100%',aspectRatio:aspect,minHeight:240,maxHeight:640,borderRadius:16,backgroundColor:COLORS.mediaBackground}} resizeMode="contain" /></Pressable> : <Text style={s.muted}>原文件尚不可用，请在素材详情中恢复。</Text>}
       {draft.provider_id==='novelai' && recipe ? <Text selectable style={s.muted}>{dimensions?.width} × {dimensions?.height} · Seed {recipe.seed ?? '未知'}</Text> : null}
+      {draft.provider_id==='novelai' && current.recipe.input && current.mime?.startsWith('image/')?<ListAction label="增强画质 · Enhance" disabled={busy || disabled || current.state!=='AVAILABLE'} onPress={()=>void work(()=>continueWith(false,'img2img',true))} />:null}
       {current.mime?.startsWith('image/')?<ImageMetadataPanel key={current.id} version={current} />:null}
       {current.mime?.startsWith('image/') && current.state==='AVAILABLE'?<TextAction label="超分图片 · 2×" disabled={busy || disabled} onPress={()=>void work(async()=>{const result=await creativeService().execute({name:'draft.createUpscale',payload:{versionId:current.id,projectId:draft.project_id??undefined}},createId());if(result.status==='completed')router.push({pathname:'/image-draft/[id]',params:{id:result.value.draftId}});})} />:null}
       <Text style={s.muted}>{draft.job_id && current.recipe.jobId !== draft.job_id ? '正在查看历史结果 · ' : ''}选择与预览不会改变镜头已采用的版本。</Text>
@@ -80,7 +90,6 @@ export function CreativeResults({ draft, disabled = false }: { draft: CreativeDr
       </Pressable>)}</ScrollView> : null}
       {draft.state === 'SUBMITTED' && draft.provider_id === 'novelai' && current.recipe.input ? <ListAction label="继续修改" disabled={busy || disabled} onPress={() => void work(() => continueWith(false))} /> : null}
       {draft.provider_id==='novelai'?<View style={s.row}><TextAction label="以此图生成" disabled={busy || disabled || current.state!=='AVAILABLE'} onPress={()=>void work(()=>continueWith(false,'img2img'))} /><TextAction label="局部重绘" disabled={busy || disabled || current.state!=='AVAILABLE'} onPress={()=>void work(()=>continueWith(false,'infill'))} /></View>:null}
-      {draft.provider_id==='novelai' && (current.recipe.input as {model?:string}|undefined)?.model?.startsWith('nai-diffusion-5')?<TextAction label="增强画质" disabled={busy || disabled || current.state!=='AVAILABLE'} onPress={()=>void work(()=>continueWith(false,'img2img',true))} />:null}
       <View style={s.row}><ListAction label={draft.shot_id ? '用于此镜头' : '保存到相册'} secondary={!draft.shot_id} disabled={busy || disabled || current.state !== 'AVAILABLE'} onPress={() => void work(async () => {
         if (draft.shot_id && draft.project_id) {
           const shot = (await creativeService().shots(draft.project_id)).find(s => s.id === draft.shot_id);

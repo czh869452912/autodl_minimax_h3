@@ -4,10 +4,11 @@ import { CreativeResults } from './CreativeResults';
 import type { AssetVersion } from './types';
 import type { CreativeDraft } from './drafts';
 import {defaultNovelAiDraft} from './novelAiProtocol';
+import {NativeModules} from 'react-native';
 const mockPush = jest.fn(), mockReplace = jest.fn(), mockExecute = jest.fn();
 let mockStatus = 'SUCCEEDED', mockVersions: AssetVersion[] = [];
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, replace: mockReplace }), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
-jest.mock('./runtime', () => ({ creativeService: () => ({ versions: async () => mockVersions, execute: mockExecute }), exportCreativeVersion: jest.fn() }));
+jest.mock('./runtime', () => ({ creativeService: () => ({ versions: async () => mockVersions, execute: mockExecute }), creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})}), exportCreativeVersion: jest.fn() }));
 jest.mock('../storage/databaseClient', () => ({ getDatabase: () => ({ getFirstAsync: async () => ({ status: mockStatus }) }) }));
 jest.mock('./MediaPreview', () => ({ MediaPreview: () => null }));
 jest.mock('../media/VideoPlayer', () => ({ VideoPlayer: () => null }));
@@ -17,6 +18,20 @@ beforeEach(() => {
   jest.clearAllMocks(); mockStatus = 'SUCCEEDED';
   mockVersions = [2, 1].map(n => ({ id: `version-${n}`, assetId: 'asset', versionNo: n, source: 'generated', state: 'AVAILABLE', relativePath: `${n}.png`, mime: 'image/png', recipe: { jobId: 'job',input:defaultNovelAiDraft } }));
   mockExecute.mockResolvedValue({ status: 'completed', value: { draftId: 'next' } });
+});
+
+test('Enhance opens an editable draft from the selected original file size without submitting generation', async () => {
+  NativeModules.AutoDLMedia = { readCreativeImageInfo: jest.fn(async()=>({width:640,height:640})) };
+  let tree!:ReturnType<typeof create>;
+  try {
+    await act(async()=>{tree=create(<CreativeResults draft={draft} />);});
+    act(()=>findButton(tree,'查看版本 1').props.onPress());
+    await act(async()=>findButton(tree,'增强画质 · Enhance').props.onPress());
+    expect(NativeModules.AutoDLMedia.readCreativeImageInfo).toHaveBeenCalledWith(expect.stringContaining('1.png'));
+    expect(mockExecute).toHaveBeenCalledTimes(1);
+    expect(mockExecute).toHaveBeenCalledWith({name:'draft.createImage',payload:{fromVersionId:'version-1',projectId:'project',shotId:'shot',input:expect.objectContaining({enhancement:{scale:'max',sourceWidth:640,sourceHeight:640},width:640,height:640,sourceVersionId:'version-1',samples:1,strength:0.5,noise:0,seed:null})}},expect.any(String));
+    expect(mockReplace).toHaveBeenCalledWith({pathname:'/image-draft/[id]',params:{id:'next'}});
+  } finally {act(()=>tree?.unmount());delete NativeModules.AutoDLMedia;}
 });
 
 test('continuing edits restores the chosen version and preserves project and shot without growing the route stack', async () => {

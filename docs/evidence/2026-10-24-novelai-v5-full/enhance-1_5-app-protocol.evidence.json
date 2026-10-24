@@ -1,0 +1,69 @@
+{
+  "case": "enhance-1_5-custom",
+  "source": "direct-official-api-request-from-current-app-protocol-not-browser-har",
+  "at": "2026-10-24T08:51:05.212Z",
+  "endpoint": "https://image.novelai.net/ai/generate-image",
+  "status": 200,
+  "contentType": "application/json",
+  "requestHash": "69a64f7b01b08f6bb91a0bbf8a96b3ef1b255e5e606691f07e288390f8a6a57b",
+  "request": {
+    "input": "scenery, no humans, a small wooden observatory on a grassy hill, telescope, starry night, warm window light, peaceful atmosphere, anime background art, very aesthetic, masterpiece, no text, -2::upscaled, blurry::,",
+    "model": "nai-diffusion-5-full",
+    "action": "img2img",
+    "parameters": {
+      "params_version": 4,
+      "width": 1280,
+      "height": 1856,
+      "steps": 23,
+      "scale": 7,
+      "cfg_rescale": 0,
+      "seed": 1653132608,
+      "n_samples": 1,
+      "sampler": "k_euler_ancestral",
+      "noise_schedule": "karras",
+      "negative_prompt": "nsfw, lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page",
+      "qualityToggle": false,
+      "ucPreset": 3,
+      "image_format": "png",
+      "tag_hint_qt": 1,
+      "tag_hint_uc_preset": 2,
+      "straight_alpha": true,
+      "deliberate_euler_ancestral_bug": false,
+      "prefer_brownian": true,
+      "v4_prompt": {
+        "caption": {
+          "base_caption": "scenery, no humans, a small wooden observatory on a grassy hill, telescope, starry night, warm window light, peaceful atmosphere, anime background art, very aesthetic, masterpiece, no text, -2::upscaled, blurry::,",
+          "char_captions": []
+        },
+        "use_coords": false,
+        "use_order": true
+      },
+      "v4_negative_prompt": {
+        "caption": {
+          "base_caption": "nsfw, lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page",
+          "char_captions": []
+        },
+        "legacy_uc": false
+      },
+      "image": {
+        "redactedBinary": true,
+        "bytes": 1765669,
+        "sha256": "8d0bb62707c8195167e8d42fa4686a3cda278a9a69c2377cfc7cb051cea9fded"
+      },
+      "strength": 0.35,
+      "noise": 0.05,
+      "extra_noise_seed": 1653132607,
+      "color_correct": false
+    }
+  },
+  "images": [
+    {
+      "index": 0,
+      "seed": 1653132608,
+      "width": 1280,
+      "height": 1856,
+      "bytes": 3882771,
+      "sha256": "2923bc12a3e0f3cade8d8cbed1b1003fe10a0e9bc9be12cabb388a90947e3d48"
+    }
+  ]
+}

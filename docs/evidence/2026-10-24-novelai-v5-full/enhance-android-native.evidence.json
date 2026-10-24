@@ -1,0 +1,52 @@
+{
+  "source": "actual-android-native-response-in-local-durable-store",
+  "operation": "Enhance",
+  "model": "nai-diffusion-5-full",
+  "effort": "high",
+  "scale": "1.5",
+  "strength": 0.36,
+  "noise": 0.05,
+  "sourceSize": {
+    "width": 832,
+    "height": 1216
+  },
+  "images": [
+    {
+      "index": 0,
+      "seed": 1496534670,
+      "width": 1280,
+      "height": 1856,
+      "bytes": 4056282,
+      "sha256": "90460a3c3a914948053395e000c5f4f288746abbb7e76901295f00a848d512d5"
+    }
+  ],
+  "paidRequestRepeated": false,
+  "recovery": {
+    "source": "read-only-android-sqlite-snapshot",
+    "jobs": [
+      {
+        "id": "job:creative-image:4b1a06e407ca4f7d7afc44fa5c79028c:3",
+        "status": "SUCCEEDED"
+      }
+    ],
+    "operations": [
+      {
+        "kind": "SUBMIT",
+        "state": "SUCCEEDED",
+        "attempt": 1
+      },
+      {
+        "kind": "STATUS_SYNC",
+        "state": "SUCCEEDED",
+        "attempt": 29
+      },
+      {
+        "kind": "ARTIFACT_DOWNLOAD",
+        "state": "SUCCEEDED",
+        "attempt": 1
+      }
+    ],
+    "assetVersionCount": 3,
+    "foreignKeyViolations": 0
+  }
+}

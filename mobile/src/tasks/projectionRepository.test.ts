@@ -56,6 +56,17 @@ test('loads the first 40 task cards without selecting persisted input or attachm
   } finally { db.close(); }
 });
 
+test('preserves the image adapter identity used to route cards to creative results', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    insertTask(db, 1);
+    db.runSync("UPDATE tasks SET adapter_id='novelai-image' WHERE id='task-0001'");
+    const window = await createTaskProjectionRepository(db as never).readWindow(40);
+    expect(window.items[0]).toMatchObject({ id: 'task-0001', adapterId: 'novelai-image' });
+    expect(window.items[0]).not.toHaveProperty('inputSnapshot');
+  } finally { db.close(); }
+});
+
 test('uses a stable keyset cursor and bounds a task-card window to 120 rows', async () => {
   const db = createInitializedRealSqliteTestDb();
   try {

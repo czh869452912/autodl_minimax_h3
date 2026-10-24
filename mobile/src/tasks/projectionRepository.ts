@@ -5,6 +5,7 @@ import type { TaskCard, TaskCursor } from './taskCard';
 type TaskCardRow = {
   can_cancel?: number;
   id: string;
+  adapter_id?: string | null;
   prompt: string;
   status: TaskStatus;
   resolution: string;
@@ -72,7 +73,7 @@ const taskCardColumns = [
   "(SELECT o.state FROM workflow_operations o WHERE o.job_id=tasks.id AND o.kind='STATUS_SYNC' ORDER BY o.created_at DESC,o.id DESC LIMIT 1) AS sync_state",
   "(SELECT CASE WHEN json_valid(o.last_error_json) THEN json_extract(o.last_error_json,'$.code') END FROM workflow_operations o WHERE o.job_id=tasks.id AND o.kind='STATUS_SYNC' ORDER BY o.created_at DESC,o.id DESC LIMIT 1) AS sync_error_code",
   "EXISTS(SELECT 1 FROM workflow_operations c WHERE c.job_id=tasks.id AND c.kind='SUBMIT' AND c.state='PENDING' AND c.attempt=0) AS can_cancel",
-  'id', 'prompt', 'status', 'resolution', 'duration',
+  'id', 'adapter_id', 'prompt', 'status', 'resolution', 'duration',
   'video_url', 'local_uri', 'thumbnail_url',
   'download_state', 'download_error', 'download_progress',
   'gallery_uri', 'export_state', 'export_error',
@@ -92,6 +93,7 @@ function optionalNumber(value: number | null | undefined): number | undefined {
 function toTaskCard(row: TaskCardRow): TaskCard {
   return {
     id: row.id,
+    ...(optionalString(row.adapter_id) ? { adapterId: optionalString(row.adapter_id) } : {}),
     canCancel: Boolean(row.can_cancel),
     syncState: row.sync_state,
     syncErrorCode: optionalString(row.sync_error_code),

@@ -2,8 +2,10 @@ import { z } from 'zod';
 import CryptoJS from 'crypto-js';
 import { Buffer } from 'buffer';
 import { addAutoText, negativePrefix, NEGATIVE_PRESETS, presetHint, QUALITY_PRESETS, qualitySuffix, splitPromptMix } from './novelAiPresets';
+import { enhanceRequestSize, enhanceScales } from './novelAiEnhancement';
+import { isImageBase64 } from '../media/base64';
 
-export const NOVELAI_CAPABILITIES_VERSION = '2026-10-24-v5-full-2';
+export const NOVELAI_CAPABILITIES_VERSION = '2026-10-24-v5-full-enhance-3';
 export const NOVELAI_MODELS = ['nai-diffusion-5-full', 'nai-diffusion-5-curated', 'nai-diffusion-4-5-full', 'nai-diffusion-4-5-curated'] as const;
 export const NOVELAI_SAMPLERS = ['k_euler_ancestral', 'k_euler', 'k_dpmpp_2s_ancestral', 'k_dpmpp_2m_sde', 'k_dpmpp_2m', 'k_dpmpp_sde'] as const;
 export const samplerNames = ['Euler Ancestral', 'Euler', 'DPM++ 2S Ancestral', 'DPM++ 2M SDE', 'DPM++ 2M', 'DPM++ SDE'];
@@ -26,6 +28,7 @@ export const novelAiDraftInput = z.object({
   samples: z.number().int().min(1).max(4).default(1), transparent: z.boolean().default(false), straightAlpha: z.boolean().default(true),
   autoText: z.boolean().default(true), action: z.enum(['generate', 'img2img', 'infill']).default('generate'),
   enhance: z.boolean().default(false),
+  enhancement: z.object({ scale: z.enum(['1', '1.5', '2', 'max']), sourceWidth: z.number().int().min(64).max(49152), sourceHeight: z.number().int().min(64).max(49152) }).strict().nullable().default(null),
   sourceVersionId: versionId, maskVersionId: versionId,
   maskStrokes: z.array(z.object({ radius: z.number().min(0.005).max(0.25), points: z.array(point).min(1).max(2048) }).strict()).max(100).default([]),
   strength: z.number().min(0).max(1).default(0.7), noise: z.number().min(0).max(1).default(0),
@@ -34,6 +37,13 @@ export const novelAiDraftInput = z.object({
   chunks: z.array(z.object({ name: z.string().min(1).max(80), text }).strict()).max(50).default([]),
 }).strict().superRefine((value, ctx) => {
   const v5 = value.model.startsWith('nai-diffusion-5');
+  if (value.enhancement) {
+    const e = value.enhancement, size = enhanceRequestSize(e);
+    if (value.action !== 'img2img' || value.samples !== 1 || !value.sourceVersionId || value.enhance !== (e.scale === 'max') ||
+      !enhanceScales(e.sourceWidth, e.sourceHeight, value.model).includes(e.scale) || value.width !== size.width || value.height !== size.height ||
+      value.strength < 0.01 || value.strength > 0.99 || value.noise > 0.99)
+      ctx.addIssue({ code: 'custom', message: 'Enhance 的底图、倍率、尺寸或强度已改变，请在增强面板中重新选择' });
+  }
   if (value.width * value.height > NOVELAI_MAX_PIXELS) ctx.addIssue({ code: 'custom', message: '图片像素总数不能超过 3145728' });
   if (value.characters.length > (v5 ? 32 : 6)) ctx.addIssue({ code: 'custom', message: v5 ? '最多 32 个角色' : 'V4.5 最多 6 个角色' });
   if (v5 && value.noiseSchedule !== 'karras') ctx.addIssue({ code: 'custom', message: 'V5 使用 Karras 噪声计划' });
@@ -66,6 +76,10 @@ export function prepareNovelAiRequest(value: unknown, random = Math.random, medi
   const mixes=splitPromptMix(prompt), base=mixes[0], textBlock = base.search(/(?:^|[\s,.:\[\]{}、。])text:(?!:)/i);
   if (pieces.length) mixes[0] = textBlock < 0 ? [base, ...pieces].filter(Boolean).join(', ') : `${[base.slice(0, textBlock).replace(/[\s,]+$/, ''), ...pieces].filter(Boolean).join(', ')}, ${base.slice(textBlock).replace(/^[\s,]+/, '')}`;
   prompt=mixes.join('|');
+  if (draft.enhancement && draft.enhancement.scale !== 'max' && !prompt.includes('upscaled, blurry')) {
+    const index = prompt.search(/(?:^|[\s,.:\[\]{}、。])text:(?!:)/i);
+    prompt = index < 0 ? `${prompt}, -2::upscaled, blurry::,` : `${prompt.slice(0, index)}, -2::upscaled, blurry::, ${prompt.slice(index)}`;
+  }
   if (v5 && draft.autoText) prompt = addAutoText(prompt, characters, draft.useCoordinates);
   const ucPreset = medium ? 'heavy' : draft.negativePreset;
   let negative = [negativePrefix(draft.model, ucPreset), medium ? '' : draft.negative].filter(Boolean).join(', ');
@@ -96,10 +110,11 @@ export function parseNovelAiResponse(raw: string, upscale=false) {
   const parsed = z.object({ images: z.array(z.object({ image: z.string().min(1).max(upscale?44*1024*1024:16 * 1024 * 1024), index: z.number().int().min(0).max(upscale?0:3), seed: z.number().int().min(0).max(4294967295).optional() })).min(1).max(upscale?1:4) }).parse(JSON.parse(raw));
   const indexes = new Set<number>();
   return parsed.images.map(image => {
-    if ((!upscale && image.seed===undefined) || indexes.has(image.index) || !/^[A-Za-z0-9+/]+={0,2}$/.test(image.image) || image.image.length % 4 !== 0) throw new Error('NOVELAI_IMAGE_INVALID');
+    if ((!upscale && image.seed===undefined) || indexes.has(image.index) || !isImageBase64(image.image)) throw new Error('NOVELAI_IMAGE_INVALID');
     indexes.add(image.index);
     const bytes = Buffer.from(image.image, 'base64');
-    if (bytes.length < 33 || bytes.subarray(0,8).toString('hex') !== '89504e470d0a1a0a' || bytes.subarray(12,16).toString('ascii') !== 'IHDR') throw new Error('NOVELAI_IMAGE_INVALID');
+    // Hermes may return a plain Uint8Array from Buffer.subarray; decode on Buffer itself.
+    if (bytes.length < 33 || bytes.toString('hex',0,8) !== '89504e470d0a1a0a' || bytes.toString('ascii',12,16) !== 'IHDR') throw new Error('NOVELAI_IMAGE_INVALID');
     const width = bytes.readUInt32BE(16), height = bytes.readUInt32BE(20);
     if (width < 1 || height < 1 || width * height > (upscale?12582912:NOVELAI_MAX_PIXELS) || bytes.length > (upscale?20:12) * 1024 * 1024) throw new Error('NOVELAI_IMAGE_TOO_LARGE');
     return { ...image, width, height, mime: 'image/png' as const };

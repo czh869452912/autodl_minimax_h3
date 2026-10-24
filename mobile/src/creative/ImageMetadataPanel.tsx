@@ -21,7 +21,8 @@ export function imageMetadataFields(raw:Record<string,string>,recipe:Record<stri
     ['生成尺寸',comment.width && comment.height?`${comment.width} × ${comment.height}`:input?.width && input?.height?`${input.width} × ${input.height}`:undefined],
     ['角色',caption?.char_captions?.length?caption.char_captions:input?.characters?.length?input.characters:undefined],
     ['角色负面',negative?.char_captions?.length?negative.char_captions:undefined],
-    ['来源软件',raw.Software],['来源任务',recipe.jobId],['处理',recipe.operation==='upscale'?'独立超分 · 2×':input?.enhance?'最大画质增强':undefined],
+    ['来源软件',raw.Software],['来源任务',recipe.jobId],['处理',recipe.operation==='upscale'?'独立超分 · 2×':input?.enhancement?`Enhance · ${input.enhancement.scale==='max'?'Max':`${input.enhancement.scale}×`}`:input?.enhance?'最大画质增强':undefined],
+    ['增强强度',input?.enhancement?input.strength:undefined],['增强噪声',input?.enhancement?input.noise:undefined],
   ].filter((row):row is [string,any]=>row[1]!==undefined && row[1]!==null && row[1]!=='').map(([label,value])=>({label,value:typeof value==='object'?JSON.stringify(value,null,2):String(value)}));
 }
 function MetadataSheet({version,onClose}:{version:AssetVersion;onClose:()=>void}){

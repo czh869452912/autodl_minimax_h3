@@ -28,7 +28,7 @@ export function novelAiResponseStore(db: AppDatabase): NovelAiResponseStore {
     const images = parseNovelAiResponse(await FileSystem.readAsStringAsync(uri),upscale);
     const result = [];
     for (const image of images) {
-      const staged = await createAttachmentStore(db).externalize({ dataUri: `data:image/png;base64,${image.image}` });
+      const staged = await createAttachmentStore(db).externalize({ type: 'data', value: image.image, mimeType: 'image/png' });
       try {
         const hash = staged.hashes[0];
         if (!hash) throw new Error('NOVELAI_IMPORT_FAILED');
@@ -50,6 +50,13 @@ export async function prepareCreativeImage(id: string) {
     const ref = refs.find(r => r.version_id === versionId);
     if (!ref || ref.state !== 'AVAILABLE' || !ref.mime?.startsWith('image/')) throw new Error('底图或蒙版原件待恢复');
     if((await creativeFiles().verify(ref.version_id))?.state!=='AVAILABLE')throw new Error('底图或蒙版原件缺失或校验失败，请先恢复原件');
+    if (input.enhancement && !mask) {
+      if (!NativeModules.AutoDLMedia?.prepareNovelAiUpscale) throw new Error('请安装支持增强的新版 Android 应用');
+      // Enhance sends the original pixels; resizing first changes the diffusion input.
+      const media = await NativeModules.AutoDLMedia.prepareNovelAiUpscale(`${FileSystem.documentDirectory}${ref.relative_path}`);
+      if (media.width !== input.enhancement.sourceWidth || media.height !== input.enhancement.sourceHeight) throw new Error('底图尺寸已改变，请从原图重新打开 Enhance');
+      return media.image as string;
+    }
     if (!NativeModules.AutoDLMedia?.prepareNovelAiImage) throw new Error('请安装支持图生图的新版 Android 应用');
     return NativeModules.AutoDLMedia.prepareNovelAiImage(`${FileSystem.documentDirectory}${ref.relative_path}`, input.width, input.height, mask, '[]') as Promise<string>;
   };

@@ -6,6 +6,18 @@ import { COLORS } from '../ui/theme';
 import type { TaskCard } from './taskCard';
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
+test('NovelAI image jobs open creative results instead of offering legacy video download and export',()=>{
+  const item:TaskCard={id:'image-job',adapterId:'novelai-image',prompt:'an observatory',status:'SUCCESS',resolution:'',duration:0,createdAt:1,updatedAt:2,downloadState:'IDLE',exportState:'NOT_REQUESTED'};
+  const onOpen=jest.fn(),onDownload=jest.fn();let tree!:ReturnType<typeof create>;
+  try {
+    act(()=>{tree=create(<TaskCardRow item={item} busy={false} onOpen={onOpen} onDownload={onDownload} onExport={jest.fn()} onRemove={jest.fn()} />);});
+    expect(tree.root.findAllByProps({accessibilityLabel:'下载视频'})).toHaveLength(0);
+    expect(tree.root.findAllByType(Text).some(n=>n.props.children==='图片')).toBe(true);
+    act(()=>tree.root.findByProps({accessibilityLabel:'查看创作结果'}).props.onPress());
+    expect(onOpen).toHaveBeenCalledWith('image-job');expect(onDownload).not.toHaveBeenCalled();
+  }finally{act(()=>tree?.unmount());}
+});
+
 test('a failed derivative keeps the original downloaded without offering retired conversion', () => {
   const item: TaskCard = { id: 'a', prompt: 'p', status: 'SUCCESS', resolution: '768p', duration: 5, createdAt: 1, updatedAt: 2, downloadState: 'DOWNLOADED', compatibilityState: 'FAILED', exportState: 'EXPORTED' };
   const retry = jest.fn();

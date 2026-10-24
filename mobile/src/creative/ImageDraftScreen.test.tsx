@@ -3,6 +3,7 @@ import { act, create } from 'react-test-renderer';
 import { Alert, TextInput } from 'react-native';
 import { ImageDraftScreen } from './ImageDraftScreen';
 import { defaultNovelAiDraft } from './novelAiProtocol';
+import { createEnhanceInput } from './novelAiEnhancement';
 
 let mockDraft: any;
 const mockExecute = jest.fn(async (command: any) => { mockDraft = { ...mockDraft, input_json: JSON.stringify(command.payload.input), revision: mockDraft.revision + 1 }; return { status: 'completed', value: {} }; });
@@ -39,6 +40,29 @@ test('generate saves the latest edits before preparing and ignores duplicate tap
     expect(mockExecute.mock.invocationCallOrder[0]).toBeLessThan(mockPrepare.mock.invocationCallOrder[0]);
     expect(Alert.alert).toHaveBeenCalledWith('确认生成 1 张图片', expect.any(String), expect.any(Array), expect.any(Object));
   } finally { act(() => tree?.unmount()); }
+});
+
+test('Enhance panel edits scale, magnitude and advanced parameters before one explicit enhancement confirmation', async()=>{
+  mockDraft.input_json=JSON.stringify(createEnhanceInput({...defaultNovelAiDraft,prompt:'an observatory'},'source',832,1216));
+  let tree!:ReturnType<typeof create>;
+  try {
+    await act(async()=>{tree=create(<ImageDraftScreen id="d" />);});
+    expect(button(tree,'Max').props.accessibilityState.checked).toBe(true);
+    act(()=>button(tree,'1.5×').props.onPress());
+    act(()=>button(tree,'5').props.onPress());
+    expect(JSON.stringify(tree.toJSON())).toContain('1280');
+    act(()=>button(tree,'高级设置').props.onPress());
+    const strength=tree.root.findAllByType(TextInput).find(n=>n.props.accessibilityLabel==='Strength（0.01–0.99）')!;
+    act(()=>strength.props.onChangeText('0.35'));
+    const noise=tree.root.findAllByType(TextInput).find(n=>n.props.accessibilityLabel==='Noise（0–0.99）')!;
+    act(()=>noise.props.onChangeText('0.05'));
+    expect(mockPrepare).not.toHaveBeenCalled();
+    await act(async()=>button(tree,'增强图片').props.onPress());
+    expect(JSON.parse(mockDraft.input_json)).toMatchObject({enhancement:{scale:'1.5'},enhance:false,width:1280,height:1856,strength:0.35,noise:0.05,samples:1});
+    expect(mockPrepare).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).toHaveBeenCalledWith('确认增强图片',expect.stringContaining('倍率 1.5，强度 0.35，噪声 0.05'),expect.any(Array),expect.any(Object));
+    expect(require('./novelAiRuntime').confirmCreativeImage).not.toHaveBeenCalled();
+  }finally{act(()=>tree?.unmount());}
 });
 
 test('failed save preserves input and prevents generation preparation', async () => {

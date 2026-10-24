@@ -7,6 +7,7 @@ import { withAsyncSchedulerLease } from '../tasks/scheduler';
 import { withWriteTransaction } from '../storage/sqliteBusy';
 import { assertAppDatabaseWritableAsync } from '../storage/database';
 import { getDatabase } from '../storage/databaseClient';
+import { isImageBase64 } from './base64';
 
 const IMAGE_BYTES = 20 * 1024 * 1024;
 const newOwnerId = () => CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex);
@@ -49,10 +50,11 @@ async function importImage(uri: string, mimeHint?: string): Promise<ArtifactCasB
   let mime = mimeHint ?? '';
   try {
     if (uri.startsWith('data:')) {
-      const match = /^data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(uri);
-      if (!match || match[2].length % 4 || match[2].length > Math.ceil(IMAGE_BYTES / 3) * 4) throw new Error('图片编码无效或超过 20MB');
+      const match = /^data:(image\/[a-z0-9.+-]+);base64,/i.exec(uri);
+      const payload = match ? uri.slice(match[0].length) : '';
+      if (!match || payload.length > Math.ceil(IMAGE_BYTES / 3) * 4 || !isImageBase64(payload)) throw new Error('图片编码无效或超过 20MB');
       mime = match[1].toLowerCase();
-      await FileSystem.writeAsStringAsync(partUri, match[2], { encoding: FileSystem.EncodingType.Base64 });
+      await FileSystem.writeAsStringAsync(partUri, payload, { encoding: FileSystem.EncodingType.Base64 });
     } else {
       if (!/^(file|content):\/\//.test(uri)) throw new Error('参考图片必须已保存在本地');
       const info = await FileSystem.getInfoAsync(uri);

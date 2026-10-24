@@ -17,6 +17,7 @@ import { CreativeAssetPicker } from './CreativeAssetPicker';
 import { NovelAiPromptEditor } from './NovelAiPromptEditor';
 import { NovelAiSettings } from './NovelAiSettings';
 import { NovelAiMaskEditor } from './NovelAiMaskEditor';
+import { NovelAiEnhancePanel } from './NovelAiEnhancePanel';
 import type { CreativeDraft } from './drafts';
 import { createId } from '../ids';
 import { pickImagesFromGallery } from '../native/imagePicker';
@@ -57,13 +58,14 @@ export function ImageDraftScreen({ id }: { id: string }) {
       await assertCurrent();
       if(dirty){await creativeService().execute({name:'draft.updateImage',payload:{id,expectedRevision:draft.revision,input:latest.current}},createId());const row=await creativeService().draft(id);if(row)setDraft(row);}
       const preview=await prepareCreativeImage(id), count=latest.current.samples;
-      Alert.alert(`确认生成 ${count} 张图片`,`使用 ${novelAiModelName(latest.current.model)} 生成 ${count} 张图片。\n\n费用暂不可预估，Opus 不代表所有参数均免费。本次授权 1 次请求（含 ${count} 张图片），15 分钟内有效。结果不明时不会自动重发。`,[
+      const enhancing = Boolean(latest.current.enhancement || latest.current.enhance);
+      Alert.alert(enhancing ? '确认增强图片' : `确认生成 ${count} 张图片`,`使用 ${novelAiModelName(latest.current.model)} ${enhancing ? `增强图片，倍率 ${latest.current.enhancement?.scale ?? 'Max'}，强度 ${latest.current.strength}，噪声 ${latest.current.noise}` : `生成 ${count} 张图片`}。\n\n费用暂不可预估，Opus 不代表所有参数均免费。本次授权 1 次请求（含 ${count} 张图片），15 分钟内有效。结果不明时不会自动重发。`,[
         {text:'取消',style:'cancel',onPress:release},
-        {text:'授权并生成',onPress:()=>{void confirmCreativeImage(preview).then(()=>load()).catch(e=>setError(creativeError(e,'提交失败'))).finally(release);}},
+        {text:enhancing?'授权并增强':'授权并生成',onPress:()=>{void confirmCreativeImage(preview).then(()=>load()).catch(e=>setError(creativeError(e,'提交失败'))).finally(release);}},
       ],{cancelable:false});
     }catch(e){setError(creativeError(e,'准备失败'));release();}
   };
-  const choose=(versionId:string,kind:'source'|'mask')=>update(kind==='source'?{sourceVersionId:versionId,maskVersionId:null,maskStrokes:[],action:input?.action==='infill'?'infill':'img2img'}:{maskVersionId:versionId,maskStrokes:[]});
+  const choose=(versionId:string,kind:'source'|'mask')=>update(kind==='source'?{sourceVersionId:versionId,enhancement:null,enhance:false,maskVersionId:null,maskStrokes:[],action:input?.action==='infill'?'infill':'img2img'}:{maskVersionId:versionId,maskStrokes:[]});
   const importImage=async(kind:'source'|'mask')=>{
     if(lock.current || !editable)return;lock.current=true;setBusy(true);
     try{const [image]=await pickImagesFromGallery(1);if(image){const result=await importCreativeImage(image,draft?.project_id??undefined);if(result.status==='completed')choose(result.value.versionId,kind);}}
@@ -73,7 +75,7 @@ export function ImageDraftScreen({ id }: { id: string }) {
   const sourceUri=source?.state==='AVAILABLE'?`${FileSystem.documentDirectory}${source.relative_path}`:undefined;
   const references=input?<View style={{gap:12}}>
     <SectionHeading title="生成方式" />
-    <SegmentedChoices label="生成方式" options={[{id:'generate',label:'文字生图'},{id:'img2img',label:'图生图'},{id:'infill',label:'局部重绘'}]} value={input.action} disabled={!editable} onChange={action=>update({action,enhance:action==='img2img' && input.enhance})} />
+    <SegmentedChoices label="生成方式" options={[{id:'generate',label:'文字生图'},{id:'img2img',label:'图生图'},{id:'infill',label:'局部重绘'}]} value={input.action} disabled={!editable} onChange={action=>update({action,enhance:action==='img2img' && input.enhance,enhancement:action==='img2img'?input.enhancement:null})} />
     {input.action!=='generate'?<>
       <Text style={s.muted}>选择底图，输出尺寸与变化强度可在生成设置中调整。</Text>
       {sourceUri?<Image accessibilityLabel="当前底图" source={{uri:sourceUri}} resizeMode="contain" style={[s.preview,{height:180}]} />:<Text style={s.muted}>{input.sourceVersionId?'底图保存或恢复中…':'尚未选择底图'}</Text>}
@@ -91,17 +93,18 @@ export function ImageDraftScreen({ id }: { id: string }) {
       {conflict?<View style={s.card}><Text style={s.body}>草稿在其他入口更新，本页输入已保留。</Text><TextAction label="载入最新草稿" disabled={busy || saving} onPress={()=>Alert.alert('载入最新草稿','这会放弃本页尚未保存的修改。',[{text:'保留本页',style:'cancel'},{text:'载入最新',onPress:()=>void reload().catch(e=>setError(e.message))}])} /></View>:null}
       {error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}
       {input?<View style={s.row}><TextAction label={`${novelAiModelName(input.model)}${input.model==='nai-diffusion-5-full'?` · ${input.effort==='high'?'High':'Medium'}`:''}`} onPress={()=>setSettings(true)} /><Text style={s.muted}>{input.width} × {input.height}{input.transparent?' · 透明':''}</Text></View>:null}
-      {draft && (draft.target_asset_id || draft.job_id)?<CreativeResults draft={draft} disabled={busy || saving || dirty} />:sourceUri && input?.action!=='generate'?<View style={{flex:1,gap:8}}><Image accessibilityLabel="底图预览" source={{uri:sourceUri}} resizeMode="contain" style={{width:'100%',flex:1,minHeight:300,backgroundColor:COLORS.mediaBackground,borderRadius:18}} /><Text style={s.muted}>{input?.action==='infill'?'局部重绘 · 打开底图编辑蒙版':'图生图 · 调整描述后生成新画面'}</Text></View>:<View style={{flex:1,minHeight:280,alignItems:'center',justifyContent:'center',padding:24,gap:16,borderRadius:20,backgroundColor:COLORS.surfaceRaised}}>
+      {draft && (draft.job_id || draft.target_asset_id && !input?.enhancement)?<CreativeResults draft={draft} disabled={busy || saving || dirty} />:sourceUri && input?.action!=='generate'?<View style={{flex:input?.enhancement?undefined:1,gap:8}}><Image accessibilityLabel="底图预览" source={{uri:sourceUri}} resizeMode="contain" style={{width:'100%',...(input?.enhancement?{height:180}:{flex:1,minHeight:300}),backgroundColor:COLORS.mediaBackground,borderRadius:18}} /><Text style={s.muted}>{input?.enhancement?'当前选中的原图 · 增强后保存为新版本':input?.action==='infill'?'局部重绘 · 打开底图编辑蒙版':'图生图 · 调整描述后生成新画面'}</Text></View>:<View style={{flex:1,minHeight:280,alignItems:'center',justifyContent:'center',padding:24,gap:16,borderRadius:20,backgroundColor:COLORS.surfaceRaised}}>
         <View style={{width:72,height:88,borderRadius:12,backgroundColor:COLORS.surface,alignItems:'center',justifyContent:'center',transform:[{rotate:'-7deg'}]}}><AppIcon name="image" size={36} color={COLORS.primaryActive} /></View>
         <Text style={[s.title,{fontSize:24}]}>让想象成为画面</Text><Text style={[s.muted,{textAlign:'center'}]}>在下方描述你想看到的场景，或添加底图继续创作。</Text>
         <TextAction label="添加底图" onPress={()=>setEditor('references')} icon="add" disabled={!editable} />
       </View>}
+      {input?.enhancement && draft?.state==='EDITING'?<NovelAiEnhancePanel input={input} update={update} editable={editable} />:null}
       {draft?.state==='SUBMITTED'?<><TextAction label="查看本次画面描述" onPress={()=>setEditor('prompt')} /><CopySubmittedDraft id={id} /></>:null}
     </ScrollView>
     {input && draft?.state==='EDITING'?<View style={[s.footer,{paddingHorizontal:16,paddingTop:8,gap:4,borderTopLeftRadius:20,borderTopRightRadius:20}]}>
-      <View style={s.row}><TextAction label="画面描述" onPress={()=>setEditor('prompt')} icon="edit" /><View style={{flexDirection:'row',gap:12}}><TextAction label={`角色${input.characters.filter(c=>c.enabled).length?` ${input.characters.filter(c=>c.enabled).length}`:''}`} onPress={()=>setEditor('characters')} /><TextAction label={input.action==='generate'?'底图':input.action==='img2img'?'图生图':'局部重绘'} onPress={()=>setEditor('references')} /></View></View>
-      <TextInput accessibilityLabel="图片提示词" placeholder="描述画面，或点「画面描述」展开完整编辑…" placeholderTextColor={COLORS.textMuted} value={input.prompt} onChangeText={prompt=>update({prompt})} editable={editable} multiline style={[s.input,{minHeight:64,maxHeight:100,paddingTop:10,textAlignVertical:'top',backgroundColor:COLORS.surfaceRaised,borderWidth:0}]} />
-      <View style={[s.row,{flexWrap:'nowrap',gap:16}]}><TextAction label="生成设置" icon="tune" onPress={()=>setSettings(true)} /><View style={{flex:1}}><ListAction label={busy?'处理中…':`生成 ${input.samples} 张图片`} disabled={busy || saving || conflict} onPress={()=>void submit()} /></View></View>
+      <View style={s.row}><TextAction label="画面描述" onPress={()=>setEditor('prompt')} icon="edit" />{input.enhancement?<Text numberOfLines={1} style={[s.muted,{flex:1}]}>{input.prompt}</Text>:<View style={{flexDirection:'row',gap:12}}><TextAction label={`角色${input.characters.filter(c=>c.enabled).length?` ${input.characters.filter(c=>c.enabled).length}`:''}`} onPress={()=>setEditor('characters')} /><TextAction label={input.action==='generate'?'底图':input.action==='img2img'?'图生图':'局部重绘'} onPress={()=>setEditor('references')} /></View>}</View>
+      {!input.enhancement?<TextInput accessibilityLabel="图片提示词" placeholder="描述画面，或点「画面描述」展开完整编辑…" placeholderTextColor={COLORS.textMuted} value={input.prompt} onChangeText={prompt=>update({prompt})} editable={editable} multiline style={[s.input,{minHeight:64,maxHeight:100,paddingTop:10,textAlignVertical:'top',backgroundColor:COLORS.surfaceRaised,borderWidth:0}]} />:null}
+      <View style={[s.row,{flexWrap:'nowrap',gap:16}]}><TextAction label="生成设置" icon="tune" onPress={()=>setSettings(true)} /><View style={{flex:1}}><ListAction label={busy?'处理中…':input.enhancement || input.enhance?'增强图片':`生成 ${input.samples} 张图片`} disabled={busy || saving || conflict} onPress={()=>void submit()} /></View></View>
       <View style={s.row}><Text style={[s.muted,{fontSize:12}]}>NovelAI · 费用待确认</Text><TextAction label="创作账号" onPress={()=>setAccount(true)} /></View>
     </View>:draft?.state==='SUBMITTED'?<View style={s.footer}><TextAction label="查看全部素材" icon="grid_view" onPress={()=>router.push('/(tabs)/assets')} /></View>:null}
     {input && settings?<NovelAiSettings input={input} update={update} editable={editable} onClose={()=>setSettings(false)} />:null}

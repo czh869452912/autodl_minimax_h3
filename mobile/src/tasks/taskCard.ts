@@ -8,6 +8,7 @@ export type TaskCursor = Readonly<{
 export type TaskCard = Readonly<{
   id: string;
   canCancel?: boolean;
+  adapterId?: string;
   prompt: string;
   status: TaskStatus;
   resolution: string;

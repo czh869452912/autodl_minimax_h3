@@ -1,5 +1,13 @@
 import { defaultNovelAiDraft, novelAiDraftInput, NOVELAI_SAMPLERS, prepareNovelAiRequest, parseNovelAiResponse } from './novelAiProtocol';
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j8ioAAAAASUVORK5CYII=';
+
+test('PNG verification works when mobile Buffer subarray returns a plain typed array',()=>{
+  const subarray=jest.spyOn(Buffer.prototype,'subarray').mockImplementation(function(this:Buffer,...args:unknown[]){const [start,end]=args as [number|undefined,number|undefined];return Uint8Array.prototype.subarray.call(new Uint8Array(this.buffer,this.byteOffset,this.byteLength),start,end) as Buffer;});
+  try {
+    expect(parseNovelAiResponse(JSON.stringify({images:[{image:png,index:0,seed:123}]}))[0]).toMatchObject({width:1,height:1});
+    expect(require('./novelAiUpscale').upscaleExpectedSize({image:png,model:'nai-diffusion-5-curated',declared_blur_sigma:0})).toEqual({width:2,height:2});
+  } finally {subarray.mockRestore();}
+});
 test('snapshot freezes seed, preserves character pairing and does not inject quality or negative text', () => {
   const result = prepareNovelAiRequest({ ...defaultNovelAiDraft, qualityPreset:'none',negativePreset:'none',prompt: 'a scene', characters: [{ prompt: 'astronomer', negative: 'hat', x: 0.2, y: 0.7 }] }, () => 0.5);
   const body = JSON.parse(result.requestJson);
