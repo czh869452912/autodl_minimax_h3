@@ -14,7 +14,7 @@ export function SettingRow({ label, value, onPress, expanded, disabled = false, 
   return <Pressable accessibilityRole="button" accessibilityLabel={value ? `${label}，${value}` : label} accessibilityState={{ disabled, ...(expanded === undefined ? {} : { expanded }) }} disabled={disabled} onPress={onPress} style={({ pressed }) => [w.setting, pressed && w.pressed, disabled && w.disabled]}>
     {icon ? <AppIcon name={icon} size={21} /> : null}
     <View style={{ flex: 1, gap: 2 }}><Text style={w.settingLabel}>{label}</Text>{value ? <Text style={w.caption}>{value}</Text> : null}</View>
-    <AppIcon name={expanded ? 'expand_less' : 'expand_more'} size={21} />
+    <AppIcon name={expanded === undefined ? 'chevron_right' : expanded ? 'expand_less' : 'expand_more'} size={21} />
   </Pressable>;
 }
 
@@ -24,11 +24,11 @@ export function SegmentedChoices<T extends string>({ label, options, value, onCh
   </Pressable>)}</View>;
 }
 
-export function ParameterSheet({ title, description, onClose, children }: { title: string; description?: string; onClose: () => void; children: ReactNode }) {
-  return <Modal transparent visible animationType="slide" onRequestClose={onClose}>
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={w.modal}>
+export function ParameterSheet({ title, description, onClose, children, fullScreen = false }: { title: string; description?: string; onClose: () => void; children: ReactNode; fullScreen?:boolean }) {
+  return <Modal transparent={!fullScreen} visible animationType="slide" onRequestClose={onClose}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={fullScreen ? {flex:1,backgroundColor:COLORS.surface} : w.modal}>
       <Pressable accessibilityRole="button" accessibilityLabel={`关闭${title}`} onPress={onClose} style={StyleSheet.absoluteFill} />
-      <SafeAreaView edges={['bottom', 'left', 'right']} style={w.sheet}>
+      <SafeAreaView edges={fullScreen ? ['top','bottom','left','right'] : ['bottom', 'left', 'right']} style={fullScreen ? {flex:1,backgroundColor:COLORS.surface} : w.sheet}>
         <View style={w.sheetHeader}><View style={{ flex: 1 }}><Text accessibilityRole="header" style={w.sectionTitle}>{title}</Text>{description ? <Text style={w.caption}>{description}</Text> : null}</View><TextAction label="完成" onPress={onClose} /></View>
         <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: 20, gap: 16 }}>{children}</ScrollView>
       </SafeAreaView>

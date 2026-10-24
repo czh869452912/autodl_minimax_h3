@@ -20,15 +20,15 @@ import { creativeUI as s } from './creativeUI';
 import { pickImagesFromGallery } from '../native/imagePicker';
 import { importCreativeImage } from './runtime';
 import { CreativeAccountPanel } from './CreativeAccountPanel';
-import { CopySubmittedDraft } from './CopySubmittedDraft';
 import { prepareCreativeVideo, confirmCreativeVideo } from './videoRuntime';
+import { PromptAssistSheet } from './PromptAssistSheet';
 import { ParameterSheet, SectionHeading, SegmentedChoices, SettingRow, TextAction } from './WorkbenchUI';
 
 export function VideoDraftScreen({ id }: { id: string }) {
   const router = useRouter();
   const navigation = useNavigation();
   const scrollRef = useRef<ScrollView>(null);
-  const [recipeOpen, setRecipeOpen] = useState(false);
+  const [assist,setAssist]=useState(false);
   const [advanced, setAdvanced] = useState(false), [picking, setPicking] = useState(false);
   const [draft, setDraft] = useState<CreativeDraft>();
   const [input, setInput] = useState<z.output<typeof videoDraftInput>>();
@@ -135,18 +135,20 @@ export function VideoDraftScreen({ id }: { id: string }) {
       {activeReference ? <TextAction label={`移除参考图 ${references.indexOf(activeReference) + 1}`} disabled={busy || dirty} onPress={() => void replaceReferences(references.filter(r => r !== activeReference).map(r => r.version_id)).catch(e => setError(e.message))} /> : null}
     </View> : null}
   </View>;
+  if(draft?.state==='SUBMITTED')return <SafeAreaView style={s.screen}>
+    <View style={{paddingHorizontal:16}}><DraftHeading draft={draft} dirty={dirty} busy={busy} title="视频创作" /></View>
+    <CreativeResults draft={draft} disabled={busy || dirty} dock />
+  </SafeAreaView>;
   return <SafeAreaView style={s.screen}><KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}><ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={s.content} style={{ backgroundColor: COLORS.background }}>
     <DraftHeading draft={draft} dirty={dirty} busy={busy} title="视频创作" />
-    {draft?.state === 'SUBMITTED' ? <CreativeResults draft={draft} disabled={busy || dirty} /> : null}
     {conflict ? <View style={s.card}><Text style={s.body}>这份草稿已在其他入口更新。本页输入仍保留，请先处理版本冲突。</Text><ListAction label="载入最新草稿" secondary disabled={busy} onPress={() => Alert.alert('载入最新草稿', '这会放弃本页尚未保存的修改。', [{ text: '保留本页', style: 'cancel' }, { text: '载入最新', onPress: () => void reload().catch(e => setError(e.message)) }])} /></View> : null}
     {error ? <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{error}{dirty ? ' · 本次修改尚未保存。' : ''}</Text> : null}
-    {draft?.state === 'SUBMITTED' ? <><CopySubmittedDraft id={id}/><SettingRow label="本次生成参数" value={recipeOpen ? '收起参数' : '查看描述、参考图与设置'} expanded={recipeOpen} onPress={() => setRecipeOpen(!recipeOpen)} /></> : null}
-    {input && (draft?.state === 'EDITING' || recipeOpen) ? <>
+    {input && draft?.state === 'EDITING' ? <>
       {referencePanel}
       <View style={s.card}>
         <SectionHeading title="动作与运镜" detail="让画面成为一个镜头" />
         <TextInput accessibilityLabel="视频镜头提示词" placeholder="例如：镜头缓慢推近，雨滴从屋檐落下，街灯映在湿润的路面上…" placeholderTextColor={COLORS.textMuted} multiline value={input.prompt} editable={editable} onChangeText={prompt => update({ prompt })} style={[s.input, { borderWidth: 0, paddingHorizontal: 0, minHeight: 120, textAlignVertical: 'top' }]} />
-        <Text style={s.muted}>描述动作、镜头运动、节奏与声音。</Text>
+        <TextAction label="帮我写提示词" icon="smart_toy" disabled={!editable} onPress={()=>setAssist(true)} />
       </View>
       <SettingRow label="画质与时长" value={`${input.resolution} · ${input.duration} 秒${input.seed ? ' · 固定种子' : ''}`} onPress={() => setAdvanced(true)} />
       {advanced ? <ParameterSheet title="视频设置" description="设置随草稿自动保存" onClose={() => setAdvanced(false)}>
@@ -167,6 +169,7 @@ export function VideoDraftScreen({ id }: { id: string }) {
     </> : null}
   </ScrollView>
     {draft?.state === 'EDITING' ? <View style={s.footer}><Text style={s.muted}>H3 · 费用暂无法估算</Text><ListAction label={busy ? '处理中…' : '生成视频'} disabled={busy || conflict} onPress={() => void submit()} /></View> : null}
+    {assist && input?<PromptAssistSheet prompt={input.prompt} kind="video" onApply={prompt=>update({prompt})} onClose={()=>setAssist(false)} />:null}
     {picking ? <CreativeAssetPicker kind="image" projectId={draft?.project_id ?? undefined} onClose={() => setPicking(false)} onChoose={v => replaceReferences([...references.map(r => r.version_id).filter(id => id !== v.id), v.id])} /> : null}
   </KeyboardAvoidingView></SafeAreaView>;
 }

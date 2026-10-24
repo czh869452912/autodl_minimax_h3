@@ -1,4 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
+import { SettingRow, TextAction } from '../../src/creative/WorkbenchUI';
 import { ListAction } from '../../src/ui/ListPageUI';
 import { readSettingsDraft, writeSettingsDraft } from '../../src/settings/draft';
 import { DataManagementPanel } from '../../src/settings/DataManagementPanel';
@@ -22,16 +23,12 @@ type Settings = Awaited<ReturnType<typeof readSettings>>;
 const AUTODL_TOKEN_URL = 'https://autodl.art/large-model/tokens';
 export default function SettingsScreen() {
   const { section } = useLocalSearchParams<{ section?: string }>();
-  const anchors = useRef<Record<string, number>>({});
-  const jumped = useRef(false);
-  useEffect(() => { jumped.current = false; if (section && anchors.current[section] != null) { scrollRef.current?.scrollTo({ y: anchors.current[section], animated: true }); jumped.current = true; } }, [section]);
-  const anchor = (key: string) => (event: { nativeEvent: { layout: { y: number } } }) => {
-    anchors.current[key] = event.nativeEvent.layout.y;
-    if (section === key && !jumped.current) { jumped.current = true; scrollRef.current?.scrollTo({ y: anchors.current[key], animated: true }); }
-  };
+  const [activeSection,setActiveSection]=useState(section);
+  useEffect(()=>setActiveSection(section),[section]);
   const layout = usePageLayout();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => { scrollRef.current?.scrollTo({ y: 0, animated: false }); }, [activeSection]);
   const revealFocusedInput = () => {
     if (!Keyboard.isVisible()) return;
     const focused = TextInput.State.currentlyFocusedInput();
@@ -75,7 +72,7 @@ export default function SettingsScreen() {
       const prepared = prepareSettingsForSave(values); setFieldErrors({});
       await saveSettings(prepared);
       setValues(current => current === values ? prepared : current); setBaseline(prepared);
-    } catch (error) { if (error instanceof SettingsValidationError) { setFieldErrors(Object.fromEntries(error.fields.map(field => [field, error.message]))); setAdvancedOpen(true); } else Alert.alert('保存失败', error instanceof Error ? error.message : '无法保存设置'); }
+    } catch (error) { if (error instanceof SettingsValidationError) { setFieldErrors(Object.fromEntries(error.fields.map(field => [field, error.message]))); setAdvancedOpen(true); setActiveSection(error.fields.some(field => field.startsWith('llm')) ? 'assistant' : error.fields.includes('token') ? 'legacy' : 'storage'); } else Alert.alert('保存失败', error instanceof Error ? error.message : '无法保存设置'); }
     finally { saveLock.current = false; setSaving(false); }
   };
   const openAutodlTokenPage = async () => {
@@ -91,13 +88,17 @@ export default function SettingsScreen() {
     {pendingDraft ? <View style={styles.card}><Text>发现未保存的设置草稿</Text><Pressable accessibilityRole="button" style={styles.resetAdvanced} onPress={() => { setValues(current => ({ ...current, ...pendingDraft })); setPendingDraft(undefined); }}><Text>恢复未保存更改</Text></Pressable><Pressable accessibilityRole="button" style={styles.resetAdvanced} onPress={() => setPendingDraft(undefined)}><Text>丢弃草稿，使用已保存设置</Text></Pressable></View> : null}
     {draftError ? <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{draftError}</Text> : null}
     <View><Text accessibilityRole="header" style={styles.title}>系统设置</Text><Text style={styles.subtitle}>管理创作账号、助手模型和存储偏好。密钥仅保存在本机安全存储中。</Text></View>
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{[['accounts','创作账号'],['assistant','助手模型'],['storage','存储'],['legacy','旧工作流']].map(([key,label]) => <ListAction key={key} label={label} secondary onPress={() => scrollRef.current?.scrollTo({ y: anchors.current[key] ?? 0, animated: true })} />)}</View>
-    <Text onLayout={anchor('accounts')} accessibilityRole="header" style={styles.cardTitle}>创作账号</Text>
+    {!activeSection?<View>
+      {([['accounts','创作账号','NovelAI · AutoDL'],['assistant','助手模型','两个工作台共用的文字模型'],['storage','存储与导出','保存偏好 · 备份与恢复'],['playback','视频播放','解码模式'],['legacy','旧工作流','连接与工作流同步'],['advanced','显示与诊断','布局与运行信息']] as const).map(([key,label,value])=><SettingRow key={key} label={label} value={value} onPress={()=>setActiveSection(key)} />)}
+    </View>:<TextAction label="返回设置分类" icon="arrow_back" onPress={()=>setActiveSection(undefined)} />}
+    {activeSection==='accounts'?<>
+    <Text accessibilityRole="header" style={styles.cardTitle}>创作账号</Text>
     <Text style={styles.help}>图片、视频工作台和创作助手共用以下账号。连接后，在每次生成前确认授权。</Text>
     <CreativeAccountPanel compact />
     <CreativeAccountPanel provider="autodl" compact />
 
-    <View onLayout={anchor('assistant')} style={styles.card}><View style={styles.cardHeading}><AppIcon name="smart_toy" size={20} color={COLORS.primaryActive} /><Text style={styles.cardTitle}>创作助手模型</Text></View><Text style={styles.help}>用于讨论创意、编写提示词、组织镜头并协助制作。生成费用另按创作账号授权；不使用助手时可跳过。填写支持 OpenAI 兼容接口的服务地址、模型和密钥。</Text><Field label="LLM API 地址" error={fieldErrors.llmEndpoint} value={values.llmEndpoint} placeholder="https://api.openai.com/v1" autoCapitalize="none" keyboardType="url" onChangeText={(text) => update('llmEndpoint', text)} /><Field label="LLM 模型" error={fieldErrors.llmModel} value={values.llmModel} placeholder="gpt-4o-mini" autoCapitalize="none" onChangeText={(text) => update('llmModel', text)} /><Field label="LLM API Key" error={fieldErrors.llmApiKey} value={values.llmApiKey} secure placeholder="输入服务商提供的 API Key" autoCapitalize="none" onChangeText={(text) => update('llmApiKey', text)} /><Pressable accessibilityRole="button" accessibilityLabel="切换 LLM 高级设置" onPress={() => setAdvancedOpen((open) => !open)} accessibilityState={{ expanded: advancedOpen }} style={styles.advancedToggle}><Text style={styles.advancedToggleText}>高级设置</Text><AppIcon name={advancedOpen ? 'expand_less' : 'expand_more'} size={20} color={COLORS.textMuted} /></Pressable>{advancedOpen ? <View style={styles.advancedPanel}>
+    </>:null}
+    {activeSection==='assistant'?<View style={styles.card}><View style={styles.cardHeading}><AppIcon name="smart_toy" size={20} color={COLORS.primaryActive} /><Text style={styles.cardTitle}>创作助手模型</Text></View><Text style={styles.help}>用于讨论创意、编写提示词、组织镜头并协助制作。生成费用另按创作账号授权；不使用助手时可跳过。填写支持 OpenAI 兼容接口的服务地址、模型和密钥。</Text><Field label="LLM API 地址" error={fieldErrors.llmEndpoint} value={values.llmEndpoint} placeholder="https://api.openai.com/v1" autoCapitalize="none" keyboardType="url" onChangeText={(text) => update('llmEndpoint', text)} /><Field label="LLM 模型" error={fieldErrors.llmModel} value={values.llmModel} placeholder="gpt-4o-mini" autoCapitalize="none" onChangeText={(text) => update('llmModel', text)} /><Field label="LLM API Key" error={fieldErrors.llmApiKey} value={values.llmApiKey} secure placeholder="输入服务商提供的 API Key" autoCapitalize="none" onChangeText={(text) => update('llmApiKey', text)} /><Pressable accessibilityRole="button" accessibilityLabel="切换 LLM 高级设置" onPress={() => setAdvancedOpen((open) => !open)} accessibilityState={{ expanded: advancedOpen }} style={styles.advancedToggle}><Text style={styles.advancedToggleText}>高级设置</Text><AppIcon name={advancedOpen ? 'expand_less' : 'expand_more'} size={20} color={COLORS.textMuted} /></Pressable>{advancedOpen ? <View style={styles.advancedPanel}>
       <Text style={styles.advancedHint}>留空使用标注的默认值；修改后点击底部“保存设置”生效。</Text>
       <Field label="最大输出（tokens）" error={fieldErrors.llmMaxOutputTokens} value={values.llmMaxOutputTokens ?? advancedDefaults.llmMaxOutputTokens} placeholder="4096" keyboardType="number-pad" onChangeText={text => update('llmMaxOutputTokens', text)} />
       <Text style={styles.help}>默认 4096，每次模型调用单独计算。部分模型的思考与最终正文共用此预算；只返回思考或输出被截断时，可按服务商支持范围提高。</Text>
@@ -116,18 +117,21 @@ export default function SettingsScreen() {
       <Text style={styles.help}>默认单次请求超时 600 秒、最多重试 2 次。整轮运行上限为请求超时的 2 倍（至少 60 秒）；重试会增加等待时间和 API 调用次数。</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="恢复 LLM 高级设置默认值" onPress={() => setValues(current => ({ ...current, ...advancedDefaults }))} style={styles.resetAdvanced}><Text style={styles.externalLinkText}>恢复高级设置默认值</Text></Pressable>
     </View> : null}</View>
-    <View onLayout={anchor('storage')} style={styles.card}><View style={styles.cardHeading}><AppIcon name="movie_filter" size={20} color={COLORS.primaryActive} /><Text style={styles.cardTitle}>存储与导出</Text></View><View style={styles.settingRow}><View style={styles.settingCopy}><Text style={styles.settingLabel}>自动保存到系统相册</Text><Text style={styles.help}>下载完成后保存到系统相册 / Movies / AutoDL-H3</Text></View><Switch accessibilityLabel="自动保存到系统相册" value={values.autoExportToGallery} onValueChange={(value) => update('autoExportToGallery', value)} trackColor={{ false: COLORS.border, true: COLORS.primaryActive }} thumbColor={COLORS.text} /></View><Text style={styles.location}>保存位置：系统相册 / Movies / AutoDL-H3</Text><View style={styles.settingRow}><View style={styles.settingCopy}><Text style={styles.settingLabel}>保留应用内副本</Text><Text style={styles.help}>关闭后仅在相册保存成功时删除应用内视频</Text></View><Switch accessibilityLabel="保留应用内副本" value={values.keepPrivateCopy} onValueChange={(value) => update('keepPrivateCopy', value)} trackColor={{ false: COLORS.border, true: COLORS.primaryActive }} thumbColor={COLORS.text} /></View></View>
-    <View style={styles.card}><Text style={styles.cardTitle}>视频解码</Text><Text style={styles.help}>默认使用自动模式；遇到黑屏或播放异常时可尝试其他模式。保存后对应用内播放生效。</Text><View style={styles.effortOptions} accessibilityRole="radiogroup" accessibilityLabel="视频解码模式">{videoDecodeOptions.map(option => <Pressable key={option.value} accessibilityRole="radio" accessibilityLabel={`视频解码：${option.label}`} accessibilityState={{ checked: (values.videoDecodeMode ?? 'auto') === option.value }} onPress={() => update('videoDecodeMode', option.value)} style={[styles.effortOption, (values.videoDecodeMode ?? 'auto') === option.value && styles.effortSelected]}><Text style={styles.effortText}>{option.label}</Text></Pressable>)}</View><Text style={styles.help}>{videoDecodeOptions.find(option => option.value === (values.videoDecodeMode ?? 'auto'))?.help}</Text><Text style={styles.help}>此选项不会修改视频原件，也不会影响系统相册中的视频。</Text></View>
-    <View onLayout={anchor('legacy')} style={styles.card}><View style={styles.cardHeading}><AppIcon name="key" size={20} color={COLORS.primaryActive} /><Text style={styles.cardTitle}>旧工作流连接</Text></View><Text style={styles.help}>仅用于旧工作流视频编辑器。新的图片、视频工作台与助手使用上方“创作账号”，需要单独连接。</Text><Field label="ComfyUI Token" error={fieldErrors.token} value={values.token} secure placeholder="输入 AutoDL ComfyUI 分组 Token" onChangeText={(text) => update('token', text)} /><Pressable accessibilityRole="link" accessibilityLabel="打开 AutoDL Token 获取页面" onPress={() => void openAutodlTokenPage()} style={styles.externalLink}><Text style={styles.externalLinkText}>前往 AutoDL 获取 Access Token ↗</Text></Pressable></View>
-    <WorkflowSyncPanel />
+    :null}
+    {activeSection==='storage'?<View style={styles.card}><View style={styles.cardHeading}><AppIcon name="movie_filter" size={20} color={COLORS.primaryActive} /><Text style={styles.cardTitle}>存储与导出</Text></View><View style={styles.settingRow}><View style={styles.settingCopy}><Text style={styles.settingLabel}>自动保存到系统相册</Text><Text style={styles.help}>下载完成后保存到系统相册 / Movies / AutoDL-H3</Text></View><Switch accessibilityLabel="自动保存到系统相册" value={values.autoExportToGallery} onValueChange={(value) => update('autoExportToGallery', value)} trackColor={{ false: COLORS.border, true: COLORS.primaryActive }} thumbColor={COLORS.text} /></View><Text style={styles.location}>保存位置：系统相册 / Movies / AutoDL-H3</Text><View style={styles.settingRow}><View style={styles.settingCopy}><Text style={styles.settingLabel}>保留应用内副本</Text><Text style={styles.help}>关闭后仅在相册保存成功时删除应用内视频</Text></View><Switch accessibilityLabel="保留应用内副本" value={values.keepPrivateCopy} onValueChange={(value) => update('keepPrivateCopy', value)} trackColor={{ false: COLORS.border, true: COLORS.primaryActive }} thumbColor={COLORS.text} /></View></View>
+    :null}
+    {activeSection==='playback'?<View style={styles.card}><Text style={styles.cardTitle}>视频解码</Text><Text style={styles.help}>默认使用自动模式；遇到黑屏或播放异常时可尝试其他模式。保存后对应用内播放生效。</Text><View style={styles.effortOptions} accessibilityRole="radiogroup" accessibilityLabel="视频解码模式">{videoDecodeOptions.map(option => <Pressable key={option.value} accessibilityRole="radio" accessibilityLabel={`视频解码：${option.label}`} accessibilityState={{ checked: (values.videoDecodeMode ?? 'auto') === option.value }} onPress={() => update('videoDecodeMode', option.value)} style={[styles.effortOption, (values.videoDecodeMode ?? 'auto') === option.value && styles.effortSelected]}><Text style={styles.effortText}>{option.label}</Text></Pressable>)}</View><Text style={styles.help}>{videoDecodeOptions.find(option => option.value === (values.videoDecodeMode ?? 'auto'))?.help}</Text><Text style={styles.help}>此选项不会修改视频原件，也不会影响系统相册中的视频。</Text></View>
+    :null}
+    {activeSection==='legacy'?<><View style={styles.card}><View style={styles.cardHeading}><AppIcon name="key" size={20} color={COLORS.primaryActive} /><Text style={styles.cardTitle}>旧工作流连接</Text></View><Text style={styles.help}>仅用于旧工作流视频编辑器。新的图片、视频工作台与助手使用上方“创作账号”，需要单独连接。</Text><Field label="ComfyUI Token" error={fieldErrors.token} value={values.token} secure placeholder="输入 AutoDL ComfyUI 分组 Token" onChangeText={(text) => update('token', text)} /><Pressable accessibilityRole="link" accessibilityLabel="打开 AutoDL Token 获取页面" onPress={() => void openAutodlTokenPage()} style={styles.externalLink}><Text style={styles.externalLinkText}>前往 AutoDL 获取 Access Token ↗</Text></Pressable></View>
+    <WorkflowSyncPanel /></>:null}
 
 
-    <DataManagementPanel />
-    <DisplayDiagnostics />
-  </ScrollView><View style={styles.saveBar}><View style={[layout.contentStyle, styles.saveContent]}>
+    {activeSection==='storage'?<DataManagementPanel />:null}
+    {activeSection==='advanced'?<DisplayDiagnostics />:null}
+  </ScrollView>{activeSection || dirty ? <View style={styles.saveBar}><View style={[layout.contentStyle, styles.saveContent]}>
     <Text accessibilityLiveRegion="polite" style={styles.help}>{saving ? '正在保存…' : dirty ? draftReadError ? '有未保存更改，草稿暂不可用；请保存设置' : '有未保存更改，草稿将加密保留；保存后生效' : '设置已保存 · 尚未验证连接'}</Text>
     <Pressable accessibilityRole="button" accessibilityLabel="保存设置" disabled={saving || !dirty} onPress={() => void save()} style={[styles.saveButton, (saving || !dirty) && styles.disabled]}><AppIcon name="save" size={20} color={COLORS.onPrimary} /><Text style={styles.saveText}>{saving ? '保存中…' : '保存设置'}</Text></Pressable>
-  </View></View></KeyboardAvoidingView>;
+  </View></View> : null}</KeyboardAvoidingView>;
 }
 function Field({ label, secure, error, ...props }: { label: string; secure?: boolean; error?: string } & React.ComponentProps<typeof TextInput>) {
   const [visible, setVisible] = useState(false);

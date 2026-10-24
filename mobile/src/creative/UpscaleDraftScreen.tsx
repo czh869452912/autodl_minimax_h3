@@ -9,7 +9,6 @@ import type {CreativeDraft} from './drafts';
 import {prepareCreativeImage,confirmCreativeImage} from './novelAiRuntime';
 import {CreativeResults} from './CreativeResults';
 import {CreativeAccountPanel} from './CreativeAccountPanel';
-import {CopySubmittedDraft} from './CopySubmittedDraft';
 import {DraftHeading} from './DraftHeading';
 import {ParameterSheet,TextAction} from './WorkbenchUI';
 import {ListAction} from '../ui/ListPageUI';
@@ -31,12 +30,12 @@ export function UpscaleDraftScreen({id}:{id:string}){
       ],{cancelable:false});
     }catch(e){if(mounted.current)setError(creativeError(e,'超分准备失败'));release();}
   };
+  if(draft?.state==='SUBMITTED')return <SafeAreaView style={s.screen}><View style={{paddingHorizontal:16}}><DraftHeading draft={draft} title="放大结果" busy={busy} dirty={false} /></View><CreativeResults draft={draft} disabled={busy} dock /></SafeAreaView>;
   return <SafeAreaView style={s.screen}><ScrollView contentContainerStyle={{padding:16,gap:16}}>
     <DraftHeading draft={draft} title="图片超分" busy={busy} dirty={false} />
     {error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}
     <Text style={s.title}>清晰放大 · 2×</Text><Text style={s.body}>放大宽高各 2 倍，保持画面内容。最多接收 3,145,728 像素原图，不会修改原图或自动替换项目采用的版本。</Text>
     {draft?.state==='EDITING'?<>{source?<Image accessibilityLabel="超分原图" source={{uri:source}} resizeMode="contain" style={[s.preview,{height:360}]} />:<Text style={s.muted}>原图待恢复，请到素材详情恢复原件。</Text>}<ListAction label={busy?'处理中…':'超分此图片'} disabled={busy || !source} onPress={()=>void submit()} /></>:null}
-    {draft?.state==='SUBMITTED'?<><CreativeResults draft={draft} disabled={busy} /><CopySubmittedDraft id={id} /></>:null}
     <TextAction label="创作账号" disabled={busy} onPress={()=>setAccount(true)} /><TextAction label="返回内容管理" disabled={busy} onPress={()=>router.push('/(tabs)/assets')} />
   </ScrollView>{account?<ParameterSheet title="创作账号" onClose={()=>setAccount(false)}><CreativeAccountPanel /></ParameterSheet>:null}</SafeAreaView>;
 }

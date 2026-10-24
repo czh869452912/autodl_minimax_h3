@@ -1,4 +1,6 @@
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({}), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
+let mockSection:string|undefined='assistant';
+beforeEach(()=>{mockSection='assistant';});
+jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({section:mockSection}), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { Alert, Linking, ScrollView, Text } from 'react-native';
@@ -27,6 +29,7 @@ import { readSettings, saveSettings } from '../settings/storage';
 import SettingsScreen from '../../app/(tabs)/settings';
 
 it('shows diagnostic information only while its switch is enabled', async () => {
+  mockSection='advanced';
   let tree!: ReturnType<typeof create>;
   try {
     await act(async () => { tree = create(<SettingsScreen />); });
@@ -74,6 +77,7 @@ describe('Prompt assistant advanced LLM settings', () => {
   });
 
   it('shows enabled gallery export defaults and the fixed destination', async () => {
+    mockSection='storage';
     let renderer: ReturnType<typeof create>;
     await act(async () => { renderer = create(<SettingsScreen />); });
     expect(renderer!.root.findByProps({ accessibilityLabel: '自动保存到系统相册' }).props.value).toBe(true);
@@ -83,6 +87,7 @@ describe('Prompt assistant advanced LLM settings', () => {
   });
 
   it('offers a direct link to the AutoDL access token page', async () => {
+    mockSection='legacy';
     const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     let renderer: ReturnType<typeof create>;
     await act(async () => { renderer = create(<SettingsScreen />); });
@@ -118,6 +123,7 @@ it('edits and saves DeepSeek effort and output budget, and restores advanced def
 });
 
 it('saves the centralized video decoding selection', async () => {
+  mockSection='playback';
   let tree!: ReturnType<typeof create>;
   await act(async () => { tree = create(<SettingsScreen />); });
   expect(tree.root.findByProps({ accessibilityLabel: '视频解码：自动' }).props.accessibilityState.checked).toBe(true);
@@ -167,6 +173,7 @@ test('does not overwrite edits made while an earlier snapshot is saving', async 
 
 
 it.each(['{broken', '{"token":42}', '{"futureSetting":"new"}'])('isolates an unreadable draft (%s) and allows recovery without blocking saved settings', async raw => {
+  mockSection='legacy';
   const secure = require('expo-secure-store');
   secure.getItemAsync.mockResolvedValueOnce(raw);
   secure.setItemAsync.mockClear();
@@ -184,4 +191,16 @@ it.each(['{broken', '{"token":42}', '{"futureSetting":"new"}'])('isolates an unr
   await act(async () => tree.root.findByProps({ accessibilityLabel: 'ComfyUI Token' }).props.onChangeText('edited'));
   expect(secure.setItemAsync).toHaveBeenLastCalledWith('settings.pendingDraft', expect.stringContaining('edited'));
   act(() => tree.unmount());
+});
+
+ test('settings home presents categories without rendering credential forms',async()=>{
+  mockSection=undefined;let tree!:ReturnType<typeof create>;
+  try{await act(async()=>{tree=create(<SettingsScreen />);});
+    expect(tree.root.findAllByProps({accessibilityLabel:'LLM API Key'})).toHaveLength(0);
+    expect(tree.root.findAllByProps({accessibilityLabel:'ComfyUI Token'})).toHaveLength(0);
+    act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='助手模型，两个工作台共用的文字模型' && typeof n.props.onPress==='function')[0].props.onPress());
+    expect(tree.root.findByProps({accessibilityLabel:'LLM API Key'})).toBeTruthy();
+    act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='返回设置分类' && typeof n.props.onPress==='function')[0].props.onPress());
+    expect(tree.root.findAllByProps({accessibilityLabel:'LLM API Key'})).toHaveLength(0);
+  }finally{act(()=>tree?.unmount());}
 });

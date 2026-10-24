@@ -17,6 +17,7 @@ test('metadata sheet shows actual dimensions separately from generation recipe a
     expect(NativeModules.AutoDLMedia.readCreativeImageInfo).not.toHaveBeenCalled();
     await act(async()=>{button(tree,'查看图片元数据').props.onPress();});
     const text=JSON.stringify(tree.toJSON());expect(text).toContain('1664');expect(text).toContain('2432');expect(text).toContain('832 × 1216');expect(text).toContain('独立超分');
+    act(()=>button(tree,'查看提示词与全部参数').props.onPress());
     await act(async()=>{button(tree,'复制正面提示词').props.onPress();});
     expect(Clipboard.setStringAsync).toHaveBeenCalledWith('Embedded 中文 prompt');
     act(()=>button(tree,'查看原始元数据与配方').props.onPress());
@@ -29,7 +30,7 @@ test('missing original still exposes saved metadata without pretending to read t
   try{
     await act(async()=>{tree=create(<ImageMetadataPanel version={{...version,state:'MISSING'}} />);});
     await act(async()=>button(tree,'查看图片元数据').props.onPress());
-    expect(NativeModules.AutoDLMedia.readCreativeImageInfo).not.toHaveBeenCalled();expect(JSON.stringify(tree.toJSON())).toContain('原件待恢复');expect(JSON.stringify(tree.toJSON())).toContain('App prompt');
+    expect(NativeModules.AutoDLMedia.readCreativeImageInfo).not.toHaveBeenCalled();expect(JSON.stringify(tree.toJSON())).toContain('原件待恢复');act(()=>button(tree,'查看提示词与全部参数').props.onPress());expect(JSON.stringify(tree.toJSON())).toContain('App prompt');
   }finally{act(()=>tree?.unmount());}
 });
 test('malformed embedded JSON remains inspectable and zero-valued parameters are visible',()=>{

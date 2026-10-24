@@ -191,9 +191,9 @@ export function createLocalThreadStore(db: AppDatabase, attachments = createAtta
         if (page.length < 200) return all;
       }
     },
-    async listSummaries(options: { limit?: number; offset?: number; query?: string } = {}): Promise<LocalThreadSnapshot[]> {
+    async listSummaries(options: { limit?: number; offset?: number; query?: string; projectId?: string } = {}): Promise<LocalThreadSnapshot[]> {
       const query = `%${(options.query ?? '').replace(/[\\%_]/g, '\\$&')}%`;
-      const rows = await db.getAllAsync<IndexRow>("SELECT * FROM (SELECT * FROM agent_thread_index UNION ALL SELECT thread_id,created_at,updated_at,custom_title,'旧会话',0,NULL,0,0 FROM agent_threads l WHERE NOT EXISTS (SELECT 1 FROM agent_thread_index i WHERE i.thread_id=l.thread_id)) i WHERE deleted=0 AND (COALESCE(custom_title,title) LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM agent_messages m WHERE m.thread_id=i.thread_id AND m.payload_json LIKE ? ESCAPE '\\')) ORDER BY updated_at DESC,thread_id LIMIT ? OFFSET ?", query, query, Math.max(1, Math.min(options.limit ?? 50, 200)), Math.max(0, options.offset ?? 0));
+      const rows = await db.getAllAsync<IndexRow>("SELECT * FROM (SELECT * FROM agent_thread_index UNION ALL SELECT thread_id,created_at,updated_at,custom_title,'旧会话',0,NULL,0,0 FROM agent_threads l WHERE NOT EXISTS (SELECT 1 FROM agent_thread_index i WHERE i.thread_id=l.thread_id)) i WHERE deleted=0 AND (? IS NULL OR EXISTS (SELECT 1 FROM creative_agent_scopes s WHERE s.thread_id=i.thread_id AND s.project_id=?)) AND (COALESCE(custom_title,title) LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM agent_messages m WHERE m.thread_id=i.thread_id AND m.payload_json LIKE ? ESCAPE '\\')) ORDER BY updated_at DESC,thread_id LIMIT ? OFFSET ?", options.projectId ?? null, options.projectId ?? null, query, query, Math.max(1, Math.min(options.limit ?? 50, 200)), Math.max(0, options.offset ?? 0));
       return rows.map(indexSnapshot);
     },
     async listMessages(threadId: string, options: { limit?: number; beforeSequence?: number } = {}): Promise<Message[]> {

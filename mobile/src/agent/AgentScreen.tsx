@@ -30,10 +30,11 @@ import type { RegistryRecord } from '../workflows/registry/types';
 import type { WorkflowDefinition } from '../workflows/schema/types';
 import { AgentCreativeCards } from '../creative/AgentCreativeCards';
 import { AgentCreativePanel } from '../creative/AgentCreativePanel';
+import { bindProjectConversation } from '../creative/projectAgentScope';
 
 type AgentConfig = H3AgentConfig;
 
-export default function AgentScreen() {
+export default function AgentScreen({ projectId }: {projectId?:string} = {}) {
   const [persistenceIssue, setPersistenceIssue] = useState<string>();
   useEffect(() => {
     let mounted = true;
@@ -104,6 +105,7 @@ export default function AgentScreen() {
     <ReadyAgent
       key={`${config.endpoint}\u0000${config.model}\u0000${config.apiKey}\u0000${config.timeoutMs}\u0000${config.maxRetries}`}
       config={config}
+      projectId={projectId}
       persistenceIssue={persistenceIssue}
     />
   );
@@ -112,9 +114,11 @@ export default function AgentScreen() {
 function ReadyAgent({
   config,
   persistenceIssue,
+  projectId,
 }: {
   config: AgentConfig;
   persistenceIssue?: string;
+  projectId?:string;
 }) {
   const [operationIssue, onError] = useState<string>();
   const router = useRouter();
@@ -174,7 +178,7 @@ function ReadyAgent({
     let active = true;
     void threadStore
       .recoverInterruptedRuns(promptRuntimeRegistry.liveThreadIds())
-      .then(() => threadStore.listSummaries({ limit: 50 }))
+      .then(() => threadStore.listSummaries({ limit: 50, projectId }))
       .then((snapshots) => {
         if (!active) return;
         setHasMoreThreads(snapshots.length === 50);
@@ -196,7 +200,8 @@ function ReadyAgent({
           createdAt: now,
           updatedAt: now,
         };
-        return threadStore.save(initial).then(() => {
+        return threadStore.save(initial).then(async () => {
+          if (projectId) await bindProjectConversation(getDatabase(), initial.threadId, projectId);
           if (active) {
             setThreads([initial]);
             setActiveThreadId(initial.threadId);
@@ -212,7 +217,7 @@ function ReadyAgent({
     return () => {
       active = false;
     };
-  }, [threadStore, onError]);
+  }, [threadStore, onError, projectId]);
   const createSession = useCallback(async () => {
     onError(undefined);
     const now = Date.now();
@@ -225,19 +230,20 @@ function ReadyAgent({
     };
     try {
       await threadStore.save(snapshot);
+      if (projectId) await bindProjectConversation(getDatabase(), snapshot.threadId, projectId);
       setThreads((current) => sortSessionSnapshots([snapshot, ...current]));
       setActiveThreadId(snapshot.threadId);
     } catch (reason) {
       onError(reason instanceof Error ? reason.message : '创建会话失败');
     }
-  }, [onError, threadStore]);
+  }, [onError, threadStore, projectId]);
   const deleteSession = useCallback(
     async (threadId: string) => {
       onError(undefined);
       try {
         await promptRuntimeRegistry.evictThread(threadId);
         await threadStore.remove(threadId);
-        const next = await threadStore.listSummaries({ limit: 50 });
+        const next = await threadStore.listSummaries({ limit: 50, projectId });
         setThreads((current) => sortSessionSnapshots(next.map((snapshot) =>
           current.find((item) => item.threadId === snapshot.threadId) ?? snapshot,
         )));
@@ -249,7 +255,7 @@ function ReadyAgent({
         onError(reason instanceof Error ? reason.message : '删除会话失败');
       }
     },
-    [createSession, onError, threadStore],
+    [createSession, onError, threadStore, projectId],
   );
   const renameSession = useCallback(
     async (threadId: string, title: string) => {
@@ -281,11 +287,11 @@ function ReadyAgent({
   useEffect(() => promptRuntimeRegistry.subscribeSummary(handleSnapshotChange), [handleSnapshotChange]);
   const searchHistory = useCallback(async (query: string, more = false) => {
     const request = ++historyPage.current;
-    const page = await threadStore.listSummaries({ query, limit: 50, offset: more ? threads.length : 0 });
+    const page = await threadStore.listSummaries({ projectId, query, limit: 50, offset: more ? threads.length : 0 });
     if (request !== historyPage.current) return;
     setHistoryQuery(query); setHasMoreThreads(page.length === 50);
     setThreads(current => more ? [...current, ...page.filter(row => !current.some(old => old.threadId === row.threadId))] : page);
-  }, [threadStore, threads.length]);
+  }, [threadStore, threads.length, projectId]);
   if (loadIssue) return <ScrollView style={{ flex: 1, padding: 20, backgroundColor: COLORS.background }}>
     <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{operationIssue ?? loadIssue}</Text>
     <Pressable accessibilityRole="button" style={{ minHeight: 48, justifyContent: 'center' }} onPress={createSession}><Text style={{ color: COLORS.primaryActive }}>新建对话</Text></Pressable>

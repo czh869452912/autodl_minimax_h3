@@ -9,7 +9,8 @@ test('restores the idea and clears only the transferred description after creati
  let tree!:ReturnType<typeof create>;
  try{
   await act(async()=>{tree=create(<CreativeHome onLegacyVideo={()=>undefined}/>);});
-  expect(tree.root.findByProps({accessibilityLabel:'创作描述'}).props.value).toBe('Portrait');
+  expect(tree.root.findAllByProps({accessibilityLabel:'创作描述'})).toHaveLength(0);
+  expect(JSON.stringify(tree.toJSON())).toContain('Portrait');
   await act(async()=>tree.root.findAll(n=>n.props.accessibilityLabel==='进入图片工作台'&&typeof n.props.onPress==='function')[0].props.onPress());
   expect(mockExecute).toHaveBeenCalledWith(expect.objectContaining({name:'draft.createImage',payload:expect.objectContaining({input:expect.objectContaining({prompt:'Portrait'})})}),expect.any(String));
   expect(mockWrite).toHaveBeenLastCalledWith({mode:'image',image:'',video:'Pan'});

@@ -12,7 +12,6 @@ import { useDraftSync } from './useDraftSync';
 import { CreativeResults } from './CreativeResults';
 import { DraftHeading } from './DraftHeading';
 import { CreativeAccountPanel } from './CreativeAccountPanel';
-import { CopySubmittedDraft } from './CopySubmittedDraft';
 import { CreativeAssetPicker } from './CreativeAssetPicker';
 import { NovelAiPromptEditor } from './NovelAiPromptEditor';
 import { NovelAiSettings } from './NovelAiSettings';
@@ -87,8 +86,12 @@ export function ImageDraftScreen({ id }: { id: string }) {
       </>:null}
     </>:<Text style={s.muted}>从文字开始创作。V5 的底图支持图生图与局部重绘；Vibe 和 Precise Reference 不适用于 V5。</Text>}
   </View>:null;
+  if(draft?.state==='SUBMITTED')return <SafeAreaView style={s.screen}>
+    <View style={{paddingHorizontal:16}}><DraftHeading draft={draft} dirty={dirty} busy={busy || saving} title="图片创作" /></View>
+    <CreativeResults draft={draft} disabled={busy || saving || dirty} dock />
+  </SafeAreaView>;
   return <SafeAreaView style={s.screen}><KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'} style={{flex:1}}>
-    <View style={{paddingHorizontal:16,paddingBottom:8}}><DraftHeading draft={draft} dirty={dirty} busy={busy || saving} title="图片工作台" /></View>
+    <View style={{paddingHorizontal:16,paddingBottom:8}}><DraftHeading draft={draft} dirty={dirty} busy={busy || saving} title={input?.enhancement || input?.enhance?"细节增强":"图片工作台"} /></View>
     <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:16,gap:16,flexGrow:1}}>
       {conflict?<View style={s.card}><Text style={s.body}>草稿在其他入口更新，本页输入已保留。</Text><TextAction label="载入最新草稿" disabled={busy || saving} onPress={()=>Alert.alert('载入最新草稿','这会放弃本页尚未保存的修改。',[{text:'保留本页',style:'cancel'},{text:'载入最新',onPress:()=>void reload().catch(e=>setError(e.message))}])} /></View>:null}
       {error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}
@@ -99,14 +102,13 @@ export function ImageDraftScreen({ id }: { id: string }) {
         <TextAction label="添加底图" onPress={()=>setEditor('references')} icon="add" disabled={!editable} />
       </View>}
       {input?.enhancement && draft?.state==='EDITING'?<NovelAiEnhancePanel input={input} update={update} editable={editable} />:null}
-      {draft?.state==='SUBMITTED'?<><TextAction label="查看本次画面描述" onPress={()=>setEditor('prompt')} /><CopySubmittedDraft id={id} /></>:null}
     </ScrollView>
     {input && draft?.state==='EDITING'?<View style={[s.footer,{paddingHorizontal:16,paddingTop:8,gap:4,borderTopLeftRadius:20,borderTopRightRadius:20}]}>
       <View style={s.row}><TextAction label="画面描述" onPress={()=>setEditor('prompt')} icon="edit" />{input.enhancement?<Text numberOfLines={1} style={[s.muted,{flex:1}]}>{input.prompt}</Text>:<View style={{flexDirection:'row',gap:12}}><TextAction label={`角色${input.characters.filter(c=>c.enabled).length?` ${input.characters.filter(c=>c.enabled).length}`:''}`} onPress={()=>setEditor('characters')} /><TextAction label={input.action==='generate'?'底图':input.action==='img2img'?'图生图':'局部重绘'} onPress={()=>setEditor('references')} /></View>}</View>
       {!input.enhancement?<TextInput accessibilityLabel="图片提示词" placeholder="描述画面，或点「画面描述」展开完整编辑…" placeholderTextColor={COLORS.textMuted} value={input.prompt} onChangeText={prompt=>update({prompt})} editable={editable} multiline style={[s.input,{minHeight:64,maxHeight:100,paddingTop:10,textAlignVertical:'top',backgroundColor:COLORS.surfaceRaised,borderWidth:0}]} />:null}
       <View style={[s.row,{flexWrap:'nowrap',gap:16}]}><TextAction label="生成设置" icon="tune" onPress={()=>setSettings(true)} /><View style={{flex:1}}><ListAction label={busy?'处理中…':input.enhancement || input.enhance?'增强图片':`生成 ${input.samples} 张图片`} disabled={busy || saving || conflict} onPress={()=>void submit()} /></View></View>
       <View style={s.row}><Text style={[s.muted,{fontSize:12}]}>NovelAI · 费用待确认</Text><TextAction label="创作账号" onPress={()=>setAccount(true)} /></View>
-    </View>:draft?.state==='SUBMITTED'?<View style={s.footer}><TextAction label="查看全部素材" icon="grid_view" onPress={()=>router.push('/(tabs)/assets')} /></View>:null}
+    </View>:null}
     {input && settings?<NovelAiSettings input={input} update={update} editable={editable} onClose={()=>setSettings(false)} />:null}
     {input && editor && !picking?<NovelAiPromptEditor input={input} update={update} editable={editable} tab={editor} setTab={setEditor} onClose={()=>setEditor(undefined)} references={references} />:null}
     {picking?<CreativeAssetPicker kind="image" projectId={draft?.project_id??undefined} onClose={()=>setPicking(undefined)} onChoose={async version=>choose(version.id,picking)} />:null}

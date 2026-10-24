@@ -8,6 +8,7 @@ import { creativeService } from './runtime';
 import { creativeBudget } from './accountRuntime';
 import { ListAction } from '../ui/ListPageUI';
 import type { CreativeProject } from './types';
+import { TextAction } from './WorkbenchUI';
 import { creativeUI as s } from './creativeUI';
 
 export function AgentCreativePanel({ threadId, running }: { threadId: string; running: boolean }) {
@@ -29,6 +30,7 @@ export function AgentCreativePanel({ threadId, running }: { threadId: string; ru
   }, [threadId]));
   const choose = async (id: string | null) => {
     if (running || lock.current) return;
+    if (projectId) { router.setParams({projectId:id ?? ''}); setExpanded(false); return; }
     lock.current = true; setBusy(true);
     try {
       await withWriteTransaction(getDatabase(), async tx => {
@@ -41,7 +43,7 @@ export function AgentCreativePanel({ threadId, running }: { threadId: string; ru
     finally { lock.current = false; setBusy(false); }
   };
   return <View style={{ paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}>
-    <View style={s.row}><Text style={s.muted}>当前项目：{projects.find(p => p.id === selected)?.title ?? (selected ? '项目不可用' : '未选择')}</Text><ListAction label="切换项目" secondary disabled={running || busy} onPress={() => setExpanded(true)} /></View>
+    <View style={s.row}><Text style={s.muted}>当前项目：{projects.find(p => p.id === selected)?.title ?? (selected ? '项目不可用' : '未选择')}</Text><TextAction label="项目" disabled={running || busy} onPress={() => setExpanded(true)} /></View>
     {projectId && projectId !== selected ? <ListAction label={`在此会话使用 ${projects.find(p => p.id === projectId)?.title ?? '所选项目'}`} disabled={running || busy} onPress={() => void choose(projectId)} /> : null}
     {!selected ? <Text style={s.muted}>可先讨论想法。制作素材前，请选择项目或让助手创建项目后再选择。</Text> : null}
     {!expanded && notice ? <Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text> : null}

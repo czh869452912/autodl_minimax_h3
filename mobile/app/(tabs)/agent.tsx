@@ -1,1 +1,1 @@
-export { default } from '../../src/agent/AgentScreen';
+export { AgentWorkspace as default } from '../../src/creative/AgentWorkspace';

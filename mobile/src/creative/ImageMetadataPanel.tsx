@@ -26,7 +26,7 @@ export function imageMetadataFields(raw:Record<string,string>,recipe:Record<stri
   ].filter((row):row is [string,any]=>row[1]!==undefined && row[1]!==null && row[1]!=='').map(([label,value])=>({label,value:typeof value==='object'?JSON.stringify(value,null,2):String(value)}));
 }
 function MetadataSheet({version,onClose}:{version:AssetVersion;onClose:()=>void}){
-  const [info,setInfo]=useState<CreativeImageInfo>(),[error,setError]=useState(''),[loaded,setLoaded]=useState(false),[rawOpen,setRawOpen]=useState(false),[notice,setNotice]=useState('');
+  const [info,setInfo]=useState<CreativeImageInfo>(),[error,setError]=useState(''),[loaded,setLoaded]=useState(false),[rawOpen,setRawOpen]=useState(false),[detailsOpen,setDetailsOpen]=useState(false),[notice,setNotice]=useState('');
   useEffect(()=>{let active=true;(async()=>{
     if(version.state!=='AVAILABLE' || !version.relativePath)throw new Error('原件待恢复，以下仅显示 App 已保存的记录');
     if((await creativeFiles().verify(version.id))?.state!=='AVAILABLE')throw new Error('原件缺失或校验失败，以下仅显示 App 已保存的记录');
@@ -36,23 +36,23 @@ function MetadataSheet({version,onClose}:{version:AssetVersion;onClose:()=>void}
   })().catch(e=>{if(active)setError(e.message??'图片信息读取失败');}).finally(()=>{if(active)setLoaded(true);});return()=>{active=false;};},[version.id]);
   const raw=info && Object.keys(info.metadata).length?info.metadata:(version.recipe.raw as Record<string,string>|undefined)??{},fields=imageMetadataFields(raw,version.recipe);
   const copy=async(value:string)=>{try{await Clipboard.setStringAsync(value);setNotice('已复制');}catch{setNotice('复制失败，请重试');}};
-  return <ParameterSheet title="图片元数据" description={`版本 ${version.versionNo} · 只读查看`} onClose={onClose}>
+  return <ParameterSheet fullScreen title="图片信息" description={`版本 ${version.versionNo} · 只读查看`} onClose={onClose}>
     {!loaded?<Text style={s.muted}>正在读取图片信息…</Text>:null}
     {error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}
     {info?.metadataError?<Text accessibilityRole="alert" style={s.error}>部分内嵌元数据无法可靠读取，以下保留文件信息与 App 保存的生成记录。</Text>:null}
     {notice?<Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text>:null}
     <SectionHeading title="文件信息" />
     {info?<Text selectable style={s.body}>{info.width} × {info.height} · {info.mime} · {(info.bytes/1024/1024).toFixed(2)} MB</Text>:<Text style={s.muted}>{version.mime??'格式未知'} · {version.state==='AVAILABLE'?'本地文件':'原件待恢复'}</Text>}
-    {version.blobSha256?<><Text selectable style={s.muted}>SHA-256：{version.blobSha256}</Text><TextAction label="复制文件哈希" onPress={()=>void copy(version.blobSha256!)} /></>:null}
     <Text style={s.muted}>{info?'内嵌信息读取自当前原件；未内嵌的字段使用 App 生成记录补充。':'当前展示 App 中保存的元数据和生成记录。'}文件尺寸与生成时尺寸可能不同。</Text>
     <SectionHeading title="生成信息" />
-    {fields.length?fields.map(({label,value})=><View key={label} style={{gap:4}}><View style={s.row}><Text style={s.title}>{label}</Text><TextAction label={`复制${label}`} onPress={()=>void copy(value)} /></View><Text selectable style={s.body}>{value.length>12000?`${value.slice(0,12000)}\n…显示已截断，可复制完整内容。`:value}</Text></View>):<Text style={s.muted}>没有找到生成参数。图片仍可查看和超分。</Text>}
+    {fields.length?fields.filter(({label})=>detailsOpen || ['模型','Effort','生成尺寸','处理'].includes(label)).map(({label,value})=><View key={label} style={{gap:4}}><View style={s.row}><Text style={s.title}>{label}</Text><TextAction label={`复制${label}`} onPress={()=>void copy(value)} /></View><Text selectable style={s.body}>{value.length>12000?`${value.slice(0,12000)}\n…显示已截断，可复制完整内容。`:value}</Text></View>):<Text style={s.muted}>没有找到生成参数。图片仍可查看和超分。</Text>}
+    <TextAction label={detailsOpen?'收起生成参数':'查看提示词与全部参数'} onPress={()=>setDetailsOpen(!detailsOpen)} />
     {Array.isArray(version.recipe.notices)?version.recipe.notices.map((n,i)=><Text key={i} style={s.muted}>{String(n)}</Text>):null}
     <TextAction label={rawOpen?'收起原始元数据':'查看原始元数据与配方'} onPress={()=>setRawOpen(!rawOpen)} />
-    {rawOpen?<><TextAction label="复制完整元数据与配方" onPress={()=>void copy(JSON.stringify({file:info?{width:info.width,height:info.height,mime:info.mime,bytes:info.bytes}:null,embedded:info?.metadata??null,recipe:version.recipe},null,2))} /><Text selectable style={s.muted}>{JSON.stringify({embedded:info?.metadata??null,recipe:version.recipe},null,2).slice(0,16000)}</Text><Text style={s.muted}>长记录在此显示前 16,000 字符，复制可获取完整内容。</Text></>:null}
+    {rawOpen?<>{version.blobSha256?<><Text selectable style={s.muted}>SHA-256：{version.blobSha256}</Text><TextAction label="复制文件哈希" onPress={()=>void copy(version.blobSha256!)} /></>:null}<TextAction label="复制完整元数据与配方" onPress={()=>void copy(JSON.stringify({file:info?{width:info.width,height:info.height,mime:info.mime,bytes:info.bytes}:null,embedded:info?.metadata??null,recipe:version.recipe},null,2))} /><Text selectable style={s.muted}>{JSON.stringify({embedded:info?.metadata??null,recipe:version.recipe},null,2).slice(0,16000)}</Text><Text style={s.muted}>长记录在此显示前 16,000 字符，复制可获取完整内容。</Text></>:null}
   </ParameterSheet>;
 }
-export function ImageMetadataPanel({version}:{version:AssetVersion}){
+export function ImageMetadataPanel({version,label="查看图片元数据"}:{version:AssetVersion;label?:string}){
   const [open,setOpen]=useState(false);
-  return <><TextAction label="查看图片元数据" onPress={()=>setOpen(true)} />{open?<MetadataSheet key={version.id} version={version} onClose={()=>setOpen(false)} />:null}</>;
+  return <><TextAction label={label} onPress={()=>setOpen(true)} />{open?<MetadataSheet key={version.id} version={version} onClose={()=>setOpen(false)} />:null}</>;
 }

@@ -39,6 +39,19 @@ test('invalid asset route shows recovery instead of unrelated import controls', 
   } finally { act(() => tree?.unmount()); }
 });
 
+test('ordinary asset preview keeps management details hidden and is not presented as trashed', async () => {
+  mockService.asset.mockResolvedValueOnce({id:'a',kind:'image',title:'预览',revision:1});
+  mockService.versions.mockResolvedValueOnce([]);
+  let tree!: ReturnType<typeof create>;
+  try {
+    await act(async () => { tree = create(<CreativeWorkspace mode="assets" assetId="a" />); });
+    expect(content(tree)).not.toContain('此素材位于回收站');
+    expect(content(tree)).not.toContain('编辑名称与标签');
+    act(() => press(tree,'更多'));
+    expect(content(tree)).toContain('编辑名称与标签');
+  } finally {act(()=>tree?.unmount());}
+});
+
 test('missing requested version falls back and trash status comes from storage', async () => {
   mockService.asset.mockResolvedValueOnce({ id: 'a', kind: 'image', title: 'A', revision: 1 });
   mockService.isTrashed.mockResolvedValueOnce(true);
