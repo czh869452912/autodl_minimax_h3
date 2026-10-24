@@ -1,110 +1,112 @@
-import { creativeError } from './creativeError';
-import { useDraftSync } from './useDraftSync';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useRouter } from 'expo-router';
 import { useNavigation, usePreventRemove } from 'expo-router/react-navigation';
-import { creativeService } from './runtime';
-import { novelAiDraftInput, NOVELAI_MODELS, type NovelAiDraftInput } from './novelAiProtocol';
-import { prepareCreativeImage, confirmCreativeImage } from './novelAiRuntime';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { creativeService, importCreativeImage } from './runtime';
+import { novelAiDraftInput, novelAiModelName, type NovelAiDraftInput } from './novelAiProtocol';
+import { prepareCreativeImage, confirmCreativeImage } from './novelAiRuntime';
+import { creativeError } from './creativeError';
+import { useDraftSync } from './useDraftSync';
 import { CreativeResults } from './CreativeResults';
 import { DraftHeading } from './DraftHeading';
-import { creativeUI as s } from './creativeUI';
 import { CreativeAccountPanel } from './CreativeAccountPanel';
 import { CopySubmittedDraft } from './CopySubmittedDraft';
+import { CreativeAssetPicker } from './CreativeAssetPicker';
+import { NovelAiPromptEditor } from './NovelAiPromptEditor';
+import { NovelAiSettings } from './NovelAiSettings';
+import { NovelAiMaskEditor } from './NovelAiMaskEditor';
 import type { CreativeDraft } from './drafts';
 import { createId } from '../ids';
+import { pickImagesFromGallery } from '../native/imagePicker';
 import { ListAction } from '../ui/ListPageUI';
+import { AppIcon } from '../ui/icons';
 import { COLORS } from '../ui/theme';
+import { ParameterSheet, SectionHeading, SegmentedChoices, TextAction } from './WorkbenchUI';
+import { creativeUI as s } from './creativeUI';
 
 export function ImageDraftScreen({ id }: { id: string }) {
-  const router = useRouter(), navigation = useNavigation();
-  const [draft, setDraft] = useState<CreativeDraft>(); const [input, setInput] = useState<NovelAiDraftInput>();
-  const [advanced, setAdvanced] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
-  const scrollRef = useRef<ScrollView>(null);
-  const [recipeOpen, setRecipeOpen] = useState(false);
-  const [charactersOpen, setCharactersOpen] = useState(false), [negativeOpen, setNegativeOpen] = useState(false);
-  const lock = useRef(false), latest = useRef(input); latest.current = input;
-  const dirty = Boolean(input && draft && JSON.stringify(input) !== draft.input_json);
-  const editable = draft?.state === 'EDITING' && !busy;
-  usePreventRemove(dirty || busy, ({ data }) => {
-    if (lock.current) { Alert.alert('操作进行中', '请等待保存或提交完成。'); return; }
-    Alert.alert('修改尚未保存', '是否放弃本次未保存修改？', [{ text: '继续编辑', style: 'cancel' }, { text: '放弃并离开', style: 'destructive', onPress: () => navigation.dispatch(data.action) }]);
+  const router=useRouter(), navigation=useNavigation();
+  const [draft,setDraft]=useState<CreativeDraft>(), [input,setInput]=useState<NovelAiDraftInput>();
+  const [busy,setBusy]=useState(false), [saving,setSaving]=useState(false), [error,setError]=useState('');
+  const [editor,setEditor]=useState<string>(), [settings,setSettings]=useState(false), [account,setAccount]=useState(false), [picking,setPicking]=useState<'source'|'mask'>();
+  const [refs,setRefs]=useState<Array<{version_id:string;relative_path:string;state:string}>>([]);
+  const scrollRef=useRef<ScrollView>(null), lock=useRef(false), latest=useRef(input); latest.current=input;
+  const dirty=Boolean(input && draft && JSON.stringify(input)!==draft.input_json), editable=draft?.state==='EDITING' && !busy;
+  usePreventRemove(dirty || busy || saving,({data})=>{
+    if(lock.current){Alert.alert('操作进行中','请等待保存或提交完成。');return;}
+    Alert.alert('修改尚未保存','是否放弃本次未保存修改？',[{text:'继续编辑',style:'cancel'},{text:'放弃并离开',style:'destructive',onPress:()=>navigation.dispatch(data.action)}]);
   });
-  const load = async (canApply = () => true) => { const row = await creativeService().draft(id); if (!row) throw new Error('草稿不存在'); const parsed = novelAiDraftInput.parse(JSON.parse(row.input_json)); if (canApply()) { setDraft(row); setInput(parsed); } };
-  const { conflict, reload, assertCurrent } = useDraftSync(id, draft, dirty, busy, load, setError);
-  useEffect(() => { if (error || conflict) scrollRef.current?.scrollTo({ y: 0, animated: true }); }, [error, conflict]);
-  const save = async () => {
-    if (lock.current || conflict || !draft || !latest.current || draft.state !== 'EDITING') return;
-    lock.current = true; setBusy(true); setError('');
-    try { await assertCurrent(); await creativeService().execute({ name: 'draft.updateImage', payload: { id, expectedRevision: draft.revision, input: latest.current } }, createId()); const row = await creativeService().draft(id); if (row) setDraft(row); }
-    catch (e) { setError(creativeError(e, '保存失败')); }
-    finally { lock.current = false; setBusy(false); }
+  const load=async(canApply=()=>true)=>{const row=await creativeService().draft(id);if(!row)throw new Error('草稿不存在');const parsed=novelAiDraftInput.parse(JSON.parse(row.input_json));if(canApply()){setDraft(row);setInput(parsed);}};
+  const {conflict,reload,assertCurrent}=useDraftSync(id,draft,dirty,busy || saving,load,setError);
+  useEffect(()=>{let active=true;if(draft)void creativeService().draftInputs(id).then(rows=>{if(active)setRefs(rows);}).catch(()=>{if(active)setError('底图读取失败，请重新打开草稿');});return()=>{active=false;};},[id,draft?.revision]);
+  useEffect(()=>{if(error || conflict)scrollRef.current?.scrollTo({y:0,animated:true});},[error,conflict]);
+  const save=async()=>{
+    if(lock.current || conflict || !draft || !latest.current || draft.state!=='EDITING')return;
+    lock.current=true;setSaving(true);setError('');
+    try{await assertCurrent();await creativeService().execute({name:'draft.updateImage',payload:{id,expectedRevision:draft.revision,input:latest.current}},createId());const row=await creativeService().draft(id);if(row)setDraft(row);}
+    catch(e){setError(creativeError(e,'保存失败'));}finally{lock.current=false;setSaving(false);}
   };
-  useEffect(() => { if (!dirty || busy || error || conflict) return; const timer = setTimeout(() => { void save(); }, 600); return () => clearTimeout(timer); }, [input, draft, dirty, busy, error, conflict]);
-  const update = (patch: Partial<NovelAiDraftInput>) => { setInput(old => old ? { ...old, ...patch } : old); setError(''); };
-  const submit = async () => {
-    if (lock.current || !draft || !latest.current || draft.state !== 'EDITING') return; lock.current = true; setBusy(true); setError('');
-    const release = () => { lock.current = false; setBusy(false); };
-    try {
+  useEffect(()=>{if(!dirty || busy || saving || error || conflict)return;const timer=setTimeout(()=>void save(),600);return()=>clearTimeout(timer);},[input,draft,dirty,busy,saving,error,conflict]);
+  const update=(patch:Partial<NovelAiDraftInput>)=>{setInput(old=>old?{...old,...patch}:old);setError('');};
+  const submit=async()=>{
+    if(lock.current || !draft || !latest.current || draft.state!=='EDITING')return;lock.current=true;setBusy(true);setError('');
+    const release=()=>{lock.current=false;setBusy(false);};
+    try{
       await assertCurrent();
-      if (dirty) {
-        await creativeService().execute({ name: 'draft.updateImage', payload: { id, expectedRevision: draft.revision, input: latest.current } }, createId());
-        const saved = await creativeService().draft(id); if (saved) setDraft(saved);
-      }
-      const preview = await prepareCreativeImage(id);
-      Alert.alert('确认生成 1 张图片', `NovelAI 凭据 ${preview.account.credential_generation_id.slice(-8)}，Seed ${preview.prepared.inputSnapshot.seed}。费用暂不可预估；本次授权 1 次生成，有效期 15 分钟。Opus 不代表所有参数均免费。`, [
-        { text: '取消', style: 'cancel', onPress: release },
-        { text: '授权并生成', onPress: () => { void confirmCreativeImage(preview).then(() => load()).catch(e => setError(creativeError(e, '提交失败'))).finally(release); } },
-      ], { cancelable: false });
-    } catch (e) { setError(creativeError(e, '准备失败')); release(); }
+      if(dirty){await creativeService().execute({name:'draft.updateImage',payload:{id,expectedRevision:draft.revision,input:latest.current}},createId());const row=await creativeService().draft(id);if(row)setDraft(row);}
+      const preview=await prepareCreativeImage(id), count=latest.current.samples;
+      Alert.alert(`确认生成 ${count} 张图片`,`使用 ${novelAiModelName(latest.current.model)} 生成 ${count} 张图片。\n\n费用暂不可预估，Opus 不代表所有参数均免费。本次授权 1 次请求（含 ${count} 张图片），15 分钟内有效。结果不明时不会自动重发。`,[
+        {text:'取消',style:'cancel',onPress:release},
+        {text:'授权并生成',onPress:()=>{void confirmCreativeImage(preview).then(()=>load()).catch(e=>setError(creativeError(e,'提交失败'))).finally(release);}},
+      ],{cancelable:false});
+    }catch(e){setError(creativeError(e,'准备失败'));release();}
   };
-  const fieldStyle = { borderWidth: 1, borderColor: COLORS.controlBorder, borderRadius: 8, padding: 12, color: COLORS.text };
-  const numberField = (label: string, key: 'width'|'height'|'steps'|'guidance'|'rescale') => <View key={key}><Text style={{ color: COLORS.text }}>{label}</Text><TextInput accessibilityLabel={label} value={String(input![key])} editable={editable} keyboardType="decimal-pad" onChangeText={value => update({ [key]: Number(value) })} style={fieldStyle} /></View>;
-  return <SafeAreaView style={s.screen}><KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: COLORS.background }}>
-    <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={s.content}>
-      <DraftHeading draft={draft} dirty={dirty} busy={busy} title="图片创作" />
-    {conflict ? <View style={s.card}><Text style={s.body}>这份草稿已在其他入口更新。本页输入仍保留，请先处理版本冲突。</Text><ListAction label="载入最新草稿" secondary disabled={busy} onPress={() => Alert.alert('载入最新草稿', '这会放弃本页尚未保存的修改。', [{ text: '保留本页', style: 'cancel' }, { text: '载入最新', onPress: () => void reload().catch(e => setError(e.message)) }])} /></View> : null}
-      {error ? <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{error}</Text> : null}
-      {draft?.state === 'EDITING' ? <CreativeAccountPanel compact /> : null}
-      {draft && (draft.target_asset_id || draft.job_id) ? <CreativeResults draft={draft} disabled={busy || dirty} /> : null}
-      {draft?.state === 'SUBMITTED' ? <ListAction label={recipeOpen ? '收起生成参数' : '查看本次生成参数'} secondary onPress={() => setRecipeOpen(!recipeOpen)} /> : null}
-      {input && (draft?.state === 'EDITING' || recipeOpen) ? <>
-        <Text style={s.title}>画面描述</Text>
-        <TextInput accessibilityLabel="图片提示词" placeholder="画面、风格与构图" value={input.prompt} onChangeText={prompt => update({ prompt })} editable={editable} multiline style={[fieldStyle, { minHeight: 130, textAlignVertical: 'top' }]} />
-        <ListAction label={negativeOpen ? "收起负面描述" : `不希望出现的内容${input.negative ? " · 已填写" : "（可选）"}`} secondary onPress={() => setNegativeOpen(!negativeOpen)} />
-        {negativeOpen ? <TextInput accessibilityLabel="图片负面提示词" placeholder="不希望出现的内容" value={input.negative} onChangeText={negative => update({ negative })} editable={editable} multiline style={fieldStyle} /> : null}
-
-        <View style={s.row}>{([{label:'竖图',width:832,height:1216},{label:'方图',width:1024,height:1024},{label:'横图',width:1216,height:832}] as const).map(p => <ListAction key={p.label} label={`${input.width===p.width&&input.height===p.height?'✓ ':''}${p.label}`} secondary disabled={!editable} onPress={() => update({width:p.width,height:p.height})} />)}</View>
-        <Text style={s.muted}>{input.width} × {input.height} · 1 张 · {input.model.replace('nai-diffusion-', 'NovelAI ').replace('-curated', ' Curated').replace('-full', ' Full')}</Text>
-        <ListAction label={charactersOpen ? '收起角色设置' : `角色 · ${input.characters.length ? `${input.characters.length} 个角色` : '添加角色（可选）'}`} secondary onPress={() => setCharactersOpen(!charactersOpen)} />
-        {charactersOpen ? <>
-        {input.characters.map((c, index) => <View key={index} style={{ padding: 12, borderWidth: 1, borderColor: COLORS.border, gap: 8 }}>
-          <Text style={{ color: COLORS.text }}>角色 {index + 1}</Text>
-          <TextInput accessibilityLabel={`角色 ${index + 1} 提示词`} value={c.prompt} editable={editable} multiline onChangeText={prompt => update({ characters: input.characters.map((v,i) => i === index ? { ...v,prompt } : v) })} style={fieldStyle} />
-          <TextInput accessibilityLabel={`角色 ${index + 1} 负面`} value={c.negative} editable={editable} multiline onChangeText={negative => update({ characters: input.characters.map((v,i) => i === index ? { ...v,negative } : v) })} style={fieldStyle} />
-          {input.useCoordinates ? <View style={{ flexDirection: 'row', gap: 8 }}>{(['x','y'] as const).map(axis => <TextInput key={axis} accessibilityLabel={`角色 ${index+1} ${axis}（0到1）`} value={String(c[axis])} keyboardType="decimal-pad" editable={editable} onChangeText={value => update({ characters: input.characters.map((v,i) => i === index ? { ...v,[axis]: Number(value) } : v) })} style={[fieldStyle,{flex:1}]} />)}</View> : null}
-          <ListAction label={`移除角色 ${index+1}`} secondary disabled={!editable} onPress={() => update({ characters: input.characters.filter((_,i) => i !== index) })} />
-        </View>)}
-        <ListAction label="添加角色（最多 6 个）" secondary disabled={!editable || input.characters.length >= 6} onPress={() => update({ characters: [...input.characters,{ prompt:'', negative:'', x:0.5, y:0.5 }] })} />
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={{ color: COLORS.text }}>指定角色位置</Text><Switch accessibilityLabel="指定角色位置" value={input.useCoordinates} disabled={!editable} onValueChange={useCoordinates => update({ useCoordinates })} /></View>
-        </> : null}
-        <ListAction label={advanced ? '收起高级设置' : '模型与高级设置'} secondary onPress={() => setAdvanced(!advanced)} />
-        {advanced ? <>
-          {NOVELAI_MODELS.map(model => <ListAction key={model} label={`${input.model === model ? '✓ ' : ''}${model}`} secondary disabled={!editable} onPress={() => update({ model, noiseSchedule: model === 'nai-diffusion-5-curated' ? 'karras' : input.noiseSchedule })} />)}
-          {numberField('宽度（64 的倍数）','width')}{numberField('高度（64 的倍数）','height')}{numberField('步数','steps')}{numberField('引导强度','guidance')}{numberField('Rescale','rescale')}
-          <TextInput accessibilityLabel="图片 Seed" placeholder="Seed 留空则随机" value={input.seed == null ? '' : String(input.seed)} editable={editable} keyboardType="number-pad" onChangeText={value => update({ seed: value === '' ? null : Number(value) })} style={fieldStyle} />
-          {(['k_euler_ancestral','k_euler','k_dpmpp_2m'] as const).map(sampler => <ListAction key={sampler} label={`${input.sampler === sampler ? '✓ ' : ''}${sampler}`} secondary disabled={!editable} onPress={() => update({ sampler })} />)}
-          {(input.model === 'nai-diffusion-5-curated' ? ['karras'] as const : ['karras','native','exponential'] as const).map(noiseSchedule => <ListAction key={noiseSchedule} label={`${input.noiseSchedule === noiseSchedule ? '✓ ' : ''}${noiseSchedule}`} secondary disabled={!editable} onPress={() => update({ noiseSchedule })} />)}
-        </> : null}
-
-      </> : null}
-
-      {draft?.state==='SUBMITTED'?<CopySubmittedDraft id={id}/>:null}
+  const choose=(versionId:string,kind:'source'|'mask')=>update(kind==='source'?{sourceVersionId:versionId,maskVersionId:null,maskStrokes:[],action:input?.action==='infill'?'infill':'img2img'}:{maskVersionId:versionId,maskStrokes:[]});
+  const importImage=async(kind:'source'|'mask')=>{
+    if(lock.current || !editable)return;lock.current=true;setBusy(true);
+    try{const [image]=await pickImagesFromGallery(1);if(image){const result=await importCreativeImage(image,draft?.project_id??undefined);if(result.status==='completed')choose(result.value.versionId,kind);}}
+    catch(e){setError(creativeError(e,'图片导入失败'));}finally{lock.current=false;setBusy(false);}
+  };
+  const source=refs.find(r=>r.version_id===input?.sourceVersionId), mask=refs.find(r=>r.version_id===input?.maskVersionId);
+  const sourceUri=source?.state==='AVAILABLE'?`${FileSystem.documentDirectory}${source.relative_path}`:undefined;
+  const references=input?<View style={{gap:12}}>
+    <SectionHeading title="生成方式" />
+    <SegmentedChoices label="生成方式" options={[{id:'generate',label:'文字生图'},{id:'img2img',label:'图生图'},{id:'infill',label:'局部重绘'}]} value={input.action} disabled={!editable} onChange={action=>update({action,enhance:action==='img2img' && input.enhance})} />
+    {input.action!=='generate'?<>
+      <Text style={s.muted}>选择底图，输出尺寸与变化强度可在生成设置中调整。</Text>
+      {sourceUri?<Image accessibilityLabel="当前底图" source={{uri:sourceUri}} resizeMode="contain" style={[s.preview,{height:180}]} />:<Text style={s.muted}>{input.sourceVersionId?'底图保存或恢复中…':'尚未选择底图'}</Text>}
+      <View style={s.row}><TextAction label="从素材选择底图" disabled={!editable || saving} onPress={()=>setPicking('source')} /><TextAction label="导入底图" disabled={!editable} onPress={()=>void importImage('source')} /></View>
+      {input.action==='infill'?<>
+        {input.model==='nai-diffusion-5-curated'?<Text style={s.error}>V5 Curated 没有原生重绘模型，请切换 V5 Full 后使用局部重绘。</Text>:null}
+        {input.maskVersionId?<><Text style={s.muted}>已选择蒙版 · 白色重绘，黑色保留</Text>{mask?.state==='AVAILABLE'?<Image source={{uri:`${FileSystem.documentDirectory}${mask.relative_path}`}} style={[s.preview,{height:140}]} resizeMode="contain" />:null}<TextAction label="改为绘制蒙版" disabled={!editable} onPress={()=>update({maskVersionId:null})} /></>:sourceUri?<NovelAiMaskEditor uri={sourceUri} input={input} disabled={!editable} onChange={maskStrokes=>update({maskStrokes,maskVersionId:null})} />:null}
+        <View style={s.row}><TextAction label="从素材选择蒙版" disabled={!editable || saving} onPress={()=>setPicking('mask')} /><TextAction label="导入黑白蒙版" disabled={!editable} onPress={()=>void importImage('mask')} /></View>
+      </>:null}
+    </>:<Text style={s.muted}>从文字开始创作。V5 的底图支持图生图与局部重绘；Vibe 和 Precise Reference 不适用于 V5。</Text>}
+  </View>:null;
+  return <SafeAreaView style={s.screen}><KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'} style={{flex:1}}>
+    <View style={{paddingHorizontal:16,paddingBottom:8}}><DraftHeading draft={draft} dirty={dirty} busy={busy || saving} title="图片工作台" /></View>
+    <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:16,gap:16,flexGrow:1}}>
+      {conflict?<View style={s.card}><Text style={s.body}>草稿在其他入口更新，本页输入已保留。</Text><TextAction label="载入最新草稿" disabled={busy || saving} onPress={()=>Alert.alert('载入最新草稿','这会放弃本页尚未保存的修改。',[{text:'保留本页',style:'cancel'},{text:'载入最新',onPress:()=>void reload().catch(e=>setError(e.message))}])} /></View>:null}
+      {error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}
+      {input?<View style={s.row}><TextAction label={`${novelAiModelName(input.model)}${input.model==='nai-diffusion-5-full'?` · ${input.effort==='high'?'High':'Medium'}`:''}`} onPress={()=>setSettings(true)} /><Text style={s.muted}>{input.width} × {input.height}{input.transparent?' · 透明':''}</Text></View>:null}
+      {draft && (draft.target_asset_id || draft.job_id)?<CreativeResults draft={draft} disabled={busy || saving || dirty} />:sourceUri && input?.action!=='generate'?<View style={{flex:1,gap:8}}><Image accessibilityLabel="底图预览" source={{uri:sourceUri}} resizeMode="contain" style={{width:'100%',flex:1,minHeight:300,backgroundColor:COLORS.mediaBackground,borderRadius:18}} /><Text style={s.muted}>{input?.action==='infill'?'局部重绘 · 打开底图编辑蒙版':'图生图 · 调整描述后生成新画面'}</Text></View>:<View style={{flex:1,minHeight:280,alignItems:'center',justifyContent:'center',padding:24,gap:16,borderRadius:20,backgroundColor:COLORS.surfaceRaised}}>
+        <View style={{width:72,height:88,borderRadius:12,backgroundColor:COLORS.surface,alignItems:'center',justifyContent:'center',transform:[{rotate:'-7deg'}]}}><AppIcon name="image" size={36} color={COLORS.primaryActive} /></View>
+        <Text style={[s.title,{fontSize:24}]}>让想象成为画面</Text><Text style={[s.muted,{textAlign:'center'}]}>在下方描述你想看到的场景，或添加底图继续创作。</Text>
+        <TextAction label="添加底图" onPress={()=>setEditor('references')} icon="add" disabled={!editable} />
+      </View>}
+      {draft?.state==='SUBMITTED'?<><TextAction label="查看本次画面描述" onPress={()=>setEditor('prompt')} /><CopySubmittedDraft id={id} /></>:null}
     </ScrollView>
-    <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: COLORS.border }}>
-      {draft?.state === 'EDITING' ? <ListAction label={busy ? '处理中…' : '生成 1 张 · 费用待确认'} disabled={busy || conflict} onPress={() => void submit()} /> : <ListAction label="返回资产库" onPress={() => router.push('/(tabs)/assets')} />}
-    </View>
+    {input && draft?.state==='EDITING'?<View style={[s.footer,{paddingHorizontal:16,paddingTop:8,gap:4,borderTopLeftRadius:20,borderTopRightRadius:20}]}>
+      <View style={s.row}><TextAction label="画面描述" onPress={()=>setEditor('prompt')} icon="edit" /><View style={{flexDirection:'row',gap:12}}><TextAction label={`角色${input.characters.filter(c=>c.enabled).length?` ${input.characters.filter(c=>c.enabled).length}`:''}`} onPress={()=>setEditor('characters')} /><TextAction label={input.action==='generate'?'底图':input.action==='img2img'?'图生图':'局部重绘'} onPress={()=>setEditor('references')} /></View></View>
+      <TextInput accessibilityLabel="图片提示词" placeholder="描述画面，或点「画面描述」展开完整编辑…" placeholderTextColor={COLORS.textMuted} value={input.prompt} onChangeText={prompt=>update({prompt})} editable={editable} multiline style={[s.input,{minHeight:64,maxHeight:100,paddingTop:10,textAlignVertical:'top',backgroundColor:COLORS.surfaceRaised,borderWidth:0}]} />
+      <View style={[s.row,{flexWrap:'nowrap',gap:16}]}><TextAction label="生成设置" icon="tune" onPress={()=>setSettings(true)} /><View style={{flex:1}}><ListAction label={busy?'处理中…':`生成 ${input.samples} 张图片`} disabled={busy || saving || conflict} onPress={()=>void submit()} /></View></View>
+      <View style={s.row}><Text style={[s.muted,{fontSize:12}]}>NovelAI · 费用待确认</Text><TextAction label="创作账号" onPress={()=>setAccount(true)} /></View>
+    </View>:draft?.state==='SUBMITTED'?<View style={s.footer}><TextAction label="查看全部素材" icon="grid_view" onPress={()=>router.push('/(tabs)/assets')} /></View>:null}
+    {input && settings?<NovelAiSettings input={input} update={update} editable={editable} onClose={()=>setSettings(false)} />:null}
+    {input && editor && !picking?<NovelAiPromptEditor input={input} update={update} editable={editable} tab={editor} setTab={setEditor} onClose={()=>setEditor(undefined)} references={references} />:null}
+    {picking?<CreativeAssetPicker kind="image" projectId={draft?.project_id??undefined} onClose={()=>setPicking(undefined)} onChoose={async version=>choose(version.id,picking)} />:null}
+    {account?<ParameterSheet title="创作账号" onClose={()=>setAccount(false)}><CreativeAccountPanel /></ParameterSheet>:null}
   </KeyboardAvoidingView></SafeAreaView>;
 }

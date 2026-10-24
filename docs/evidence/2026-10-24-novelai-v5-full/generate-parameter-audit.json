@@ -1,0 +1,340 @@
+{
+  "source": "official Swagger definitions/image.RequestParameters and deployed public model capability table",
+  "rootFields": {
+    "input": "supported",
+    "model": "supported",
+    "action": "supported",
+    "parameters": "supported",
+    "url": "not used; generation sources are explicit normalized private image bytes"
+  },
+  "fields": [
+    {
+      "field": "add_original_image",
+      "type": "boolean",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "cfg_rescale",
+      "type": "number",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "color_correct",
+      "type": "boolean",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "controlnet_condition",
+      "type": "string",
+      "implementation": "not-sent",
+      "reason": "V5 does not support ControlNet"
+    },
+    {
+      "field": "controlnet_model",
+      "type": "string",
+      "implementation": "not-sent",
+      "reason": "V5 does not support ControlNet"
+    },
+    {
+      "field": "controlnet_strength",
+      "type": "number",
+      "implementation": "not-sent",
+      "reason": "V5 does not support ControlNet"
+    },
+    {
+      "field": "deliberate_euler_ancestral_bug",
+      "type": "boolean",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "director_reference_descriptions",
+      "type": "array",
+      "implementation": "not-sent",
+      "reason": "V5 does not support Precise Reference"
+    },
+    {
+      "field": "director_reference_images",
+      "type": "array",
+      "implementation": "not-sent",
+      "reason": "V5 does not support Precise Reference"
+    },
+    {
+      "field": "director_reference_information_extracted",
+      "type": "array",
+      "implementation": "not-sent",
+      "reason": "V5 does not support Precise Reference"
+    },
+    {
+      "field": "director_reference_secondary_strength_values",
+      "type": "array",
+      "implementation": "not-sent",
+      "reason": "V5 does not support Precise Reference"
+    },
+    {
+      "field": "director_reference_strength_values",
+      "type": "array",
+      "implementation": "not-sent",
+      "reason": "V5 does not support Precise Reference"
+    },
+    {
+      "field": "dynamic_thresholding",
+      "type": "boolean",
+      "implementation": "not-sent",
+      "reason": "V5 does not support Decrisper"
+    },
+    {
+      "field": "extra_noise_seed",
+      "type": "integer",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "height",
+      "type": "integer",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "image",
+      "type": "string",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "image_format",
+      "type": "#/definitions/image.ImageFormat",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "img2img",
+      "type": [
+        {
+          "$ref": "#/definitions/image.Img2ImgParams"
+        }
+      ],
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "legacy",
+      "type": "boolean",
+      "implementation": "not-sent",
+      "reason": "Legacy model compatibility, omitted for V5"
+    },
+    {
+      "field": "legacy_v3_extend",
+      "type": "boolean",
+      "implementation": "not-sent",
+      "reason": "Legacy model compatibility, omitted for V5"
+    },
+    {
+      "field": "mask",
+      "type": "string",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "n_samples",
+      "type": "integer",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "negative_prompt",
+      "type": "string",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "noise",
+      "type": "number",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "noise_schedule",
+      "type": "string",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "params_version",
+      "type": "integer",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "prefer_brownian",
+      "type": "boolean",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "prompt",
+      "type": "string",
+      "implementation": "not-sent",
+      "reason": "Legacy prompt alias; current protocol uses input and v4_prompt"
+    },
+    {
+      "field": "qualityToggle",
+      "type": "boolean",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "reference_image",
+      "type": "string",
+      "implementation": "not-sent",
+      "reason": "V5 does not support Vibe Transfer"
+    },
+    {
+      "field": "reference_image_multiple",
+      "type": "array",
+      "implementation": "not-sent",
+      "reason": "V5 does not support Vibe Transfer"
+    },
+    {
+      "field": "reference_information_extracted",
+      "type": "number",
+      "implementation": "not-sent",
+      "reason": "V5 does not support Vibe Transfer"
+    },
+    {
+      "field": "reference_information_extracted_multiple",
+      "type": "array",
+      "implementation": "not-sent",
+      "reason": "V5 does not support Vibe Transfer"
+    },
+    {
+      "field": "reference_strength",
+      "type": "number",
+      "implementation": "not-sent",
+      "reason": "V5 does not support Vibe Transfer"
+    },
+    {
+      "field": "reference_strength_multiple",
+      "type": "array",
+      "implementation": "not-sent",
+      "reason": "V5 does not support Vibe Transfer"
+    },
+    {
+      "field": "sampler",
+      "type": "string",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "scale",
+      "type": "number",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "seed",
+      "type": "integer",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "skip_cfg_above_sigma",
+      "type": "number",
+      "implementation": "not-sent",
+      "reason": "V5 does not support Variety Boost"
+    },
+    {
+      "field": "sm",
+      "type": "boolean",
+      "implementation": "not-sent",
+      "reason": "V5 does not support SMEA"
+    },
+    {
+      "field": "sm_dyn",
+      "type": "boolean",
+      "implementation": "not-sent",
+      "reason": "V5 does not support SMEA"
+    },
+    {
+      "field": "steps",
+      "type": "number",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "straight_alpha",
+      "type": "boolean",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "stream",
+      "type": "#/definitions/image.StreamingType",
+      "implementation": "not-sent",
+      "reason": "Streaming response transport is not implemented; JSON batch transport is used"
+    },
+    {
+      "field": "strength",
+      "type": "number",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "tag_hint_qt",
+      "type": "integer",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "tag_hint_transparent_background",
+      "type": "boolean",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "tag_hint_uc_preset",
+      "type": "integer",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "ucPreset",
+      "type": "integer",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "upscale",
+      "type": "#/definitions/image.UpscaleParams",
+      "implementation": "not-sent",
+      "reason": "V5 e2eUpscale is false in current official client; maximum enhance uses upscaled_enhance"
+    },
+    {
+      "field": "upscaled_enhance",
+      "type": "boolean",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "v4_negative_prompt",
+      "type": "#/definitions/image.V4ConditionInput",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "v4_prompt",
+      "type": "#/definitions/image.V4ConditionInput",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    },
+    {
+      "field": "width",
+      "type": "integer",
+      "implementation": "sent-when-applicable",
+      "reason": "See implementation report parameter matrix"
+    }
+  ]
+}

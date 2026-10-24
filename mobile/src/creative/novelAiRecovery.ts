@@ -21,7 +21,7 @@ export async function recoverNovelAiResponses(db: AppDatabase, jobs: JobStateRep
     const job = await jobs.get(row.id);
     if (!job || job.status !== 'UNKNOWN') continue;
     const result = await jobs.transition({ jobId: row.id, expectedRevision: job.revision,
-      patch: { status: 'QUEUED', providerHandle: { kind: 'novelai-local-response', key, requestHash }, lastError: undefined, updatedAt: now },
+      patch: { status: 'QUEUED', providerHandle: { kind: 'novelai-local-response', key, requestHash, expectedImages: prepared.requestInput.parameters?.n_samples ?? 1 }, lastError: undefined, updatedAt: now },
       event: { id: `${row.id}:response:${job.revision}`, type: 'LOCAL_RESPONSE_RECOVERED', payload: {}, createdAt: now },
       nextOperations: [{ id: `${row.id}:response-import:${job.revision}`, kind: 'STATUS_SYNC', jobId: row.id, idempotencyKey: `${row.id}:response-import:${job.revision}`, payload: {}, now }] });
     if (result.ok) recovered++;

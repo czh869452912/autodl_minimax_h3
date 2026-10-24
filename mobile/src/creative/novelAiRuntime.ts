@@ -5,7 +5,8 @@ import type { AppDatabase } from '../storage/appDatabase';
 import { getDatabase } from '../storage/databaseClient';
 import { withWriteTransaction } from '../storage/sqliteBusy';
 import { createAttachmentStore } from '../media/attachments';
-import { novelAiDraftInput, parseNovelAiResponse, prepareNovelAiRequest } from './novelAiProtocol';
+import { novelAiDraftInput, novelAiSourceIds, NOVELAI_MAX_RESPONSE, parseNovelAiResponse, prepareNovelAiRequest } from './novelAiProtocol';
+import { creativeFiles } from './runtime';
 import { readCreativeDraft, readDraftInputs } from './drafts';
 import { creativeAccounts, creativeBudget } from './accountRuntime';
 import { submitCreativeVideo } from './videoSubmission';
@@ -19,7 +20,7 @@ function native() {
 export function novelAiResponseStore(db: AppDatabase): NovelAiResponseStore {
   return { generate: (...args) => native().generateNovelAi(...args), lookup: (...args) => native().lookupNovelAi(...args), async importResponse(uri, key) {
     const info = await FileSystem.getInfoAsync(uri);
-    if (!info.exists || info.isDirectory || info.size > 20 * 1024 * 1024) throw new Error('NOVELAI_RESPONSE_UNAVAILABLE');
+    if (!info.exists || info.isDirectory || info.size > NOVELAI_MAX_RESPONSE) throw new Error('NOVELAI_RESPONSE_UNAVAILABLE');
     const images = parseNovelAiResponse(await FileSystem.readAsStringAsync(uri));
     const result = [];
     for (const image of images) {
@@ -28,7 +29,7 @@ export function novelAiResponseStore(db: AppDatabase): NovelAiResponseStore {
         const hash = staged.hashes[0];
         if (!hash) throw new Error('NOVELAI_IMPORT_FAILED');
         await withWriteTransaction(db, tx => tx.runAsync("INSERT OR IGNORE INTO artifact_blob_refs VALUES(?,'novelai_response',?,?)", hash, key, Date.now()).then(() => undefined));
-        result.push({ hash, seed: image.seed, index: image.index });
+        result.push({ hash, seed: image.seed, index: image.index, width: image.width, height: image.height });
       } finally { await staged.releaseStaging(); }
     }
     return result;
@@ -37,15 +38,30 @@ export function novelAiResponseStore(db: AppDatabase): NovelAiResponseStore {
 export async function prepareCreativeImage(id: string) {
   const db = getDatabase(), draft = await readCreativeDraft(db, id);
   if (!draft || draft.provider_id !== 'novelai' || draft.state !== 'EDITING') throw new Error('图片草稿不可编辑');
-  const request = prepareNovelAiRequest(novelAiDraftInput.parse(JSON.parse(draft.input_json)));
+  const input = novelAiDraftInput.parse(JSON.parse(draft.input_json));
+  const refs = await readDraftInputs(db, id);
+  const source = async (versionId: string | null, mask = false) => {
+    const ref = refs.find(r => r.version_id === versionId);
+    if (!ref || ref.state !== 'AVAILABLE' || !ref.mime?.startsWith('image/')) throw new Error('底图或蒙版原件待恢复');
+    await creativeFiles().verify(ref.version_id);
+    if (!NativeModules.AutoDLMedia?.prepareNovelAiImage) throw new Error('请安装支持图生图的新版 Android 应用');
+    return NativeModules.AutoDLMedia.prepareNovelAiImage(`${FileSystem.documentDirectory}${ref.relative_path}`, input.width, input.height, mask, '[]') as Promise<string>;
+  };
+  let media: { image: string; mask?: string } | undefined;
+  if (input.action !== 'generate') {
+    if (novelAiSourceIds(input).some(id => !refs.some(r => r.version_id === id))) throw new Error('底图或蒙版关联已改变，请重新选择');
+    media = { image: await source(input.sourceVersionId) };
+    if (input.action === 'infill') media.mask = input.maskVersionId ? await source(input.maskVersionId, true) : await NativeModules.AutoDLMedia.prepareNovelAiImage('', input.width, input.height, true, JSON.stringify(input.maskStrokes));
+  }
+  const request = prepareNovelAiRequest(input, Math.random, media);
   const account = (await creativeAccounts(db).list()).find(a => a.provider_id === 'novelai');
   if (!account) throw new Error('请先连接 NovelAI 创作账号');
   const prepared = { workflowId: 'novelai-image-basic', workflowVersion: '1', workflowContentHash: CryptoJS.SHA256(request.capabilitiesVersion).toString(), adapterId: 'novelai-image', adapterVersion: '1', inputSnapshot: request.snapshot, requestInput: JSON.parse(request.requestJson), target: { operation: 'image.generate' } };
-  return { db, draft, account, prepared, versionIds: (await readDraftInputs(db, id)).map(r => r.version_id) };
+  return { db, draft, account, prepared, versionIds: refs.map(r => r.version_id), sourceManifest: refs.map(r => ({ versionId: r.version_id, sha256: r.blob_sha256, state: r.state })) };
 }
 export async function confirmCreativeImage(preview: Awaited<ReturnType<typeof prepareCreativeImage>>) {
   if (preview.db !== getDatabase()) throw new Error('数据库已恢复或切换，请重新准备生成');
   const authorizationId = await creativeBudget().grant({ provider: 'novelai', generationId: preview.account.credential_generation_id, projectId: preview.draft.project_id ?? undefined,
     operations: ['image.generate'], requestLimit: 1, amountLimit: null, allowUnknownCost: true, maxUnknownRequests: 1, expiresAt: Date.now() + 15 * 60_000 });
-  return submitCreativeVideo(preview.db, { draftId: preview.draft.id, expectedRevision: preview.draft.revision, draftInputJson: preview.draft.input_json, authorizationId, prepared: preview.prepared, images: [], versionIds: preview.versionIds });
+  return submitCreativeVideo(preview.db, { draftId: preview.draft.id, expectedRevision: preview.draft.revision, draftInputJson: preview.draft.input_json, authorizationId, prepared: preview.prepared, images: [], versionIds: preview.versionIds, sourceManifest: preview.sourceManifest });
 }

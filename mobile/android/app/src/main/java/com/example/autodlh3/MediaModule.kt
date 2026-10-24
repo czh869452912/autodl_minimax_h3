@@ -56,6 +56,16 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   private val pdfPreview = CreativePdfPreview(context)
   private val integrity = MediaIntegrity(context)
   private val novelAi = NovelAiTransport(File(context.filesDir, "creative-responses"))
+  @ReactMethod
+  fun prepareNovelAiImage(source: String, width: Double, height: Double, mask: Boolean, strokes: String, promise: Promise) {
+    if (!width.isFinite() || !height.isFinite() || width % 1.0 != 0.0 || height % 1.0 != 0.0 || width !in 64.0..49152.0 || height !in 64.0..49152.0) {
+      promise.reject("NOVELAI_IMAGE_DIMENSIONS_INVALID", "NOVELAI_IMAGE_DIMENSIONS_INVALID"); return
+    }
+    executors.executeMedia {
+      try { promise.resolve(NovelAiImagePreparation(context.filesDir).prepare(source, width.toInt(), height.toInt(), mask, strokes)) }
+      catch (error: Exception) { promise.reject("NOVELAI_IMAGE_PREPARATION_FAILED", "底图或蒙版无法读取，请重新选择。", error) }
+    }
+  }
   private val compatibility = VideoCompatibility(context)
   private val transferPolicy = ArtifactTransferPolicy()
   private val dohPrototype = if (BuildConfig.DEBUG && BuildConfig.ARTIFACT_DOH_PROTOTYPE) DohTransferPrototype(
@@ -320,8 +330,7 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
     executors.executeMedia {
       try {
         val uri=Uri.parse(source);require(uri.scheme in listOf("file","content"))
-        val stream=if(uri.scheme=="file")File(requireNotNull(uri.path)).inputStream() else requireNotNull(context.contentResolver.openInputStream(uri))
-        val metadata=stream.use{CreativePngMetadata.read(it)}
+        val metadata=CreativeImageMetadata.read { if(uri.scheme=="file")File(requireNotNull(uri.path)).inputStream() else requireNotNull(context.contentResolver.openInputStream(uri)) }
         promise.resolve(Arguments.createMap().apply{metadata.forEach{(key,value)->putString(key,value)}})
       }catch(error:Exception){promise.reject("CREATIVE_METADATA_UNAVAILABLE","无法可靠读取图片元数据")}
     }
@@ -331,7 +340,18 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   fun generateNovelAi(key: String, requestJson: String, hash: String, token: String, promise: Promise) {
     executors.executeMedia {
       try { promise.resolve(Uri.fromFile(novelAi.generate(key, requestJson, hash, token)).toString()) }
-      catch (error: Exception) { promise.reject("NOVELAI_GENERATION_UNCONFIRMED", "生成结果未确认，请先核对任务；不会自动重发") }
+      catch (error: Exception) {
+        val code = error.message?.takeIf { it.matches(Regex("NOVELAI_HTTP_[0-9]{3}")) }
+        promise.reject(code ?: "NOVELAI_GENERATION_UNCONFIRMED", if (code != null) "NovelAI 服务拒绝请求（HTTP ${code.takeLast(3)}），请检查参数、账号与额度；不会自动重发" else "生成结果未确认，请先核对任务；不会自动重发")
+      }
+    }
+  }
+
+  @ReactMethod
+  fun suggestNovelAiTags(model: String, prompt: String, token: String, promise: Promise) {
+    executors.executeMedia {
+      try { promise.resolve(NovelAiTagSuggestions().search(model, prompt, token)) }
+      catch (_: Exception) { promise.reject("NOVELAI_TAGS_UNAVAILABLE", "标签查询失败") }
     }
   }
 

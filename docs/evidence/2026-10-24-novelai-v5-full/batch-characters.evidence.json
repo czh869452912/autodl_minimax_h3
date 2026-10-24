@@ -1,0 +1,104 @@
+{
+  "case": "batch-characters",
+  "source": "direct-official-api-request-from-current-app-protocol-not-browser-har",
+  "at": "2026-10-24T07:18:51.675Z",
+  "endpoint": "https://image.novelai.net/ai/generate-image",
+  "status": 200,
+  "contentType": "application/json",
+  "requestHash": "e2c3650a1d8639d9ad2d2c96a2d0cc3b8068ad57dbb372a0b43bb39ee9092e66",
+  "request": {
+    "input": "two adult astronomers standing at an observatory, a sign reads \"STARS\", anime illustration, very aesthetic, amazing quality, no text, teXt: STARS",
+    "model": "nai-diffusion-5-full",
+    "action": "generate",
+    "parameters": {
+      "params_version": 4,
+      "width": 640,
+      "height": 640,
+      "steps": 12,
+      "scale": 6,
+      "cfg_rescale": 0.15,
+      "seed": 19472,
+      "n_samples": 2,
+      "sampler": "k_dpmpp_2m",
+      "noise_schedule": "karras",
+      "negative_prompt": "nsfw, lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page, @_@, mismatched pupils, glowing eyes, bad anatomy",
+      "qualityToggle": false,
+      "ucPreset": 3,
+      "image_format": "png",
+      "tag_hint_qt": 3,
+      "tag_hint_uc_preset": 4,
+      "straight_alpha": true,
+      "v4_prompt": {
+        "caption": {
+          "base_caption": "two adult astronomers standing at an observatory, a sign reads \"STARS\", anime illustration, very aesthetic, amazing quality, no text, teXt: STARS",
+          "char_captions": [
+            {
+              "char_caption": "adult astronomer, short brown hair, red coat",
+              "centers": [
+                {
+                  "x": 0.25,
+                  "y": 0.5
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, long blue hair, white coat",
+              "centers": [
+                {
+                  "x": 0.75,
+                  "y": 0.5
+                }
+              ]
+            }
+          ]
+        },
+        "use_coords": true,
+        "use_order": true
+      },
+      "v4_negative_prompt": {
+        "caption": {
+          "base_caption": "nsfw, lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page, @_@, mismatched pupils, glowing eyes, bad anatomy",
+          "char_captions": [
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.25,
+                  "y": 0.5
+                }
+              ]
+            },
+            {
+              "char_caption": "glasses",
+              "centers": [
+                {
+                  "x": 0.75,
+                  "y": 0.5
+                }
+              ]
+            }
+          ]
+        },
+        "legacy_uc": false
+      }
+    }
+  },
+  "images": [
+    {
+      "index": 0,
+      "seed": 19472,
+      "width": 640,
+      "height": 640,
+      "bytes": 588386,
+      "sha256": "ea3655d9728956560a8538eb0b78fc93403e29dcc1a23a51b52737fbdf62effc"
+    },
+    {
+      "index": 1,
+      "seed": 19473,
+      "width": 640,
+      "height": 640,
+      "bytes": 649280,
+      "sha256": "9a11f0ffe59a4af684bc61253fc8cec438fd25987aef7402383795ba1482b081"
+    }
+  ]
+}

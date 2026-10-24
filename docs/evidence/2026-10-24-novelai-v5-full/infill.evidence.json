@@ -1,0 +1,79 @@
+{
+  "case": "infill",
+  "source": "direct-official-api-request-from-current-app-protocol-not-browser-har",
+  "at": "2026-10-24T07:25:39.491Z",
+  "endpoint": "https://image.novelai.net/ai/generate-image",
+  "status": 200,
+  "contentType": "application/json",
+  "requestHash": "157779054ba5523dc57be95280eea8f0c924ead90103d91c5c69345359bdd3de",
+  "request": {
+    "input": "the small wooden observatory, a bright crescent moon in the night sky, peaceful anime background art, very aesthetic, masterpiece, no text",
+    "model": "nai-diffusion-5-full-inpainting",
+    "action": "infill",
+    "parameters": {
+      "params_version": 4,
+      "width": 832,
+      "height": 1216,
+      "steps": 23,
+      "scale": 7,
+      "cfg_rescale": 0,
+      "seed": 3280070968,
+      "n_samples": 1,
+      "sampler": "k_euler_ancestral",
+      "noise_schedule": "karras",
+      "negative_prompt": "nsfw, lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page",
+      "qualityToggle": false,
+      "ucPreset": 3,
+      "image_format": "png",
+      "tag_hint_qt": 1,
+      "tag_hint_uc_preset": 2,
+      "straight_alpha": true,
+      "deliberate_euler_ancestral_bug": false,
+      "prefer_brownian": true,
+      "v4_prompt": {
+        "caption": {
+          "base_caption": "the small wooden observatory, a bright crescent moon in the night sky, peaceful anime background art, very aesthetic, masterpiece, no text",
+          "char_captions": []
+        },
+        "use_coords": false,
+        "use_order": true
+      },
+      "v4_negative_prompt": {
+        "caption": {
+          "base_caption": "nsfw, lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page",
+          "char_captions": []
+        },
+        "legacy_uc": false
+      },
+      "image": {
+        "redactedBinary": true,
+        "bytes": 1765669,
+        "sha256": "8d0bb62707c8195167e8d42fa4686a3cda278a9a69c2377cfc7cb051cea9fded"
+      },
+      "strength": 0.7,
+      "noise": 0,
+      "extra_noise_seed": 3280070967,
+      "color_correct": false,
+      "mask": {
+        "redactedBinary": true,
+        "bytes": 4257,
+        "sha256": "8f5d4c32c092775272778ff129a098325b63f631f77aac8a201da681d8d26e44"
+      },
+      "add_original_image": true,
+      "img2img": {
+        "strength": 0.8,
+        "color_correct": true
+      }
+    }
+  },
+  "images": [
+    {
+      "index": 0,
+      "seed": 3280070968,
+      "width": 832,
+      "height": 1216,
+      "bytes": 1758825,
+      "sha256": "99a31f97266b7d36a35c68da7a5382f93cf3ed0a4dbc389eb736ae9d411d27d5"
+    }
+  ]
+}

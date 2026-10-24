@@ -17,7 +17,7 @@ class NovelAiTransport(
     .readTimeout(180, TimeUnit.SECONDS).callTimeout(240, TimeUnit.SECONDS).build(),
   private val endpoint: String = "https://image.novelai.net/ai/generate-image",
 ) {
-  companion object { const val MAX_BODY = 20L * 1024L * 1024L }
+  companion object { const val MAX_BODY = 64L * 1024L * 1024L }
   private fun directory(key: String): File {
     require(key.matches(Regex("[a-f0-9]{64}"))) { "NOVELAI_KEY_INVALID" }
     return File(root, key).also { require(it.mkdirs() || it.isDirectory) { "NOVELAI_STORAGE_UNAVAILABLE" } }
@@ -34,7 +34,7 @@ class NovelAiTransport(
     return body
   }
   @Synchronized fun generate(key: String, requestJson: String, requestHash: String, token: String): File {
-    require(requestJson.toByteArray().size <= 256 * 1024 && hash(requestJson.toByteArray()) == requestHash) { "NOVELAI_REQUEST_INVALID" }
+    require(requestJson.toByteArray().size <= 36 * 1024 * 1024 && hash(requestJson.toByteArray()) == requestHash) { "NOVELAI_REQUEST_INVALID" }
     lookup(key, requestHash)?.let { return it }
     require(token.length in 8..4096 && !token.contains('\n') && !token.contains('\r')) { "NOVELAI_CREDENTIAL_INVALID" }
     val dir = directory(key); val marker = File(dir, "sent")

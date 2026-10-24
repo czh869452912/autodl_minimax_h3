@@ -71,4 +71,17 @@ class NovelAiTransportTest {
     } finally { server.shutdown(); dir.deleteRecursively() }
   }
   private fun FileTreeContains(dir: java.io.File, value: String) = dir.walkTopDown().filter { it.isFile }.any { it.readText().contains(value) }
+
+  @Test fun imageToImageRequestsAndBatchResponsesCanExceedTheOldTextOnlyLimits() {
+    val dir=Files.createTempDirectory("nai-large").toFile();val server=MockWebServer();server.start()
+    try {
+      val largeRequest="{\"image\":\""+"A".repeat(1024*1024)+"\"}"
+      val requestHash=MessageDigest.getInstance("SHA-256").digest(largeRequest.toByteArray()).joinToString("") { "%02x".format(it) }
+      val body="{\"images\":[],\"padding\":\""+"A".repeat(21*1024*1024)+"\"}"
+      server.enqueue(MockResponse().setHeader("Content-Type","application/json").setBody(body))
+      val result=NovelAiTransport(dir,endpoint=server.url("/").toString()).generate(key,largeRequest,requestHash,"private-token")
+      assertEquals(body.length.toLong(),result.length());assertEquals(1,server.requestCount)
+      assertNotNull(NovelAiTransport(dir).lookup(key,requestHash));assertFalse(FileTreeContains(dir,"private-token"))
+    } finally {server.shutdown();dir.deleteRecursively()}
+  }
 }

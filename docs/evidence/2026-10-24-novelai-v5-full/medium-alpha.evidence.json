@@ -1,0 +1,60 @@
+{
+  "case": "medium-alpha",
+  "source": "direct-official-api-request-from-current-app-protocol-not-browser-har",
+  "at": "2026-10-24T07:18:13.340Z",
+  "endpoint": "https://image.novelai.net/ai/generate-image",
+  "status": 200,
+  "contentType": "application/json",
+  "requestHash": "5161947f207a2e9252d8c93d0cf6bc868ca588e1c404bc65a9824b5ad253c970",
+  "request": {
+    "input": "a small brass telescope, isolated object, clean silhouette, anime illustration, transparent background, very aesthetic, masterpiece, no text",
+    "model": "nai-diffusion-5-full-medium",
+    "action": "generate",
+    "parameters": {
+      "params_version": 4,
+      "width": 832,
+      "height": 1216,
+      "steps": 14,
+      "scale": 7,
+      "seed": 106948398,
+      "n_samples": 1,
+      "sampler": "k_euler_ancestral",
+      "noise_schedule": "karras",
+      "negative_prompt": "nsfw, lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page",
+      "qualityToggle": false,
+      "ucPreset": 3,
+      "image_format": "png",
+      "tag_hint_qt": 1,
+      "tag_hint_uc_preset": 2,
+      "straight_alpha": true,
+      "tag_hint_transparent_background": true,
+      "deliberate_euler_ancestral_bug": false,
+      "prefer_brownian": true,
+      "v4_prompt": {
+        "caption": {
+          "base_caption": "a small brass telescope, isolated object, clean silhouette, anime illustration, transparent background, very aesthetic, masterpiece, no text",
+          "char_captions": []
+        },
+        "use_coords": false,
+        "use_order": true
+      },
+      "v4_negative_prompt": {
+        "caption": {
+          "base_caption": "nsfw, lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page",
+          "char_captions": []
+        },
+        "legacy_uc": false
+      }
+    }
+  },
+  "images": [
+    {
+      "index": 0,
+      "seed": 106948398,
+      "width": 832,
+      "height": 1216,
+      "bytes": 796360,
+      "sha256": "2495f41790661598c2d7aa948af43b10d54e67e94bdc9b9bae469354eb993c41"
+    }
+  ]
+}

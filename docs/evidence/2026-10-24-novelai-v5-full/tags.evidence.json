@@ -1,0 +1,58 @@
+{
+  "source": "direct-official-api-not-browser-har",
+  "status": 200,
+  "response": {
+    "tags": [
+      {
+        "tag": "telescope",
+        "count": 7936,
+        "confidence": 0
+      },
+      {
+        "tag": "holding telescope",
+        "count": 1132,
+        "confidence": 0.82763671875
+      },
+      {
+        "tag": "magical astronomy",
+        "count": 692,
+        "confidence": 0.66748046875
+      },
+      {
+        "tag": "observatory",
+        "count": 464,
+        "confidence": 0.75048828125
+      },
+      {
+        "tag": "radio telescope",
+        "count": 224,
+        "confidence": 0.80078125
+      },
+      {
+        "tag": "astronomy",
+        "count": 220,
+        "confidence": 0.7421875
+      },
+      {
+        "tag": "comet observatory",
+        "count": 76,
+        "confidence": 0.65087890625
+      },
+      {
+        "tag": "telescope goldfish",
+        "count": 68,
+        "confidence": 0
+      },
+      {
+        "tag": "hubble space telescope",
+        "count": 32,
+        "confidence": 0.71826171875
+      },
+      {
+        "tag": "hand on telescope",
+        "count": 28,
+        "confidence": 0.8447265625
+      }
+    ]
+  }
+}

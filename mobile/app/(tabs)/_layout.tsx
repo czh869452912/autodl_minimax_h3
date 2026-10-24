@@ -3,16 +3,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppTabs } from '../../src/ui/AppTabs';
 import { COLORS, type AppTabId } from '../../src/ui/theme';
 import { Pressable, Text, View } from 'react-native';
+import { AppIcon } from '../../src/ui/icons';
 
 export default function TabsLayout() {
   const pathname = usePathname();
   const router = useRouter();
   const activeId = ((pathname.split('/').filter(Boolean).pop() || 'create')) as AppTabId;
+  const auxiliary = ['tasks', 'settings', 'gallery'].includes(activeId);
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: COLORS.background }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 16, paddingHorizontal: 16 }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="打开任务中心" style={{ minHeight: 48, justifyContent: 'center' }} onPress={() => router.navigate('/(tabs)/tasks')}><Text style={{ color: COLORS.primary }}>任务中心</Text></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="打开设置" style={{ minHeight: 48, justifyContent: 'center' }} onPress={() => router.navigate('/(tabs)/settings')}><Text style={{ color: COLORS.primary }}>设置</Text></Pressable>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, minHeight: 52 }}>
+        {auxiliary ? <Pressable accessibilityRole="button" accessibilityLabel="返回创作" style={{ minHeight: 48, minWidth: 48, justifyContent: 'center' }} onPress={() => router.navigate('/(tabs)/create')}><AppIcon name="arrow_back" size={22} /></Pressable> : <AppIcon name="auto_awesome" size={21} color={COLORS.primaryActive} />}
+        <Text style={{ flex: 1, color: COLORS.text, fontSize: 15, fontWeight: '700', letterSpacing: 1 }}>创作空间</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="打开任务中心" style={{ minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center', gap: 2 }} onPress={() => router.navigate('/(tabs)/tasks')}><AppIcon name="list_alt" size={22} color={COLORS.primaryActive} /><Text style={{ color: COLORS.textMuted, fontSize: 10 }}>任务</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="打开设置" style={{ minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center' }} onPress={() => router.navigate('/(tabs)/settings')}><AppIcon name="settings" size={22} /></Pressable>
       </View>
       <Tabs
         tabBar={() => <AppTabs activeId={activeId} onSelect={(id) => router.navigate(`/(tabs)/${id}`)} />}

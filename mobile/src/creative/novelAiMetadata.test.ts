@@ -14,3 +14,12 @@ test('missing or unsupported metadata never pretends full restoration',()=>{
   expect(recoverNovelAiMetadata({Software:'NovelAI',Comment:JSON.stringify({width:999})}).input).toBeUndefined();
   expect(recoverNovelAiMetadata({Software:'NovelAI',Comment:'{}'}).notices.join('')).toContain('原模型');
 });
+
+test.each(['full-high','full-medium','full-medium-transparent'])('actual official %s EXIF restores Full effort and final prompt without adding presets twice',name=>{
+  const evidence=require(`../../../docs/evidence/2026-10-24-novelai-v5-full/${name}.metadata.json`);
+  const recovered=recoverNovelAiMetadata({Software:'NovelAI',Source:evidence.modelSource,Comment:JSON.stringify(evidence.parameters)});
+  expect(recovered.input).toMatchObject({model:'nai-diffusion-5-full',effort:name==='full-high'?'high':'medium',qualityPreset:'none',negativePreset:'none'});
+  const body=JSON.parse(prepareNovelAiRequest(recovered.input).requestJson);
+  expect(body.input).toBe(evidence.parameters.prompt);expect(body.parameters.seed).toBe(evidence.parameters.seed);
+  expect(body.parameters.v4_prompt.caption).toEqual(evidence.parameters.v4_prompt.caption);
+});

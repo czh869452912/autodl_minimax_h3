@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { creativeService } from './runtime';
 import type { CreativeDraft } from './drafts';
-import { ListAction } from '../ui/ListPageUI';
+import { TextAction } from './WorkbenchUI';
 import { creativeUI as s } from './creativeUI';
 
 export function DraftHeading({ draft, dirty, busy, title }: { draft?: CreativeDraft; dirty: boolean; busy: boolean; title: string }) {
@@ -15,8 +15,12 @@ export function DraftHeading({ draft, dirty, busy, title }: { draft?: CreativeDr
     else setContext('个人创作');
     return () => { active = false; };
   }, [draft?.project_id]);
-  return <View style={{ gap: 8 }}>
-    <View style={s.row}><ListAction label="返回" secondary onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/create')} /><Text accessibilityLiveRegion="polite" style={s.muted}>{busy ? '处理中…' : dirty ? '修改尚未保存' : draft ? draft.state === 'EDITING' ? '已保存' : '已提交' : '读取中…'}</Text></View>
-    <Text accessibilityRole="header" style={s.heading}>{title}</Text><Text style={s.muted}>{context}</Text>
+  return <View style={{ gap: 4 }}>
+    <View style={[s.row, { flexWrap: 'nowrap', gap: 12 }]}>
+      <TextAction label="返回" icon="arrow_back" onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/create')} />
+      <Text accessibilityRole="header" style={[s.title, { flex: 1 }]}>{title}</Text>
+      <Text accessibilityLiveRegion="polite" style={[s.muted, { flexShrink: 1 }]}>{busy ? '处理中…' : dirty ? '待保存' : draft ? draft.state === 'EDITING' ? '已保存' : '已提交' : '读取中…'}</Text>
+    </View>
+    <Text style={s.muted}>{context}</Text>
   </View>;
 }

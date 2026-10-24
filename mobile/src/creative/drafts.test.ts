@@ -1,6 +1,7 @@
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { createCreativeService } from './service';
 import type { CreativeCommand } from './types';
+import { defaultNovelAiDraft } from './novelAiProtocol';
 
 async function fixture() {
   const db = createInitializedRealSqliteTestDb(); let seq = 0;
@@ -75,4 +76,23 @@ test('archived projects, missing files and cross-project shots cannot create exe
     await expect(f.execute({ name: 'draft.createVideo', payload: { projectId: f.projectId } })).rejects.toThrow('PROJECT_NOT_AVAILABLE');
     expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
   } finally { f.db.close(); }
+});
+
+test('image source and mask are atomically pinned to immutable versions across modes and failed saves',async()=>{
+  const f=await fixture();
+  try{
+    const mask=await f.execute({name:'asset.import',payload:{title:'Mask',kind:'image',blobSha256:f.hash}});
+    const input={...defaultNovelAiDraft,prompt:'observatory',action:'infill' as const,sourceVersionId:f.asset.versionId,maskVersionId:mask.versionId};
+    const {draftId}=await f.execute({name:'draft.createImage',payload:{input}});
+    expect((await f.service.draftInputs(draftId)).map(r=>r.version_id)).toEqual([f.asset.versionId,mask.versionId]);
+    await expect(f.execute({name:'draft.updateImage',payload:{id:draftId,expectedRevision:0,input:{...input,maskVersionId:'missing'}}})).rejects.toThrow('DRAFT_INPUT_NOT_AVAILABLE');
+    expect((await f.service.draftInputs(draftId)).map(r=>r.version_id)).toEqual([f.asset.versionId,mask.versionId]);
+    expect((await f.service.draft(draftId))?.revision).toBe(0);
+    await f.execute({name:'draft.updateImage',payload:{id:draftId,expectedRevision:0,input:{...input,action:'img2img'}}});
+    expect((await f.service.draftInputs(draftId)).map(r=>r.version_id)).toEqual([f.asset.versionId]);
+    await f.execute({name:'draft.updateImage',payload:{id:draftId,expectedRevision:1,input:{...input,action:'generate'}}});
+    expect(await f.service.draftInputs(draftId)).toEqual([]);
+    expect(JSON.parse((await f.service.draft(draftId))!.input_json).sourceVersionId).toBe(f.asset.versionId);
+    expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
+  }finally{f.db.close();}
 });

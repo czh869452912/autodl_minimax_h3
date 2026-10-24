@@ -29,6 +29,7 @@ export const creativeRequestHash = (prepared: PreparedWorkflowSubmission) => Cry
 export async function submitCreativeVideo(db: AppDatabase, input: {
   draftId: string; expectedRevision: number; draftInputJson: string; authorizationId: string;
   prepared: PreparedWorkflowSubmission; images: TaskMediaInput[]; versionIds: string[];
+  sourceManifest?: Array<{ versionId: string; sha256: string; state: string }>;
   origin?: CreativeAgentOrigin;
   planStepId?: string;
 }, now = Date.now()) {
@@ -52,6 +53,7 @@ export async function submitCreativeVideo(db: AppDatabase, input: {
     if (draft.target_asset_id && await tx.getFirstAsync('SELECT asset_id FROM creative_asset_trash WHERE asset_id=?', draft.target_asset_id)) throw new Error('TARGET_ASSET_TRASHED');
     if (draft.shot_id && !await tx.getFirstAsync('SELECT id FROM creative_shots WHERE id=? AND deleted_at IS NULL', draft.shot_id)) throw new Error('SHOT_NOT_AVAILABLE');
     const refs = await readDraftInputs(tx, draft.id);
+    if (input.sourceManifest && JSON.stringify(refs.map(r => ({ versionId: r.version_id, sha256: r.blob_sha256, state: r.state }))) !== JSON.stringify(input.sourceManifest)) throw new Error('DRAFT_INPUT_CHANGED');
     if (JSON.stringify(refs.map(r => r.version_id)) !== JSON.stringify(input.versionIds) || (!image && (refs.some((r, i) => r.state !== 'AVAILABLE' || r.blob_sha256 !== input.images[i]?.sha256) || refs.length !== input.images.length))) throw new Error('DRAFT_INPUT_CHANGED');
     const reservation = await reserveCreativeBudget(tx, { authorizationId: input.authorizationId, commandId, jobId: job.id, requestHash,
       projectId: draft.project_id ?? undefined, provider: image ? 'novelai' : 'autodl', operation: image ? 'image.generate' : 'video.generate', requestUnits: 1,

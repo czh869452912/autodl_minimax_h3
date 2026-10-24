@@ -100,6 +100,19 @@ test('missing response remains unknown and restoring backup never resumes the re
   } finally { f.db.close(); }
 });
 
+test('enhanced output dimensions remain separate from reproducible input parameters',async()=>{
+  const f=await fixture();
+  try{
+    await withWriteTransaction(f.db as never,tx=>archiveCreativeOutput(tx,{jobId:f.task.id,artifact:{id:'enhanced',kind:'image',metadata:{seed:77,width:1467,height:2144}},blob:{sha256:f.hash},now:300} as never));
+    const draft=(await f.service.draft(f.draft.id))!, [version]=await f.service.versions(draft.target_asset_id!);
+    expect(version.recipe.output).toEqual({width:1467,height:2144});
+    expect(version.recipe.input).toMatchObject({width:832,height:1216,seed:77});
+    const next=await f.service.execute({name:'draft.createImage',payload:{fromVersionId:version.id}},'continue-enhanced');
+    expect(next.status).toBe('completed');
+    expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
+  }finally{f.db.close();}
+});
+
 // Opt-in, offline replay of the saved real response. Never reads credentials or sends HTTP.
 (process.env.CREATIVE_LIVE_EVIDENCE ? test : test.skip)('saved live image archives once and becomes a hash-pinned H3 reference', async () => {
   const folder = path.resolve(process.env.CREATIVE_LIVE_EVIDENCE!);

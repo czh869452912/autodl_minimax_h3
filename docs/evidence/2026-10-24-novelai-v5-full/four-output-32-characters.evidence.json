@@ -1,0 +1,660 @@
+{
+  "case": "four-output-32-characters",
+  "source": "direct-official-api-request-from-current-app-protocol-not-browser-har",
+  "at": "2026-10-24T07:35:33.465Z",
+  "endpoint": "https://image.novelai.net/ai/generate-image",
+  "status": 200,
+  "contentType": "application/json",
+  "requestHash": "403ae6baedf5040e2f164147b3de3b80375ebc03a0ad3baab657de975e5f2b04",
+  "request": {
+    "input": "a group portrait of adult astronomers at an observatory, anime illustration, very aesthetic, masterpiece, no text",
+    "model": "nai-diffusion-5-full",
+    "action": "generate",
+    "parameters": {
+      "params_version": 4,
+      "width": 512,
+      "height": 512,
+      "steps": 6,
+      "scale": 7,
+      "cfg_rescale": 0,
+      "seed": 56731,
+      "n_samples": 4,
+      "sampler": "k_dpmpp_2m_sde",
+      "noise_schedule": "karras",
+      "negative_prompt": "nsfw, lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page",
+      "qualityToggle": false,
+      "ucPreset": 3,
+      "image_format": "png",
+      "tag_hint_qt": 1,
+      "tag_hint_uc_preset": 2,
+      "straight_alpha": true,
+      "v4_prompt": {
+        "caption": {
+          "base_caption": "a group portrait of adult astronomers at an observatory, anime illustration, very aesthetic, masterpiece, no text",
+          "char_captions": [
+            {
+              "char_caption": "adult astronomer, red scarf",
+              "centers": [
+                {
+                  "x": 0.0625,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, blue scarf",
+              "centers": [
+                {
+                  "x": 0.1875,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, green scarf",
+              "centers": [
+                {
+                  "x": 0.3125,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, orange scarf",
+              "centers": [
+                {
+                  "x": 0.4375,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, red scarf",
+              "centers": [
+                {
+                  "x": 0.5625,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, blue scarf",
+              "centers": [
+                {
+                  "x": 0.6875,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, green scarf",
+              "centers": [
+                {
+                  "x": 0.8125,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, orange scarf",
+              "centers": [
+                {
+                  "x": 0.9375,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, red scarf",
+              "centers": [
+                {
+                  "x": 0.0625,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, blue scarf",
+              "centers": [
+                {
+                  "x": 0.1875,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, green scarf",
+              "centers": [
+                {
+                  "x": 0.3125,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, orange scarf",
+              "centers": [
+                {
+                  "x": 0.4375,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, red scarf",
+              "centers": [
+                {
+                  "x": 0.5625,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, blue scarf",
+              "centers": [
+                {
+                  "x": 0.6875,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, green scarf",
+              "centers": [
+                {
+                  "x": 0.8125,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, orange scarf",
+              "centers": [
+                {
+                  "x": 0.9375,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, red scarf",
+              "centers": [
+                {
+                  "x": 0.0625,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, blue scarf",
+              "centers": [
+                {
+                  "x": 0.1875,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, green scarf",
+              "centers": [
+                {
+                  "x": 0.3125,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, orange scarf",
+              "centers": [
+                {
+                  "x": 0.4375,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, red scarf",
+              "centers": [
+                {
+                  "x": 0.5625,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, blue scarf",
+              "centers": [
+                {
+                  "x": 0.6875,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, green scarf",
+              "centers": [
+                {
+                  "x": 0.8125,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, orange scarf",
+              "centers": [
+                {
+                  "x": 0.9375,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, red scarf",
+              "centers": [
+                {
+                  "x": 0.0625,
+                  "y": 0.875
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, blue scarf",
+              "centers": [
+                {
+                  "x": 0.1875,
+                  "y": 0.875
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, green scarf",
+              "centers": [
+                {
+                  "x": 0.3125,
+                  "y": 0.875
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, orange scarf",
+              "centers": [
+                {
+                  "x": 0.4375,
+                  "y": 0.875
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, red scarf",
+              "centers": [
+                {
+                  "x": 0.5625,
+                  "y": 0.875
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, blue scarf",
+              "centers": [
+                {
+                  "x": 0.6875,
+                  "y": 0.875
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, green scarf",
+              "centers": [
+                {
+                  "x": 0.8125,
+                  "y": 0.875
+                }
+              ]
+            },
+            {
+              "char_caption": "adult astronomer, orange scarf",
+              "centers": [
+                {
+                  "x": 0.9375,
+                  "y": 0.875
+                }
+              ]
+            }
+          ]
+        },
+        "use_coords": true,
+        "use_order": true
+      },
+      "v4_negative_prompt": {
+        "caption": {
+          "base_caption": "nsfw, lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page",
+          "char_captions": [
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.0625,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.1875,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.3125,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.4375,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.5625,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.6875,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.8125,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.9375,
+                  "y": 0.125
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.0625,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.1875,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.3125,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.4375,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.5625,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.6875,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.8125,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.9375,
+                  "y": 0.375
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.0625,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.1875,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.3125,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.4375,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.5625,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.6875,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.8125,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.9375,
+                  "y": 0.625
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.0625,
+                  "y": 0.875
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.1875,
+                  "y": 0.875
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.3125,
+                  "y": 0.875
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.4375,
+                  "y": 0.875
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.5625,
+                  "y": 0.875
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.6875,
+                  "y": 0.875
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.8125,
+                  "y": 0.875
+                }
+              ]
+            },
+            {
+              "char_caption": "hat",
+              "centers": [
+                {
+                  "x": 0.9375,
+                  "y": 0.875
+                }
+              ]
+            }
+          ]
+        },
+        "legacy_uc": false
+      }
+    }
+  },
+  "images": [
+    {
+      "index": 0,
+      "seed": 56731,
+      "width": 512,
+      "height": 512,
+      "bytes": 549434,
+      "sha256": "b6d556fb4c802b01aaf25433101300c2f50c1bad81194436424ddc5aa58efa9b"
+    },
+    {
+      "index": 1,
+      "seed": 56732,
+      "width": 512,
+      "height": 512,
+      "bytes": 523420,
+      "sha256": "cfde0f2b86e31c7ddb16353701f78f5180e349fa0fb0f42247894845ed4672f1"
+    },
+    {
+      "index": 2,
+      "seed": 56733,
+      "width": 512,
+      "height": 512,
+      "bytes": 503954,
+      "sha256": "f4d1d35066c02be90648db21ac21a160ca403a88f446b375970bade30b3327a6"
+    },
+    {
+      "index": 3,
+      "seed": 56734,
+      "width": 512,
+      "height": 512,
+      "bytes": 498915,
+      "sha256": "c92786a9f0e9bd5a821a0308fd07513a852c6a1d7b97c33293773cb2b0b98ce5"
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import { Alert, Text, TextInput, View } from 'react-native';
 import { creativeAccounts } from './accountRuntime';
 import { ListAction } from '../ui/ListPageUI';
 import { COLORS } from '../ui/theme';
+import { TextAction } from './WorkbenchUI';
 
 export function CreativeAccountPanel({ provider = 'novelai', compact = false }: { provider?: 'novelai' | 'autodl'; compact?: boolean }) {
   const name = provider === 'novelai' ? 'NovelAI' : 'AutoDL';
@@ -25,7 +26,7 @@ export function CreativeAccountPanel({ provider = 'novelai', compact = false }: 
   if (compact && !expanded) return <View style={{ gap: 8 }}>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
       <Text style={{ color: COLORS.textMuted }}>{!loaded ? '正在检查账号…' : connected ? `${name} · ${provider === 'autodl' ? '已绑定' : '已连接'}` : `${name} · 尚未连接`}</Text>
-      <ListAction label={connected ? '管理账号' : `连接 ${name}`} secondary onPress={() => setExpanded(true)} />
+      <TextAction label={connected ? '管理账号' : `连接 ${name}`} icon="key" onPress={() => setExpanded(true)} />
     </View>
     {notice ? <Text accessibilityLiveRegion="polite" style={{ color: COLORS.textMuted }}>{notice}</Text> : null}
   </View>;

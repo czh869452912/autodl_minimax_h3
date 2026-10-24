@@ -1,7 +1,7 @@
 import { creativeError } from './creativeError';
 import { useDraftSync } from './useDraftSync';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useNavigation, usePreventRemove } from 'expo-router/react-navigation';
 import { useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -22,6 +22,7 @@ import { importCreativeImage } from './runtime';
 import { CreativeAccountPanel } from './CreativeAccountPanel';
 import { CopySubmittedDraft } from './CopySubmittedDraft';
 import { prepareCreativeVideo, confirmCreativeVideo } from './videoRuntime';
+import { ParameterSheet, SectionHeading, SegmentedChoices, SettingRow, TextAction } from './WorkbenchUI';
 
 export function VideoDraftScreen({ id }: { id: string }) {
   const router = useRouter();
@@ -32,6 +33,7 @@ export function VideoDraftScreen({ id }: { id: string }) {
   const [draft, setDraft] = useState<CreativeDraft>();
   const [input, setInput] = useState<z.output<typeof videoDraftInput>>();
   const [references, setReferences] = useState<Awaited<ReturnType<ReturnType<typeof creativeService>['draftInputs']>>>([]);
+  const [referenceIndex, setReferenceIndex] = useState(0);
   const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false); const lock = useRef(false);
   const inputRef = useRef(input); inputRef.current = input;
   const dirty = Boolean(input && draft && JSON.stringify(input) !== draft.input_json);
@@ -81,7 +83,7 @@ export function VideoDraftScreen({ id }: { id: string }) {
         const saved = await creativeService().draft(id); if (saved) setDraft(saved);
       }
       const preview = await prepareCreativeVideo(id);
-      Alert.alert('确认生成 1 个 H3 视频', `使用 AutoDL 凭据 ${preview.account.credential_generation_id.slice(-8)}。费用暂不可预估，本次允许提交 1 次，授权 15 分钟内有效。结果不明时不会自动重发。`, [
+      Alert.alert('确认生成 1 个 H3 视频', `使用 AutoDL 生成 1 个视频，${inputRef.current.duration} 秒 · ${inputRef.current.resolution}。\n\n费用暂不可预估，本次允许提交 1 次，授权 15 分钟内有效。结果不明时不会自动重发。`, [
         { text: '取消', style: 'cancel', onPress: release },
         { text: '授权并生成', onPress: () => {
           void confirmCreativeVideo(preview).then(async () => { await load(); setNotice('已开始生成，结果会出现在这里。可离开后回来继续。'); }).catch(e => setError(creativeError(e, '提交失败'))).finally(release);
@@ -89,7 +91,7 @@ export function VideoDraftScreen({ id }: { id: string }) {
       ], { cancelable: false });
     } catch (e) { setError(creativeError(e, '无法准备生成')); release(); }
   };
-  const style = { borderWidth: 1, borderColor: COLORS.controlBorder, color: COLORS.text, borderRadius: 8, padding: 12 };
+  const style = s.input;
   const replaceReferences = async (versionIds: string[]) => {
     if (lock.current || !draft || dirty) throw new Error('请等待草稿保存后再选择参考图');
     lock.current = true; setBusy(true);
@@ -115,29 +117,53 @@ export function VideoDraftScreen({ id }: { id: string }) {
     } catch (e) { setError(creativeError(e, '参考图导入失败')); }
     finally { lock.current = false; setBusy(false); }
   };
+  const activeReference = references[Math.min(referenceIndex, Math.max(0, references.length - 1))];
+  const editable = draft?.state === 'EDITING' && !busy;
+  const referencePanel = <View style={{ gap: 12 }}>
+    <SectionHeading title="参考画面" detail={`${references.length} / 9 张`} />
+    {activeReference ? <>
+      {activeReference.state === 'AVAILABLE' ? <Image accessibilityLabel={`参考图 ${references.indexOf(activeReference) + 1}`} source={{ uri: `${FileSystem.documentDirectory}${activeReference.relative_path}` }} style={[s.preview, { height: undefined, aspectRatio: 4 / 3 }]} resizeMode="contain" /> : <View style={s.card}><Text style={s.muted}>此参考图的原文件待恢复，请重新选择。</Text></View>}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+        {references.map((ref, index) => <Pressable key={`${ref.version_id}:${index}`} accessibilityRole="button" accessibilityLabel={`查看参考图 ${index + 1}`} accessibilityState={{ selected: activeReference === ref }} onPress={() => setReferenceIndex(index)} style={{ width: 68, minHeight: 72, padding: 3, borderRadius: 10, borderWidth: 2, borderColor: activeReference === ref ? COLORS.primary : COLORS.border, gap: 3 }}>
+          {ref.state === 'AVAILABLE' ? <Image source={{ uri: `${FileSystem.documentDirectory}${ref.relative_path}` }} style={{ width: '100%', height: 48, borderRadius: 5 }} /> : null}<Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>{index + 1}</Text>
+        </Pressable>)}
+      </ScrollView>
+    </> : <View style={[s.card, { backgroundColor: COLORS.surfaceRaised, borderWidth: 0 }]}><Text style={s.body}>添加一张画面，让它动起来</Text><Text style={s.muted}>从素材库选择，或导入手机中的图片。</Text></View>}
+    {draft?.state === 'EDITING' ? <View style={s.row}>
+      <TextAction label="从素材选择" icon="grid_view" disabled={busy || dirty || references.length >= 9} onPress={() => setPicking(true)} />
+      <TextAction label="导入参考图" icon="add_photo_alternate" disabled={busy || dirty || references.length >= 9} onPress={() => void importReference()} />
+      {activeReference ? <TextAction label={`移除参考图 ${references.indexOf(activeReference) + 1}`} disabled={busy || dirty} onPress={() => void replaceReferences(references.filter(r => r !== activeReference).map(r => r.version_id)).catch(e => setError(e.message))} /> : null}
+    </View> : null}
+  </View>;
   return <SafeAreaView style={s.screen}><KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}><ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={s.content} style={{ backgroundColor: COLORS.background }}>
     <DraftHeading draft={draft} dirty={dirty} busy={busy} title="视频创作" />
-    {draft?.state === 'EDITING' ? <CreativeAccountPanel provider="autodl" compact /> : null}
     {draft?.state === 'SUBMITTED' ? <CreativeResults draft={draft} disabled={busy || dirty} /> : null}
-    <Text style={{ color: COLORS.textMuted }}>描述画面中的动作与运镜，让参考图成为一个镜头。</Text>
     {conflict ? <View style={s.card}><Text style={s.body}>这份草稿已在其他入口更新。本页输入仍保留，请先处理版本冲突。</Text><ListAction label="载入最新草稿" secondary disabled={busy} onPress={() => Alert.alert('载入最新草稿', '这会放弃本页尚未保存的修改。', [{ text: '保留本页', style: 'cancel' }, { text: '载入最新', onPress: () => void reload().catch(e => setError(e.message)) }])} /></View> : null}
     {error ? <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{error}{dirty ? ' · 本次修改尚未保存。' : ''}</Text> : null}
-    {draft?.state === 'SUBMITTED' ? <><CopySubmittedDraft id={id}/><ListAction label={recipeOpen ? '收起生成参数' : '查看本次生成参数'} secondary onPress={() => setRecipeOpen(!recipeOpen)} /></> : null}
+    {draft?.state === 'SUBMITTED' ? <><CopySubmittedDraft id={id}/><SettingRow label="本次生成参数" value={recipeOpen ? '收起参数' : '查看描述、参考图与设置'} expanded={recipeOpen} onPress={() => setRecipeOpen(!recipeOpen)} /></> : null}
     {input && (draft?.state === 'EDITING' || recipeOpen) ? <>
-      <Text style={s.title}>动作与运镜</Text>
-      <TextInput accessibilityLabel="视频镜头提示词" placeholder="描述动作、运镜、光影和声音；不自动复制图片标签" multiline value={input.prompt} editable={draft?.state === 'EDITING' && !busy} onChangeText={prompt => update({ prompt })} style={[style, { minHeight: 180, textAlignVertical: 'top' }]} />
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{RESOLUTION_OPTIONS.map(resolution => <ListAction key={resolution} label={`${input.resolution === resolution ? '✓ ' : ''}${resolution}`} secondary disabled={draft?.state !== 'EDITING' || busy} onPress={() => update({ resolution })} />)}</View>
-      <Text style={{ color: COLORS.text }}>时长（1–15 秒）</Text><TextInput accessibilityLabel="视频时长" value={String(input.duration)} keyboardType="number-pad" editable={draft?.state === 'EDITING' && !busy} onChangeText={value => update({ duration: Number(value) })} style={style} />
-      <ListAction label={advanced ? "收起高级设置" : "高级设置"} secondary onPress={() => setAdvanced(!advanced)} />
-      {advanced ? <TextInput accessibilityLabel="视频种子" placeholder="Seed 留空则提交时生成" keyboardType="number-pad" value={input.seed} editable={draft?.state === 'EDITING' && !busy} onChangeText={seed => update({ seed })} style={style} /> : null}
-      <Text style={s.title}>参考图 · {references.length} / 9</Text>
-      {references.map((ref, index) => <View key={`${ref.version_id}:${index}`}><Text style={{ color: COLORS.textMuted }}>参考图 {index + 1} · {ref.state === 'AVAILABLE' ? '本地可用' : '文件待恢复'}</Text>{ref.state === 'AVAILABLE' ? <Image source={{ uri: `${FileSystem.documentDirectory}${ref.relative_path}` }} style={{ height: 190, width: '100%' }} resizeMode="contain" /> : null}{draft?.state === 'EDITING' ? <ListAction label={`移除参考图 ${index + 1}`} secondary disabled={busy || dirty} onPress={() => void replaceReferences(references.filter((_, i) => i !== index).map(r => r.version_id)).catch(e => setError(e.message))} /> : null}</View>)}
-      {draft?.state === 'EDITING' ? <View style={s.row}><ListAction label="从素材选择" secondary disabled={busy || dirty || references.length >= 9} onPress={() => setPicking(true)} /><ListAction label="导入参考图" secondary disabled={busy || dirty || references.length >= 9} onPress={() => void importReference()} /></View> : null}
+      {referencePanel}
+      <View style={s.card}>
+        <SectionHeading title="动作与运镜" detail="让画面成为一个镜头" />
+        <TextInput accessibilityLabel="视频镜头提示词" placeholder="例如：镜头缓慢推近，雨滴从屋檐落下，街灯映在湿润的路面上…" placeholderTextColor={COLORS.textMuted} multiline value={input.prompt} editable={editable} onChangeText={prompt => update({ prompt })} style={[s.input, { borderWidth: 0, paddingHorizontal: 0, minHeight: 120, textAlignVertical: 'top' }]} />
+        <Text style={s.muted}>描述动作、镜头运动、节奏与声音。</Text>
+      </View>
+      <SettingRow label="画质与时长" value={`${input.resolution} · ${input.duration} 秒${input.seed ? ' · 固定种子' : ''}`} onPress={() => setAdvanced(true)} />
+      {advanced ? <ParameterSheet title="视频设置" description="设置随草稿自动保存" onClose={() => setAdvanced(false)}>
+        <SectionHeading title="画质与方向" />
+        <SegmentedChoices label="视频画质与方向" options={RESOLUTION_OPTIONS.map(resolution => ({ id: resolution, label: resolution }))} value={input.resolution} disabled={!editable} onChange={resolution => update({ resolution })} />
+        <SectionHeading title="时长" detail="1–15 秒" />
+        <SegmentedChoices label="常用视频时长" options={[{id:'5',label:'5 秒'},{id:'10',label:'10 秒'},{id:'15',label:'15 秒'}]} value={String(input.duration)} disabled={!editable} onChange={value => update({duration:Number(value)})} />
+        <Text style={s.muted}>自定义时长（秒）</Text><TextInput accessibilityLabel="视频时长" value={String(input.duration)} keyboardType="number-pad" editable={editable} onChangeText={value => update({ duration: Number(value) })} style={style} />
+        <SectionHeading title="随机种子" detail="留空则随机" />
+        <TextInput accessibilityLabel="视频种子" placeholder="Seed" keyboardType="number-pad" value={input.seed} editable={editable} onChangeText={seed => update({ seed })} style={style} />
+        {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
+      </ParameterSheet> : null}
       {dirty && error ? <ListAction label="重试保存草稿" secondary disabled={busy} onPress={() => void save()} /> : null}
 
       {notice ? <Text style={{ color: COLORS.textMuted }}>{notice}</Text> : null}
 
-      <ListAction label="查看全部创作草稿" secondary disabled={dirty || busy} onPress={() => router.push('/creative-drafts')} />
+      {draft?.state === 'EDITING' ? <CreativeAccountPanel provider="autodl" compact /> : null}
     </> : null}
   </ScrollView>
     {draft?.state === 'EDITING' ? <View style={s.footer}><Text style={s.muted}>H3 · 费用暂无法估算</Text><ListAction label={busy ? '处理中…' : '生成视频'} disabled={busy || conflict} onPress={() => void submit()} /></View> : null}

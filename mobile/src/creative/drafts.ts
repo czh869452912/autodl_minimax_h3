@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { AppDatabase } from '../storage/appDatabase';
 import { H3_CREATIVE_WORKFLOW_ID as H3_WORKFLOW_ID } from './videoWorkflow';
 import { RESOLUTION_OPTIONS } from '../create/resolutions';
-import { novelAiDraftInput, defaultNovelAiDraft } from './novelAiProtocol';
+import { novelAiDraftInput, defaultNovelAiDraft, novelAiSourceIds } from './novelAiProtocol';
 const id = z.string().min(1).max(200), revision = z.number().int().nonnegative();
 export const videoDraftInput = z.object({ schemaVersion: z.literal(1).default(1), prompt: z.string().max(10000), resolution: z.enum(RESOLUTION_OPTIONS), duration: z.number().int().min(1).max(15), seed: z.string().regex(/^$|^\d{1,15}$/) }).strict();
 export const draftSchemas = {
@@ -57,6 +57,11 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     const draftId = makeId();
     await tx.runAsync("INSERT INTO creative_generation_drafts VALUES(?,?,?,?,'novelai','novelai-image-basic',?,0,'EDITING',NULL,?,?)", draftId, projectId, p.shotId ?? null, assetId, JSON.stringify(input), now, now);
     if (p.fromVersionId) await tx.runAsync("INSERT INTO creative_draft_inputs VALUES(?,'base',0,?)", draftId, p.fromVersionId);
+    const sourceIds = novelAiSourceIds(novelAiDraftInput.parse(input));
+    if (sourceIds.length) {
+      await tx.runAsync('DELETE FROM creative_draft_inputs WHERE draft_id=?', draftId);
+      await inputs(draftId, sourceIds);
+    }
     return { draftId };
   }
   if (name === 'draft.createVideo') {
@@ -79,6 +84,14 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
   await project(draft.project_id);
   if (name === 'draft.updateVideo' || name === 'draft.updateImage') {
     if (draft.provider_id !== (name === 'draft.updateVideo' ? 'autodl' : 'novelai')) throw new Error('DRAFT_PROVIDER_MISMATCH');
+    if (name === 'draft.updateImage') {
+      const previous = novelAiSourceIds(novelAiDraftInput.parse(JSON.parse(draft.input_json)));
+      const next = novelAiSourceIds(p.input);
+      if (JSON.stringify(previous) !== JSON.stringify(next)) {
+        await tx.runAsync('DELETE FROM creative_draft_inputs WHERE draft_id=?', p.id);
+        await inputs(p.id, next);
+      }
+    }
     await tx.runAsync('UPDATE creative_generation_drafts SET input_json=?,revision=revision+1,updated_at=? WHERE id=?', JSON.stringify(p.input), now, p.id);
   } else if (name === 'draft.replaceInputs') {
     await tx.runAsync('DELETE FROM creative_draft_inputs WHERE draft_id=?', p.id);
