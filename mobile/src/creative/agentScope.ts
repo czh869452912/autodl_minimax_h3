@@ -27,7 +27,7 @@ export async function guardCreativeAgentCommand(tx: AppDatabase, origin: Creativ
   }else if(command.name==='plan.cancel'){
     const plan=await tx.getFirstAsync<{project_id:string}>('SELECT project_id FROM creative_plans WHERE id=?',p.id as string);requireProject(plan?.project_id);
   }
-  else if (command.name === 'draft.createImage' || command.name === 'draft.createVideo' || command.name === 'shot.create' || command.name === 'shot.reorder') {
+  else if (command.name === 'draft.createImage' || command.name === 'draft.createUpscale' || command.name === 'draft.createVideo' || command.name === 'shot.create' || command.name === 'shot.reorder') {
     requireProject(p.projectId); await version(p.versionId); await version(p.fromVersionId);
     if (typeof p.shotId === 'string' && !await tx.getFirstAsync('SELECT id FROM creative_shots WHERE id=? AND project_id=?', p.shotId, origin.projectId)) throw new Error('AGENT_SHOT_SCOPE_MISMATCH');
   } else if (command.name.startsWith('draft.')) {

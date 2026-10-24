@@ -16,27 +16,33 @@ import { archiveCreativeOutput } from './archiveOutput';
 import { withWriteTransaction } from '../storage/sqliteBusy';
 import { parseNovelAiResponse } from './novelAiProtocol';
 import { readDraftInputs } from './drafts';
+import {prepareNovelAiUpscale} from './novelAiUpscale';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 
-async function fixture() {
+async function fixture(upscale=false) {
   const db = createInitializedRealSqliteTestDb(), service = createCreativeService(db as never);
   const input = { ...defaultNovelAiDraft, prompt: 'an observatory', seed: 12 };
-  const result = await service.execute({ name: 'draft.createImage', payload: { input } }, 'image-draft');
+  const hash = 'a'.repeat(64);
+  db.runSync('INSERT INTO artifact_blobs VALUES(?,10,?,?,1,1)', hash, 'image/png', `cas/${hash}`);
+  let sourceVersionId='';
+  if(upscale){
+    const imported=await service.execute({name:'asset.import',payload:{title:'Original',kind:'image',blobSha256:hash,metadata:{Software:'NovelAI',Source:input.model,Comment:JSON.stringify({model:input.model,prompt:input.prompt,seed:12})}}},'source');
+    if(imported.status!=='completed')throw new Error('Expected source');sourceVersionId=imported.value.versionId;
+  }
+  const result = await service.execute(upscale?{name:'draft.createUpscale',payload:{versionId:sourceVersionId}}:{ name: 'draft.createImage', payload: { input } }, 'image-draft');
   if (result.status !== 'completed') throw new Error('Expected completed');
   const draft = (await service.draft(result.value.draftId))!;
   const secrets = new Map<string,string>();
   const accounts = createCreativeAccounts(db as never, { now: () => 100, verify: async () => ({ namespace: 'novelai' }), secrets: { get: async k => secrets.get(k) ?? null, set: async (k,v) => { secrets.set(k,v); }, remove: async k => { secrets.delete(k); } } });
   const identity = await accounts.connect('novelai', 'private-token');
   const auth = await createCreativeBudget(db as never, () => 100).grant({ provider: 'novelai', generationId: identity.generationId, operations: ['image.generate'], requestLimit: 1, amountLimit: null, allowUnknownCost: true, maxUnknownRequests: 1, expiresAt: 10000 });
-  const request = prepareNovelAiRequest(input);
-  const prepared = { workflowId: draft.workflow_id, workflowVersion:'1', workflowContentHash: 'h', adapterId: 'novelai-image', adapterVersion:'1', inputSnapshot: request.snapshot, requestInput: JSON.parse(request.requestJson), target: { operation: 'image.generate' } };
-  const task = await submitCreativeVideo(db as never, { draftId: draft.id, expectedRevision: 0, draftInputJson: draft.input_json, authorizationId: auth, prepared, images: [], versionIds: [] }, 100);
+  const request = upscale?prepareNovelAiUpscale(JSON.parse(draft.input_json),{image:fs.readFileSync(path.join(__dirname,'__fixtures__/novelai-enhanced-size.png')).toString('base64'),width:1467,height:2144}):prepareNovelAiRequest(input);
+  const prepared = { workflowId: draft.workflow_id, workflowVersion:'1', workflowContentHash: 'h', adapterId: 'novelai-image', adapterVersion:'1', inputSnapshot: request.snapshot, requestInput: 'requestInput' in request?request.requestInput:JSON.parse(request.requestJson), target: { operation: 'image.generate' } };
+  const task = await submitCreativeVideo(db as never, { draftId: draft.id, expectedRevision: 0, draftInputJson: draft.input_json, authorizationId: auth, prepared, images: [], versionIds: upscale?[sourceVersionId]:[] }, 100);
   const jobs = createJobStateRepository(db as never), operations = createOperationRepository(db as never);
-  const hash = 'a'.repeat(64);
-  db.runSync('INSERT INTO artifact_blobs VALUES(?,10,?,?,1,1)', hash, 'image/png', `cas/${hash}`);
-  const store: NovelAiResponseStore = { generate: jest.fn(async () => 'file:///response'), lookup: jest.fn(async () => 'file:///response'), importResponse: jest.fn(async () => [{ hash, seed: 77, index: 0 }]) };
+  const store: NovelAiResponseStore = { generate: jest.fn(async () => 'file:///response'), upscale:jest.fn(async()=> 'file:///response'),lookup: jest.fn(async () => 'file:///response'), importResponse: jest.fn(async () => [{ hash, seed: upscale?0:77, index: 0,...(upscale?{width:2934,height:4288}:{}) }]) };
   const claim = async (kind: 'SUBMIT'|'STATUS_SYNC') => {
     const op = (await operations.listDue({ kind, now: 200, limit: 10 }))[0];
     return (await operations.claimById(op.id, 'worker', 200, 10000))!;
@@ -50,6 +56,37 @@ async function fixture() {
   };
   return { db, service, task, jobs, operations, store, handle, draft, hash };
 }
+
+test('standalone upscale archives a new version with actual output size and original generation metadata',async()=>{
+  const f=await fixture(true);
+  try{
+    const source=JSON.parse(f.draft.input_json).sourceVersionId;
+    await f.handle('SUBMIT');await f.handle('STATUS_SYNC');
+    expect((await f.jobs.get(f.task.id))?.status).toBe('SUCCEEDED');
+    expect(f.store.upscale).toHaveBeenCalledTimes(1);expect(f.store.generate).not.toHaveBeenCalled();
+    const output=f.db.getFirstSync<{payload_json:string}>("SELECT payload_json FROM workflow_operations WHERE kind='ARTIFACT_DOWNLOAD'")!;
+    await withWriteTransaction(f.db as never,tx=>archiveCreativeOutput(tx,{jobId:f.task.id,artifact:JSON.parse(output.payload_json).artifact,blob:{sha256:f.hash},now:300} as never));
+    const draft=(await f.service.draft(f.draft.id))!,versions=await f.service.versions(draft.target_asset_id!);
+    expect(versions).toHaveLength(2);
+    expect(versions[0].recipe).toMatchObject({operation:'upscale',sourceVersionId:source,output:{width:2934,height:4288},input:{seed:12,prompt:'an observatory'},raw:{Software:'NovelAI'}});
+    expect(versions[0].recipe.upscale).toMatchObject({sourceVersionId:source,factor:2});
+    expect(f.db.getFirstSync('SELECT current_version_id FROM creative_assets')).toEqual({current_version_id:source});
+    await expect(f.service.execute({name:'draft.createImage',payload:{fromVersionId:versions[0].id}},'continue-upscale')).resolves.toMatchObject({status:'completed'});
+    expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
+  }finally{f.db.close();}
+});
+
+test('upscale response recovery restores endpoint identity and dimensions without replaying the paid request',async()=>{
+  const f=await fixture(true);
+  try{
+    f.db.execSync("CREATE TRIGGER fail_handle BEFORE UPDATE OF provider_handle_json ON workflow_jobs WHEN NEW.provider_handle_json IS NOT NULL BEGIN SELECT RAISE(ABORT,'injected'); END");
+    await f.handle('SUBMIT');expect((await f.jobs.get(f.task.id))?.status).toBe('UNKNOWN');
+    f.db.execSync('DROP TRIGGER fail_handle');
+    expect(await recoverNovelAiResponses(f.db as never,f.jobs,f.store,200)).toBe(1);
+    await f.handle('STATUS_SYNC');expect((await f.jobs.get(f.task.id))?.status).toBe('SUCCEEDED');
+    expect(f.store.upscale).toHaveBeenCalledTimes(1);expect(f.store.importResponse).toHaveBeenCalledWith('file:///response',expect.any(String),true);
+  }finally{f.db.close();}
+});
 
 test('NovelAI executes through shared queue and actual seed archives without adopting candidate', async () => {
   const f = await fixture();

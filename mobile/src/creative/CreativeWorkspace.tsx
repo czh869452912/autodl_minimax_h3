@@ -28,6 +28,7 @@ import { CREATIVE_FILE_MIMES,creativeExportTarget } from './fileFormats';
 import { VideoPlayer } from '../media/VideoPlayer';
 import { MediaPreview } from './MediaPreview';
 import { SettingRow, TextAction } from './WorkbenchUI';
+import {ImageMetadataPanel} from './ImageMetadataPanel';
 
 export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initialVersionId, initialTrash = false }: { mode: 'projects' | 'assets'; projectId?: string; assetId?: string; initialTab?: string; initialVersionId?: string; initialTrash?: boolean }) {
   const router = useRouter();
@@ -163,6 +164,8 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
       {versions.filter(v => v.id === visibleVersion?.id).map(v => <View key={v.id} style={{ gap: 16 }}>
         <Text style={styles.body}>版本 {v.versionNo} · {activeAsset.currentVersionId === v.id ? '素材默认版本' : '历史版本'} · {v.state === 'AVAILABLE' ? '本地可用' : '文件待恢复'}</Text>
         {v.mime?.startsWith('image/') ? <MediaPreview version={v} label={`版本 ${v.versionNo} 预览`} contain style={{ aspectRatio: 4 / 3 }} /> : null}
+        {activeAsset.kind==='image'?<ImageMetadataPanel key={v.id} version={v} />:null}
+        {!trash && activeAsset.kind==='image' && v.state==='AVAILABLE'?action('超分图片 · 2×',()=>void run(async()=>{const result=await command({name:'draft.createUpscale',payload:{versionId:v.id,projectId:selected}});if(result.status==='completed')router.push({pathname:'/image-draft/[id]',params:{id:result.value.draftId}});})):null}
         {v.state === 'AVAILABLE' && v.relativePath && v.mime?.startsWith('video/') ? <VideoPlayer source={`${FileSystem.documentDirectory}${v.relativePath}`} /> : null}
         {v.state==='AVAILABLE'&&v.mime==='application/pdf'?<PdfVersionPreview key={v.id} version={v}/>:null}
         {v.state==='AVAILABLE'&&v.mime?.startsWith('audio/')?<AudioVersionPreview version={v}/>:null}

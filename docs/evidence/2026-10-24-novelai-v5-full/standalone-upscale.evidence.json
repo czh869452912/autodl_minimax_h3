@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-24",
+  "provenance": "direct-api-request-not-browser-capture",
+  "endpoint": "https://image.novelai.net/ai/upscale",
+  "status": 200,
+  "request": {
+    "image": {
+      "bytes": 1765669,
+      "sha256": "8d0bb62707c8195167e8d42fa4686a3cda278a9a69c2377cfc7cb051cea9fded"
+    },
+    "model": "nai-diffusion-5-curated",
+    "declared_blur_sigma": 0
+  },
+  "results": [
+    {
+      "index": 0,
+      "seed": 0,
+      "width": 1664,
+      "height": 2432,
+      "bytes": 6491026,
+      "sha256": "99856189b781088d0aa5b461cceb1d56eac092feae675ec589e6efd852154fc8"
+    }
+  ],
+  "responseFields": [
+    "images"
+  ],
+  "imageFields": [
+    [
+      "image",
+      "index",
+      "seed"
+    ]
+  ]
+}

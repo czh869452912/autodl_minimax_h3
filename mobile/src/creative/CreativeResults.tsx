@@ -15,6 +15,7 @@ import { createId } from '../ids';
 import { SectionHeading, TextAction } from './WorkbenchUI';
 import { MediaPreview } from './MediaPreview';
 import { defaultNovelAiDraft, novelAiDraftInput } from './novelAiProtocol';
+import {ImageMetadataPanel} from './ImageMetadataPanel';
 
 export const creativeJobLabel = (status: string) => ({ DRAFT: '准备中', VALIDATING: '检查生成条件', READY_TO_SUBMIT: '等待提交', SUBMITTING: '正在提交', QUEUED: '排队中', RUNNING: '正在生成', SUCCEEDED: '生成已完成', PARTIAL_SUCCEEDED: '部分生成完成', FAILED: '生成未完成，请查看原因', CANCELLED: '已取消', UNKNOWN: '暂时无法确认结果，请核查原任务' }[status] ?? '正在读取进度');
 
@@ -71,11 +72,13 @@ export function CreativeResults({ draft, disabled = false }: { draft: CreativeDr
       <SectionHeading title={draft.state === 'EDITING' ? '参考结果' : '创作结果'} detail={`版本 ${current.versionNo}`} />
       {current.state === 'AVAILABLE' && current.relativePath ? current.mime?.startsWith('video/') ? <VideoPlayer source={`${FileSystem.documentDirectory}${current.relativePath}`} /> : <Pressable accessibilityRole="button" accessibilityLabel="全屏查看图片" onPress={()=>setFullScreen(true)}><Image accessibilityLabel={`当前图片，版本 ${current.versionNo}`} source={{ uri: `${FileSystem.documentDirectory}${current.relativePath}` }} style={{width:'100%',aspectRatio:aspect,minHeight:240,maxHeight:640,borderRadius:16,backgroundColor:COLORS.mediaBackground}} resizeMode="contain" /></Pressable> : <Text style={s.muted}>原文件尚不可用，请在素材详情中恢复。</Text>}
       {draft.provider_id==='novelai' && recipe ? <Text selectable style={s.muted}>{dimensions?.width} × {dimensions?.height} · Seed {recipe.seed ?? '未知'}</Text> : null}
+      {current.mime?.startsWith('image/')?<ImageMetadataPanel key={current.id} version={current} />:null}
+      {current.mime?.startsWith('image/') && current.state==='AVAILABLE'?<TextAction label="超分图片 · 2×" disabled={busy || disabled} onPress={()=>void work(async()=>{const result=await creativeService().execute({name:'draft.createUpscale',payload:{versionId:current.id,projectId:draft.project_id??undefined}},createId());if(result.status==='completed')router.push({pathname:'/image-draft/[id]',params:{id:result.value.draftId}});})} />:null}
       <Text style={s.muted}>{draft.job_id && current.recipe.jobId !== draft.job_id ? '正在查看历史结果 · ' : ''}选择与预览不会改变镜头已采用的版本。</Text>
       {versions.length > 1 ? <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>{versions.map(v => <Pressable key={v.id} accessibilityRole="button" accessibilityLabel={`查看版本 ${v.versionNo}`} accessibilityState={{ selected: v.id === current.id }} onPress={() => setSelected(v.id)} style={{ padding: 6, minWidth: 64, minHeight: 48, borderWidth: 2, borderRadius: 8, borderColor: v.id === current.id ? COLORS.primary : COLORS.border }}>
         <MediaPreview version={v} kind={draft.provider_id === 'novelai' ? 'image' : 'video'} label={`版本 ${v.versionNo} 预览`} style={{ width: 64, aspectRatio: 1 }} /><Text style={s.muted}>版本 {v.versionNo}</Text>
       </Pressable>)}</ScrollView> : null}
-      {draft.state === 'SUBMITTED' && draft.provider_id === 'novelai' ? <ListAction label="继续修改" disabled={busy || disabled} onPress={() => void work(() => continueWith(false))} /> : null}
+      {draft.state === 'SUBMITTED' && draft.provider_id === 'novelai' && current.recipe.input ? <ListAction label="继续修改" disabled={busy || disabled} onPress={() => void work(() => continueWith(false))} /> : null}
       {draft.provider_id==='novelai'?<View style={s.row}><TextAction label="以此图生成" disabled={busy || disabled || current.state!=='AVAILABLE'} onPress={()=>void work(()=>continueWith(false,'img2img'))} /><TextAction label="局部重绘" disabled={busy || disabled || current.state!=='AVAILABLE'} onPress={()=>void work(()=>continueWith(false,'infill'))} /></View>:null}
       {draft.provider_id==='novelai' && (current.recipe.input as {model?:string}|undefined)?.model?.startsWith('nai-diffusion-5')?<TextAction label="增强画质" disabled={busy || disabled || current.state!=='AVAILABLE'} onPress={()=>void work(()=>continueWith(false,'img2img',true))} />:null}
       <View style={s.row}><ListAction label={draft.shot_id ? '用于此镜头' : '保存到相册'} secondary={!draft.shot_id} disabled={busy || disabled || current.state !== 'AVAILABLE'} onPress={() => void work(async () => {

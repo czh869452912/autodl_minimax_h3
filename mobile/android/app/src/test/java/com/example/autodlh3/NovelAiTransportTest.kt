@@ -9,6 +9,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NovelAiTransportTest {
+  @Test fun standaloneUpscaleUsesItsOwnEndpointAndDurableReceiptWithoutRepeatingTheRequest() {
+    val dir=Files.createTempDirectory("nai-upscale").toFile();val server=MockWebServer();server.start()
+    try {
+      server.enqueue(MockResponse().setHeader("Content-Type","application/json").setBody("{\"images\":[]}"))
+      val transport=NovelAiTransport(dir,endpoint=server.url("/ai/generate-image").toString(),upscaleEndpoint=server.url("/ai/upscale").toString())
+      val result=transport.generate(key,request,hash,"private-token",true)
+      assertEquals(result,transport.generate(key,request,hash,"different-token",true))
+      assertEquals(1,server.requestCount);val sent=server.takeRequest();assertEquals("/ai/upscale",sent.path);assertEquals("application/json",sent.getHeader("Accept"));assertFalse(FileTreeContains(dir,"private-token"))
+    }finally{server.shutdown();dir.deleteRecursively()}
+  }
   @Test fun independentWorkersShareAnAtomicSendGate() {
     val dir = Files.createTempDirectory("nai-race").toFile(); val server = MockWebServer(); server.start()
     val pool = java.util.concurrent.Executors.newFixedThreadPool(12)

@@ -35,7 +35,14 @@ export async function archiveCreativeOutput(tx: AppDatabase, input: ArtifactComm
   const snapshot = JSON.parse(context.input_snapshot_json);
   const recipe = { schemaVersion: 1, provider: input.artifact.kind === 'image' ? 'novelai' : 'autodl', jobId: input.jobId, artifactId: input.artifact.id, input: { ...snapshot, ...(typeof input.artifact.metadata?.seed === 'number' ? { seed: input.artifact.metadata.seed } : {}) } };
   const {width,height}=input.artifact.metadata??{};
-  if(input.artifact.kind==='image' && typeof width==='number' && typeof height==='number' && Number.isInteger(width) && Number.isInteger(height) && width>0 && height>0 && width*height<=3145728)Object.assign(recipe,{output:{width,height}});
+  if(snapshot.operation==='upscale'){
+    const source=await tx.getFirstAsync<{recipe_json:string}>('SELECT recipe_json FROM creative_asset_versions WHERE id=?',snapshot.sourceVersionId);
+    if(!source)throw new Error('UPSCALE_SOURCE_MISSING');
+    const original=JSON.parse(source.recipe_json);
+    Object.assign(recipe,{operation:'upscale',upscale:{...snapshot},sourceVersionId:snapshot.sourceVersionId,...(original.raw?{raw:original.raw}:{}),...(original.notices?{notices:original.notices}:{})});
+    if(original.input)Object.assign(recipe,{input:original.input});else delete (recipe as {input?:unknown}).input;
+  }
+  if(input.artifact.kind==='image' && typeof width==='number' && typeof height==='number' && Number.isInteger(width) && Number.isInteger(height) && width>0 && height>0 && width*height<=(snapshot.operation==='upscale'?12582912:3145728))Object.assign(recipe,{output:{width,height}});
   await tx.runAsync("INSERT INTO creative_asset_versions VALUES(?,?,?,'generated',?,?)", versionId, context.target_asset_id, next!.n, JSON.stringify(recipe), input.now);
   await tx.runAsync("INSERT INTO creative_version_files VALUES(?,'original',?,'AVAILABLE')", versionId, input.blob.sha256);
   await tx.runAsync("INSERT INTO artifact_blob_refs VALUES(?,'creative_version',?,?)", input.blob.sha256, versionId, input.now);

@@ -14,15 +14,16 @@ import type { AssetVersion } from './types';
 import { COLORS } from '../ui/theme';
 
 function RecentCreation({ draft, onPress }: { draft: CreativeDraft; onPress: () => void }) {
+  const input=JSON.parse(draft.input_json),name=input.operation==='upscale'?'图片超分 · 2×':input.prompt||'新的灵感';
   const [version, setVersion] = useState<AssetVersion>();
   useEffect(() => {
     let active = true;
     if (draft.target_asset_id) void creativeService().versions(draft.target_asset_id).then(rows => { if (active) setVersion(rows.find(v => v.recipe.jobId === draft.job_id) ?? rows[0]); }).catch(() => undefined);
     return () => { active = false; };
   }, [draft.target_asset_id, draft.job_id, draft.revision]);
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${draft.state === 'EDITING' ? '继续编辑' : '查看这次创作'}：${JSON.parse(draft.input_json).prompt || '未命名创作'}`} onPress={onPress} style={({pressed}) => [{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border, opacity: pressed ? 0.65 : 1 }]}>
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${draft.state === 'EDITING' ? '继续编辑' : '查看这次创作'}：${name}`} onPress={onPress} style={({pressed}) => [{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border, opacity: pressed ? 0.65 : 1 }]}>
     <MediaPreview version={version} kind={draft.provider_id === 'novelai' ? 'image' : 'video'} label="创作预览" style={{ width: 72, aspectRatio: 1 }} />
-    <View style={{ flex: 1, gap: 4 }}><Text style={[s.body, { fontWeight: '600' }]} numberOfLines={2}>{JSON.parse(draft.input_json).prompt || '新的灵感'}</Text><Text style={s.muted}>{draft.provider_id === 'novelai' ? '图片' : '视频'} · {draft.state === 'EDITING' ? '草稿 · 继续编辑' : version ? '查看成果' : '查看生成进度'}</Text></View>
+    <View style={{ flex: 1, gap: 4 }}><Text style={[s.body, { fontWeight: '600' }]} numberOfLines={2}>{name}</Text><Text style={s.muted}>{draft.provider_id === 'novelai' ? '图片' : '视频'} · {draft.state === 'EDITING' ? '草稿 · 继续编辑' : version ? '查看成果' : '查看生成进度'}</Text></View>
   </Pressable>;
 }
 

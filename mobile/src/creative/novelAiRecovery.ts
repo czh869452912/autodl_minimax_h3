@@ -2,6 +2,7 @@ import type { AppDatabase } from '../storage/appDatabase';
 import type { JobStateRepository } from '../tasks/jobStateStore';
 import { novelAiKey, novelAiBodyHash, type NovelAiResponseStore } from './novelAiAdapter';
 import { creativeRequestHash } from './videoSubmission';
+import {isNovelAiUpscaleRequest,upscaleExpectedSize} from './novelAiUpscale';
 
 /** Read-only external reconciliation: only a verified local response can resume import. */
 export async function recoverNovelAiResponses(db: AppDatabase, jobs: JobStateRepository, store: NovelAiResponseStore, now = Date.now()) {
@@ -14,6 +15,8 @@ export async function recoverNovelAiResponses(db: AppDatabase, jobs: JobStateRep
   for (const row of rows) {
     const prepared = JSON.parse(row.payload_json).prepared;
     if (!prepared || creativeRequestHash(prepared) !== row.request_hash) continue;
+    let upscaleSize;
+    try{if(isNovelAiUpscaleRequest(prepared.requestInput))upscaleSize=upscaleExpectedSize(prepared.requestInput);}catch{continue;}
     const key = novelAiKey(row.id), requestHash = novelAiBodyHash(prepared.requestInput);
     let uri: string | null = null;
     try { uri = await store.lookup(key, requestHash); } catch { continue; }
@@ -21,7 +24,7 @@ export async function recoverNovelAiResponses(db: AppDatabase, jobs: JobStateRep
     const job = await jobs.get(row.id);
     if (!job || job.status !== 'UNKNOWN') continue;
     const result = await jobs.transition({ jobId: row.id, expectedRevision: job.revision,
-      patch: { status: 'QUEUED', providerHandle: { kind: 'novelai-local-response', key, requestHash, expectedImages: prepared.requestInput.parameters?.n_samples ?? 1 }, lastError: undefined, updatedAt: now },
+      patch: { status: 'QUEUED', providerHandle: { kind: 'novelai-local-response', key, requestHash, expectedImages: prepared.requestInput.parameters?.n_samples ?? 1, ...(upscaleSize?{operation:'upscale',outputSize:upscaleSize}:{}) }, lastError: undefined, updatedAt: now },
       event: { id: `${row.id}:response:${job.revision}`, type: 'LOCAL_RESPONSE_RECOVERED', payload: {}, createdAt: now },
       nextOperations: [{ id: `${row.id}:response-import:${job.revision}`, kind: 'STATUS_SYNC', jobId: row.id, idempotencyKey: `${row.id}:response-import:${job.revision}`, payload: {}, now }] });
     if (result.ok) recovered++;

@@ -16,6 +16,7 @@ class NovelAiTransport(
     .followRedirects(false).followSslRedirects(false).connectTimeout(30, TimeUnit.SECONDS)
     .readTimeout(180, TimeUnit.SECONDS).callTimeout(240, TimeUnit.SECONDS).build(),
   private val endpoint: String = "https://image.novelai.net/ai/generate-image",
+  private val upscaleEndpoint: String = "https://image.novelai.net/ai/upscale",
 ) {
   companion object { const val MAX_BODY = 64L * 1024L * 1024L }
   private fun directory(key: String): File {
@@ -33,7 +34,7 @@ class NovelAiTransport(
     require(body.length() in 1..MAX_BODY && hash(body.readBytes()) == checksum.readText()) { "NOVELAI_RESPONSE_CORRUPT" }
     return body
   }
-  @Synchronized fun generate(key: String, requestJson: String, requestHash: String, token: String): File {
+  @Synchronized fun generate(key: String, requestJson: String, requestHash: String, token: String, upscale: Boolean = false): File {
     require(requestJson.toByteArray().size <= 36 * 1024 * 1024 && hash(requestJson.toByteArray()) == requestHash) { "NOVELAI_REQUEST_INVALID" }
     lookup(key, requestHash)?.let { return it }
     require(token.length in 8..4096 && !token.contains('\n') && !token.contains('\r')) { "NOVELAI_CREDENTIAL_INVALID" }
@@ -43,7 +44,7 @@ class NovelAiTransport(
     check(marker.createNewFile()) { "NOVELAI_OUTCOME_UNKNOWN" }
     // Commit before opening the HTTP connection; even auth/transport errors do not replay.
     FileOutputStream(marker).use { it.write(requestHash.toByteArray()); it.fd.sync() }
-    val request = Request.Builder().url(endpoint).header("Authorization", "Bearer $token")
+    val request = Request.Builder().url(if(upscale)upscaleEndpoint else endpoint).header("Authorization", "Bearer $token")
       .header("Accept", "application/json").post(requestJson.toRequestBody("application/json".toMediaType())).build()
     client.newCall(request).execute().use { response ->
       check(response.isSuccessful) { "NOVELAI_HTTP_${response.code}" }

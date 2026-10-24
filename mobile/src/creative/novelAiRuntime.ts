@@ -11,6 +11,7 @@ import { readCreativeDraft, readDraftInputs } from './drafts';
 import { creativeAccounts, creativeBudget } from './accountRuntime';
 import { submitCreativeVideo } from './videoSubmission';
 import type { NovelAiResponseStore } from './novelAiAdapter';
+import {novelAiUpscaleInput,prepareNovelAiUpscale} from './novelAiUpscale';
 
 function native() {
   const module = NativeModules.AutoDLMedia;
@@ -18,10 +19,13 @@ function native() {
   return module as { generateNovelAi(key: string, request: string, hash: string, token: string): Promise<string>; lookupNovelAi(key: string, hash: string): Promise<string | null> };
 }
 export function novelAiResponseStore(db: AppDatabase): NovelAiResponseStore {
-  return { generate: (...args) => native().generateNovelAi(...args), lookup: (...args) => native().lookupNovelAi(...args), async importResponse(uri, key) {
+  return { generate: (...args) => native().generateNovelAi(...args), upscale:async(...args)=>{
+    if(!NativeModules.AutoDLMedia?.upscaleNovelAi)throw new Error('请安装支持超分的新版 Android 应用');
+    return NativeModules.AutoDLMedia.upscaleNovelAi(...args);
+  }, lookup: (...args) => native().lookupNovelAi(...args), async importResponse(uri, key, upscale=false) {
     const info = await FileSystem.getInfoAsync(uri);
     if (!info.exists || info.isDirectory || info.size > NOVELAI_MAX_RESPONSE) throw new Error('NOVELAI_RESPONSE_UNAVAILABLE');
-    const images = parseNovelAiResponse(await FileSystem.readAsStringAsync(uri));
+    const images = parseNovelAiResponse(await FileSystem.readAsStringAsync(uri),upscale);
     const result = [];
     for (const image of images) {
       const staged = await createAttachmentStore(db).externalize({ dataUri: `data:image/png;base64,${image.image}` });
@@ -38,12 +42,14 @@ export function novelAiResponseStore(db: AppDatabase): NovelAiResponseStore {
 export async function prepareCreativeImage(id: string) {
   const db = getDatabase(), draft = await readCreativeDraft(db, id);
   if (!draft || draft.provider_id !== 'novelai' || draft.state !== 'EDITING') throw new Error('图片草稿不可编辑');
-  const input = novelAiDraftInput.parse(JSON.parse(draft.input_json));
+  const savedInput=JSON.parse(draft.input_json);
+  if(savedInput.operation==='upscale')return prepareCreativeUpscale(db,draft,novelAiUpscaleInput.parse(savedInput));
+  const input = novelAiDraftInput.parse(savedInput);
   const refs = await readDraftInputs(db, id);
   const source = async (versionId: string | null, mask = false) => {
     const ref = refs.find(r => r.version_id === versionId);
     if (!ref || ref.state !== 'AVAILABLE' || !ref.mime?.startsWith('image/')) throw new Error('底图或蒙版原件待恢复');
-    await creativeFiles().verify(ref.version_id);
+    if((await creativeFiles().verify(ref.version_id))?.state!=='AVAILABLE')throw new Error('底图或蒙版原件缺失或校验失败，请先恢复原件');
     if (!NativeModules.AutoDLMedia?.prepareNovelAiImage) throw new Error('请安装支持图生图的新版 Android 应用');
     return NativeModules.AutoDLMedia.prepareNovelAiImage(`${FileSystem.documentDirectory}${ref.relative_path}`, input.width, input.height, mask, '[]') as Promise<string>;
   };
@@ -58,6 +64,18 @@ export async function prepareCreativeImage(id: string) {
   if (!account) throw new Error('请先连接 NovelAI 创作账号');
   const prepared = { workflowId: 'novelai-image-basic', workflowVersion: '1', workflowContentHash: CryptoJS.SHA256(request.capabilitiesVersion).toString(), adapterId: 'novelai-image', adapterVersion: '1', inputSnapshot: request.snapshot, requestInput: JSON.parse(request.requestJson), target: { operation: 'image.generate' } };
   return { db, draft, account, prepared, versionIds: refs.map(r => r.version_id), sourceManifest: refs.map(r => ({ versionId: r.version_id, sha256: r.blob_sha256, state: r.state })) };
+}
+async function prepareCreativeUpscale(db:AppDatabase,draft:NonNullable<Awaited<ReturnType<typeof readCreativeDraft>>>,input:{sourceVersionId:string;operation:'upscale';schemaVersion:1}){
+  const refs=await readDraftInputs(db,draft.id),ref=refs[0];
+  if(refs.length!==1 || ref.version_id!==input.sourceVersionId || ref.state!=='AVAILABLE' || !ref.mime?.startsWith('image/'))throw new Error('超分原图不可用，请先恢复原件');
+  if((await creativeFiles().verify(ref.version_id))?.state!=='AVAILABLE')throw new Error('超分原图缺失或校验失败，请先恢复原件');
+  if(!NativeModules.AutoDLMedia?.prepareNovelAiUpscale)throw new Error('请安装支持超分的新版 Android 应用');
+  const media=await NativeModules.AutoDLMedia.prepareNovelAiUpscale(`${FileSystem.documentDirectory}${ref.relative_path}`);
+  const request=prepareNovelAiUpscale(input,media);
+  const account=(await creativeAccounts(db).list()).find(a=>a.provider_id==='novelai');
+  if(!account)throw new Error('请先连接 NovelAI 创作账号');
+  const prepared={workflowId:draft.workflow_id,workflowVersion:'1',workflowContentHash:CryptoJS.SHA256('novelai-standalone-upscale-2026-10-24').toString(),adapterId:'novelai-image',adapterVersion:'1',inputSnapshot:request.snapshot,requestInput:request.requestInput,target:{operation:'image.generate'}};
+  return {db,draft,account,prepared,versionIds:refs.map(r=>r.version_id),sourceManifest:refs.map(r=>({versionId:r.version_id,sha256:r.blob_sha256,state:r.state}))};
 }
 export async function confirmCreativeImage(preview: Awaited<ReturnType<typeof prepareCreativeImage>>) {
   if (preview.db !== getDatabase()) throw new Error('数据库已恢复或切换，请重新准备生成');

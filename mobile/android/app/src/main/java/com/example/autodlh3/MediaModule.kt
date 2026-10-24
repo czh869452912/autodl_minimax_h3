@@ -337,6 +337,41 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   }
 
   @ReactMethod
+  fun readCreativeImageInfo(source: String, promise: Promise) {
+    executors.executeMedia {
+      try {
+        val info=CreativeImageInfo(context.filesDir).inspect(source)
+        promise.resolve(Arguments.createMap().apply {
+          putInt("width",info.width);putInt("height",info.height);putDouble("bytes",info.file.length().toDouble());putString("mime",info.mime)
+          putBoolean("metadataError",info.metadataError)
+          putMap("metadata",Arguments.createMap().apply { info.metadata.forEach { (key,value)->putString(key,value) } })
+        })
+      }catch(_:Exception){promise.reject("CREATIVE_METADATA_UNAVAILABLE","无法读取图片信息，请确认原件完整且不超过 25MB / 1600 万像素")}
+    }
+  }
+
+  @ReactMethod
+  fun prepareNovelAiUpscale(source: String, promise: Promise) {
+    executors.executeMedia {
+      try {
+        val (image,width,height)=CreativeImageInfo(context.filesDir).upscale(source)
+        promise.resolve(Arguments.createMap().apply { putString("image",image);putInt("width",width);putInt("height",height) })
+      }catch(_:Exception){promise.reject("NOVELAI_UPSCALE_SOURCE_INVALID","超分原图不可用，需为本地图片、最多 3,145,728 像素和 25MB")}
+    }
+  }
+
+  @ReactMethod
+  fun upscaleNovelAi(key: String, requestJson: String, hash: String, token: String, promise: Promise) {
+    executors.executeMedia {
+      try { promise.resolve(Uri.fromFile(novelAi.generate(key,requestJson,hash,token,true)).toString()) }
+      catch(error:Exception){
+        val code=error.message?.takeIf { it.matches(Regex("NOVELAI_HTTP_[0-9]{3}")) }
+        promise.reject(code?:"NOVELAI_UPSCALE_UNCONFIRMED",if(code!=null)"NovelAI 超分请求被拒绝（HTTP ${code.takeLast(3)}），不会自动重发" else "超分结果未确认，请先核查原任务；不会自动重发")
+      }
+    }
+  }
+
+  @ReactMethod
   fun generateNovelAi(key: String, requestJson: String, hash: String, token: String, promise: Promise) {
     executors.executeMedia {
       try { promise.resolve(Uri.fromFile(novelAi.generate(key, requestJson, hash, token)).toString()) }

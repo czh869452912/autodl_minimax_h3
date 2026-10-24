@@ -3,6 +3,7 @@ import { act, create } from 'react-test-renderer';
 import { CreativeResults } from './CreativeResults';
 import type { AssetVersion } from './types';
 import type { CreativeDraft } from './drafts';
+import {defaultNovelAiDraft} from './novelAiProtocol';
 const mockPush = jest.fn(), mockReplace = jest.fn(), mockExecute = jest.fn();
 let mockStatus = 'SUCCEEDED', mockVersions: AssetVersion[] = [];
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, replace: mockReplace }), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
@@ -14,7 +15,7 @@ const draft: CreativeDraft = { id: 'draft', project_id: 'project', shot_id: 'sho
 const findButton = (tree: ReturnType<typeof create>, label: string) => tree.root.findAll(n => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function')[0];
 beforeEach(() => {
   jest.clearAllMocks(); mockStatus = 'SUCCEEDED';
-  mockVersions = [2, 1].map(n => ({ id: `version-${n}`, assetId: 'asset', versionNo: n, source: 'generated', state: 'AVAILABLE', relativePath: `${n}.png`, mime: 'image/png', recipe: { jobId: 'job' } }));
+  mockVersions = [2, 1].map(n => ({ id: `version-${n}`, assetId: 'asset', versionNo: n, source: 'generated', state: 'AVAILABLE', relativePath: `${n}.png`, mime: 'image/png', recipe: { jobId: 'job',input:defaultNovelAiDraft } }));
   mockExecute.mockResolvedValue({ status: 'completed', value: { draftId: 'next' } });
 });
 

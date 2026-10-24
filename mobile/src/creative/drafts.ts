@@ -3,9 +3,11 @@ import type { AppDatabase } from '../storage/appDatabase';
 import { H3_CREATIVE_WORKFLOW_ID as H3_WORKFLOW_ID } from './videoWorkflow';
 import { RESOLUTION_OPTIONS } from '../create/resolutions';
 import { novelAiDraftInput, defaultNovelAiDraft, novelAiSourceIds } from './novelAiProtocol';
+import {novelAiUpscaleInput} from './novelAiUpscale';
 const id = z.string().min(1).max(200), revision = z.number().int().nonnegative();
 export const videoDraftInput = z.object({ schemaVersion: z.literal(1).default(1), prompt: z.string().max(10000), resolution: z.enum(RESOLUTION_OPTIONS), duration: z.number().int().min(1).max(15), seed: z.string().regex(/^$|^\d{1,15}$/) }).strict();
 export const draftSchemas = {
+  'draft.createUpscale':z.object({versionId:id,projectId:id.optional()}).strict(),
   'draft.copySubmitted':z.object({id}).strict(),
   'draft.createImage': z.object({ projectId: id.optional(), shotId: id.optional(), input: novelAiDraftInput.optional(), fromVersionId: id.optional() }).strict(),
   'draft.updateImage': z.object({ id, expectedRevision: revision, input: novelAiDraftInput }).strict(),
@@ -37,6 +39,15 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     await tx.runAsync("INSERT INTO creative_generation_drafts SELECT ?,project_id,shot_id,target_asset_id,provider_id,workflow_id,input_json,0,'EDITING',NULL,?,? FROM creative_generation_drafts WHERE id=?",draftId,now,now,p.id);
     await tx.runAsync('INSERT INTO creative_draft_inputs SELECT ?,slot,ordinal,version_id FROM creative_draft_inputs WHERE draft_id=?',draftId,p.id);
     return {draftId,provider:source.provider_id,supersedesJobId:source.job_id};
+  }
+  if(name==='draft.createUpscale'){
+    await project(p.projectId??null);
+    const version=await tx.getFirstAsync<{asset_id:string}>("SELECT v.asset_id FROM creative_asset_versions v JOIN creative_assets a ON a.id=v.asset_id WHERE v.id=? AND a.kind='image' AND NOT EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=a.id)",p.versionId);
+    if(!version)throw new Error('IMAGE_VERSION_NOT_FOUND');
+    const draftId=makeId(),input=novelAiUpscaleInput.parse({operation:'upscale',sourceVersionId:p.versionId});
+    await tx.runAsync("INSERT INTO creative_generation_drafts VALUES(?,?,NULL,?,'novelai','novelai-image-basic',?,0,'EDITING',NULL,?,?)",draftId,p.projectId??null,version.asset_id,JSON.stringify(input),now,now);
+    await inputs(draftId,[p.versionId]);
+    return {draftId};
   }
   if (name === 'draft.createImage') {
     let projectId = p.projectId ?? null;
@@ -84,6 +95,7 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
   await project(draft.project_id);
   if (name === 'draft.updateVideo' || name === 'draft.updateImage') {
     if (draft.provider_id !== (name === 'draft.updateVideo' ? 'autodl' : 'novelai')) throw new Error('DRAFT_PROVIDER_MISMATCH');
+    if(JSON.parse(draft.input_json).operation==='upscale')throw new Error('UPSCALE_DRAFT_IMMUTABLE');
     if (name === 'draft.updateImage') {
       const previous = novelAiSourceIds(novelAiDraftInput.parse(JSON.parse(draft.input_json)));
       const next = novelAiSourceIds(p.input);

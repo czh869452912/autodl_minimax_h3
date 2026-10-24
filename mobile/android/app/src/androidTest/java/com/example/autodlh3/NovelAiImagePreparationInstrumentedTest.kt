@@ -15,6 +15,34 @@ import java.util.UUID
 
 @RunWith(AndroidJUnit4::class)
 class NovelAiImagePreparationInstrumentedTest {
+  @Test fun upscaleKeepsOddDimensionsAlphaAndOriginalPngBytes() {
+    val file=File(context.filesDir,"nai-upscale-${UUID.randomUUID()}.png")
+    val bitmap=Bitmap.createBitmap(117,179,Bitmap.Config.ARGB_8888).apply {eraseColor(Color.TRANSPARENT);setPixel(30,50,Color.RED)}
+    file.outputStream().use {bitmap.compress(Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()
+    try {
+      val before=file.readBytes();val helper=CreativeImageInfo(context.filesDir);val info=helper.inspect(Uri.fromFile(file).toString())
+      assertEquals(117,info.width);assertEquals(179,info.height);assertEquals("image/png",info.mime)
+      val (image,width,height)=helper.upscale(Uri.fromFile(file).toString())
+      assertEquals(117,width);assertEquals(179,height);assertArrayEquals(before,Base64.decode(image,Base64.DEFAULT));assertArrayEquals(before,file.readBytes())
+      val result=decode(image);try{assertEquals(0,Color.alpha(result.getPixel(0,0)));assertEquals(Color.RED,result.getPixel(30,50))}finally{result.recycle()}
+    }finally{file.delete()}
+  }
+  @Test fun upscaleConvertsOfficialWebpToPngAndRetainsItsGenerationMetadata() {
+    val file=File(context.filesDir,"novelai-official-metadata.webp")
+    org.junit.Assume.assumeTrue(file.exists())
+    val helper=CreativeImageInfo(context.filesDir);val uri=Uri.fromFile(file).toString();val info=helper.inspect(uri)
+    val (image,width,height)=helper.upscale(uri);val bytes=Base64.decode(image,Base64.DEFAULT)
+    assertEquals(info.width,width);assertEquals(info.height,height)
+    val metadata=CreativePngMetadata.read(bytes.inputStream())
+    assertEquals(info.metadata["Comment"],metadata["Comment"]);assertEquals("NovelAI",metadata["Software"])
+  }
+  @Test fun upscaleRejectsLargeSourcesAndImagesOutsidePrivateStorage() {
+    val helper=CreativeImageInfo(context.filesDir)
+    assertThrows(IllegalArgumentException::class.java){helper.upscale("file:///sdcard/untrusted.png")}
+    val file=File(context.filesDir,"nai-too-large-${UUID.randomUUID()}.png");val bitmap=Bitmap.createBitmap(2048,2048,Bitmap.Config.ARGB_8888)
+    file.outputStream().use{bitmap.compress(Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()
+    try{assertThrows(IllegalArgumentException::class.java){helper.upscale(Uri.fromFile(file).toString())}}finally{file.delete()}
+  }
   private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
   private fun decode(value: String): Bitmap { val bytes=Base64.decode(value, Base64.DEFAULT); return BitmapFactory.decodeByteArray(bytes,0,bytes.size) }
   @Test fun maskKeepsUnpaintedPixelsBlackAndPaintsExactNormalizedCenter() {
@@ -51,6 +79,10 @@ class NovelAiImagePreparationInstrumentedTest {
     file.outputStream().use {bitmap.compress(Bitmap.CompressFormat.JPEG,100,it)};bitmap.recycle()
     try {
       android.media.ExifInterface(file.path).apply {setAttribute(android.media.ExifInterface.TAG_ORIENTATION,"6");saveAttributes()}
+      val helper=CreativeImageInfo(context.filesDir);val uri=Uri.fromFile(file).toString()
+      val info=helper.inspect(uri);assertEquals(64,info.width);assertEquals(128,info.height)
+      val (encoded,w,h)=helper.upscale(uri);assertEquals(64,w);assertEquals(128,h)
+      val upscaledSource=decode(encoded);try{assertTrue(Color.red(upscaledSource.getPixel(32,20))>220);assertTrue(Color.blue(upscaledSource.getPixel(32,100))>220)}finally{upscaledSource.recycle()}
       val result=decode(NovelAiImagePreparation(context.filesDir).prepare(Uri.fromFile(file).toString(),64,128,false,"[]"))
       try {assertTrue(Color.red(result.getPixel(32,20))>220);assertTrue(Color.blue(result.getPixel(32,100))>220)} finally {result.recycle()}
     } finally {file.delete()}

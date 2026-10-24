@@ -91,17 +91,17 @@ export function prepareNovelAiRequest(value: unknown, random = Math.random, medi
   return { snapshot, requestJson, requestHash: CryptoJS.SHA256(requestJson).toString(), capabilitiesVersion: NOVELAI_CAPABILITIES_VERSION };
 }
 
-export function parseNovelAiResponse(raw: string) {
+export function parseNovelAiResponse(raw: string, upscale=false) {
   if (raw.length > NOVELAI_MAX_RESPONSE) throw new Error('NOVELAI_RESPONSE_TOO_LARGE');
-  const parsed = z.object({ images: z.array(z.object({ image: z.string().min(1).max(16 * 1024 * 1024), index: z.number().int().min(0).max(3), seed: z.number().int().min(0).max(4294967295) })).min(1).max(4) }).parse(JSON.parse(raw));
+  const parsed = z.object({ images: z.array(z.object({ image: z.string().min(1).max(upscale?44*1024*1024:16 * 1024 * 1024), index: z.number().int().min(0).max(upscale?0:3), seed: z.number().int().min(0).max(4294967295).optional() })).min(1).max(upscale?1:4) }).parse(JSON.parse(raw));
   const indexes = new Set<number>();
   return parsed.images.map(image => {
-    if (indexes.has(image.index) || !/^[A-Za-z0-9+/]+={0,2}$/.test(image.image) || image.image.length % 4 !== 0) throw new Error('NOVELAI_IMAGE_INVALID');
+    if ((!upscale && image.seed===undefined) || indexes.has(image.index) || !/^[A-Za-z0-9+/]+={0,2}$/.test(image.image) || image.image.length % 4 !== 0) throw new Error('NOVELAI_IMAGE_INVALID');
     indexes.add(image.index);
     const bytes = Buffer.from(image.image, 'base64');
     if (bytes.length < 33 || bytes.subarray(0,8).toString('hex') !== '89504e470d0a1a0a' || bytes.subarray(12,16).toString('ascii') !== 'IHDR') throw new Error('NOVELAI_IMAGE_INVALID');
     const width = bytes.readUInt32BE(16), height = bytes.readUInt32BE(20);
-    if (width < 1 || height < 1 || width * height > NOVELAI_MAX_PIXELS || bytes.length > 12 * 1024 * 1024) throw new Error('NOVELAI_IMAGE_TOO_LARGE');
+    if (width < 1 || height < 1 || width * height > (upscale?12582912:NOVELAI_MAX_PIXELS) || bytes.length > (upscale?20:12) * 1024 * 1024) throw new Error('NOVELAI_IMAGE_TOO_LARGE');
     return { ...image, width, height, mime: 'image/png' as const };
   }).sort((a,b) => a.index - b.index);
 }
