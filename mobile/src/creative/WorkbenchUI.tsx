@@ -1,11 +1,16 @@
-import type { ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppIcon, type IconName } from '../ui/icons';
 import { COLORS } from '../ui/theme';
 
+const DensityContext = createContext(false);
+export function CompactWorkbench({children}:{children:ReactNode}) { return <DensityContext.Provider value>{children}</DensityContext.Provider>; }
+export const useCompactWorkbench = () => useContext(DensityContext);
+
 export function TextAction({ label, onPress, disabled = false, icon }: { label: string; onPress: () => void; disabled?: boolean; icon?: IconName }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [w.textAction, pressed && w.pressed, disabled && w.disabled]}>
+  const compact=useCompactWorkbench();
+  return <Pressable hitSlop={compact?4:undefined} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [w.textAction, compact && {minHeight:36,paddingVertical:4}, pressed && w.pressed, disabled && w.disabled]}>
     {icon ? <AppIcon name={icon} size={18} color={COLORS.primaryActive} /> : null}<Text style={w.actionText}>{label}</Text>
   </Pressable>;
 }
@@ -19,25 +24,32 @@ export function SettingRow({ label, value, onPress, expanded, disabled = false, 
 }
 
 export function SegmentedChoices<T extends string>({ label, options, value, onChange, disabled = false, singleRow = false }: { label: string; options: ReadonlyArray<{ id: T; label: string; icon?: IconName }>; value: T; onChange: (id: T) => void; disabled?: boolean; singleRow?: boolean }) {
-  return <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[w.segments,singleRow && {flexWrap:'nowrap'}]}>{options.map(option => <Pressable key={option.id} accessibilityRole="radio" accessibilityLabel={option.label} accessibilityState={{ checked: value === option.id, disabled }} disabled={disabled} onPress={() => onChange(option.id)} style={({ pressed }) => [w.segment,singleRow && {flexBasis:0,paddingHorizontal:4}, value === option.id && w.segmentSelected, pressed && w.pressed, disabled && w.disabled]}>
+  const compact=useCompactWorkbench();
+  return <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[w.segments,compact && {padding:2,gap:2,borderRadius:7},singleRow && {flexWrap:'nowrap'}]}>{options.map(option => <Pressable key={option.id} hitSlop={compact?4:undefined} accessibilityRole="radio" accessibilityLabel={option.label} accessibilityState={{ checked: value === option.id, disabled }} disabled={disabled} onPress={() => onChange(option.id)} style={({ pressed }) => [w.segment,compact && {minHeight:32,padding:5,borderRadius:5,flexBasis:60},singleRow && {flexBasis:0,paddingHorizontal:4}, value === option.id && w.segmentSelected, pressed && w.pressed, disabled && w.disabled]}>
     {option.icon ? <AppIcon name={option.icon} size={19} color={value === option.id ? COLORS.primaryActive : COLORS.textMuted} /> : null}<Text style={[w.segmentText, value === option.id && w.segmentTextSelected]}>{option.label}</Text>
   </Pressable>)}</View>;
 }
 
 export function ParameterSheet({ title, description, onClose, children, fullScreen = false }: { title: string; description?: string; onClose: () => void; children: ReactNode; fullScreen?:boolean }) {
+  const compact=useCompactWorkbench();
   return <Modal transparent={!fullScreen} visible animationType="slide" onRequestClose={onClose}>
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={fullScreen ? {flex:1,backgroundColor:COLORS.surface} : w.modal}>
       <Pressable accessibilityRole="button" accessibilityLabel={`关闭${title}`} onPress={onClose} style={StyleSheet.absoluteFill} />
       <SafeAreaView edges={fullScreen ? ['top','bottom','left','right'] : ['bottom', 'left', 'right']} style={fullScreen ? {flex:1,backgroundColor:COLORS.surface} : w.sheet}>
         <View style={w.sheetHeader}><View style={{ flex: 1 }}><Text accessibilityRole="header" style={w.sectionTitle}>{title}</Text>{description ? <Text style={w.caption}>{description}</Text> : null}</View><TextAction label="完成" onPress={onClose} /></View>
-        <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: 20, gap: 16 }}>{children}</ScrollView>
+        <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: compact?12:20, gap: compact?10:16 }}>{children}</ScrollView>
       </SafeAreaView>
     </KeyboardAvoidingView>
   </Modal>;
 }
 
 export function SectionHeading({ title, detail }: { title: string; detail?: string }) {
-  return <View style={w.sectionHeading}><Text accessibilityRole="header" style={w.sectionTitle}>{title}</Text>{detail ? <Text style={w.caption}>{detail}</Text> : null}</View>;
+  const compact=useCompactWorkbench();
+  return <View style={w.sectionHeading}><Text accessibilityRole="header" style={[w.sectionTitle,compact && {fontSize:14}]}>{title}</Text>{detail ? <Text style={w.caption}>{detail}</Text> : null}</View>;
+}
+
+export function IconAction({label,icon,onPress,disabled=false,selected=false}:{label:string;icon:IconName;onPress:()=>void;disabled?:boolean;selected?:boolean}) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled,selected}} disabled={disabled} onPress={onPress} hitSlop={4} style={({pressed})=>({width:40,minHeight:40,alignItems:'center',justifyContent:'center',borderRadius:6,backgroundColor:selected?COLORS.primarySoft:'transparent',opacity:disabled?0.4:pressed?0.6:1})}><AppIcon name={icon} size={19} color={selected?COLORS.primary:COLORS.textMuted} /></Pressable>;
 }
 
 export const w = StyleSheet.create({

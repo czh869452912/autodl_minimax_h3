@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -12,7 +12,7 @@ import { ListAction } from '../ui/ListPageUI';
 import { COLORS } from '../ui/theme';
 import { creativeUI as s } from './creativeUI';
 import { createId } from '../ids';
-import { ParameterSheet, SectionHeading, TextAction } from './WorkbenchUI';
+import { IconAction, ParameterSheet, SectionHeading, TextAction } from './WorkbenchUI';
 import { MediaPreview } from './MediaPreview';
 import { defaultNovelAiDraft, novelAiDraftInput } from './novelAiProtocol';
 import {ImageMetadataPanel} from './ImageMetadataPanel';
@@ -23,7 +23,7 @@ import { DraftParametersSheet } from './DraftParametersSheet';
 
 export const creativeJobLabel = (status: string) => ({ DRAFT: '准备中', VALIDATING: '检查生成条件', READY_TO_SUBMIT: '等待提交', SUBMITTING: '正在提交', QUEUED: '排队中', RUNNING: '正在生成', SUCCEEDED: '生成已完成', PARTIAL_SUCCEEDED: '部分生成完成', FAILED: '生成未完成，请查看原因', CANCELLED: '已取消', UNKNOWN: '暂时无法确认结果，请核查原任务' }[status] ?? '正在读取进度');
 
-export function CreativeResults({ draft, disabled = false, dock = false }: { draft: CreativeDraft; disabled?: boolean; dock?:boolean }) {
+export function CreativeResults({ draft, disabled = false, dock = false, canvas=false, onCurrentVersion, onJobStatus, onEnhance, onUpscale, historySignal=0 }: { draft: CreativeDraft; disabled?: boolean; dock?:boolean; canvas?:boolean; onCurrentVersion?:(version:AssetVersion|undefined)=>void; onJobStatus?:(status:string)=>void; onEnhance?:(version:AssetVersion)=>void; onUpscale?:(version:AssetVersion)=>void; historySignal?:number }) {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [versions, setVersions] = useState<AssetVersion[]>([]);
@@ -36,8 +36,10 @@ export function CreativeResults({ draft, disabled = false, dock = false }: { dra
   const [processing,setProcessing]=useState(false),[more,setMore]=useState(false),[history,setHistory]=useState(false);
   const [parameters, setParameters] = useState(false);
   const lock = useRef(false);
+  useEffect(()=>{setSelected(undefined);},[draft.job_id]);
   useFocusEffect(useCallback(() => {
     let active = true;
+    setStatus('');
     const refresh = async () => {
       const rows = draft.target_asset_id ? await creativeService().versions(draft.target_asset_id) : [];
       const job = draft.job_id ? await getDatabase().getFirstAsync<{ status: string }>('SELECT status FROM workflow_jobs WHERE id=?', draft.job_id) : null;
@@ -48,6 +50,9 @@ export function CreativeResults({ draft, disabled = false, dock = false }: { dra
     return () => { active = false; clearInterval(timer); };
   }, [draft.id, draft.target_asset_id, draft.job_id]));
   const current = versions.find(v => v.id === selected) ?? versions.find(v => v.recipe.jobId === draft.job_id) ?? versions[0];
+  useEffect(()=>{onCurrentVersion?.(current);},[current?.id,current?.state,onCurrentVersion]);
+  useEffect(()=>{onJobStatus?.(status);},[status,onJobStatus]);
+  useEffect(()=>{if(historySignal)setHistory(true);},[historySignal]);
   const work = async (fn: () => Promise<unknown>) => {
     if (lock.current || disabled) return;
     lock.current = true; setBusy(true); setError('');
@@ -102,11 +107,25 @@ export function CreativeResults({ draft, disabled = false, dock = false }: { dra
     {notice?<Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text>:null}
     {error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}
   </View>;
-  return <View style={dock?{flex:1}:{gap:12}}>
-    {dock?<ScrollView contentContainerStyle={{padding:16,gap:12}}>{content}</ScrollView>:content}
-    {actions}
+  const canvasContent=<View style={{flex:1,paddingHorizontal:12}}>
+    {draft.job_id && (pending || needsAttention || !current)?<View style={s.row}><Text accessibilityLiveRegion="polite" style={[needsAttention?s.error:s.muted,{fontSize:12}]}>{creativeJobLabel(status)}</Text><TextAction label={status==='UNKNOWN'?'核查原任务':'查看本次任务'} onPress={()=>router.push({pathname:'/creative-task/[id]',params:{id:draft.job_id!}})} /></View>:null}
+    {current?<><View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}><Text style={{fontSize:11,color:COLORS.textMuted,flex:1}}>{dimensions?.width?`${dimensions.width} × ${dimensions.height} · `:''}v{current.versionNo}</Text><View style={{flexDirection:'row'}}>
+      {onEnhance?<IconAction label="增强图片" icon="auto_awesome" disabled={unavailable} onPress={()=>onEnhance(current)} />:null}
+      {onUpscale?<IconAction label="清晰放大 2×" icon="open_in_full" disabled={unavailable} onPress={()=>onUpscale(current)} />:null}
+      <IconAction label={draft.shot_id?'用于此镜头':'保存到相册'} icon="download" disabled={unavailable} onPress={apply} />
+      <IconAction label="更多成果操作" icon="filter_list" onPress={()=>setMore(true)} />
+    </View></View>
+    {current.state==='AVAILABLE' && current.relativePath?<Pressable accessibilityRole="button" accessibilityLabel="全屏查看图片" onPress={()=>setFullScreen(true)} style={{flex:1,minHeight:120}}><Image accessibilityLabel={`当前图片，版本 ${current.versionNo}`} source={{uri:`${FileSystem.documentDirectory}${current.relativePath}`}} resizeMode="contain" style={{flex:1,width:'100%'}} /></Pressable>:<Text style={s.muted}>原文件尚不可用，请在素材详情中恢复。</Text>}
+    </>:<View style={{flex:1,alignItems:'center',justifyContent:'center',gap:6}}><Text style={{fontSize:15,color:COLORS.textMuted}}>{draft.job_id?'正在等待结果':'写下描述，开始创作'}</Text><TextAction label="任务与草稿操作" onPress={()=>setMore(true)} /></View>}
+    {notice?<Text style={[s.muted,{fontSize:12}]}>{notice}</Text>:null}{error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}
+  </View>;
+  return <View style={dock || canvas?{flex:1}:{gap:12}}>
+    {canvas?canvasContent:dock?<ScrollView contentContainerStyle={{padding:16,gap:12}}>{content}</ScrollView>:content}
+    {!canvas?actions:null}
     {processing && current?<ImageProcessingSheet version={current} projectId={draft.project_id??undefined} shotId={draft.shot_id??undefined} replace onClose={()=>setProcessing(false)} />:null}
     {more?<ParameterSheet title="成果操作" onClose={()=>setMore(false)}>
+      {canvas && current && image?<ImageMetadataPanel key={current.id} version={current} label="图片信息" />:null}
+      {canvas && versions.length>1?<TextAction label={`版本历史 · ${versions.length}`} onPress={()=>{setMore(false);setHistory(true);}} />:null}
       {current && draft.provider_id==='novelai'?<><TextAction label="以此图生成" disabled={unavailable} onPress={()=>{setMore(false);void work(()=>continueWith(false,'img2img'));}} /><TextAction label="局部重绘" disabled={unavailable} onPress={()=>{setMore(false);void work(()=>continueWith(false,'infill'));}} /><TextAction label="制作视频" disabled={unavailable} onPress={()=>{setMore(false);void work(()=>continueWith(true));}} /></>:null}
       {current?<TextAction label="查看素材与版本" onPress={()=>{setMore(false);router.push({pathname:'/creative-asset/[id]',params:{id:current.assetId,versionId:current.id,...(draft.project_id?{projectId:draft.project_id}:{})}});}} />:null}
       <TextAction label="本次生成参数" onPress={()=>{setMore(false);setParameters(true);}} />

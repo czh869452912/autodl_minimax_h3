@@ -99,3 +99,22 @@ test('an editing draft can preview previous versions without a second set of res
     expect(findButton(tree,'更多成果操作')).toBeUndefined();
   } finally {act(()=>tree?.unmount());}
 });
+
+test('canvas tools use the selected version in place and a new job selects its own result', async () => {
+  const enhance = jest.fn(), current = jest.fn(), status = jest.fn();
+  let tree!: ReturnType<typeof create>;
+  try {
+    await act(async () => { tree = create(<CreativeResults draft={draft} canvas onEnhance={enhance} onCurrentVersion={current} onJobStatus={status} historySignal={1} />); });
+    act(() => findButton(tree, '查看版本 1').props.onPress());
+    act(() => findButton(tree, '增强图片').props.onPress());
+    expect(enhance).toHaveBeenCalledWith(mockVersions[1]);
+    expect(mockExecute).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(findButton(tree, '增强 / 放大')).toBeUndefined();
+    expect(status).toHaveBeenLastCalledWith('SUCCEEDED');
+    mockVersions = [{ ...mockVersions[0], id: 'new', versionNo: 3, recipe: { jobId: 'new-job' } }, ...mockVersions];
+    await act(async () => { tree.update(<CreativeResults draft={{...draft,job_id:'new-job'}} canvas onEnhance={enhance} onCurrentVersion={current} onJobStatus={status} historySignal={1} />); });
+    expect(current).toHaveBeenLastCalledWith(mockVersions[0]);
+    expect(findButton(tree, '查看版本 1')).toBeUndefined();
+  } finally { act(() => tree?.unmount()); }
+});

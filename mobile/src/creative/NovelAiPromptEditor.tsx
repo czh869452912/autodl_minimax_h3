@@ -10,13 +10,13 @@ import { PromptAssistSheet } from './PromptAssistSheet';
 import { NovelAiTags } from './NovelAiTags';
 import { NovelAiNumberField } from './NovelAiNumberField';
 
-export function NovelAiPromptEditor({ input, update, editable, tab, setTab, onClose, references }: { input: NovelAiDraftInput; update: (patch: Partial<NovelAiDraftInput>) => void; editable: boolean; tab: string; setTab: (tab: string) => void; onClose: () => void; references: ReactNode }) {
+export function NovelAiPromptEditor({ input, update, editable, tab, setTab, onClose, references, description='提示词、角色与底图自动保存在本草稿' }: { input: NovelAiDraftInput; update: (patch: Partial<NovelAiDraftInput>) => void; editable: boolean; tab: string; setTab: (tab: string) => void; onClose: () => void; references: ReactNode; description?:string }) {
   const [expanded, setExpanded] = useState(false),[assist,setAssist]=useState(false);
   const medium = isNovelAiMedium(input), maxCharacters=input.model.startsWith('nai-diffusion-5') ? 32 : 6;
   const field = (label: string, value: string, onChangeText: (value: string) => void, disabled=false) => <TextInput accessibilityLabel={label} placeholder={label} placeholderTextColor={COLORS.textMuted} value={value} editable={editable && !disabled} multiline onChangeText={onChangeText} style={[s.input,{minHeight:130,textAlignVertical:'top'}]} />;
   let preview: {input:string;parameters:{negative_prompt:string}} | undefined;
   try { preview=JSON.parse(prepareNovelAiRequest({...input,action:'generate',enhance:false,enhancement:null},()=>0).requestJson); } catch { /* Incomplete input remains editable. */ }
-  return <ParameterSheet fullScreen title="画面编辑" description="提示词、角色与底图自动保存在本草稿" onClose={onClose}>
+  return <ParameterSheet fullScreen title="画面编辑" description={description} onClose={onClose}>
     <SegmentedChoices singleRow label="画面编辑分页" options={[{id:'prompt',label:'描述'},{id:'negative',label:'负面'},{id:'characters',label:`角色 ${input.characters.length || ''}`},{id:'references',label:'底图'},{id:'chunks',label:'片段'}]} value={tab} onChange={setTab} />
     {tab === 'prompt' ? <>
       <SectionHeading title="画面描述" detail="主体 · 风格 · 构图" />

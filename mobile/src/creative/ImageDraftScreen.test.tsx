@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Alert, TextInput } from 'react-native';
+import { Alert, NativeModules, TextInput } from 'react-native';
 import { ImageDraftScreen } from './ImageDraftScreen';
 import { defaultNovelAiDraft } from './novelAiProtocol';
 import { createEnhanceInput } from './novelAiEnhancement';
@@ -8,7 +8,7 @@ import { createEnhanceInput } from './novelAiEnhancement';
 let mockDraft: any;
 const mockExecute = jest.fn(async (command: any) => { mockDraft = { ...mockDraft, input_json: JSON.stringify(command.payload.input), revision: mockDraft.revision + 1 }; return { status: 'completed', value: {} }; });
 const mockPrepare = jest.fn(async (_id: string) => ({ account: { credential_generation_id: 'test-account' }, prepared: { inputSnapshot: { seed: 1 } } }));
-jest.mock('./runtime', () => ({ creativeService: () => ({ draft: async () => mockDraft, draftInputs: async () => [], execute: mockExecute }) }));
+jest.mock('./runtime', () => ({ creativeService: () => ({ draft: async () => mockDraft, draftInputs: async () => [], execute: mockExecute }), creativeFiles: () => ({ verify: async () => ({ state: 'AVAILABLE' }) }) }));
 jest.mock('./novelAiRuntime', () => ({ prepareCreativeImage: (id: string) => mockPrepare(id), confirmCreativeImage: jest.fn() }));
 jest.mock('./CreativeResults', () => ({ CreativeResults: () => null }));
 jest.mock('./CreativeAccountPanel', () => ({ CreativeAccountPanel: () => null }));
@@ -27,6 +27,32 @@ afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); });
 
 const button=(tree:ReturnType<typeof create>,label:string)=>tree.root.findAll(n=>n.props.accessibilityLabel===label && typeof n.props.onPress==='function')[0];
 
+test('opening and closing inline Enhance preserves the manual prompt without creating or submitting a draft', async () => {
+  NativeModules.AutoDLMedia = { readCreativeImageInfo: jest.fn(async () => ({ width: 832, height: 1216 })) };
+  mockDraft.input_json = JSON.stringify({ ...defaultNovelAiDraft, prompt: 'my next scene' });
+  const source = { id: 'selected-original', assetId: 'asset', versionNo: 2, source: 'generated', state: 'AVAILABLE', relativePath: 'original.png', mime: 'image/png', recipe: { input: { ...defaultNovelAiDraft, prompt: 'original image' } } };
+  let tree!: ReturnType<typeof create>;
+  try {
+    await act(async () => { tree = create(<ImageDraftScreen id="d" />); });
+    const resultsType = require('./CreativeResults').CreativeResults;
+    await act(async () => { tree.root.findByType(resultsType).props.onEnhance(source); });
+    const prompt = () => tree.root.findAllByType(TextInput).find(n => n.props.accessibilityLabel === '图片提示词')!;
+    expect(prompt().props.value).toBe('original image');
+    act(() => prompt().props.onChangeText('enhanced original'));
+    act(() => button(tree, '生成设置').props.onPress());
+    expect(tree.root.findAllByType(resultsType)).toHaveLength(1);
+    act(() => button(tree, 'Medium').props.onPress());
+    act(() => button(tree, '关闭生成设置').props.onPress());
+    act(() => button(tree, '关闭增强').props.onPress());
+    expect(prompt().props.value).toBe('my next scene');
+    expect(JSON.parse(mockDraft.input_json).effort).toBe('high');
+    await act(async () => jest.advanceTimersByTime(650));
+    expect(mockExecute).not.toHaveBeenCalled();
+    expect(mockPrepare).not.toHaveBeenCalled();
+    expect(require('./novelAiRuntime').confirmCreativeImage).not.toHaveBeenCalled();
+  } finally { act(() => tree?.unmount()); delete NativeModules.AutoDLMedia; }
+});
+
 test('generate saves the latest edits before preparing and ignores duplicate taps', async () => {
   let tree!: ReturnType<typeof create>;
   try {
@@ -38,11 +64,12 @@ test('generate saves the latest edits before preparing and ignores duplicate tap
     expect(JSON.parse(mockDraft.input_json).prompt).toBe('An observatory');
     expect(mockPrepare).toHaveBeenCalledTimes(1);
     expect(mockExecute.mock.invocationCallOrder[0]).toBeLessThan(mockPrepare.mock.invocationCallOrder[0]);
-    expect(Alert.alert).toHaveBeenCalledWith('确认生成 1 张图片', expect.any(String), expect.any(Array), expect.any(Object));
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(require('./novelAiRuntime').confirmCreativeImage).toHaveBeenCalledTimes(1);
   } finally { act(() => tree?.unmount()); }
 });
 
-test('Enhance panel edits scale, magnitude and advanced parameters before one explicit enhancement confirmation', async()=>{
+test('Enhance panel edits scale, magnitude and advanced parameters before direct submission from the canvas', async()=>{
   mockDraft.input_json=JSON.stringify(createEnhanceInput({...defaultNovelAiDraft,prompt:'an observatory'},'source',832,1216));
   let tree!:ReturnType<typeof create>;
   try {
@@ -60,8 +87,8 @@ test('Enhance panel edits scale, magnitude and advanced parameters before one ex
     await act(async()=>button(tree,'增强图片').props.onPress());
     expect(JSON.parse(mockDraft.input_json)).toMatchObject({enhancement:{scale:'1.5'},enhance:false,width:1280,height:1856,strength:0.35,noise:0.05,samples:1});
     expect(mockPrepare).toHaveBeenCalledTimes(1);
-    expect(Alert.alert).toHaveBeenCalledWith('确认增强图片',expect.stringContaining('倍率 1.5，强度 0.35，噪声 0.05'),expect.any(Array),expect.any(Object));
-    expect(require('./novelAiRuntime').confirmCreativeImage).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(require('./novelAiRuntime').confirmCreativeImage).toHaveBeenCalledTimes(1);
   }finally{act(()=>tree?.unmount());}
 });
 
@@ -77,22 +104,37 @@ test('failed save preserves input and prevents generation preparation', async ()
   } finally { act(() => tree?.unmount()); }
 });
 
-test('settings persist batch size and Medium and generation confirmation authorizes the whole batch once',async()=>{
+test('an unknown submission stays on the canvas and blocks another generation', async () => {
+  mockDraft = { ...mockDraft, state: 'SUBMITTED', job_id: 'unknown-job' };
+  let tree!: ReturnType<typeof create>;
+  try {
+    await act(async () => { tree = create(<ImageDraftScreen id="d" />); });
+    act(() => tree.root.findByType(require('./CreativeResults').CreativeResults).props.onJobStatus('UNKNOWN'));
+    expect(button(tree, '生成 1 张图片').props.disabled).toBe(true);
+    expect(JSON.stringify(tree.toJSON())).toContain('请核查原任务');
+    await act(async () => button(tree, '生成 1 张图片').props.onPress());
+    expect(mockExecute).not.toHaveBeenCalled();
+    expect(mockPrepare).not.toHaveBeenCalled();
+  } finally { act(() => tree?.unmount()); }
+});
+
+test('compact settings retain batch size and Medium and one click submits the batch once',async()=>{
   let tree!:ReturnType<typeof create>;
   try{
     await act(async()=>{tree=create(<ImageDraftScreen id="d" />);});
     act(()=>button(tree,'生成设置').props.onPress());
-    act(()=>button(tree,'4 张').props.onPress());
-    act(()=>button(tree,'Medium · 更快速').props.onPress());
+    act(()=>button(tree,'4').props.onPress());
+    act(()=>button(tree,'Medium').props.onPress());
     expect(tree.root.findAllByProps({accessibilityLabel:'步数'})).toHaveLength(0);
     act(()=>button(tree,'专业参数').props.onPress());
     const fields=tree.root.findAllByType(TextInput);
     expect(fields.find(n=>n.props.accessibilityLabel==='步数')?.props).toMatchObject({value:'14',editable:false});
     expect(button(tree,'Euler Ancestral').props.accessibilityState.disabled).toBe(true);
-    act(()=>button(tree,'完成').props.onPress());
+    act(()=>button(tree,'关闭生成设置').props.onPress());
     await act(async()=>button(tree,'生成 4 张图片').props.onPress());
     expect(JSON.parse(mockDraft.input_json)).toMatchObject({samples:4,effort:'medium',steps:23});
-    expect(Alert.alert).toHaveBeenCalledWith('确认生成 4 张图片',expect.stringContaining('1 次请求（含 4 张图片）'),expect.any(Array),expect.any(Object));
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(require('./novelAiRuntime').confirmCreativeImage).toHaveBeenCalledTimes(1);
   }finally{act(()=>tree?.unmount());}
 });
 
@@ -118,6 +160,7 @@ test('reference modes retain incomplete editing but refuse to prepare a request 
   let tree!:ReturnType<typeof create>;
   try{
     await act(async()=>{tree=create(<ImageDraftScreen id="d" />);});
+    act(()=>button(tree,'展开画面编辑').props.onPress());
     act(()=>button(tree,'底图').props.onPress());
     act(()=>button(tree,'局部重绘').props.onPress());
     expect(JSON.stringify(tree.toJSON())).toContain('尚未选择底图');
