@@ -37,3 +37,16 @@ test('malformed embedded JSON remains inspectable and zero-valued parameters are
   const fields=imageMetadataFields({Comment:'broken'}, {input:{prompt:'saved',seed:0,rescale:0}});
   expect(fields).toEqual(expect.arrayContaining([{label:'正面提示词',value:'saved'},{label:'Seed',value:'0'},{label:'Rescale',value:'0'}]));
 });
+
+test('reusing a seed changes only the next input and never rewrites the saved recipe',async()=>{
+  NativeModules.AutoDLMedia={readCreativeImageInfo:jest.fn(async()=>({width:832,height:1216,bytes:100,mime:'image/png',metadata:{Comment:JSON.stringify({seed:0,prompt:'embedded'})}}))};
+  const reuse=jest.fn(),snapshot=JSON.stringify(version.recipe);let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<ImageMetadataPanel version={version} onReuse={reuse} />);});
+    await act(async()=>button(tree,'查看图片元数据').props.onPress());
+    act(()=>button(tree,'仅复用 Seed').props.onPress());
+    expect(reuse).toHaveBeenCalledWith({seed:0});
+    expect(JSON.stringify(version.recipe)).toBe(snapshot);
+    expect(button(tree,'仅复用 Seed')).toBeUndefined();
+  }finally{act(()=>tree?.unmount());}
+});

@@ -8,7 +8,7 @@ import type { AssetVersion } from './types';
 
 export async function createImageProcessingDraft(version:AssetVersion, operation:'enhance'|'upscale', context:{projectId?:string;shotId?:string}) {
   if (version.state!=='AVAILABLE' || !version.relativePath || (await creativeFiles().verify(version.id))?.state!=='AVAILABLE') throw new Error('原图缺失或校验失败，请先恢复原件');
-  if (operation==='upscale') return creativeService().execute({name:'draft.createUpscale',payload:{versionId:version.id,projectId:context.projectId}},createId());
+  if (operation==='upscale') return creativeService().execute({name:'draft.createUpscale',payload:{versionId:version.id,...context}},createId());
   return creativeService().execute({name:'draft.createImage',payload:{fromVersionId:version.id,...context,input:await prepareImageEnhancement(version)}},createId());
 }
 

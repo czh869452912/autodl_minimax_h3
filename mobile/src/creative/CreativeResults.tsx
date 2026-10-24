@@ -20,14 +20,17 @@ import { ImageProcessingSheet } from './ImageProcessingSheet';
 import { ResultActionBar } from './ResultActionBar';
 import { CopySubmittedDraft } from './CopySubmittedDraft';
 import { DraftParametersSheet } from './DraftParametersSheet';
+import { ImagePreview } from '../ui/ImagePreview';
+import { VersionComparison } from './VersionComparison';
+import type { NovelAiDraftInput } from './novelAiProtocol';
 
 export const creativeJobLabel = (status: string) => ({ DRAFT: '准备中', VALIDATING: '检查生成条件', READY_TO_SUBMIT: '等待提交', SUBMITTING: '正在提交', QUEUED: '排队中', RUNNING: '正在生成', SUCCEEDED: '生成已完成', PARTIAL_SUCCEEDED: '部分生成完成', FAILED: '生成未完成，请查看原因', CANCELLED: '已取消', UNKNOWN: '暂时无法确认结果，请核查原任务' }[status] ?? '正在读取进度');
 
-export function CreativeResults({ draft, disabled = false, dock = false, canvas=false, onCurrentVersion, onJobStatus, onEnhance, onUpscale, historySignal=0 }: { draft: CreativeDraft; disabled?: boolean; dock?:boolean; canvas?:boolean; onCurrentVersion?:(version:AssetVersion|undefined)=>void; onJobStatus?:(status:string)=>void; onEnhance?:(version:AssetVersion)=>void; onUpscale?:(version:AssetVersion)=>void; historySignal?:number }) {
+export function CreativeResults({ draft, disabled = false, dock = false, canvas=false, onCurrentVersion, onJobStatus, onEnhance, onUpscale, onReuse, onUseImage, historySignal=0, initialVersionId }: { draft: CreativeDraft; disabled?: boolean; dock?:boolean; canvas?:boolean; onCurrentVersion?:(version:AssetVersion|undefined)=>void; onJobStatus?:(status:string)=>void; onEnhance?:(version:AssetVersion)=>void; onUpscale?:(version:AssetVersion)=>void; onReuse?:(patch:Partial<NovelAiDraftInput>)=>void; onUseImage?:(version:AssetVersion,action:'img2img'|'infill')=>void; historySignal?:number; initialVersionId?:string }) {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [versions, setVersions] = useState<AssetVersion[]>([]);
-  const [selected, setSelected] = useState<string>();
+  const [selected, setSelected] = useState<string|undefined>(initialVersionId);
   const [status, setStatus] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -35,8 +38,11 @@ export function CreativeResults({ draft, disabled = false, dock = false, canvas=
   const [fullScreen,setFullScreen]=useState(false);
   const [processing,setProcessing]=useState(false),[more,setMore]=useState(false),[history,setHistory]=useState(false);
   const [parameters, setParameters] = useState(false);
+  const [comparing,setComparing]=useState(false);
+  const [exporting,setExporting]=useState<{versionId:string;generation:number}>();
+  const [delivery,setDelivery]=useState<{status:string;generation:number}>();
   const lock = useRef(false);
-  useEffect(()=>{setSelected(undefined);},[draft.job_id]);
+  useEffect(()=>{setSelected(initialVersionId);},[draft.job_id]);
   useFocusEffect(useCallback(() => {
     let active = true;
     setStatus('');
@@ -53,6 +59,14 @@ export function CreativeResults({ draft, disabled = false, dock = false, canvas=
   useEffect(()=>{onCurrentVersion?.(current);},[current?.id,current?.state,onCurrentVersion]);
   useEffect(()=>{onJobStatus?.(status);},[status,onJobStatus]);
   useEffect(()=>{if(historySignal)setHistory(true);},[historySignal]);
+  useEffect(()=>{
+    if(!exporting)return;
+    let active=true;
+    const refresh=async()=>{const rows=await creativeService().deliveries(exporting.versionId);if(active){setDelivery(rows[0]);if(rows[0] && ['EXPORTED','FAILED','DELIVERY_UNKNOWN','QUARANTINED'].includes(rows[0].status))clearInterval(timer);}};
+    const timer=setInterval(()=>void refresh().catch(()=>{if(active)setError('保存状态读取失败，可重新查看');}),2000);
+    void refresh().catch(()=>{if(active)setError('保存状态读取失败，可重新查看');});
+    return()=>{active=false;clearInterval(timer);};
+  },[exporting]);
   const work = async (fn: () => Promise<unknown>) => {
     if (lock.current || disabled) return;
     lock.current = true; setBusy(true); setError('');
@@ -84,8 +98,15 @@ export function CreativeResults({ draft, disabled = false, dock = false, canvas=
       if(!shot)throw new Error('镜头已不存在，请返回项目检查');
       await creativeService().execute({name:'shot.selectOutput',payload:{id:shot.id,expectedRevision:shot.revision,slot:draft.provider_id==='novelai'?'selected_image':'selected_video',versionId:current.id}},createId());
       setNotice('此镜头已采用当前版本');
-    } else { await exportCreativeVersion(current.id);setNotice('已加入保存队列，可在素材详情查看保存状态'); }
+    } else { await exportCreativeVersion(current.id);setExporting({versionId:current.id,generation:1});setNotice('已在素材库 · 正在存入系统相册'); }
   });
+  const reuse=onReuse?((patch:Partial<NovelAiDraftInput>)=>{setMore(false);onReuse(patch);}):undefined;
+  const sourceId=(current?.recipe.input as {sourceVersionId?:string}|undefined)?.sourceVersionId;
+  const original=versions.find(v=>v.id===sourceId && v.state==='AVAILABLE' && v.relativePath);
+  const available=versions.filter(v=>v.state==='AVAILABLE' && v.relativePath && v.mime?.startsWith('image/'));
+  const currentIndex=available.findIndex(v=>v.id===current?.id);
+  const deliveryNotice=exporting && delivery?({QUEUED:'等待存入系统相册',PUBLISHING:'正在存入系统相册',EXPORTED:'已存入系统相册',FAILED:'存入相册失败',DELIVERY_UNKNOWN:'保存结果不确定，请先检查系统相册',QUARANTINED:'保存操作已隔离，请查看任务详情'} as Record<string,string>)[delivery.status]:undefined;
+  const saveStatus=<>{deliveryNotice?<Text accessibilityLiveRegion="polite" style={s.muted}>{deliveryNotice}</Text>:notice?<Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text>:null}{delivery?.status==='FAILED' && exporting?<TextAction label="重试存入相册" disabled={busy || disabled} onPress={()=>void work(async()=>{const generation=delivery.generation+1;await exportCreativeVersion(exporting.versionId,generation);setDelivery(undefined);setExporting({versionId:exporting.versionId,generation});})} />:null}</>;
   const edit = draft.state==='SUBMITTED' && draft.provider_id==='novelai' && current?.recipe.input ? ()=>void work(()=>continueWith(false)) : undefined;
   const actions=current && draft.state==='SUBMITTED'?<ResultActionBar primaryLabel={draft.shot_id?'用于此镜头':'保存到相册'} onPrimary={apply} onEdit={edit} onProcess={image?()=>setProcessing(true):undefined} disabled={unavailable} />:null;
   const candidates=versions.slice(0,4);
@@ -94,45 +115,48 @@ export function CreativeResults({ draft, disabled = false, dock = false, canvas=
     <MediaPreview version={v} kind={draft.provider_id==='novelai'?'image':'video'} label={`版本 ${v.versionNo} 预览`} style={{width:64,aspectRatio:1}} /><Text style={s.muted}>版本 {v.versionNo}</Text>
   </Pressable>);
   const content=<View style={{gap:12}}>
-    {draft.job_id?<View style={[s.row,{paddingVertical:4}]}><View style={{flexDirection:'row',alignItems:'center',gap:8,flex:1}}>{pending?<ActivityIndicator size="small" />:null}<Text accessibilityLiveRegion="polite" style={needsAttention?s.error:s.muted}>{creativeJobLabel(status)}</Text></View><TextAction label={status==='UNKNOWN'?'核查原任务':'查看本次任务'} onPress={()=>router.push({pathname:'/creative-task/[id]',params:{id:draft.job_id!}})} /></View>:null}
+    {draft.job_id?<View style={[s.row,{paddingVertical:4}]}><View style={{flexDirection:'row',alignItems:'center',gap:8,flex:1}}>{pending?<ActivityIndicator size="small" />:null}<Text accessibilityLiveRegion="polite" style={needsAttention?s.error:s.muted}>{creativeJobLabel(status)}</Text></View><TextAction label={status==='UNKNOWN'?'核查原任务':'查看本次任务'} onPress={()=>router.push({pathname:'/creative-task/[id]',params:{id:draft.job_id!,returnToWorkbench:'1'}})} /></View>:null}
     {current?<>
       <View style={s.row}><SectionHeading title={draft.state==='EDITING'?'参考结果':'创作结果'} detail={`版本 ${current.versionNo}`} /><View style={{flexDirection:'row',gap:12}}>
-        {image?<ImageMetadataPanel key={current.id} version={current} label="信息" />:null}
+        {image?<ImageMetadataPanel key={current.id} version={current} label="信息" onReuse={reuse} />:null}
         {draft.state==='SUBMITTED'?<TextAction label="更多成果操作" onPress={()=>setMore(true)} />:null}
       </View></View>
       {current.state==='AVAILABLE' && current.relativePath?current.mime?.startsWith('video/')?<VideoPlayer source={`${FileSystem.documentDirectory}${current.relativePath}`} />:<Pressable accessibilityRole="button" accessibilityLabel="全屏查看图片" onPress={()=>setFullScreen(true)}><Image accessibilityLabel={`当前图片，版本 ${current.versionNo}`} source={{uri:`${FileSystem.documentDirectory}${current.relativePath}`}} resizeMode="contain" style={{width:'100%',height:Math.min(dock?400:640,Math.max(200,(width-32)/aspect)),borderRadius:16,backgroundColor:COLORS.mediaBackground}} /></Pressable>:<Text style={s.muted}>原文件尚不可用，请在素材详情中恢复。</Text>}
       {dimensions?.width?<Text style={s.muted}>{dimensions.width} × {dimensions.height}{draft.job_id && current.recipe.jobId!==draft.job_id?' · 历史结果':''}</Text>:null}
       {versions.length>1?<View style={s.row}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:8}}>{versionChoices(candidates)}</ScrollView><TextAction label={`版本历史 · ${versions.length}`} onPress={()=>setHistory(true)} /></View>:null}
     </>:<View style={[s.card,{minHeight:160,justifyContent:'center',borderWidth:0}]}><Text style={s.title}>{draft.job_id?(needsAttention?'本次尚无可用成果':'创作进行中'):'从画面描述开始'}</Text><Text style={s.muted}>{draft.job_id?'结果会显示在这里，你可以离开后再回来。':'生成后可在这里看图和继续创作。'}</Text><TextAction label="任务与草稿操作" onPress={()=>setMore(true)} /></View>}
-    {notice?<Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text>:null}
+    {saveStatus}
     {error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}
   </View>;
   const canvasContent=<View style={{flex:1,paddingHorizontal:12}}>
-    {draft.job_id && (pending || needsAttention || !current)?<View style={s.row}><Text accessibilityLiveRegion="polite" style={[needsAttention?s.error:s.muted,{fontSize:12}]}>{creativeJobLabel(status)}</Text><TextAction label={status==='UNKNOWN'?'核查原任务':'查看本次任务'} onPress={()=>router.push({pathname:'/creative-task/[id]',params:{id:draft.job_id!}})} /></View>:null}
+    {draft.job_id && (pending || needsAttention || !current)?<View style={s.row}><Text accessibilityLiveRegion="polite" style={[needsAttention?s.error:s.muted,{fontSize:12}]}>{creativeJobLabel(status)}</Text><TextAction label={status==='UNKNOWN'?'核查原任务':'查看本次任务'} onPress={()=>router.push({pathname:'/creative-task/[id]',params:{id:draft.job_id!,returnToWorkbench:'1'}})} /></View>:null}
     {current?<><View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}><Text style={{fontSize:11,color:COLORS.textMuted,flex:1}}>{dimensions?.width?`${dimensions.width} × ${dimensions.height} · `:''}v{current.versionNo}</Text><View style={{flexDirection:'row'}}>
       {onEnhance?<IconAction label="增强图片" icon="auto_awesome" disabled={unavailable} onPress={()=>onEnhance(current)} />:null}
       {onUpscale?<IconAction label="清晰放大 2×" icon="open_in_full" disabled={unavailable} onPress={()=>onUpscale(current)} />:null}
-      <IconAction label={draft.shot_id?'用于此镜头':'保存到相册'} icon="download" disabled={unavailable} onPress={apply} />
+      <IconAction label={draft.shot_id?'用于此镜头':'保存到相册'} icon={draft.shot_id?'image':'download'} disabled={unavailable} onPress={apply} />
       <IconAction label="更多成果操作" icon="filter_list" onPress={()=>setMore(true)} />
     </View></View>
-    {current.state==='AVAILABLE' && current.relativePath?<Pressable accessibilityRole="button" accessibilityLabel="全屏查看图片" onPress={()=>setFullScreen(true)} style={{flex:1,minHeight:120}}><Image accessibilityLabel={`当前图片，版本 ${current.versionNo}`} source={{uri:`${FileSystem.documentDirectory}${current.relativePath}`}} resizeMode="contain" style={{flex:1,width:'100%'}} /></Pressable>:<Text style={s.muted}>原文件尚不可用，请在素材详情中恢复。</Text>}
-    </>:<View style={{flex:1,alignItems:'center',justifyContent:'center',gap:6}}><Text style={{fontSize:15,color:COLORS.textMuted}}>{draft.job_id?'正在等待结果':'写下描述，开始创作'}</Text><TextAction label="任务与草稿操作" onPress={()=>setMore(true)} /></View>}
-    {notice?<Text style={[s.muted,{fontSize:12}]}>{notice}</Text>:null}{error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}
+    {current.state==='AVAILABLE' && current.relativePath?image?<Pressable accessibilityRole="button" accessibilityLabel="全屏查看图片" onPress={()=>setFullScreen(true)} style={{flex:1,minHeight:120}}><Image accessibilityLabel={`当前图片，版本 ${current.versionNo}`} source={{uri:`${FileSystem.documentDirectory}${current.relativePath}`}} resizeMode="contain" style={{flex:1,width:'100%'}} /></Pressable>:<ScrollView contentContainerStyle={{flexGrow:1,justifyContent:'center'}}><VideoPlayer source={`${FileSystem.documentDirectory}${current.relativePath}`} /></ScrollView>:<Text style={s.muted}>原文件尚不可用，请在素材详情中恢复。</Text>}
+    {original?<TextAction label="对照原图与结果" onPress={()=>setFullScreen(true)} />:null}
+    </>:<View style={{flex:1,alignItems:'center',justifyContent:'center',gap:6}}><Text style={{fontSize:15,color:COLORS.textMuted}}>{draft.job_id?'正在等待结果':'写下描述，开始创作'}</Text></View>}
+    {saveStatus}{error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}
   </View>;
   return <View style={dock || canvas?{flex:1}:{gap:12}}>
     {canvas?canvasContent:dock?<ScrollView contentContainerStyle={{padding:16,gap:12}}>{content}</ScrollView>:content}
     {!canvas?actions:null}
     {processing && current?<ImageProcessingSheet version={current} projectId={draft.project_id??undefined} shotId={draft.shot_id??undefined} replace onClose={()=>setProcessing(false)} />:null}
     {more?<ParameterSheet title="成果操作" onClose={()=>setMore(false)}>
-      {canvas && current && image?<ImageMetadataPanel key={current.id} version={current} label="图片信息" />:null}
+      {canvas && current && image?<ImageMetadataPanel key={current.id} version={current} label="图片信息" onReuse={reuse} />:null}
+      {versions.length>1?<TextAction label="比较版本与参数" onPress={()=>{setMore(false);setComparing(true);}} />:null}
       {canvas && versions.length>1?<TextAction label={`版本历史 · ${versions.length}`} onPress={()=>{setMore(false);setHistory(true);}} />:null}
-      {current && draft.provider_id==='novelai'?<><TextAction label="以此图生成" disabled={unavailable} onPress={()=>{setMore(false);void work(()=>continueWith(false,'img2img'));}} /><TextAction label="局部重绘" disabled={unavailable} onPress={()=>{setMore(false);void work(()=>continueWith(false,'infill'));}} /><TextAction label="制作视频" disabled={unavailable} onPress={()=>{setMore(false);void work(()=>continueWith(true));}} /></>:null}
+      {current && draft.provider_id==='novelai'?<><TextAction label="以此图生成" disabled={unavailable} onPress={()=>{setMore(false);if(onUseImage)onUseImage(current,'img2img');else void work(()=>continueWith(false,'img2img'));}} /><TextAction label="局部重绘" disabled={unavailable} onPress={()=>{setMore(false);if(onUseImage)onUseImage(current,'infill');else void work(()=>continueWith(false,'infill'));}} /><TextAction label="制作视频" disabled={unavailable} onPress={()=>{setMore(false);void work(()=>continueWith(true));}} /></>:null}
       {current?<TextAction label="查看素材与版本" onPress={()=>{setMore(false);router.push({pathname:'/creative-asset/[id]',params:{id:current.assetId,versionId:current.id,...(draft.project_id?{projectId:draft.project_id}:{})}});}} />:null}
       <TextAction label="本次生成参数" onPress={()=>{setMore(false);setParameters(true);}} />
       {draft.state==='SUBMITTED'?<CopySubmittedDraft id={draft.id} />:null}
     </ParameterSheet>:null}
     {parameters?<DraftParametersSheet draft={draft} onClose={()=>setParameters(false)} />:null}
-    {history?<ParameterSheet fullScreen title="版本历史" description="选择仅改变预览，不改变项目采用" onClose={()=>setHistory(false)}><View style={{flexDirection:'row',flexWrap:'wrap',gap:12}}>{versionChoices(versions)}</View></ParameterSheet>:null}
-    {fullScreen && current?.relativePath?<Modal visible animationType="fade" onRequestClose={()=>setFullScreen(false)}><SafeAreaView style={{flex:1,backgroundColor:COLORS.mediaBackground}}><TextAction label="关闭图片预览" onPress={()=>setFullScreen(false)} /><Image accessibilityLabel="全屏图片" source={{uri:`${FileSystem.documentDirectory}${current.relativePath}`}} resizeMode="contain" style={{flex:1,width:'100%'}} /></SafeAreaView></Modal>:null}
+    {history?<ParameterSheet fullScreen={!canvas} title="版本历史" description="选择仅改变预览，不改变项目采用" onClose={()=>setHistory(false)}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:10}}>{versionChoices(versions)}</ScrollView></ParameterSheet>:null}
+    {comparing?<ParameterSheet fullScreen title="版本对照" onClose={()=>setComparing(false)}><VersionComparison versions={versions} /></ParameterSheet>:null}
+    {fullScreen && current?.relativePath?<ImagePreview uri={`${FileSystem.documentDirectory}${current.relativePath}`} title={`版本 ${current.versionNo}`} onClose={()=>setFullScreen(false)} comparison={original?{uri:`${FileSystem.documentDirectory}${original.relativePath}`,label:`原图 · v${original.versionNo}`}:undefined} onPrevious={currentIndex>=0 && currentIndex<available.length-1?()=>setSelected(available[currentIndex+1].id):undefined} onNext={currentIndex>0?()=>setSelected(available[currentIndex-1].id):undefined} />:null}
   </View>;
 }

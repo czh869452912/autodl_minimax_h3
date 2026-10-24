@@ -31,6 +31,19 @@ test('image drafts preserve shot context and reject cross-project creation', asy
   } finally { f.db.close(); }
 });
 
+test('upscale keeps the source, shot and project and rejects a conflicting project atomically',async()=>{
+  const f=await fixture();
+  try{
+    const {draftId}=await f.execute({name:'draft.createUpscale',payload:{versionId:f.asset.versionId,shotId:f.shotId}});
+    expect(await f.service.draft(draftId)).toMatchObject({project_id:f.projectId,shot_id:f.shotId,target_asset_id:f.asset.assetId,state:'EDITING'});
+    expect((await f.service.draftInputs(draftId)).map(r=>r.version_id)).toEqual([f.asset.versionId]);
+    const {projectId}=await f.execute({name:'project.create',payload:{title:'Other'}});
+    await expect(f.execute({name:'draft.createUpscale',payload:{versionId:f.asset.versionId,shotId:f.shotId,projectId}})).rejects.toThrow('SHOT_SCOPE_MISMATCH');
+    expect(f.db.getAllSync('SELECT id FROM creative_generation_drafts')).toHaveLength(1);
+    expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
+  }finally{f.db.close();}
+});
+
 test('draft references are frozen, survive reopening and repeated creation is idempotent', async () => {
   const f = await fixture();
   try {

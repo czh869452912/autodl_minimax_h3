@@ -12,13 +12,13 @@ export default function TabsLayout() {
   const auxiliary = !['create', 'agent'].includes(activeId);
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: COLORS.background }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, minHeight: 52 }}>
+      {activeId!=='create'?<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, minHeight: 48 }}>
         {auxiliary ? <Pressable accessibilityRole="button" accessibilityLabel="返回工作台" style={{ minHeight: 48, minWidth: 48, justifyContent: 'center' }} onPress={() => router.canGoBack() ? router.back() : router.navigate('/(tabs)/create')}><AppIcon name="arrow_back" size={22} /></Pressable> : <AppIcon name="auto_awesome" size={21} color={COLORS.primaryActive} />}
-        <Text style={{ flex: 1, color: COLORS.text, fontSize: 15, fontWeight: '700' }}>{activeId === 'agent' ? 'Agent 工作台' : activeId === 'create' ? '手工工作台' : ({assets:'素材',projects:'项目',tasks:'任务',settings:'设置',gallery:'历史作品'} as Record<string,string>)[activeId]}</Text>
+        <Text style={{ flex: 1, color: COLORS.text, fontSize: 15, fontWeight: '700' }}>{activeId === 'agent' ? 'Agent 工作台' : ({assets:'素材',projects:'项目',tasks:'任务',settings:'设置',gallery:'历史作品'} as Record<string,string>)[activeId]}</Text>
         {!auxiliary ? <Pressable accessibilityRole="button" accessibilityLabel="打开素材库" style={{ minHeight: 48, minWidth: 48, alignItems:'center', justifyContent:'center' }} onPress={() => router.navigate('/(tabs)/assets')}><AppIcon name="grid_view" size={22} /></Pressable> : null}
         <Pressable accessibilityRole="button" accessibilityLabel="打开任务中心" style={{ minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center', gap: 2 }} onPress={() => router.navigate('/(tabs)/tasks')}><AppIcon name="list_alt" size={22} color={COLORS.primaryActive} /><Text style={{ color: COLORS.textMuted, fontSize: 10 }}>任务</Text></Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="打开设置" style={{ minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center' }} onPress={() => router.navigate('/(tabs)/settings')}><AppIcon name="settings" size={22} /></Pressable>
-      </View>
+      </View>:null}
       <Tabs
         initialRouteName="create"
         backBehavior="history"

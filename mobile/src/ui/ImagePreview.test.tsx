@@ -36,3 +36,25 @@ test('pinch-to-pan stays continuous, clamps offsets, and near-unit zoom allows a
     expect(close).toHaveBeenCalledTimes(1);
   } finally { act(() => tree?.unmount()); spy.mockRestore(); }
 });
+
+test('original comparison retains the zoomed viewport and adjacent version controls remain available',()=>{
+  const previous=jest.fn();let tree!:ReturnType<typeof create>;
+  try{
+    act(()=>{tree=create(<ImagePreview uri="file:///result.png" title="版本 2" onClose={()=>undefined} onPrevious={previous} comparison={{uri:'file:///original.png',label:'原图 · v1'}} />);});
+    const button=(label:string)=>tree.root.findAll(n=>n.props.accessibilityLabel===label && typeof n.props.onPress==='function')[0];
+    act(()=>button('放大').props.onPress());
+    const preview=()=>tree.root.findByProps({testID:'reference-image-preview'});
+    const transform=preview().props.style.transform;
+    act(()=>button('对照原图').props.onPress());
+    expect(preview().props.source.uri).toBe('file:///original.png');
+    expect(preview().props.style.transform).toEqual(transform);
+    act(()=>button('查看结果').props.onPress());
+    expect(preview().props.source.uri).toBe('file:///result.png');
+    act(()=>button('上一个版本').props.onPress());expect(previous).toHaveBeenCalledTimes(1);
+    act(()=>button('放大').props.onPress());
+    act(()=>button('对照原图').props.onPress());
+    act(()=>tree.update(<ImagePreview uri="file:///other-result.png" title="版本 3" onClose={()=>undefined} comparison={{uri:'file:///other-original.png',label:'原图 · v2'}} />));
+    expect(preview().props.source.uri).toBe('file:///other-result.png');
+    expect(preview().props.style.transform[2].scale).toBe(1);
+  }finally{act(()=>tree?.unmount());}
+});

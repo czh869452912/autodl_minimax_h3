@@ -6,6 +6,7 @@ import type {AssetVersion} from './types';
 import {creativeFiles} from './runtime';
 import {ParameterSheet,SectionHeading,TextAction} from './WorkbenchUI';
 import {creativeUI as s} from './creativeUI';
+import {novelAiDraftInput,type NovelAiDraftInput} from './novelAiProtocol';
 export type CreativeImageInfo={width:number;height:number;bytes:number;mime:string;metadata:Record<string,string>;metadataError?:boolean};
 export function imageMetadataFields(raw:Record<string,string>,recipe:Record<string,unknown>){
   let comment:Record<string,any>={};
@@ -16,7 +17,7 @@ export function imageMetadataFields(raw:Record<string,string>,recipe:Record<stri
     ['模型',comment.model??raw.Source??input?.model],['Effort',input?.effort],
     ['正面提示词',caption?.base_caption??comment.prompt??raw.Description??input?.prompt],
     ['负面提示词',negative?.base_caption??comment.negative_prompt??comment.uc??input?.negative],
-    ['Seed',comment.seed??input?.seed],['步数',comment.steps??input?.steps],['采样器',comment.sampler??input?.sampler],
+    ['Seed',comment.seed??(recipe.output as {seed?:number}|undefined)?.seed??input?.seed],['步数',comment.steps??input?.steps],['采样器',comment.sampler??input?.sampler],
     ['引导强度',comment.scale??input?.guidance],['Rescale',comment.cfg_rescale??input?.rescale],
     ['生成尺寸',comment.width && comment.height?`${comment.width} × ${comment.height}`:input?.width && input?.height?`${input.width} × ${input.height}`:undefined],
     ['角色',caption?.char_captions?.length?caption.char_captions:input?.characters?.length?input.characters:undefined],
@@ -25,7 +26,7 @@ export function imageMetadataFields(raw:Record<string,string>,recipe:Record<stri
     ['增强强度',input?.enhancement?input.strength:undefined],['增强噪声',input?.enhancement?input.noise:undefined],
   ].filter((row):row is [string,any]=>row[1]!==undefined && row[1]!==null && row[1]!=='').map(([label,value])=>({label,value:typeof value==='object'?JSON.stringify(value,null,2):String(value)}));
 }
-function MetadataSheet({version,onClose}:{version:AssetVersion;onClose:()=>void}){
+function MetadataSheet({version,onClose,onReuse}:{version:AssetVersion;onClose:()=>void;onReuse?:(patch:Partial<NovelAiDraftInput>)=>void}){
   const [info,setInfo]=useState<CreativeImageInfo>(),[error,setError]=useState(''),[loaded,setLoaded]=useState(false),[rawOpen,setRawOpen]=useState(false),[detailsOpen,setDetailsOpen]=useState(false),[notice,setNotice]=useState('');
   useEffect(()=>{let active=true;(async()=>{
     if(version.state!=='AVAILABLE' || !version.relativePath)throw new Error('原件待恢复，以下仅显示 App 已保存的记录');
@@ -35,6 +36,9 @@ function MetadataSheet({version,onClose}:{version:AssetVersion;onClose:()=>void}
     if(active)setInfo(value);
   })().catch(e=>{if(active)setError(e.message??'图片信息读取失败');}).finally(()=>{if(active)setLoaded(true);});return()=>{active=false;};},[version.id]);
   const raw=info && Object.keys(info.metadata).length?info.metadata:(version.recipe.raw as Record<string,string>|undefined)??{},fields=imageMetadataFields(raw,version.recipe);
+  const parsed=novelAiDraftInput.safeParse(version.recipe.input),prompt=parsed.success?parsed.data.prompt:fields.find(f=>f.label==='正面提示词')?.value;
+  const seedText=fields.find(f=>f.label==='Seed')?.value,seed=seedText!==undefined?Number(seedText):undefined;
+  const reuse=(patch:Partial<NovelAiDraftInput>)=>{onReuse?.(patch);onClose();};
   const copy=async(value:string)=>{try{await Clipboard.setStringAsync(value);setNotice('已复制');}catch{setNotice('复制失败，请重试');}};
   return <ParameterSheet fullScreen title="图片信息" description={`版本 ${version.versionNo} · 只读查看`} onClose={onClose}>
     {!loaded?<Text style={s.muted}>正在读取图片信息…</Text>:null}
@@ -47,12 +51,13 @@ function MetadataSheet({version,onClose}:{version:AssetVersion;onClose:()=>void}
     <SectionHeading title="生成信息" />
     {fields.length?fields.filter(({label})=>detailsOpen || ['模型','Effort','生成尺寸','处理'].includes(label)).map(({label,value})=><View key={label} style={{gap:4}}><View style={s.row}><Text style={s.title}>{label}</Text><TextAction label={`复制${label}`} onPress={()=>void copy(value)} /></View><Text selectable style={s.body}>{value.length>12000?`${value.slice(0,12000)}\n…显示已截断，可复制完整内容。`:value}</Text></View>):<Text style={s.muted}>没有找到生成参数。图片仍可查看和超分。</Text>}
     <TextAction label={detailsOpen?'收起生成参数':'查看提示词与全部参数'} onPress={()=>setDetailsOpen(!detailsOpen)} />
+    {onReuse?<View style={{gap:4}}><SectionHeading title="复用到下一次创作" /><Text style={s.muted}>仅替换所选内容，可在工作台撤销。</Text>{prompt!==undefined?<TextAction label="仅复用提示词" onPress={()=>reuse({prompt})} />:null}{seed!==undefined && Number.isInteger(seed) && seed>=0 && seed<=4294967295?<TextAction label="仅复用 Seed" onPress={()=>reuse({seed})} />:null}{parsed.success?<TextAction label="复用完整配置" onPress={()=>reuse({...parsed.data,...(parsed.data.enhancement || parsed.data.enhance?{action:'generate' as const,enhance:false,enhancement:null,sourceVersionId:null,maskVersionId:null,maskStrokes:[]}:{}),...(seed!==undefined && Number.isInteger(seed) && seed>=0 && seed<=4294967295?{seed}:{})})} />:<Text style={s.muted}>缺少完整配方，暂不能复用全部配置。</Text>}</View>:null}
     {Array.isArray(version.recipe.notices)?version.recipe.notices.map((n,i)=><Text key={i} style={s.muted}>{String(n)}</Text>):null}
     <TextAction label={rawOpen?'收起原始元数据':'查看原始元数据与配方'} onPress={()=>setRawOpen(!rawOpen)} />
     {rawOpen?<>{version.blobSha256?<><Text selectable style={s.muted}>SHA-256：{version.blobSha256}</Text><TextAction label="复制文件哈希" onPress={()=>void copy(version.blobSha256!)} /></>:null}<TextAction label="复制完整元数据与配方" onPress={()=>void copy(JSON.stringify({file:info?{width:info.width,height:info.height,mime:info.mime,bytes:info.bytes}:null,embedded:info?.metadata??null,recipe:version.recipe},null,2))} /><Text selectable style={s.muted}>{JSON.stringify({embedded:info?.metadata??null,recipe:version.recipe},null,2).slice(0,16000)}</Text><Text style={s.muted}>长记录在此显示前 16,000 字符，复制可获取完整内容。</Text></>:null}
   </ParameterSheet>;
 }
-export function ImageMetadataPanel({version,label="查看图片元数据"}:{version:AssetVersion;label?:string}){
+export function ImageMetadataPanel({version,label="查看图片元数据",onReuse}:{version:AssetVersion;label?:string;onReuse?:(patch:Partial<NovelAiDraftInput>)=>void}){
   const [open,setOpen]=useState(false);
-  return <><TextAction label={label} onPress={()=>setOpen(true)} />{open?<MetadataSheet key={version.id} version={version} onClose={()=>setOpen(false)} />:null}</>;
+  return <><TextAction label={label} onPress={()=>setOpen(true)} />{open?<MetadataSheet key={version.id} version={version} onClose={()=>setOpen(false)} onReuse={onReuse} />:null}</>;
 }

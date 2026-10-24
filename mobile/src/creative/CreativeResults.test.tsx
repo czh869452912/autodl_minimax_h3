@@ -69,7 +69,7 @@ test('unknown results offer original-job investigation and never resubmit a requ
   try {
     await act(async () => { tree = create(<CreativeResults draft={draft} />); });
     act(() => findButton(tree, '核查原任务').props.onPress());
-    expect(mockPush).toHaveBeenCalledWith({ pathname: '/creative-task/[id]', params: { id: 'job' } });
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/creative-task/[id]', params: { id: 'job', returnToWorkbench:'1' } });
     expect(mockExecute).not.toHaveBeenCalled();
     expect(JSON.stringify(tree.toJSON())).toContain('暂时无法确认结果');
     act(() => findButton(tree, '任务与草稿操作').props.onPress());

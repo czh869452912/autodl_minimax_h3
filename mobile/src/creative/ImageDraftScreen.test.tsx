@@ -6,9 +6,14 @@ import { defaultNovelAiDraft } from './novelAiProtocol';
 import { createEnhanceInput } from './novelAiEnhancement';
 
 let mockDraft: any;
-const mockExecute = jest.fn(async (command: any) => { mockDraft = { ...mockDraft, input_json: JSON.stringify(command.payload.input), revision: mockDraft.revision + 1 }; return { status: 'completed', value: {} }; });
-const mockPrepare = jest.fn(async (_id: string) => ({ account: { credential_generation_id: 'test-account' }, prepared: { inputSnapshot: { seed: 1 } } }));
-jest.mock('./runtime', () => ({ creativeService: () => ({ draft: async () => mockDraft, draftInputs: async () => [], execute: mockExecute }), creativeFiles: () => ({ verify: async () => ({ state: 'AVAILABLE' }) }) }));
+let mockPreparedInput:any;
+let mockPrevious:any[]=[];
+const mockExecute = jest.fn(async (command: any) => {
+  if(command.name==='draft.copySubmitted'){mockPrevious.push(mockDraft);mockDraft={...mockDraft,id:'next-draft',revision:0,state:'EDITING',job_id:null};return {status:'completed',value:{draftId:mockDraft.id}};}
+  mockDraft = { ...mockDraft, input_json: JSON.stringify(command.payload.input), revision: mockDraft.revision + 1 }; return { status: 'completed', value: {} };
+});
+const mockPrepare = jest.fn(async (_id: string) => {mockPreparedInput=JSON.parse(mockDraft.input_json);return { account: { credential_generation_id: 'test-account' }, prepared: { inputSnapshot: { seed: 1 } } };});
+jest.mock('./runtime', () => ({ creativeService: () => ({ draft: async () => mockDraft, drafts:async()=>[mockDraft,...mockPrevious], versions:async()=>[], draftInputs: async () => [], execute: mockExecute }), creativeFiles: () => ({ verify: async () => ({ state: 'AVAILABLE' }) }) }));
 jest.mock('./novelAiRuntime', () => ({ prepareCreativeImage: (id: string) => mockPrepare(id), confirmCreativeImage: jest.fn() }));
 jest.mock('./CreativeResults', () => ({ CreativeResults: () => null }));
 jest.mock('./CreativeAccountPanel', () => ({ CreativeAccountPanel: () => null }));
@@ -21,7 +26,71 @@ jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('reac
 beforeEach(() => {
   jest.useFakeTimers(); jest.clearAllMocks();
   mockDraft = { id: 'd', provider_id: 'novelai', state: 'EDITING', revision: 0, input_json: JSON.stringify(defaultNovelAiDraft) };
+  mockPrevious=[];
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+});
+
+test('switching history exits Enhance and cannot submit the previously selected source',async()=>{
+  NativeModules.AutoDLMedia={readCreativeImageInfo:jest.fn(async()=>({width:832,height:1216}))};
+  mockDraft.input_json=JSON.stringify({...defaultNovelAiDraft,prompt:'next scene'});
+  const source:any={id:'v2',assetId:'asset',versionNo:2,state:'AVAILABLE',relativePath:'2.png',recipe:{input:defaultNovelAiDraft}};
+  let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<ImageDraftScreen id="d" />);});
+    const results=()=>tree.root.findByType(require('./CreativeResults').CreativeResults);
+    act(()=>results().props.onCurrentVersion(source));
+    await act(async()=>results().props.onEnhance(source));
+    expect(button(tree,'增强图片')).toBeDefined();
+    act(()=>results().props.onCurrentVersion({...source,id:'v1',versionNo:1}));
+    expect(button(tree,'增强图片')).toBeUndefined();
+    expect(button(tree,'生成 1 张图片')).toBeDefined();
+    expect(tree.root.findAllByType(TextInput).find(n=>n.props.accessibilityLabel==='图片提示词')?.props.value).toBe('next scene');
+    expect(mockPrepare).not.toHaveBeenCalled();expect(mockExecute).not.toHaveBeenCalled();
+  }finally{act(()=>tree?.unmount());delete NativeModules.AutoDLMedia;}
+});
+
+test('editing while a request runs forks input but keeps the original job visible and submission disabled',async()=>{
+  mockDraft={...mockDraft,state:'SUBMITTED',job_id:'running-job',target_asset_id:'asset',input_json:JSON.stringify({...defaultNovelAiDraft,prompt:'submitted scene'})};
+  let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<ImageDraftScreen id="d" />);});
+    const results=()=>tree.root.findByType(require('./CreativeResults').CreativeResults);
+    act(()=>results().props.onJobStatus('RUNNING'));
+    const field=()=>tree.root.findAllByType(TextInput).find(n=>n.props.accessibilityLabel==='图片提示词')!;
+    expect(field().props.editable).toBe(true);
+    act(()=>field().props.onChangeText('next scene'));
+    await act(async()=>jest.advanceTimersByTime(650));
+    expect(JSON.parse(mockPrevious[0].input_json).prompt).toBe('submitted scene');
+    expect(JSON.parse(mockDraft.input_json).prompt).toBe('next scene');
+    expect(results().props.draft.job_id).toBe('running-job');
+    expect(button(tree,'生成 1 张图片').props.disabled).toBe(true);
+    await act(async()=>button(tree,'生成 1 张图片').props.onPress());
+    expect(mockPrepare).not.toHaveBeenCalled();
+  }finally{act(()=>tree?.unmount());}
+});
+
+test('back closes inline settings before attempting to leave the workspace',async()=>{
+  let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<ImageDraftScreen id="d" />);});
+    act(()=>button(tree,'生成设置').props.onPress());
+    const prevent=require('expo-router/react-navigation').usePreventRemove as jest.Mock;
+    act(()=>prevent.mock.calls.at(-1)[1]({data:{action:{type:'GO_BACK'}}}));
+    expect(button(tree,'关闭生成设置')).toBeUndefined();
+    expect(Alert.alert).not.toHaveBeenCalled();expect(mockExecute).not.toHaveBeenCalled();
+  }finally{act(()=>tree?.unmount());}
+});
+
+test('closing a prepared enhancement persists ordinary input so returning does not reopen the discarded tool',async()=>{
+  mockDraft.input_json=JSON.stringify(createEnhanceInput({...defaultNovelAiDraft,prompt:'scene'},'source',832,1216));
+  let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<ImageDraftScreen id="d" />);});
+    act(()=>button(tree,'关闭增强').props.onPress());
+    await act(async()=>jest.advanceTimersByTime(650));
+    expect(JSON.parse(mockDraft.input_json)).toMatchObject({action:'generate',enhance:false,enhancement:null,sourceVersionId:null,prompt:'scene'});
+    expect(mockPrepare).not.toHaveBeenCalled();
+  }finally{act(()=>tree?.unmount());}
 });
 afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); });
 
@@ -85,7 +154,7 @@ test('Enhance panel edits scale, magnitude and advanced parameters before direct
     act(()=>noise.props.onChangeText('0.05'));
     expect(mockPrepare).not.toHaveBeenCalled();
     await act(async()=>button(tree,'增强图片').props.onPress());
-    expect(JSON.parse(mockDraft.input_json)).toMatchObject({enhancement:{scale:'1.5'},enhance:false,width:1280,height:1856,strength:0.35,noise:0.05,samples:1});
+    expect(mockPreparedInput).toMatchObject({enhancement:{scale:'1.5'},enhance:false,width:1280,height:1856,strength:0.35,noise:0.05,samples:1});
     expect(mockPrepare).toHaveBeenCalledTimes(1);
     expect(Alert.alert).not.toHaveBeenCalled();
     expect(require('./novelAiRuntime').confirmCreativeImage).toHaveBeenCalledTimes(1);

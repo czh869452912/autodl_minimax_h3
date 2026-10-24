@@ -1,7 +1,7 @@
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { createCreativeService } from './service';
 import { defaultNovelAiDraft } from './novelAiProtocol';
-import { persistImageWorkbenchInput } from './imageWorkbenchSession';
+import { persistImageWorkbenchInput, persistVideoWorkbenchInput } from './imageWorkbenchSession';
 
 let mockService: ReturnType<typeof createCreativeService>;
 jest.mock('./runtime', () => ({ creativeService: () => mockService }));
@@ -68,4 +68,18 @@ test('switching from standalone upscale back to generation preserves the asset w
     expect(await mockService.draft(upscale.id)).toEqual(upscale);
     expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
   } finally { f.db.close(); }
+});
+
+test('a video successor preserves its frozen references and shot while the submitted request stays immutable',async()=>{
+  const f=await fixture();
+  try{
+    const {draftId}=await f.execute({name:'draft.createVideo',payload:{versionId:f.asset.versionId,projectId:f.draft.project_id!,shotId:f.draft.shot_id!}});
+    f.db.runSync("UPDATE creative_generation_drafts SET state='SUBMITTED',job_id='job' WHERE id=?",draftId);
+    const submitted=(await mockService.draft(draftId))!,input={...JSON.parse(submitted.input_json),prompt:'Next shot'};
+    const next=await persistVideoWorkbenchInput(submitted,input,()=>undefined);
+    expect(next).toMatchObject({state:'EDITING',job_id:null,project_id:submitted.project_id,shot_id:submitted.shot_id});
+    expect((await mockService.draftInputs(next.id)).map(r=>r.version_id)).toEqual([f.asset.versionId]);
+    expect(await mockService.draft(draftId)).toEqual(submitted);
+    expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
+  }finally{f.db.close();}
 });

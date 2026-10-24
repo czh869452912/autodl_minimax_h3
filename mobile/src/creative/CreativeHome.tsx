@@ -1,79 +1,82 @@
 import { readCreativeIdea, writeCreativeIdea, type CreativeIdea } from './creativeIdea';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { creativeService } from './runtime';
 import { defaultNovelAiDraft } from './novelAiProtocol';
 import type { CreativeDraft } from './drafts';
 import { createId } from '../ids';
-import { ListAction } from '../ui/ListPageUI';
 import { creativeUI as s } from './creativeUI';
-import { SectionHeading, SegmentedChoices, SettingRow, TextAction } from './WorkbenchUI';
+import { CompactWorkbench, IconAction, ParameterSheet, SegmentedChoices, TextAction, WorkbenchNavigationContext } from './WorkbenchUI';
 import { MediaPreview } from './MediaPreview';
+import { ImageDraftScreen } from './ImageDraftScreen';
+import { VideoDraftScreen } from './VideoDraftScreen';
+import { CreativeAccountPanel } from './CreativeAccountPanel';
+import { groupWorkbenchDrafts, recentWorkbenchDraft, type WorkbenchMode } from './workbenchSessions';
 import type { AssetVersion } from './types';
 import { COLORS } from '../ui/theme';
 
-function RecentCreation({ draft, onPress }: { draft: CreativeDraft; onPress: () => void }) {
-  const input=JSON.parse(draft.input_json),name=input.operation==='upscale'?'图片超分 · 2×':input.prompt||'新的灵感';
+function RecentCreation({ draft, generations, onPress }: { draft: CreativeDraft; generations:number; onPress: () => void }) {
+  const input=JSON.parse(draft.input_json);
   const [version, setVersion] = useState<AssetVersion>();
   useEffect(() => {
     let active = true;
-    if (draft.target_asset_id) void creativeService().versions(draft.target_asset_id).then(rows => { if (active) setVersion(rows.find(v => v.recipe.jobId === draft.job_id) ?? rows[0]); }).catch(() => undefined);
+    if (draft.target_asset_id) void creativeService().versions(draft.target_asset_id).then(rows => { if (active) setVersion(rows[0]); }).catch(() => undefined);
     return () => { active = false; };
-  }, [draft.target_asset_id, draft.job_id, draft.revision]);
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${draft.state === 'EDITING' ? '继续编辑' : '查看这次创作'}：${name}`} onPress={onPress} style={({pressed}) => [{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border, opacity: pressed ? 0.65 : 1 }]}>
-    <MediaPreview version={version} kind={draft.provider_id === 'novelai' ? 'image' : 'video'} label="创作预览" style={{ width: 72, aspectRatio: 1 }} />
-    <View style={{ flex: 1, gap: 4 }}><Text style={[s.body, { fontWeight: '600' }]} numberOfLines={2}>{name}</Text><Text style={s.muted}>{draft.provider_id === 'novelai' ? '图片' : '视频'} · {draft.state === 'EDITING' ? '草稿 · 继续编辑' : version ? '查看成果' : '查看生成进度'}</Text></View>
+  }, [draft.target_asset_id, draft.revision]);
+  const name=input.prompt || (version?.recipe.input as {prompt?:string}|undefined)?.prompt || '未命名创作';
+  return <Pressable accessibilityRole="button" accessibilityLabel={`继续创作：${name}`} onPress={onPress} style={({pressed}) => ({ flexDirection:'row',alignItems:'center',gap:10,paddingVertical:8,borderBottomWidth:1,borderBottomColor:COLORS.border,opacity:pressed?0.65:1 })}>
+    <MediaPreview version={version} kind={draft.provider_id==='novelai'?'image':'video'} label="创作预览" style={{width:52,aspectRatio:1,borderRadius:6}} />
+    <View style={{flex:1,gap:3}}><Text style={s.body} numberOfLines={2}>{name}</Text><Text style={s.muted}>{generations?`${generations} 次生成`:'草稿'}{draft.state==='EDITING'?' · 有可编辑输入':''}</Text></View>
   </Pressable>;
 }
 
 export function CreativeHome({ onLegacyVideo }: { onLegacyVideo: () => void }) {
-  const router = useRouter();
-  const [idea, setIdea] = useState<CreativeIdea>({ mode: 'image', image: '', video: '' });
-  const [ideaReady, setIdeaReady] = useState(false), [ideaError, setIdeaError] = useState('');
-  const ideaRef = useRef(idea); ideaRef.current = idea;
-  const mode = idea.mode, prompt = idea[mode];
-  useEffect(() => { let active = true; void readCreativeIdea().then(value => { if (active) { setIdea(value); setIdeaReady(true); } }).catch(e => { if (active) setIdeaError('首页描述读取失败，请重试恢复'); }); return () => { active = false; }; }, []);
-  const updateIdea = (patch: Partial<CreativeIdea>) => {
-    const next = { ...ideaRef.current, ...patch }; ideaRef.current = next; setIdea(next);
-    void writeCreativeIdea(next).then(() => setIdeaError('')).catch(() => setIdeaError('首页描述未能保存，请先进入工作台保存草稿。'));
+  const router=useRouter();
+  const [idea,setIdea]=useState<CreativeIdea>({mode:'image',image:'',video:''});
+  const [ready,setReady]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const [active,setActive]=useState<Partial<Record<WorkbenchMode,CreativeDraft>>>({});
+  const [drafts,setDrafts]=useState<CreativeDraft[]>([]),[records,setRecords]=useState(false),[account,setAccount]=useState(false);
+  const lock=useRef(false),leave=useRef<()=>Promise<boolean>>(async()=>true),activeRef=useRef(active);activeRef.current=active;
+  const navigation=useMemo(()=>({register:(guard:()=>Promise<boolean>)=>{leave.current=guard;return()=>{if(leave.current===guard)leave.current=async()=>true;};}}),[]);
+  const refresh=async()=>{const rows=await creativeService().drafts();setDrafts(rows);return rows;};
+  useEffect(()=>{let live=true;void readCreativeIdea().then(value=>{if(live){setIdea(value);setReady(true);}}).catch(()=>{if(live)setError('工作区恢复失败，请重试');});return()=>{live=false;};},[]);
+  useFocusEffect(useCallback(()=>{let live=true;void creativeService().drafts().then(rows=>{if(live)setDrafts(rows);}).catch(()=>{if(live)setError('创作记录读取失败');});return()=>{live=false;};},[]));
+  const createDraft=async(mode:WorkbenchMode)=>{
+    const result=await creativeService().execute(mode==='image'?{name:'draft.createImage',payload:{input:{...defaultNovelAiDraft,prompt:idea.image}}}:{name:'draft.createVideo',payload:{prompt:idea.video}},createId());
+    if(result.status!=='completed')throw new Error('无法创建工作区');
+    const row=await creativeService().draft(result.value.draftId);if(!row)throw new Error('工作区读取失败');
+    const next={...idea,[mode]:''};await writeCreativeIdea(next);setIdea(next);return row;
   };
-  const setMode = (mode: 'image' | 'video') => updateIdea({ mode });
-  const setPrompt = (prompt: string) => updateIdea({ [mode]: prompt });
-  const [drafts, setDrafts] = useState<CreativeDraft[]>([]);
-  const [error, setError] = useState('');
-  const [toolsOpen,setToolsOpen]=useState(false);
-  const [busy, setBusy] = useState(false);
-  const lock = useRef(false);
-  useFocusEffect(useCallback(() => {
-    let active = true;
-    void creativeService().drafts().then(rows => { if (active) setDrafts(rows); }).catch(() => { if (active) setError('草稿读取失败，请重新进入此页重试'); });
-    return () => { active = false; };
-  }, []));
-  const start = async () => {
-    if (lock.current || !ideaReady) return;
-    lock.current = true; setBusy(true); setError('');
-    try {
-      const result = await creativeService().execute(mode === 'image'
-        ? { name: 'draft.createImage', payload: { input: { ...defaultNovelAiDraft, prompt } } }
-        : { name: 'draft.createVideo', payload: { prompt } }, createId());
-      if (result.status === 'completed') { setPrompt(''); router.push({ pathname: mode === 'image' ? '/image-draft/[id]' : '/creative-draft/[id]', params: { id: result.value.draftId } }); }
-    } catch (e) { setError(e instanceof Error ? e.message : '无法创建草稿，输入仍保留'); }
-    finally { lock.current = false; setBusy(false); }
+  useEffect(()=>{
+    if(!ready || activeRef.current[idea.mode] || lock.current)return;
+    let live=true;lock.current=true;setBusy(true);
+    void (async()=>{const rows=await creativeService().drafts();const row=await recentWorkbenchDraft(idea.mode,rows)??await createDraft(idea.mode);if(live){setDrafts(rows);setActive(old=>({...old,[idea.mode]:row}));}})().catch(e=>{if(live)setError(e.message??'工作区读取失败');}).finally(()=>{lock.current=false;if(live)setBusy(false);});
+    return()=>{live=false;};
+  },[ready,idea.mode]);
+  const change=async(action:()=>Promise<void>)=>{
+    if(lock.current)return;
+    lock.current=true;setBusy(true);setError('');
+    try{if(!await leave.current())throw new Error('请等待输入保存，或先处理工作区中的错误');await action();}
+    catch(e){setError(e instanceof Error?e.message:'无法切换工作区');}
+    finally{lock.current=false;setBusy(false);}
   };
-  return <View style={s.screen}><ScrollView contentContainerStyle={s.content}>
-    <View style={{gap:8}}><Text accessibilityRole="header" style={s.heading}>专注完成一个画面</Text><Text style={s.muted}>你来选择参数与生成时机，助手可以帮你完善描述。</Text></View>
-    <SegmentedChoices label="创作类型" options={[{id:'image',label:'图片',icon:'image'},{id:'video',label:'视频',icon:'movie_filter'}]} value={mode} disabled={!ideaReady || busy} onChange={setMode} />
-    <ListAction label={busy?'正在准备…':mode==='image'?'进入图片工作台':'进入视频工作台'} disabled={busy || !ideaReady} onPress={()=>void start()} />
-    {prompt?<Text style={s.muted}>上次未完成的描述会带入新草稿：{prompt.slice(0,100)}</Text>:null}
-    {ideaError?<Text accessibilityRole="alert" style={s.error}>{ideaError}</Text>:null}
-    {!ideaReady && ideaError?<TextAction label="重试恢复首页描述" onPress={()=>void readCreativeIdea().then(value=>{setIdea(value);setIdeaReady(true);setIdeaError('');}).catch(()=>setIdeaError('读取失败，请重试'))} />:null}
-    {error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}
-    <View style={{gap:4}}><View style={s.row}><SectionHeading title="继续创作" /><TextAction label="全部记录" onPress={()=>router.push('/creative-drafts')} /></View>
-      {drafts.slice(0,6).map(d=><RecentCreation key={d.id} draft={d} onPress={()=>router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}})} />)}
-      {!drafts.length?<Text style={s.muted}>从一张图开始，草稿和成果会自动保留在这里。</Text>:null}
-    </View>
-    <SettingRow label="工具与项目" value="项目管理 · 工作流视频编辑器" expanded={toolsOpen} onPress={()=>setToolsOpen(!toolsOpen)} />
-    {toolsOpen?<View style={{gap:4}}><TextAction label="管理项目与分镜" onPress={()=>router.push('/(tabs)/projects')} /><TextAction label="使用工作流视频编辑器" onPress={onLegacyVideo} /></View>:null}
-  </ScrollView></View>;
+  const chooseMode=(mode:WorkbenchMode)=>{if(mode===idea.mode)return;void change(async()=>{const rows=await refresh(),restored=await recentWorkbenchDraft(mode,rows),row=restored??await createDraft(mode);const next=restored?{...idea,mode}:{...idea,mode,[mode]:''};await writeCreativeIdea(next);setActive(old=>({...old,[mode]:row}));setIdea(next);});};
+  const mode=idea.mode,groups=groupWorkbenchDrafts(drafts,mode),current=active[mode];
+  return <CompactWorkbench><View style={s.screen}>
+    <View style={{flexDirection:'row',alignItems:'center',gap:4,paddingHorizontal:8,borderBottomWidth:1,borderBottomColor:COLORS.border}}><View style={{flex:1}}><SegmentedChoices label="创作类型" options={[{id:'image',label:'图片'},{id:'video',label:'视频'}]} value={mode} disabled={!ready || busy} onChange={chooseMode} /></View><IconAction label="新建创作" icon="add" disabled={busy || !ready} onPress={()=>void change(async()=>{const row=await createDraft(mode);setActive(old=>({...old,[mode]:row}));})} /><IconAction label="创作记录与导航" icon="grid_view" onPress={()=>{setRecords(true);void refresh().catch(()=>setError('创作记录读取失败'));}} /><IconAction label="创作账号" icon="key" onPress={()=>setAccount(true)} /></View>
+    {error?<View style={{paddingHorizontal:12,paddingVertical:4}}><Text accessibilityRole="alert" style={s.error}>{error}</Text>{!current?<TextAction label="重试恢复工作区" onPress={()=>{setReady(false);void readCreativeIdea().then(value=>{setIdea(value);setError('');setReady(true);}).catch(()=>setError('工作区恢复失败'));}} />:null}</View>:null}
+    <WorkbenchNavigationContext.Provider value={navigation}>{current?mode==='image'?<ImageDraftScreen key={current.id} id={current.id} embedded />:<VideoDraftScreen key={current.id} id={current.id} embedded />:<View style={{flex:1,alignItems:'center',justifyContent:'center'}}><ActivityIndicator /><Text style={s.muted}>正在恢复工作区…</Text></View>}</WorkbenchNavigationContext.Provider>
+    {records?<ParameterSheet title="创作记录" description={mode==='image'?'图片创作 · 每组包含输入、任务和版本':'视频创作 · 每组包含输入、任务和版本'} onClose={()=>setRecords(false)}>
+      {groups.slice(0,20).map(group=><RecentCreation key={group.draft.id} {...group} onPress={()=>void change(async()=>{const rows=await refresh();const selected=group.draft.target_asset_id?groupWorkbenchDrafts(rows,mode).find(g=>g.draft.target_asset_id===group.draft.target_asset_id && g.draft.project_id===group.draft.project_id && g.draft.shot_id===group.draft.shot_id)?.draft:rows.find(d=>d.id===group.draft.id);setActive(old=>({...old,[mode]:selected??group.draft}));setRecords(false);})} />)}
+      {!groups.length?<Text style={s.muted}>完成编辑或生成后，创作会保存在这里。</Text>:null}
+      <TextAction label="全部任务与草稿" onPress={()=>{setRecords(false);router.push('/creative-drafts');}} />
+      <TextAction label="素材库" onPress={()=>{setRecords(false);router.push('/(tabs)/assets');}} />
+      <TextAction label="任务中心" onPress={()=>{setRecords(false);router.push('/(tabs)/tasks');}} />
+      <TextAction label="项目与分镜" onPress={()=>{setRecords(false);router.push('/(tabs)/projects');}} />
+      <TextAction label="设置" onPress={()=>{setRecords(false);router.push('/(tabs)/settings');}} />
+      <TextAction label="工作流视频编辑器" onPress={()=>void change(async()=>{setRecords(false);onLegacyVideo();})} />
+    </ParameterSheet>:null}
+    {account?<ParameterSheet title="创作账号" onClose={()=>setAccount(false)}><CreativeAccountPanel provider={mode==='image'?'novelai':'autodl'} /></ParameterSheet>:null}
+  </View></CompactWorkbench>;
 }

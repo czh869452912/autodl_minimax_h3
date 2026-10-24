@@ -1,10 +1,15 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppIcon, type IconName } from '../ui/icons';
 import { COLORS } from '../ui/theme';
 
 const DensityContext = createContext(false);
+export const WorkbenchNavigationContext=createContext<{register:(guard:()=>Promise<boolean>)=>()=>void}|null>(null);
+export function useWorkbenchLeave(guard:()=>Promise<boolean>){
+  const context=useContext(WorkbenchNavigationContext),latest=useRef(guard);latest.current=guard;
+  useEffect(()=>context?.register(()=>latest.current()),[context]);
+}
 export function CompactWorkbench({children}:{children:ReactNode}) { return <DensityContext.Provider value>{children}</DensityContext.Provider>; }
 export const useCompactWorkbench = () => useContext(DensityContext);
 
@@ -16,7 +21,8 @@ export function TextAction({ label, onPress, disabled = false, icon }: { label: 
 }
 
 export function SettingRow({ label, value, onPress, expanded, disabled = false, icon }: { label: string; value?: string; onPress: () => void; expanded?: boolean; disabled?: boolean; icon?: IconName }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={value ? `${label}，${value}` : label} accessibilityState={{ disabled, ...(expanded === undefined ? {} : { expanded }) }} disabled={disabled} onPress={onPress} style={({ pressed }) => [w.setting, pressed && w.pressed, disabled && w.disabled]}>
+  const compact=useCompactWorkbench();
+  return <Pressable accessibilityRole="button" accessibilityLabel={value ? `${label}，${value}` : label} accessibilityState={{ disabled, ...(expanded === undefined ? {} : { expanded }) }} disabled={disabled} onPress={onPress} style={({ pressed }) => [w.setting,compact && {paddingVertical:6,minHeight:44}, pressed && w.pressed, disabled && w.disabled]}>
     {icon ? <AppIcon name={icon} size={21} /> : null}
     <View style={{ flex: 1, gap: 2 }}><Text style={w.settingLabel}>{label}</Text>{value ? <Text style={w.caption}>{value}</Text> : null}</View>
     <AppIcon name={expanded === undefined ? 'chevron_right' : expanded ? 'expand_less' : 'expand_more'} size={21} />
@@ -58,7 +64,7 @@ export const w = StyleSheet.create({
   caption: { fontSize: 13, lineHeight: 20, color: COLORS.textMuted },
   textAction: { minHeight: 48, paddingHorizontal: 4, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, flexShrink: 1 },
   actionText: { fontSize: 14, lineHeight: 21, color: COLORS.primaryActive, fontWeight: '600', flexShrink: 1 },
-  setting: { minHeight: 56, flexDirection: 'row', gap: 12, alignItems: 'center', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.border },
+  setting: { minHeight: 48, flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.border },
   settingLabel: { color: COLORS.text, fontSize: 15, lineHeight: 22, fontWeight: '600' },
   segments: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, padding: 4, backgroundColor: COLORS.surfaceRaised, borderRadius: 14 },
   segment: { minHeight: 48, flexGrow: 1, flexBasis: 72, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', padding: 10, borderRadius: 10 },
@@ -66,7 +72,7 @@ export const w = StyleSheet.create({
   segmentText: { fontSize: 14, fontWeight: '500', color: COLORS.textMuted, textAlign: 'center', flexShrink: 1 },
   segmentTextSelected: { fontWeight: '700', color: COLORS.primaryActive },
   modal: { flex: 1, justifyContent: 'flex-end', backgroundColor: COLORS.scrim, paddingTop: 48 },
-  sheet: { maxHeight: '92%', backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
-  sheetHeader: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomColor: COLORS.border, borderBottomWidth: StyleSheet.hairlineWidth },
+  sheet: { maxHeight: '92%', backgroundColor: COLORS.surface, borderTopLeftRadius: 12, borderTopRightRadius: 12, overflow: 'hidden' },
+  sheetHeader: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomColor: COLORS.border, borderBottomWidth: StyleSheet.hairlineWidth },
   pressed: { opacity: 0.65 }, disabled: { opacity: 0.45 },
 });

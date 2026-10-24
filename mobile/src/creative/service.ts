@@ -56,7 +56,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
     shots: (projectId: string) => listCreativeShots(db, projectId),
     draft: (id: string) => readCreativeDraft(db, id),
     draftInputs: (id: string) => readDraftInputs(db, id),
-    drafts: (projectId?: string) => db.getAllAsync<import('./drafts').CreativeDraft>("SELECT * FROM creative_generation_drafts WHERE (? IS NULL OR project_id=?) AND state!='DISCARDED' ORDER BY updated_at DESC,id DESC LIMIT 100", projectId ?? null, projectId ?? null),
+    drafts: (projectId?: string) => db.getAllAsync<import('./drafts').CreativeDraft>("SELECT d.*,EXISTS(SELECT 1 FROM creative_draft_inputs i WHERE i.draft_id=d.id) AS has_inputs FROM creative_generation_drafts d WHERE (? IS NULL OR project_id=?) AND state!='DISCARDED' ORDER BY updated_at DESC,id DESC LIMIT 100", projectId ?? null, projectId ?? null),
     async projects(archived = false): Promise<CreativeProject[]> { return (await db.getAllAsync<Row>('SELECT * FROM creative_projects WHERE (archived_at IS NOT NULL)=? ORDER BY updated_at DESC,id DESC', archived ? 1 : 0)).map(project); },
     async project(id: string) { const row = await db.getFirstAsync<Row>('SELECT * FROM creative_projects WHERE id=?', id); return row ? project(row) : undefined; },
     async isTrashed(id: string) { return Boolean(await db.getFirstAsync('SELECT asset_id FROM creative_asset_trash WHERE asset_id=?', id)); },

@@ -7,7 +7,7 @@ import {novelAiUpscaleInput} from './novelAiUpscale';
 const id = z.string().min(1).max(200), revision = z.number().int().nonnegative();
 export const videoDraftInput = z.object({ schemaVersion: z.literal(1).default(1), prompt: z.string().max(10000), resolution: z.enum(RESOLUTION_OPTIONS), duration: z.number().int().min(1).max(15), seed: z.string().regex(/^$|^\d{1,15}$/) }).strict();
 export const draftSchemas = {
-  'draft.createUpscale':z.object({versionId:id,projectId:id.optional()}).strict(),
+  'draft.createUpscale':z.object({versionId:id,projectId:id.optional(),shotId:id.optional()}).strict(),
   'draft.copySubmitted':z.object({id}).strict(),
   'draft.createImage': z.object({ projectId: id.optional(), shotId: id.optional(), input: novelAiDraftInput.optional(), fromVersionId: id.optional() }).strict(),
   'draft.updateImage': z.object({ id, expectedRevision: revision, input: novelAiDraftInput }).strict(),
@@ -17,7 +17,7 @@ export const draftSchemas = {
   'draft.discard': z.object({ id, expectedRevision: revision }).strict(),
 };
 export type DraftCommand = { [K in keyof typeof draftSchemas]: { name: K; payload: z.input<typeof draftSchemas[K]> } }[keyof typeof draftSchemas];
-export type CreativeDraft = { id: string; project_id: string | null; shot_id: string | null; target_asset_id: string | null; provider_id: string; workflow_id: string; input_json: string; revision: number; state: string; job_id: string | null };
+export type CreativeDraft = { id: string; project_id: string | null; shot_id: string | null; target_asset_id: string | null; provider_id: string; workflow_id: string; input_json: string; revision: number; state: string; job_id: string | null; has_inputs?:number };
 export function readCreativeDraft(db: AppDatabase, id: string) { return db.getFirstAsync<CreativeDraft>('SELECT * FROM creative_generation_drafts WHERE id=?', id); }
 export function readDraftInputs(db: AppDatabase, id: string) { return db.getAllAsync<{ version_id: string; ordinal: number; blob_sha256: string; relative_path: string; mime: string; byte_size: number; state: string }>(`SELECT i.*,f.blob_sha256,f.state,b.relative_path,b.mime,b.byte_size FROM creative_draft_inputs i LEFT JOIN creative_version_files f ON f.version_id=i.version_id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE draft_id=? ORDER BY ordinal`, id); }
 export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, now: number, makeId: () => string): Promise<Record<string,string>> {
@@ -41,11 +41,17 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     return {draftId,provider:source.provider_id,supersedesJobId:source.job_id};
   }
   if(name==='draft.createUpscale'){
-    await project(p.projectId??null);
+    let projectId=p.projectId??null;
+    if(p.shotId){
+      const shot=await tx.getFirstAsync<{project_id:string}>('SELECT project_id FROM creative_shots WHERE id=? AND deleted_at IS NULL',p.shotId);
+      if(!shot || (projectId && projectId!==shot.project_id))throw new Error('SHOT_SCOPE_MISMATCH');
+      projectId=shot.project_id;
+    }
+    await project(projectId);
     const version=await tx.getFirstAsync<{asset_id:string}>("SELECT v.asset_id FROM creative_asset_versions v JOIN creative_assets a ON a.id=v.asset_id WHERE v.id=? AND a.kind='image' AND NOT EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=a.id)",p.versionId);
     if(!version)throw new Error('IMAGE_VERSION_NOT_FOUND');
     const draftId=makeId(),input=novelAiUpscaleInput.parse({operation:'upscale',sourceVersionId:p.versionId});
-    await tx.runAsync("INSERT INTO creative_generation_drafts VALUES(?,?,NULL,?,'novelai','novelai-image-basic',?,0,'EDITING',NULL,?,?)",draftId,p.projectId??null,version.asset_id,JSON.stringify(input),now,now);
+    await tx.runAsync("INSERT INTO creative_generation_drafts VALUES(?,?,?,?,'novelai','novelai-image-basic',?,0,'EDITING',NULL,?,?)",draftId,projectId,p.shotId??null,version.asset_id,JSON.stringify(input),now,now);
     await inputs(draftId,[p.versionId]);
     return {draftId};
   }

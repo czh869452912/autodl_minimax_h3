@@ -12,7 +12,7 @@ import { ListAction } from '../../src/ui/ListPageUI';
 import { getTaskServices } from '../../src/tasks/taskServices';
 
 export default function CreativeTask() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, returnToWorkbench } = useLocalSearchParams<{ id: string; returnToWorkbench?:string }>();
   const router = useRouter();
   const [job, setJob] = useState<JobRecord>();
   const [draft, setDraft] = useState<CreativeDraft | null>(null);
@@ -40,7 +40,7 @@ export default function CreativeTask() {
       {job.status === 'UNKNOWN' ? <Text style={s.muted}>请先核查原任务，当前页面不会重新提交生成。</Text> : null}
       <ListAction label="同步任务状态" secondary onPress={() => void getTaskServices().taskCommandService.requestRefresh({ maintenance: 'force-next-slice' }).then(() => setNotice('已请求同步任务中心状态，不会重新生成')).catch(e => setError(e.message))} />
     </View> : null}
-    {draft ? <ListAction label="返回创作与结果" onPress={() => router.push({ pathname: draft.provider_id === 'novelai' ? '/image-draft/[id]' : '/creative-draft/[id]', params: { id: draft.id } })} /> : null}
+    {draft ? <ListAction label="返回创作与结果" onPress={() => returnToWorkbench==='1' && router.canGoBack() ? router.back() : router.replace({ pathname: draft.provider_id === 'novelai' ? '/image-draft/[id]' : '/creative-draft/[id]', params: { id: draft.id } })} /> : null}
     <ListAction label="打开任务中心处理下载或异常" secondary onPress={() => router.push('/(tabs)/tasks')} />
     {notice ? <Text style={s.muted}>{notice}</Text> : null}
     {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
