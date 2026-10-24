@@ -11,9 +11,10 @@ import { taskProjectionEvents } from '../tasks/taskProjectionEvents';
 import { executorWakePort } from '../tasks/executorEvents';
 import { assertAppDatabaseWritableAsync } from '../storage/database';
 import { attachmentHashes, createAttachmentStore } from '../media/attachments';
+import type {TaskCredentialBinding} from '../tasks/credentialBinding';
 
 export async function persistSubmissionCommand(database: AppDatabase, submissionId: string, prepared: PreparedWorkflowSubmission,
-  media: { images: TaskMediaInput[]; audios: TaskMediaInput[]; handoffId?: string }, now = Date.now(),
+  media: { images: TaskMediaInput[]; audios: TaskMediaInput[]; handoffId?: string; credentialBinding?:TaskCredentialBinding }, now = Date.now(),
   bind?: (tx: AppDatabase, job: JobRecord, inserted: boolean) => Promise<void>): Promise<TaskRecord> {
   const job: JobRecord = { id: `job:${submissionId}`, revision: 0, workflowId: prepared.workflowId, workflowVersion: prepared.workflowVersion,
     workflowContentHash: prepared.workflowContentHash, adapterId: prepared.adapterId, adapterVersion: prepared.adapterVersion,
@@ -38,7 +39,7 @@ export async function persistSubmissionCommand(database: AppDatabase, submission
       }
       await db.runAsync(`INSERT INTO workflow_job_events(id,job_id,sequence,event_type,payload_json,created_at) VALUES(?,?,0,'VALIDATED',?,?)`,
         `${job.id}:event:0:validated`, job.id, JSON.stringify({ workflowContentHash: job.workflowContentHash }), now);
-      await insertWorkflowOperation(db, { id: `${job.id}:submit`, kind: 'SUBMIT', jobId: job.id, idempotencyKey: `submit:${submissionId}`, payload: { prepared }, now: now, nextRetryAt: now }, 'error');
+      await insertWorkflowOperation(db, { id: `${job.id}:submit`, kind: 'SUBMIT', jobId: job.id, idempotencyKey: `submit:${submissionId}`, payload: { prepared, ...(media.credentialBinding?{credentialBinding:media.credentialBinding}:{}) }, now: now, nextRetryAt: now }, 'error');
       await db.runAsync(`INSERT INTO tasks(id,prompt,status,resolution,duration,seed,images_json,audios_json,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,created_at,updated_at)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, task.id, task.prompt, task.status, task.resolution, task.duration, task.seed ?? null,
       JSON.stringify(media.images), JSON.stringify(media.audios), job.workflowId, job.workflowVersion, job.workflowContentHash, job.adapterId, job.adapterVersion, JSON.stringify(job.inputSnapshot), now, now);

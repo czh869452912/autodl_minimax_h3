@@ -1,4 +1,5 @@
 import {recoverUnsentCreativeJobs} from '../creative/unsentRecovery';
+import {resolveTaskCredential} from './credentialBinding';
 import { readPendingMaintenance } from '../storage/pendingMaintenance';
 import {createInputReader} from '../media/inputReader';
 import { creativeAccounts,defaultAutodlCredential } from '../creative/accountRuntime';
@@ -104,7 +105,21 @@ function createApplicationExecutor(database: AppDatabase) {
       }
       if (operation.kind !== 'ARTIFACT_DOWNLOAD') {
         const binding = operation.jobId ? await readCreativeJobBinding(database, operation.jobId) : null;
-        if (!binding) return current.durable.handle(operation, owner);
+        if (!binding) {
+          // Pin compatibility-entry submissions too; changing the default account must not redirect an existing job.
+          let exact;
+          try{exact=operation.jobId?await resolveTaskCredential(database,operation.jobId,operation.kind==='SUBMIT'?'dispatch':'query',(id,use)=>creativeAccounts(database).resolveExact(id,use)):null;}
+          catch{
+            const error={code:'TASK_CREDENTIAL_UNAVAILABLE',message:'本次任务使用的凭据不可用，请在创作账号中检查连接。',retryable:false};
+            const job=operation.jobId?await jobs.get(operation.jobId):null;
+            const unsent=operation.kind==='SUBMIT' && job?.status==='READY_TO_SUBMIT' && !job.providerHandle;
+            if(unsent)await jobs.transition({jobId:job.id,expectedRevision:job.revision,patch:{status:'FAILED',lastError:error,updatedAt:Date.now()},event:{id:operation.id+':credential-unavailable',type:'SUBMISSION_FAILED',payload:{code:error.code},createdAt:Date.now()}});
+            await operations.finish(operation.id,owner,unsent?'FAILED':'BLOCKED',Date.now(),error);return;
+          }
+          if(!exact)return current.durable.handle(operation,owner);
+          const adapters=createBuiltinProviderAdapters({readBase64:createInputReader(database),resolveCredential:kind=>kind==='autodl-token' && exact.provider==='autodl'?exact.token:undefined});
+          return createDurableExecutor({jobs,operations,adapters,runtime:createWorkflowRuntime({adapters}),credentials:{get:async()=>({ok:true})}}).handle(operation,owner);
+        }
         const boundJob = await jobs.get(operation.jobId!);
         const novelAi = boundJob?.adapterId === 'novelai-image';
         let exact: Awaited<ReturnType<ReturnType<typeof creativeAccounts>['resolveExact']>>;

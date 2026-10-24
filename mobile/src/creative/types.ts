@@ -1,6 +1,6 @@
 export type CreativeProject = { id: string; title: string; brief: string; revision: number; archivedAt?: number; createdAt: number; updatedAt: number };
 export type CreativeAsset = { id: string; kind: 'image' | 'video' | 'audio' | 'prompt' | 'document'; title: string; currentVersionId?: string; revision: number; createdAt: number; updatedAt: number };
-export type AssetVersion = { id: string; assetId: string; versionNo: number; source: 'import' | 'generated' | 'authored'; blobSha256?: string; relativePath?: string; mime?: string; state: 'AVAILABLE' | 'MISSING' | 'PENDING'; recipe: Record<string, unknown> };
+export type AssetVersion = { id: string; assetId: string; versionNo: number; createdAt?: number; source: 'import' | 'generated' | 'authored'; blobSha256?: string; relativePath?: string; mime?: string; state: 'AVAILABLE' | 'MISSING' | 'PENDING'; recipe: Record<string, unknown> };
 export type AsyncExecutionRef = { kind: 'generation'; jobId: string } | { kind: 'export'; deliveryId: string; operationId: string } | { kind: 'file_transfer'; attemptId: string; operationId: string };
 export type CommandResult<T> = { status: 'completed'; receiptId: string; value: T } | { status: 'accepted'; receiptId: string; execution: AsyncExecutionRef };
 export type CreativeCommand = import('./story').StoryCommand

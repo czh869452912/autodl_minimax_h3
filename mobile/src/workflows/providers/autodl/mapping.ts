@@ -1,13 +1,14 @@
 import type { TaskMediaInput } from '../../../media/types';
 import type { ArtifactRecord } from '../../../jobs/types';
 
-export type AutodlInput = { prompt: string; resolution: string; duration: number; seed?: number | string; images?: TaskMediaInput[]; audios?: TaskMediaInput[] };
+export type AutodlInput = Record<string, unknown> & { seed?: number | string; images?: TaskMediaInput[]; audios?: TaskMediaInput[] };
 export function buildAutodlSubmitRequest(input: AutodlInput): Record<string, unknown> {
-  const payload: Record<string, unknown> = { prompt: input.prompt, duration: input.duration, resolution: input.resolution };
+  // These are compiled provider bindings, not the editor's complete form state.
+  const { images, audios, seed: _, ...payload } = input;
   if (typeof input.seed === 'number' && Number.isFinite(input.seed)) payload.seed = input.seed;
   else if (typeof input.seed === 'string' && input.seed.trim()) payload.seed = Number.isFinite(Number(input.seed)) ? Number(input.seed) : input.seed.trim();
-  input.images?.slice(0, 9).forEach((item, index) => { if (item.dataUri) payload[`ref_image_${index}`] = item.dataUri; });
-  input.audios?.slice(0, 3).forEach((item, index) => { if (item.dataUri) payload[`ref_audio_${index}`] = item.dataUri; });
+  images?.slice(0, 9).forEach((item, index) => { if (item.dataUri) payload[`ref_image_${index}`] = item.dataUri; });
+  audios?.slice(0, 3).forEach((item, index) => { if (item.dataUri) payload[`ref_audio_${index}`] = item.dataUri; });
   return payload;
 }
 export function normalizeAutodlStatus(value: unknown): 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'PARTIAL_SUCCEEDED' | 'FAILED' | 'CANCELLED' {

@@ -47,7 +47,9 @@ export function classifyProviderFailure(kind: OperationKind, cause: unknown): Cl
     disposition: result,
     error: {
       code: `${cause.provider.toUpperCase()}_${operation.toUpperCase()}_${cause.kind.toUpperCase()}${status}`,
-      message: result === 'BLOCKED'
+      message: cause.provider==='novelai' && result==='TERMINAL'
+        ? (cause.kind==='auth'?'NovelAI 凭据已失效或无权生成，请在创作账号中重新连接。':cause.status===402?'NovelAI 额度不足，请检查订阅与 Anlas 余额后重新生成。':cause.status===429?'NovelAI 请求过于频繁，请稍后重新生成。':'NovelAI 拒绝了本次请求，请检查模型、生成参数与账号权限。')
+        : result === 'BLOCKED'
         ? (cause.kind === 'auth' ? '任务同步已暂停，请在设置中修复 AutoDL 凭据后刷新任务。' : '任务同步已暂停，请核查 AutoDL 任务后刷新重试。')
         : result === 'UNKNOWN'
         ? `Provider ${operation} request outcome is unknown.`

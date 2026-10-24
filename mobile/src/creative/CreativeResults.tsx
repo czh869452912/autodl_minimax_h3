@@ -49,7 +49,7 @@ export function CreativeResults({ draft, disabled = false, dock = false, canvas=
     let active = true;
     setStatus('');
     const refresh = async () => {
-      const rows = assetKey?(await Promise.all(assetKey.split('\n').map(id=>creativeService().versions(id)))).flat().sort((a,b)=>b.versionNo-a.versionNo):[];
+      const rows = assetKey?(await Promise.all(assetKey.split('\n').map(id=>creativeService().versions(id)))).flat().sort((a,b)=>(b.createdAt??0)-(a.createdAt??0)||b.versionNo-a.versionNo):[];
       const job = draft.job_id ? await getDatabase().getFirstAsync<{ status: string }>('SELECT status FROM workflow_jobs WHERE id=?', draft.job_id) : null;
       if (active) { setVersions(rows); setStatus(job?.status ?? ''); }
     };

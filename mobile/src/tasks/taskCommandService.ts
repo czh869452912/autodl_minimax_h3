@@ -6,13 +6,14 @@ import { createMediaCommandService, type MediaCommandService } from '../workflow
 import { createExecutorWakeRepository } from './executorWakeRepository';
 import { executorWakePort } from './executorEvents';
 import { taskProjectionEvents } from './taskProjectionEvents';
+import type {TaskCredentialBinding} from './credentialBinding';
 
 export type CommandReceipt = Readonly<{ status: 'accepted' | 'coalesced' | 'already-complete'; wakeGeneration: number; acceptedAt: number }>;
 
 export function createTaskCommandService(options: {
   db: AppDatabase; fileExists(uri: string): Promise<boolean>; resolveCasUri(path: string): string;
   refreshArtifactSources?: (taskId: string) => Promise<void>;
-  prepareReplacement?: (taskId:string)=>Promise<void>;
+  prepareReplacement?: (taskId:string)=>Promise<void|TaskCredentialBinding>;
   now?: () => number; invalidate?: () => void; signal?: () => void;
 }) {
   const now = options.now ?? Date.now;
@@ -33,7 +34,7 @@ export function createTaskCommandService(options: {
   return {
     async replaceUnknownAfterConfirmation(taskId: string) {
       if(await options.db.getFirstAsync('SELECT job_id FROM creative_job_contexts WHERE job_id=?',taskId))throw new Error('请打开原创作草稿，核查后重新授权；不能沿用旧授权直接重建');
-      await options.prepareReplacement?.(taskId);
+      const credentialBinding=await options.prepareReplacement?.(taskId);
       const replacement = 'job:' + createId();
       await withWriteTransaction(options.db, async db => {
         if(await db.getFirstAsync('SELECT job_id FROM creative_job_contexts WHERE job_id=?',taskId))throw new Error('请打开原创作草稿，复制为新草稿后重新授权；不能沿用旧授权或当前默认账号直接重建');
@@ -51,7 +52,9 @@ export function createTaskCommandService(options: {
         await db.runAsync(`INSERT INTO tasks(id,prompt,status,resolution,duration,seed,images_json,audios_json,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,created_at,updated_at)
           SELECT ?,prompt,'QUEUED',resolution,duration,seed,images_json,audios_json,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,?,? FROM tasks WHERE id=?`, replacement, at, at, taskId);
         await db.runAsync("INSERT INTO artifact_blob_refs(blob_sha256,owner_type,owner_id,created_at) SELECT blob_sha256,owner_type,?,? FROM artifact_blob_refs WHERE owner_type='task_input' AND owner_id=?", replacement, at, taskId);
-        await db.runAsync("INSERT INTO workflow_operations(id,kind,job_id,idempotency_key,payload_json,state,next_retry_at,created_at,updated_at) VALUES(?,'SUBMIT',?,?,?,'PENDING',?,?,?)", replacement+':submit', replacement, 'submit:'+replacement, source.payload_json, at, at, at);
+        const payload=JSON.parse(source.payload_json);
+        if(credentialBinding)payload.credentialBinding=credentialBinding;
+        await db.runAsync("INSERT INTO workflow_operations(id,kind,job_id,idempotency_key,payload_json,state,next_retry_at,created_at,updated_at) VALUES(?,'SUBMIT',?,?,?,'PENDING',?,?,?)", replacement+':submit', replacement, 'submit:'+replacement, JSON.stringify(payload), at, at, at);
         await db.runAsync("INSERT INTO workflow_job_events(id,job_id,sequence,event_type,payload_json,created_at) SELECT ?,?,COALESCE(MAX(sequence),-1)+1,'REPLACEMENT_CONFIRMED',?,? FROM workflow_job_events WHERE job_id=?", taskId+':replacement-confirmed', taskId, JSON.stringify({ replacementJobId: replacement }), at, taskId);
         await db.runAsync("INSERT INTO workflow_job_events(id,job_id,sequence,event_type,payload_json,created_at) VALUES(?,?,0,'REPLACEMENT_CONFIRMED',?,?)", replacement+':created', replacement, JSON.stringify({ originalJobId: taskId }), at);
         await createExecutorWakeRepository(db).requestWake(at);

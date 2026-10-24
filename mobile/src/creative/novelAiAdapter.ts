@@ -1,7 +1,9 @@
 import CryptoJS from 'crypto-js';
 import type { ProviderAdapter } from '../workflows/providers/registry';
 import {isNovelAiUpscaleRequest,upscaleExpectedSize} from './novelAiUpscale';
+import {ProviderError,ProviderPreflightError} from '../workflows/providers/errors';
 export type NovelAiResponseStore = {
+  assertReady?(upscale:boolean):void;
   generate(key: string, request: string, hash: string, token: string): Promise<string>;
   upscale?(key: string, request: string, hash: string, token: string): Promise<string>;
   lookup(key: string, hash: string): Promise<string | null>;
@@ -11,17 +13,37 @@ export const novelAiKey = (jobId: string) => CryptoJS.SHA256(`novelai:${jobId}`)
 export const novelAiBodyHash = (body: Record<string, unknown>) => CryptoJS.SHA256(JSON.stringify(body)).toString();
 export function createNovelAiAdapter(jobId: string, token: string, store: NovelAiResponseStore): ProviderAdapter {
   const key = novelAiKey(jobId);
+  const inspect=(body:Record<string,unknown>)=>{
+    try{
+      const upscale=isNovelAiUpscaleRequest(body),outputSize=upscale?upscaleExpectedSize(body):undefined;
+      const expectedImages=(body.parameters as {n_samples?:number}|undefined)?.n_samples??1;
+      if(!Number.isInteger(expectedImages) || expectedImages<1 || expectedImages>4)throw new Error('NOVELAI_SAMPLE_COUNT_INVALID');
+      if(upscale && !store.upscale)throw new Error('请安装支持超分的新版 Android 应用');
+      store.assertReady?.(upscale);
+      return {upscale,outputSize,expectedImages};
+    }catch(error){throw new ProviderPreflightError('NOVELAI_INPUT_UNAVAILABLE',error instanceof Error?error.message:'图片生成条件尚未就绪');}
+  };
   return {
     manifest: () => ({ id: 'novelai-image', adapterVersion: '1', platforms: ['novelai'], capabilities: ['image.generate'], credentialKinds: ['novelai-token'], operations: ['image.generate'], supportedArtifactKinds: ['image'] }),
     validateCredentials: async () => ({ ok: Boolean(token) }),
+    async prepareInput(body,target){
+      if(target?.operation && target.operation!=='image.generate')throw new ProviderPreflightError('LOCAL_OPERATION_INVALID','不支持的 NovelAI 操作');
+      inspect(body);return body;
+    },
     async submit(body) {
-      const upscale=isNovelAiUpscaleRequest(body);
-      const outputSize=upscale?upscaleExpectedSize(body):undefined;
-      const expectedImages=(body.parameters as {n_samples?:number}|undefined)?.n_samples??1;
-      if(!Number.isInteger(expectedImages) || expectedImages<1 || expectedImages>4)throw new Error('NOVELAI_SAMPLE_COUNT_INVALID');
+      const {upscale,outputSize,expectedImages}=inspect(body);
       const hash = novelAiBodyHash(body);
-      if(upscale){if(!store.upscale)throw new Error('请安装支持超分的新版 Android 应用');await store.upscale(key,JSON.stringify(body),hash,token);}
-      else await store.generate(key, JSON.stringify(body), hash, token);
+      try{
+        if(upscale){await store.upscale!(key,JSON.stringify(body),hash,token);}
+        else await store.generate(key, JSON.stringify(body), hash, token);
+      }catch(cause){
+        const code=cause && typeof cause==='object' && 'code' in cause?cause.code:undefined;
+        // Only native, explicit rejection codes prove a failed request; timeouts and upstream failures remain uncertain.
+        if(typeof code==='string' && /^NOVELAI_HTTP_(400|401|402|403|404|422|429)$/.test(code)){
+          const status=Number(code.slice(-3));throw new ProviderError('novelai','submit',status===401||status===403?'auth':'http','NovelAI 拒绝请求',status);
+        }
+        throw cause;
+      }
       return { kind: 'novelai-local-response', key, requestHash: hash, expectedImages, ...(upscale?{operation:'upscale',outputSize}:{}) };
     },
     async getStatus(handle) {

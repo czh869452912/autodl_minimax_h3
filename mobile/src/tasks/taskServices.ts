@@ -27,6 +27,7 @@ function createTaskServices(db: AppDatabase) {
       const adapter=prepared&&createBuiltinProviderAdapters({resolveCredential:()=>credential.token,readBase64:createInputReader(db)}).get(prepared.adapterId);
       if(!adapter)throw new Error('原工作流不可用，请回到手工工作台选择工作流');
       try{await adapter.prepareInput?.(prepared.requestInput,prepared.target);}catch{throw new Error('参考素材原件不可用，请回到手工工作台重新选择素材后生成。');}
+      const {accountId,generationId,provider}=credential;return {accountId,generationId,provider};
     },
     refreshArtifactSources: async taskId => {
       const task = await taskStore.get(taskId);

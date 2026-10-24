@@ -74,7 +74,8 @@ export const defaultSubmissionDependencies: CreateFormSubmissionDependencies = {
       { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord.contentHash, inputs: inputSnapshot, source: 'user', status: 'ready' },
       { workflowId: activeRecord.workflowId, workflowVersion: activeRecord.version, contentHash: activeRecord.contentHash });
     await adapters.get(prepared.adapterId)?.prepareInput?.(prepared.requestInput,prepared.target);
-    const task = await persistSubmissionCommand(database, 'submission-' + Date.now() + '-' + Math.random().toString(16).slice(2), prepared, { images, audios, handoffId });
+    const {accountId,generationId,provider}=credential;
+    const task = await persistSubmissionCommand(database, 'submission-' + Date.now() + '-' + Math.random().toString(16).slice(2), prepared, { images, audios, handoffId,credentialBinding:{accountId,generationId,provider} });
     notifyListeners([foregroundTick]);
     return task;
   },

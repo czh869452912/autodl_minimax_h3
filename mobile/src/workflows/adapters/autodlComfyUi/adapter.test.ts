@@ -1,4 +1,5 @@
 import { createAutodlComfyUiAdapter } from './adapter';
+import {ProviderPreflightError} from '../../providers/errors';
 
 test('submits and polls the configured H3 AutoDL workflow', async () => {
   const fetcher = jest.fn()
@@ -32,5 +33,12 @@ test('rejects an opaque handle without a non-empty provider job id', async () =>
   const adapter = createAutodlComfyUiAdapter({ transport, token: 'token' });
   await expect(adapter.getStatus({ region: 'unknown' })).rejects.toThrow('任务句柄无效');
   await expect(adapter.getStatus({ providerJobId: '   ' })).rejects.toThrow('任务句柄无效');
+  expect(transport).not.toHaveBeenCalled();
+});
+
+test.each([{operation:'unsupported'},{workflowId:'bad/id'}])('invalid local target is rejected during preflight without transport (%j)',async target=>{
+  const transport=jest.fn(),adapter=createAutodlComfyUiAdapter({transport,token:'test-only'});
+  await expect(adapter.prepareInput({},target)).rejects.toBeInstanceOf(ProviderPreflightError);
+  await expect(adapter.submit({},target)).rejects.toBeInstanceOf(ProviderPreflightError);
   expect(transport).not.toHaveBeenCalled();
 });

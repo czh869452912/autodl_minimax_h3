@@ -10,7 +10,7 @@ import { creativeFiles } from './runtime';
 import { readCreativeDraft, readDraftInputs } from './drafts';
 import { creativeAccounts, creativeBudget } from './accountRuntime';
 import { submitCreativeVideo } from './videoSubmission';
-import type { NovelAiResponseStore } from './novelAiAdapter';
+import {createNovelAiAdapter, type NovelAiResponseStore } from './novelAiAdapter';
 import {novelAiUpscaleInput,prepareNovelAiUpscale} from './novelAiUpscale';
 
 function native() {
@@ -19,7 +19,7 @@ function native() {
   return module as { generateNovelAi(key: string, request: string, hash: string, token: string): Promise<string>; lookupNovelAi(key: string, hash: string): Promise<string | null> };
 }
 export function novelAiResponseStore(db: AppDatabase): NovelAiResponseStore {
-  return { generate: (...args) => native().generateNovelAi(...args), upscale:async(...args)=>{
+  return { assertReady(upscale){native();if(upscale && !NativeModules.AutoDLMedia?.upscaleNovelAi)throw new Error('请安装支持超分的新版 Android 应用');}, generate: (...args) => native().generateNovelAi(...args), upscale:async(...args)=>{
     if(!NativeModules.AutoDLMedia?.upscaleNovelAi)throw new Error('请安装支持超分的新版 Android 应用');
     return NativeModules.AutoDLMedia.upscaleNovelAi(...args);
   }, lookup: (...args) => native().lookupNovelAi(...args), async importResponse(uri, key, upscale=false) {
@@ -69,7 +69,9 @@ export async function prepareCreativeImage(id: string) {
   const request = prepareNovelAiRequest(input, Math.random, media);
   const account = (await creativeAccounts(db).list()).find(a => a.provider_id === 'novelai');
   if (!account) throw new Error('请先连接 NovelAI 创作账号');
+  await creativeAccounts(db).resolveExact(account.credential_generation_id);
   const prepared = { workflowId: 'novelai-image-basic', workflowVersion: '1', workflowContentHash: CryptoJS.SHA256(request.capabilitiesVersion).toString(), adapterId: 'novelai-image', adapterVersion: '1', inputSnapshot: request.snapshot, requestInput: JSON.parse(request.requestJson), target: { operation: 'image.generate' } };
+  await createNovelAiAdapter('preflight','',novelAiResponseStore(db)).prepareInput!(prepared.requestInput,prepared.target);
   return { db, draft, account, prepared, versionIds: refs.map(r => r.version_id), sourceManifest: refs.map(r => ({ versionId: r.version_id, sha256: r.blob_sha256, state: r.state })) };
 }
 async function prepareCreativeUpscale(db:AppDatabase,draft:NonNullable<Awaited<ReturnType<typeof readCreativeDraft>>>,input:{sourceVersionId:string;operation:'upscale';schemaVersion:1}){
@@ -81,11 +83,15 @@ async function prepareCreativeUpscale(db:AppDatabase,draft:NonNullable<Awaited<R
   const request=prepareNovelAiUpscale(input,media);
   const account=(await creativeAccounts(db).list()).find(a=>a.provider_id==='novelai');
   if(!account)throw new Error('请先连接 NovelAI 创作账号');
+  await creativeAccounts(db).resolveExact(account.credential_generation_id);
   const prepared={workflowId:draft.workflow_id,workflowVersion:'1',workflowContentHash:CryptoJS.SHA256('novelai-standalone-upscale-2026-10-24').toString(),adapterId:'novelai-image',adapterVersion:'1',inputSnapshot:request.snapshot,requestInput:request.requestInput,target:{operation:'image.generate'}};
+  await createNovelAiAdapter('preflight','',novelAiResponseStore(db)).prepareInput!(prepared.requestInput,prepared.target);
   return {db,draft,account,prepared,versionIds:refs.map(r=>r.version_id),sourceManifest:refs.map(r=>({versionId:r.version_id,sha256:r.blob_sha256,state:r.state}))};
 }
 export async function confirmCreativeImage(preview: Awaited<ReturnType<typeof prepareCreativeImage>>) {
   if (preview.db !== getDatabase()) throw new Error('数据库已恢复或切换，请重新准备生成');
+  await creativeAccounts(preview.db).resolveExact(preview.account.credential_generation_id);
+  await createNovelAiAdapter('preflight','',novelAiResponseStore(preview.db)).prepareInput!(preview.prepared.requestInput,preview.prepared.target);
   const authorizationId = await creativeBudget().grant({ provider: 'novelai', generationId: preview.account.credential_generation_id, projectId: preview.draft.project_id ?? undefined,
     operations: ['image.generate'], requestLimit: 1, amountLimit: null, allowUnknownCost: true, maxUnknownRequests: 1, expiresAt: Date.now() + 15 * 60_000 });
   return submitCreativeVideo(preview.db, { draftId: preview.draft.id, expectedRevision: preview.draft.revision, draftInputJson: preview.draft.input_json, authorizationId, prepared: preview.prepared, images: [], versionIds: preview.versionIds, sourceManifest: preview.sourceManifest });

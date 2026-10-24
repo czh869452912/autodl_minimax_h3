@@ -137,6 +137,24 @@ test('missing response remains unknown and restoring backup never resumes the re
   } finally { f.db.close(); }
 });
 
+test.each([400,401,402,403,404,422,429])('explicit native HTTP %s rejection becomes failed and never replays the paid request',async status=>{
+  const f=await fixture();try{
+    (f.store.generate as jest.Mock).mockRejectedValue(Object.assign(new Error('private provider details'),{code:`NOVELAI_HTTP_${status}`}));
+    await f.handle('SUBMIT');const job=await f.jobs.get(f.task.id);
+    expect(job?.status).toBe('FAILED');expect(job?.lastError?.code).toMatch(new RegExp(`NOVELAI_SUBMIT_.*_${status}$`));
+    expect(JSON.stringify(job?.lastError)).not.toContain('private provider details');
+    const operation=f.db.getFirstSync<{state:string}>("SELECT state FROM workflow_operations WHERE job_id=? AND kind='SUBMIT'",f.task.id);
+    expect(operation?.state).toBe('FAILED');expect(f.store.generate).toHaveBeenCalledTimes(1);
+  }finally{f.db.close();}
+});
+
+test.each([408,503])('ambiguous native HTTP %s remains unknown without blind resubmission',async status=>{
+  const f=await fixture();try{
+    (f.store.generate as jest.Mock).mockRejectedValue(Object.assign(new Error('upstream'),{code:`NOVELAI_HTTP_${status}`}));
+    await f.handle('SUBMIT');expect((await f.jobs.get(f.task.id))?.status).toBe('UNKNOWN');expect(f.store.generate).toHaveBeenCalledTimes(1);
+  }finally{f.db.close();}
+});
+
 test('enhanced output dimensions remain separate from reproducible input parameters',async()=>{
   const f=await fixture();
   try{

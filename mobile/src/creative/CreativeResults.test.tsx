@@ -9,7 +9,7 @@ import { createEnhanceInput } from './novelAiEnhancement';
 const mockPush = jest.fn(), mockReplace = jest.fn(), mockExecute = jest.fn();
 let mockStatus = 'SUCCEEDED', mockVersions: AssetVersion[] = [];
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, replace: mockReplace }), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
-jest.mock('./runtime', () => ({ creativeService: () => ({ versions: async () => mockVersions, execute: mockExecute }), creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})}), exportCreativeVersion: jest.fn() }));
+jest.mock('./runtime', () => ({ creativeService: () => ({ versions: async (id:string) => mockVersions.filter(v=>v.assetId===id), execute: mockExecute }), creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})}), exportCreativeVersion: jest.fn() }));
 jest.mock('../storage/databaseClient', () => ({ getDatabase: () => ({ getFirstAsync: async () => ({ status: mockStatus }) }) }));
 jest.mock('./MediaPreview', () => ({ MediaPreview: () => null }));
 jest.mock('../media/VideoPlayer', () => ({ VideoPlayer: () => null }));
@@ -19,6 +19,17 @@ beforeEach(() => {
   jest.clearAllMocks(); mockStatus = 'SUCCEEDED';
   mockVersions = [2, 1].map(n => ({ id: `version-${n}`, assetId: 'asset', versionNo: n, source: 'generated', state: 'AVAILABLE', relativePath: `${n}.png`, mime: 'image/png', recipe: { jobId: 'job',input:defaultNovelAiDraft } }));
   mockExecute.mockResolvedValue({ status: 'completed', value: { draftId: 'next' } });
+});
+
+test('results across switched video workflows show the newest generation before an older higher per-asset version',async()=>{
+  mockVersions=[{...mockVersions[0],id:'older',versionNo:9,createdAt:100,recipe:{jobId:'old'}},{...mockVersions[1],id:'newest',assetId:'second',versionNo:1,createdAt:200,recipe:{jobId:'new'}}];
+  let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<CreativeResults draft={{...draft,job_id:null,provider_id:'autodl'}} relatedAssetIds={['second']} />);});
+    const buttons=tree.root.findAll(n=>n.props.accessibilityLabel?.startsWith?.('查看版本 ') && typeof n.props.onPress==='function');
+    expect(buttons.map(n=>n.props.accessibilityLabel)).toEqual(['查看版本 1','查看版本 9']);
+    expect(buttons[0].props.accessibilityState.selected).toBe(true);
+  }finally{act(()=>tree?.unmount());}
 });
 
 test('Enhance opens an editable draft from the selected original file size without submitting generation', async () => {
