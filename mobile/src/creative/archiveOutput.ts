@@ -34,6 +34,12 @@ export async function archiveCreativeOutput(tx: AppDatabase, input: ArtifactComm
   const next = await tx.getFirstAsync<{ n: number }>('SELECT COALESCE(MAX(version_no),0)+1 AS n FROM creative_asset_versions WHERE asset_id=?', context.target_asset_id);
   const snapshot = JSON.parse(context.input_snapshot_json);
   const recipe = { schemaVersion: 1, provider: input.artifact.kind === 'image' ? 'novelai' : 'autodl', jobId: input.jobId, artifactId: input.artifact.id, input: { ...snapshot, ...(typeof input.artifact.metadata?.seed === 'number' ? { seed: input.artifact.metadata.seed } : {}) } };
+  if(input.artifact.kind==='video'){
+    const job=await tx.getFirstAsync<{workflow_id:string;workflow_version:string;workflow_hash:string}>('SELECT workflow_id,workflow_version,workflow_hash FROM workflow_jobs WHERE id=?',input.jobId);
+    const draft=await tx.getFirstAsync<{input_json:string}>('SELECT d.input_json FROM creative_job_contexts c JOIN creative_generation_drafts d ON d.id=c.draft_id WHERE c.job_id=?',input.jobId);
+    const pinned=draft?JSON.parse(draft.input_json):undefined;
+    if(job)Object.assign(recipe,{workflow:{id:job.workflow_id,version:job.workflow_version,contentHash:job.workflow_hash,title:pinned?.workflow?.title??job.workflow_id}});
+  }
   const {width,height}=input.artifact.metadata??{};
   if(snapshot.operation==='upscale'){
     const source=await tx.getFirstAsync<{recipe_json:string}>('SELECT recipe_json FROM creative_asset_versions WHERE id=?',snapshot.sourceVersionId);

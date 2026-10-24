@@ -34,6 +34,7 @@ export async function guardCreativeAgentCommand(tx: AppDatabase, origin: Creativ
     const draft = await tx.getFirstAsync<{project_id:string}>('SELECT project_id FROM creative_generation_drafts WHERE id=?', p.id as string);
     requireProject(draft?.project_id);
     if (Array.isArray(p.versionIds)) for (const id of p.versionIds) await version(id);
+    for(const field of ['imageVersionIds','audioVersionIds'])if(Array.isArray(p[field]))for(const id of p[field] as string[])await version(id);
   } else if (command.name.startsWith('shot.')) {
     const shot = await tx.getFirstAsync<{project_id:string}>('SELECT project_id FROM creative_shots WHERE id=?', p.id as string);
     requireProject(shot?.project_id); await version(p.versionId);

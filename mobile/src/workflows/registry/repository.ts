@@ -243,6 +243,10 @@ export function createWorkflowRegistry(db: AppDatabase | undefined): WorkflowReg
       const activeRows = new Map<string, ActiveRow>();
       for (const item of records) { const row = db ? db.getFirstSync<ActiveRow>('SELECT * FROM workflow_registry_active WHERE workflow_id = ? LIMIT 1', item.workflowId) as ActiveRow | null : active.get(item.workflowId); if (row) activeRows.set(item.workflowId, row); }
       const referenced = new Set<string>([...activeRows.values()].flatMap((row) => [row.content_hash, row.previous_hash].filter((hash): hash is string => Boolean(hash))));
+      if(db?.getFirstSync("SELECT name FROM sqlite_master WHERE type='table' AND name='creative_generation_drafts'")){
+        const drafts=db.getAllSync<{input_json:string}>("SELECT input_json FROM creative_generation_drafts WHERE state!='DISCARDED'");
+        for(const draft of drafts)try{const input=JSON.parse(draft.input_json);if(input.schemaVersion===2&&typeof input.workflow?.contentHash==='string')referenced.add(input.workflow.contentHash);}catch{/* Malformed drafts cannot pin a definition. */}
+      }
       for (const item of records) if (!keepHashes.has(item.contentHash) && !referenced.has(item.contentHash)) {
         if (!db) memory.delete(key(item.workflowId, item.version)); else db.runSync('DELETE FROM workflow_registry WHERE workflow_id = ? AND version = ?', item.workflowId, item.version);
       }

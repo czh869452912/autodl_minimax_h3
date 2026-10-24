@@ -2,6 +2,34 @@ import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { createCreativeService } from './service';
 import type { CreativeCommand } from './types';
 import { defaultNovelAiDraft } from './novelAiProtocol';
+import {alignVideoState} from './videoDraftState';
+import definition from '../workflows/definitions/autodl/minimax-h3-i2v-15s-v1.0.1.json';
+import type {WorkflowDefinition} from '../workflows/schema/types';
+import type {RegistryRecord} from '../workflows/registry/types';
+
+const videoInput=(sessionId:string,workflowId=definition.id)=>alignVideoState({workflowId,version:definition.version,contentHash:'pinned'} as RegistryRecord,definition as WorkflowDefinition,sessionId,{prompt:'Original motion'}).input;
+
+test('workflow switches preserve original inputs and independently freeze image and audio versions',async()=>{
+  const f=await fixture();
+  try{
+    const audioHash='b'.repeat(64);f.db.runSync('INSERT INTO artifact_blobs VALUES(?,10,?,?,1,1)',audioHash,'audio/wav',`cas/${audioHash}`);
+    const audio=await f.execute({name:'asset.import',payload:{title:'Sound',kind:'audio',blobSha256:audioHash}});
+    const input=videoInput('session');
+    const {draftId}=await f.execute({name:'draft.createVideo',payload:{shotId:f.shotId,input}});
+    await f.execute({name:'draft.replaceVideoMedia',payload:{id:draftId,expectedRevision:0,imageVersionIds:[f.asset.versionId],audioVersionIds:[audio.versionId]}});
+    const next={...videoInput('session','other.video'),prompt:'Next motion',values:{prompt:'Next motion'}};
+    const switched=await f.execute({name:'draft.switchVideoWorkflow',payload:{id:draftId,expectedRevision:1,input:next,imageVersionIds:[f.asset.versionId],audioVersionIds:[audio.versionId]}});
+    expect(JSON.parse((await f.service.draft(draftId))!.input_json)).toEqual(input);
+    expect(await f.service.draft(switched.draftId)).toMatchObject({workflow_id:'other.video',project_id:f.projectId,shot_id:f.shotId,state:'EDITING'});
+    expect((await f.service.draftInputs(switched.draftId)).map(r=>[r.slot,r.version_id])).toEqual([['audio',audio.versionId],['image',f.asset.versionId]]);
+    await expect(f.execute({name:'draft.replaceVideoMedia',payload:{id:switched.draftId,expectedRevision:0,imageVersionIds:[],audioVersionIds:[f.asset.versionId]}})).rejects.toThrow('DRAFT_INPUT_NOT_AVAILABLE');
+    expect(await f.service.draftInputs(switched.draftId)).toHaveLength(2);
+    await expect(f.execute({name:'draft.switchVideoWorkflow',payload:{id:draftId,expectedRevision:1,input:{...next,sessionId:'foreign'}}})).rejects.toThrow('VIDEO_SESSION_MISMATCH');
+    await expect(f.execute({name:'draft.updateVideo',payload:{id:draftId,expectedRevision:1,input:{...input,workflow:{...input.workflow,version:'changed'}}}})).rejects.toThrow('VIDEO_WORKFLOW_MISMATCH');
+    expect(f.db.getAllSync('SELECT id FROM creative_generation_drafts')).toHaveLength(2);
+    expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
+  }finally{f.db.close();}
+});
 
 async function fixture() {
   const db = createInitializedRealSqliteTestDb(); let seq = 0;

@@ -15,6 +15,7 @@ import { CreativeAccountPanel } from './CreativeAccountPanel';
 import { groupWorkbenchDrafts, recentWorkbenchDraft, type WorkbenchMode } from './workbenchSessions';
 import type { AssetVersion } from './types';
 import { COLORS } from '../ui/theme';
+import {createVideoWorkbenchDraft} from './videoWorkbenchWorkflows';
 
 function RecentCreation({ draft, generations, onPress }: { draft: CreativeDraft; generations:number; onPress: () => void }) {
   const input=JSON.parse(draft.input_json);
@@ -43,7 +44,7 @@ export function CreativeHome({ onLegacyVideo }: { onLegacyVideo: () => void }) {
   useEffect(()=>{let live=true;void readCreativeIdea().then(value=>{if(live){setIdea(value);setReady(true);}}).catch(()=>{if(live)setError('工作区恢复失败，请重试');});return()=>{live=false;};},[]);
   useFocusEffect(useCallback(()=>{let live=true;void creativeService().drafts().then(rows=>{if(live)setDrafts(rows);}).catch(()=>{if(live)setError('创作记录读取失败');});return()=>{live=false;};},[]));
   const createDraft=async(mode:WorkbenchMode)=>{
-    const result=await creativeService().execute(mode==='image'?{name:'draft.createImage',payload:{input:{...defaultNovelAiDraft,prompt:idea.image}}}:{name:'draft.createVideo',payload:{prompt:idea.video}},createId());
+    const result=mode==='image'?await creativeService().execute({name:'draft.createImage',payload:{input:{...defaultNovelAiDraft,prompt:idea.image}}},createId()):await createVideoWorkbenchDraft(idea.video);
     if(result.status!=='completed')throw new Error('无法创建工作区');
     const row=await creativeService().draft(result.value.draftId);if(!row)throw new Error('工作区读取失败');
     const next={...idea,[mode]:''};await writeCreativeIdea(next);setIdea(next);return row;

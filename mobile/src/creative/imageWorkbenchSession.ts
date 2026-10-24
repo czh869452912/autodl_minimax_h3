@@ -1,7 +1,7 @@
 import { creativeService } from './runtime';
 import type { CreativeDraft } from './drafts';
 import type { NovelAiDraftInput } from './novelAiProtocol';
-import {videoDraftInput} from './drafts';
+import {editableVideoInput} from './drafts';
 import type {z} from 'zod';
 import { createId } from '../ids';
 
@@ -9,10 +9,10 @@ import { createId } from '../ids';
 export async function persistImageWorkbenchInput(draft:CreativeDraft,input:NovelAiDraftInput,onDraft:(draft:CreativeDraft)=>void,fromVersionId?:string) {
   return persistWorkbenchInput(draft,input,onDraft,fromVersionId);
 }
-export async function persistVideoWorkbenchInput(draft:CreativeDraft,input:z.output<typeof videoDraftInput>,onDraft:(draft:CreativeDraft)=>void){
+export async function persistVideoWorkbenchInput(draft:CreativeDraft,input:z.output<typeof editableVideoInput>,onDraft:(draft:CreativeDraft)=>void){
   return persistWorkbenchInput(draft,input,onDraft);
 }
-async function persistWorkbenchInput(draft:CreativeDraft,input:NovelAiDraftInput|z.output<typeof videoDraftInput>,onDraft:(draft:CreativeDraft)=>void,fromVersionId?:string){
+async function persistWorkbenchInput(draft:CreativeDraft,input:NovelAiDraftInput|z.output<typeof editableVideoInput>,onDraft:(draft:CreativeDraft)=>void,fromVersionId?:string){
   const service=creativeService();
   let row=await service.draft(draft.id);
   if(!row || row.revision!==draft.revision || row.state!==draft.state)throw new Error('草稿已在其他入口更新，请先载入最新内容');
@@ -28,7 +28,7 @@ async function persistWorkbenchInput(draft:CreativeDraft,input:NovelAiDraftInput
   }
   if(row.state!=='EDITING')throw new Error('图片草稿不可编辑');
   if(row.input_json!==JSON.stringify(input)) {
-    await service.execute(row.provider_id==='novelai'?{name:'draft.updateImage',payload:{id:row.id,expectedRevision:row.revision,input:input as NovelAiDraftInput}}:{name:'draft.updateVideo',payload:{id:row.id,expectedRevision:row.revision,input:input as z.output<typeof videoDraftInput>}},createId());
+    await service.execute(row.provider_id==='novelai'?{name:'draft.updateImage',payload:{id:row.id,expectedRevision:row.revision,input:input as NovelAiDraftInput}}:{name:'draft.updateVideo',payload:{id:row.id,expectedRevision:row.revision,input:input as z.output<typeof editableVideoInput>}},createId());
     row=await service.draft(row.id);
     if(!row)throw new Error('草稿保存后读取失败');
   }

@@ -1,32 +1,36 @@
 import { z } from 'zod';
 import type { AppDatabase } from '../storage/appDatabase';
-import { H3_CREATIVE_WORKFLOW_ID as H3_WORKFLOW_ID } from './videoWorkflow';
+import { H3_CREATIVE_WORKFLOW_ID as H3_WORKFLOW_ID,creativeVideoWorkflowId } from './videoWorkflow';
 import { RESOLUTION_OPTIONS } from '../create/resolutions';
 import { novelAiDraftInput, defaultNovelAiDraft, novelAiSourceIds } from './novelAiProtocol';
 import {novelAiUpscaleInput} from './novelAiUpscale';
+import {workflowVideoInput} from './videoDraftState';
 const id = z.string().min(1).max(200), revision = z.number().int().nonnegative();
 export const videoDraftInput = z.object({ schemaVersion: z.literal(1).default(1), prompt: z.string().max(10000), resolution: z.enum(RESOLUTION_OPTIONS), duration: z.number().int().min(1).max(15), seed: z.string().regex(/^$|^\d{1,15}$/) }).strict();
+export const editableVideoInput=z.union([videoDraftInput,workflowVideoInput]);
 export const draftSchemas = {
   'draft.createUpscale':z.object({versionId:id,projectId:id.optional(),shotId:id.optional()}).strict(),
   'draft.copySubmitted':z.object({id}).strict(),
   'draft.createImage': z.object({ projectId: id.optional(), shotId: id.optional(), input: novelAiDraftInput.optional(), fromVersionId: id.optional() }).strict(),
   'draft.updateImage': z.object({ id, expectedRevision: revision, input: novelAiDraftInput }).strict(),
-  'draft.createVideo': z.object({ projectId: id.optional(), shotId: id.optional(), versionId: id.optional(), prompt: z.string().max(10000).default('') }).strict(),
-  'draft.updateVideo': z.object({ id, expectedRevision: revision, input: videoDraftInput }).strict(),
+  'draft.createVideo': z.object({ projectId: id.optional(), shotId: id.optional(), versionId: id.optional(), prompt: z.string().max(10000).default(''),input:workflowVideoInput.optional() }).strict(),
+  'draft.updateVideo': z.object({ id, expectedRevision: revision, input: editableVideoInput }).strict(),
+  'draft.switchVideoWorkflow':z.object({id,expectedRevision:revision,input:workflowVideoInput,imageVersionIds:z.array(id).max(9).default([]),audioVersionIds:z.array(id).max(3).default([])}).strict(),
+  'draft.replaceVideoMedia':z.object({id,expectedRevision:revision,imageVersionIds:z.array(id).max(9),audioVersionIds:z.array(id).max(3)}).strict(),
   'draft.replaceInputs': z.object({ id, expectedRevision: revision, versionIds: z.array(id).max(9) }).strict(),
   'draft.discard': z.object({ id, expectedRevision: revision }).strict(),
 };
 export type DraftCommand = { [K in keyof typeof draftSchemas]: { name: K; payload: z.input<typeof draftSchemas[K]> } }[keyof typeof draftSchemas];
 export type CreativeDraft = { id: string; project_id: string | null; shot_id: string | null; target_asset_id: string | null; provider_id: string; workflow_id: string; input_json: string; revision: number; state: string; job_id: string | null; has_inputs?:number };
 export function readCreativeDraft(db: AppDatabase, id: string) { return db.getFirstAsync<CreativeDraft>('SELECT * FROM creative_generation_drafts WHERE id=?', id); }
-export function readDraftInputs(db: AppDatabase, id: string) { return db.getAllAsync<{ version_id: string; ordinal: number; blob_sha256: string; relative_path: string; mime: string; byte_size: number; state: string }>(`SELECT i.*,f.blob_sha256,f.state,b.relative_path,b.mime,b.byte_size FROM creative_draft_inputs i LEFT JOIN creative_version_files f ON f.version_id=i.version_id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE draft_id=? ORDER BY ordinal`, id); }
+export function readDraftInputs(db: AppDatabase, id: string) { return db.getAllAsync<{ version_id: string; slot:string; ordinal: number; blob_sha256: string; relative_path: string; mime: string; byte_size: number; state: string }>(`SELECT i.*,f.blob_sha256,f.state,b.relative_path,b.mime,b.byte_size FROM creative_draft_inputs i LEFT JOIN creative_version_files f ON f.version_id=i.version_id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE draft_id=? ORDER BY slot,ordinal`, id); }
 export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, now: number, makeId: () => string): Promise<Record<string,string>> {
   if (!(name in draftSchemas)) throw new Error('UNKNOWN_CREATIVE_COMMAND');
   const project = async (id: string | null | undefined) => { if (id && !await tx.getFirstAsync('SELECT id FROM creative_projects WHERE id=? AND archived_at IS NULL', id)) throw new Error('PROJECT_NOT_AVAILABLE'); };
-  const inputs = async (draftId: string, versions: string[]) => {
+  const inputs = async (draftId: string, versions: string[],kind:'image'|'audio'='image') => {
     for (const [ordinal, versionId] of versions.entries()) {
-      if (!await tx.getFirstAsync("SELECT v.id FROM creative_asset_versions v JOIN creative_assets a ON a.id=v.asset_id AND a.kind='image' JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' AND f.state='AVAILABLE' WHERE v.id=? AND NOT EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=v.asset_id)", versionId)) throw new Error('DRAFT_INPUT_NOT_AVAILABLE');
-      await tx.runAsync("INSERT INTO creative_draft_inputs VALUES(?,'image',?,?)", draftId, ordinal, versionId);
+      if (!await tx.getFirstAsync("SELECT v.id FROM creative_asset_versions v JOIN creative_assets a ON a.id=v.asset_id AND a.kind=? JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' AND f.state='AVAILABLE' WHERE v.id=? AND NOT EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=v.asset_id)", kind,versionId)) throw new Error('DRAFT_INPUT_NOT_AVAILABLE');
+      await tx.runAsync('INSERT INTO creative_draft_inputs VALUES(?,?,?,?)', draftId,kind, ordinal, versionId);
     }
   };
   if(name==='draft.copySubmitted'){
@@ -39,6 +43,20 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     await tx.runAsync("INSERT INTO creative_generation_drafts SELECT ?,project_id,shot_id,target_asset_id,provider_id,workflow_id,input_json,0,'EDITING',NULL,?,? FROM creative_generation_drafts WHERE id=?",draftId,now,now,p.id);
     await tx.runAsync('INSERT INTO creative_draft_inputs SELECT ?,slot,ordinal,version_id FROM creative_draft_inputs WHERE draft_id=?',draftId,p.id);
     return {draftId,provider:source.provider_id,supersedesJobId:source.job_id};
+  }
+  if(name==='draft.switchVideoWorkflow'){
+    const source=await readCreativeDraft(tx,p.id);
+    if(!source || source.provider_id!=='autodl' || source.revision!==p.expectedRevision || !['EDITING','SUBMITTED'].includes(source.state))throw new Error('DRAFT_REVISION_CONFLICT');
+    if(await tx.getFirstAsync("SELECT s.id FROM creative_plan_steps s JOIN creative_plans p ON p.id=s.plan_id WHERE s.draft_id=? AND p.state IN ('ACTIVE','QUARANTINED')",p.id))throw new Error('PLAN_DRAFT_FROZEN');
+    await project(source.project_id);
+    if(source.target_asset_id && await tx.getFirstAsync('SELECT asset_id FROM creative_asset_trash WHERE asset_id=?',source.target_asset_id))throw new Error('TARGET_ASSET_TRASHED');
+    if(source.shot_id && !await tx.getFirstAsync('SELECT id FROM creative_shots WHERE id=? AND deleted_at IS NULL',source.shot_id))throw new Error('SHOT_NOT_AVAILABLE');
+    const old=JSON.parse(source.input_json),sessionId=old.schemaVersion===2?old.sessionId:source.target_asset_id??source.id;
+    if(p.input.sessionId!==sessionId)throw new Error('VIDEO_SESSION_MISMATCH');
+    const draftId=makeId();
+    await tx.runAsync("INSERT INTO creative_generation_drafts VALUES(?,?,?,?,'autodl',?,?,0,'EDITING',NULL,?,?)",draftId,source.project_id,source.shot_id,source.target_asset_id,p.input.workflow.id,JSON.stringify(p.input),now,now);
+    await inputs(draftId,p.imageVersionIds);await inputs(draftId,p.audioVersionIds,'audio');
+    return {draftId};
   }
   if(name==='draft.createUpscale'){
     let projectId=p.projectId??null;
@@ -91,7 +109,7 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     }
     await project(projectId);
     const draftId = makeId();
-    await tx.runAsync("INSERT INTO creative_generation_drafts VALUES(?,?,?,NULL,'autodl',?,?,0,'EDITING',NULL,?,?)", draftId, projectId, p.shotId ?? null, H3_WORKFLOW_ID, JSON.stringify({ schemaVersion: 1, prompt, resolution: '480p竖', duration: 5, seed: '' }), now, now);
+    await tx.runAsync("INSERT INTO creative_generation_drafts VALUES(?,?,?,NULL,'autodl',?,?,0,'EDITING',NULL,?,?)", draftId, projectId, p.shotId ?? null, p.input?.workflow.id??H3_WORKFLOW_ID, JSON.stringify(p.input??{ schemaVersion: 1, prompt, resolution: '480p竖', duration: 5, seed: '' }), now, now);
     if (selectedVersion) await inputs(draftId, [selectedVersion]);
     return { draftId };
   }
@@ -102,6 +120,11 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
   if (name === 'draft.updateVideo' || name === 'draft.updateImage') {
     if (draft.provider_id !== (name === 'draft.updateVideo' ? 'autodl' : 'novelai')) throw new Error('DRAFT_PROVIDER_MISMATCH');
     if(JSON.parse(draft.input_json).operation==='upscale')throw new Error('UPSCALE_DRAFT_IMMUTABLE');
+    if(name==='draft.updateVideo'){
+      const old=JSON.parse(draft.input_json);
+      if(p.input.schemaVersion===2 && (p.input.workflow.id!==creativeVideoWorkflowId(draft.workflow_id) || old.schemaVersion===2 && (old.sessionId!==p.input.sessionId || old.workflow.id!==p.input.workflow.id || old.workflow.version!==p.input.workflow.version || old.workflow.contentHash!==p.input.workflow.contentHash)))throw new Error('VIDEO_WORKFLOW_MISMATCH');
+      if(old.schemaVersion===2 && p.input.schemaVersion!==2)throw new Error('VIDEO_WORKFLOW_MISMATCH');
+    }
     if (name === 'draft.updateImage') {
       const previous = novelAiSourceIds(novelAiDraftInput.parse(JSON.parse(draft.input_json)));
       const next = novelAiSourceIds(p.input);
@@ -110,7 +133,12 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
         await inputs(p.id, next);
       }
     }
-    await tx.runAsync('UPDATE creative_generation_drafts SET input_json=?,revision=revision+1,updated_at=? WHERE id=?', JSON.stringify(p.input), now, p.id);
+    await tx.runAsync('UPDATE creative_generation_drafts SET input_json=?,workflow_id=?,revision=revision+1,updated_at=? WHERE id=?', JSON.stringify(p.input),name==='draft.updateVideo'&&p.input.schemaVersion===2?p.input.workflow.id:draft.workflow_id, now, p.id);
+  } else if(name==='draft.replaceVideoMedia'){
+    if(draft.provider_id!=='autodl')throw new Error('DRAFT_PROVIDER_MISMATCH');
+    await tx.runAsync('DELETE FROM creative_draft_inputs WHERE draft_id=?',p.id);
+    await inputs(p.id,p.imageVersionIds);await inputs(p.id,p.audioVersionIds,'audio');
+    await tx.runAsync('UPDATE creative_generation_drafts SET revision=revision+1,updated_at=? WHERE id=?',now,p.id);
   } else if (name === 'draft.replaceInputs') {
     await tx.runAsync('DELETE FROM creative_draft_inputs WHERE draft_id=?', p.id);
     await inputs(p.id, p.versionIds);

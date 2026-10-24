@@ -2,6 +2,19 @@ import { createWorkflowRegistry } from './repository';
 import type { RegistryRecord } from './types';
 import { createRealSqliteTestDb } from '../../test/realSqlite';
 import { runAppMigrations } from '../../storage/migrations/runner';
+import {createInitializedRealSqliteTestDb} from '../../test/realSqlite';
+import {createCreativeService} from '../../creative/service';
+
+test('cleanup retains definitions pinned by editable video drafts beyond the active rollback pair',async()=>{
+  const db=createInitializedRealSqliteTestDb();
+  try{
+    const store=createWorkflowRegistry(db as never);
+    for(const [v,h] of [['1.0.0','aaa'],['2.0.0','bbb'],['3.0.0','ccc']]){await store.upsert(record(v,h));await store.setActive('demo',v,h);}
+    await createCreativeService(db as never).execute({name:'draft.createVideo',payload:{input:{schemaVersion:2,sessionId:'session',workflow:{id:'demo',version:'1.0.0',contentHash:'aaa'},prompt:'Pan',values:{prompt:'Pan'}}}},'draft');
+    await store.removeUnreferenced(new Set());
+    expect(await store.get('demo','1.0.0')).toMatchObject({contentHash:'aaa'});
+  }finally{db.close();}
+});
 
 function record(version: string, hash: string): RegistryRecord {
   return { workflowId: 'demo', version, contentHash: hash, hashScheme: 'workflow-package/without-declared-hash+sorted-json@1', source: 'remote', trust: 'trusted', definitionJson: '{}', installedAt: 1 };

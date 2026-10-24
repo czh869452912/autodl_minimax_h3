@@ -9,7 +9,7 @@ import { MediaPreview } from './MediaPreview';
 import { TextAction } from './WorkbenchUI';
 import { COLORS } from '../ui/theme';
 
-export function CreativeAssetPicker({ kind, projectId, onChoose, onClose }: { kind: 'image' | 'video'; projectId?: string; onChoose: (version: AssetVersion) => Promise<void>; onClose: () => void }) {
+export function CreativeAssetPicker({ kind, projectId, onChoose, onClose }: { kind: 'image' | 'video'|'audio'; projectId?: string; onChoose: (version: AssetVersion) => Promise<void>; onClose: () => void }) {
   const [items, setItems] = useState<Array<{ title: string; version: AssetVersion }>>([]);
   const [query, setQuery] = useState('');
   const [all, setAll] = useState(!projectId);
@@ -38,7 +38,7 @@ export function CreativeAssetPicker({ kind, projectId, onChoose, onClose }: { ki
   };
   return <Modal visible animationType="slide" onRequestClose={() => { if (!busy) onClose(); }}><SafeAreaView style={s.screen}>
     <View style={{ paddingHorizontal: 20, paddingTop: 8, gap: 12 }}>
-    <View style={s.row}><Text style={s.title}>{kind === 'image' ? '选择图片' : '选择视频'}</Text><TextAction label="取消" disabled={busy} onPress={onClose} /></View>
+    <View style={s.row}><Text style={s.title}>{kind === 'image' ? '选择图片' : kind==='audio'?'选择音频':'选择视频'}</Text><TextAction label="取消" disabled={busy} onPress={onClose} /></View>
     <TextInput accessibilityLabel="搜索素材" placeholder="搜索素材名称" value={query} editable={!busy} onChangeText={setQuery} style={s.input} />
     {projectId ? <TextAction label={all ? '仅看本项目' : '从全部素材选择'} disabled={busy} onPress={() => setAll(!all)} /> : null}
     <Text style={s.muted}>{loading ? '正在读取素材…' : `点选画面后确认 · ${items.length} 个可用版本`}</Text>
@@ -49,8 +49,8 @@ export function CreativeAssetPicker({ kind, projectId, onChoose, onClose }: { ki
         <MediaPreview version={version} kind={kind} label={title} style={{ aspectRatio: 1 }} />
         <Text style={[s.body, { fontSize: 14 }]} numberOfLines={2}>{title}</Text><Text style={s.muted}>{selected === version.id ? '已选择 · ' : ''}版本 {version.versionNo}</Text>
       </Pressable>}
-      ListEmptyComponent={!loading ? <Text style={s.muted}>{query ? '没有匹配的可用版本，请调整搜索。' : `暂无可用${kind === 'image' ? '图片' : '视频'}。可先导入素材或生成候选。`}</Text> : null}
+      ListEmptyComponent={!loading ? <Text style={s.muted}>{query ? '没有匹配的可用版本，请调整搜索。' : `暂无可用${kind === 'image' ? '图片' : kind==='audio'?'音频':'视频'}。可先导入素材或生成候选。`}</Text> : null}
       ListFooterComponent={hasMore && limit < 1000 ? <TextAction label="加载更多素材" disabled={busy || loading} onPress={() => setLimit(n => n + 100)} /> : null} />
-    <View style={s.footer}><Text style={s.muted}>{chosen ? `${chosen.title} · 版本 ${chosen.version.versionNo}` : '尚未选择画面'}</Text><ListAction label={busy ? '正在添加…' : kind === 'image' ? '使用所选图片' : '使用所选视频'} disabled={busy || loading || !chosen} onPress={confirm} /></View>
+    <View style={s.footer}><Text style={s.muted}>{chosen ? `${chosen.title} · 版本 ${chosen.version.versionNo}` : '尚未选择素材'}</Text><ListAction label={busy ? '正在添加…' : kind === 'image' ? '使用所选图片' : kind==='audio'?'使用所选音频':'使用所选视频'} disabled={busy || loading || !chosen} onPress={confirm} /></View>
   </SafeAreaView></Modal>;
 }

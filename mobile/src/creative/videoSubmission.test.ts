@@ -43,6 +43,30 @@ async function fixture() {
   return { db, service, draft, accounts, identity, input, submit, claim };
 }
 
+test('mixed image/audio inputs are pinned into the task and rejected atomically if their bytes change',async()=>{
+  const f=await fixture();
+  try{
+    const media=[];
+    for(const [kind,mime,char] of [['image','image/png','a'],['audio','audio/wav','b']] as const){
+      const sha256=char.repeat(64);f.db.runSync('INSERT INTO artifact_blobs VALUES(?,10,?,?,1,1)',sha256,mime,`cas/${sha256}`);
+      const result=await f.service.execute({name:'asset.import',payload:{title:kind,kind,blobSha256:sha256}},`import-${kind}`);
+      if(result.status!=='completed')throw new Error('Expected asset');
+      media.push({uri:`asset://${sha256}`,sha256,mime,size:10,name:result.value.versionId});
+    }
+    await f.service.execute({name:'draft.replaceVideoMedia',payload:{id:f.draft.id,expectedRevision:0,imageVersionIds:[media[0].name],audioVersionIds:[media[1].name]}},'references');
+    const draft=(await f.service.draft(f.draft.id))!,snapshot={...f.input.prepared.inputSnapshot,images:[media[0]],audios:[media[1]]};
+    const input={...f.input,expectedRevision:draft.revision,draftInputJson:draft.input_json,images:[media[0]],audios:[media[1]],versionIds:[media[1].name,media[0].name],prepared:{...f.input.prepared,inputSnapshot:snapshot,requestInput:snapshot}};
+    await expect(submitCreativeVideo(f.db as never,{...input,audios:[{...media[1],sha256:'changed'}]},100)).rejects.toThrow('DRAFT_INPUT_CHANGED');
+    expect(f.db.getAllSync('SELECT id FROM workflow_jobs')).toEqual([]);
+    const task=await submitCreativeVideo(f.db as never,input,100);
+    expect(f.db.getAllSync('SELECT slot,version_id FROM creative_job_inputs WHERE job_id=? ORDER BY slot',task.id)).toEqual([{slot:'audio',version_id:media[1].name},{slot:'image',version_id:media[0].name}]);
+    const persisted=f.db.getFirstSync<{audios_json:string}>('SELECT audios_json FROM tasks WHERE id=?',task.id)!;
+    expect(JSON.parse(persisted.audios_json)).toEqual([media[1]]);
+    expect(JSON.parse(f.db.getFirstSync<{input_json:string}>('SELECT input_json FROM workflow_jobs WHERE id=?',task.id)!.input_json)).toEqual(snapshot);
+    expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
+  }finally{f.db.close();}
+});
+
 (process.env.CREATIVE_LIVE_EVIDENCE ? test : test.skip)('saved live H3 output archives once with verified original bytes', async () => {
   const folder = path.resolve(process.env.CREATIVE_LIVE_EVIDENCE!);
   const status = JSON.parse(fs.readFileSync(path.join(folder, 'autodl.status.json'), 'utf8'));
