@@ -6,7 +6,7 @@ import { createCreativeBudget } from './budget';
 import { readSubmittedCreativeDraft, submitCreativeVideo } from './videoSubmission';
 import { bindCreativeAdapter, readCreativeJobBinding } from './boundExecution';
 import { archiveCreativeOutput } from './archiveOutput';
-import { H3_WORKFLOW_ID } from '../workflows/providers/autodl/metadata';
+import { H3_CREATIVE_WORKFLOW_ID as H3_WORKFLOW_ID } from './videoWorkflow';
 import { withWriteTransaction } from '../storage/sqliteBusy';
 import { createTaskRepository } from '../tasks/repository';
 import { quarantineRestoredExecution } from '../storage/restoreIsolation';
@@ -235,4 +235,15 @@ test('legacy source refresh for creative tasks resolves the original query accou
     await expect(resolveCreativeQueryCredential(f.db as never,task.id,resolve)).rejects.toThrow('INACTIVE');
     expect(await resolveCreativeQueryCredential(f.db as never,'unbound-legacy',resolve)).toBeNull();
   }finally{f.db.close();}
+});
+
+
+test('legacy drafts with the remote H3 id submit through the local catalog identity', async () => {
+  const f = await fixture();
+  try {
+    f.db.runSync("UPDATE creative_generation_drafts SET workflow_id='minimax_h3_image_audio_to_video_v2_15s' WHERE id=?", f.draft.id);
+    const job = await f.submit();
+    expect(job.workflowId).toBe('autodl.minimax-h3.i2v-15s');
+    expect((await f.service.draft(f.draft.id))?.state).toBe('SUBMITTED');
+  } finally { f.db.close(); }
 });

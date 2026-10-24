@@ -89,8 +89,8 @@ export default function TasksScreen() {
       ListEmptyComponent={<ListEmptyState icon={snapshot.phase === 'stale' ? 'info' : 'list_alt'}
         loading={snapshot.phase === 'cold'}
         title={snapshot.phase === 'stale' ? '任务读取失败' : snapshot.phase === 'cold' ? '正在读取任务…' : filter === 'active' ? '暂无进行中的任务' : filter === 'failed' ? '暂无失败任务' : filter === 'archived' ? '暂无已归档任务' : '暂无任务'}
-        description={snapshot.phase === 'stale' ? '请检查连接后重试，任务记录会保留。' : snapshot.phase === 'cold' ? '正在同步任务状态，请稍候。' : filter === 'active' ? '新提交的任务会在这里显示生成与下载进度。' : filter === 'failed' ? '出现异常的任务会集中显示在这里，方便查看和处理。' : filter === 'archived' ? '归档可整理列表，不会停止后台追踪；归档的任务可以随时恢复。' : '从一个灵感开始，生成后可在这里查看进度、下载和保存视频。'}
-        action={snapshot.phase === 'cold' ? undefined : snapshot.phase === 'stale' ? { label: '重试读取任务', icon: 'refresh', onPress: refresh } : filter === 'archived' ? { label: '查看全部任务', onPress: () => setFilter('all') } : { label: '去生成视频', icon: 'movie_filter', onPress: () => router.push('/(tabs)/create') }}
+        description={snapshot.phase === 'stale' ? '请检查连接后重试，任务记录会保留。' : snapshot.phase === 'cold' ? '正在同步任务状态，请稍候。' : filter === 'active' ? '新提交的任务会在这里显示生成与下载进度。' : filter === 'failed' ? '出现异常的任务会集中显示在这里，方便查看和处理。' : filter === 'archived' ? '归档可整理列表，不会停止后台追踪；归档的任务可以随时恢复。' : '从一个灵感开始，生成后可在这里查看进度、下载和保存成果。'}
+        action={snapshot.phase === 'cold' ? undefined : snapshot.phase === 'stale' ? { label: '重试读取任务', icon: 'refresh', onPress: refresh } : filter === 'archived' ? { label: '查看全部任务', onPress: () => setFilter('all') } : { label: '开始创作', icon: 'movie_filter', onPress: () => router.push('/(tabs)/create') }}
         secondaryAction={snapshot.phase !== 'cold' && snapshot.phase !== 'stale' && filter !== 'all' && filter !== 'archived' ? { label: '查看全部任务', onPress: () => setFilter('all') } : undefined} />} renderItem={renderItem} />
   </View>;
 }

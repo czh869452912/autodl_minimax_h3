@@ -74,3 +74,13 @@ test('receipt failure rolls back the entire import and file ownership', async ()
     expect(f.db.getAllSync('SELECT * FROM creative_execution_origins')).toEqual([]);
   } finally { f.db.close(); }
 });
+
+test('asset type filtering precedes the page limit, so older matching assets remain discoverable', async () => {
+ const f = fixture();
+ try {
+  for (let i=0;i<105;i++) f.db.runSync('INSERT INTO creative_assets VALUES(?,?,?,NULL,0,?,?)', `a-${i}`, i===0?'video':'image', `Asset ${i}`, i, i);
+  expect((await f.service.assets()).length).toBe(100);
+  expect((await f.service.assets({kind:'video'})).map(a=>a.id)).toEqual(['a-0']);
+  expect((await f.service.assets({kind:'image',limit:200})).length).toBe(104);
+ } finally { f.db.close(); }
+});

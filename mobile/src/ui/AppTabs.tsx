@@ -17,6 +17,7 @@ export function AppTabs({ activeId, onSelect }: { activeId: AppTabId; onSelect: 
     const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
     return () => { show.remove(); hide.remove(); };
   }, []);
+  useEffect(() => { Keyboard.dismiss(); setKeyboardVisible(false); }, [layout.fontScale]);
   if (keyboardVisible) return null;
   return (
     <View onLayout={event => setBarWidth(event.nativeEvent.layout.width)} style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>

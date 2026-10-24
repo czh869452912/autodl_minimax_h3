@@ -25,9 +25,9 @@ export default function TabsLayout() {
         }}
       >
         <Tabs.Screen name="projects" options={{ title: '项目' }} />
-        <Tabs.Screen name="assets" options={{ title: '资产' }} />
+        <Tabs.Screen name="assets" options={{ title: '素材' }} />
         <Tabs.Screen name="create" options={{ title: '生成' }} />
-        <Tabs.Screen name="agent" options={{ title: 'Prompt 助手' }} />
+        <Tabs.Screen name="agent" options={{ title: '创作助手' }} />
         <Tabs.Screen name="tasks" options={{ title: '任务队列' }} />
         <Tabs.Screen name="gallery" options={{ title: '结果' }} />
         <Tabs.Screen name="settings" options={{ title: '设置' }} />

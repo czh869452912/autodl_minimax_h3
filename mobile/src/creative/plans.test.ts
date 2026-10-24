@@ -6,7 +6,7 @@ import type {CreativeCommand} from './types';
 import {runCreativePlans,reconcileCreativePlans} from './planRunner';
 import {createCreativeAccounts} from './accounts';
 import {createCreativeBudget} from './budget';
-import {H3_WORKFLOW_ID} from '../workflows/providers/autodl/metadata';
+import { H3_CREATIVE_WORKFLOW_ID as H3_WORKFLOW_ID } from './videoWorkflow';
 import {submitCreativeVideo} from './videoSubmission';
 async function fixture(){
   const db=createInitializedRealSqliteTestDb();let next=0;

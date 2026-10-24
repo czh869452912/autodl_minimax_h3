@@ -37,10 +37,10 @@ export const LIGHT_PROMPT_COLORS = {
 export const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 
 export const APP_TABS = [
-  { id: 'projects', label: '项目', icon: 'list_alt' },
-  { id: 'assets', label: '资产', icon: 'grid_view' },
   { id: 'create', label: '创作', icon: 'movie_filter' },
-  { id: 'agent', label: 'Agent', icon: 'smart_toy' },
+  { id: 'projects', label: '项目', icon: 'list_alt' },
+  { id: 'assets', label: '素材', icon: 'grid_view' },
+  { id: 'agent', label: '助手', icon: 'smart_toy' },
 ] as const;
 
 export type AppTabId = (typeof APP_TABS)[number]['id'];

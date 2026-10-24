@@ -1,3 +1,4 @@
+import { creativeVideoWorkflowId } from './videoWorkflow';
 import CryptoJS from 'crypto-js';
 import type { AppDatabase } from '../storage/appDatabase';
 import type { PreparedWorkflowSubmission } from '../workflows/runtime/runtime';
@@ -46,7 +47,7 @@ export async function submitCreativeVideo(db: AppDatabase, input: {
     const draft = await readCreativeDraft(tx, input.draftId);
     if (input.origin && (!input.origin.projectId || draft?.project_id !== input.origin.projectId)) throw new Error('AGENT_PROJECT_SCOPE_MISMATCH');
     if (!draft || draft.revision !== input.expectedRevision || draft.state !== 'EDITING' || draft.input_json !== input.draftInputJson) throw new Error('DRAFT_REVISION_CONFLICT');
-    if (draft.provider_id !== (image ? 'novelai' : 'autodl') || draft.workflow_id !== input.prepared.workflowId) throw new Error('DRAFT_PROVIDER_MISMATCH');
+    if (draft.provider_id !== (image ? 'novelai' : 'autodl') || (image ? draft.workflow_id : creativeVideoWorkflowId(draft.workflow_id)) !== input.prepared.workflowId) throw new Error('DRAFT_PROVIDER_MISMATCH');
     if (draft.project_id && !await tx.getFirstAsync('SELECT id FROM creative_projects WHERE id=? AND archived_at IS NULL', draft.project_id)) throw new Error('PROJECT_NOT_AVAILABLE');
     if (draft.target_asset_id && await tx.getFirstAsync('SELECT asset_id FROM creative_asset_trash WHERE asset_id=?', draft.target_asset_id)) throw new Error('TARGET_ASSET_TRASHED');
     if (draft.shot_id && !await tx.getFirstAsync('SELECT id FROM creative_shots WHERE id=? AND deleted_at IS NULL', draft.shot_id)) throw new Error('SHOT_NOT_AVAILABLE');

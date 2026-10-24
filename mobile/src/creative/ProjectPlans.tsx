@@ -12,7 +12,7 @@ import {COLORS} from '../ui/theme';
 import {planVideoSummary,type CreativePlan,type CreativeDecision,type CreativePlanStep} from './plans';
 import type {CreativeShot} from './story';
 type Card={plan:CreativePlan;decision:CreativeDecision;step:CreativePlanStep;candidates:Array<{version_id:string;title:string;relative_path:string|null}>};
-export function ProjectPlans({projectId,archived=false}:{projectId:string;archived?:boolean}){
+export function ProjectPlans({projectId,archived=false,compact=false}:{projectId:string;archived?:boolean;compact?:boolean}){
   const router=useRouter(),lock=useRef(false);
   const [cards,setCards]=useState<Card[]>([]),[shots,setShots]=useState<CreativeShot[]>([]),[shotId,setShotId]=useState(''),[prompt,setPrompt]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const [choices,setChoices]=useState<Array<{id:string;title:string}>>([]),[selected,setSelected]=useState<string[]>([]);
@@ -37,11 +37,13 @@ export function ProjectPlans({projectId,archived=false}:{projectId:string;archiv
         await creativeService().execute({name:'plan.resume',payload:{id:card.plan.id,expectedRevision:card.plan.revision,authorizationId}},createId());
       })}]);
   });
+  if (compact && !error && !cards.some(c => c.plan.state === 'ACTIVE' && (c.decision.state === 'WAITING' || c.step.state === 'BLOCKED'))) return null;
   return <View style={{gap:12}}>
-    <Text style={{color:COLORS.text,fontSize:20,fontWeight:'700'}}>选图与视频计划</Text>
-    <Text style={{color:COLORS.textMuted}}>计划会保留候选、选定版本与生成状态。视频结果归档为候选，不会覆盖镜头已选成果。</Text>
+    <Text style={{color:COLORS.text,fontSize:20,fontWeight:'700'}}>{compact?'需要你处理':'选图与视频计划'}</Text>
+    {!compact ? <Text style={{color:COLORS.textMuted}}>计划会保留候选、选定版本与生成状态。视频结果归档为候选，不会覆盖镜头已选成果。</Text> : null}
     {error?<Text accessibilityRole="alert" style={{color:COLORS.danger}}>{error}</Text>:null}
-    {cards.map(card=><View key={card.plan.id} style={{borderWidth:1,borderColor:COLORS.border,borderRadius:12,padding:12,gap:8}}>
+    {compact&&!cards.some(c=>c.plan.state==='ACTIVE')?<Text style={{color:COLORS.textMuted}}>暂无等待处理的选图计划。</Text>:null}
+    {cards.filter(c=>!compact||c.plan.state==='ACTIVE').map(card=><View key={card.plan.id} style={{borderWidth:1,borderColor:COLORS.border,borderRadius:12,padding:12,gap:8}}>
       <Text style={{color:COLORS.text,fontWeight:'700'}}>{card.plan.title}</Text>
       <Text style={{color:COLORS.textMuted}}>{({ACTIVE:'进行中',COMPLETED:'已归档视频候选',CANCELLED:'已取消',QUARANTINED:'备份恢复后已隔离，不会自动生成'} as Record<string,string>)[card.plan.state]} · {({PENDING:'等待选图',READY:'等待提交',BLOCKED:'待处理',DISPATCHED:'已提交任务',SUCCEEDED:'完成',FAILED:'任务未完成',CANCELLED:'已取消'} as Record<string,string>)[card.step.state]}</Text>
       <Text style={{color:COLORS.textMuted}}>{planVideoSummary(card.step.input_binding_json)}{'\n'}视频提示词：{JSON.parse(card.step.input_binding_json).prompt}</Text>
@@ -54,11 +56,11 @@ export function ProjectPlans({projectId,archived=false}:{projectId:string;archiv
         })}]))}
       </View>):null}
       {card.plan.state==='ACTIVE'&&card.step.state==='BLOCKED'&&!card.step.job_id?action('授权并继续生成',()=>authorize(card)):null}
-      {card.step.job_id?<ListAction label="查看生成任务" secondary onPress={()=>router.push('/(tabs)/tasks')}/>:null}
+      {card.step.job_id?<ListAction label="查看生成任务" secondary onPress={()=>router.push({pathname:'/creative-task/[id]',params:{id:card.step.job_id!}})}/>:null}
       {card.plan.state==='ACTIVE'&&card.step.state!=='DISPATCHED'?action('取消计划',()=>void work(()=>creativeService().execute({name:'plan.cancel',payload:{id:card.plan.id,expectedRevision:card.plan.revision}},createId()))):null}
       {card.plan.state==='QUARANTINED'?<Text style={{color:COLORS.textMuted}}>请先核对旧任务结果。确需再次生成时新建计划并重新授权，可能重复消费。</Text>:null}
     </View>)}
-    {!archived?<View style={{gap:8}}>
+    {!archived&&!compact?<View style={{gap:8}}>
       <Text style={{color:COLORS.text,fontWeight:'700'}}>新建选图计划</Text>
       {shots.map(s=><View key={s.id}>{action(`${shotId===s.id?'✓ ':''}${s.title}`,()=>{setShotId(s.id);setPrompt(s.description);})}</View>)}
       <TextInput accessibilityLabel="计划视频提示词" placeholder="动作、运镜和节奏" multiline value={prompt} onChangeText={setPrompt} style={{color:COLORS.text,borderWidth:1,borderColor:COLORS.border,padding:12,minHeight:90}}/>

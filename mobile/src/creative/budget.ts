@@ -62,6 +62,18 @@ export async function dispatchCreativeBudget(tx: AppDatabase, id: string, exactI
 
 export function createCreativeBudget(db: AppDatabase, now = Date.now) {
   return {
+    async availableUnknownRequests(projectId: string, provider: CreativeProvider) {
+      const rows = await db.getAllAsync<Authorization & { used: number; unknown_used: number }>(
+        `SELECT a.*, COALESCE((SELECT SUM(r.request_units) FROM creative_budget_reservations r WHERE r.authorization_id=a.id AND r.state!='RELEASED'),0) AS used,
+        COALESCE((SELECT SUM(r.request_units) FROM creative_budget_reservations r WHERE r.authorization_id=a.id AND r.state!='RELEASED' AND r.reserved_amount IS NULL),0) AS unknown_used
+        FROM creative_authorizations a JOIN creative_execution_state e ON e.id=1 AND e.epoch=a.execution_epoch
+        JOIN creative_default_accounts d ON d.provider_id=a.provider_id AND d.credential_generation_id=a.credential_generation_id
+        JOIN creative_credential_generations g ON g.id=d.credential_generation_id AND g.status='active'
+        JOIN creative_projects p ON p.id=a.project_id AND p.archived_at IS NULL
+        WHERE a.project_id=? AND a.provider_id=? AND a.revoked_at IS NULL AND a.expires_at>? AND a.allow_unknown_cost=1 AND a.amount_limit IS NULL`, projectId, provider, now());
+      return rows.filter(r => JSON.parse(r.allowed_operations_json).includes(provider === 'novelai' ? 'image.generate' : 'video.generate'))
+        .reduce((sum, r) => sum + Math.max(0, Math.min(r.request_limit-r.used, r.max_unknown_requests-r.unknown_used)), 0);
+    },
     async list() { return db.getAllAsync<Authorization>('SELECT * FROM creative_authorizations ORDER BY created_at DESC'); },
     async grant(input: { provider: CreativeProvider; generationId: string; projectId?: string; operations: string[]; requestLimit: number; amountLimit: number | null; allowUnknownCost: boolean; maxUnknownRequests: number; expiresAt: number }) {
       count.parse(input.requestLimit); money.nullable().parse(input.amountLimit); z.number().int().min(0).max(input.requestLimit).parse(input.maxUnknownRequests);

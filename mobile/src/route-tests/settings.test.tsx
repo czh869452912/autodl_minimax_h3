@@ -1,3 +1,4 @@
+jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({}), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { Alert, Linking, ScrollView, Text } from 'react-native';

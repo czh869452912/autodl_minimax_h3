@@ -28,6 +28,7 @@ import { createAppWorkflowCatalog } from '../workflows/registry/builtin';
 import { registryRecordToDefinition } from '../workflows/registry/catalog';
 import type { RegistryRecord } from '../workflows/registry/types';
 import type { WorkflowDefinition } from '../workflows/schema/types';
+import { AgentCreativeCards } from '../creative/AgentCreativeCards';
 import { AgentCreativePanel } from '../creative/AgentCreativePanel';
 
 type AgentConfig = H3AgentConfig;
@@ -393,6 +394,7 @@ function AgentSession({
       >
         <PromptAssistantUi
           {...uiProps}
+          creativeCards={<AgentCreativeCards threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />}
           onExportPrompt={onExportPrompt}
           onExportHandoff={onExportHandoff}
           clientState={liveSnapshot.state as Record<string, unknown>}
@@ -448,7 +450,7 @@ function StatusView({
         {message ?? '正在加载 Prompt 助手…'}
       </Text>
       {!loading ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="打开 LLM 设置" onPress={() => router.navigate('/(tabs)/settings')} style={{ minHeight: 48, padding: 12, justifyContent: 'center' }}><Text style={{ color: COLORS.primaryActive }}>打开设置</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="打开 LLM 设置" onPress={() => router.navigate({ pathname: '/(tabs)/settings', params: { section: 'assistant' } })} style={{ minHeight: 48, padding: 12, justifyContent: 'center' }}><Text style={{ color: COLORS.primaryActive }}>打开设置</Text></Pressable>
       ) : null}
     </View>
   );

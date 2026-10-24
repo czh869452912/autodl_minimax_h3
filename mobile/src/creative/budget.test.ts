@@ -138,3 +138,21 @@ test('provider identity mismatch fails closed and rotation without stable ID bin
     await expect(f.accounts.resolveExact(connected.generationId, 'query')).rejects.toThrow('CREDENTIAL_GENERATION_INACTIVE');
   } finally { f.close(); }
 });
+
+test('visible project allowance excludes held requests, revoked grants and stale account generations', async () => {
+ const f = await fixture({unknown:true,amountLimit:null});
+ try {
+  f.db.runSync("INSERT INTO creative_projects VALUES('p','Project','',0,NULL,1,1)");
+  const id = await f.budget.grant({...f.grantInput, projectId:'p'});
+  expect(await f.budget.availableUnknownRequests('p','novelai')).toBe(1);
+  await f.budget.reserve({...f.input, authorizationId:id, projectId:'p', estimate:{...f.input.estimate,maximum:null}});
+  expect(await f.budget.availableUnknownRequests('p','novelai')).toBe(0);
+  const next = await f.budget.grant({...f.grantInput,projectId:'p'});
+  expect(await f.budget.availableUnknownRequests('p','novelai')).toBe(1);
+  await f.budget.revoke(next);
+  expect(await f.budget.availableUnknownRequests('p','novelai')).toBe(0);
+  await f.budget.grant({...f.grantInput,projectId:'p'});
+  await f.accounts.connect('novelai','token-new-B');
+  expect(await f.budget.availableUnknownRequests('p','novelai')).toBe(0);
+ } finally { f.close(); }
+});

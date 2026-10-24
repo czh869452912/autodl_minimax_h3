@@ -38,7 +38,7 @@ describe('tabs shell layout', () => {
       expect(tab.props.accessibilityState.selected).toBe(APP_TABS[index].id === 'agent');
       expect(StyleSheet.flatten(tab.props.style).minHeight).toBeGreaterThanOrEqual(48);
     });
-    act(() => tree.root.findAll(node => node.props.accessibilityLabel === APP_TABS[2].label && typeof node.props.onPress === 'function')[0].props.onPress());
+    act(() => tree.root.findAll(node => node.props.accessibilityLabel === APP_TABS.find(tab => tab.id === 'create')!.label && typeof node.props.onPress === 'function')[0].props.onPress());
     expect(select).toHaveBeenCalledWith('create');
     act(() => (callbacks.get('keyboardWillShow') ?? callbacks.get('keyboardDidShow'))!());
     expect(getTabs()).toHaveLength(0);

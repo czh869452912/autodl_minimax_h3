@@ -4,7 +4,7 @@ import { ICON_NAMES } from './icons';
 describe('native app shell contract', () => {
   it('keeps four creative application destinations', () => {
     expect(APP_TABS).toHaveLength(4);
-    expect(APP_TABS.map((tab) => tab.id)).toEqual(['projects', 'assets', 'create', 'agent']);
+    expect(APP_TABS.map((tab) => tab.id)).toEqual(['create', 'projects', 'assets', 'agent']);
   });
 
   it('provides readable text for light surfaces and filled primary buttons', () => {

@@ -35,6 +35,7 @@ function mockCreateAgent() {
   };
 }
 jest.mock('expo-router', () => ({
+  useLocalSearchParams: () => ({}),
   useRouter: () => ({ navigate() {} }),
   useFocusEffect: (effect: () => void) => { require('react').useEffect(effect, [effect]); },
 }));

@@ -105,6 +105,7 @@ export function PromptAssistantUi({
   onLoadMoreHistory,
   transcript,
   transcriptRevision,
+  creativeCards,
   workflowDefinition,
   workflows,
   workflowLoadIssue,
@@ -123,6 +124,7 @@ export function PromptAssistantUi({
   onAccept?: (input: { id: string; text: string; attachments: unknown[]; draftRevision: number }) => Promise<void>;
   transcript?: readonly unknown[];
   transcriptRevision?: number;
+  creativeCards?: React.ReactNode;
   workflowDefinition?: WorkflowDefinition;
   workflows?: WorkflowChoice[];
   workflowLoadIssue?: string;
@@ -347,7 +349,7 @@ export function PromptAssistantUi({
           />
         </Pressable>
         <View style={styles.headerTitleWrap}>
-          <Text style={styles.eyebrow}>PROMPT 助手</Text>
+          <Text style={styles.eyebrow}>创作助手</Text>
           <Text style={styles.title} numberOfLines={1}>
             {threads.find((item) => item.threadId === activeThreadId)
               ? sessionTitle(
@@ -374,6 +376,7 @@ export function PromptAssistantUi({
             </View>
           ) : null}
           <ConversationTimeline
+            creativeCards={creativeCards}
             bottomInset={composerHeight}
             rows={rows}
             isRunning={isRunning || submitting}
@@ -494,6 +497,7 @@ export function ConversationTimeline({
   runs = [],
   latestVersionMessageId,
   bottomInset = 0,
+  creativeCards,
 }: {
   rows: ReturnType<typeof normalizeMessages>;
   onResend?: () => Promise<void>;
@@ -507,6 +511,7 @@ export function ConversationTimeline({
   runs?: PromptRun[];
   latestVersionMessageId?: string;
   bottomInset?: number;
+  creativeCards?: React.ReactNode;
 }) {
   const listRef = useRef<FlatList<ReturnType<typeof projectRunTimeline>[number]>>(null);
   const [visibleCount, setVisibleCount] = useState(50);
@@ -585,6 +590,7 @@ export function ConversationTimeline({
           }
           ListFooterComponent={
             <View style={{ paddingBottom: bottomInset }}>
+            {creativeCards}
             {runIssue ? <RunIssueRow issue={runIssue} onRetry={runIssue.kind === 'submit' ? onResend ?? (async () => undefined) : onRetry} onDismiss={onDismissIssue} disabled={isRunning} /> : !runs.length && allRows.length > 0 && isRunning ? (
               <RunningIndicator compact />
             ) : null}

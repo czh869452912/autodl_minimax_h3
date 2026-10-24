@@ -28,7 +28,7 @@ export function ProjectActivity({projectId}:{projectId:string}){
     {!rows.length?<Text style={{color:COLORS.textMuted}}>尚无活动。</Text>:null}
     {rows.map(r=><View key={`${r.kind}:${r.id}`} style={{padding:12,borderWidth:1,borderColor:COLORS.border,borderRadius:10,gap:6}}>
       <Text style={{color:COLORS.text}}>{r.label} · {r.state}</Text><Text style={{color:COLORS.textMuted}}>{new Date(r.createdAt).toLocaleString()} · {r.origin==='agent'?'Agent':r.origin==='user'?'手动操作':r.origin==='executor'?'执行器':'计划'}</Text>
-      {r.jobId?<ListAction label="查看任务" secondary onPress={()=>router.push('/(tabs)/tasks')}/>:r.draftId?<ListAction label="查看草稿" secondary onPress={()=>void creativeService().draft(r.draftId!).then(d=>{if(d)router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}});}).catch(()=>setError('草稿读取失败'))}/>:null}
+      {r.jobId?<ListAction label="查看任务" secondary onPress={()=>router.push({pathname:'/creative-task/[id]',params:{id:r.jobId!}})}/>:r.draftId?<ListAction label="查看草稿" secondary onPress={()=>void creativeService().draft(r.draftId!).then(d=>{if(d)router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}});}).catch(()=>setError('草稿读取失败'))}/>:null}
     </View>)}
   </View>;
 }

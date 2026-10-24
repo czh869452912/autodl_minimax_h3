@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import type { AppDatabase } from '../storage/appDatabase';
-import { H3_WORKFLOW_ID } from '../workflows/providers/autodl/metadata';
+import { H3_CREATIVE_WORKFLOW_ID as H3_WORKFLOW_ID } from './videoWorkflow';
 import { RESOLUTION_OPTIONS } from '../create/resolutions';
 import { novelAiDraftInput, defaultNovelAiDraft } from './novelAiProtocol';
 const id = z.string().min(1).max(200), revision = z.number().int().nonnegative();
 export const videoDraftInput = z.object({ schemaVersion: z.literal(1).default(1), prompt: z.string().max(10000), resolution: z.enum(RESOLUTION_OPTIONS), duration: z.number().int().min(1).max(15), seed: z.string().regex(/^$|^\d{1,15}$/) }).strict();
 export const draftSchemas = {
   'draft.copySubmitted':z.object({id}).strict(),
-  'draft.createImage': z.object({ projectId: id.optional(), input: novelAiDraftInput.optional(), fromVersionId: id.optional() }).strict(),
+  'draft.createImage': z.object({ projectId: id.optional(), shotId: id.optional(), input: novelAiDraftInput.optional(), fromVersionId: id.optional() }).strict(),
   'draft.updateImage': z.object({ id, expectedRevision: revision, input: novelAiDraftInput }).strict(),
   'draft.createVideo': z.object({ projectId: id.optional(), shotId: id.optional(), versionId: id.optional(), prompt: z.string().max(10000).default('') }).strict(),
   'draft.updateVideo': z.object({ id, expectedRevision: revision, input: videoDraftInput }).strict(),
@@ -39,7 +39,13 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     return {draftId,provider:source.provider_id,supersedesJobId:source.job_id};
   }
   if (name === 'draft.createImage') {
-    await project(p.projectId);
+    let projectId = p.projectId ?? null;
+    if (p.shotId) {
+      const shot = await tx.getFirstAsync<{ project_id: string }>('SELECT project_id FROM creative_shots WHERE id=? AND deleted_at IS NULL', p.shotId);
+      if (!shot || (projectId && projectId !== shot.project_id)) throw new Error('SHOT_SCOPE_MISMATCH');
+      projectId = shot.project_id;
+    }
+    await project(projectId);
     let input = p.input ?? defaultNovelAiDraft, assetId: string | null = null;
     if (p.fromVersionId) {
       const version = await tx.getFirstAsync<{ asset_id: string; recipe_json: string }>("SELECT v.* FROM creative_asset_versions v JOIN creative_assets a ON a.id=v.asset_id AND a.kind='image' WHERE v.id=? AND NOT EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=a.id)", p.fromVersionId);
@@ -49,7 +55,7 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
       assetId = version.asset_id;
     }
     const draftId = makeId();
-    await tx.runAsync("INSERT INTO creative_generation_drafts VALUES(?,?,NULL,?,'novelai','novelai-image-basic',?,0,'EDITING',NULL,?,?)", draftId, p.projectId ?? null, assetId, JSON.stringify(input), now, now);
+    await tx.runAsync("INSERT INTO creative_generation_drafts VALUES(?,?,?,?,'novelai','novelai-image-basic',?,0,'EDITING',NULL,?,?)", draftId, projectId, p.shotId ?? null, assetId, JSON.stringify(input), now, now);
     if (p.fromVersionId) await tx.runAsync("INSERT INTO creative_draft_inputs VALUES(?,'base',0,?)", draftId, p.fromVersionId);
     return { draftId };
   }

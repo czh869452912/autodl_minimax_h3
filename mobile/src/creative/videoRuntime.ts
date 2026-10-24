@@ -1,3 +1,4 @@
+import { creativeVideoWorkflowId } from './videoWorkflow';
 import { getDatabase } from '../storage/databaseClient';
 import { readCreativeDraft, readDraftInputs, videoDraftInput } from './drafts';
 import { creativeFiles } from './runtime';
@@ -20,7 +21,7 @@ export async function prepareCreativeVideo(id: string) {
   if (refs.some(r => r.state !== 'AVAILABLE')) throw new Error('请先恢复参考图原件');
   const images = refs.map(r => ({ uri: `asset://${r.blob_sha256}`, sha256: r.blob_sha256, mime: r.mime, size: r.byte_size, name: r.version_id }));
   const catalog = createAppWorkflowCatalog(); await catalog.bootstrap();
-  const record = await catalog.getActive(draft.workflow_id);
+  const record = await catalog.getActive(creativeVideoWorkflowId(draft.workflow_id));
   if (!record) throw new Error('H3 工作流尚未安装');
   const definition = registryRecordToDefinition(record);
   const { schemaVersion: _, ...fields } = input;
