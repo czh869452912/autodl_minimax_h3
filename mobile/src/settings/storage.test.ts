@@ -18,6 +18,7 @@ describe('local LLM settings', () => {
 
     await expect(readSettings()).resolves.toEqual({
       videoDecodeMode: 'auto',
+      autoExportImagesToGallery:false,
       llmEndpoint: 'https://api.example.test/v1',
       llmModel: 'h3-model',
       llmApiKey: 'llm-key',

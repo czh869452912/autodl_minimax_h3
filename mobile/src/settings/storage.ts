@@ -16,10 +16,12 @@ const keys = {
   llmMaxOutputTokens: 'llm.maxOutputTokens',
   llmReasoningEffort: 'llm.reasoningEffort',
   videoDecodeMode: VIDEO_DECODE_MODE_KEY,
+  autoExportImagesToGallery: 'media.autoExportImagesToGallery',
 } as const;
 
 export type AppSettings = {
   videoDecodeMode?: VideoDecodeMode;
+  autoExportImagesToGallery?: boolean;
   llmEndpoint: string;
   llmModel: string;
   llmApiKey: string;
@@ -33,10 +35,11 @@ export type AppSettings = {
 };
 
 export async function readSettings(): Promise<AppSettings> {
-  const [llmEndpoint, llmModel, llmApiKey, llmTimeoutSeconds, llmMaxRetries, autoExportToGallery, keepPrivateCopy, llmContextWindowTokens, llmMaxOutputTokens, llmReasoningEffort, videoDecodeMode] = await Promise.all(
+  const [llmEndpoint, llmModel, llmApiKey, llmTimeoutSeconds, llmMaxRetries, autoExportToGallery, keepPrivateCopy, llmContextWindowTokens, llmMaxOutputTokens, llmReasoningEffort, videoDecodeMode, autoExportImagesToGallery] = await Promise.all(
     Object.values(keys).map((key) => SecureStore.getItemAsync(key)),
   );
   return {
+    autoExportImagesToGallery: autoExportImagesToGallery === 'true',
     videoDecodeMode: normalizeVideoDecodeMode(videoDecodeMode),
     llmEndpoint: llmEndpoint || 'https://api.openai.com/v1',
     llmModel: llmModel || 'gpt-4o-mini',
@@ -53,6 +56,7 @@ export async function readSettings(): Promise<AppSettings> {
 
 export async function saveSettings(values: Partial<AppSettings>): Promise<void> {
   await Promise.all([
+    values.autoExportImagesToGallery === undefined ? undefined : SecureStore.setItemAsync(keys.autoExportImagesToGallery, String(values.autoExportImagesToGallery)),
     values.videoDecodeMode === undefined ? undefined : SecureStore.setItemAsync(VIDEO_DECODE_MODE_KEY, normalizeVideoDecodeMode(values.videoDecodeMode)),
     values.llmEndpoint === undefined ? undefined : SecureStore.setItemAsync(keys.llmEndpoint, values.llmEndpoint),
     values.llmModel === undefined ? undefined : SecureStore.setItemAsync(keys.llmModel, values.llmModel),

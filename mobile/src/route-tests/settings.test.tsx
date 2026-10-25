@@ -1,6 +1,6 @@
 let mockSection:string|undefined='assistant';
 beforeEach(()=>{mockSection='assistant';});
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({section:mockSection}), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
+jest.mock('expo-router', () => ({ useRouter:()=>({back:jest.fn(),canGoBack:()=>true,navigate:jest.fn()}), useLocalSearchParams: () => ({section:mockSection}), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { Alert, Linking, ScrollView, Text } from 'react-native';

@@ -33,7 +33,7 @@ import {alignVideoState,transferVideoValues,videoSession,workflowVideoState,type
 import {listVideoWorkflows,resolveVideoWorkbench,rememberVideoWorkflow,videoAccountReady,type VideoWorkflowEntry} from './videoWorkbenchWorkflows';
 
 type MediaRow=Awaited<ReturnType<ReturnType<typeof creativeService>['draftInputs']>>[number];
-type Sheet='workflow'|'references'|'orientation'|'quality'|'duration'|'settings'|'account'|undefined;
+type Sheet='workflow'|'orientation'|'quality'|'duration'|'settings'|'account'|undefined;
 export function VideoDraftScreen({id,embedded=false}:{id:string;embedded?:boolean}){return <CompactWorkbench><VideoCanvas initialId={id} embedded={embedded}/></CompactWorkbench>;}
 
 function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){
@@ -143,7 +143,7 @@ function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){
     }catch(e){setError(creativeError(e,'切换失败，原输入仍保留'));}finally{lock.current=false;switchLock.current=false;setBusy(false);}
   };
   const submit=async()=>{
-    if(lock.current||switchLock.current||!draft||!latest.current||!editable||conflict||pending)return;
+    if(lock.current||switchLock.current||!draft||!latest.current||!editable||conflict)return;
     Keyboard.dismiss();lock.current=true;setBusy(true);setError('');const snapshot=latest.current;let requestId:string|undefined;
     try{
       await assertCurrent();const request=await persistVideoWorkbenchInput(draft,snapshot,adopt);requestId=request.id;
@@ -168,10 +168,19 @@ function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){
   const importReference=async(kind:'image'|'audio')=>{
     if(lock.current||switchLock.current||!editable||!draft||!definition)return;lock.current=true;setBusy(true);setError('');
     try{
-      const rules=mediaConstraints(definition,kind==='image'?'images':'audios');let result;
-      if(kind==='image'){const [image]=await pickImagesFromGallery(1);if(image){if(!rules.mimes.includes(image.mimeType))throw new Error('图片格式不受当前工作流支持');result=await importCreativeImage(image,draft.project_id??undefined);}}
-      else {const picked=await DocumentPicker.getDocumentAsync({type:rules.mimes,multiple:false,copyToCacheDirectory:true});if(!picked.canceled&&picked.assets[0])result=await importCreativeFile(picked.assets[0],draft.project_id??undefined);}
-      if(result?.status==='completed')await writeReferences(kind,[...references.filter(ref=>(ref.slot==='audio')===(kind==='audio')).map(ref=>ref.version_id),result.value.versionId]);
+      const rules=mediaConstraints(definition,kind==='image'?'images':'audios');
+      const existing=references.filter(ref=>(ref.slot==='audio')===(kind==='audio')).map(ref=>ref.version_id),remaining=rules.maximum-existing.length;
+      if(remaining<=0)throw new Error('已达到当前工作流的素材数量限制');
+      const files=kind==='image'?await pickImagesFromGallery(remaining):await (async()=>{const picked=await DocumentPicker.getDocumentAsync({type:rules.mimes,multiple:true,copyToCacheDirectory:true});return picked.canceled?[]:picked.assets;})();
+      if(files.length>remaining)throw new Error(`最多还可添加 ${remaining} 个素材，请重新选择`);
+      if(files.some(file=>!rules.mimes.includes(file.mimeType??'')))throw new Error('素材格式不受当前工作流支持');
+      const added:string[]=[];
+      for(const file of files){
+        const result=kind==='image'?await importCreativeImage(file as Parameters<typeof importCreativeImage>[0],draft.project_id??undefined):await importCreativeFile(file,draft.project_id??undefined);
+        if(result.status!=='completed')throw new Error('素材导入未完成，已导入的文件可从素材库选择');
+        added.push(result.value.versionId);
+      }
+      if(added.length)await writeReferences(kind,[...new Set([...existing,...added])]);
     }catch(e){setError(creativeError(e,'素材导入失败'));}finally{lock.current=false;setBusy(false);}
   };
   const props=definition?inputProperties(definition):{},promptField=definition?inputField(definition,'prompt'):'prompt',prompt=String(input?.values[promptField]??input?.prompt??'');
@@ -183,16 +192,17 @@ function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){
   const parameterDefinition=definition?{...definition,ui:{sections:[{id:'parameters',title:'',fields:settingsFields}]}}:undefined;
   const quickDefinition=definition?{...definition,ui:{sections:[{id:'quick',title:'',fields:quickFields}]}}:undefined;
   const openSheet=(next:Sheet)=>{Keyboard.dismiss();if(next==='account'){router.push({pathname:'/(tabs)/settings',params:{section:'accounts'}});return;}setSheet(next);};
-  const mediaGroup=(kind:'image'|'audio',manage=false)=>{
+  const mediaGroup=(kind:'image'|'audio')=>{
     if(!definition)return null;
     const rows=references.filter(ref=>(ref.slot==='audio')===(kind==='audio')),rules=mediaConstraints(definition,kind==='image'?'images':'audios'),label=kind==='image'?'参考图':'参考音频';
     if(!rules.maximum&&!rows.length)return null;
-    if(!manage&&!rows.length)return <View style={s.row}><Text style={v.caption}>{label} · {rules.minimum?`至少 ${rules.minimum}`:'可选'} · 最多 {rules.maximum}{kind==='image'?' 张':' 段'}</Text><TextAction label={`添加${label}`} disabled={!editable||saving} onPress={()=>openSheet('references')}/></View>;
-    return <View style={{gap:8}}><View style={s.row}><Text style={v.label}>{label}<Text style={v.caption}> · {rows.length}/{rules.maximum}{rules.minimum?` · 至少 ${rules.minimum}`:' · 可选'}</Text></Text>{!manage&&rows.length?<TextAction label={`管理${label}`} onPress={()=>openSheet('references')}/>:null}</View>
-      {!manage?<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:8,alignItems:'center'}}>{rows.map((ref,i)=><Pressable key={ref.version_id} accessibilityRole="button" accessibilityLabel={`预览${label} ${i+1}`} onPress={()=>kind==='image'&&ref.state==='AVAILABLE'?setPreview(`${FileSystem.documentDirectory}${ref.relative_path}`):openSheet('references')} style={v.thumb}>{kind==='image'&&ref.state==='AVAILABLE'?<Image source={{uri:`${FileSystem.documentDirectory}${ref.relative_path}`}} resizeMode="cover" style={{width:'100%',height:'100%',borderRadius:6}}/>:<Text style={v.caption}>{kind==='audio'?`音频 ${i+1}`:'待恢复'}</Text>}</Pressable>)}{rows.length<rules.maximum?<Pressable accessibilityRole="button" accessibilityLabel={`添加${label}`} disabled={!editable||saving} onPress={()=>openSheet('references')} style={v.add}><Text style={{color:COLORS.primary,fontSize:22}}>＋</Text></Pressable>:null}</ScrollView>:<>
-        <View style={s.row}><TextAction label={`从素材选择${kind==='image'?'图片':'音频'}`} disabled={!editable||saving||rows.length>=rules.maximum} onPress={()=>setPicking(kind)}/><TextAction label={kind==='image'?'导入参考图':'导入音频'} disabled={!editable||saving||rows.length>=rules.maximum} onPress={()=>void importReference(kind)}/></View>
-        {rows.map((ref,i)=><View key={ref.version_id} style={s.row}><Text style={v.caption}>{label} {i+1}{ref.state!=='AVAILABLE'?' · 原件待恢复':''}</Text><View style={{flexDirection:'row'}}>{i>0?<TextAction label={`上移${label} ${i+1}`} disabled={!editable||saving} onPress={()=>{const ids=rows.map(r=>r.version_id);[ids[i-1],ids[i]]=[ids[i],ids[i-1]];void replaceReferences(kind,ids).catch(()=>undefined);}}/>:null}<TextAction label={`移除${label} ${i+1}`} disabled={!editable||saving} onPress={()=>void replaceReferences(kind,rows.filter(r=>r!==ref).map(r=>r.version_id)).catch(()=>undefined)}/></View></View>)}
-      </>}
+    const full=rows.length>=rules.maximum;
+    return <View style={{gap:6}}><View style={s.row}><Text style={v.label}>{label}<Text style={v.caption}> · {rows.length}/{rules.maximum}{rules.minimum?` · 至少 ${rules.minimum}`:' · 可选'}</Text></Text></View>
+      <View style={{flexDirection:'row',gap:12,flexWrap:'wrap'}}><TextAction label={`添加${label}`} disabled={!editable||saving||full} onPress={()=>void importReference(kind)}/><TextAction label={`从素材选择${kind==='image'?'图片':'音频'}`} disabled={!editable||saving||full} onPress={()=>setPicking(kind)}/></View>
+      {rows.length?<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:10,alignItems:'flex-start'}}>{rows.map((ref,i)=><View key={ref.version_id} style={{width:100,gap:2}}>
+        {kind==='image'?<Pressable accessibilityRole="button" accessibilityLabel={`预览${label} ${i+1}`} disabled={ref.state!=='AVAILABLE'} onPress={()=>setPreview(`${FileSystem.documentDirectory}${ref.relative_path}`)} style={[v.thumb,{width:100,height:72}]}>{ref.state==='AVAILABLE'?<Image source={{uri:`${FileSystem.documentDirectory}${ref.relative_path}`}} resizeMode="cover" style={{width:'100%',height:'100%',borderRadius:6}}/>:<Text style={v.caption}>待恢复</Text>}</Pressable>:<View style={[v.thumb,{width:100,height:48}]}><Text style={v.caption}>音频 {i+1}{ref.state!=='AVAILABLE'?' · 待恢复':''}</Text></View>}
+        <View style={{flexDirection:'row',justifyContent:'space-between'}}>{i>0?<IconAction label={`上移${label} ${i+1}`} icon="arrow_back" disabled={!editable||saving} onPress={()=>{const ids=rows.map(r=>r.version_id);[ids[i-1],ids[i]]=[ids[i],ids[i-1]];void replaceReferences(kind,ids).catch(()=>undefined);}}/>:<Text style={v.caption}>{i+1}</Text>}<IconAction label={`移除${label} ${i+1}`} icon="close" disabled={!editable||saving} onPress={()=>void replaceReferences(kind,rows.filter(r=>r!==ref).map(r=>r.version_id)).catch(()=>undefined)}/></View>
+      </View>)}</ScrollView>:null}
     </View>;
   };
   const hasResults=Boolean(resultDraft?.job_id),displayResult=view==='result'&&hasResults;
@@ -215,15 +225,14 @@ function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){
       {undo?<View style={s.row}><Text style={v.caption}>已应用助手建议</Text><TextAction label="撤销提示词修改" onPress={()=>{setInput(undo);setUndo(undefined);}}/></View>:null}
     </ScrollView></View>
     {resultDraft?<View style={{flex:displayResult?1:0,display:displayResult?'flex':'none'}}><CreativeResults draft={resultDraft} canvas previewVisible={displayResult} relatedAssetIds={assetIds} disabled={busy||saving} onJobStatus={setStatus}/></View>:null}
-    <View style={v.footer}>{displayResult?<Pressable accessibilityRole="button" accessibilityLabel={pending?'准备下一次':'调整后再生成'} onPress={()=>setView('create')} style={v.primary}><Text style={v.primaryText}>{pending?'准备下一次':'调整后再生成'}</Text></Pressable>:<Pressable accessibilityRole="button" accessibilityLabel="生成视频" disabled={!editable||busy||saving||conflict||pending||!accountReady||requiredPrompt&&!prompt.trim()} onPress={()=>void submit()} style={[v.primary,(!editable||busy||saving||conflict||pending||!accountReady||requiredPrompt&&!prompt.trim())&&{opacity:.5}]}><Text style={v.primaryText}>{busy?'处理中…':status==='UNKNOWN'&&pending?'请核查原任务':pending?'等待本次完成':props[durationField]?`生成 ${String(duration??'')} 秒视频`:'生成视频'}</Text></Pressable>}
+    <View style={v.footer}>{displayResult?<Pressable accessibilityRole="button" accessibilityLabel={pending?'准备下一次':'调整后再生成'} onPress={()=>setView('create')} style={v.primary}><Text style={v.primaryText}>{pending?'准备下一次':'调整后再生成'}</Text></Pressable>:<Pressable accessibilityRole="button" accessibilityLabel="生成视频" disabled={!editable||busy||saving||conflict||!accountReady||requiredPrompt&&!prompt.trim()} onPress={()=>void submit()} style={[v.primary,(!editable||busy||saving||conflict||!accountReady||requiredPrompt&&!prompt.trim())&&{opacity:.5}]}><Text style={v.primaryText}>{busy?'处理中…':props[durationField]?`生成 ${String(duration??'')} 秒视频`:'生成视频'}</Text></Pressable>}
       <Text accessibilityLiveRegion="polite" style={v.status}>{saving?'正在保存输入…':dirty?'输入待保存':pending?'已提交内容固定 · 下一次输入自动保存':'输入自动保存 · 费用暂无法估算'}</Text>
     </View>
     {sheet==='workflow'?<ParameterSheet title="视频工作流" description="选择已接入的视频能力" onClose={()=>setSheet(undefined)}>{entries.map(item=><View key={item.record.workflowId} style={{gap:4,paddingVertical:8,borderBottomWidth:1,borderBottomColor:COLORS.border}}><Text style={v.label}>{item.definition.metadata.title}</Text><Text style={v.caption}>{item.reason||item.definition.metadata.description||'视频生成'} · v{item.record.version}</Text>{!item.reason?<Text style={v.caption}>{mediaConstraints(item.definition,'images').maximum?`参考图 ≤ ${mediaConstraints(item.definition,'images').maximum} 张`:'无需图片'}{mediaConstraints(item.definition,'audios').maximum?` · 音频 ≤ ${mediaConstraints(item.definition,'audios').maximum} 段`:''}</Text>:null}{item.record.workflowId!==draft?.workflow_id?<TextAction label={`选择工作流 ${item.definition.metadata.title}`} disabled={Boolean(item.reason)||busy||saving} onPress={()=>void switchWorkflow(item)}/>:<Text style={v.caption}>当前使用</Text>}</View>)}{!entries.length?<Text style={v.caption}>没有已安装的视频工作流</Text>:null}<TextAction label="管理与同步工作流" onPress={()=>{setSheet(undefined);router.push({pathname:'/(tabs)/settings',params:{section:'workflows'}});}}/></ParameterSheet>:null}
-    {sheet==='references'?<ParameterSheet title="参考素材" onClose={()=>setSheet(undefined)}>{mediaGroup('image',true)}{mediaGroup('audio',true)}</ParameterSheet>:null}
     {(sheet==='orientation'||sheet==='quality')&&input?<ParameterSheet title={sheet==='orientation'?'画面方向':'清晰度'} onClose={()=>setSheet(undefined)}><SegmentedChoices label={sheet==='orientation'?'视频方向':'视频清晰度'} options={sheet==='orientation'?[{id:'横',label:'横屏'},{id:'竖',label:'竖屏'}]:[{id:'480p',label:'480p'},{id:'768p',label:'768p'}]} value={sheet==='orientation'?resolution.slice(-1):resolution.slice(0,-1)} disabled={!editable} onChange={value=>{const next=sheet==='orientation'?`${resolution.slice(0,-1)}${value}`:`${value}${resolution.slice(-1)}`;if(props[resolutionField]?.enum?.includes(next)){update(resolutionField,next);setSheet(undefined);}}}/></ParameterSheet>:null}
     {sheet==='duration'?<ParameterSheet title="视频时长" onClose={()=>setSheet(undefined)}><SegmentedChoices label="常用视频时长" options={[{id:'5',label:'5 秒'},{id:'10',label:'10 秒'},{id:'15',label:'15 秒'},{id:'custom',label:'自定义'}]} value={customDuration?'custom':String(duration)} disabled={!editable} onChange={value=>{setCustomDuration(value==='custom');if(value!=='custom'){update(durationField,Number(value));setSheet(undefined);}}}/>{customDuration?<><Text style={v.caption}>1–15 秒</Text><NovelAiNumberField label="视频时长" value={Number(duration)} editable={editable} onChange={value=>{if(value!==null)update(durationField,value);}}/></>:null}</ParameterSheet>:null}
     {sheet==='settings'&&parameterDefinition?<ParameterSheet title="更多视频设置" onClose={()=>setSheet(undefined)}><WorkflowForm compact definition={parameterDefinition} value={input?.values??{}} disabled={!editable} onChange={changeValues}/></ParameterSheet>:null}
-    {assist&&input?<PromptAssistSheet prompt={prompt} kind="video" onApply={value=>{setUndo(input);update(promptField,value);}} onClose={()=>setAssist(false)}/>:null}
+    {assist&&input?<View style={{height:320,maxHeight:'55%',borderTopWidth:0.5,borderColor:COLORS.border}}><PromptAssistSheet sessionId={`video:${initialId}`} disabled={!editable} workflow={definition?.id} prompt={prompt} kind="video" onApply={value=>{setUndo(input);update(promptField,value);}} onClose={()=>setAssist(false)}/></View>:null}
     {picking?<CreativeAssetPicker kind={picking} projectId={draft?.project_id??undefined} onClose={()=>setPicking(undefined)} onChoose={version=>replaceReferences(picking,[...references.filter(ref=>(ref.slot==='audio')===(picking==='audio')).map(ref=>ref.version_id).filter(id=>id!==version.id),version.id])}/>:null}
     {preview?<ImagePreview uri={preview} onClose={()=>setPreview(undefined)}/>:null}
   </KeyboardSurface></SafeAreaView>;

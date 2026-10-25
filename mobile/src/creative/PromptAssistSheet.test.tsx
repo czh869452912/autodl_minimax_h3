@@ -1,20 +1,41 @@
 import React from 'react';
 import {act,create} from 'react-test-renderer';
+import {Modal} from 'react-native';
 import {PromptAssistSheet} from './PromptAssistSheet';
-const mockSuggest=jest.fn(async()=> 'suggested prompt');
-jest.mock('./promptSuggestion',()=>({suggestCreativePrompt:(...args:unknown[])=>mockSuggest(...args as [])}));
+const mockRun=jest.fn(),mockRead=jest.fn(),mockWrite=jest.fn(async()=>undefined);
+jest.mock('./promptAssistant',()=>({...jest.requireActual('./promptAssistant'),streamPromptAssistant:(...args:unknown[])=>mockRun(...args)}));
+jest.mock('./promptAssistantSession',()=>({readPromptSession:(id:string)=>mockRead(id),writePromptSession:(...args:unknown[])=>mockWrite(...args as [])}));
 jest.mock('expo-router',()=>({useRouter:()=>({push:jest.fn()})}));
-const press=(tree:ReturnType<typeof create>,label:string)=>tree.root.findAll(n=>n.props.accessibilityLabel===label && typeof n.props.onPress==='function')[0].props.onPress();
-test('suggestions require explicit application and respect a concurrently changed draft',async()=>{
-  const apply=jest.fn(),close=jest.fn();let tree!:ReturnType<typeof create>;
-  try{
-    await act(async()=>{tree=create(<PromptAssistSheet prompt="original" kind="image" onApply={apply} onClose={close} />);});
-    await act(async()=>press(tree,'获取提示词建议'));
-    expect(apply).not.toHaveBeenCalled();
-    act(()=>tree.update(<PromptAssistSheet prompt="edited elsewhere" kind="image" onApply={apply} onClose={close} />));
-    expect(tree.root.findAll(n=>n.props.accessibilityLabel==='应用到当前草稿' && n.props.disabled===true).length).toBeGreaterThan(0);
-    act(()=>tree.update(<PromptAssistSheet prompt="original" kind="image" onApply={apply} onClose={close} />));
-    act(()=>press(tree,'应用到当前草稿'));
-    expect(apply).toHaveBeenCalledWith('suggested prompt');expect(close).toHaveBeenCalledTimes(1);
-  }finally{act(()=>tree?.unmount());}
+const button=(tree:ReturnType<typeof create>,label:string)=>tree.root.findAll(n=>n.props.accessibilityLabel===label&&typeof n.props.onPress==='function')[0];
+beforeEach(()=>{jest.clearAllMocks();mockRead.mockResolvedValue([]);mockRun.mockResolvedValue({content:'保留主体，增加月光',proposal:{summary:'增强光线',prompt:'moonlit cabin'}});});
+test('inline conversation supports follow-ups, explicit apply, undo and conflict protection',async()=>{
+ let tree!:ReturnType<typeof create>;const apply=jest.fn(),close=jest.fn();
+ const render=(prompt:string)=><PromptAssistSheet sessionId="draft-a" prompt={prompt} kind="video" onApply={apply} onClose={close}/>;
+ try{
+  await act(async()=>{tree=create(render('cabin'));});
+  expect(tree.root.findAllByType(Modal)).toHaveLength(0);
+  await act(async()=>button(tree,'润色，保留原意').props.onPress());
+  expect(apply).not.toHaveBeenCalled();
+  act(()=>tree.update(render('other')));
+  expect(button(tree,'采用描述').props.disabled).toBe(true);
+  act(()=>tree.update(render('cabin')));
+  act(()=>button(tree,'采用描述').props.onPress());
+  expect(apply).toHaveBeenLastCalledWith('moonlit cabin');expect(close).not.toHaveBeenCalled();
+  act(()=>tree.update(render('moonlit cabin')));
+  act(()=>button(tree,'撤销上次采用').props.onPress());expect(apply).toHaveBeenLastCalledWith('cabin');
+  act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='提示词修改方向'&&n.props.onChangeText)[0].props.onChangeText('减少月光'));
+  await act(async()=>button(tree,'发送').props.onPress());
+  expect(mockRun.mock.calls[1][1]).toEqual(expect.arrayContaining([expect.objectContaining({role:'assistant',proposal:expect.objectContaining({prompt:'moonlit cabin'})}),expect.objectContaining({content:'减少月光'})]));
+ }finally{act(()=>tree?.unmount());}
+});
+test('reopening restores only the selected draft conversation',async()=>{
+ mockRead.mockResolvedValue([{role:'user',content:'之前的构图要求'},{role:'assistant',content:'已记住'}]);let tree!:ReturnType<typeof create>;
+ try{await act(async()=>{tree=create(<PromptAssistSheet sessionId="draft-b" prompt="" kind="video" onApply={jest.fn()} onClose={jest.fn()}/>);});expect(mockRead).toHaveBeenCalledWith('draft-b');expect(JSON.stringify(tree.toJSON())).toContain('之前的构图要求');}finally{act(()=>tree?.unmount());}
+});
+test('stop cancels the request and never exposes its late proposal',async()=>{
+ let finish!:(value:any)=>void;mockRun.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));let tree!:ReturnType<typeof create>;
+ try{await act(async()=>{tree=create(<PromptAssistSheet sessionId="draft-c" prompt="cabin" kind="video" onApply={jest.fn()} onClose={jest.fn()}/>);});
+ act(()=>button(tree,'润色，保留原意').props.onPress());act(()=>button(tree,'停止').props.onPress());expect(mockRun.mock.calls[0][2].aborted).toBe(true);
+ await act(async()=>finish({content:'late',proposal:{summary:'late',prompt:'late'}}));expect(button(tree,'采用全部修改')).toBeUndefined();
+ }finally{act(()=>tree?.unmount());}
 });

@@ -12,13 +12,13 @@ export function ListAction({ label, onPress, icon, secondary = false, disabled =
   </Pressable>;
 }
 
-export function ListFilters<T extends string>({ label, options, value, onChange }: {
-  label: string; options: ReadonlyArray<{ id: T; label: string }>; value: T; onChange: (value: T) => void;
+export function ListFilters<T extends string>({ label, options, value, onChange, compact=false }: {
+  compact?:boolean;label: string; options: ReadonlyArray<{ id: T; label: string }>; value: T; onChange: (value: T) => void;
 }) {
-  return <View accessibilityRole="radiogroup" accessibilityLabel={label} style={listUI.filters}>
+  return <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[listUI.filters,compact && {marginVertical:0,gap:6}]}>
     {options.map(option => <Pressable key={option.id} accessibilityRole="radio" accessibilityLabel={option.label}
       accessibilityState={{ checked: value === option.id }} onPress={() => onChange(option.id)}
-      style={({ pressed }) => [listUI.filter, value === option.id && listUI.filterActive, pressed && listUI.pressed]}>
+      style={({ pressed }) => [listUI.filter,compact && {minHeight:36,paddingVertical:7,paddingHorizontal:10,borderRadius:8,flexGrow:0}, value === option.id && listUI.filterActive, pressed && listUI.pressed]}>
       <Text style={[listUI.filterText, value === option.id && listUI.filterTextActive]}>{option.label}</Text>
     </Pressable>)}
   </View>;

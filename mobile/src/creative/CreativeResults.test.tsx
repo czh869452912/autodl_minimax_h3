@@ -4,7 +4,8 @@ import { CreativeResults } from './CreativeResults';
 import type { AssetVersion } from './types';
 import type { CreativeDraft } from './drafts';
 import {defaultNovelAiDraft} from './novelAiProtocol';
-import {NativeModules} from 'react-native';
+import {NativeModules,StyleSheet} from 'react-native';
+import {ImagePreview} from '../ui/ImagePreview';
 import { createEnhanceInput } from './novelAiEnhancement';
 const mockPush = jest.fn(), mockReplace = jest.fn(), mockExecute = jest.fn();
 const mockReadStatus=jest.fn(async()=>({status:mockStatus}));
@@ -20,6 +21,31 @@ beforeEach(() => {
   jest.clearAllMocks(); mockReadStatus.mockReset().mockImplementation(async()=>({status:mockStatus}));mockStatus = 'SUCCEEDED';
   mockVersions = [2, 1].map(n => ({ id: `version-${n}`, assetId: 'asset', versionNo: n, source: 'generated', state: 'AVAILABLE', relativePath: `${n}.png`, mime: 'image/png', recipe: { jobId: 'job',input:defaultNovelAiDraft } }));
   mockExecute.mockResolvedValue({ status: 'completed', value: { draftId: 'next' } });
+});
+
+test('holding the floating compare control reveals the original without opening fullscreen or moving the stage',async()=>{
+  mockVersions[0].recipe.input={...defaultNovelAiDraft,sourceVersionId:'version-1'};
+  let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<CreativeResults draft={draft} canvas/>);});
+    const control=()=>tree.root.findAll(n=>n.props.accessibilityLabel==='按住查看原图'&&n.props.onPressIn)[0];
+    const overlay=()=>tree.root.findByProps({testID:'result-original-overlay'});
+    const stage=tree.root.findByProps({testID:'result-image-stage'}).props.style;
+    expect(StyleSheet.flatten(tree.root.findByProps({testID:'result-compare-overlay'}).props.style).position).toBe('absolute');
+    expect(overlay().props.style.opacity).toBe(0);
+    act(()=>control().props.onPressIn());
+    expect(overlay().props.style.opacity).toBe(1);
+    expect(overlay().props.source.uri).toContain('1.png');
+    expect(tree.root.findAllByType(ImagePreview)).toHaveLength(0);
+    expect(tree.root.findByProps({testID:'result-image-stage'}).props.style).toEqual(stage);
+    act(()=>control().props.onPressOut());
+    expect(overlay().props.style.opacity).toBe(0);
+    act(()=>control().props.onPressIn());
+    act(()=>findButton(tree,'上一张结果').props.onPress());
+    expect(tree.root.findAllByProps({testID:'result-original-overlay'})).toHaveLength(0);
+    act(()=>findButton(tree,'下一张结果').props.onPress());
+    expect(overlay().props.style.opacity).toBe(0);
+  }finally{act(()=>tree?.unmount());}
 });
 
 test('slow result reads do not overlap or let a delayed old status overwrite completion',async()=>{
@@ -154,6 +180,37 @@ test('canvas tools use the selected version in place and a new job selects its o
     mockVersions = [{ ...mockVersions[0], id: 'new', versionNo: 3, recipe: { jobId: 'new-job' } }, ...mockVersions];
     await act(async () => { tree.update(<CreativeResults draft={{...draft,job_id:'new-job'}} canvas onEnhance={enhance} onCurrentVersion={current} onJobStatus={status} historySignal={1} />); });
     expect(current).toHaveBeenLastCalledWith(mockVersions[0]);
-    expect(findButton(tree, '查看版本 1')).toBeUndefined();
+    expect(findButton(tree, '查看版本 1')).toBeDefined(); // Inline history stays open for continuous comparison.
   } finally { act(() => tree?.unmount()); }
+});
+
+test('history scroll lock does not freeze the result of a new generation', async () => {
+  const current=jest.fn();let tree!:ReturnType<typeof create>;
+  try {
+    await act(async()=>{tree=create(<CreativeResults draft={draft} canvas onCurrentVersion={current} historySignal={1}/>);});
+    act(()=>findButton(tree,'自动滚动到最新结果 · 点击锁定历史滚动').props.onPress());
+    act(()=>findButton(tree,'查看版本 1').props.onPress());
+    mockVersions=[{...mockVersions[0],id:'new',versionNo:3,recipe:{jobId:'new-job'}},...mockVersions];
+    await act(async()=>tree.update(<CreativeResults draft={{...draft,job_id:'new-job'}} canvas onCurrentVersion={current} historySignal={2}/>));
+    expect(current).toHaveBeenLastCalledWith(expect.objectContaining({id:'new'}));
+    act(()=>findButton(tree,'已锁定历史滚动 · 点击恢复自动滚动').props.onPress());
+    expect(current).toHaveBeenLastCalledWith(expect.objectContaining({id:'new'}));
+  } finally {act(()=>tree?.unmount());}
+});
+
+test('canvas seed reuse uses actual output seed including zero without generating',async()=>{
+  mockVersions[0].recipe.output={seed:0};const reuse=jest.fn();let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<CreativeResults draft={draft} canvas onReuse={reuse}/>);});
+    act(()=>findButton(tree,'复用 Seed').props.onPress());
+    expect(reuse).toHaveBeenCalledWith({seed:0});expect(mockExecute).not.toHaveBeenCalled();
+  }finally{act(()=>tree?.unmount());}
+});
+
+test('video task detail provides measurable playback bounds inside the scrolling results',async()=>{
+ mockVersions=[{...mockVersions[0],mime:'video/mp4',relativePath:'movie.mp4'}];let tree!:ReturnType<typeof create>;
+ try{await act(async()=>{tree=create(<CreativeResults draft={{...draft,provider_id:'autodl'}} taskDetail/>);});
+  expect(StyleSheet.flatten(tree.root.findByProps({testID:'result-video-stage'}).props.style).height).toBeGreaterThanOrEqual(220);
+  expect(tree.root.findByType(require('../media/VideoPlayer').VideoPlayer).props.source).toContain('movie.mp4');
+ }finally{act(()=>tree?.unmount());}
 });

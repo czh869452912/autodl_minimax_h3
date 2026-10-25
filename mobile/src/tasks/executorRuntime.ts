@@ -104,7 +104,7 @@ function createApplicationExecutor(database: AppDatabase) {
         await materializeJobArtifacts(job, [localArtifact], mediaStore, task);
         await commitArtifact({ operationId: operation.id, owner, jobId: operation.jobId, artifact: localArtifact,
           blob: { sha256: hash, byteSize: blob.byte_size, mime: blob.mime, relativePath: blob.relative_path, createdAt: blob.created_at, verifiedAt: blob.verified_at },
-          localUri: `${FileSystem.documentDirectory}${blob.relative_path}`, now: Date.now(), deliveryPolicy: { autoExportToGallery: false, keepPrivateCopy: true } });
+          localUri: `${FileSystem.documentDirectory}${blob.relative_path}`, now: Date.now(), deliveryPolicy: { autoExportToGallery: false, autoExportImagesToGallery:(await readSettings()).autoExportImagesToGallery, keepPrivateCopy: true } });
         return;
       }
       if (operation.payload.compatibilityOnly === true) {
@@ -119,6 +119,7 @@ function createApplicationExecutor(database: AppDatabase) {
         commit: commitArtifact,
         deliveryPolicy: {
           autoExportToGallery: settings.autoExportToGallery,
+          autoExportImagesToGallery: settings.autoExportImagesToGallery,
           keepPrivateCopy: settings.keepPrivateCopy,
         },
         updateProjection: async () => undefined,

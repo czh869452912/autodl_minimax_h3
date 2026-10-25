@@ -15,6 +15,7 @@ export function prepareSettingsForSave(values: AppSettings, options: { allowInse
     llmApiKey: values.llmApiKey.trim(),
     llmTimeoutSeconds: values.llmTimeoutSeconds.trim() || defaults.llmTimeoutSeconds,
     llmMaxRetries: values.llmMaxRetries.trim() || defaults.llmMaxRetries,
+    ...(values.autoExportImagesToGallery!==undefined?{autoExportImagesToGallery:values.autoExportImagesToGallery}:{}),
     autoExportToGallery: values.autoExportToGallery,
     keepPrivateCopy: values.keepPrivateCopy,
     ...(values.llmContextWindowTokens !== undefined ? { llmContextWindowTokens: values.llmContextWindowTokens.trim() || defaults.llmContextWindowTokens } : {}),

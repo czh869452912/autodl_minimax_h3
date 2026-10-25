@@ -51,6 +51,7 @@ test('first projection and manual refresh finish while worker and maintenance re
 
 test('download and export acknowledge persistence, monitoring uses off-page activity, pagination reads larger window', async () => {
   await act(async () => { tree = create(<TasksScreen />); });
+  act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='展开任务操作' && n.props.onPress)[0].props.onPress());
   await act(async () => tree.root.findByProps({ accessibilityLabel: '重试下载' }).props.onPress());
   expect(mockDownload).toHaveBeenCalledTimes(1);
   await act(async () => tree.root.findByProps({ accessibilityLabel: '开启持续监控' }).props.onPress());

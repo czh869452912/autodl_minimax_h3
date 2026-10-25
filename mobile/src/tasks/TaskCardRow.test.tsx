@@ -146,3 +146,16 @@ test('active removal is visibly disabled and archival has a full touch target', 
   expect(StyleSheet.flatten(archive.props.style({ pressed: false })).minHeight).toBeGreaterThanOrEqual(48);
   act(() => tree.unmount());
 });
+
+test('compact cards retain their summary and timing while only actions expand',async()=>{
+ const item:TaskCard={id:'v',prompt:'A moving camera',adapterId:'autodl',status:'SUCCESS',resolution:'768p',duration:5,createdAt:1000,startedAt:61000,updatedAt:66000,executionDuration:5,downloadState:'DOWNLOADED',exportState:'NOT_REQUESTED'};
+ let tree!:ReturnType<typeof create>;
+ try{await act(async()=>{tree=create(<TaskCardRow compact item={item} busy={false} onDownload={jest.fn()} onExport={jest.fn()} onRemove={jest.fn()} onOpen={jest.fn()}/>);});
+  const text=()=>tree.root.findAllByType(Text).map(n=>[n.props.children].flat().join(''));
+  expect(text()).toContain('排队 1分00秒');expect(text()).toContain('执行 0分05秒');
+  act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='展开任务操作'&&n.props.onPress)[0].props.onPress());
+  expect(text().filter(t=>t==='A moving camera')).toHaveLength(1);expect(text()).toContain('执行 0分05秒');
+  act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='收起任务操作'&&n.props.onPress)[0].props.onPress());
+  expect(text()).toContain('A moving camera');expect(text()).toContain('排队 1分00秒');
+ }finally{act(()=>tree?.unmount());}
+});

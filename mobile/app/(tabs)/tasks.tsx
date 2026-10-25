@@ -55,7 +55,7 @@ export default function TasksScreen() {
     if(bound){router.push({pathname:'/creative-task/[id]',params:{id}});return;}
     Alert.alert('创建新的尝试？','请先核查 AutoDL 任务记录。新任务可能重复消耗额度；参考素材必须仍然可用。',[{text:'取消',style:'cancel'},{text:'已核查，创建新任务',onPress:()=>{void getTaskServices().taskCommandService.replaceUnknownAfterConfirmation(id).catch(error=>Alert.alert('无法创建新尝试',String(error)));}}]);
   }).catch(()=>Alert.alert('读取失败','请重新打开任务'));},[]);
-  const renderItem = useCallback(({ item }: { item: TaskCard }) => <TaskCardRow onSettings={() => router.push({pathname:'/(tabs)/settings',params:{section:'accounts'}})} onRefresh={refresh} archived={filter === 'archived'} onArchive={(id, archived) => { void getTaskServices().taskCommandService.setArchived(id, archived).catch(error => Alert.alert('归档失败', String(error))); }} onReplace={recover} item={item} busy={busyIds.has(item.id)} onDownload={download} onExport={exportTask} onRemove={remove} onOpen={item.adapterId === 'novelai-image' ? id => router.push({pathname:'/creative-task/[id]',params:{id}}) : open} onCancel={id => { void getTaskServices().taskCommandService.requestCancel(id).catch(error => Alert.alert('无法取消', error.message)); }} onCancelMedia={(id, kind) => { void getTaskServices().taskCommandService.requestCancelMedia(id, kind).catch(error => Alert.alert('无法取消', error.message)); }} />, [busyIds, download, exportTask, remove, open, recover, filter, refresh]);
+  const renderItem = useCallback(({ item }: { item: TaskCard }) => <TaskCardRow compact onSettings={() => router.push({pathname:'/(tabs)/settings',params:{section:'accounts'}})} onRefresh={refresh} archived={filter === 'archived'} onArchive={(id, archived) => { void getTaskServices().taskCommandService.setArchived(id, archived).catch(error => Alert.alert('归档失败', String(error))); }} onReplace={recover} item={item} busy={busyIds.has(item.id)} onDownload={download} onExport={exportTask} onRemove={remove} onOpen={item.adapterId === 'novelai-image' ? id => router.push({pathname:'/creative-task/[id]',params:{id}}) : open} onCancel={id => { void getTaskServices().taskCommandService.requestCancel(id).catch(error => Alert.alert('无法取消', error.message)); }} onCancelMedia={(id, kind) => { void getTaskServices().taskCommandService.requestCancelMedia(id, kind).catch(error => Alert.alert('无法取消', error.message)); }} />, [busyIds, download, exportTask, remove, open, recover, filter, refresh]);
   const toggleMonitoring = async () => {
     if (monitorLock.current) return;
     monitorLock.current = true; setMonitorBusy(true);
@@ -78,7 +78,7 @@ export default function TasksScreen() {
         <Pressable accessibilityRole="button" accessibilityLabel="刷新任务" accessibilityState={{ busy: refreshing }} onPress={refresh} style={({ pressed }) => [styles.refresh, pressed && listUI.pressed]}>{refreshing ? <ActivityIndicator size="small" color={COLORS.primaryActive} /> : <AppIcon name="refresh" size={20} color={COLORS.textMuted} />}<Text style={styles.controlText}>刷新</Text></Pressable>
       </View>
     </View>
-    <Text style={styles.subtitle}>任务状态、下载进度和本地媒体统一管理。</Text>
+
     {refreshing || snapshot.activity.activeTaskCount > 0 || updated ? <Text style={styles.syncStatus}>{refreshing ? '正在刷新…' : snapshot.work.phase === 'running' ? '正在同步任务' : snapshot.activity.remainingDue + snapshot.activity.remainingScheduled > 0 ? '等待下一次同步' : snapshot.activity.activeTaskCount > 0 ? '本机同步暂无排期，请查看任务提示；服务端任务可能仍在执行' : '列表更新于 ' + updated}</Text> : null}
     {snapshot.work.phase === 'running' ? <Text style={styles.syncStatus}>后台处理中…</Text> : null}
     {snapshot.work.phase === 'backoff' ? <Text style={styles.syncStatus}>后台处理将在稍后重试</Text> : null}
@@ -87,7 +87,7 @@ export default function TasksScreen() {
     {background.phase === 'failed' ? <View style={listUI.notice}><Text accessibilityRole="alert" style={styles.syncError}>后台同步注册失败，回到应用时会重试；前台任务仍可继续。</Text><ListAction secondary icon="refresh" label="重试后台同步注册" onPress={() => { void backgroundRegistration.retry(); }} /></View> : null}
     {(monitoring || snapshot.activity.activeTaskCount > 0) && (monitoring ? <Text style={styles.syncStatus}>持续监控所有任务；任务及下载、保存操作完成后自动停止。系统可能延迟或终止后台执行。{monitor.notificationsEnabled === false ? '完成通知未开启。' : ''}</Text> : monitor.stopReason === 'user' ? <Text style={styles.syncStatus}>持续监控已由你停止。</Text> : monitor.stopReason === 'timeout' ? <Text style={styles.syncError}>已达到系统后台运行时限，持续监控已停止；可重新开启。</Text> : monitor.stopReason === 'complete' ? <Text style={styles.syncStatus}>任务及相关操作已完成，持续监控已自动停止。</Text> : monitor.enabled ? <Text style={styles.syncError}>持续监控当前未运行，可重新开启。</Text> : monitor.stopReason === 'headless-failed' || monitor.stopReason === 'start-failed' ? <Text style={styles.syncError}>持续监控启动失败，请重试。</Text> : null)}
     <ListFilters label="任务筛选" options={[{ id: 'all', label: '全部' }, { id: 'active', label: '进行中' }, { id: 'failed', label: '失败' }, { id: 'archived', label: '已归档' }]} value={filter} onChange={value => { setFilter(value); setPageError(''); }} />
-    </View>} keyboardDismissMode="on-drag" data={snapshot.items} initialNumToRender={12} maxToRenderPerBatch={8} windowSize={7} updateCellsBatchingPeriod={50} removeClippedSubviews
+    </View>} keyboardDismissMode="on-drag" data={snapshot.items} initialNumToRender={12} maxToRenderPerBatch={8} windowSize={7} updateCellsBatchingPeriod={50} removeClippedSubviews={false}
       keyExtractor={item => item.id} contentContainerStyle={styles.list} refreshing={refreshing} onRefresh={refresh}
       onEndReached={() => { if (pageBusy || pageError || !snapshot.nextCursor) return; setPageBusy(true); void session.loadMore().catch(() => setPageError('加载更多失败')).finally(() => setPageBusy(false)); }}
       ListFooterComponent={pageBusy ? <ActivityIndicator color={COLORS.primaryActive} /> : pageError ? <ListAction secondary icon="refresh" label="加载更多失败，点击重试" onPress={() => { setPageError(''); setPageBusy(true); void session.loadMore().catch(() => setPageError('加载更多失败')).finally(() => setPageBusy(false)); }} /> : !snapshot.nextCursor && snapshot.items.length ? <Text style={listUI.footer}>已显示全部任务</Text> : null} onEndReachedThreshold={0.6}
@@ -100,15 +100,15 @@ export default function TasksScreen() {
   </View>;
 }
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background, padding: SPACING.xl },
-  heading: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: COLORS.background, padding: 12 },
+  heading: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between', alignItems: 'center' },
   headingActions: { flexDirection: 'row', gap: 8 },
-  title: { color: COLORS.text, fontSize: 29, fontWeight: '800' },
+  title: { color: COLORS.text, fontSize: 16, fontWeight: '600' },
   subtitle: { color: COLORS.textMuted, marginTop: 7, lineHeight: 20 },
   syncStatus: { color: COLORS.primaryActive, marginTop: 5, fontSize: 12, lineHeight: 18 },
   syncError: { color: COLORS.danger, marginTop: 8, fontSize: 12, lineHeight: 18 },
   controlText: { color: COLORS.textMuted, fontSize: 12 },
-  refresh: { minWidth: 48, minHeight: 48, paddingHorizontal: 10, paddingVertical: 8, gap: 4, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
+  refresh: { flexDirection:'row', minWidth: 44, minHeight: 40, paddingHorizontal: 10, paddingVertical: 8, gap: 4, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
   monitoring: { borderColor: COLORS.primaryActive, backgroundColor: COLORS.primarySoft },
-  list: { gap: SPACING.md, paddingBottom: 130 },
+  list: { gap: 6, paddingBottom: 24 },
 });

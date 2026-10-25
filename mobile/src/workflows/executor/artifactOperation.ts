@@ -38,7 +38,7 @@ type ArtifactOperationDeps = {
   policy(jobId: string, artifact: ArtifactRecord): ArtifactPolicy | Promise<ArtifactPolicy>;
   ensureProjection(jobId: string, artifact: ArtifactRecord): Promise<void>;
   updateDownloadState(state: 'ENQUEUED' | 'DOWNLOADING' | 'DOWNLOAD_FAILED', errorCode?: string): Promise<void>;
-  deliveryPolicy: { autoExportToGallery: boolean; keepPrivateCopy: boolean };
+  deliveryPolicy: { autoExportImagesToGallery?:boolean; autoExportToGallery: boolean; keepPrivateCopy: boolean };
   updateProjection(input: { jobId: string; artifactId: string; localUri: string; mime: string; sha256: string; byteSize: number }): Promise<void> | void;
   verifyVideo(source: string): Promise<unknown>;
   resolveUri?: (relativePath: string) => string;
@@ -55,7 +55,7 @@ export type ArtifactCommitInput = {
   blob: ArtifactBlob;
   localUri: string;
   now: number;
-  deliveryPolicy: { autoExportToGallery: boolean; keepPrivateCopy: boolean };
+  deliveryPolicy: { autoExportImagesToGallery?:boolean; autoExportToGallery: boolean; keepPrivateCopy: boolean };
   deliveryIntent?: SystemGalleryIntent;
   compatible?: boolean;
 };

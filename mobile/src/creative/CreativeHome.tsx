@@ -1,3 +1,4 @@
+import {TaskInboxButton} from '../tasks/TaskInboxButton';
 import { readCreativeIdea, writeCreativeIdea, type CreativeIdea } from './creativeIdea';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
@@ -13,6 +14,7 @@ import { ImageDraftScreen } from './ImageDraftScreen';
 import { VideoDraftScreen } from './VideoDraftScreen';
 import { groupWorkbenchDrafts, recentWorkbenchDraft, type WorkbenchMode } from './workbenchSessions';
 import type { AssetVersion } from './types';
+import { WorkbenchModeSwitcher } from '../ui/WorkbenchModeSwitcher';
 import { COLORS } from '../ui/theme';
 import {createVideoWorkbenchDraft} from './videoWorkbenchWorkflows';
 
@@ -64,18 +66,20 @@ export function CreativeHome({ onLegacyVideo }: { onLegacyVideo: () => void }) {
   const chooseMode=(mode:WorkbenchMode)=>{if(mode===idea.mode)return;void change(async()=>{const rows=await refresh(),restored=await recentWorkbenchDraft(mode,rows),row=restored??await createDraft(mode);const next=restored?{...idea,mode}:{...idea,mode,[mode]:''};await writeCreativeIdea(next);setActive(old=>({...old,[mode]:row}));setIdea(next);});};
   const mode=idea.mode,groups=groupWorkbenchDrafts(drafts,mode),current=active[mode];
   return <CompactWorkbench><View style={s.screen}>
-    <View style={{flexDirection:'row',alignItems:'center',gap:4,paddingHorizontal:8,borderBottomWidth:1,borderBottomColor:COLORS.border}}><View style={{flex:1}}><SegmentedChoices label="创作类型" options={[{id:'image',label:'图片'},{id:'video',label:'视频'}]} value={mode} disabled={!ready || busy} onChange={chooseMode} /></View><IconAction label="新建创作" icon="add" disabled={busy || !ready} onPress={()=>void change(async()=>{const row=await createDraft(mode);setActive(old=>({...old,[mode]:row}));})} /><IconAction label="创作记录与导航" icon="grid_view" onPress={()=>{setRecords(true);void refresh().catch(()=>setError('创作记录读取失败'));}} /><IconAction label="创作账号" icon="key" onPress={()=>router.push({pathname:'/(tabs)/settings',params:{section:'accounts'}})} /></View>
+    <View style={{flexDirection:'row',alignItems:'center',gap:4,paddingHorizontal:8,borderBottomWidth:1,borderBottomColor:COLORS.border}}><WorkbenchModeSwitcher mode="create" disabled={busy || !ready} onSelect={id=>void change(async()=>{router.navigate(`/(tabs)/${id}`);})}/><View style={{width:112,flexShrink:1}}><SegmentedChoices singleRow label="创作类型" options={[{id:'image',label:'图片'},{id:'video',label:'视频'}]} value={mode} disabled={!ready || busy} onChange={chooseMode} /></View><View style={{flex:1}}/><IconAction label="新建创作" icon="add" disabled={busy || !ready} onPress={()=>void change(async()=>{const row=await createDraft(mode);setActive(old=>({...old,[mode]:row}));})} /><IconAction label="创作记录与导航" icon="grid_view" onPress={()=>{setRecords(true);void refresh().catch(()=>setError('创作记录读取失败'));}} /><TaskInboxButton/><IconAction label="打开设置" icon="settings" onPress={()=>router.push('/(tabs)/settings')} /></View>
     {error?<View style={{paddingHorizontal:12,paddingVertical:4}}><Text accessibilityRole="alert" style={s.error}>{error}</Text>{!current?<TextAction label="重试恢复工作区" onPress={()=>{setReady(false);void readCreativeIdea().then(value=>{setIdea(value);setError('');setReady(true);}).catch(()=>setError('工作区恢复失败'));}} />:null}</View>:null}
     <WorkbenchNavigationContext.Provider value={navigation}>{current?mode==='image'?<ImageDraftScreen key={current.id} id={current.id} embedded />:<VideoDraftScreen key={current.id} id={current.id} embedded />:<View style={{flex:1,alignItems:'center',justifyContent:'center'}}><ActivityIndicator /><Text style={s.muted}>正在恢复工作区…</Text></View>}</WorkbenchNavigationContext.Provider>
     {records?<ParameterSheet title="创作记录" description={mode==='image'?'图片创作 · 每组包含输入、任务和版本':'视频创作 · 每组包含输入、任务和版本'} onClose={()=>setRecords(false)}>
       {groups.slice(0,20).map(group=><RecentCreation key={group.draft.id} {...group} onPress={()=>void change(async()=>{const rows=await refresh();const selected=group.draft.target_asset_id?groupWorkbenchDrafts(rows,mode).find(g=>g.draft.target_asset_id===group.draft.target_asset_id && g.draft.project_id===group.draft.project_id && g.draft.shot_id===group.draft.shot_id)?.draft:rows.find(d=>d.id===group.draft.id);setActive(old=>({...old,[mode]:selected??group.draft}));setRecords(false);})} />)}
       {!groups.length?<Text style={s.muted}>完成编辑或生成后，创作会保存在这里。</Text>:null}
+      <View style={{flexDirection:'row',flexWrap:'wrap',gap:4}}>
       <TextAction label="全部任务与草稿" onPress={()=>{setRecords(false);router.push('/creative-drafts');}} />
       <TextAction label="素材库" onPress={()=>{setRecords(false);router.push('/(tabs)/assets');}} />
       <TextAction label="任务中心" onPress={()=>{setRecords(false);router.push('/(tabs)/tasks');}} />
       <TextAction label="项目与分镜" onPress={()=>{setRecords(false);router.push('/(tabs)/projects');}} />
       <TextAction label="设置" onPress={()=>{setRecords(false);router.push('/(tabs)/settings');}} />
       <TextAction label="工作流视频编辑器" onPress={()=>void change(async()=>{setRecords(false);onLegacyVideo();})} />
+      </View>
     </ParameterSheet>:null}
 
   </View></CompactWorkbench>;

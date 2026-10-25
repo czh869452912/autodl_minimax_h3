@@ -1,6 +1,6 @@
 import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../ui/KeyboardSurface';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, BackHandler, Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, BackHandler, Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useNavigation, usePreventRemove } from 'expo-router/react-navigation';
@@ -20,6 +20,11 @@ import { CreativeResults } from './CreativeResults';
 import { CreativeAssetPicker } from './CreativeAssetPicker';
 import { NovelAiPromptEditor } from './NovelAiPromptEditor';
 import { NovelAiSettings } from './NovelAiSettings';
+import { NovelAiUsageBar } from './NovelAiUsageBar';
+import {ImageEditorDrawer} from './ImageEditorDrawer';
+import {NovelAiImageImport} from './NovelAiImageImport';
+import type {NativeImageAsset} from '../native/imagePicker';
+import { imageWorkbenchLayout } from './imageWorkbenchLayout';
 import { NovelAiMaskEditor } from './NovelAiMaskEditor';
 import { NovelAiEnhancePanel } from './NovelAiEnhancePanel';
 import type { CreativeDraft } from './drafts';
@@ -35,13 +40,20 @@ const normalInput=(input:NovelAiDraftInput):NovelAiDraftInput=>input.enhancement
 export function ImageDraftScreen({id,embedded=false}:{id:string;embedded?:boolean}) { return <CompactWorkbench><ImageCanvas initialId={id} embedded={embedded} /></CompactWorkbench>; }
 
 function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
+  const window=useWindowDimensions();
+  const [bounds,setBounds]=useState({width:window.width,height:window.height*0.65});
+  const layout=imageWorkbenchLayout(bounds.width,bounds.height,window.fontScale);
+  const [historyOpen,setHistoryOpen]=useState(false);
+  const [canvasHeight,setCanvasHeight]=useState<number>();
+  const [importing,setImporting]=useState<NativeImageAsset>();
   const router=useRouter(),navigation=useNavigation();
   const [id,setId]=useState(initialId),[draft,setDraft]=useState<CreativeDraft>(),[input,setInput]=useState<NovelAiDraftInput>(),[baseline,setBaseline]=useState('');
   const [busy,setBusy]=useState(false),[saving,setSaving]=useState(false),[error,setError]=useState(''),[jobStatus,setJobStatus]=useState('');
   const [editor,setEditor]=useState<string>(),[settings,setSettings]=useState(false),[picking,setPicking]=useState<'source'|'mask'>();
-  const [currentVersion,setCurrentVersion]=useState<AssetVersion>(),[historySignal,setHistorySignal]=useState(0);
+  const [currentVersion,setCurrentVersion]=useState<AssetVersion>();
   const [resultDraft,setResultDraft]=useState<CreativeDraft>(),[assist,setAssist]=useState(false),[undoInput,setUndoInput]=useState<NovelAiDraftInput>();
-  const [promptSelection,setPromptSelection]=useState<{start:number;end:number}|undefined>({start:0,end:0});
+  const [focusPrompt,setFocusPrompt]=useState(false);
+  useEffect(()=>{if(!editor)setFocusPrompt(false);},[editor]);
   const [processing,setProcessing]=useState<'enhance'|'upscale'>(),[enhanceInput,setEnhanceInput]=useState<NovelAiDraftInput>(),[processingSource,setProcessingSource]=useState<AssetVersion>();
   const [refs,setRefs]=useState<Array<{version_id:string;relative_path:string;state:string}>>([]);
   const lock=useRef(false),latest=useRef(input);latest.current=input;
@@ -58,13 +70,16 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
   const closePanel=useCallback(()=>{
     if(picking){setPicking(undefined);return true;}
     if(assist){setAssist(false);return true;}
-    if(editor){setEditor(undefined);return true;}
+    if(historyOpen){setHistoryOpen(false);return true;}
+    if(importing){setImporting(undefined);return true;}
+    if(editor){Keyboard.dismiss();setEditor(undefined);return true;}
     if(settings){Keyboard.dismiss();setSettings(false);return true;}
+    if(historyOpen){setHistoryOpen(false);return true;}
     if(processing){exitTool();return true;}
     return false;
-  },[picking,assist,editor,settings,processing,exitTool]);
+  },[picking,assist,historyOpen,editor,settings,processing,exitTool,importing]);
   useFocusEffect(useCallback(()=>{const sub=BackHandler.addEventListener('hardwareBackPress',closePanel);return()=>sub.remove();},[closePanel]));
-  usePreventRemove(dirty || busy || saving || Boolean(settings || processing),({data})=>{
+  usePreventRemove(dirty || busy || saving || Boolean(settings || processing || editor || historyOpen),({data})=>{
     if(closePanel())return;
     if(lock.current){Alert.alert('操作进行中','请等待保存或提交完成。');return;}
     Alert.alert('修改尚未保存','是否放弃本次未保存修改？',[{text:'继续编辑',style:'cancel'},{text:'放弃并离开',style:'destructive',onPress:()=>navigation.dispatch(data.action)}]);
@@ -104,6 +119,9 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
   };
   const closeProcessing=exitTool;
   const closeSettings=()=>{Keyboard.dismiss();setSettings(false);};
+  const openAssist=()=>{setSettings(false);setEditor(undefined);setAssist(true);};
+  const openEditor=(tab:string)=>{setAssist(false);setSettings(false);setEditor(tab);};
+  const changeHistory=useCallback((open:boolean)=>{if(open){setAssist(false);setSettings(false);setEditor(undefined);}setHistoryOpen(open);},[]);
   const showVersion=useCallback((version:AssetVersion|undefined)=>{
     setCurrentVersion(version);
     const sourceId=processingSource?.id ?? enhanceInput?.sourceVersionId;
@@ -112,7 +130,7 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
   const reuse=(patch:Partial<NovelAiDraftInput>)=>{if(!input)return;closeProcessing();setUndoInput(input);update(patch);};
   const openProcessing=useCallback(async(version:AssetVersion,operation:'enhance'|'upscale')=>{
     if(lock.current)return;lock.current=true;setBusy(true);setError('');
-    try{if(operation==='enhance')setEnhanceInput(await prepareImageEnhancement(version));setProcessingSource(version);setProcessing(operation);setSettings(false);}
+    try{if(operation==='enhance')setEnhanceInput(await prepareImageEnhancement(version));setProcessingSource(version);setProcessing(operation);setSettings(false);setEditor(undefined);setHistoryOpen(false);}
     catch(e){setError(creativeError(e,'无法打开图片工具'));}finally{lock.current=false;setBusy(false);}
   },[]);
   const submit=async()=>{
@@ -148,7 +166,7 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
         if(processing)await persistImageWorkbenchInput(submitted,snapshot,adopt,currentVersion?.id);
         else adopt(submitted);
       }
-      setBaseline(JSON.stringify(snapshot));setJobStatus('QUEUED');setProcessing(undefined);setEnhanceInput(undefined);setSettings(false);
+      setEditor(undefined);setHistoryOpen(false);setBaseline(JSON.stringify(snapshot));setJobStatus('QUEUED');setProcessing(undefined);setEnhanceInput(undefined);setSettings(false);
     } catch(e){
       setError(creativeError(e,'提交失败'));
       if(requestId)try{const row=await creativeService().draft(requestId);if(row?.state==='SUBMITTED'){adopt(row);setResultDraft(row);setJobStatus('UNKNOWN');setProcessing(undefined);setProcessingSource(undefined);setEnhanceInput(undefined);}}catch{/* Poll the original draft when storage recovers. */}
@@ -158,12 +176,12 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
   const choose=(versionId:string,kind:'source'|'mask')=>update(kind==='source'?{sourceVersionId:versionId,enhancement:null,enhance:false,maskVersionId:null,maskStrokes:[],action:input?.action==='infill'?'infill':'img2img'}:{maskVersionId:versionId,maskStrokes:[]});
   const importImage=async(kind:'source'|'mask')=>{
     if(lock.current || !editable)return;lock.current=true;setBusy(true);
-    try{const [image]=await pickImagesFromGallery(1);if(image){const result=await importCreativeImage(image,draft?.project_id??undefined);if(result.status==='completed')choose(result.value.versionId,kind);}}
+    try{const [image]=await pickImagesFromGallery(1);if(image){if(kind==='source')setImporting(image);else{const result=await importCreativeImage(image,draft?.project_id??undefined);if(result.status==='completed')choose(result.value.versionId,kind);}} }
     catch(e){setError(creativeError(e,'图片导入失败'));}finally{lock.current=false;setBusy(false);}
   };
   const source=refs.find(r=>r.version_id===input?.sourceVersionId), mask=refs.find(r=>r.version_id===input?.maskVersionId);
   const sourceUri=source?.state==='AVAILABLE'?`${FileSystem.documentDirectory}${source.relative_path}`:undefined;
-  const references=input?<View style={{gap:12}}>
+  const references=input?<View style={{gap:12}}><TextAction label="导入图片或生成信息" icon="add_photo_alternate" disabled={!editable} onPress={()=>void importImage('source')}/>
     <SectionHeading title="生成方式" />
     <SegmentedChoices label="生成方式" options={[{id:'generate',label:'文字生图'},{id:'img2img',label:'图生图'},{id:'infill',label:'局部重绘'}]} value={input.action} disabled={!editable} onChange={action=>update({action,enhance:action==='img2img' && input.enhance,enhancement:action==='img2img'?input.enhancement:null})} />
     {input.action!=='generate'?<>
@@ -182,40 +200,40 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
     {conflict?<View style={c.notice}><Text style={s.error}>草稿已在其他入口更新，本页输入已保留。</Text><TextAction label="载入最新草稿" disabled={busy || saving} onPress={()=>Alert.alert('载入最新草稿','这会放弃本页尚未保存的修改。',[{text:'保留本页',style:'cancel'},{text:'载入最新',onPress:()=>void reload().catch(e=>setError(e.message))}])} /></View>:null}
     {error?<View style={c.notice}><Text accessibilityRole="alert" style={s.error}>{error}</Text>{dirty?<TextAction label="重试保存草稿" disabled={busy || saving} onPress={()=>void save()} />:null}</View>:null}
     <WorkbenchScope draft={draft} />
-    <View style={{flex:1}}>
-      <View style={{flex:1,display:settings?'none':'flex'}}>{draft?<CreativeResults draft={resultDraft??draft} initialVersionId={processingSource?.id??enhanceInput?.sourceVersionId??undefined} canvas disabled={busy || saving || pending} onCurrentVersion={showVersion} onJobStatus={setJobStatus} onEnhance={version=>void openProcessing(version,'enhance')} onUpscale={version=>void openProcessing(version,'upscale')} onReuse={editable?reuse:undefined} onUseImage={editable?((version,action)=>{closeProcessing();update({action,sourceVersionId:version.id,enhance:false,enhancement:null,maskVersionId:null,maskStrokes:[]});setEditor('references');}):undefined} historySignal={historySignal} />:null}</View>
-      {settings && activeInput?<NovelAiSettings inline input={activeInput} update={updateActive} editable={editable} onClose={closeSettings} />:null}
-      {!settings && processing?<ScrollView keyboardShouldPersistTaps="handled" style={c.toolOverlay} contentContainerStyle={{flexGrow:1}}>
+    <NovelAiUsageBar inline refreshKey={`${(resultDraft??draft)?.job_id??''}:${['SUCCEEDED','PARTIAL_SUCCEEDED','FAILED','CANCELLED','UNKNOWN'].includes(jobStatus)?jobStatus:''}`} />
+    <View onLayout={event=>{setBounds(event.nativeEvent.layout);if(!Keyboard.isVisible()&&!TextInput.State.currentlyFocusedInput())setCanvasHeight(event.nativeEvent.layout.height);}} style={{flex:1,minHeight:0,overflow:'hidden'}}>
+      <View testID="image-workbench-canvas" style={{height:canvasHeight??bounds.height,minWidth:0,paddingBottom:76}}>{draft?<CreativeResults draft={resultDraft??draft} initialVersionId={processingSource?.id??enhanceInput?.sourceVersionId??undefined} canvas disabled={busy || saving || pending} onCurrentVersion={showVersion} onJobStatus={setJobStatus} onEnhance={version=>void openProcessing(version,'enhance')} onUpscale={version=>void openProcessing(version,'upscale')} onReuse={editable?reuse:undefined} onUseImage={editable?((version,action)=>{closeProcessing();update({action,sourceVersionId:version.id,enhance:false,enhancement:null,maskVersionId:null,maskStrokes:[]});openEditor('references');}):undefined} historyVisible={historyOpen} onHistoryVisibilityChange={changeHistory} />:null}</View>
+      {activeInput?<ImageEditorDrawer expanded={Boolean(settings||editor||assist)} height={bounds.height} wide={layout.sideBySide} onExpand={()=>{if(!settings&&!editor&&!assist)openEditor('prompt');}} onCollapse={()=>{Keyboard.dismiss();setEditor(undefined);setSettings(false);setAssist(false);}} summary={<View style={c.promptRow}><TextInput accessibilityLabel="图片提示词" placeholder="描述画面…" placeholderTextColor={COLORS.textMuted} value={activeInput.prompt} onChangeText={prompt=>updateActive({prompt})} editable={editable} onFocus={()=>{setFocusPrompt(true);openEditor('prompt');}} style={[c.prompt,{height:40,minHeight:32}]} /><IconAction label="提示词助手" icon="smart_toy" disabled={!editable} onPress={openAssist}/></View>}>
+        {assist?<PromptAssistSheet sessionId={`image:${initialId}`} image={activeInput} prompt={activeInput.prompt} kind="image" disabled={!editable} onApply={prompt=>{setUndoInput(activeInput);updateActive({prompt});}} onApplyPatch={patch=>{setUndoInput(activeInput);updateActive(patch);}} onClose={()=>setAssist(false)}/>:settings?<NovelAiSettings inline input={activeInput} update={updateActive} editable={editable} onClose={closeSettings} />:<NovelAiPromptEditor focusPrompt={focusPrompt} onImport={processing?undefined:()=>void importImage('source')} onAssist={openAssist} inline input={activeInput} update={updateActive} editable={editable} tab={editor??'prompt'} setTab={setEditor} onClose={()=>{Keyboard.dismiss();setEditor(undefined);}} references={processing==='enhance'?<Text style={s.muted}>使用当前增强原图</Text>:references} />}
+      </ImageEditorDrawer>:null}
+      {!settings && !editor && !assist && !historyOpen && processing?<ScrollView keyboardShouldPersistTaps="handled" style={[c.toolOverlay,layout.sideBySide?{width:layout.panelWidth}:{height:layout.panelHeight}]} contentContainerStyle={{flexGrow:1}}>
         <Text style={[c.caption,{backgroundColor:COLORS.surface,paddingHorizontal:12,paddingTop:6}]}>处理原图{processingSource?` · v${processingSource.versionNo}`:''} · {enhanceInput?.enhancement?`${enhanceInput.enhancement.sourceWidth} × ${enhanceInput.enhancement.sourceHeight}`:processingSource?'2× 放大':''}</Text>
         {processing==='enhance' && enhanceInput?<NovelAiEnhancePanel input={enhanceInput} editable={!busy && !pending} update={patch=>setEnhanceInput(old=>old?{...old,...patch}:old)} onClose={closeProcessing} />:processing==='upscale'?<View style={c.toolCard}><View style={s.row}><Text style={{color:COLORS.text,fontWeight:'600'}}>清晰放大 · 2×</Text><IconAction label="关闭放大" icon="close" onPress={closeProcessing} disabled={busy} /></View><Text style={c.caption}>宽高各放大 2 倍，保留原图并新增版本。</Text></View>:null}
       </ScrollView>:null}
     </View>
-    {input?<View style={c.composer}>
-      {!settings && processing!=='upscale'?<View style={c.promptRow}><TextInput accessibilityLabel="图片提示词" placeholder="描述画面…" placeholderTextColor={COLORS.textMuted} value={activeInput?.prompt} onChangeText={prompt=>updateActive({prompt})} editable={editable} multiline scrollEnabled={false} selection={promptSelection} onFocus={()=>setPromptSelection(undefined)} onBlur={()=>setPromptSelection({start:0,end:0})} style={c.prompt} /><IconAction label="提示词助手" icon="smart_toy" disabled={!editable} onPress={()=>setAssist(true)} /><IconAction label="展开画面编辑" icon="expand_more" onPress={()=>setEditor('prompt')} /></View>:null}
-      {!settings && activeInput && (activeInput.action!=='generate' || activeInput.characters.some(c=>c.enabled) || activeInput.negative.trim())?<Pressable accessibilityRole="button" accessibilityLabel="查看已启用配置" onPress={()=>setEditor(activeInput.action!=='generate'?'references':activeInput.characters.some(c=>c.enabled)?'characters':'negative')}><Text numberOfLines={1} style={c.caption}>{[activeInput.action==='img2img'?'图生图':activeInput.action==='infill'?'局部重绘':'',activeInput.sourceVersionId && activeInput.action!=='generate'?'底图 1':'',activeInput.characters.some(c=>c.enabled)?`角色 ${activeInput.characters.filter(c=>c.enabled).length}`:'',activeInput.negative.trim()?'自定义负面':''].filter(Boolean).join(' · ')}</Text></Pressable>:null}
+    {input?<View style={[c.composer,{width:'100%',maxWidth:760,alignSelf:'center'}]}>
       {undoInput?<View style={s.row}><Text style={c.caption}>已应用提示词或参数</Text><TextAction label="撤销修改" onPress={()=>{if(processing==='enhance')setEnhanceInput(undoInput);else setInput(undoInput);setUndoInput(undefined);setError('');}} /></View>:null}
-      <View style={c.generateRow}><IconAction label="生成设置" icon="tune" disabled={processing==='upscale'} selected={settings} onPress={()=>setSettings(!settings)} /><Pressable accessibilityRole="button" accessibilityLabel={processing==='enhance'?'增强图片':processing==='upscale'?'放大图片':`生成 ${input.samples} 张图片`} disabled={busy || saving || pending || conflict} onPress={()=>void submit()} style={({pressed})=>[c.generate,(busy || saving || pending || conflict) && {opacity:0.5},pressed && {opacity:0.75}]}><Text style={c.generateText}>{busy?'处理中…':jobStatus==='UNKNOWN' && pending?'请核查原任务':pending?'生成中…':processing==='enhance'?'Enhance':processing==='upscale'?'放大 2×':`生成 ${input.samples} 张图片`}</Text></Pressable><IconAction label="生成历史" icon="list_alt" disabled={!currentVersion} onPress={()=>{setSettings(false);setHistorySignal(value=>value+1);}} /></View>
-      <Text accessibilityLiveRegion="polite" style={c.cost}>{saving?'正在保存输入…':dirty?'输入待保存':pending?'生成中可继续编辑下一张，完成后再提交':'点击即生成 · Anlas 费用暂无法估算'}</Text>
+      <View style={c.generateRow}><IconAction label="生成设置" icon="tune" disabled={processing==='upscale'} selected={settings} onPress={()=>{setAssist(false);setEditor(undefined);setSettings(!settings);}} /><IconAction label="展开画面编辑" icon="edit" selected={Boolean(editor)} onPress={()=>editor?setEditor(undefined):openEditor('prompt')} /><Pressable accessibilityRole="button" accessibilityLabel={processing==='enhance'?'增强图片':processing==='upscale'?'放大图片':`生成 ${input.samples} 张图片`} disabled={busy || saving || pending || conflict} onPress={()=>void submit()} style={({pressed})=>[c.generate,(busy || saving || pending || conflict) && {opacity:0.5},pressed && {opacity:0.9,transform:[{scale:0.985}]}]}><Text style={c.generateText}>{busy?'处理中…':jobStatus==='UNKNOWN' && pending?'请核查原任务':pending?'生成中…':processing==='enhance'?'Enhance':processing==='upscale'?'放大 2×':`生成 ${input.samples} 张图片`}</Text></Pressable><IconAction label="生成历史" icon="list_alt" selected={historyOpen} onPress={()=>{setAssist(false);setSettings(false);setEditor(undefined);setHistoryOpen(!historyOpen);}} /></View>
+      <Text accessibilityLiveRegion="polite" style={c.cost}>{saving?'正在保存输入…':dirty?'输入待保存':pending?'生成中可继续编辑下一张，完成后再提交':`${input.width} × ${input.height} · ${input.steps} 步 · ${input.seed===null?'随机 Seed':`Seed ${input.seed}`} · Anlas 费用未知`}</Text>
     </View>:null}
-    {activeInput && editor && !picking?<NovelAiPromptEditor input={activeInput} update={updateActive} editable={editable} tab={editor} setTab={setEditor} onClose={()=>setEditor(undefined)} description={processing==='enhance'?'调整本次增强使用的提示词与角色':'提示词、角色与底图自动保存在本草稿'} references={processing==='enhance'?<Text style={s.muted}>使用打开 Enhance 时选中的原图。关闭增强后可切换生成方式。</Text>:references} />:null}
+    {importing&&input?<NovelAiImageImport image={importing} input={input} onClose={()=>setImporting(undefined)} onApply={patch=>{setUndoInput(input);update(patch);openEditor('prompt');}} onUseImage={async()=>{const result=await importCreativeImage(importing,draft?.project_id??undefined);if(result.status!=='completed')throw new Error('图片导入未完成');choose(result.value.versionId,'source');openEditor('references');}}/>:null}
     {picking?<CreativeAssetPicker kind="image" projectId={draft?.project_id??undefined} onClose={()=>setPicking(undefined)} onChoose={async version=>choose(version.id,picking)} />:null}
-    {assist && activeInput?<PromptAssistSheet prompt={activeInput.prompt} kind="image" onApply={prompt=>{setUndoInput(activeInput);updateActive({prompt});}} onClose={()=>setAssist(false)} />:null}
 
   </KeyboardSurface></SafeAreaView>;
 }
 
 const c=StyleSheet.create({
-  header:{flexDirection:'row',alignItems:'center',paddingHorizontal:6,minHeight:44,gap:6,borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:COLORS.border},
+  header:{flexDirection:'row',alignItems:'center',paddingHorizontal:6,minHeight:34,gap:6,borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:COLORS.border},
   headerTitle:{fontSize:15,fontWeight:'600',color:COLORS.text,flex:1},
   caption:{fontSize:12,lineHeight:18,color:COLORS.textMuted},
   notice:{paddingHorizontal:12,paddingVertical:6},
-  composer:{borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:COLORS.border,backgroundColor:COLORS.surface,paddingHorizontal:8,paddingTop:4,paddingBottom:4,gap:2},
-  promptRow:{flexDirection:'row',alignItems:'center',paddingLeft:4},
-  prompt:{flex:1,height:52,minHeight:52,maxHeight:52,textAlignVertical:'top',fontSize:13,lineHeight:18,color:COLORS.text,paddingVertical:8,paddingHorizontal:4},
+  composer:{borderWidth:StyleSheet.hairlineWidth,borderColor:COLORS.border,borderTopLeftRadius:16,borderTopRightRadius:16,backgroundColor:COLORS.surface,paddingHorizontal:10,paddingTop:8,paddingBottom:6,gap:4,shadowColor:'#172b23',shadowOffset:{width:0,height:-2},shadowOpacity:0.04,shadowRadius:8,elevation:2},
+  promptRow:{flexDirection:'row',alignItems:'center',paddingLeft:8,backgroundColor:COLORS.background,borderRadius:10},
+  prompt:{flex:1,height:52,minHeight:52,maxHeight:52,textAlignVertical:'center',fontSize:13,lineHeight:18,color:COLORS.text,paddingVertical:8,paddingHorizontal:4},
   generateRow:{flexDirection:'row',alignItems:'center',gap:6},
-  generate:{flex:1,minHeight:40,alignItems:'center',justifyContent:'center',backgroundColor:COLORS.primary,borderRadius:6,paddingHorizontal:10},
+  generate:{flex:1,minHeight:34,alignItems:'center',justifyContent:'center',backgroundColor:COLORS.primary,borderRadius:10,paddingHorizontal:10},
   generateText:{fontSize:14,fontWeight:'700',color:COLORS.onPrimary},
   cost:{fontSize:10,lineHeight:14,color:COLORS.textMuted,textAlign:'center'},
-  toolOverlay:{position:'absolute',left:12,right:12,bottom:8,maxHeight:'86%'},
+  toolOverlay:{flexGrow:0,flexShrink:0,borderWidth:StyleSheet.hairlineWidth,borderColor:COLORS.border,backgroundColor:COLORS.surface},
   toolCard:{padding:12,gap:8,borderWidth:1,borderColor:COLORS.border,borderRadius:8,backgroundColor:COLORS.surface},
 });

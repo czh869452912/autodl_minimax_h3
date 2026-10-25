@@ -13,7 +13,7 @@ jest.mock('@copilotkit/react-native', () => ({ useCopilotChatContext: () => mock
 jest.mock('@copilotkit/react-native/components', () => ({ CopilotMarkdown: ({ content }: { content: string }) => { mockMarkdownRender(content); return <>{content}</>; } }));
 jest.mock('@copilotkit/shared', () => ({ getSourceUrl: (source: { value?: string }) => source.value || '' }));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
-jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
+jest.mock('react-native-safe-area-context', () => ({ SafeAreaView:require('react-native').View, useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
 jest.mock('./assistantImagePicker', () => ({
   ...jest.requireActual('./assistantImagePicker'),
   pickAssistantImages: jest.fn(() => Promise.resolve([])),
@@ -358,10 +358,11 @@ describe('Prompt assistant UI primitives', () => {
     act(() => { tree = create(<AttachmentStrip attachments={[{ id: 'image', status: 'ready', displayName: '图片1', source: { value: 'file:///image.png' } }]} onOpenPicker={async () => undefined} />); });
     act(() => tree.root.findByProps({ accessibilityLabel: '查看附件 图片1' }).props.onPress());
     expect(tree.root.findByType(ReferenceImagePreview).props.uri).toBe('file:///image.png');
-    expect(tree.root.findByType(Modal).props.animationType).toBe('fade');
+    expect(tree.root.findByType(Modal).props.animationType).toBe('none');
+    expect(tree.root.findByProps({testID:'image-preview-transition'})).toBeDefined();
     const close = tree.root.findByProps({ accessibilityLabel: '关闭图片预览' });
     expect(close.props.accessibilityRole).toBe('button');
-    expect(close.props.style).toMatchObject({ minHeight: 48 });
+    expect(close.props.style).toMatchObject({ height: 44, width: 44 });
     act(() => close.props.onPress());
     expect(tree.root.findByType(ReferenceImagePreview).props.uri).toBeNull();
     act(() => tree.unmount());

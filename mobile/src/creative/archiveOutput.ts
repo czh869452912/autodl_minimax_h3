@@ -1,3 +1,4 @@
+import {enqueueVersionExport} from './enqueueVersionExport';
 import type { AppDatabase } from '../storage/appDatabase';
 import type { ArtifactCommitInput } from '../workflows/executor/artifactOperation';
 import { createId } from '../ids';
@@ -53,5 +54,6 @@ export async function archiveCreativeOutput(tx: AppDatabase, input: ArtifactComm
   await tx.runAsync("INSERT INTO creative_version_files VALUES(?,'original',?,'AVAILABLE')", versionId, input.blob.sha256);
   await tx.runAsync("INSERT INTO artifact_blob_refs VALUES(?,'creative_version',?,?)", input.blob.sha256, versionId, input.now);
   await tx.runAsync('INSERT INTO creative_output_links VALUES(?,?,?)', input.jobId, input.artifact.id, versionId);
+  if(input.artifact.kind==='image' && input.deliveryPolicy?.autoExportImagesToGallery)await enqueueVersionExport(tx,versionId,1,input.now);
   await tx.runAsync('UPDATE creative_assets SET updated_at=? WHERE id=?', input.now, context.target_asset_id);
 }

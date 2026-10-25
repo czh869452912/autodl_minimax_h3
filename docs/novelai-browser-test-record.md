@@ -57,3 +57,38 @@ History 展开后出现 choose image、lock history scrolling、download all ima
 3. 生成 Run 保存实际 Seed、模型、完整输入快照和资产版本，不能只存 Prompt。
 4. 本次 WebP 样本可用于资产入库与展示测试；元数据解析需另收集确证原始文件。
 5. Agent 和手动生成共享命令及回执；官网成功不替代适配器集成测试。
+
+## T10 窄屏交互复核（2026-10-25）：通过
+
+用户要求以真实窄屏交互重新校正原生工作台。使用已登录的内置浏览器，官网版本仍为 32f2478，实际截图 444×918。仅记录本次可见行为，不以隐藏的无障碍树推断面板已显示；每次切换后另取截图确认动画结束状态。
+
+- 初始配置为 V5 Full / Medium、Anime、832×1216、1 张、Guidance 7、随机 Seed、Standard 质量、透明背景开启。测试提示词为 `a small brass telescope, isolated object, clean silhouette, anime illustration`。
+- 提示词折叠时仅占画布底部一行。展开后顶部为 Prompt / Reference Images / Chunks 三项；角色在 Prompt 区内，不是一级页签。High 的正负词在同一输入卡片内切换；Medium 不展示负面编辑入口。本次切换 High 仅观察，随后恢复 Medium。
+- Settings 和 History 在该宽度覆盖主体区域，底部 Settings / Generate / History 始终保留。尺寸分类为局部下拉，Normal / Large / Wallpaper / Small / Custom；比例按钮与分类在同一行。未改动尺寸。
+- 连续生成两张望远镜测试图，按钮均显示 0 Anlas。提交中按钮禁用，完成自动返回结果画布；前后余额显示不变。不据此推断订阅额度没有消耗。
+- 结果图上下分布紧凑工具栏；Enhance 在原图局部展开，底部主按钮变成 Enhance 并显示费用。打开增强后关闭，未提交增强。图片复制操作出现成功提示；Director Tools 为独立后处理工作区，观察后返回。
+- 历史图按缩略图排列，点击其中一张返回画布。锁的真实标签为 `Lock scroll position (disable auto-scroll)`。锁定时生成第二张仍展示新结果，证明它不是锁定当前图片。测试后恢复自动滚动。
+- 用量说明展示订阅剩余额度百分比及估算张数，并明确订阅额度会恢复、耗尽可使用 Anlas；满额状态显示恢复暂停。不能把接口中的下一百分点时长在满额时当成正在恢复的倒计时。
+- 未上传用户文件、修改既有提示词块或删除历史。本次没有抓取网络请求体；API 合约与 UI 观察分开验证。
+
+原生适配决策：保留固定底部生成操作；提示词/设置使用有界的工作台内区域，宽屏移到侧栏；历史选择保留缩略图区域以连续比较，这是有意改善官方窄屏覆盖切换，而不是声称官网本身如此。历史锁仅控制自动滚动。正负词和角色归入提示词区域，减少一级页签；宽屏底部输入和按钮限宽。
+
+## 2026-10-25 · Inspect 元数据对照
+
+- 在内置浏览器打开 https://novelai.net/inspect，上传应用已有的 NovelAI V5 生成 PNG，检查窄屏 Simplified 与 Raw Parameters 两种视图。
+- 官方结构：图片预览；Title / Description / Software / Source / Request Type；Simplified 提示词与参数；Raw 展示 Comment JSON。Sampler 显示采样器与 noise_schedule，例如 k_euler_ancestral (karras)。
+- 应用采用相同信息层级，保留应用主题。添加 Samples、UC Strength，显示真实文件尺寸并区分生成尺寸。提示词默认展开；参数可复制；Raw 复制保留原始文本，应用配方独立折叠。
+- 不伪造官方签名验证标记；当前未实现签名验证。若成功读取的原件没有元数据，不用旧保存的 raw 冒充当前原件内容。
+- Android 模拟器 720×1280 / 320 dpi 实测：打开真实生成图片的信息页、滚动基础字段、切换 Raw Parameters，布局正常。测试后恢复模拟器尺寸与密度。
+
+## 2026-10-26 · 覆盖式编辑抽屉、权重与图片导入
+
+- 在已登录的内置浏览器窄屏（444×918）逐项操作 Prompt、Reference Images、Character Prompts 与图片上传。展开编辑器覆盖原图，底部 Generate 保持固定；Prompt/UC 在同一区域切换，角色卡片拥有独立 Prompt/UC 和位置控制。
+- 实测 `1.5::brass telescope::, 0.5::stars::, 1.0::sky::`：官网增强为红底、减弱为蓝底，中性权重不着色。测试后恢复原提示词，删除测试用空角色；未提交生成，没有抓取或推断新的后台协议。
+- 向官网上传已有 NovelAI PNG：确认导入选择默认为 Prompt、Undesired Content、Characters；Append、Settings、Seed、Clean Imports 默认关闭。观察后关闭弹窗，没有应用到官网草稿。
+- 原生实现：底部编辑抽屉绝对覆盖画布，折叠/中上/顶部三档，可拖动吸附；保留现有历史缩略图。键盘引起容器收缩时固定背景画布尺寸。设置与提示词助手共享覆盖层，返回先关闭上层编辑区。
+- 原生 TextInput 内使用文字背景 span 显示权重，正向、UC、角色、片段共用；保留原始文本，不改变发送内容。角色采用卡片内 Prompt/UC 切换、启停、排序及自动/自定义位置。
+- 导入支持图片预览、作为图生图底图或选择性导入元数据；默认不覆盖设置和 Seed，支持追加角色、清理已识别预设、撤销。相册临时 URI 使用通用元数据读取器，不能使用仅接受应用归档路径的 Inspector 读取器。
+- Android 模拟器 720×1280 / 320 dpi 实测：抽屉展开、拖到顶部、输入红蓝权重、键盘弹出、添加空角色并切换 UC、删除测试角色；预览图在展开/拖动/键盘弹出时保持 [16,283][704,738] 的布局边界。
+- 实测系统相册 AutoDL-H3 中已有 NovelAI PNG 的选择、元数据识别和导入：正向恢复为原始 observatory 描述，角色数为 0，现有 Seed 2016169171 保持不变。未生成新图片。测试提示词和临时角色已恢复。
+- 验证：TypeScript 检查通过；5 个相关 Jest 套件共 23 项通过；Android x86_64 beta 构建成功并安装验证。本次模拟器包不是供手机分发的 arm64 测试包。

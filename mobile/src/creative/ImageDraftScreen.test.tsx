@@ -3,7 +3,7 @@ jest.mock('./taskRecovery',()=>({unknownTaskReviewed:async()=>mockReviewed}));
 let mockReviewed=false;
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Alert, NativeModules, TextInput } from 'react-native';
+import { Alert, Modal, NativeModules, StyleSheet, TextInput } from 'react-native';
 import { ImageDraftScreen } from './ImageDraftScreen';
 import { defaultNovelAiDraft } from './novelAiProtocol';
 import { createEnhanceInput } from './novelAiEnhancement';
@@ -19,6 +19,7 @@ const mockPrepare = jest.fn(async (_id: string) => {mockPreparedInput=JSON.parse
 jest.mock('./runtime', () => ({ creativeService: () => ({ draft: async () => mockDraft, drafts:async()=>[mockDraft,...mockPrevious], versions:async()=>[], draftInputs: async () => [], execute: mockExecute }), creativeFiles: () => ({ verify: async () => ({ state: 'AVAILABLE' }) }) }));
 jest.mock('./novelAiRuntime', () => ({ prepareCreativeImage: (id: string) => mockPrepare(id), confirmCreativeImage: jest.fn() }));
 jest.mock('./CreativeResults', () => ({ CreativeResults: () => null }));
+jest.mock('./NovelAiUsageBar', () => ({ NovelAiUsageBar: () => null }));
 jest.mock('./CreativeAccountPanel', () => ({ CreativeAccountPanel: () => null }));
 jest.mock('./DraftHeading', () => ({ DraftHeading: () => null }));
 jest.mock('./CopySubmittedDraft', () => ({ CopySubmittedDraft: () => null }));
@@ -31,6 +32,22 @@ beforeEach(() => {
   mockDraft = { id: 'd', provider_id: 'novelai', state: 'EDITING', revision: 0, input_json: JSON.stringify(defaultNovelAiDraft) };
   mockPrevious=[];
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+});
+
+test('canvas measurements around the compact threshold cannot resize the prompt and feed back into layout',async()=>{
+  let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<ImageDraftScreen id="d"/>);});
+    const field=()=>tree.root.findAllByType(TextInput).find(n=>n.props.accessibilityLabel==='图片提示词')!;
+    const height=()=>StyleSheet.flatten(field().props.style).height;
+    const initial=height();
+    const canvas=tree.root.findAll(n=>n.props.testID==='image-workbench-canvas')[0];
+    const measure=canvas.parent!.props.onLayout;
+    for(const available of [476,484,479,481,476,484]){
+      act(()=>measure({nativeEvent:{layout:{width:393,height:available,x:0,y:0}}}));
+      expect(height()).toBe(initial);
+    }
+  }finally{act(()=>tree?.unmount());}
 });
 
 test('switching history exits Enhance and cannot submit the previously selected source',async()=>{
@@ -79,8 +96,28 @@ test('back closes inline settings before attempting to leave the workspace',asyn
     act(()=>button(tree,'生成设置').props.onPress());
     const prevent=require('expo-router/react-navigation').usePreventRemove as jest.Mock;
     act(()=>prevent.mock.calls.at(-1)[1]({data:{action:{type:'GO_BACK'}}}));
+    act(()=>jest.advanceTimersByTime(250));
     expect(button(tree,'关闭生成设置')).toBeUndefined();
     expect(Alert.alert).not.toHaveBeenCalled();expect(mockExecute).not.toHaveBeenCalled();
+  }finally{act(()=>tree?.unmount());}
+});
+
+test('settings, prompt and history switch in place while preserving the canvas and generation control',async()=>{
+  let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<ImageDraftScreen id="d"/>);});
+    const canvas=()=>tree.root.findAll(n=>n.props.testID==='image-workbench-canvas')[0];
+    act(()=>button(tree,'生成设置').props.onPress());
+    expect(canvas()).toBeDefined();expect(button(tree,'生成 1 张图片')).toBeDefined();
+    expect(tree.root.findAllByType(Modal)).toHaveLength(0);
+    act(()=>button(tree,'展开画面编辑').props.onPress());
+    expect(button(tree,'关闭生成设置')).toBeUndefined();expect(button(tree,'关闭画面编辑')).toBeDefined();
+    expect(canvas()).toBeDefined();expect(tree.root.findAllByType(Modal)).toHaveLength(0);
+    act(()=>button(tree,'生成历史').props.onPress());
+    act(()=>jest.advanceTimersByTime(250));
+    expect(button(tree,'关闭画面编辑')).toBeUndefined();
+    expect(tree.root.findByType(require('./CreativeResults').CreativeResults).props.historyVisible).toBe(true);
+    expect(canvas()).toBeDefined();
   }finally{act(()=>tree?.unmount());}
 });
 
@@ -251,12 +288,26 @@ test('reference modes retain incomplete editing but refuse to prepare a request 
   try{
     await act(async()=>{tree=create(<ImageDraftScreen id="d" />);});
     act(()=>button(tree,'展开画面编辑').props.onPress());
-    act(()=>button(tree,'底图').props.onPress());
+    act(()=>button(tree,'参考图').props.onPress());
     act(()=>button(tree,'局部重绘').props.onPress());
     expect(JSON.stringify(tree.toJSON())).toContain('尚未选择底图');
-    act(()=>button(tree,'完成').props.onPress());
+    act(()=>button(tree,'关闭画面编辑').props.onPress());
     await act(async()=>jest.advanceTimersByTime(650));
     expect(JSON.parse(mockDraft.input_json).action).toBe('infill');
     expect(mockPrepare).not.toHaveBeenCalled();
   }finally{act(()=>tree?.unmount());}
+});
+
+test('opening the editor overlays an open history without resizing the preview or hiding its selection',async()=>{
+ let tree!:ReturnType<typeof create>;
+ try{await act(async()=>{tree=create(<ImageDraftScreen id="d"/>);});
+  act(()=>button(tree,'生成历史').props.onPress());
+  const results=()=>tree.root.findByType(require('./CreativeResults').CreativeResults);
+  expect(results().props.historyVisible).toBe(true);
+  const stage=()=>StyleSheet.flatten(tree.root.findByProps({testID:'image-workbench-canvas'}).props.style);
+  const before=stage();act(()=>button(tree,'展开画面编辑').props.onPress());
+  expect(results().props.historyVisible).toBe(true);expect(stage()).toEqual(before);
+  expect(StyleSheet.flatten(tree.root.findAllByProps({testID:'image-workbench-tools'})[0].props.style).position).toBe('absolute');
+  act(()=>button(tree,'关闭画面编辑').props.onPress());expect(stage()).toEqual(before);
+ }finally{act(()=>tree?.unmount());}
 });

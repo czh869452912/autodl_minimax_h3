@@ -1,8 +1,9 @@
 import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../ui/KeyboardSurface';
-import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppIcon, type IconName } from '../ui/icons';
+import { WorkbenchMotion } from './WorkbenchMotion';
 import { COLORS } from '../ui/theme';
 
 const DensityContext = createContext(false);
@@ -11,13 +12,22 @@ export function useWorkbenchLeave(guard:()=>Promise<boolean>){
   const context=useContext(WorkbenchNavigationContext),latest=useRef(guard);latest.current=guard;
   useEffect(()=>context?.register(()=>latest.current()),[context]);
 }
-export function CompactWorkbench({children}:{children:ReactNode}) { return <DensityContext.Provider value>{children}</DensityContext.Provider>; }
+export function CompactWorkbench({children}:{children:ReactNode}) { return <DensityContext.Provider value><WorkbenchMotion>{children}</WorkbenchMotion></DensityContext.Provider>; }
 export const useCompactWorkbench = () => useContext(DensityContext);
+
+/** A bounded, in-place tool region: the owner keeps the canvas visible beside it. */
+export function InlineWorkbenchPanel({title,onClose,children,header}:{title:string;onClose:()=>void;children:ReactNode;header?:ReactNode}) {
+  const [tight,setTight]=useState(false);
+  return <View onLayout={event=>setTight(event.nativeEvent.layout.height<140)} style={{flex:1,minHeight:0,backgroundColor:COLORS.surface}}>
+    {!tight?<View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,paddingVertical:4,borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:COLORS.border}}>{header?<View style={{flex:1}}>{header}</View>:<Text accessibilityRole="header" style={{flex:1,fontSize:13,fontWeight:'600',color:COLORS.text}}>{title}</Text>}<IconAction label={`关闭${title}`} icon="close" onPress={onClose}/></View>:null}
+    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:12,gap:10,paddingBottom:20}}>{children}</ScrollView>
+  </View>;
+}
 
 export function TextAction({ label, onPress, disabled = false, icon }: { label: string; onPress: () => void; disabled?: boolean; icon?: IconName }) {
   const compact=useCompactWorkbench();
   return <Pressable hitSlop={compact?4:undefined} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [w.textAction, compact && {minHeight:36,paddingVertical:4}, pressed && w.pressed, disabled && w.disabled]}>
-    {icon ? <AppIcon name={icon} size={18} color={COLORS.primaryActive} /> : null}<Text style={w.actionText}>{label}</Text>
+    {icon ? <AppIcon name={icon} size={compact?16:18} color={COLORS.primaryActive} /> : null}<Text style={[w.actionText,compact && {fontSize:12,lineHeight:17}]}>{label}</Text>
   </Pressable>;
 }
 
@@ -30,10 +40,10 @@ export function SettingRow({ label, value, onPress, expanded, disabled = false, 
   </Pressable>;
 }
 
-export function SegmentedChoices<T extends string>({ label, options, value, onChange, disabled = false, singleRow = false }: { label: string; options: ReadonlyArray<{ id: T; label: string; icon?: IconName }>; value: T; onChange: (id: T) => void; disabled?: boolean; singleRow?: boolean }) {
+export function SegmentedChoices<T extends string>({ label, options, value, onChange, disabled = false, singleRow = false, variant='segments' }: { variant?:'segments'|'tabs';label: string; options: ReadonlyArray<{ id: T; label: string; icon?: IconName }>; value: T; onChange: (id: T) => void; disabled?: boolean; singleRow?: boolean }) {
   const compact=useCompactWorkbench();
-  return <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[w.segments,compact && {padding:2,gap:2,borderRadius:7},singleRow && {flexWrap:'nowrap'}]}>{options.map(option => <Pressable key={option.id} hitSlop={compact?4:undefined} accessibilityRole="radio" accessibilityLabel={option.label} accessibilityState={{ checked: value === option.id, disabled }} disabled={disabled} onPress={() => onChange(option.id)} style={({ pressed }) => [w.segment,compact && {minHeight:32,padding:5,borderRadius:5,flexBasis:60},singleRow && {flexBasis:0,paddingHorizontal:4}, value === option.id && w.segmentSelected, pressed && w.pressed, disabled && w.disabled]}>
-    {option.icon ? <AppIcon name={option.icon} size={19} color={value === option.id ? COLORS.primaryActive : COLORS.textMuted} /> : null}<Text style={[w.segmentText, value === option.id && w.segmentTextSelected]}>{option.label}</Text>
+  return <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[w.segments,compact && {padding:2,gap:2,borderRadius:10},singleRow && {flexWrap:'nowrap'},variant==='tabs' && {backgroundColor:'transparent',padding:0,gap:12}]}>{options.map(option => <Pressable key={option.id} hitSlop={compact?4:undefined} accessibilityRole="radio" accessibilityLabel={option.label} accessibilityState={{ checked: value === option.id, disabled }} disabled={disabled} onPress={() => onChange(option.id)} style={({ pressed }) => [w.segment,compact && {minHeight:32,padding:5,borderRadius:8,flexBasis:60},singleRow && {flexBasis:0,paddingHorizontal:4}, value === option.id && w.segmentSelected,variant==='tabs' && {borderRadius:0,backgroundColor:'transparent',elevation:0,shadowOpacity:0,borderBottomWidth:2,borderBottomColor:value===option.id?COLORS.primary:'transparent'}, pressed && w.pressed, disabled && w.disabled]}>
+    {option.icon ? <AppIcon name={option.icon} size={compact?16:19} color={value === option.id ? COLORS.primaryActive : COLORS.textMuted} /> : null}<Text style={[w.segmentText,compact && {fontSize:12}, value === option.id && w.segmentTextSelected]}>{option.label}</Text>
   </Pressable>)}</View>;
 }
 
@@ -56,7 +66,9 @@ export function SectionHeading({ title, detail }: { title: string; detail?: stri
 }
 
 export function IconAction({label,icon,onPress,disabled=false,selected=false}:{label:string;icon:IconName;onPress:()=>void;disabled?:boolean;selected?:boolean}) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled,selected}} disabled={disabled} onPress={onPress} hitSlop={4} style={({pressed})=>({width:40,minHeight:40,alignItems:'center',justifyContent:'center',borderRadius:6,backgroundColor:selected?COLORS.primarySoft:'transparent',opacity:disabled?0.4:pressed?0.6:1})}><AppIcon name={icon} size={19} color={selected?COLORS.primary:COLORS.textMuted} /></Pressable>;
+  const compact=useCompactWorkbench(),{fontScale}=useWindowDimensions();
+  const size=compact && fontScale<=1.2?34:44;
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled,selected}} disabled={disabled} onPress={onPress} hitSlop={5} style={({pressed})=>({width:size,minHeight:size,alignItems:'center',justifyContent:'center',borderRadius:10,backgroundColor:selected?COLORS.primarySoft:pressed?COLORS.surfaceRaised:'transparent',opacity:disabled?0.4:1,transform:[{scale:pressed?0.94:1}]})}><AppIcon name={icon} size={compact?17:19} color={selected?COLORS.primary:COLORS.textMuted} /></Pressable>;
 }
 
 export const w = StyleSheet.create({
@@ -69,7 +81,7 @@ export const w = StyleSheet.create({
   settingLabel: { color: COLORS.text, fontSize: 15, lineHeight: 22, fontWeight: '600' },
   segments: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, padding: 4, backgroundColor: COLORS.surfaceRaised, borderRadius: 14 },
   segment: { minHeight: 48, flexGrow: 1, flexBasis: 72, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', padding: 10, borderRadius: 10 },
-  segmentSelected: { backgroundColor: COLORS.surface },
+  segmentSelected: { backgroundColor: COLORS.surface,shadowColor:'#172b23',shadowOffset:{width:0,height:1},shadowOpacity:0.06,shadowRadius:2,elevation:1 },
   segmentText: { fontSize: 14, fontWeight: '500', color: COLORS.textMuted, textAlign: 'center', flexShrink: 1 },
   segmentTextSelected: { fontWeight: '700', color: COLORS.primaryActive },
   modal: { flex: 1, justifyContent: 'flex-end', backgroundColor: COLORS.scrim, paddingTop: 48 },

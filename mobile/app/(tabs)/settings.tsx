@@ -1,13 +1,13 @@
 import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../../src/ui/KeyboardSurface';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { CompactWorkbench,IconAction,SettingRow, TextAction } from '../../src/creative/WorkbenchUI';
 import { readSettingsDraft, writeSettingsDraft } from '../../src/settings/draft';
 import { DataManagementPanel } from '../../src/settings/DataManagementPanel';
 import { CreativeAccountPanel } from '../../src/creative/CreativeAccountPanel';
 import { videoDecodeOptions } from '../../src/settings/videoDecodeMode';
 import { WorkflowSyncPanel } from '../../src/settings/WorkflowSyncPanel';
-import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, BackHandler, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { readSettings, saveSettings } from '../../src/settings/storage';
 import { DEFAULT_LLM_ADVANCED_SETTINGS as advancedDefaults } from '../../src/config/llmDefaults';
 import { isDeepSeekV4, reasoningOptions } from '../../src/config/llmReasoning';
@@ -20,10 +20,13 @@ import { DisplayDiagnostics } from '../../src/settings/DisplayDiagnostics';
 
 type Settings = Awaited<ReturnType<typeof readSettings>>;
 export default function SettingsScreen() {
+  const router=useRouter();
   const { section } = useLocalSearchParams<{ section?: string }>();
   const normalizeSection=(value?:string)=>value==='legacy'?'accounts':value;
   const [activeSection,setActiveSection]=useState(normalizeSection(section));
   useEffect(()=>setActiveSection(normalizeSection(section)),[section]);
+  const back=()=>activeSection?setActiveSection(undefined):router.canGoBack()?router.back():router.navigate('/(tabs)/create');
+  useFocusEffect(useCallback(()=>{const sub=BackHandler.addEventListener('hardwareBackPress',()=>{if(!activeSection)return false;setActiveSection(undefined);return true;});return()=>sub.remove();},[activeSection]));
   const layout = usePageLayout();
   const scrollRef = useRef<ScrollView>(null);
   useEffect(() => { scrollRef.current?.scrollTo({ y: 0, animated: false }); }, [activeSection]);
@@ -67,11 +70,11 @@ export default function SettingsScreen() {
     finally { saveLock.current = false; setSaving(false); }
   };
   if (!baseline) return <View style={styles.container}>{loadError ? <Pressable accessibilityRole="button" accessibilityLabel="重试读取设置" onPress={() => setLoadAttempt(value => value + 1)} style={styles.saveButton}><Text style={styles.saveText}>设置读取失败，点击重试</Text></Pressable> : <ActivityIndicator accessibilityLabel="正在读取设置" />}</View>;
-  return <CompactWorkbench><KeyboardSurface style={styles.container}><ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={[styles.content, layout.contentStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+  return <CompactWorkbench><KeyboardSurface style={styles.container}><View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,borderBottomWidth:0.5,borderBottomColor:COLORS.border}}><IconAction label={activeSection?"返回设置分类":"返回工作台"} icon="arrow_back" onPress={back}/><Text style={{fontSize:16,fontWeight:'600',color:COLORS.text}}>{activeSection?({accounts:'创作账号',assistant:'助手模型',workflows:'工作流',storage:'存储与导出',playback:'视频播放',advanced:'显示与诊断'} as Record<string,string>)[activeSection]:'设置'}</Text></View><ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={[styles.content, layout.contentStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
     {draftReadError ? <View style={styles.card}><Text accessibilityRole="alert" style={{ color: COLORS.danger }}>未保存草稿无法读取，已隔离；当前使用已保存设置。</Text><Pressable accessibilityRole="button" accessibilityLabel="丢弃无法读取的草稿" style={styles.resetAdvanced} onPress={() => { void writeSettingsDraft().then(() => { setDraftReadError(false); setDraftError(''); }).catch(() => setDraftError('无法丢弃草稿，请重试；已保存设置不受影响')); }}><Text>丢弃无法读取的草稿</Text></Pressable></View> : null}
     {pendingDraft ? <View style={styles.card}><Text>发现未保存的设置草稿</Text><Pressable accessibilityRole="button" style={styles.resetAdvanced} onPress={() => { setValues(current => ({ ...current, ...pendingDraft })); setPendingDraft(undefined); }}><Text>恢复未保存更改</Text></Pressable><Pressable accessibilityRole="button" style={styles.resetAdvanced} onPress={() => setPendingDraft(undefined)}><Text>丢弃草稿，使用已保存设置</Text></Pressable></View> : null}
     {draftError ? <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{draftError}</Text> : null}
-    {activeSection?<View style={{flexDirection:'row',alignItems:'center',gap:12}}><IconAction label="返回设置分类" icon="arrow_back" onPress={()=>setActiveSection(undefined)}/><Text accessibilityRole="header" style={styles.title}>{activeSection?({accounts:'创作账号',assistant:'助手模型',workflows:'工作流',storage:'存储与导出',playback:'视频播放',advanced:'显示与诊断'} as Record<string,string>)[activeSection]??'设置':'设置'}</Text></View>:null}
+
     {!activeSection?<>
       <Text style={styles.groupLabel}>连接与能力</Text><View style={styles.group}>
       {([['accounts','创作账号','NovelAI · AutoDL'],['assistant','助手模型','提示词与创作辅助'],['workflows','工作流','已安装能力与同步']] as const).map(([key,label,value])=><SettingRow key={key} label={label} value={value} onPress={()=>setActiveSection(key)}/>)}
@@ -105,7 +108,7 @@ export default function SettingsScreen() {
       <Pressable accessibilityRole="button" accessibilityLabel="恢复 LLM 高级设置默认值" onPress={() => setValues(current => ({ ...current, ...advancedDefaults }))} style={styles.resetAdvanced}><Text style={styles.externalLinkText}>恢复高级设置默认值</Text></Pressable>
     </View> : null}</View>
     :null}
-    {activeSection==='storage'?<View style={styles.card}><View style={styles.cardHeading}><AppIcon name="movie_filter" size={20} color={COLORS.primaryActive} /><Text style={styles.cardTitle}>存储与导出</Text></View><View style={styles.settingRow}><View style={styles.settingCopy}><Text style={styles.settingLabel}>自动保存到系统相册</Text><Text style={styles.help}>下载完成后保存到系统相册 / Movies / AutoDL-H3</Text></View><Switch accessibilityLabel="自动保存到系统相册" value={values.autoExportToGallery} onValueChange={(value) => update('autoExportToGallery', value)} trackColor={{ false: COLORS.border, true: COLORS.primaryActive }} thumbColor={COLORS.text} /></View><Text style={styles.location}>保存位置：系统相册 / Movies / AutoDL-H3</Text><View style={styles.settingRow}><View style={styles.settingCopy}><Text style={styles.settingLabel}>保留应用内副本</Text><Text style={styles.help}>关闭后仅在相册保存成功时删除应用内视频</Text></View><Switch accessibilityLabel="保留应用内副本" value={values.keepPrivateCopy} onValueChange={(value) => update('keepPrivateCopy', value)} trackColor={{ false: COLORS.border, true: COLORS.primaryActive }} thumbColor={COLORS.text} /></View></View>
+    {activeSection==='storage'?<View style={styles.card}><View style={styles.cardHeading}><AppIcon name="movie_filter" size={20} color={COLORS.primaryActive} /><Text style={styles.cardTitle}>存储与导出</Text></View><View style={styles.settingRow}><View style={styles.settingCopy}><Text style={styles.settingLabel}>自动保存到系统相册</Text><Text style={styles.help}>视频下载完成后保存到系统相册 / Movies / AutoDL-H3</Text></View><Switch accessibilityLabel="自动保存到系统相册" value={values.autoExportToGallery} onValueChange={(value) => update('autoExportToGallery', value)} trackColor={{ false: COLORS.border, true: COLORS.primaryActive }} thumbColor={COLORS.text} /></View><View style={styles.settingRow}><View style={styles.settingCopy}><Text style={styles.settingLabel}>图片生成后自动保存</Text><Text style={styles.help}>生成、增强与放大完成后保存到系统相册，应用内仍保留原件。</Text></View><Switch accessibilityLabel="图片生成后自动保存" value={values.autoExportImagesToGallery??false} onValueChange={value=>update('autoExportImagesToGallery',value)}/></View><Text style={styles.location}>保存位置：系统相册 / Movies / AutoDL-H3</Text><View style={styles.settingRow}><View style={styles.settingCopy}><Text style={styles.settingLabel}>保留应用内副本</Text><Text style={styles.help}>关闭后仅在相册保存成功时删除应用内视频</Text></View><Switch accessibilityLabel="保留应用内副本" value={values.keepPrivateCopy} onValueChange={(value) => update('keepPrivateCopy', value)} trackColor={{ false: COLORS.border, true: COLORS.primaryActive }} thumbColor={COLORS.text} /></View></View>
     :null}
     {activeSection==='playback'?<View style={styles.card}><Text style={styles.cardTitle}>视频解码</Text><Text style={styles.help}>默认使用自动模式；遇到黑屏或播放异常时可尝试其他模式。保存后对应用内播放生效。</Text><View style={styles.effortOptions} accessibilityRole="radiogroup" accessibilityLabel="视频解码模式">{videoDecodeOptions.map(option => <Pressable key={option.value} accessibilityRole="radio" accessibilityLabel={`视频解码：${option.label}`} accessibilityState={{ checked: (values.videoDecodeMode ?? 'auto') === option.value }} onPress={() => update('videoDecodeMode', option.value)} style={[styles.effortOption, (values.videoDecodeMode ?? 'auto') === option.value && styles.effortSelected]}><Text style={styles.effortText}>{option.label}</Text></Pressable>)}</View><Text style={styles.help}>{videoDecodeOptions.find(option => option.value === (values.videoDecodeMode ?? 'auto'))?.help}</Text><Text style={styles.help}>此选项不会修改视频原件，也不会影响系统相册中的视频。</Text></View>
     :null}

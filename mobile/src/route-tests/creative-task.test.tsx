@@ -23,10 +23,10 @@ test.each(['novelai','autodl'])('%s unknown task exposes provider-specific revie
     await act(async()=>{tree=create(<CreativeTask/>);});
     expect(button(`打开 ${provider==='novelai'?'NovelAI':'AutoDL'} 核查`)).toBeDefined();
     if(provider==='novelai')expect(tree.root.findAllByType(Text).map(n=>n.props.children).join('')).not.toContain('AutoDL');
-    act(()=>button('已核查，解除本次等待').props.onPress());
+    if(provider==='novelai'){act(()=>button('已核查，解除本次等待').props.onPress());
     expect(mockAcknowledge).not.toHaveBeenCalled();
     await act(async()=>alert.mock.calls[0][2]!.find(action=>action.text==='已核查，继续创作')!.onPress!());
-    expect(mockAcknowledge).toHaveBeenCalledWith(expect.anything(),'original');
+    expect(mockAcknowledge).toHaveBeenCalledWith(expect.anything(),'original');}else{expect(mockAcknowledge).not.toHaveBeenCalled();expect(JSON.stringify(tree.toJSON())).toContain('可返回工作台继续提交新视频');}
     expect(button('已核查，解除本次等待')).toBeUndefined();
     act(()=>button('返回创作与结果').props.onPress());
     expect(mockBack).toHaveBeenCalledTimes(1);

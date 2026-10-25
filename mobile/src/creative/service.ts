@@ -1,3 +1,4 @@
+import {enqueueVersionExport} from './enqueueVersionExport';
 import CryptoJS from 'crypto-js';
 import { recoverNovelAiMetadata } from './novelAiMetadata';
 import { storySchemas, applyStoryCommand, listCreativeShots } from './story';
@@ -99,22 +100,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
             value={projectId:p.id};break;
           }
           case 'asset.authorText': value=await applyAuthoredText(tx,p,now,deps.id);break;
-          case 'asset.export': {
-            const existing = await tx.getFirstAsync<{ id: string; operation_id: string }>("SELECT id,operation_id FROM creative_deliveries WHERE version_id=? AND file_role='original' AND generation=?", p.versionId, p.generation);
-            if (existing) { execution = { kind: 'export', deliveryId: existing.id, operationId: existing.operation_id }; break; }
-            const file = await tx.getFirstAsync<{ blob_sha256: string; mime: string }>("SELECT f.blob_sha256,b.mime FROM creative_version_files f JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE f.version_id=? AND f.role='original' AND f.state='AVAILABLE'", p.versionId);
-            if (!file) throw new Error('VERSION_NOT_AVAILABLE');
-            if (!(CREATIVE_FILE_MIMES as readonly string[]).includes(file.mime)) throw new Error('EXPORT_MIME_UNSUPPORTED');
-            const epoch = await tx.getFirstAsync<{ epoch: string }>('SELECT epoch FROM creative_execution_state WHERE id=1');
-            if (!epoch) throw new Error('EXECUTION_EPOCH_MISSING');
-            const deliveryId = deps.id(), operationId = deps.id();
-            const publicationKey = CryptoJS.SHA256(deliveryId).toString();
-            await insertWorkflowOperation(tx, { id: operationId, kind: 'EXPORT', idempotencyKey: deliveryId, payload: { kind: 'creative_version', deliveryId }, now }, 'error');
-            await tx.runAsync("INSERT INTO creative_deliveries VALUES(?,?,'original',?,?,'QUEUED',?,?,?,NULL,NULL,?,?)", deliveryId, p.versionId, creativeExportTarget(file.mime),p.generation, operationId, publicationKey, epoch.epoch, now, now);
-            await tx.runAsync("INSERT INTO artifact_blob_refs VALUES(?,'creative_delivery',?,?)", file.blob_sha256, deliveryId, now);
-            await tx.runAsync('UPDATE executor_wake_state SET generation=generation+1,requested_at=? WHERE singleton=1', now);
-            execution = { kind: 'export', deliveryId, operationId }; break;
-          }
+          case 'asset.export': { execution=await enqueueVersionExport(tx,p.versionId,p.generation,now,deps.id);break; }
           case 'project.create': {
             const projectId = deps.id();
             await tx.runAsync('INSERT INTO creative_projects VALUES(?,?,?,0,NULL,?,?)', projectId, p.title, p.brief ?? '', now, now);

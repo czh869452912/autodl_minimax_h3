@@ -98,3 +98,20 @@ test('unsaved project brief blocks route removal and tab changes until explicitl
     expect(usePreventRemove).toHaveBeenLastCalledWith(false, expect.any(Function));
   } finally { act(() => tree?.unmount()); alert.mockRestore(); mockService.projects.mockResolvedValue([]); }
 });
+
+test('import is an action separate from asset filters and does not change the selected category',async()=>{
+  let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<CreativeWorkspace mode="assets"/>);});
+    await act(async()=>press(tree,'视频'));
+    const before=mockService.assets.mock.calls.length;
+    act(()=>press(tree,'导入素材'));
+    expect(content(tree)).toContain('从相册导入图片');
+    expect(content(tree)).toContain('从文件导入');
+    const selected=tree.root.findAll(n=>n.props.accessibilityRole==='radio' && n.props.accessibilityLabel==='视频')[0];
+    expect(selected.props.accessibilityState.checked).toBe(true);
+    expect(mockService.assets).toHaveBeenCalledTimes(before);
+    await act(async()=>press(tree,'从相册导入图片'));
+    expect(selected.props.accessibilityState.checked).toBe(true);
+  }finally{act(()=>tree?.unmount());}
+});

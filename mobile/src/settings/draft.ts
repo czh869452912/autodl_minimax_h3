@@ -9,7 +9,7 @@ export async function readSettingsDraft(): Promise<Partial<AppSettings> | undefi
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('设置草稿无法读取');
   const {token: _legacyToken, ...preferences} = parsed;
   const allowedStrings = new Set([ 'llmEndpoint', 'llmModel', 'llmApiKey', 'llmTimeoutSeconds', 'llmMaxRetries', 'llmContextWindowTokens', 'llmMaxOutputTokens', 'llmReasoningEffort', 'videoDecodeMode']);
-  const allowedBooleans = new Set(['autoExportToGallery', 'keepPrivateCopy']);
+  const allowedBooleans = new Set(['autoExportToGallery', 'autoExportImagesToGallery', 'keepPrivateCopy']);
   for (const [key, value] of Object.entries(preferences)) {
     if (!(allowedStrings.has(key) && typeof value === 'string') && !(allowedBooleans.has(key) && typeof value === 'boolean')) throw new Error('设置草稿格式无效');
   }

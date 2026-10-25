@@ -57,6 +57,21 @@ async function fixture(upscale=false) {
   return { db, service, task, jobs, operations, store, handle, draft, hash };
 }
 
+test.each([true,false])('image auto-save preference queues a durable export only when enabled (%s)',async enabled=>{
+ const f=await fixture();try{
+  await f.handle('SUBMIT');await f.handle('STATUS_SYNC');
+  const output=f.db.getFirstSync<{payload_json:string}>("SELECT payload_json FROM workflow_operations WHERE kind='ARTIFACT_DOWNLOAD'")!;
+  const input={jobId:f.task.id,artifact:JSON.parse(output.payload_json).artifact,blob:{sha256:f.hash},now:300,deliveryPolicy:{autoExportImagesToGallery:enabled}} as never;
+  await withWriteTransaction(f.db as never,tx=>archiveCreativeOutput(tx,input));
+  await withWriteTransaction(f.db as never,tx=>archiveCreativeOutput(tx,input));
+  expect(f.db.getAllSync('SELECT * FROM creative_deliveries')).toHaveLength(enabled?1:0);
+  const version=f.db.getFirstSync<{version_id:string}>('SELECT version_id FROM creative_output_links')!;
+  await f.service.execute({name:'asset.export',payload:{versionId:version.version_id}},'manual');
+  expect(f.db.getAllSync('SELECT * FROM creative_deliveries')).toHaveLength(1);
+  expect(f.db.getAllSync("SELECT * FROM workflow_operations WHERE kind='EXPORT'")).toHaveLength(1);
+ }finally{f.db.close();}
+});
+
 test('standalone upscale archives a new version with actual output size and original generation metadata',async()=>{
   const f=await fixture(true);
   try{

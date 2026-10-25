@@ -42,7 +42,7 @@ function formatSeconds(value: number): string {
   return `${minutes}分${pad(seconds)}秒`;
 }
 
-export function getTaskTiming(task: TaskRecord, now: number): { queued: string; running: string } {
+export function getTaskTiming(task: Pick<TaskRecord, 'createdAt' | 'updatedAt' | 'startedAt' | 'executionDuration' | 'status'>, now: number): { queued: string; running: string } {
   const createdAt = Number.isFinite(task.createdAt) ? task.createdAt : now;
   const startedAt = task.startedAt != null && Number.isFinite(task.startedAt) ? task.startedAt : undefined;
   const queuedSeconds = startedAt != null

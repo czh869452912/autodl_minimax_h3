@@ -68,3 +68,13 @@
 - 签名与前两版 Beta 相同，可覆盖安装测试版并保留测试数据；正式版身份不变。
 - 在独立新建的 Android QA 模拟器执行键盘交互抽查，确认 Agent 主输入框、设置页下方字段及连续切换焦点、创作信息抽屉、图片编辑和内嵌数字字段、视频提示词及底部 Seed 弹窗可见。完成后已关闭本轮 QA 模拟器；未操作用户手机、使用真实账号或提交付费生成。用户所用 OEM 输入法仍需原手机复测。
 - Android Lint 本轮未通过：第三方 `react-native-worklets:lintAnalyzeRelease` 的 Kotlin UAST 分析崩溃，错误为 `Cannot find a KaModule for the VirtualFile`，见 `mobile/keyboard-beta-lint.log`。没有将构建成功等同于 Lint 成功。
+
+## 2026-10-26 · beta.10 编辑抽屉与创作工作台更新
+
+- 版本 `1.5.0-preview.4-beta.10`，versionCode 49，包名 `com.example.autodlh3.beta`。
+- APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.10-android.apk`，158,605,279 字节，包含 arm64-v8a / armeabi-v7a，最低 Android 8.0。
+- SHA-256：`ED8DE4AE9D2352253285B786A43DB40269297B69B63E0C137C0C03C4535EABFB`。
+- 包含此前尚未提交的工作台、任务中心、提示词协作、全屏预览、元数据检查及本次覆盖式编辑抽屉、权重高亮、选择性元数据导入改进。
+- TypeScript 检查通过，完整 Jest：255 个套件 / 1635 项通过；1 个套件 / 4 项按原配置跳过。
+- 手机双架构 Beta 构建成功；最终 APK 包名、版本、ABI、v2 签名及 16 KB ZIP 对齐检查通过，签名证书与 beta.9 一致，可覆盖升级现有测试版。
+- 编辑器功能已在上一轮 x86_64 模拟器构建实测；本次手机包未安装至真实手机。检查输出见 `build/phone-beta/beta10-badging.txt` 和 `beta10-signature.txt`。

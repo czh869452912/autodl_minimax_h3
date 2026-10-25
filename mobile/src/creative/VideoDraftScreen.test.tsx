@@ -11,12 +11,15 @@ const mockExecute = jest.fn(async(command:any)=>{
   const source=[mockDraft,...mockPrevious].find(row=>row.id===command.payload.id);
   if(source&&source.id!==mockDraft.id){mockPrevious=[mockDraft,...mockPrevious.filter(row=>row.id!==source.id)];mockDraft=source;}
   if(command.name==='draft.copySubmitted'||command.name==='draft.switchVideoWorkflow'){mockPrevious.unshift(mockDraft);mockDraft={...mockDraft,id:`next-${mockPrevious.length}`,job_id:null,state:'EDITING',revision:0,...(command.name==='draft.switchVideoWorkflow'?{workflow_id:command.payload.input.workflow.id,input_json:JSON.stringify(command.payload.input)}:{})};return {status:'completed',value:{draftId:mockDraft.id}};}
+  if(command.name==='draft.replaceVideoMedia'){mockDraft={...mockDraft,revision:mockDraft.revision+1};return {status:'completed',value:{}};}
   mockDraft={...mockDraft,input_json:JSON.stringify(command.payload.input),revision:mockDraft.revision+1};return {status:'completed',value:{}};
 });
-const mockImport = jest.fn();
+const mockImport = jest.fn(),mockFileImport=jest.fn(),mockDocuments=jest.fn();
+jest.mock('expo-document-picker',()=>({getDocumentAsync:(...args:any[])=>mockDocuments(...args)}));
+jest.mock('./fileImport',()=>({importCreativeFile:(...args:any[])=>mockFileImport(...args)}));
 let mockDraft:any,mockPrevious:any[]=[],mockEntries:any[]=[];
 const mockPrepare=jest.fn(async()=>({})),mockConfirm=jest.fn(async()=>{mockDraft={...mockDraft,state:'SUBMITTED',job_id:'video-job',target_asset_id:'asset'};});
-jest.mock('./runtime', () => ({ creativeService: () => ({ draft: async (id:string) => [mockDraft,...mockPrevious].find(row=>row.id===id), drafts:async()=>[mockDraft,...mockPrevious], draftInputs: async () => [], execute: mockExecute }), importCreativeImage: (...args: any[]) => mockImport(...args), creativeFiles: () => ({ verify: jest.fn(),read:async()=>({mime:'image/png'}) }) }));
+jest.mock('./runtime', () => ({ creativeService: () => ({ draft: async (id:string) => [mockDraft,...mockPrevious].find(row=>row.id===id), drafts:async()=>[mockDraft,...mockPrevious], draftInputs: async () => [], execute: mockExecute }), importCreativeImage: (...args: any[]) => mockImport(...args), creativeFiles: () => ({ verify: jest.fn(),read:async(id:string)=>({mime:id.startsWith('audio')?'audio/mpeg':'image/png'}) }) }));
 jest.mock('./videoWorkbenchWorkflows',()=>({
   listVideoWorkflows:async()=>mockEntries,videoAccountReady:async()=>mockAccountReady,rememberVideoWorkflow:async()=>undefined,
   resolveVideoWorkbench:async(row:any)=>{
@@ -26,7 +29,7 @@ jest.mock('./videoWorkbenchWorkflows',()=>({
     return {...resolved,entry,stale:false};
   },
 }));
-jest.mock('../native/imagePicker', () => ({ pickImagesFromGallery: () => mockPick() }));
+jest.mock('../native/imagePicker', () => ({ pickImagesFromGallery: (...args:any[]) => mockPick(...args) }));
 jest.mock('./videoRuntime', () => ({ prepareCreativeVideo:()=>mockPrepare(), confirmCreativeVideo:()=>mockConfirm() }));
 jest.mock('./CreativeResults', () => ({ CreativeResults: () => null }));
 jest.mock('./CreativeAccountPanel', () => ({ CreativeAccountPanel: () => null }));
@@ -122,10 +125,9 @@ test('reference import locks duplicate taps and editing until picker cancellatio
   let release!: (images: unknown[]) => void;
   mockPick.mockImplementation(() => new Promise(resolve => { release = resolve; }));
   let tree!: ReturnType<typeof create>;
-  const button = () => tree.root.findAll(n => n.props.accessibilityLabel === '导入参考图' && typeof n.props.onPress === 'function')[0];
+  const button = () => tree.root.findAll(n => n.props.accessibilityLabel === '添加参考图' && typeof n.props.onPress === 'function')[0];
   try {
     await act(async () => { tree = create(<VideoDraftScreen id="d" />); });
-    await act(async()=>tree.root.findAll(n=>n.props.accessibilityLabel==='添加参考图'&&typeof n.props.onPress==='function')[0].props.onPress());
     act(() => { const onPress = button().props.onPress; onPress(); onPress(); });
     expect(mockPick).toHaveBeenCalledTimes(1);
     expect(tree.root.findByProps({ accessibilityLabel: '视频镜头提示词' }).props.editable).toBe(false);
@@ -153,8 +155,9 @@ test('video submits once directly, stays on its canvas and saves the next descri
     await act(async()=>jest.advanceTimersByTime(650));
     expect(JSON.parse(mockPrevious[0].input_json).values.prompt).toBe('Camera pushes in');
     expect(JSON.parse(mockDraft.input_json).values.prompt).toBe('Next shot');
-    expect(results().props.draft.job_id).toBe('video-job');expect(button().props.disabled).toBe(true);
-    await act(async()=>button().props.onPress());expect(mockConfirm).toHaveBeenCalledTimes(1);
+    expect(results().props.draft.job_id).toBe('video-job');expect(button().props.disabled).toBe(false);
+    await act(async()=>button().props.onPress());expect(mockConfirm).toHaveBeenCalledTimes(2);
+    await act(async()=>tree.root.findAll(n=>n.props.accessibilityLabel==='准备下一次'&&typeof n.props.onPress==='function')[0].props.onPress());
     act(()=>results().props.onJobStatus('SUCCEEDED'));
     expect(results().props.previewVisible).toBe(false);
     expect(prompt().props.value).toBe('Next shot');expect(button().props.disabled).toBe(false);
@@ -186,14 +189,16 @@ test('switching workflows renders their own parameters and restores each saved d
   }finally{act(()=>tree?.unmount());jest.useRealTimers();}
 });
 
-test('an unknown video remains investigable while edits cannot authorize another request',async()=>{
+test('an unknown video remains investigable without blocking a new explicit submission',async()=>{
   mockDraft={...mockDraft,state:'SUBMITTED',job_id:'unknown',target_asset_id:'asset'};let tree!:ReturnType<typeof create>;
   try{
     await act(async()=>{tree=create(<VideoDraftScreen id="d" />);});
     act(()=>tree.root.findByType(require('./CreativeResults').CreativeResults).props.onJobStatus('UNKNOWN'));
     await act(async()=>tree.root.findAll(n=>n.props.accessibilityLabel==='准备下一次'&&typeof n.props.onPress==='function')[0].props.onPress());
+    act(()=>tree.root.findByProps({accessibilityLabel:'视频镜头提示词'}).props.onChangeText('A new shot'));
     const button=tree.root.findAll(n=>n.props.accessibilityLabel==='生成视频' && typeof n.props.onPress==='function')[0];
-    expect(button.props.disabled).toBe(true);await act(async()=>button.props.onPress());expect(mockPrepare).not.toHaveBeenCalled();expect(mockConfirm).not.toHaveBeenCalled();
+    expect(button.props.disabled).toBe(false);await act(async()=>button.props.onPress());expect(mockPrepare).toHaveBeenCalledTimes(1);expect(mockConfirm).toHaveBeenCalledTimes(1);
+    expect(mockPrevious.find(row=>row.id==='d')?.job_id).toBe('unknown');
   }finally{act(()=>tree?.unmount());}
 });
 
@@ -225,4 +230,23 @@ test('an explicitly reviewed unknown request no longer blocks the next manual ge
     const button=tree.root.findAll(n=>n.props.accessibilityLabel==='生成视频'&&typeof n.props.onPress==='function')[0];
     expect(button.props.disabled).toBe(false);expect(mockPrepare).not.toHaveBeenCalled();expect(mockConfirm).not.toHaveBeenCalled();
   }finally{act(()=>tree?.unmount());}
+});
+
+test('adding references opens the corresponding multi-picker and associates the whole batch once',async()=>{
+ const images=[{uri:'file:///a.png',name:'a.png',mimeType:'image/png',size:10},{uri:'file:///b.png',name:'b.png',mimeType:'image/png',size:10}];
+ mockPick.mockResolvedValue(images);mockImport.mockImplementation(async(file:any)=>({status:'completed',value:{versionId:file.name}}));
+ mockDocuments.mockResolvedValue({canceled:false,assets:[{uri:'file:///a.mp3',name:'a.mp3',mimeType:'audio/mpeg'},{uri:'file:///b.mp3',name:'b.mp3',mimeType:'audio/mpeg'}]});
+ mockFileImport.mockImplementation(async(file:any)=>({status:'completed',value:{versionId:'audio-'+file.name}}));
+ let tree!:ReturnType<typeof create>;
+ const button=(label:string)=>tree.root.findAll(n=>n.props.accessibilityLabel===label&&typeof n.props.onPress==='function')[0];
+ try{
+  await act(async()=>{tree=create(<VideoDraftScreen id="d"/>);});
+  await act(async()=>button('添加参考图').props.onPress());
+  expect(mockPick).toHaveBeenCalledWith(expect.any(Number));expect(mockImport).toHaveBeenCalledTimes(2);
+  expect(mockExecute.mock.calls.filter(([c])=>c.name==='draft.replaceVideoMedia').map(([c])=>c.payload.imageVersionIds)).toEqual([['a.png','b.png']]);
+  await act(async()=>button('添加参考音频').props.onPress());
+  expect(mockDocuments).toHaveBeenCalledWith(expect.objectContaining({multiple:true}));expect(mockFileImport).toHaveBeenCalledTimes(2);
+  expect(mockExecute.mock.calls.filter(([c])=>c.name==='draft.replaceVideoMedia').at(-1)?.[0].payload.audioVersionIds).toEqual(['audio-a.mp3','audio-b.mp3']);
+  expect(tree.root.findAll(n=>n.props.title==='参考素材')).toHaveLength(0);
+ }finally{act(()=>tree?.unmount());}
 });

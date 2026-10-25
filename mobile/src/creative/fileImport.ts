@@ -36,7 +36,9 @@ export async function importCreativeFile(file:{uri:string;name:string;mimeType?:
 }
 export async function pickCreativeFiles(projectId?:string){
   const picked=await DocumentPicker.getDocumentAsync({type:[...CREATIVE_FILE_MIMES],multiple:false,copyToCacheDirectory:true});
-  if(!picked.canceled)for(const file of picked.assets)await importCreativeFile(file,projectId);
+  if(picked.canceled)return 0;
+  for(const file of picked.assets)await importCreativeFile(file,projectId);
+  return picked.assets.length;
 }
 export async function saveCreativeText(input:{title:string;kind:'prompt'|'document';content:string;projectId?:string;assetId?:string;expectedRevision?:number},commandKey=createId(),origin?:CreativeAgentOrigin){
   const bytes=CryptoJS.enc.Utf8.parse(input.content).sigBytes;
