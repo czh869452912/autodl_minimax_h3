@@ -1,8 +1,8 @@
+import {resolveJobCredential} from '../tasks/credentialBinding';
 import {acknowledgeUnknownTask,unknownTaskReviewed} from './taskRecovery';
 import {recoverUnsentCreativeJobs} from './unsentRecovery';
 import {ProviderPreflightError} from '../workflows/providers/errors';
 import {classifyProviderFailure} from '../workflows/executor/errorPolicy';
-import {resolveCreativeQueryCredential} from './queryCredential';
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { createCreativeService } from './service';
 import { createCreativeAccounts } from './accounts';
@@ -255,13 +255,13 @@ test('verified redownload restores missing output state, rejects different bytes
 test('legacy source refresh for creative tasks resolves the original query account, never a replacement default',async()=>{
   const f=await fixture();try{
     const task=await f.submit();await f.accounts.connect('autodl','replacement-secret');
-    const resolve=jest.fn((id:string,use:'query')=>f.accounts.resolveExact(id,use));
-    const result=await resolveCreativeQueryCredential(f.db as never,task.id,resolve);
+    const resolve=jest.fn((id:string,use:'query'|'dispatch')=>f.accounts.resolveExact(id,use));
+    const result=await resolveJobCredential(f.db as never,task.id,'query',resolve);
     expect(result?.token).toBe('original-secret');expect(resolve).toHaveBeenCalledWith(f.identity.generationId,'query');
-    await expect(resolveCreativeQueryCredential(f.db as never,task.id,async()=>({token:'wrong',accountId:'other',generationId:'other',provider:'autodl'}))).rejects.toThrow('IDENTITY_MISMATCH');
+    await expect(resolveJobCredential(f.db as never,task.id,'query',async()=>({token:'wrong',accountId:'other',generationId:'other',provider:'autodl'}))).rejects.toThrow('IDENTITY_MISMATCH');
     await f.accounts.disconnect('autodl');
-    await expect(resolveCreativeQueryCredential(f.db as never,task.id,resolve)).rejects.toThrow('INACTIVE');
-    expect(await resolveCreativeQueryCredential(f.db as never,'unbound-legacy',resolve)).toBeNull();
+    await expect(resolveJobCredential(f.db as never,task.id,'query',resolve)).rejects.toThrow('INACTIVE');
+    expect(await resolveJobCredential(f.db as never,'unbound-legacy','query',resolve)).toBeNull();
   }finally{f.db.close();}
 });
 

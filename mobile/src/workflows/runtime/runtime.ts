@@ -3,9 +3,9 @@ import type { JobRecord, ArtifactRecord } from '../../jobs/types';
 import type { PlatformAdapterManifest } from '../schema/types';
 import { validateWorkflowDefinition } from '../schema/validator';
 import { compileWorkflow } from '../compiler/compiler';
-import type { ProviderAdapter, ProviderStatusUpdate, ProviderTarget } from '../providers/registry';
+import type { ProviderStatusUpdate, ProviderTarget } from '../providers/registry';
 
-type Adapter = Omit<ProviderAdapter, 'manifest'> & { manifest(): Pick<PlatformAdapterManifest, 'id' | 'adapterVersion' | 'operations'> };
+type Adapter = { manifest(): Pick<PlatformAdapterManifest, 'id' | 'adapterVersion' | 'operations'> };
 type RuntimeDeps = { adapters: Map<string, Adapter>; now?: () => number };
 export type WorkflowProvenance = { workflowId: string; workflowVersion: string; contentHash: string };
 export type PreparedWorkflowSubmission = {

@@ -3,7 +3,7 @@ import {prepareCreativeImage} from './novelAiRuntime';
 import {defaultNovelAiDraft} from './novelAiProtocol';
 import {createEnhanceInput,enhancementPatch} from './novelAiEnhancement';
 let mockInput:any;
-const mockDb={}, mockOriginal=jest.fn(), mockResize=jest.fn(), mockResolve=jest.fn(async()=>({})), mockVerify=jest.fn(async()=>({state:'AVAILABLE'}));
+const mockDb={}, mockOriginal=jest.fn(), mockResize=jest.fn(), mockResolve=jest.fn(async()=>({accountId:'account',generationId:'generation',provider:'novelai',token:'test-only'})), mockVerify=jest.fn(async()=>({state:'AVAILABLE'}));
 jest.mock('../storage/databaseClient',()=>({getDatabase:()=>mockDb}));
 jest.mock('./runtime',()=>({creativeFiles:()=>({verify:mockVerify})}));
 jest.mock('./accountRuntime',()=>({creativeAccounts:()=>({list:async()=>[{provider_id:'novelai',credential_generation_id:'generation'}],resolveExact:mockResolve})}));

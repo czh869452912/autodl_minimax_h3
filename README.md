@@ -164,7 +164,9 @@ Prompt 助手不是一个简单的文本输入框。它在 APK 内运行 DeepAge
 | LLM 接口 | 用户配置的 OpenAI-compatible Endpoint、Model 和 API Key |
 | 本地数据 | SQLite 索引、应用私有文件目录、SecureStore |
 | 原生播放 | AndroidX Media3 UI + libmpv 0.41.0 |
-| 服务端依赖 | 项目不要求自建业务服务端；外部依赖为 AutoDL 与用户选择的 LLM API |
+| 服务端依赖 | 项目不要求自建业务服务端；外部依赖为 AutoDL、NovelAI 与用户选择的 LLM API |
+
+生成队列、服务商装配、凭据绑定及扩展约定见[本地生成后端架构](docs/architecture/generation-backend.md)。
 
 维护原则：
 

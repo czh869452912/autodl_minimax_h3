@@ -1,5 +1,5 @@
 import {createInitializedRealSqliteTestDb} from '../test/realSqlite';
-import {novelAiResponseStore} from './novelAiRuntime';
+import {novelAiResponseStore} from './novelAiResponseStore';
 import * as FileSystem from 'expo-file-system/legacy';
 
 let mockDb:ReturnType<typeof createInitializedRealSqliteTestDb>;

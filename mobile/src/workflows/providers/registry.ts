@@ -1,10 +1,6 @@
 import type { ArtifactRecord, JobStatus } from '../../jobs/types';
 import type { PlatformAdapterManifest } from '../schema/types';
 import type { ProviderHandle } from '../executor/types';
-import { getNativeHttpTransport } from '../../providers/httpTransport';
-import type { HttpTransport } from '../../providers/httpTransport';
-import { createAutodlComfyUiAdapter } from './autodl/adapter';
-import { autodlComfyUiManifest } from './autodl/manifest';
 
 export type ProviderTarget = { operation?: string; workflowId?: string };
 export type ProviderStatusUpdate = {
@@ -22,14 +18,3 @@ export type ProviderAdapter = {
   submit(input: Record<string, unknown>, target?: ProviderTarget): Promise<ProviderHandle>;
   getStatus(handle: ProviderHandle): Promise<ProviderStatusUpdate>;
 };
-
-const builtinManifests = [autodlComfyUiManifest];
-
-export function getBuiltinArtifactDownloadPolicy(adapterId?: string) {
-  return builtinManifests.find((manifest) => manifest.id === adapterId)?.artifactDownloadPolicy;
-}
-
-export function createBuiltinProviderAdapters({ resolveCredential, transport = getNativeHttpTransport(), additional = [],readBase64 }: { resolveCredential: (kind: string) => string | undefined; transport?: HttpTransport; additional?: ProviderAdapter[];readBase64?:(uri:string)=>Promise<string> }): Map<string, ProviderAdapter> {
-  const builtins: ProviderAdapter[] = [createAutodlComfyUiAdapter({ token: resolveCredential('autodl-token') ?? '', transport,readBase64 }), ...additional];
-  return new Map(builtins.map((adapter) => [adapter.manifest().id, adapter]));
-}

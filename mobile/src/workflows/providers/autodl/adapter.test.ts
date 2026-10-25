@@ -1,5 +1,5 @@
 import { createAutodlComfyUiAdapter } from './adapter';
-import {ProviderPreflightError} from '../../providers/errors';
+import {ProviderPreflightError} from '../errors';
 
 test('submits and polls the configured H3 AutoDL workflow', async () => {
   const fetcher = jest.fn()

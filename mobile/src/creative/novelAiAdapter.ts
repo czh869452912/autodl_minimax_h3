@@ -2,6 +2,8 @@ import CryptoJS from 'crypto-js';
 import type { ProviderAdapter } from '../workflows/providers/registry';
 import {isNovelAiUpscaleRequest,upscaleExpectedSize} from './novelAiUpscale';
 import {ProviderError,ProviderPreflightError} from '../workflows/providers/errors';
+import type {PlatformAdapterManifest} from '../workflows/schema/types';
+export const novelAiManifest:PlatformAdapterManifest={ id: 'novelai-image', adapterVersion: '1', platforms: ['novelai'], capabilities: ['image.generate'], credentialKinds: ['novelai-token'], operations: ['image.generate'], supportedArtifactKinds: ['image'] };
 export type NovelAiResponseStore = {
   assertReady?(upscale:boolean):void;
   generate(key: string, request: string, hash: string, token: string): Promise<string>;
@@ -24,7 +26,7 @@ export function createNovelAiAdapter(jobId: string, token: string, store: NovelA
     }catch(error){throw new ProviderPreflightError('NOVELAI_INPUT_UNAVAILABLE',error instanceof Error?error.message:'图片生成条件尚未就绪');}
   };
   return {
-    manifest: () => ({ id: 'novelai-image', adapterVersion: '1', platforms: ['novelai'], capabilities: ['image.generate'], credentialKinds: ['novelai-token'], operations: ['image.generate'], supportedArtifactKinds: ['image'] }),
+    manifest: () => novelAiManifest,
     validateCredentials: async () => ({ ok: Boolean(token) }),
     async prepareInput(body,target){
       if(target?.operation && target.operation!=='image.generate')throw new ProviderPreflightError('LOCAL_OPERATION_INVALID','不支持的 NovelAI 操作');

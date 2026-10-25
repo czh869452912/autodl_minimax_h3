@@ -7,8 +7,11 @@ import { dispatchCreativeBudget, type Reservation } from './budget';
 import { creativeRequestHash } from './videoSubmission';
 import type { PreparedWorkflowSubmission } from '../workflows/runtime/runtime';
 
+export type CreativeJobBinding = Reservation & { context_hash: string; provider_id: string };
 export async function readCreativeJobBinding(db: AppDatabase, jobId: string) {
-  return db.getFirstAsync<Reservation & { context_hash: string }>('SELECT r.*,c.request_hash AS context_hash FROM creative_job_contexts c JOIN creative_budget_reservations r ON r.id=c.reservation_id WHERE c.job_id=?', jobId);
+  return db.getFirstAsync<CreativeJobBinding>(`SELECT r.*,c.request_hash AS context_hash,a.provider_id
+    FROM creative_job_contexts c JOIN creative_budget_reservations r ON r.id=c.reservation_id
+    JOIN creative_authorizations a ON a.id=r.authorization_id WHERE c.job_id=?`, jobId);
 }
 
 /** All calls retain the resolved exact secret; account switching cannot redirect them. */

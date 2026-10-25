@@ -1,8 +1,7 @@
-import {createInputReader} from '../media/inputReader';
-import {resolveCreativeQueryCredential} from '../creative/queryCredential';
+import {resolveJobCredential} from './credentialBinding';
 import {creativeAccounts,defaultAutodlCredential} from '../creative/accountRuntime';
 import { createJobRepository } from '../jobs/repository';
-import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
+import {createApplicationProviderRegistry} from '../providers/applicationRegistry';
 import { withWriteTransaction } from '../storage/sqliteBusy';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { AppDatabase } from '../storage/appDatabase';
@@ -15,6 +14,7 @@ import { createTaskCommandService } from './taskCommandService';
 
 function createTaskServices(db: AppDatabase) {
   const taskStore = createTaskRepository(db);
+  const providers=createApplicationProviderRegistry(db);
   const mediaStore = createSqliteMediaStore(db);
   const taskProjectionRepository = createTaskProjectionRepository(db);
   const taskCommandService = createTaskCommandService({
@@ -24,7 +24,7 @@ function createTaskServices(db: AppDatabase) {
       if(!credential)throw new Error('请先在创作账号中连接 AutoDL');
       const source=await db.getFirstAsync<{payload_json:string}>("SELECT payload_json FROM workflow_operations WHERE job_id=? AND kind='SUBMIT' LIMIT 1",taskId);
       const prepared=source?JSON.parse(source.payload_json).prepared:undefined;
-      const adapter=prepared&&createBuiltinProviderAdapters({resolveCredential:()=>credential.token,readBase64:createInputReader(db)}).get(prepared.adapterId);
+      const adapter=prepared&&providers.adapter(prepared.adapterId,credential,'preflight');
       if(!adapter)throw new Error('原工作流不可用，请回到手工工作台选择工作流');
       try{await adapter.prepareInput?.(prepared.requestInput,prepared.target);}catch{throw new Error('参考素材原件不可用，请回到手工工作台重新选择素材后生成。');}
       const {accountId,generationId,provider}=credential;return {accountId,generationId,provider};
@@ -34,11 +34,11 @@ function createTaskServices(db: AppDatabase) {
       if (!task || (task.downloadState !== 'DOWNLOAD_FAILED' && task.downloadState !== 'IDLE' && task.downloadState !== 'DOWNLOADED')) return;
       const job = await createJobRepository(db).get(taskId);
       if (!job?.providerHandle) return;
-      const exact=await resolveCreativeQueryCredential(db,taskId,(id,use)=>creativeAccounts(db).resolveExact(id,use));
+      if(providers.registration(job.adapterId).statusSource==='local-receipt')return;
+      const exact=await resolveJobCredential(db,taskId,'query',(id,use)=>creativeAccounts(db).resolveExact(id,use));
       const credential=exact??await defaultAutodlCredential(db);
       if(!credential)throw new Error('请在创作账号中连接本次任务使用的 AutoDL 账号');
-      const provider = createBuiltinProviderAdapters({ resolveCredential: kind => kind === 'autodl-token' ? credential.token : undefined }).get(job.adapterId);
-      if (!provider) throw new Error('当前版本不支持此任务来源，请更新应用');
+      const provider = providers.adapter(job.adapterId,credential,job.id);
       const update = await provider.getStatus(job.providerHandle);
       if (!update.artifacts.length) throw new Error('服务端暂未返回可下载结果，请稍后重试');
       await withWriteTransaction(db, async tx => {

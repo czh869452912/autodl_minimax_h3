@@ -12,7 +12,7 @@ jest.mock('../storage/databaseClient',()=>({getDatabase:()=>mockDb}));
 jest.mock('./accountRuntime',()=>({creativeAccounts:()=>({list:async()=>[{provider_id:'novelai',credential_generation_id:'generation'}],resolveExact:mockResolve}),creativeBudget:()=>({grant:mockGrant})}));
 jest.mock('./runtime',()=>({creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})})}));
 beforeEach(()=>{
-  mockDb=createInitializedRealSqliteTestDb();mockResolve.mockReset().mockResolvedValue({});mockGrant.mockReset();
+  mockDb=createInitializedRealSqliteTestDb();mockResolve.mockReset().mockResolvedValue({accountId:'account',generationId:'generation',provider:'novelai',token:'test-only'});mockGrant.mockReset();
   Platform.OS='android';
   NativeModules.AutoDLMedia={generateNovelAi:jest.fn(),lookupNovelAi:jest.fn(),upscaleNovelAi:jest.fn(),prepareNovelAiUpscale:jest.fn(async()=>({image:fs.readFileSync(path.join(__dirname,'__fixtures__/novelai-enhanced-size.png')).toString('base64'),width:1467,height:2144}))};
 });

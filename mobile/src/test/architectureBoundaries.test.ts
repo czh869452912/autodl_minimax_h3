@@ -37,6 +37,11 @@ test('application imports preserve storage capabilities and the extracted domain
         (/^(media|handoff)\//.test(from) && target.startsWith('agent/')) ||
         (from.startsWith('media/') && target.startsWith('handoff/')) ||
         (from.startsWith('config/') && /^(agent|storage|settings)\//.test(target)) ||
+        (from === 'providers/credentials.ts' && /^(creative|tasks|settings|storage)\//.test(target)) ||
+        (from.startsWith('workflows/executor/') && (target.startsWith('creative/') || target === 'providers/applicationRegistry')) ||
+        (from === 'tasks/providerExecution.ts' && /^(native\/|creative\/novelAi|workflows\/providers\/autodl\/)/.test(target)) ||
+        (from === 'creative/novelAiResponseStore.ts' && /^(tasks\/|creative\/(novelAiRuntime|accountRuntime|drafts|runtime)$)/.test(target)) ||
+        target.startsWith('workflows/adapters/') ||
         (from === 'workflows/executor/errorPolicy.ts' && target.includes('providers/autodl/')) ||
         (from === 'workflows/executor/jobStateRepository.ts' && /^tasks\/(projection|repository)/.test(target)) ||
         (/\.(tsx)$/.test(from) && target === 'tasks/executorRuntime') ||

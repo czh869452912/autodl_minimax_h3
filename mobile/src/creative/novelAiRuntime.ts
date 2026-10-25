@@ -1,43 +1,20 @@
-import { NativeModules, Platform } from 'react-native';
+import { NativeModules } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import CryptoJS from 'crypto-js';
 import type { AppDatabase } from '../storage/appDatabase';
 import { getDatabase } from '../storage/databaseClient';
-import { withWriteTransaction } from '../storage/sqliteBusy';
-import { createAttachmentStore } from '../media/attachments';
-import { novelAiDraftInput, novelAiSourceIds, NOVELAI_MAX_RESPONSE, parseNovelAiResponse, prepareNovelAiRequest } from './novelAiProtocol';
+import { novelAiDraftInput, novelAiSourceIds, prepareNovelAiRequest } from './novelAiProtocol';
 import { creativeFiles } from './runtime';
 import { readCreativeDraft, readDraftInputs } from './drafts';
 import { creativeAccounts, creativeBudget } from './accountRuntime';
 import { submitCreativeVideo } from './videoSubmission';
-import {createNovelAiAdapter, type NovelAiResponseStore } from './novelAiAdapter';
+import {createApplicationProviderRegistry} from '../providers/applicationRegistry';
+import type {PreparedWorkflowSubmission} from '../workflows/runtime/runtime';
 import {novelAiUpscaleInput,prepareNovelAiUpscale} from './novelAiUpscale';
 
-function native() {
-  const module = NativeModules.AutoDLMedia;
-  if (Platform.OS !== 'android' || !module?.generateNovelAi || !module.lookupNovelAi) throw new Error('请安装包含 NovelAI 模块的新版 Android 应用');
-  return module as { generateNovelAi(key: string, request: string, hash: string, token: string): Promise<string>; lookupNovelAi(key: string, hash: string): Promise<string | null> };
-}
-export function novelAiResponseStore(db: AppDatabase): NovelAiResponseStore {
-  return { assertReady(upscale){native();if(upscale && !NativeModules.AutoDLMedia?.upscaleNovelAi)throw new Error('请安装支持超分的新版 Android 应用');}, generate: (...args) => native().generateNovelAi(...args), upscale:async(...args)=>{
-    if(!NativeModules.AutoDLMedia?.upscaleNovelAi)throw new Error('请安装支持超分的新版 Android 应用');
-    return NativeModules.AutoDLMedia.upscaleNovelAi(...args);
-  }, lookup: (...args) => native().lookupNovelAi(...args), async importResponse(uri, key, upscale=false) {
-    const info = await FileSystem.getInfoAsync(uri);
-    if (!info.exists || info.isDirectory || info.size > NOVELAI_MAX_RESPONSE) throw new Error('NOVELAI_RESPONSE_UNAVAILABLE');
-    const images = parseNovelAiResponse(await FileSystem.readAsStringAsync(uri),upscale);
-    const result = [];
-    for (const image of images) {
-      const staged = await createAttachmentStore(db).externalize({ type: 'data', value: image.image, mimeType: 'image/png' });
-      try {
-        const hash = staged.hashes[0];
-        if (!hash) throw new Error('NOVELAI_IMPORT_FAILED');
-        await withWriteTransaction(db, tx => tx.runAsync("INSERT OR IGNORE INTO artifact_blob_refs VALUES(?,'novelai_response',?,?)", hash, key, Date.now()).then(() => undefined));
-        result.push({ hash, seed: image.seed, index: image.index, width: image.width, height: image.height });
-      } finally { await staged.releaseStaging(); }
-    }
-    return result;
-  } };
+async function preflightImage(db:AppDatabase,generationId:string,prepared:PreparedWorkflowSubmission){
+  const identity=await creativeAccounts(db).resolveExact(generationId);
+  await createApplicationProviderRegistry(db).adapter(prepared.adapterId,identity,'preflight').prepareInput?.(prepared.requestInput,prepared.target);
 }
 export async function prepareCreativeImage(id: string) {
   const db = getDatabase(), draft = await readCreativeDraft(db, id);
@@ -69,9 +46,8 @@ export async function prepareCreativeImage(id: string) {
   const request = prepareNovelAiRequest(input, Math.random, media);
   const account = (await creativeAccounts(db).list()).find(a => a.provider_id === 'novelai');
   if (!account) throw new Error('请先连接 NovelAI 创作账号');
-  await creativeAccounts(db).resolveExact(account.credential_generation_id);
   const prepared = { workflowId: 'novelai-image-basic', workflowVersion: '1', workflowContentHash: CryptoJS.SHA256(request.capabilitiesVersion).toString(), adapterId: 'novelai-image', adapterVersion: '1', inputSnapshot: request.snapshot, requestInput: JSON.parse(request.requestJson), target: { operation: 'image.generate' } };
-  await createNovelAiAdapter('preflight','',novelAiResponseStore(db)).prepareInput!(prepared.requestInput,prepared.target);
+  await preflightImage(db,account.credential_generation_id,prepared);
   return { db, draft, account, prepared, versionIds: refs.map(r => r.version_id), sourceManifest: refs.map(r => ({ versionId: r.version_id, sha256: r.blob_sha256, state: r.state })) };
 }
 async function prepareCreativeUpscale(db:AppDatabase,draft:NonNullable<Awaited<ReturnType<typeof readCreativeDraft>>>,input:{sourceVersionId:string;operation:'upscale';schemaVersion:1}){
@@ -83,15 +59,13 @@ async function prepareCreativeUpscale(db:AppDatabase,draft:NonNullable<Awaited<R
   const request=prepareNovelAiUpscale(input,media);
   const account=(await creativeAccounts(db).list()).find(a=>a.provider_id==='novelai');
   if(!account)throw new Error('请先连接 NovelAI 创作账号');
-  await creativeAccounts(db).resolveExact(account.credential_generation_id);
   const prepared={workflowId:draft.workflow_id,workflowVersion:'1',workflowContentHash:CryptoJS.SHA256('novelai-standalone-upscale-2026-10-24').toString(),adapterId:'novelai-image',adapterVersion:'1',inputSnapshot:request.snapshot,requestInput:request.requestInput,target:{operation:'image.generate'}};
-  await createNovelAiAdapter('preflight','',novelAiResponseStore(db)).prepareInput!(prepared.requestInput,prepared.target);
+  await preflightImage(db,account.credential_generation_id,prepared);
   return {db,draft,account,prepared,versionIds:refs.map(r=>r.version_id),sourceManifest:refs.map(r=>({versionId:r.version_id,sha256:r.blob_sha256,state:r.state}))};
 }
 export async function confirmCreativeImage(preview: Awaited<ReturnType<typeof prepareCreativeImage>>) {
   if (preview.db !== getDatabase()) throw new Error('数据库已恢复或切换，请重新准备生成');
-  await creativeAccounts(preview.db).resolveExact(preview.account.credential_generation_id);
-  await createNovelAiAdapter('preflight','',novelAiResponseStore(preview.db)).prepareInput!(preview.prepared.requestInput,preview.prepared.target);
+  await preflightImage(preview.db,preview.account.credential_generation_id,preview.prepared);
   const authorizationId = await creativeBudget().grant({ provider: 'novelai', generationId: preview.account.credential_generation_id, projectId: preview.draft.project_id ?? undefined,
     operations: ['image.generate'], requestLimit: 1, amountLimit: null, allowUnknownCost: true, maxUnknownRequests: 1, expiresAt: Date.now() + 15 * 60_000 });
   return submitCreativeVideo(preview.db, { draftId: preview.draft.id, expectedRevision: preview.draft.revision, draftInputJson: preview.draft.input_json, authorizationId, prepared: preview.prepared, images: [], versionIds: preview.versionIds, sourceManifest: preview.sourceManifest });

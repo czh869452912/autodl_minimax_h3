@@ -1,14 +1,13 @@
 import { getDatabase } from '../storage/databaseClient';
 import { assertAppDatabaseWritable } from '../storage/database';
 import {defaultAutodlCredential} from '../creative/accountRuntime';
-import {createInputReader} from '../media/inputReader';
 import { readSettings } from '../settings/storage';
 import type { TaskMediaInput } from '../media/types';
 import { createPromptDraftStore } from '../handoff/promptDraft';
 import { materializePromptHandoff } from '../handoff/promptHandoff';
 import type { WorkflowDefinition } from '../workflows/schema/types';
 import { createWorkflowRuntime } from '../workflows/runtime/runtime';
-import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
+import {createApplicationProviderRegistry} from '../providers/applicationRegistry';
 import { createAppWorkflowCatalog } from '../workflows/registry/builtin';
 import type { RegistryRecord } from '../workflows/registry/types';
 import { persistSubmissionCommand } from './submissionCommand';
@@ -68,7 +67,8 @@ export const defaultSubmissionDependencies: CreateFormSubmissionDependencies = {
     const database = getDatabase();
     const credential=await defaultAutodlCredential(database);
     if(!credential)throw new Error('请先在创作账号中连接 AutoDL');
-    const adapters = createBuiltinProviderAdapters({ readBase64:createInputReader(database),resolveCredential: (kind) => kind === 'autodl-token' ? credential.token : undefined });
+    const adapter=createApplicationProviderRegistry(database).adapter(definition.platform.adapter,credential,'preflight');
+    const adapters = new Map([[adapter.manifest().id,adapter]]);
     const runtime = createWorkflowRuntime({ adapters });
     const prepared = runtime.prepareSubmission(definition,
       { workflowId: definition.id, workflowVersion: definition.version, contentHash: activeRecord.contentHash, inputs: inputSnapshot, source: 'user', status: 'ready' },

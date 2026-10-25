@@ -1,3 +1,4 @@
+import {resolveJobCredential} from '../tasks/credentialBinding';
 import {createInitializedRealSqliteTestDb} from '../test/realSqlite';
 import {createCreativeService} from './service';
 import {createCreativeAccounts} from './accounts';
@@ -6,7 +7,6 @@ import {prepareCreativeVideo,confirmCreativeVideo} from './videoRuntime';
 import {alignVideoState} from './videoDraftState';
 import {createAutodlComfyUiAdapter} from '../workflows/providers/autodl/adapter';
 import {bindCreativeAdapter,readCreativeJobBinding} from './boundExecution';
-import {resolveCreativeQueryCredential} from './queryCredential';
 import {createJobStateRepository} from '../tasks/jobStateStore';
 import {createOperationRepository} from '../workflows/executor/operationRepository';
 import {createDurableExecutor} from '../workflows/executor/durableExecutor';
@@ -49,7 +49,7 @@ test('editor workflow bindings survive queue, actual HTTP serialization, account
     const run=async(kind:'SUBMIT'|'STATUS_SYNC')=>{
       const pending=(await operations.listDue({kind,now,limit:10}))[0];expect(pending).toBeDefined();
       const operation=(await operations.claimById(pending.id,'worker',now,10000))!,binding=(await readCreativeJobBinding(mockDb as never,task.id))!;
-      const exact=kind==='SUBMIT'?await mockAccounts.resolveExact(identity.generationId):await resolveCreativeQueryCredential(mockDb as never,task.id,(id,use)=>mockAccounts.resolveExact(id,use));
+      const exact=kind==='SUBMIT'?await mockAccounts.resolveExact(identity.generationId):await resolveJobCredential(mockDb as never,task.id,'query',(id,use)=>mockAccounts.resolveExact(id,use));
       const adapter=bindCreativeAdapter(mockDb as never,createAutodlComfyUiAdapter({transport,token:exact!.token,readBase64:async()=> 'YQ=='}),binding,exact!,operation,'worker',()=>now);
       const adapters=new Map([['autodl-comfyui',adapter]]),executor=createDurableExecutor({jobs,operations,adapters,runtime:createWorkflowRuntime({adapters}),credentials:{get:async()=>({ok:true})},now:()=>now});
       await executor.handle(operation,'worker');now+=6000;

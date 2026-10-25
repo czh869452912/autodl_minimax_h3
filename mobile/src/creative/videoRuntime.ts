@@ -1,4 +1,4 @@
-import {createInputReader} from '../media/inputReader';
+import {createApplicationProviderRegistry} from '../providers/applicationRegistry';
 import { creativeVideoWorkflowId } from './videoWorkflow';
 import { getDatabase } from '../storage/databaseClient';
 import { readCreativeDraft, readDraftInputs, editableVideoInput } from './drafts';
@@ -8,7 +8,6 @@ import { registryRecordToDefinition } from '../workflows/registry/catalog';
 import { alignWorkflowInputs } from '../workflows/inputModel';
 import { buildSubmissionInputSnapshot } from '../create/submissionInput';
 import { createWorkflowRuntime } from '../workflows/runtime/runtime';
-import { createBuiltinProviderAdapters } from '../workflows/providers/registry';
 import { creativeAccounts, creativeBudget } from './accountRuntime';
 import { submitCreativeVideo } from './videoSubmission';
 import {videoWorkflowReason} from './videoDraftState';
@@ -36,13 +35,14 @@ export async function prepareCreativeVideo(id: string) {
   const snapshot = buildSubmissionInputSnapshot({ definition, workflowValues:values, fallback: {prompt:input.prompt,resolution:'',duration:'',seed:''}, images, audios });
   const checked=validateSubmissionBeforeQueue({definition,loaded:record,active:record,inputs:snapshot});
   if(!checked.ok)throw new Error(checked.fieldErrors.map(error=>formatSubmissionFieldError(error,definition)).join('\n'));
-  const runtime = createWorkflowRuntime({ adapters: createBuiltinProviderAdapters({ resolveCredential: () => undefined }) });
+  const providers=createApplicationProviderRegistry(db);
+  const runtime = createWorkflowRuntime({ adapters: providers.workflowAdapters() });
   const provenance = { workflowId: record.workflowId, workflowVersion: record.version, contentHash: record.contentHash };
   const prepared = runtime.prepareSubmission(definition, { ...provenance, inputs: snapshot, source: 'user', status: 'ready' }, provenance);
   const account = (await creativeAccounts(db).list()).find(a => a.provider_id === 'autodl');
   if (!account) throw new Error('请先绑定 AutoDL 创作凭据');
-  await creativeAccounts(db).resolveExact(account.credential_generation_id);
-  await createBuiltinProviderAdapters({resolveCredential:()=>undefined,readBase64:createInputReader(db)}).get(prepared.adapterId)?.prepareInput?.(prepared.requestInput,prepared.target);
+  const identity=await creativeAccounts(db).resolveExact(account.credential_generation_id);
+  await providers.adapter(prepared.adapterId,identity,'preflight').prepareInput?.(prepared.requestInput,prepared.target);
   return { db, draft, images,audios, versionIds: refs.map(r => r.version_id), prepared, account };
 }
 
