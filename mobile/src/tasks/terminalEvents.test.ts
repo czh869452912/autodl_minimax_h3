@@ -8,10 +8,10 @@ test('projects short safe notification copy without task payload data', () => {
     { eventId: 'e4', taskId: 'task-4', status: 'CANCELLED', createdAt: 4 },
   ]);
   expect(events.map(({ title, body }) => ({ title, body }))).toEqual([
-    { title: '任务已完成', body: '视频生成任务已成功完成' },
-    { title: '任务部分完成', body: '视频生成任务已有部分结果' },
-    { title: '任务失败', body: '视频生成任务未能完成' },
-    { title: '任务已取消', body: '视频生成任务已取消' },
+    { title: '任务已完成', body: '生成任务已成功完成' },
+    { title: '任务部分完成', body: '生成任务已有部分结果' },
+    { title: '任务失败', body: '生成任务未能完成' },
+    { title: '任务已取消', body: '生成任务已取消' },
   ]);
   expect(JSON.stringify(events)).not.toContain('http');
   expect(JSON.stringify(events)).not.toContain('prompt');

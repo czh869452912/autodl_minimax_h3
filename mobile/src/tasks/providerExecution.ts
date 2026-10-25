@@ -10,6 +10,7 @@ import { bindCreativeAdapter, readCreativeJobBinding } from '../creative/boundEx
 import { createCreativeBudget } from '../creative/budget';
 import { JobBindingError, readJobExecutionBinding, resolveBoundJobCredential, type JobExecutionBinding } from './credentialBinding';
 import type { ExactCredentialResolver, ResolvedCredential } from '../providers/credentials';
+import { isSqliteBusy } from '../storage/sqliteBusy';
 
 type Deps = {
   db: AppDatabase;
@@ -46,7 +47,7 @@ export function createProviderExecution(deps: Deps) {
         if (binding.kind === 'creative') adapter = bindCreativeAdapter(db, adapter, binding.reservation, identity, operation, owner, now);
       } catch (cause) {
         // Storage failures belong to runner recovery, not permanent credential failure.
-        if (!binding && !(cause instanceof JobBindingError)) throw cause;
+        if (isSqliteBusy(cause) || (!binding && !(cause instanceof JobBindingError))) throw cause;
         const unavailable = cause instanceof Error && cause.message.startsWith('PROVIDER_ADAPTER_');
         const error = {
           code: unavailable ? 'ADAPTER_UNAVAILABLE' : binding?.kind === 'creative' ? 'CREATIVE_CREDENTIAL_UNAVAILABLE' : 'TASK_CREDENTIAL_UNAVAILABLE',
@@ -55,7 +56,7 @@ export function createProviderExecution(deps: Deps) {
         };
         const unsent = operation.kind === 'SUBMIT' && job.status === 'READY_TO_SUBMIT' && !job.providerHandle;
         if (unsent) {
-          const result = await jobs.transition({ jobId: job.id, expectedRevision: job.revision, patch: { status: 'FAILED', lastError: error, updatedAt: now() }, event: { id: operation.id + ':credential-unavailable', type: 'SUBMISSION_FAILED', payload: { code: error.code }, createdAt: now() } });
+          const result = await jobs.transition({ jobId: job.id, expectedRevision: job.revision, patch: { status: 'FAILED', lastError: error, updatedAt: now() }, event: { id: operation.id + ':credential-unavailable', type: 'SUBMIT_FAILED', payload: { code: error.code }, createdAt: now() } });
           if (result.ok && binding?.kind === 'creative' && binding.reservation.state === 'RESERVED') await createCreativeBudget(db).transition(binding.reservation.id, { key: 'release:' + binding.reservation.id, to: 'RELEASED', evidence: '本地凭据或适配器检查失败，未发送请求。' });
         }
         await operations.finish(operation.id, owner, unsent ? 'FAILED' : 'BLOCKED', now(), error);

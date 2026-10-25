@@ -58,6 +58,66 @@ test('returning from account settings rechecks readiness even when the draft is 
   }finally{act(()=>tree?.unmount());}
 });
 
+test('an unavailable workflow still restores its submitted job and result observation',async()=>{
+  mockDraft={...mockDraft,workflow_id:'removed.workflow',state:'SUBMITTED',job_id:'still-running',target_asset_id:'asset'};
+  let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<VideoDraftScreen id="d"/>);});
+    const results=tree.root.findByType(require('./CreativeResults').CreativeResults);
+    expect(results.props.draft.job_id).toBe('still-running');
+    expect(results.props.previewVisible).toBe(true);
+    expect(JSON.stringify(tree.toJSON())).toContain('工作流不可用');
+    expect(mockPrepare).not.toHaveBeenCalled();expect(mockConfirm).not.toHaveBeenCalled();
+  }finally{act(()=>tree?.unmount());}
+});
+
+test('returning from workflow settings refreshes choices without replacing unsaved input',async()=>{
+  let tree!:ReturnType<typeof create>;
+  const button=(label:string)=>tree.root.findAll(n=>n.props.accessibilityLabel===label&&typeof n.props.onPress==='function')[0];
+  try{
+    await act(async()=>{tree=create(<VideoDraftScreen id="d"/>);});
+    const prompt=()=>tree.root.findByProps({accessibilityLabel:'视频镜头提示词'});
+    act(()=>prompt().props.onChangeText('Keep my new direction'));
+    const second=JSON.parse(JSON.stringify(mockEntries[0]));second.record.workflowId='new.workflow';second.definition.id='new.workflow';second.definition.metadata.title='Newly installed';
+    mockEntries=[...mockEntries,second];mockFocus++;
+    await act(async()=>tree.update(<VideoDraftScreen id="d"/>));
+    expect(prompt().props.value).toBe('Keep my new direction');
+    act(()=>button('MiniMax H3 · 切换').props.onPress());
+    expect(button('选择工作流 Newly installed')).toBeDefined();
+    expect(mockPrepare).not.toHaveBeenCalled();expect(mockConfirm).not.toHaveBeenCalled();
+  }finally{act(()=>tree?.unmount());}
+});
+
+test('reinstalling a missing workflow restores the editor on return without resubmitting',async()=>{
+  const installed=mockEntries;mockEntries=[];
+  let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<VideoDraftScreen id="d"/>);});
+    expect(JSON.stringify(tree.toJSON())).toContain('工作流不可用');
+    mockEntries=installed;mockFocus++;
+    await act(async()=>tree.update(<VideoDraftScreen id="d"/>));
+    expect(tree.root.findByProps({accessibilityLabel:'视频镜头提示词'})).toBeDefined();
+    expect(JSON.stringify(tree.toJSON())).not.toContain('工作流不可用');
+    expect(mockPrepare).not.toHaveBeenCalled();expect(mockConfirm).not.toHaveBeenCalled();
+  }finally{act(()=>tree?.unmount());}
+});
+
+test('a removed and reinstalled workflow preserves unsaved input and clears its directory error',async()=>{
+  const installed=mockEntries;let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<VideoDraftScreen id="d"/>);});
+    act(()=>tree.root.findByProps({accessibilityLabel:'视频镜头提示词'}).props.onChangeText('Preserve this shot'));
+    mockEntries=[];mockFocus++;
+    await act(async()=>tree.update(<VideoDraftScreen id="d"/>));
+    expect(JSON.stringify(tree.toJSON())).toContain('工作流不可用');
+    mockEntries=installed;mockFocus++;
+    await act(async()=>tree.update(<VideoDraftScreen id="d"/>));
+    expect(tree.root.findByProps({accessibilityLabel:'视频镜头提示词'}).props.value).toBe('Preserve this shot');
+    expect(JSON.stringify(tree.toJSON())).not.toContain('工作流不可用');
+    expect(mockPrepare).not.toHaveBeenCalled();expect(mockConfirm).not.toHaveBeenCalled();
+  }finally{act(()=>tree?.unmount());}
+});
+
 test('reference import locks duplicate taps and editing until picker cancellation', async () => {
   let release!: (images: unknown[]) => void;
   mockPick.mockImplementation(() => new Promise(resolve => { release = resolve; }));

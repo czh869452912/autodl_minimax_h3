@@ -34,6 +34,7 @@ export function CreativeResults({ draft, disabled = false, dock = false, canvas=
   const [status, setStatus] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [readError, setReadError] = useState('');
   const [busy, setBusy] = useState(false);
   const [fullScreen,setFullScreen]=useState(false);
   const [processing,setProcessing]=useState(false),[more,setMore]=useState(false),[history,setHistory]=useState(false);
@@ -46,15 +47,22 @@ export function CreativeResults({ draft, disabled = false, dock = false, canvas=
   const assetKey=[...new Set([...(relatedAssetIds??[]),...(draft.target_asset_id?[draft.target_asset_id]:[])])].sort().join('\n');
   useEffect(()=>{setSelected(initialVersionId);},[draft.job_id]);
   useFocusEffect(useCallback(() => {
-    let active = true;
+    let active = true, reading = false;
     setStatus('');
+    setReadError('');
     const refresh = async () => {
-      const rows = assetKey?(await Promise.all(assetKey.split('\n').map(id=>creativeService().versions(id)))).flat().sort((a,b)=>(b.createdAt??0)-(a.createdAt??0)||b.versionNo-a.versionNo):[];
-      const job = draft.job_id ? await getDatabase().getFirstAsync<{ status: string }>('SELECT status FROM workflow_jobs WHERE id=?', draft.job_id) : null;
-      if (active) { setVersions(rows); setStatus(job?.status ?? ''); }
+      if (!active || reading) return;
+      reading = true;
+      try {
+        const rows = assetKey?(await Promise.all(assetKey.split('\n').map(id=>creativeService().versions(id)))).flat().sort((a,b)=>(b.createdAt??0)-(a.createdAt??0)||b.versionNo-a.versionNo):[];
+        const job = draft.job_id ? await getDatabase().getFirstAsync<{ status: string }>('SELECT status FROM workflow_jobs WHERE id=?', draft.job_id) : null;
+        if (active) { setVersions(rows); setStatus(job?.status ?? ''); setReadError(''); }
+      } catch {
+        if (active) setReadError('结果读取失败，正在重试');
+      } finally { reading = false; }
     };
-    void refresh().catch(() => { if (active) setError('结果读取失败，请稍后重新打开'); });
-    const timer = setInterval(() => void refresh().catch(() => undefined), 2500);
+    void refresh();
+    const timer = setInterval(() => void refresh(), 2500);
     return () => { active = false; clearInterval(timer); };
   }, [draft.id, draft.target_asset_id, draft.job_id,assetKey]));
   const current = versions.find(v => v.id === selected) ?? versions.find(v => v.recipe.jobId === draft.job_id) ?? versions[0];
@@ -128,7 +136,7 @@ export function CreativeResults({ draft, disabled = false, dock = false, canvas=
       {versions.length>1?<View style={s.row}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:8}}>{versionChoices(candidates)}</ScrollView><TextAction label={`版本历史 · ${versions.length}`} onPress={()=>setHistory(true)} /></View>:null}
     </>:<View style={[s.card,{minHeight:160,justifyContent:'center',borderWidth:0}]}><Text style={s.title}>{draft.job_id?(needsAttention?'本次尚无可用成果':'创作进行中'):'从画面描述开始'}</Text><Text style={s.muted}>{draft.job_id?'结果会显示在这里，你可以离开后再回来。':'生成后可在这里看图和继续创作。'}</Text><TextAction label="任务与草稿操作" onPress={()=>setMore(true)} /></View>}
     {saveStatus}
-    {error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}
+    {error || readError?<Text accessibilityRole="alert" style={s.error}>{error || readError}</Text>:null}
   </View>;
   const canvasContent=<View style={{flex:1,paddingHorizontal:12}}>
     {draft.job_id && (pending || needsAttention || !current)?<View style={s.row}><Text accessibilityLiveRegion="polite" style={[needsAttention?s.error:s.muted,{fontSize:12}]}>{creativeJobLabel(status)}</Text><TextAction label={status==='UNKNOWN'?'核查原任务':'查看本次任务'} onPress={()=>router.push({pathname:'/creative-task/[id]',params:{id:draft.job_id!,returnToWorkbench:'1'}})} /></View>:null}
@@ -141,7 +149,7 @@ export function CreativeResults({ draft, disabled = false, dock = false, canvas=
     {current.state==='AVAILABLE' && current.relativePath?image?<Pressable accessibilityRole="button" accessibilityLabel="全屏查看图片" onPress={()=>setFullScreen(true)} style={{flex:1,minHeight:120}}><Image accessibilityLabel={`当前图片，版本 ${current.versionNo}`} source={{uri:`${FileSystem.documentDirectory}${current.relativePath}`}} resizeMode="contain" style={{flex:1,width:'100%'}} /></Pressable>:<View style={{flex:1,minHeight:180}}><VideoPlayer source={`${FileSystem.documentDirectory}${current.relativePath}`} /></View>:<Text style={s.muted}>原文件尚不可用，请在素材详情中恢复。</Text>}
     {original?<TextAction label="对照原图与结果" onPress={()=>setFullScreen(true)} />:null}
     </>:<View style={{flex:1,alignItems:'center',justifyContent:'center',gap:6}}><Text style={{fontSize:15,color:COLORS.textMuted}}>{draft.job_id?(status==='UNKNOWN'?'结果待核查':status==='FAILED'?'本次生成未完成':status==='CANCELLED'?'本次生成已取消':'正在等待结果'):'写下描述，开始创作'}</Text></View>}
-    {saveStatus}{error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}
+    {saveStatus}{error || readError?<Text accessibilityRole="alert" style={s.error}>{error || readError}</Text>:null}
   </View>;
   if(!previewVisible)return null;
   return <View style={dock || canvas?{flex:1}:{gap:12}}>

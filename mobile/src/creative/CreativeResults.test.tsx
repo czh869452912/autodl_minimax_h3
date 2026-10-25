@@ -7,18 +7,46 @@ import {defaultNovelAiDraft} from './novelAiProtocol';
 import {NativeModules} from 'react-native';
 import { createEnhanceInput } from './novelAiEnhancement';
 const mockPush = jest.fn(), mockReplace = jest.fn(), mockExecute = jest.fn();
+const mockReadStatus=jest.fn(async()=>({status:mockStatus}));
 let mockStatus = 'SUCCEEDED', mockVersions: AssetVersion[] = [];
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, replace: mockReplace }), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
 jest.mock('./runtime', () => ({ creativeService: () => ({ versions: async (id:string) => mockVersions.filter(v=>v.assetId===id), execute: mockExecute }), creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})}), exportCreativeVersion: jest.fn() }));
-jest.mock('../storage/databaseClient', () => ({ getDatabase: () => ({ getFirstAsync: async () => ({ status: mockStatus }) }) }));
+jest.mock('../storage/databaseClient', () => ({ getDatabase: () => ({ getFirstAsync: ()=>mockReadStatus() }) }));
 jest.mock('./MediaPreview', () => ({ MediaPreview: () => null }));
 jest.mock('../media/VideoPlayer', () => ({ VideoPlayer: () => null }));
 const draft: CreativeDraft = { id: 'draft', project_id: 'project', shot_id: 'shot', target_asset_id: 'asset', provider_id: 'novelai', workflow_id: 'image', input_json: '{}', revision: 1, state: 'SUBMITTED', job_id: 'job' };
 const findButton = (tree: ReturnType<typeof create>, label: string) => tree.root.findAll(n => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function')[0];
 beforeEach(() => {
-  jest.clearAllMocks(); mockStatus = 'SUCCEEDED';
+  jest.clearAllMocks(); mockReadStatus.mockReset().mockImplementation(async()=>({status:mockStatus}));mockStatus = 'SUCCEEDED';
   mockVersions = [2, 1].map(n => ({ id: `version-${n}`, assetId: 'asset', versionNo: n, source: 'generated', state: 'AVAILABLE', relativePath: `${n}.png`, mime: 'image/png', recipe: { jobId: 'job',input:defaultNovelAiDraft } }));
   mockExecute.mockResolvedValue({ status: 'completed', value: { draftId: 'next' } });
+});
+
+test('slow result reads do not overlap or let a delayed old status overwrite completion',async()=>{
+  jest.useFakeTimers();
+  let release!:(status:{status:string})=>void,tree!:ReturnType<typeof create>;
+  const observed=jest.fn();
+  mockReadStatus.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve;}));
+  try{
+    await act(async()=>{tree=create(<CreativeResults draft={draft} onJobStatus={observed}/>);});
+    await act(async()=>jest.advanceTimersByTime(7500));
+    expect(mockReadStatus).toHaveBeenCalledTimes(1);
+    await act(async()=>release({status:'RUNNING'}));
+    expect(observed).toHaveBeenLastCalledWith('RUNNING');
+    await act(async()=>jest.advanceTimersByTime(2500));
+    expect(observed).toHaveBeenLastCalledWith('SUCCEEDED');
+  }finally{act(()=>tree?.unmount());jest.useRealTimers();}
+});
+
+test('a successful retry clears the result-read error',async()=>{
+  jest.useFakeTimers();let tree!:ReturnType<typeof create>;
+  mockReadStatus.mockRejectedValueOnce(new Error('SQLITE_BUSY'));
+  try{
+    await act(async()=>{tree=create(<CreativeResults draft={draft}/>);});
+    expect(JSON.stringify(tree.toJSON())).toContain('结果读取失败');
+    await act(async()=>jest.advanceTimersByTime(2500));
+    expect(JSON.stringify(tree.toJSON())).not.toContain('结果读取失败');
+  }finally{act(()=>tree?.unmount());jest.useRealTimers();}
 });
 
 test('results across switched video workflows show the newest generation before an older higher per-asset version',async()=>{

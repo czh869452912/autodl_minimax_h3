@@ -42,9 +42,9 @@ function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){
   const [entries,setEntries]=useState<VideoWorkflowEntry[]>([]),[entry,setEntry]=useState<VideoWorkflowEntry>(),[stale,setStale]=useState(false),[accountReady,setAccountReady]=useState(false);
   const [references,setReferences]=useState<MediaRow[]>([]),[assetIds,setAssetIds]=useState<string[]>([]);
   const [view,setView]=useState<'create'|'result'>('create'),[sheet,setSheet]=useState<Sheet>(),[picking,setPicking]=useState<'image'|'audio'>(),[assist,setAssist]=useState(false),[preview,setPreview]=useState<string>();
-  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[saving,setSaving]=useState(false),[status,setStatus]=useState('');
+  const [error,setError]=useState(''),[workflowError,setWorkflowError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[saving,setSaving]=useState(false),[status,setStatus]=useState('');
   const [undo,setUndo]=useState<WorkflowVideoInput>(),[undoDraft,setUndoDraft]=useState<string>(),[customDuration,setCustomDuration]=useState(false);
-  const lock=useRef(false),switchLock=useRef(false),latest=useRef(input);latest.current=input;
+  const lock=useRef(false),switchLock=useRef(false),latest=useRef(input),latestDraft=useRef(draft),latestResult=useRef(resultDraft);latest.current=input;latestDraft.current=draft;latestResult.current=resultDraft;
   const initialized=useRef(false);
   const dirty=Boolean(input&&baseline&&JSON.stringify(input)!==baseline),definition=entry?.definition;
   const pending=useWorkbenchJobPending(resultDraft?.job_id,status);
@@ -58,23 +58,45 @@ function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){
   useFocusEffect(useCallback(()=>{const sub=BackHandler.addEventListener('hardwareBackPress',closePanel);return()=>sub.remove();},[closePanel]));
   usePreventRemove(dirty||busy||saving||Boolean(sheet),({data})=>{if(closePanel())return;if(lock.current||switchLock.current){Alert.alert('操作进行中','请等待保存或切换完成。');return;}Alert.alert('修改尚未保存','是否放弃本次未保存修改？',[{text:'继续编辑',style:'cancel'},{text:'放弃并离开',style:'destructive',onPress:()=>navigation.dispatch(data.action)}]);});
   const adopt=useCallback((row:CreativeDraft)=>{setId(row.id);setDraft(row);void rememberWorkbenchDraft(row).catch(()=>undefined);},[]);
-  const install=async(row:CreativeDraft,available:VideoWorkflowEntry[],canApply=()=>true)=>{
-    const service=creativeService(),refs=await service.draftInputs(row.id);
-    for(const ref of refs)await creativeFiles().verify(ref.version_id);
-    if(canApply())setReferences(refs);
-    const resolved=await resolveVideoWorkbench(row,available),output=await workbenchResultDraft(row),rows=await service.drafts(row.project_id??undefined);
+  const install=async(row:CreativeDraft,available?:VideoWorkflowEntry[],canApply=()=>true)=>{
+    const service=creativeService(),output=await workbenchResultDraft(row),rows=await service.drafts(row.project_id??undefined);
     if(!canApply())return;
-    if(output.job_id!==resultDraft?.job_id)setStatus('');
-    adopt(row);setEntries(available);setEntry(resolved.entry);setInput(resolved.input);setBaseline(JSON.stringify(resolved.input));setStale(resolved.stale);setReferences(await service.draftInputs(row.id));setResultDraft(output.job_id?output:undefined);
+    // Existing submissions remain observable even if their editor dependencies are unavailable.
+    if(output.job_id!==latestResult.current?.job_id)setStatus('');
+    setResultDraft(output.job_id?output:undefined);
     setAssetIds([...new Set(videoSessionDrafts(row,rows).map(d=>d.target_asset_id).filter((value):value is string=>Boolean(value)))]);
-    if(resolved.notices.length)setNotice(resolved.notices.join('\n'));
     if(!initialized.current){initialized.current=true;setView(output.job_id?'result':'create');}
+    const catalog=available??await listVideoWorkflows();if(!canApply())return;setEntries(catalog);
+    const refs=await service.draftInputs(row.id);
+    for(const ref of refs)await creativeFiles().verify(ref.version_id);
+    const resolved=await resolveVideoWorkbench(row,catalog);
+    if(!canApply())return;
+    adopt(row);setEntry(resolved.entry);setInput(resolved.input);setBaseline(JSON.stringify(resolved.input));setStale(resolved.stale);setWorkflowError('');setReferences(await service.draftInputs(row.id));
+    if(resolved.notices.length)setNotice(resolved.notices.join('\n'));
   };
   const load=async(canApply=()=>true)=>{
     const row=await creativeService().draft(id);if(!row)throw new Error('草稿不存在');
-    const available=await listVideoWorkflows();if(canApply()){adopt(row);setEntries(available);}
-    await install(row,available,canApply);
+    if(canApply()){adopt(row);setEntry(undefined);}
+    await install(row,undefined,canApply);
   };
+  useFocusEffect(useCallback(()=>{
+    if(!latestDraft.current)return; // Initial loading also installs the catalog.
+    let active=true;
+    void (async()=>{
+      const available=await listVideoWorkflows();if(!active)return;setEntries(available);
+      const source=latestDraft.current;if(!source)return;
+      try{
+        if(!latest.current){
+          await install(source,available,()=>active&&latestDraft.current?.id===source.id&&!latest.current);
+          if(active&&latestDraft.current?.id===source.id){setError('');setWorkflowError('');}
+          return;
+        }
+        const resolved=await resolveVideoWorkbench(source,available);
+        if(active&&latestDraft.current?.id===source.id){setEntry(resolved.entry);setStale(resolved.stale);setWorkflowError('');}
+      }catch(e){if(active&&latestDraft.current?.id===source.id){setEntry(undefined);setStale(true);setWorkflowError(creativeError(e,'工作流读取失败'));}}
+    })().catch(e=>{if(active)setWorkflowError(creativeError(e,'工作流目录读取失败'));});
+    return()=>{active=false;};
+  },[]));
   const {conflict,reload,assertCurrent}=useDraftSync(id,draft,dirty,busy||saving,load,setError);
   useEffect(()=>{let active=true;if(draft)void creativeService().draftInputs(id).then(rows=>{if(active)setReferences(rows);}).catch(()=>{if(active)setError('参考素材读取失败');});return()=>{active=false;};},[id,draft?.revision]);
   const save=async():Promise<CreativeDraft|false>=>{
@@ -178,7 +200,7 @@ function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){
     <WorkbenchScope draft={draft}/>
     {hasResults?<View style={{flexDirection:'row',paddingHorizontal:12,gap:16}}>{(['create','result'] as const).map(tab=><Pressable key={tab} accessibilityRole="tab" accessibilityLabel={tab==='create'?(pending?'准备下一次':'创作'):(pending?'本次进度':'结果')} accessibilityState={{selected:view===tab}} onPress={()=>setView(tab)} style={[v.tab,view===tab&&{borderBottomColor:COLORS.primary}]}><Text style={[v.caption,view===tab&&{color:COLORS.primary,fontWeight:'600'}]}>{tab==='create'?(pending?'准备下一次':'创作'):(pending?'本次进度':'结果')}</Text></Pressable>)}</View>:null}
     {conflict?<View style={v.notice}><Text style={s.error}>草稿已在其他入口更新，本页输入已保留。</Text><TextAction label="载入最新草稿" disabled={busy||saving} onPress={()=>Alert.alert('载入最新草稿','这会放弃本页尚未保存的修改。',[{text:'保留本页',style:'cancel'},{text:'载入最新',onPress:()=>void reload().catch(e=>setError(e.message))}])}/></View>:null}
-    {error?<View style={v.notice}><Text accessibilityRole="alert" style={s.error}>{error}</Text><TextAction label={dirty?'重试保存输入':'重新读取工作区'} disabled={busy||saving} onPress={()=>void (dirty?save():load()).catch(e=>setError(e.message))}/></View>:null}
+    {error || workflowError?<View style={v.notice}><Text accessibilityRole="alert" style={s.error}>{error || workflowError}</Text><TextAction label={dirty?'重试保存输入':'重新读取工作区'} disabled={busy||saving} onPress={()=>void (dirty?save():reload()).catch(e=>setError(e.message))}/></View>:null}
     <View style={{flex:1,display:displayResult?'none':'flex'}}><ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={v.content}>
       <View style={s.row}><Text style={v.caption}>工作流</Text><View style={{flexShrink:1}}><TextAction label={definition?`${h3?'MiniMax H3':definition.metadata.title} · ${entries.filter(item=>!item.reason).length>1?'切换':'详情'}`:'选择视频工作流'} disabled={busy||saving} onPress={()=>openSheet('workflow')}/></View></View>
       {stale?<View style={{gap:4}}><Text style={s.error}>工作流版本已变化，原输入已保留。对齐后可继续生成。</Text><TextAction label="对齐当前工作流版本" disabled={busy||saving} onPress={()=>{const current=entries.find(item=>item.record.workflowId===draft?.workflow_id);if(current)void switchWorkflow(current);}}/></View>:null}
