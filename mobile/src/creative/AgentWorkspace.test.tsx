@@ -29,8 +29,7 @@ test('entering an existing project opens its chat without creating drafts or mov
     mockProjectId = 'project-a';
     act(() => tree.update(<AgentWorkspace />));
     expect(tree.root.findByType(AgentScreen).props.projectId).toBe('project-a');
-    act(() => button(tree, '切换创作项目').props.onPress());
-    expect(mockSetParams).toHaveBeenLastCalledWith({ projectId: '' });
+    expect(button(tree, '切换创作项目')).toBeUndefined(); // Project controls live in the chat header, not another workspace row.
   } finally { act(() => tree?.unmount()); }
 });
 

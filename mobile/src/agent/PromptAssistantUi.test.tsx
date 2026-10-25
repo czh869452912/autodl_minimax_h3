@@ -65,6 +65,7 @@ describe('Prompt assistant UI primitives', () => {
     let tree!: ReturnType<typeof create>;
     act(() => { tree = create(<PromptAssistantUi {...basePromptProps} />); });
     expect(renderedText(tree).some(text => text.includes('4,000'))).toBe(false);
+    act(() => tree.root.findByProps({ accessibilityLabel: '更多创作操作' }).props.onPress());
     act(() => tree.root.findByProps({ accessibilityLabel: '全屏编辑' }).props.onPress());
     const editor = tree.root.findByProps({ accessibilityLabel: '全屏编辑创作想法' });
     act(() => editor.props.onChangeText('雨夜\n街灯与倒影'));
@@ -81,16 +82,19 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
-  it('reserves the measured floating composer height so the last message can scroll clear', () => {
+  it('keeps the composer and creative results entry outside the scrollable timeline in normal layout flow', () => {
     let tree!: ReturnType<typeof create>;
-    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} />); });
-    const actions = tree.root.findByProps({ testID: 'composer-actions' });
-    const dock = actions.parent!;
-    act(() => dock.props.onLayout({ nativeEvent: { layout: { height: 246 } } }));
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} creativeCards={<Text testID="creative-entry">本会话创作</Text>} />); });
+    const dock = tree.root.findByProps({ testID: 'conversation-composer-dock' });
+    expect(StyleSheet.flatten(dock.props.style).position).not.toBe('absolute');
+    expect(dock.findAllByProps({ testID: 'creative-entry' }).length).toBeGreaterThan(0);
     const list = tree.root.findByType(FlatList);
-    expect(list.props.ListFooterComponent.props.style.paddingBottom).toBe(246);
-    expect(list.props.scrollIndicatorInsets.bottom).toBe(246);
-    expect(dock.props.pointerEvents).toBe('box-none');
+    expect(list.props.ListFooterComponent.props.style.paddingBottom).toBe(0);
+    expect(list.findAllByProps({ testID: 'creative-entry' })).toHaveLength(0);
+    const input = tree.root.findByProps({accessibilityLabel:'创作想法'});
+    expect(StyleSheet.flatten(input.props.style).height).toBe(40);
+    act(()=>input.props.onContentSizeChange({nativeEvent:{contentSize:{height:300}}}));
+    expect(StyleSheet.flatten(tree.root.findByProps({accessibilityLabel:'创作想法'}).props.style).height).toBe(104);
     act(() => tree.unmount());
   });
 
@@ -99,7 +103,8 @@ describe('Prompt assistant UI primitives', () => {
     let tree!: ReturnType<typeof create>;
     try {
       act(() => { tree = create(<PromptAssistantUi {...basePromptProps} />); });
-      act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
+      act(() => tree.root.findByProps({ accessibilityLabel: '更多创作操作' }).props.onPress());
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
       act(() => tree.root.findByProps({ accessibilityLabel: '上传图片附件' }).props.onPress());
       act(() => alert.mock.calls[0][2]![2].onPress?.());
       const mention = () => tree.root.findAllByType(DraggableBottomSheet).find(node => node.props.title === '引用图片附件')!;
@@ -117,7 +122,8 @@ describe('Prompt assistant UI primitives', () => {
     let tree!: ReturnType<typeof create>;
     try {
       act(() => { tree = create(<PromptAssistantUi {...basePromptProps} />); });
-      act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
+      act(() => tree.root.findByProps({ accessibilityLabel: '更多创作操作' }).props.onPress());
+    act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
       expect(renderedText(tree)).toContain('图片正在上传，完成后可引用');
       act(() => tree.root.findByProps({ accessibilityLabel: '上传图片附件' }).props.onPress());
       await act(async () => alert.mock.calls[0][2]![0].onPress?.());
@@ -129,6 +135,7 @@ describe('Prompt assistant UI primitives', () => {
   it('disables blank brief submission and clears fields after adding once', () => {
     let tree!: ReturnType<typeof create>;
     act(() => { tree = create(<PromptAssistantUi {...basePromptProps} />); });
+    act(() => tree.root.findByProps({ accessibilityLabel: '更多创作操作' }).props.onPress());
     act(() => tree.root.findByProps({ accessibilityLabel: '补充创作信息' }).props.onPress());
     const submit = () => tree.root.findByProps({ accessibilityLabel: '加入创作草稿' });
     expect(submit().props.disabled).toBe(true);
@@ -137,6 +144,7 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.root.findByProps({ accessibilityLabel: '主体与动作' }).props.onChangeText('雨中散步'));
     act(() => submit().props.onPress());
     expect(tree.root.findByType(Composer).props.value).toBe('主体与动作：雨中散步');
+    act(() => tree.root.findByProps({ accessibilityLabel: '更多创作操作' }).props.onPress());
     act(() => tree.root.findByProps({ accessibilityLabel: '补充创作信息' }).props.onPress());
     expect(tree.root.findByProps({ accessibilityLabel: '主体与动作' }).props.value).toBe('');
     expect(submit().props.disabled).toBe(true);
@@ -155,11 +163,11 @@ describe('Prompt assistant UI primitives', () => {
     try {
       act(() => { tree = create(<PromptAssistantUi {...basePromptProps} clientState={{ h3Versions: [{ id: 'v', promptText: 'Prompt', sourceMessageId: 'm', createdAt: 1, images: [], parameters: {} }] }} />); });
       const text = renderedText(tree);
-      expect(text).toContain(compact ? '创作信息' : '补充创作信息');
-      expect(text).toContain(compact ? '版本' : 'Prompt 版本');
-      const actions = StyleSheet.flatten(tree.root.findByProps({ testID: 'composer-actions' }).props.style);
-      expect(actions.flexDirection).toBe('row');
-      expect(actions.flexWrap ?? 'nowrap').toBe('nowrap');
+      expect(tree.root.findAllByProps({ accessibilityLabel: '更多创作操作' }).length).toBeGreaterThan(0);
+      expect(text).not.toContain('打开 Prompt 版本');
+      act(() => tree.root.findByProps({ accessibilityLabel: '更多创作操作' }).props.onPress());
+      expect(renderedText(tree)).toContain('补充创作信息');
+      expect(renderedText(tree)).toContain('打开 Prompt 版本');
       expect(tree.root.findAllByType(View).filter(node => node.props.testID === 'inspiration-artwork')).toHaveLength(compact ? 0 : 2);
       if (width === 240) {
         const rail = tree.root.findAllByType(ScrollView).find(node => node.props.snapToInterval);
@@ -260,7 +268,7 @@ describe('Prompt assistant UI primitives', () => {
       expect(project).toHaveBeenCalledTimes(1);
     } finally { if (tree) act(() => tree.unmount()); factory.mockRestore(); }
   });
-  it('opens a queued run on start, preserves manual collapse, and bounds expanded text', () => {
+  it('keeps runs collapsed by default, preserves manual expansion and bounds expanded text', () => {
     const run = { id: 'r', userMessageId: 'u', messageIds: [], status: 'queued' as const, startedAt: 1, tools: [] };
     const onInspect = jest.fn();
     const entries = [{ id: 'private-id', kind: 'reasoning' as const, text: 'x'.repeat(9000) + 'END' }];
@@ -269,7 +277,8 @@ describe('Prompt assistant UI primitives', () => {
     act(() => { tree = create(render('queued')); });
     expect(tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.accessibilityState.expanded).toBe(false);
     act(() => tree.update(render('running')));
-    expect(tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.accessibilityState.expanded).toBe(true);
+    expect(tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.accessibilityState.expanded).toBe(false);
+    act(() => tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.onPress());
     const item = tree.root.findByProps({ testID: 'process-item-private-id' });
     expect(item.props.accessibilityLabel).toBe('思考');
     act(() => item.props.onPress());
@@ -284,6 +293,19 @@ describe('Prompt assistant UI primitives', () => {
     expect(tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.accessibilityState.expanded).toBe(false);
     act(() => tree.unmount());
   });
+  it('collapses an inspected process when execution ends and flags logical tool failures', () => {
+    const tool = { id:'submit', name:'generation_submit', status:'complete' as const, startedAt:1, endedAt:2, output:'{"status":"error","message":"AUTHORIZATION_REQUIRED"}' };
+    const run = { id:'r', userMessageId:'u', messageIds:[], status:'running' as const, startedAt:1, tools:[tool] };
+    const entries = [{id:'submit',kind:'tool' as const,tool}];
+    let tree!:ReturnType<typeof create>;
+    act(()=>{tree=create(<RunTimelineRow run={run} entries={entries} disabled onRetry={async()=>undefined}/>);});
+    act(()=>tree.root.findByProps({accessibilityLabel:'查看运行 r'}).props.onPress());
+    expect(tree.root.findByProps({testID:'process-item-submit'}).props.accessibilityLabel).toContain('未成功');
+    act(()=>tree.update(<RunTimelineRow run={{...run,status:'completed',endedAt:3}} entries={entries} disabled onRetry={async()=>undefined}/>));
+    expect(tree.root.findByProps({accessibilityLabel:'查看运行 r'}).props.accessibilityState.expanded).toBe(false);
+    expect(renderedText(tree).join('')).toContain('有操作未成功');
+    act(()=>tree.unmount());
+  });
   it('folds process messages together and expands complete tool output on demand', () => {
     const run = { id: 'r', userMessageId: 'u', messageIds: [], status: 'completed' as const, startedAt: 1, endedAt: 2, tools: [] };
     const output = 'Tool detail '.repeat(100) + 'END OF OUTPUT';
@@ -292,6 +314,8 @@ describe('Prompt assistant UI primitives', () => {
     act(() => { tree = create(<RunTimelineRow run={run} entries={entries} disabled={false} onRetry={async () => undefined} />); });
     expect(renderedText(tree).join('')).not.toContain('Inspect reference');
     act(() => tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.onPress());
+    expect(renderedText(tree).join('')).not.toContain('Inspect reference');
+    act(() => tree.root.findByProps({ testID: 'process-item-reason' }).props.onPress());
     expect(renderedText(tree).join('')).toContain('Inspect reference');
     expect(renderedText(tree).join('')).toContain('/guide.md');
     expect(renderedText(tree).join('')).not.toContain('END OF OUTPUT');
@@ -411,6 +435,7 @@ describe('Prompt assistant UI primitives', () => {
     const reload = jest.fn();
     let tree!: ReturnType<typeof create>;
     act(() => { tree = create(<PromptAssistantUi {...basePromptProps} clientState={state} onReloadWorkflow={reload} />); });
+    act(() => tree.root.findByProps({ accessibilityLabel: '更多创作操作' }).props.onPress());
     act(() => tree.root.findByProps({ accessibilityLabel: '打开 Prompt 版本' }).props.onPress());
     expect(tree.root.findAllByType(PromptVersionPanel)).toHaveLength(0);
     expect(renderedText(tree)).toContain('正在加载工作流…');
@@ -564,6 +589,7 @@ describe('Prompt assistant UI primitives', () => {
   it('opens creative information in a two-stop bottom drawer with a fixed submit action', () => {
     let tree!: ReturnType<typeof create>;
     act(() => { tree = create(<PromptAssistantUi {...basePromptProps} />); });
+    act(() => tree.root.findByProps({ accessibilityLabel: '更多创作操作' }).props.onPress());
     act(() => tree.root.findByProps({ accessibilityLabel: '补充创作信息' }).props.onPress());
     const sheet = tree.root.findAllByType(DraggableBottomSheet).find(node => node.props.title === '补充创作信息');
     expect(sheet?.props.visible).toBe(true);
@@ -591,7 +617,7 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.unmount());
   });
 
-  it('places attachment, mention, and send actions below the multiline input', () => {
+  it('keeps core composer actions in one row and secondary actions reachable from its menu', () => {
     const onMention = jest.fn();
     let tree!: ReturnType<typeof create>;
     act(() => {
@@ -608,13 +634,14 @@ describe('Prompt assistant UI primitives', () => {
         />,
       );
     });
-    const input = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    const input = tree.root.findByProps({ accessibilityLabel: '创作想法' });
     const controls = tree.root.findAll((node) => typeof node.props.accessibilityLabel === 'string');
     expect(input.props.multiline).toBe(true);
     expect(tree.root.findByProps({ accessibilityLabel: '添加图片附件' })).toBeTruthy();
-    expect(tree.root.findByProps({ accessibilityLabel: '引用图片附件' })).toBeTruthy();
+    expect(tree.root.findByProps({ accessibilityLabel: '更多创作操作' })).toBeTruthy();
     expect(tree.root.findByProps({ accessibilityLabel: '发送消息' })).toBeTruthy();
     expect(controls.length).toBeGreaterThanOrEqual(3);
+    act(() => tree.root.findByProps({ accessibilityLabel: '更多创作操作' }).props.onPress());
     act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
     expect(onMention).toHaveBeenCalledTimes(1);
     act(() => tree.unmount());
@@ -642,7 +669,8 @@ describe('Prompt assistant UI primitives', () => {
         />,
       );
     });
-    expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件' }).length).toBeGreaterThan(0);
+    expect(tree.root.findAllByProps({ accessibilityLabel: '引用图片附件' })).toHaveLength(0);
+    act(() => tree.root.findByProps({ accessibilityLabel: '更多创作操作' }).props.onPress());
     act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
     expect(tree.root.findAllByType(DraggableBottomSheet).filter((node) => node.props.visible)).toHaveLength(1);
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === '引用图片附件')).toBe(true);
@@ -697,18 +725,17 @@ describe('Prompt assistant UI primitives', () => {
         />,
       );
     });
-    const input = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    const input = tree.root.findByProps({ accessibilityLabel: '创作想法' });
     act(() => input.props.onChangeText('镜头前后'));
     act(() => input.props.onSelectionChange({ nativeEvent: { selection: { start: 2, end: 2 } } }));
+    act(() => tree.root.findByProps({ accessibilityLabel: '更多创作操作' }).props.onPress());
     act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
     act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件 图片1' }).props.onPress());
-    expect(tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.value).toBe('镜头@图片1 前后');
-    expect(tree.root.findByProps({ testID: 'composer-toolbar-spacer' }).props.style).toEqual(
-      expect.objectContaining({ flex: 1 }),
-    );
+    expect(tree.root.findByProps({ accessibilityLabel: '创作想法' }).props.value).toBe('镜头@图片1 前后');
+    expect(StyleSheet.flatten(tree.root.findByProps({ testID: 'composer-input-area' }).props.style).flex).toBe(1);
     expect(tree.root.findAllByType(Image).some((node) => node.props.source?.uri === 'file://ready-1')).toBe(true);
     expect(tree.root.findAllByProps({ testID: 'mention-token-layer' })).toHaveLength(0);
-    const richInput = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    const richInput = tree.root.findByProps({ accessibilityLabel: '创作想法' });
     expect(richInput.props.caretHidden).not.toBe(true);
     expect(richInput.props.style).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ color: 'transparent' })]),
@@ -751,7 +778,7 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.root.findByProps({ accessibilityLabel: '添加图片附件' }).props.onPress());
     const pickerButtons = alert.mock.calls[0]?.[2] as Array<{ onPress?: () => void }>;
     await act(async () => pickerButtons[0]?.onPress?.());
-    await act(async () => tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.onChangeText('使用角色'));
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '创作想法' }).props.onChangeText('使用角色'));
     await act(async () => {
       tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.onPress();
     });
@@ -955,7 +982,7 @@ describe('Prompt assistant UI primitives', () => {
       );
     });
     await act(async () => {
-      tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.onChangeText('雨中的城市夜跑');
+      tree.root.findByProps({ accessibilityLabel: '创作想法' }).props.onChangeText('雨中的城市夜跑');
     });
     await act(async () => {
       tree.root.findByProps({ accessibilityLabel: '发送消息' }).props.onPress();
@@ -984,7 +1011,7 @@ describe('Prompt assistant UI primitives', () => {
         />,
       );
     });
-    await act(async () => tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.onChangeText('只发送一次'));
+    await act(async () => tree.root.findByProps({ accessibilityLabel: '创作想法' }).props.onChangeText('只发送一次'));
     const send = tree.root.findByProps({ accessibilityLabel: '发送消息' });
     act(() => { send.props.onPress(); send.props.onPress(); });
     expect(submitMessage).toHaveBeenCalledTimes(1);
@@ -1032,14 +1059,15 @@ describe('Prompt assistant UI primitives', () => {
         />,
       );
     });
-    const input = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    const input = tree.root.findByProps({ accessibilityLabel: '创作想法' });
     act(() => input.props.onChangeText('镜头'));
     act(() => input.props.onSelectionChange({ nativeEvent: { selection: { start: 2, end: 2 } } }));
+    act(() => tree.root.findByProps({ accessibilityLabel: '更多创作操作' }).props.onPress());
     act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
     act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件 图片1' }).props.onPress());
-    const editedInput = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    const editedInput = tree.root.findByProps({ accessibilityLabel: '创作想法' });
     act(() => editedInput.props.onChangeText('镜头@图片 '));
-    expect(tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.value).toBe('镜头 ');
+    expect(tree.root.findByProps({ accessibilityLabel: '创作想法' }).props.value).toBe('镜头 ');
     expect(tree.root.findAllByProps({ testID: 'mention-token-layer' })).toHaveLength(0);
     act(() => tree.unmount());
   });
@@ -1063,14 +1091,15 @@ describe('Prompt assistant UI primitives', () => {
         />,
       );
     });
-    const input = tree.root.findByProps({ placeholder: '描述你想生成的画面…' });
+    const input = tree.root.findByProps({ accessibilityLabel: '创作想法' });
     act(() => input.props.onChangeText('abc'));
     act(() => input.props.onSelectionChange({ nativeEvent: { selection: { start: 3, end: 3 } } }));
+    act(() => tree.root.findByProps({ accessibilityLabel: '更多创作操作' }).props.onPress());
     act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件' }).props.onPress());
     act(() => tree.root.findByProps({ accessibilityLabel: '引用图片附件 图片1' }).props.onPress());
-    act(() => tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.onChangeText('ab@图片1 '));
-    act(() => tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.onChangeText('ab@图片 '));
-    expect(tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.value).toBe('ab ');
+    act(() => tree.root.findByProps({ accessibilityLabel: '创作想法' }).props.onChangeText('ab@图片1 '));
+    act(() => tree.root.findByProps({ accessibilityLabel: '创作想法' }).props.onChangeText('ab@图片 '));
+    expect(tree.root.findByProps({ accessibilityLabel: '创作想法' }).props.value).toBe('ab ');
     act(() => tree.unmount());
   });
 
@@ -1170,7 +1199,7 @@ describe('Prompt assistant UI primitives', () => {
         accessibilityLabel: '使用建议 一镜到底的城市夜跑',
       }).props.onPress();
     });
-    expect(tree.root.findByProps({ placeholder: '描述你想生成的画面…' }).props.value)
+    expect(tree.root.findByProps({ accessibilityLabel: '创作想法' }).props.value)
       .toBe('一镜到底的城市夜跑');
     expect(mockChatContext.submitMessage).not.toHaveBeenCalled();
     act(() => tree.unmount());

@@ -26,7 +26,7 @@ export function AppTabs({ activeId, onSelect }: { activeId: AppTabId; onSelect: 
         // flexBasis sets the wrap threshold for large text; flexGrow shares
         // remaining space equally within each row, rather than fixing tab widths.
         return <Pressable key={tab.id} accessibilityLabel={tab.label} accessibilityRole="tab" accessibilityState={{ selected: active }} onPress={() => onSelect(tab.id)} style={({ pressed }) => [styles.item, { flexBasis: Math.max(48, 30 * layout.fontScale) }, active && styles.activeItem, pressed && styles.pressed]}>
-          <AppIcon name={tab.icon} size={25} color={active ? COLORS.primaryActive : COLORS.textMuted} />
+          <AppIcon name={tab.icon} size={22} color={active ? COLORS.primaryActive : COLORS.textMuted} />
           <Text style={[styles.label, active && styles.activeLabel]}>{compact ? tab.id === 'agent' ? 'Agent' : '手工' : tab.label}</Text>
         </Pressable>;
       })}
@@ -35,8 +35,8 @@ export function AppTabs({ activeId, onSelect }: { activeId: AppTabId; onSelect: 
 }
 
 const styles = StyleSheet.create({
-  container: { flexDirection: 'row', flexWrap: 'wrap', backgroundColor: COLORS.surface, borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 8 },
-  item: { flexGrow: 1, flexShrink: 1, minWidth: 48, minHeight: 66, paddingVertical: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 8, marginHorizontal: 2, gap: 3 },
+  container: { flexDirection: 'row', flexWrap: 'wrap', backgroundColor: COLORS.surface, borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 4 },
+  item: { flexGrow: 1, flexShrink: 1, minWidth: 48, minHeight: 48, paddingVertical: 2, alignItems: 'center', justifyContent: 'center', borderRadius: 8, marginHorizontal: 2, gap: 2 },
   pressed: { backgroundColor: COLORS.surfaceRaised },
   activeItem: { backgroundColor: COLORS.primarySoft },
   label: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600', textAlign: 'center', flexShrink: 1 },

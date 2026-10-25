@@ -32,7 +32,6 @@ export function AgentWorkspace() {
   };
   if(legacy)return <View style={s.screen}><View style={{paddingHorizontal:16}}><TextAction label="返回项目选择" onPress={()=>setLegacy(false)} /></View><AgentScreen /></View>;
   if (projectId) return <View style={s.screen}>
-    <View style={[s.row,{paddingHorizontal:16}]}><Text numberOfLines={1} style={[s.title,{flex:1}]}>{projects.find(project=>project.id===projectId)?.title ?? '项目对话'}</Text><TextAction label="切换创作项目" onPress={() => router.setParams({projectId:''})} /></View>
     <AgentScreen key={projectId} projectId={projectId} />
   </View>;
   return <View style={s.screen}><ScrollView contentContainerStyle={s.content}>

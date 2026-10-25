@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { Modal, ScrollView, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { AppIcon } from '../ui/icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { getDatabase } from '../storage/databaseClient';
@@ -11,7 +12,7 @@ import type { CreativeProject } from './types';
 import { TextAction } from './WorkbenchUI';
 import { creativeUI as s } from './creativeUI';
 
-export function AgentCreativePanel({ threadId, running }: { threadId: string; running: boolean }) {
+export function AgentCreativePanel({ threadId, running, compact=false }: { threadId: string; running: boolean; compact?:boolean }) {
   const router = useRouter();
   const { projectId } = useLocalSearchParams<{ projectId?: string }>();
   const [expanded, setExpanded] = useState(false), [projects, setProjects] = useState<CreativeProject[]>([]), [selected, setSelected] = useState<string | null>(null);
@@ -42,11 +43,11 @@ export function AgentCreativePanel({ threadId, running }: { threadId: string; ru
     } catch (e) { setNotice(e instanceof Error ? e.message : '项目切换失败'); }
     finally { lock.current = false; setBusy(false); }
   };
-  return <View style={{ paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}>
-    <View style={s.row}><Text style={s.muted}>当前项目：{projects.find(p => p.id === selected)?.title ?? (selected ? '项目不可用' : '未选择')}</Text><TextAction label="项目" disabled={running || busy} onPress={() => setExpanded(true)} /></View>
-    {projectId && projectId !== selected ? <ListAction label={`在此会话使用 ${projects.find(p => p.id === projectId)?.title ?? '所选项目'}`} disabled={running || busy} onPress={() => void choose(projectId)} /> : null}
-    {!selected ? <Text style={s.muted}>可先讨论想法。制作素材前，请选择项目或让助手创建项目后再选择。</Text> : null}
-    {!expanded && notice ? <Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text> : null}
+  const projectTitle=projects.find(p => p.id === selected)?.title ?? (selected ? '项目不可用' : '选择项目');
+  return <View style={compact?{flex:1}:{ paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}>
+    {compact?<Pressable accessibilityRole="button" accessibilityLabel="切换创作项目" disabled={running || busy} onPress={()=>setExpanded(true)} style={{minHeight:44,flexDirection:'row',alignItems:'center',gap:4}}><Text numberOfLines={1} style={[s.title,{flexShrink:1}]}>{projectTitle}</Text><AppIcon name="expand_more" size={18}/></Pressable>:<View style={s.row}><Text style={s.muted}>当前项目：{projectTitle}</Text><TextAction label="项目" disabled={running || busy} onPress={() => setExpanded(true)} /></View>}
+    {!selected && !compact ? <Text style={s.muted}>可先讨论想法。制作素材前，请选择项目或让助手创建项目后再选择。</Text> : null}
+    {!expanded && notice && !compact ? <Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text> : null}
     {expanded ? <Modal visible animationType="slide" onRequestClose={() => setExpanded(false)}><SafeAreaView style={s.screen}><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <View style={s.row}><Text style={s.heading}>选择创作项目</Text><ListAction label="关闭" secondary onPress={() => setExpanded(false)} /></View>
       <TextInput accessibilityLabel="搜索创作项目" placeholder="搜索项目" value={query} onChangeText={setQuery} style={s.input} />

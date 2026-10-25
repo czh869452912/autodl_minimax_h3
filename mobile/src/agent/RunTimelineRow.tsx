@@ -7,15 +7,16 @@ import { AppIcon } from '../ui/icons';
 import type { ProcessEntry } from './runTimeline';
 
 export function RunTimelineRow({ run, entries = [], disabled, onRetry, onInspect }: { run: PromptRun; entries?: ProcessEntry[]; disabled: boolean; onRetry: (id: string) => Promise<void>; onInspect?: () => void }) {
-  const [expanded, setExpanded] = useState(run.status === 'running' || run.status === 'failed' || run.status === 'interrupted');
+  const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  useEffect(() => { if (run.status === 'running' || run.status === 'failed' || run.status === 'interrupted') setExpanded(true); }, [run.status]);
+  useEffect(() => { if (run.status === 'completed') setExpanded(false); }, [run.status]);
   const active = run.tools.find(tool => tool.status === 'running');
+  const failedTool = run.tools.some(tool => tool.status === 'failed' || creativeToolError(tool.output)) || entries.some(entry => entry.kind === 'tool' && (entry.tool.status === 'failed' || creativeToolError(entry.tool.output)));
   return <View style={styles.container}>
     <Pressable accessibilityRole="button" accessibilityLabel={`查看运行 ${run.id}`} accessibilityState={{ expanded }} onPress={() => { if (!expanded) onInspect?.(); setExpanded(value => !value); }} style={({ pressed }) => [styles.toggle, pressed && styles.pressed]}>
       {run.status === 'running' ? <ActivityIndicator size="small" color={COLORS.primary} /> : <AppIcon name={run.status === 'failed' || run.status === 'interrupted' ? 'info' : 'list_alt'} size={18} color={COLORS.textMuted} />}
-      <Text style={styles.label}>{run.status === 'running' && active ? toolActivity(active.name) : `执行过程 · ${RUN_LABELS[run.status]}`}{run.retryOf ? ' · 重试' : ''}</Text>
+      <Text style={styles.label}>{run.status === 'running' && active ? toolActivity(active.name) : `执行过程 · ${run.status === 'completed' && failedTool ? '有操作未成功' : RUN_LABELS[run.status]}`}{run.retryOf ? ' · 重试' : ''}</Text>
       <Text style={styles.meta}>{entries.length} 项 · <Elapsed startedAt={run.startedAt} endedAt={run.endedAt} active={run.status === 'running'} /></Text>
       <AppIcon name={expanded ? 'expand_less' : 'expand_more'} size={18} color={COLORS.textMuted} />
     </Pressable>
@@ -42,25 +43,36 @@ function toolTarget(args?: string): string {
   } catch { return ''; }
 }
 
+function creativeToolError(output?: string): string {
+  if (!output) return '';
+  try {
+    const result = JSON.parse(output);
+    return result?.status === 'error' ? (typeof result.message === 'string' ? result.message : '操作未成功') : '';
+  } catch { return ''; }
+}
+
 const ProcessItem = memo(function ProcessItem({ entry, onInspect }: { entry: ProcessEntry; onInspect?: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const tool = entry.kind === 'tool' ? entry.tool : undefined;
   const title = tool ? toolActivity(tool.name) : entry.kind === 'reasoning' ? '思考' : '中间回复';
   const text = tool ? tool.output ?? tool.summary ?? '' : entry.kind !== 'tool' ? entry.text : '';
-  const status = tool ? ({ complete: '完成', running: '执行中', failed: '失败', cancelled: '已停止' } as const)[tool.status] : '';
+  const toolError = creativeToolError(tool?.output);
+  const failed = tool?.status === 'failed' || Boolean(toolError);
+  const status = tool ? failed ? '未成功' : ({ complete: '完成', running: '执行中', failed: '失败', cancelled: '已停止' } as const)[tool.status] : '';
   const target = toolTarget(tool?.arguments);
   return <View style={styles.step}>
     <Pressable testID={`process-item-${entry.id}`} accessibilityRole="button" accessibilityLabel={`${title}${target ? `，${target}` : ''}${status ? `，${status}` : ''}`} accessibilityState={{ expanded }} onPress={() => { if (!expanded) onInspect?.(); setExpanded(value => !value); }} style={({ pressed }) => [styles.itemToggle, pressed && styles.pressed]}>
-      {tool?.status === 'running' ? <ActivityIndicator size="small" color={COLORS.primary} /> : <AppIcon name={tool ? tool.status === 'failed' ? 'info' : 'list_alt' : entry.kind === 'reasoning' ? 'auto_awesome' : 'smart_toy'} size={16} color={tool?.status === 'failed' ? COLORS.danger : COLORS.textMuted} />}
+      {tool?.status === 'running' ? <ActivityIndicator size="small" color={COLORS.primary} /> : <AppIcon name={tool ? failed ? 'info' : 'list_alt' : entry.kind === 'reasoning' ? 'auto_awesome' : 'smart_toy'} size={16} color={failed ? COLORS.danger : COLORS.textMuted} />}
       <Text style={styles.itemLabel}>{title}</Text>
-      {tool ? <Text style={[styles.meta, tool.status === 'failed' && styles.failure]}>{status} · <Elapsed startedAt={tool.startedAt} endedAt={tool.endedAt} active={tool.status === 'running'} /></Text> : null}
+      {tool ? <Text style={[styles.meta, failed && styles.failure]}>{status} · <Elapsed startedAt={tool.startedAt} endedAt={tool.endedAt} active={tool.status === 'running'} /></Text> : null}
       <AppIcon name={expanded ? 'expand_less' : 'expand_more'} size={16} color={COLORS.textMuted} />
     </Pressable>
     {target ? <Text style={styles.target} numberOfLines={expanded ? undefined : 1} selectable={expanded}>{target}</Text> : null}
     {expanded && tool?.arguments ? <View style={styles.payload}><Text style={styles.meta}>输入 · {tool.name}</Text><PagedText text={tool.arguments} onInspect={onInspect} /></View> : null}
-    {text ? <View style={expanded ? styles.payload : styles.preview}>
+    {!expanded && toolError ? <Text style={styles.failure} numberOfLines={2}>{toolError}</Text> : null}
+    {expanded && text ? <View style={styles.payload}>
       {expanded && tool ? <Text style={styles.meta}>输出</Text> : null}
-      {expanded ? <PagedText text={text} onInspect={onInspect} /> : <Text numberOfLines={2} style={tool ? styles.code : styles.stepText}>{text.slice(0, 240)}</Text>}
+      <PagedText text={text} onInspect={onInspect} />
     </View> : null}
   </View>;
 });

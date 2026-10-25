@@ -393,13 +393,13 @@ function AgentSession({
         setRunIssue({ kind: 'error', message: reason.message })
       }
     >
-      <AgentCreativePanel threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />
       <CopilotChat
         agentId={agent.agentId}
         attachments={{ enabled: false }}
       >
         <PromptAssistantUi
           {...uiProps}
+          headerContext={<AgentCreativePanel compact threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />}
           creativeCards={<AgentCreativeCards threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />}
           onExportPrompt={onExportPrompt}
           onExportHandoff={onExportHandoff}

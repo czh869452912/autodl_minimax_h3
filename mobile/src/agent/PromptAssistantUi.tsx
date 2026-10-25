@@ -106,6 +106,7 @@ export function PromptAssistantUi({
   transcript,
   transcriptRevision,
   creativeCards,
+  headerContext,
   workflowDefinition,
   workflows,
   workflowLoadIssue,
@@ -125,6 +126,7 @@ export function PromptAssistantUi({
   transcript?: readonly unknown[];
   transcriptRevision?: number;
   creativeCards?: React.ReactNode;
+  headerContext?: React.ReactNode;
   workflowDefinition?: WorkflowDefinition;
   workflows?: WorkflowChoice[];
   workflowLoadIssue?: string;
@@ -147,7 +149,6 @@ export function PromptAssistantUi({
   const [galleryAttachments, setGalleryAttachments] = useState<AssistantImageAttachment[]>(initialComposer.attachments);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [briefOpen, setBriefOpen] = useState(false);
-  const [composerHeight, setComposerHeight] = useState(154);
   const versionSheet = useRef<DraggableBottomSheetHandle>(null);
   const briefSheet = useRef<DraggableBottomSheetHandle>(null);
   const [brief, setBrief] = useState({ subject: '', camera: '', style: '', duration: '' });
@@ -175,8 +176,7 @@ export function PromptAssistantUi({
   const attachmentNames = useRef(new Map(initialComposer.attachments.map(item => [item.id, item.displayName ?? '图片1'])));
   const nextAttachmentNumber = useRef(1 + Math.max(0, ...initialComposer.attachments.map(item => imageReferenceOrdinal(item.displayName ?? '') ?? 0)));
   const insets = useSafeAreaInsets();
-  const { width, height, fontScale } = useWindowDimensions();
-  const compactActions = isCompactPromptLayout(width, fontScale);
+  const { width, height } = useWindowDimensions();
   const wide = width >= 900 && height >= 480;
   // AbstractAgent mutates its messages array when addMessage() is called. Do
   // not memoize by array identity or the first user bubble waits for the next
@@ -334,7 +334,7 @@ export function PromptAssistantUi({
       keyboardVerticalOffset={insets.top}
       enabled={isVisible && (wide || !historyOpen) && !renameOpen && !briefOpen && !versionsOpen && !mentionSheetOpen}
       // Keep resting space outside the padding controlled by keyboard avoidance.
-      style={[styles.root, { marginBottom: Math.max(insets.bottom, 8) }]}
+      style={styles.root}
     >
       <View style={styles.header}>
         <Pressable
@@ -349,14 +349,7 @@ export function PromptAssistantUi({
           />
         </Pressable>
         <View style={styles.headerTitleWrap}>
-          <Text style={styles.eyebrow}>创作助手</Text>
-          <Text style={styles.title} numberOfLines={1}>
-            {threads.find((item) => item.threadId === activeThreadId)
-              ? sessionTitle(
-                  threads.find((item) => item.threadId === activeThreadId)!,
-                )
-              : 'H3 创意工作台'}
-          </Text>
+          {headerContext ?? <Text style={styles.title} numberOfLines={1}>{threads.find(item=>item.threadId===activeThreadId)?sessionTitle(threads.find(item=>item.threadId===activeThreadId)!):'创作助手'}</Text>}
         </View>
         <Pressable
           accessibilityLabel="新建对话"
@@ -376,8 +369,7 @@ export function PromptAssistantUi({
             </View>
           ) : null}
           <ConversationTimeline
-            creativeCards={creativeCards}
-            bottomInset={composerHeight}
+            bottomInset={0}
             rows={rows}
             isRunning={isRunning || submitting}
             onExportPrompt={async (prompt, artifactId) => {
@@ -395,26 +387,16 @@ export function PromptAssistantUi({
             onRetry={onRetry}
             onSelectSuggestion={applySuggestion}
           />
-          <View pointerEvents="box-none" style={styles.composerDock} onLayout={({ nativeEvent }) => setComposerHeight(nativeEvent.layout.height)}>
-            <View pointerEvents="box-none" testID="composer-actions" style={styles.composerActions}>
-              <Pressable accessibilityRole="button" accessibilityLabel="补充创作信息" accessibilityState={{ expanded: briefOpen }} onPress={() => setBriefOpen(true)} style={({ pressed }) => [styles.composerAction, compactActions && styles.composerActionCompact, pressed && styles.composerActionPressed]}>
-                <AppIcon name="filter_list" size={18} color={LIGHT_PROMPT_COLORS.muted} />
-                <Text style={styles.composerActionText}>{compactActions ? '创作信息' : '补充创作信息'}</Text>
-                <AppIcon name="expand_more" size={16} color={LIGHT_PROMPT_COLORS.muted} />
-              </Pressable>
-              {versions.length ? <Pressable accessibilityRole="button" accessibilityLabel="打开 Prompt 版本" accessibilityState={{ expanded: versionsOpen }} onPress={() => setVersionsOpen(true)} style={({ pressed }) => [styles.composerAction, compactActions && styles.composerActionCompact, pressed && styles.composerActionPressed]}>
-                <AppIcon name="list_alt" size={18} color={LIGHT_PROMPT_COLORS.muted} />
-                <Text style={styles.composerActionText}>{compactActions ? '版本' : 'Prompt 版本'}</Text>
-                <Text style={styles.versionCount}>{versions.length}</Text>
-                <AppIcon name="expand_more" size={16} color={LIGHT_PROMPT_COLORS.muted} />
-              </Pressable> : null}
-            </View>
+          <View testID="conversation-composer-dock" style={styles.composerDock}>
+            {creativeCards}
             <Composer
               value={draft}
               onChangeText={handleDraftChange}
               onSubmit={handleSubmit}
               onOpenPicker={handleOpenPicker}
               onOpenMentionPicker={() => setMentionSheetOpen(true)}
+              onOpenBrief={()=>setBriefOpen(true)}
+              onOpenVersions={versions.length?()=>setVersionsOpen(true):undefined}
               onCancel={() => {
                 if (!isRunning) return;
                 agent.abortRun?.();
@@ -497,7 +479,6 @@ export function ConversationTimeline({
   runs = [],
   latestVersionMessageId,
   bottomInset = 0,
-  creativeCards,
 }: {
   rows: ReturnType<typeof normalizeMessages>;
   onResend?: () => Promise<void>;
@@ -511,7 +492,6 @@ export function ConversationTimeline({
   runs?: PromptRun[];
   latestVersionMessageId?: string;
   bottomInset?: number;
-  creativeCards?: React.ReactNode;
 }) {
   const listRef = useRef<FlatList<ReturnType<typeof projectRunTimeline>[number]>>(null);
   const [visibleCount, setVisibleCount] = useState(50);
@@ -590,7 +570,6 @@ export function ConversationTimeline({
           }
           ListFooterComponent={
             <View style={{ paddingBottom: bottomInset }}>
-            {creativeCards}
             {runIssue ? <RunIssueRow issue={runIssue} onRetry={runIssue.kind === 'submit' ? onResend ?? (async () => undefined) : onRetry} onDismiss={onDismissIssue} disabled={isRunning} /> : !runs.length && allRows.length > 0 && isRunning ? (
               <RunningIndicator compact />
             ) : null}
@@ -1074,6 +1053,8 @@ export function Composer({
   onSubmit,
   onOpenPicker,
   onOpenMentionPicker,
+  onOpenBrief,
+  onOpenVersions,
   onCancel,
   isRunning,
   submitting = false,
@@ -1088,6 +1069,8 @@ export function Composer({
   onSubmit: (value: string) => void;
   onOpenPicker: () => Promise<void>;
   onOpenMentionPicker?: () => void;
+  onOpenBrief?:()=>void;
+  onOpenVersions?:()=>void;
   onCancel: () => void;
   isRunning: boolean;
   submitting?: boolean;
@@ -1097,7 +1080,8 @@ export function Composer({
   selection?: { start: number; end: number };
   onSelectionChange?: (event: { nativeEvent: { selection: { start: number; end: number } } }) => void;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(false),[toolsOpen,setToolsOpen]=useState(false),[inputHeight,setInputHeight]=useState(40);
+  useEffect(()=>{if(!value)setInputHeight(40);},[value]);
   const [focused, setFocused] = useState(false);
   const insets = useSafeAreaInsets();
   const editorRef = useRef<TextInput>(null);
@@ -1145,53 +1129,12 @@ export function Composer({
         onOpenPicker={onOpenPicker}
         onRemoveAttachment={onRemoveAttachment}
       />
-      <View testID="composer-input-area" style={styles.inputArea}>
-        <TextInput
-          ref={inputRef}
-          value={value}
-          onChangeText={onChangeText}
-          accessibilityLabel="创作想法"
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          placeholder="描述你想生成的画面…"
-          placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder}
-          multiline
-          style={styles.input}
-          editable
-          scrollEnabled
-          textAlignVertical="top"
-          selection={selection}
-          onSelectionChange={onSelectionChange}
-        />
-        <Pressable accessibilityRole="button" accessibilityLabel="全屏编辑" accessibilityHint="展开编辑长文本" onPress={() => setEditing(true)} style={({ pressed }) => [styles.expandEditor, pressed && styles.composerActionPressed]}>
-          <AppIcon name="open_in_full" size={19} color={LIGHT_PROMPT_COLORS.muted} />
-        </Pressable>
-      </View>
       <View style={styles.composerRow}>
-        <Pressable
-          accessibilityLabel="添加图片附件"
-          onPress={() => void onOpenPicker()}
-          style={styles.addButton}
-        >
-          <AppIcon
-            name="add_photo_alternate"
-            size={19}
-            color={LIGHT_PROMPT_COLORS.ink}
-          />
-        </Pressable>
-        <Pressable
-          accessibilityLabel="引用图片附件"
-          onPress={onOpenMentionPicker}
-          style={styles.addButton}
-        >
-          <AppIcon
-            name="alternate_email"
-            size={19}
-            color={LIGHT_PROMPT_COLORS.ink}
-          />
-        </Pressable>
-        <View testID="composer-toolbar-spacer" style={styles.toolbarSpacer} />
-        {counter}
+        <Pressable accessibilityRole="button" accessibilityLabel="添加图片附件" onPress={()=>void onOpenPicker()} style={styles.addButton}><AppIcon name="add_photo_alternate" size={19} color={LIGHT_PROMPT_COLORS.ink}/></Pressable>
+        <View testID="composer-input-area" style={styles.inputArea}>
+          <TextInput ref={inputRef} value={value} onChangeText={onChangeText} accessibilityLabel="创作想法" onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} placeholder="发消息，开始创作…" placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder} multiline style={[styles.input,{height:inputHeight}]} onContentSizeChange={event=>setInputHeight(Math.max(40,Math.min(104,event.nativeEvent.contentSize.height)))} editable scrollEnabled textAlignVertical="top" selection={selection} onSelectionChange={onSelectionChange}/>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="更多创作操作" onPress={()=>{Keyboard.dismiss();setToolsOpen(true);}} style={styles.addButton}><AppIcon name="more_horiz" size={20} color={LIGHT_PROMPT_COLORS.muted}/></Pressable>
         <Pressable
           accessibilityLabel={isRunning ? '停止生成' : submitting ? '发送中' : '发送消息'}
           accessibilityState={{ disabled: !isRunning && disabled, busy: submitting }}
@@ -1211,6 +1154,17 @@ export function Composer({
           />}
         </Pressable>
       </View>
+      {counter}
+      <DraggableBottomSheet visible={toolsOpen} title="创作操作" onClose={()=>setToolsOpen(false)}>
+        <View testID="composer-actions" style={{gap:4}}>
+          {[
+            {label:'引用图片附件',action:onOpenMentionPicker},
+            {label:'补充创作信息',action:onOpenBrief},
+            {label:'打开 Prompt 版本',action:onOpenVersions},
+            {label:'全屏编辑',action:()=>setEditing(true)},
+          ].filter(item=>item.action).map(item=><Pressable key={item.label} accessibilityRole="button" accessibilityLabel={item.label} onPress={()=>{setToolsOpen(false);item.action?.();}} style={{minHeight:48,justifyContent:'center',paddingHorizontal:12}}><Text style={styles.composerActionText}>{item.label}</Text></Pressable>)}
+        </View>
+      </DraggableBottomSheet>
     </View>
   );
 }
