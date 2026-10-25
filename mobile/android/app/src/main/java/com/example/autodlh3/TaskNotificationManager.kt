@@ -100,7 +100,7 @@ class TaskNotificationManager(private val context: Context) {
       .build()
 
   private fun tasksIntent(requestCode: Int): PendingIntent {
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("autodlh3://tasks"), context, MainActivity::class.java)
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.APP_SCHEME}://tasks"), context, MainActivity::class.java)
       .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
     return PendingIntent.getActivity(context, requestCode, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
   }

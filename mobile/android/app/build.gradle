@@ -120,6 +120,8 @@ android {
             externalNativeBuild { cmake { arguments '-DCMAKE_OBJECT_PATH_MAX=240' } }
         }
         applicationId 'com.example.autodlh3'
+        manifestPlaceholders += [appLabel: '@string/app_name', appScheme: 'autodlh3']
+        buildConfigField "String", "APP_SCHEME", '"autodlh3"'
         // dev.jdtech.mpv:libmpv:1.0.0 declares and supports Android API 26+.
         minSdkVersion Math.max(26, rootProject.ext.minSdkVersion as int)
         targetSdkVersion rootProject.ext.targetSdkVersion
@@ -151,6 +153,16 @@ android {
             def enablePngCrunchInRelease = findProperty('android.enablePngCrunchInReleaseBuilds') ?: 'true'
             crunchPngs enablePngCrunchInRelease.toBoolean()
         }
+        beta {
+            initWith release
+            applicationIdSuffix '.beta'
+            versionNameSuffix '-beta'
+            manifestPlaceholders += [appLabel: 'AutoDL H3 测试版', appScheme: 'autodlh3-beta']
+            buildConfigField "String", "APP_SCHEME", '"autodlh3-beta"'
+            signingConfig signingConfigs.debug
+            matchingFallbacks = ['release']
+            debuggable false
+        }
     }
     packagingOptions {
         jniLibs {
@@ -164,7 +176,7 @@ android {
 }
 
 gradle.taskGraph.whenReady { graph ->
-    def releaseRequested = graph.allTasks.any { it.name.toLowerCase().contains('release') }
+    def releaseRequested = graph.allTasks.any { it.project == project && it.name.toLowerCase().contains('release') }
     if (releaseRequested && !releaseSigningConfigured) {
         throw new GradleException('Release signing requires AUTODL_UPLOAD_STORE_FILE, AUTODL_UPLOAD_STORE_PASSWORD, AUTODL_UPLOAD_KEY_ALIAS, and AUTODL_UPLOAD_KEY_PASSWORD')
     }
