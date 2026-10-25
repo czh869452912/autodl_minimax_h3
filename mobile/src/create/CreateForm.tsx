@@ -2,7 +2,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { settingsEvents } from '../settings/events';
 import { defaultDraftDependencies, defaultSubmissionDependencies, type CreateFormDraftDependencies, type CreateFormSubmissionDependencies } from './createServices';
 export type { CreateFormDraftDependencies, CreateFormSubmissionDependencies } from './createServices';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,7 +14,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import type { TaskMediaInput } from '../media/types';
 import { AppIcon } from '../ui/icons';
 import { COLORS, SPACING } from '../ui/theme';
@@ -86,20 +86,20 @@ export function CreateForm({
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [settingsNotice, setSettingsNotice] = useState('');
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let active = true;
     let revision = 0;
     const check = async () => {
       const current = ++revision;
       try {
-        const settings = await submissionDependencies.readSettings();
-        if (active && current === revision) setSettingsNotice(settings && !settings.token?.trim() ? '尚未连接 AutoDL，请在设置的创作账号中连接。' : '');
+        const ready = await submissionDependencies.readAccountReady();
+        if (active && current === revision) setSettingsNotice(!ready ? '尚未连接 AutoDL，请在设置的创作账号中连接。' : '');
       } catch { if (active && current === revision) setSettingsNotice('无法读取生成配置，请前往设置检查后重试。'); }
     };
     void check();
     const unsubscribe = settingsEvents.subscribe(() => { void check(); });
     return () => { active = false; unsubscribe(); };
-  }, [submissionDependencies]);
+  }, [submissionDependencies]));
   const scrollRef = useRef<ScrollView>(null);
   const mediaRef = useRef<View>(null);
   const [incomingPrompt, setIncomingPrompt] = useState('');
@@ -373,9 +373,7 @@ export function CreateForm({
         return;
       }
       setFieldErrors([]);
-      const settings = await submissionDependencies.readSettings();
-      if (!settings.token) throw new Error('请先在设置的创作账号中连接 AutoDL');
-      const task = await submissionDependencies.queue({ definition, activeRecord, inputSnapshot, images, audios, token: settings.token, foregroundTick, ...(acknowledgedDraft ? { handoffId: acknowledgedDraft } : {}) });
+      const task = await submissionDependencies.queue({ definition, activeRecord, inputSnapshot, images, audios, foregroundTick, ...(acknowledgedDraft ? { handoffId: acknowledgedDraft } : {}) });
       if (acknowledgedDraft) {
         setImages([]); setAudios([]);
         setWorkflowValues(current => ({ ...current, [inputField(definition, 'images')]: [], [inputField(definition, 'audios')]: [] }));
@@ -405,14 +403,14 @@ export function CreateForm({
       keyboardDismissMode="on-drag"
     >
       {incomingPrompt ? <View style={styles.card}><Text>收到新的提示词，请选择如何带入。当前编辑内容已保留。</Text>{(['替换','追加','取消'] as const).map(action => <Pressable key={action} accessibilityRole="button" disabled={submitting || switching} style={styles.mediaButton} onPress={() => { if (action !== '取消') { const field = definition ? inputField(definition, 'prompt') : 'prompt'; setWorkflowValues(current => ({ ...current, [field]: action === '追加' ? [String(current[field] ?? ''), incomingPrompt].filter(Boolean).join('\n') : incomingPrompt })); editRevision.current++; } setIncomingPrompt(''); }}><Text>{action}</Text></Pressable>)}</View> : null}
-      {catalogLoading ? <ActivityIndicator accessibilityLabel="正在加载工作流" /> : !definition && !loadError ? <Pressable accessibilityRole="button" onPress={() => router.navigate('/(tabs)/settings')} style={styles.mediaButton}><Text>暂无工作流，前往设置同步</Text></Pressable> : null}
+      {catalogLoading ? <ActivityIndicator accessibilityLabel="正在加载工作流" /> : !definition && !loadError ? <Pressable accessibilityRole="button" onPress={() => router.navigate({pathname:'/(tabs)/settings',params:{section:'workflows'}})} style={styles.mediaButton}><Text>暂无工作流，前往设置同步</Text></Pressable> : null}
       <Text style={styles.title}>生成视频</Text>
       <Text style={styles.subtitle}>
         {loadError ?? (definition ? '描述画面、选择素材，然后生成你的视频。' : '正在加载工作流…')}
       </Text>
       {loadError ? <Pressable accessibilityRole="button" accessibilityLabel="重试加载工作流" onPress={() => setCatalogRevision(value => value + 1)} style={styles.mediaButton}><Text style={styles.mediaText}>重试加载工作流</Text></Pressable> : null}
       {submitting || switching ? <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator /><Text style={styles.help}>{submitting ? '正在提交，参数暂时锁定…' : '正在切换工作流…'}</Text></View> : null}
-      {settingsNotice ? <View style={styles.card}><Text accessibilityRole="alert" style={styles.help}>{settingsNotice}</Text><Pressable accessibilityRole="button" accessibilityLabel="前往设置配置生成" style={styles.mediaButton} onPress={() => router.navigate('/(tabs)/settings')}><Text style={styles.mediaText}>前往设置</Text></Pressable></View> : null}
+      {settingsNotice ? <View style={styles.card}><Text accessibilityRole="alert" style={styles.help}>{settingsNotice}</Text><Pressable accessibilityRole="button" accessibilityLabel="前往设置配置生成" style={styles.mediaButton} onPress={() => router.navigate({pathname:'/(tabs)/settings',params:{section:'accounts'}})}><Text style={styles.mediaText}>前往设置</Text></Pressable></View> : null}
       <WorkflowSelector definitions={records.map(registryRecordToDefinition)} selectedId={definition?.id} onSelect={id => void selectWorkflow(id)} disabled={submitting || switching || picking || loadingDraft || awaitingDraft || Boolean(appliedDraft && acknowledgedDraft !== appliedDraft)} />
       {alignmentNotices.map((notice, index) => <Text key={index} style={styles.help}>{notice}</Text>)}
       {handoffNotice ? <Text accessibilityLiveRegion="polite" style={styles.help}>{handoffNotice}</Text> : null}

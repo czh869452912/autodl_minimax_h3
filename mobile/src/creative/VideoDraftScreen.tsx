@@ -1,5 +1,4 @@
-import {getDatabase} from '../storage/databaseClient';
-import {unknownTaskReviewed} from './taskRecovery';
+import {useWorkbenchJobPending} from './useWorkbenchJobPending';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {Alert,BackHandler,Image,Keyboard,KeyboardAvoidingView,Platform,Pressable,ScrollView,StyleSheet,Text,TextInput,View} from 'react-native';
 import {useFocusEffect,useRouter} from 'expo-router';
@@ -40,17 +39,20 @@ function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){
   const router=useRouter(),navigation=useNavigation();
   const [id,setId]=useState(initialId),[draft,setDraft]=useState<CreativeDraft>(),[resultDraft,setResultDraft]=useState<CreativeDraft>();
   const [input,setInput]=useState<WorkflowVideoInput>(),[baseline,setBaseline]=useState('');
-  const [entries,setEntries]=useState<VideoWorkflowEntry[]>([]),[entry,setEntry]=useState<VideoWorkflowEntry>(),[stale,setStale]=useState(false),[accountReady,setAccountReady]=useState(true);
+  const [entries,setEntries]=useState<VideoWorkflowEntry[]>([]),[entry,setEntry]=useState<VideoWorkflowEntry>(),[stale,setStale]=useState(false),[accountReady,setAccountReady]=useState(false);
   const [references,setReferences]=useState<MediaRow[]>([]),[assetIds,setAssetIds]=useState<string[]>([]);
   const [view,setView]=useState<'create'|'result'>('create'),[sheet,setSheet]=useState<Sheet>(),[picking,setPicking]=useState<'image'|'audio'>(),[assist,setAssist]=useState(false),[preview,setPreview]=useState<string>();
   const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[saving,setSaving]=useState(false),[status,setStatus]=useState('');
   const [undo,setUndo]=useState<WorkflowVideoInput>(),[undoDraft,setUndoDraft]=useState<string>(),[customDuration,setCustomDuration]=useState(false);
   const lock=useRef(false),switchLock=useRef(false),latest=useRef(input);latest.current=input;
   const initialized=useRef(false);
-  const [reviewedJob,setReviewedJob]=useState('');
-  useFocusEffect(useCallback(()=>{let active=true;setReviewedJob('');const jobId=resultDraft?.job_id;if(jobId)void unknownTaskReviewed(getDatabase(),jobId).then(reviewed=>{if(active)setReviewedJob(reviewed?jobId:'');}).catch(()=>undefined);return()=>{active=false;};},[resultDraft?.job_id,status]));
   const dirty=Boolean(input&&baseline&&JSON.stringify(input)!==baseline),definition=entry?.definition;
-  const pending=Boolean(resultDraft?.job_id&&(!status||['VALIDATING','READY_TO_SUBMIT','SUBMITTING','QUEUED','RUNNING'].includes(status)||status==='UNKNOWN'&&reviewedJob!==resultDraft?.job_id));
+  const pending=useWorkbenchJobPending(resultDraft?.job_id,status);
+  useFocusEffect(useCallback(()=>{
+    let active=true;setAccountReady(false);
+    void videoAccountReady().then(ready=>{if(active)setAccountReady(ready);}).catch(()=>{if(active)setAccountReady(false);});
+    return()=>{active=false;};
+  },[]));
   const editable=Boolean(draft&&input&&entry&&!stale&&!entry.reason&&!busy);
   const closePanel=useCallback(()=>{if(picking){setPicking(undefined);return true;}if(preview){setPreview(undefined);return true;}if(assist){setAssist(false);return true;}if(sheet){Keyboard.dismiss();setSheet(undefined);return true;}if(view==='result'){setView('create');return true;}return false;},[picking,preview,assist,sheet,view]);
   useFocusEffect(useCallback(()=>{const sub=BackHandler.addEventListener('hardwareBackPress',closePanel);return()=>sub.remove();},[closePanel]));
@@ -72,7 +74,6 @@ function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){
     const row=await creativeService().draft(id);if(!row)throw new Error('草稿不存在');
     const available=await listVideoWorkflows();if(canApply()){adopt(row);setEntries(available);}
     await install(row,available,canApply);
-    void videoAccountReady().then(value=>{if(canApply())setAccountReady(value);}).catch(()=>undefined);
   };
   const {conflict,reload,assertCurrent}=useDraftSync(id,draft,dirty,busy||saving,load,setError);
   useEffect(()=>{let active=true;if(draft)void creativeService().draftInputs(id).then(rows=>{if(active)setReferences(rows);}).catch(()=>{if(active)setError('参考素材读取失败');});return()=>{active=false;};},[id,draft?.revision]);

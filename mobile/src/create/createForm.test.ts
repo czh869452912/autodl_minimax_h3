@@ -16,7 +16,7 @@ import { LEGACY_DEFINITION_IDENTITY_V1 } from '../workflows/registry/identity';
 import { RegistryReleaseError } from '../workflows/registry/releaseManifest';
 
 jest.mock('../storage/databaseClient', () => ({ getDatabase: () => undefined }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ navigate: jest.fn() }) }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ navigate: jest.fn() }), useFocusEffect: (effect:()=>void)=>require('react').useEffect(effect,[effect]) }));
 jest.mock('expo-audio', () => ({ useAudioPlayer: () => ({}), useAudioPlayerStatus: () => ({}) }));
 
 const image: TaskMediaInput = { dataUri: 'data:image/png;base64,a', name: 'ref.png', mime: 'image/png' };
@@ -40,14 +40,11 @@ async function renderCreateForm(catalog: {
   listActive(): Promise<RegistryRecord[]>;
   getActive(workflowId: string): Promise<RegistryRecord | undefined>;
 }) {
-  const readSettings = jest.fn(async () => ({
-    token: '', llmEndpoint: '', llmModel: '', llmApiKey: '', llmTimeoutSeconds: '600',
-    llmMaxRetries: '2', autoExportToGallery: true, keepPrivateCopy: true,
-  }));
+  const readAccountReady = jest.fn(async () => true);
   let tree!: ReturnType<typeof create>;
   await act(async () => {
     tree = create(createElement(CreateForm, {
-      submissionDependencies: { catalog: catalog as never, readSettings, queue: jest.fn() },
+      submissionDependencies: { catalog: catalog as never, readAccountReady, queue: jest.fn() },
     }));
     await Promise.resolve();
     await Promise.resolve();
@@ -109,11 +106,8 @@ describe('create form contracts', () => {
       definitionJson: JSON.stringify(definition),
       installedAt: 1,
     };
-    const readSettings = jest.fn(async () => ({
-      token: 'token', llmEndpoint: 'https://api.example.test/v1', llmModel: 'model', llmApiKey: '',
-      llmTimeoutSeconds: '600', llmMaxRetries: '2', autoExportToGallery: true, keepPrivateCopy: true,
-    }));
-    const queue = jest.fn(async () => ({ id: 'task-1' }));
+    const readAccountReady = jest.fn(async () => true);
+    const queue = jest.fn(async (_input: unknown) => ({ id: 'task-1' }));
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const catalog = {
       bootstrap: jest.fn(async () => undefined),
@@ -122,13 +116,13 @@ describe('create form contracts', () => {
     };
     let tree!: ReturnType<typeof create>;
     await act(async () => {
-      tree = create(createElement(CreateForm, { submissionDependencies: { catalog, readSettings, queue } }));
+      tree = create(createElement(CreateForm, { submissionDependencies: { catalog, readAccountReady, queue } }));
       await Promise.resolve();
       await Promise.resolve();
     });
     // The mount-time readiness check is separate from submission validation.
-    expect(readSettings).toHaveBeenCalledTimes(1);
-    readSettings.mockClear();
+    expect(readAccountReady).toHaveBeenCalledTimes(1);
+    readAccountReady.mockClear();
     const promptInput = tree.root.findAllByType(TextInput).find((node) => node.props.multiline);
     expect(promptInput).toBeDefined();
     act(() => { promptInput?.props.onChangeText('a'.repeat(promptLength)); });
@@ -140,7 +134,8 @@ describe('create form contracts', () => {
     });
 
     expect(queue).toHaveBeenCalledTimes(expectedQueues);
-    expect(readSettings).toHaveBeenCalledTimes(expectedQueues);
+    expect(readAccountReady).not.toHaveBeenCalled();
+    if(expectedQueues)expect(queue.mock.calls[0][0]).not.toHaveProperty('token');
     if (expectedQueues === 0) {
       expect(alert).not.toHaveBeenCalled();
       expect(tree.root.findByType(WorkflowForm).props.errors).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'prompt' })]));

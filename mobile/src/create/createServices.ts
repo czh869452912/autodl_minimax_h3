@@ -1,7 +1,6 @@
 import { getDatabase } from '../storage/databaseClient';
 import { assertAppDatabaseWritable } from '../storage/database';
 import {defaultAutodlCredential} from '../creative/accountRuntime';
-import { readSettings } from '../settings/storage';
 import type { TaskMediaInput } from '../media/types';
 import { createPromptDraftStore } from '../handoff/promptDraft';
 import { materializePromptHandoff } from '../handoff/promptHandoff';
@@ -43,14 +42,13 @@ type CreateFormCatalog = {
 };
 export type CreateFormSubmissionDependencies = {
   catalog: CreateFormCatalog;
-  readSettings: typeof readSettings;
+  readAccountReady(): Promise<boolean>;
   queue(input: {
     definition: WorkflowDefinition;
     activeRecord: RegistryRecord;
     inputSnapshot: Record<string, unknown>;
     images: TaskMediaInput[];
     audios: TaskMediaInput[];
-    token: string;
     foregroundTick: () => void | Promise<unknown>;
     handoffId?: string;
   }): Promise<{ id: string }>;
@@ -62,7 +60,7 @@ export const defaultSubmissionDependencies: CreateFormSubmissionDependencies = {
     listActive: () => getWorkflowCatalog().listActive(),
     getActive: id => getWorkflowCatalog().getActive(id),
   },
-  readSettings: async()=>({...await readSettings(),token:(await defaultAutodlCredential())?.token??''}),
+  readAccountReady: async()=>Boolean(await defaultAutodlCredential()),
   async queue({ definition, activeRecord, inputSnapshot, images, audios, foregroundTick, handoffId }) {
     const database = getDatabase();
     const credential=await defaultAutodlCredential(database);

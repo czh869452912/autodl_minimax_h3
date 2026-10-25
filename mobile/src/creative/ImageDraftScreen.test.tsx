@@ -1,3 +1,6 @@
+jest.mock('../storage/databaseClient',()=>({getDatabase:()=>({})}));
+jest.mock('./taskRecovery',()=>({unknownTaskReviewed:async()=>mockReviewed}));
+let mockReviewed=false;
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { Alert, NativeModules, TextInput } from 'react-native';
@@ -24,7 +27,7 @@ jest.mock('expo-router/react-navigation', () => ({ useNavigation: () => ({}), us
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));
 
 beforeEach(() => {
-  jest.useFakeTimers(); jest.clearAllMocks();
+  jest.useFakeTimers(); jest.clearAllMocks();mockReviewed=false;
   mockDraft = { id: 'd', provider_id: 'novelai', state: 'EDITING', revision: 0, input_json: JSON.stringify(defaultNovelAiDraft) };
   mockPrevious=[];
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -185,6 +188,24 @@ test('an unknown submission stays on the canvas and blocks another generation', 
     expect(mockExecute).not.toHaveBeenCalled();
     expect(mockPrepare).not.toHaveBeenCalled();
   } finally { act(() => tree?.unmount()); }
+});
+
+test('a reviewed unknown image unlocks only a new explicit attempt and keeps its original result visible',async()=>{
+  mockReviewed=true;
+  mockDraft={...mockDraft,state:'SUBMITTED',job_id:'unknown-job',target_asset_id:'asset'};
+  let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<ImageDraftScreen id="d"/>);});
+    const results=()=>tree.root.findByType(require('./CreativeResults').CreativeResults);
+    await act(async()=>results().props.onJobStatus('UNKNOWN'));
+    expect(button(tree,'生成 1 张图片').props.disabled).toBe(false);
+    expect(JSON.stringify(tree.toJSON())).not.toContain('请核查原任务');
+    expect(mockPrepare).not.toHaveBeenCalled();
+    await act(async()=>button(tree,'生成 1 张图片').props.onPress());
+    expect(mockPrevious[0].job_id).toBe('unknown-job');
+    expect(mockExecute.mock.calls.filter(([command])=>command.name==='draft.copySubmitted')).toHaveLength(1);
+    expect(mockPrepare).toHaveBeenCalledTimes(1);
+  }finally{act(()=>tree?.unmount());}
 });
 
 test('compact settings retain batch size and Medium and one click submits the batch once',async()=>{

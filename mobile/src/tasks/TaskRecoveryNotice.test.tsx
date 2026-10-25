@@ -9,13 +9,13 @@ test('authentication repair and refresh are separate from retryable failures', (
   const settings = jest.fn(), refresh = jest.fn();
   let tree!: ReturnType<typeof create>;
   act(() => { tree = create(<TaskRecoveryNotice item={{ ...item, syncState: 'BLOCKED', syncErrorCode: 'AUTODL_STATUS_AUTH_401' }} busy={false} onSettings={settings} onRefresh={refresh} />); });
-  act(() => tree.root.findByProps({ accessibilityLabel: '修改 AutoDL 凭据' }).props.onPress());
+  act(() => tree.root.findByProps({ accessibilityLabel: '管理创作账号' }).props.onPress());
   expect(settings).toHaveBeenCalledTimes(1);
   expect(refresh).not.toHaveBeenCalled();
   act(() => tree.root.findByProps({ accessibilityLabel: '刷新同步' }).props.onPress());
   expect(refresh).toHaveBeenCalledTimes(1);
   act(() => tree.update(<TaskRecoveryNotice item={{ ...item, syncState: 'PENDING', syncError: 'offline', syncErrorCode: 'AUTODL_STATUS_NETWORK' }} busy={false} onSettings={settings} onRefresh={refresh} />));
-  expect(tree.root.findAllByProps({ accessibilityLabel: '修改 AutoDL 凭据' })).toHaveLength(0);
+  expect(tree.root.findAllByProps({ accessibilityLabel: '管理创作账号' })).toHaveLength(0);
   expect(tree.root.findAllByType(Text).some(node => String(node.props.children).includes('系统将稍后重试'))).toBe(true);
   act(() => tree.unmount());
 });
@@ -30,4 +30,25 @@ test('unknown submission opens recovery without pretending that a new task was s
   act(() => tree.root.findByProps({ accessibilityLabel: '核查与继续创作' }).props.onPress());
   expect(replace).toHaveBeenCalledWith(item.id);
   act(() => tree.unmount());
+});
+
+test('an unknown NovelAI image points to its own result and consumption records',()=>{
+  const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>undefined);
+  let tree!:ReturnType<typeof create>;
+  act(()=>{tree=create(<TaskRecoveryNotice item={{...item,status:'UNKNOWN',adapterId:'novelai-image'}} busy={false}/>);});
+  act(()=>tree.root.findByProps({accessibilityLabel:'核查原任务'}).props.onPress());
+  expect(alert.mock.calls[0][1]).toContain('NovelAI 消费记录');
+  expect(JSON.stringify(alert.mock.calls)).not.toContain('AutoDL');
+  expect(alert.mock.calls[0][2]?.map(button=>button.text)).toContain('打开 NovelAI');
+  act(()=>tree.unmount());
+});
+
+test('an additional provider never inherits AutoDL recovery links',()=>{
+  const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>undefined);
+  let tree!:ReturnType<typeof create>;
+  act(()=>{tree=create(<TaskRecoveryNotice item={{...item,status:'UNKNOWN',adapterId:'extra-video'}} busy={false}/>);});
+  act(()=>tree.root.findByProps({accessibilityLabel:'核查原任务'}).props.onPress());
+  expect(JSON.stringify(alert.mock.calls)).not.toContain('AutoDL');
+  expect(alert.mock.calls[0][2]).toHaveLength(2);
+  act(()=>tree.unmount());
 });

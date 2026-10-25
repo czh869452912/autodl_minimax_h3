@@ -14,7 +14,7 @@ import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { Directory, File, Paths } from 'expo-file-system';
 
 jest.mock('../storage/databaseClient', () => ({ getDatabase: () => undefined }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ navigate: jest.fn() }) }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ navigate: jest.fn() }), useFocusEffect: (effect:()=>void)=>require('react').useEffect(effect,[effect]) }));
 jest.mock('expo-audio', () => ({ useAudioPlayer: () => ({}), useAudioPlayerStatus: () => ({}) }));
 jest.mock('../ui/icons', () => ({ AppIcon: () => null }));
 
@@ -37,7 +37,7 @@ function setup(value: PromptDraft = draft) {
   const definition = builtinWorkflowDefinitions[1];
   const active: RegistryRecord = { workflowId: definition.id, version: definition.version, definitionJson: JSON.stringify(definition), contentHash: 'hash', hashScheme: 'workflow-package/without-declared-hash+sorted-json@1', source: 'builtin', trust: 'builtin', installedAt: 1 } as const;
   const queue = jest.fn(async () => ({ id: 'task1' }));
-  const submissionDependencies = { catalog: { bootstrap: async () => undefined, listActive: async () => [active], getActive: async () => active }, queue, readSettings: jest.fn() };
+  const submissionDependencies = { catalog: { bootstrap: async () => undefined, listActive: async () => [active], getActive: async () => active }, queue, readAccountReady: jest.fn(async()=>true) };
   return { rows, consume, discard, drafts, queue, submissionDependencies };
 }
 const text = (tree: ReturnType<typeof create>) => tree.root.findAllByType(Text).map((node) => node.props.children).flat(Infinity).join(' ');
@@ -233,7 +233,7 @@ it('reapplies a retained handoff after an edit conflict and can explicitly disca
 
 it('reopens an applied handoff and carries its owner identity into task submission', async () => {
   const context = setup();
-  context.submissionDependencies.readSettings.mockResolvedValue({ token: 'token' });
+  context.submissionDependencies.readAccountReady.mockResolvedValue(true);
   let tree!: ReturnType<typeof create>;
   await act(async () => { tree = create(<CreateForm draftId="d1" draftDependencies={context.drafts} submissionDependencies={context.submissionDependencies} />); });
   act(() => tree.unmount());
@@ -259,12 +259,12 @@ it('saves edits to an applied form and restores them after leaving and reopening
 test('missing token is surfaced before submission and clears after settings are saved', async () => {
   const { settingsEvents } = require('../settings/events');
   const context = setup();
-  context.submissionDependencies.readSettings.mockResolvedValue({ token: '' });
+  context.submissionDependencies.readAccountReady.mockResolvedValue(false);
   let tree!: ReturnType<typeof create>;
   await act(async () => { tree = create(<CreateForm submissionDependencies={context.submissionDependencies} draftDependencies={context.drafts} />); });
   expect(tree.root.findByProps({ accessibilityLabel: '前往设置配置生成' })).toBeDefined();
   expect(context.queue).not.toHaveBeenCalled();
-  context.submissionDependencies.readSettings.mockResolvedValue({ token: 'configured' });
+  context.submissionDependencies.readAccountReady.mockResolvedValue(true);
   await act(async () => settingsEvents.publish());
   expect(tree.root.findAllByProps({ accessibilityLabel: '前往设置配置生成' })).toHaveLength(0);
   const button = tree.root.findByProps({ accessibilityLabel: '提交 AutoDL 任务生成' });

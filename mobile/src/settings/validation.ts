@@ -10,7 +10,6 @@ export class SettingsValidationError extends Error {
 export function prepareSettingsForSave(values: AppSettings, options: { allowInsecureLocalhost?: boolean } = {}): AppSettings {
   const normalized = {
     ...(values.videoDecodeMode !== undefined ? { videoDecodeMode: values.videoDecodeMode } : {}),
-    token: values.token.trim(),
     llmEndpoint: values.llmEndpoint.trim().replace(/\/$/, ''),
     llmModel: values.llmModel.trim(),
     llmApiKey: values.llmApiKey.trim(),

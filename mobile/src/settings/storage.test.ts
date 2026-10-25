@@ -9,9 +9,8 @@ jest.mock('expo-secure-store', () => ({
 describe('local LLM settings', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('reads only app token and LLM configuration, with no agent runtime fields', async () => {
-    (SecureStore.getItemAsync as jest.Mock).mockResolvedValueOnce('autodl-token')
-      .mockResolvedValueOnce('https://api.example.test/v1')
+  it('reads preferences without touching the legacy generation token', async () => {
+    (SecureStore.getItemAsync as jest.Mock).mockResolvedValueOnce('https://api.example.test/v1')
       .mockResolvedValueOnce('h3-model')
       .mockResolvedValueOnce('llm-key')
       .mockResolvedValueOnce('900')
@@ -19,7 +18,6 @@ describe('local LLM settings', () => {
 
     await expect(readSettings()).resolves.toEqual({
       videoDecodeMode: 'auto',
-      token: 'autodl-token',
       llmEndpoint: 'https://api.example.test/v1',
       llmModel: 'h3-model',
       llmApiKey: 'llm-key',
@@ -28,6 +26,7 @@ describe('local LLM settings', () => {
       autoExportToGallery: true,
       keepPrivateCopy: true,
     });
+    expect(SecureStore.getItemAsync).not.toHaveBeenCalledWith('autodl.token');
   });
 
   it('uses safe network defaults for existing installations', async () => {

@@ -5,7 +5,6 @@ import type { ReasoningEffort } from '../config/llmReasoning';
 import { DEFAULT_LLM_ADVANCED_SETTINGS } from '../config/llmDefaults';
 
 const keys = {
-  token: 'autodl.token',
   llmEndpoint: 'llm.endpoint',
   llmModel: 'llm.model',
   llmApiKey: 'llm.apiKey',
@@ -21,7 +20,6 @@ const keys = {
 
 export type AppSettings = {
   videoDecodeMode?: VideoDecodeMode;
-  token: string;
   llmEndpoint: string;
   llmModel: string;
   llmApiKey: string;
@@ -35,12 +33,11 @@ export type AppSettings = {
 };
 
 export async function readSettings(): Promise<AppSettings> {
-  const [token, llmEndpoint, llmModel, llmApiKey, llmTimeoutSeconds, llmMaxRetries, autoExportToGallery, keepPrivateCopy, llmContextWindowTokens, llmMaxOutputTokens, llmReasoningEffort, videoDecodeMode] = await Promise.all(
+  const [llmEndpoint, llmModel, llmApiKey, llmTimeoutSeconds, llmMaxRetries, autoExportToGallery, keepPrivateCopy, llmContextWindowTokens, llmMaxOutputTokens, llmReasoningEffort, videoDecodeMode] = await Promise.all(
     Object.values(keys).map((key) => SecureStore.getItemAsync(key)),
   );
   return {
     videoDecodeMode: normalizeVideoDecodeMode(videoDecodeMode),
-    token: token ?? '',
     llmEndpoint: llmEndpoint || 'https://api.openai.com/v1',
     llmModel: llmModel || 'gpt-4o-mini',
     llmApiKey: llmApiKey ?? '',
@@ -57,7 +54,6 @@ export async function readSettings(): Promise<AppSettings> {
 export async function saveSettings(values: Partial<AppSettings>): Promise<void> {
   await Promise.all([
     values.videoDecodeMode === undefined ? undefined : SecureStore.setItemAsync(VIDEO_DECODE_MODE_KEY, normalizeVideoDecodeMode(values.videoDecodeMode)),
-    values.token === undefined ? undefined : SecureStore.setItemAsync(keys.token, values.token),
     values.llmEndpoint === undefined ? undefined : SecureStore.setItemAsync(keys.llmEndpoint, values.llmEndpoint),
     values.llmModel === undefined ? undefined : SecureStore.setItemAsync(keys.llmModel, values.llmModel),
     values.llmApiKey === undefined ? undefined : SecureStore.setItemAsync(keys.llmApiKey, values.llmApiKey),

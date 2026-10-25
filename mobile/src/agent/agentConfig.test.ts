@@ -2,7 +2,7 @@ import { applyAgentSettings, toH3AgentConfig } from './agentConfig';
 
 it('maps editable token budgets and reasoning strength into the model configuration', () => {
   expect(toH3AgentConfig({
-    token: 'autodl', llmApiKey: 'key', llmEndpoint: 'https://api.deepseek.com/v1', llmModel: 'deepseek-v4-flash',
+    llmApiKey: 'key', llmEndpoint: 'https://api.deepseek.com/v1', llmModel: 'deepseek-v4-flash',
     llmTimeoutSeconds: '600', llmMaxRetries: '2', llmContextWindowTokens: '65536', llmMaxOutputTokens: '16384',
     llmReasoningEffort: 'max', autoExportToGallery: true, keepPrivateCopy: true,
   })).toMatchObject({ contextWindowTokens: 65536, maxOutputTokens: 16384, reasoningEffort: 'max' });
@@ -10,7 +10,6 @@ it('maps editable token budgets and reasoning strength into the model configurat
 
 it('maps secure settings into the local harness configuration', () => {
   expect(toH3AgentConfig({
-    token: 'autodl',
     llmApiKey: 'key',
     llmEndpoint: 'https://llm.example/v1',
     llmModel: 'model',
@@ -23,7 +22,6 @@ it('maps secure settings into the local harness configuration', () => {
 
 it('clears a stale screen error when settings are loaded successfully', () => {
   expect(applyAgentSettings({ config: null, error: 'Cannot read property includes' }, {
-    token: 'autodl',
     llmApiKey: 'key',
     llmEndpoint: 'https://llm.example/v1',
     llmModel: 'model',

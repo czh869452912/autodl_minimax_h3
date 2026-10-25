@@ -11,6 +11,7 @@ import { creativeUI as s } from '../../src/creative/creativeUI';
 import { TextAction as ListAction } from '../../src/creative/WorkbenchUI';
 import {acknowledgeUnknownTask,unknownTaskReviewed} from '../../src/creative/taskRecovery';
 import { getTaskServices } from '../../src/tasks/taskServices';
+import { taskProviderPresentation } from '../../src/tasks/providerPresentation';
 
 export default function CreativeTask() {
   const { id, returnToWorkbench } = useLocalSearchParams<{ id: string; returnToWorkbench?:string }>();
@@ -21,6 +22,7 @@ export default function CreativeTask() {
   const [notice, setNotice] = useState('');
   const [reviewed,setReviewed]=useState(false);
   const [busy,setBusy]=useState(false);
+  const provider=taskProviderPresentation(job?.adapterId);
   const returnToDraft=()=>{if(!draft)return;if(returnToWorkbench==='1'&&router.canGoBack())router.back();else router.replace({pathname:draft.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:draft.id}});};
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -44,9 +46,9 @@ export default function CreativeTask() {
       {job.error || job.lastError ? <Text style={s.error}>{/^(PROVIDER_SUBMIT_UNKNOWN|SUBMIT_OUTCOME_UNKNOWN)$/.test(job.lastError?.code??job.error?.code??'')?'上一次提交未取得确认，暂时无法判断服务端是否已受理。':job.error?.message ?? job.lastError?.message}</Text> : null}
       {job.providerHandle?<Text selectable style={s.muted}>服务端任务：{String(job.providerHandle.providerJobId??'已接收')}</Text>:null}
       {job.status==='UNKNOWN'?<>
-        <Text style={s.muted}>{job.providerHandle?'原任务可能仍在执行，可同步状态并对照服务端记录。':'未取得服务端任务编号，无法自动查询；请按生成时间和提示词在 AutoDL 核查原记录。'}</Text>
-        {draft?.provider_id==='autodl'?<ListAction label="打开 AutoDL 核查" onPress={()=>void Linking.openURL('https://autodl.art').catch(()=>setError('无法打开 AutoDL，请在浏览器核查任务记录'))}/>:null}
-        {draft?.provider_id==='autodl'&&!reviewed?<ListAction label="已核查，解除本次等待" disabled={busy} onPress={()=>Alert.alert('继续新的尝试？','请确认已核查 AutoDL 原任务。原任务结果和消费记录会保留；继续创作可能产生新的费用。本操作只解除工作台等待，生成仍需你点击。',[{text:'继续核查',style:'cancel'},{text:'已核查，继续创作',onPress:()=>{setBusy(true);void acknowledgeUnknownTask(getDatabase(),id).then(()=>{setReviewed(true);setNotice('已解除工作台等待，原任务记录已保留');}).catch(e=>setError(e.message)).finally(()=>setBusy(false));}}])}/>:null}
+        <Text style={s.muted}>{job.providerHandle?'原任务可能仍在执行，可同步状态并对照服务端记录。':provider.reviewHint}</Text>
+        {provider.reviewUrl?<ListAction label={`打开 ${provider.name} 核查`} onPress={()=>void Linking.openURL(provider.reviewUrl!).catch(()=>setError(`无法打开 ${provider.name}，请在浏览器核查生成记录`))}/>:null}
+        {draft&&!reviewed?<ListAction label="已核查，解除本次等待" disabled={busy} onPress={()=>Alert.alert('继续新的尝试？',`请确认已核查 ${provider.name} 原任务。原任务结果和消费记录会保留；继续创作可能产生新的费用。本操作只解除工作台等待，生成仍需你点击。`,[{text:'继续核查',style:'cancel'},{text:'已核查，继续创作',onPress:()=>{setBusy(true);void acknowledgeUnknownTask(getDatabase(),id).then(()=>{setReviewed(true);setNotice('已解除工作台等待，原任务记录已保留');}).catch(e=>setError(e.message)).finally(()=>setBusy(false));}}])}/>:null}
         {reviewed?<Text style={s.muted}>已完成本次核查，可返回工作台调整输入并重新生成。原任务结果仍待确认。</Text>:null}
       </>:null}
       {job.providerHandle&&!['SUCCEEDED','PARTIAL_SUCCEEDED','FAILED','CANCELLED'].includes(job.status)?<ListAction label="同步任务状态" onPress={()=>void getTaskServices().taskCommandService.requestRefresh({maintenance:'force-next-slice'}).then(()=>setNotice('已请求查询，不会重新生成')).catch(e=>setError(e.message))}/>:null}

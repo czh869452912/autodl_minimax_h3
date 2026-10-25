@@ -11,7 +11,6 @@ jest.mock('expo-secure-store', () => ({
 }));
 jest.mock('../settings/storage', () => ({
   readSettings: jest.fn(async () => ({
-    token: '',
     llmEndpoint: 'https://api.openai.com/v1',
     llmModel: 'gpt-4o-mini',
     llmApiKey: '',
@@ -49,7 +48,7 @@ it('shows diagnostic information only while its switch is enabled', async () => 
 });
 
 it('resets none when switching to an OpenAI model that cannot disable reasoning', async () => {
-  jest.mocked(readSettings).mockResolvedValueOnce({ token: '', llmEndpoint: 'https://api.openai.com/v1', llmModel: 'gpt-5.1', llmApiKey: 'key', llmReasoningEffort: 'none', llmTimeoutSeconds: '600', llmMaxRetries: '2', autoExportToGallery: true, keepPrivateCopy: true });
+  jest.mocked(readSettings).mockResolvedValueOnce({ llmEndpoint: 'https://api.openai.com/v1', llmModel: 'gpt-5.1', llmApiKey: 'key', llmReasoningEffort: 'none', llmTimeoutSeconds: '600', llmMaxRetries: '2', autoExportToGallery: true, keepPrivateCopy: true });
   let tree!: ReturnType<typeof create>;
   try {
     await act(async () => { tree = create(<SettingsScreen />); });
@@ -104,7 +103,7 @@ describe('Prompt assistant advanced LLM settings', () => {
 });
 
 it('edits and saves DeepSeek effort and output budget, and restores advanced defaults only', async () => {
-  jest.mocked(readSettings).mockResolvedValueOnce({ token: 'keep-token', llmEndpoint: 'https://api.deepseek.com', llmModel: 'deepseek-v4-flash', llmApiKey: 'keep-key', llmTimeoutSeconds: '600', llmMaxRetries: '2', autoExportToGallery: true, keepPrivateCopy: true });
+  jest.mocked(readSettings).mockResolvedValueOnce({ llmEndpoint: 'https://api.deepseek.com', llmModel: 'deepseek-v4-flash', llmApiKey: 'keep-key', llmTimeoutSeconds: '600', llmMaxRetries: '2', autoExportToGallery: true, keepPrivateCopy: true });
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   let tree!: ReturnType<typeof create>;
   try {
@@ -174,7 +173,7 @@ test('does not overwrite edits made while an earlier snapshot is saving', async 
 });
 
 
-it.each(['{broken', '{"token":42}', '{"futureSetting":"new"}'])('isolates an unreadable draft (%s) and allows recovery without blocking saved settings', async raw => {
+it.each(['{broken', '{"llmApiKey":42}', '{"futureSetting":"new"}'])('isolates an unreadable draft (%s) and allows recovery without blocking saved settings', async raw => {
   mockSection='assistant';
   const secure = require('expo-secure-store');
   secure.getItemAsync.mockResolvedValueOnce(raw);

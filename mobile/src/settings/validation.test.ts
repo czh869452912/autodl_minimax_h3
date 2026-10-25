@@ -3,7 +3,6 @@ import { prepareSettingsForSave } from './validation';
 describe('settings validation before secure persistence', () => {
   it('rejects a model identifier entered in the API address field', () => {
     expect(() => prepareSettingsForSave({
-      token: '',
       llmEndpoint: 'deepseek-v4-flash-vision-exp',
       llmModel: 'deepseek-v4-flash',
       llmApiKey: 'test-key',
@@ -16,7 +15,6 @@ describe('settings validation before secure persistence', () => {
 
   it('normalizes a valid OpenAI-compatible configuration', () => {
     expect(prepareSettingsForSave({
-      token: ' token ',
       llmEndpoint: ' https://api.deepseek.com/ ',
       llmModel: ' deepseek-v4-flash-vision-exp ',
       llmApiKey: ' test-key ',
@@ -25,7 +23,6 @@ describe('settings validation before secure persistence', () => {
       autoExportToGallery: false,
       keepPrivateCopy: true,
     })).toEqual({
-      token: 'token',
       llmEndpoint: 'https://api.deepseek.com',
       llmModel: 'deepseek-v4-flash-vision-exp',
       llmApiKey: 'test-key',
@@ -38,7 +35,7 @@ describe('settings validation before secure persistence', () => {
 
   it('rejects cleartext and local-network LLM endpoints in production', () => {
     const validSettings = {
-      token: '', llmModel: 'model', llmApiKey: 'key', llmTimeoutSeconds: '600', llmMaxRetries: '2',
+      llmModel: 'model', llmApiKey: 'key', llmTimeoutSeconds: '600', llmMaxRetries: '2',
       autoExportToGallery: true, keepPrivateCopy: true,
     };
     for (const llmEndpoint of ['http://api.example.test/v1', 'https://localhost/v1', 'https://192.168.1.2/v1']) {
@@ -48,7 +45,7 @@ describe('settings validation before secure persistence', () => {
 
   it('allows a localhost exception only for debug tooling', () => {
     const value = prepareSettingsForSave({
-      token: '', llmEndpoint: 'http://localhost:11434/v1', llmModel: 'model', llmApiKey: 'key',
+      llmEndpoint: 'http://localhost:11434/v1', llmModel: 'model', llmApiKey: 'key',
       llmTimeoutSeconds: '600', llmMaxRetries: '2', autoExportToGallery: true, keepPrivateCopy: true,
     }, { allowInsecureLocalhost: true });
     expect(value.llmEndpoint).toBe('http://localhost:11434/v1');
@@ -61,7 +58,6 @@ describe('settings validation before secure persistence', () => {
     ['600', '-1', 'LLM 最大重试次数必须是 0–5 之间的整数'],
   ])('rejects invalid network controls (%s, %s)', (timeout, retries, message) => {
     expect(() => prepareSettingsForSave({
-      token: '',
       llmEndpoint: 'https://api.example.test/v1',
       llmModel: 'model',
       llmApiKey: 'key',
@@ -74,7 +70,7 @@ describe('settings validation before secure persistence', () => {
 });
 
 const advancedSettings = {
-  token: '', llmEndpoint: 'https://api.deepseek.com', llmModel: 'deepseek-v4-flash', llmApiKey: 'key',
+  llmEndpoint: 'https://api.deepseek.com', llmModel: 'deepseek-v4-flash', llmApiKey: 'key',
   llmTimeoutSeconds: '600', llmMaxRetries: '2', autoExportToGallery: true, keepPrivateCopy: true,
 };
 it('rejects a saved unsupported OpenAI effort and preserves a supported none value', () => {

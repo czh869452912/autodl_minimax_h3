@@ -1,6 +1,6 @@
 jest.mock('../storage/databaseClient',()=>({getDatabase:()=>({})}));
 jest.mock('./taskRecovery',()=>({unknownTaskReviewed:async()=>mockReviewed}));
-let mockReviewed=false;
+let mockReviewed=false,mockAccountReady=true,mockFocus=0;
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { VideoDraftScreen } from './VideoDraftScreen';
@@ -18,7 +18,7 @@ let mockDraft:any,mockPrevious:any[]=[],mockEntries:any[]=[];
 const mockPrepare=jest.fn(async()=>({})),mockConfirm=jest.fn(async()=>{mockDraft={...mockDraft,state:'SUBMITTED',job_id:'video-job',target_asset_id:'asset'};});
 jest.mock('./runtime', () => ({ creativeService: () => ({ draft: async (id:string) => [mockDraft,...mockPrevious].find(row=>row.id===id), drafts:async()=>[mockDraft,...mockPrevious], draftInputs: async () => [], execute: mockExecute }), importCreativeImage: (...args: any[]) => mockImport(...args), creativeFiles: () => ({ verify: jest.fn(),read:async()=>({mime:'image/png'}) }) }));
 jest.mock('./videoWorkbenchWorkflows',()=>({
-  listVideoWorkflows:async()=>mockEntries,videoAccountReady:async()=>true,rememberVideoWorkflow:async()=>undefined,
+  listVideoWorkflows:async()=>mockEntries,videoAccountReady:async()=>mockAccountReady,rememberVideoWorkflow:async()=>undefined,
   resolveVideoWorkbench:async(row:any)=>{
     const entry=mockEntries.find(item=>item.record.workflowId===row.workflow_id),raw=JSON.parse(row.input_json);
     if(!entry)throw new Error('工作流不可用');
@@ -32,10 +32,31 @@ jest.mock('./CreativeResults', () => ({ CreativeResults: () => null }));
 jest.mock('./CreativeAccountPanel', () => ({ CreativeAccountPanel: () => null }));
 jest.mock('./DraftHeading', () => ({ DraftHeading: () => null }));
 jest.mock('./CopySubmittedDraft', () => ({ CopySubmittedDraft: () => null }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn,mockFocus]) }));
 jest.mock('expo-router/react-navigation', () => ({ useNavigation: () => ({}), usePreventRemove: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));
-beforeEach(()=>{jest.clearAllMocks();mockReviewed=false;mockPrevious=[];const definition=require('../workflows/definitions/autodl/minimax-h3-i2v-15s-v1.0.1.json');mockEntries=[{definition,record:{workflowId:definition.id,version:definition.version,contentHash:'hash'},reason:''}];mockDraft={id:'d',provider_id:'autodl',workflow_id:definition.id,state:'EDITING',revision:1,project_id:null,shot_id:null,target_asset_id:null,input_json:JSON.stringify({schemaVersion:1,prompt:'',resolution:RESOLUTION_OPTIONS[0],duration:5,seed:''})};});
+beforeEach(()=>{jest.clearAllMocks();mockReviewed=false;mockAccountReady=true;mockFocus=0;mockPrevious=[];const definition=require('../workflows/definitions/autodl/minimax-h3-i2v-15s-v1.0.1.json');mockEntries=[{definition,record:{workflowId:definition.id,version:definition.version,contentHash:'hash'},reason:''}];mockDraft={id:'d',provider_id:'autodl',workflow_id:definition.id,state:'EDITING',revision:1,project_id:null,shot_id:null,target_asset_id:null,input_json:JSON.stringify({schemaVersion:1,prompt:'',resolution:RESOLUTION_OPTIONS[0],duration:5,seed:''})};});
+
+test('returning from account settings rechecks readiness even when the draft is unchanged',async()=>{
+  mockAccountReady=false;
+  let tree!:ReturnType<typeof create>;
+  const generate=()=>tree.root.findAll(n=>n.props.accessibilityLabel==='生成视频'&&typeof n.props.onPress==='function')[0];
+  try{
+    await act(async()=>{tree=create(<VideoDraftScreen id="d"/>);});
+    const prompt=tree.root.findAllByType(TextInput).find(n=>n.props.accessibilityLabel==='视频镜头提示词')!;
+    act(()=>prompt.props.onChangeText('A camera pan'));
+    expect(generate().props.disabled).toBe(true);
+    mockAccountReady=true;mockFocus++;
+    await act(async()=>tree.update(<VideoDraftScreen id="d"/>));
+    expect(generate().props.disabled).toBe(false);
+    expect(tree.root.findAll(n=>n.props.accessibilityLabel==='连接 AutoDL 创作账号')).toHaveLength(0);
+    expect(mockPrepare).not.toHaveBeenCalled();expect(mockConfirm).not.toHaveBeenCalled();
+    mockAccountReady=false;mockFocus++;
+    await act(async()=>tree.update(<VideoDraftScreen id="d"/>));
+    expect(generate().props.disabled).toBe(true);
+    expect(tree.root.findAllByType(TextInput).find(n=>n.props.accessibilityLabel==='视频镜头提示词')?.props.value).toBe('A camera pan');
+  }finally{act(()=>tree?.unmount());}
+});
 
 test('reference import locks duplicate taps and editing until picker cancellation', async () => {
   let release!: (images: unknown[]) => void;

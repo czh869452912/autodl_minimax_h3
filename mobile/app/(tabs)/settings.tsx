@@ -35,7 +35,7 @@ export default function SettingsScreen() {
     // below the tabs' top SafeAreaView. Recheck after keyboard layout settles.
     if (focused) scrollRef.current?.scrollResponderScrollNativeHandleToKeyboard(focused, insets.top + 16, true);
   };
-  const [values, setValues] = useState<Settings>({ ...advancedDefaults, token: '', llmEndpoint: 'https://api.openai.com/v1', llmModel: 'gpt-4o-mini', llmApiKey: '', autoExportToGallery: true, keepPrivateCopy: true });
+  const [values, setValues] = useState<Settings>({ ...advancedDefaults, llmEndpoint: 'https://api.openai.com/v1', llmModel: 'gpt-4o-mini', llmApiKey: '', autoExportToGallery: true, keepPrivateCopy: true });
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof Settings, string>>>({});
   const [saving, setSaving] = useState(false);
   const saveLock = useRef(false);
@@ -50,7 +50,7 @@ export default function SettingsScreen() {
   useEffect(() => {
     let active = true;
     setLoadError(false); setDraftReadError(false);
-    void Promise.all([readSettings(), readSettingsDraft().catch(() => { if (active) setDraftReadError(true); return undefined; })]).then(([saved, draft]) => { if (active) { const next = { ...advancedDefaults, ...saved,token:'' }; setValues(next); setBaseline(next); setPendingDraft(draft?{...draft,token:''}:undefined); } }).catch(() => { if (active) setLoadError(true); });
+    void Promise.all([readSettings(), readSettingsDraft().catch(() => { if (active) setDraftReadError(true); return undefined; })]).then(([saved, draft]) => { if (active) { const next = { ...advancedDefaults, ...saved }; setValues(next); setBaseline(next); setPendingDraft(draft); } }).catch(() => { if (active) setLoadError(true); });
     return () => { active = false; };
   }, [loadAttempt]);
   useEffect(() => {
@@ -69,10 +69,9 @@ export default function SettingsScreen() {
     saveLock.current = true; setSaving(true);
     try {
       const prepared = prepareSettingsForSave(values); setFieldErrors({});
-      const {token:_,...preferences}=prepared;
-      await saveSettings(preferences);
+      await saveSettings(prepared);
       setValues(current => current === values ? prepared : current); setBaseline(prepared);
-    } catch (error) { if (error instanceof SettingsValidationError) { setFieldErrors(Object.fromEntries(error.fields.map(field => [field, error.message]))); setAdvancedOpen(true); setActiveSection(error.fields.some(field => field.startsWith('llm')) ? 'assistant' : error.fields.includes('token') ? 'accounts' : 'storage'); } else Alert.alert('保存失败', error instanceof Error ? error.message : '无法保存设置'); }
+    } catch (error) { if (error instanceof SettingsValidationError) { setFieldErrors(Object.fromEntries(error.fields.map(field => [field, error.message]))); setAdvancedOpen(true); setActiveSection(error.fields.some(field => field.startsWith('llm')) ? 'assistant' : 'storage'); } else Alert.alert('保存失败', error instanceof Error ? error.message : '无法保存设置'); }
     finally { saveLock.current = false; setSaving(false); }
   };
   if (!baseline) return <View style={styles.container}>{loadError ? <Pressable accessibilityRole="button" accessibilityLabel="重试读取设置" onPress={() => setLoadAttempt(value => value + 1)} style={styles.saveButton}><Text style={styles.saveText}>设置读取失败，点击重试</Text></Pressable> : <ActivityIndicator accessibilityLabel="正在读取设置" />}</View>;
