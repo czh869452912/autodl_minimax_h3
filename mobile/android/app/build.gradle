@@ -156,7 +156,7 @@ android {
         beta {
             initWith release
             applicationIdSuffix '.beta'
-            versionNameSuffix '-beta.2'
+            versionNameSuffix '-beta.3'
             manifestPlaceholders += [appLabel: 'AutoDL H3 测试版', appScheme: 'autodlh3-beta']
             buildConfigField "String", "APP_SCHEME", '"autodlh3-beta"'
             signingConfig signingConfigs.debug

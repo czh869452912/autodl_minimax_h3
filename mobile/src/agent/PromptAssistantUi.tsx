@@ -1,3 +1,4 @@
+import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../ui/KeyboardSurface';
 import { isCompactLayout as isCompactPromptLayout } from '../ui/adaptiveLayout';
 import { ImagePreview } from '../ui/ImagePreview';
 import { styles, sentStyles, markdownStyles } from './PromptAssistantStyles';
@@ -10,24 +11,7 @@ import { CopilotMarkdown } from '@copilotkit/react-native/components';
 import { getSourceUrl } from '@copilotkit/shared';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  ActivityIndicator,
-  Alert,
-  AccessibilityInfo,
-  findNodeHandle,
-  FlatList,
-  Image,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, AccessibilityInfo, findNodeHandle, FlatList, Image, Keyboard, Modal, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { AppIcon } from '../ui/icons';
 import { COLORS, LIGHT_PROMPT_COLORS } from '../ui/theme';
 import { mergeUniqueAssistantAttachments, pickAssistantImages, type AssistantImageAttachment } from './assistantImagePicker';
@@ -327,11 +311,9 @@ export function PromptAssistantUi({
     />
   );
   return (
-    <KeyboardAvoidingView
+    <KeyboardSurface
       // Use the actual container/keyboard intersection. Window-height deltas
       // cannot account for a custom tab bar disappearing or modal windows.
-      behavior="padding"
-      keyboardVerticalOffset={insets.top}
       enabled={isVisible && (wide || !historyOpen) && !renameOpen && !briefOpen && !versionsOpen && !mentionSheetOpen}
       // Keep resting space outside the padding controlled by keyboard avoidance.
       style={styles.root}
@@ -462,7 +444,7 @@ export function PromptAssistantUi({
           </View>)}
         </ScrollView>
       </DraggableBottomSheet>
-    </KeyboardAvoidingView>
+    </KeyboardSurface>
   );
 }
 
@@ -1102,7 +1084,7 @@ export function Composer({
   return (
     <View style={[styles.composer, focused && styles.composerFocused]}>
       <Modal visible={editing} animationType="slide" onRequestClose={closeEditor} onShow={() => editorRef.current?.focus()}>
-        <KeyboardAvoidingView behavior="padding" style={styles.editorRoot}>
+        <KeyboardSurface style={styles.editorRoot}>
           <View style={[styles.editorSurface, { paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 12) }]}>
             <View style={styles.editorHeader}>
               <Pressable accessibilityRole="button" accessibilityLabel="收起编辑" onPress={closeEditor} style={({ pressed }) => [styles.editorClose, pressed && styles.composerActionPressed]}>
@@ -1121,7 +1103,7 @@ export function Composer({
             </View>
             <View style={styles.editorFooter}><Text style={styles.editorHint}>收起后保留草稿</Text>{counter}</View>
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardSurface>
       </Modal>
       {uploading ? <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator /><Text>图片上传中，完成后可发送；可移除附件取消上传。</Text></View> : null}
       <AttachmentStrip

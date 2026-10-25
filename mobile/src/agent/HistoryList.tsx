@@ -1,5 +1,6 @@
+import { KeyboardSurface } from '../ui/KeyboardSurface';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Pressable, SectionList, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, SectionList, Text, TextInput, View } from 'react-native';
 import { AppIcon } from '../ui/icons';
 import { LIGHT_PROMPT_COLORS } from '../ui/theme';
 import { groupSessions, matchesSessionQuery, sessionDisplayTitle, sessionMessageCount, sessionTitle } from './agentPresentation';
@@ -119,8 +120,7 @@ export function HistoryList({
         statusBarTranslucent
         onRequestClose={() => setRenameTarget(null)}
       >
-        <KeyboardAvoidingView
-          behavior="padding"
+        <KeyboardSurface
           style={styles.renameKeyboardSurface}
         >
           <View style={styles.renameBackdrop}>
@@ -156,7 +156,7 @@ export function HistoryList({
               </View>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardSurface>
       </Modal>
     </View>
   );

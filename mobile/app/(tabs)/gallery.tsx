@@ -1,3 +1,4 @@
+import { KeyboardSurface } from '../../src/ui/KeyboardSurface';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -100,7 +101,7 @@ export default function GalleryScreen() {
   ]);
   const openAsset = (asset: MediaAsset) => { if (navigating.current) return; navigating.current = true; router.push({ pathname: '/video/[id]', params: { id: asset.id } }); };
   const clearFilters = () => { generation.current++; changeQuery(''); setFilter('all'); setSelected([]); setPageError(''); };
-  return <View style={[styles.container, layout.contentStyle]}>
+  return <KeyboardSurface style={[styles.container, layout.contentStyle]}>
     <View style={styles.selectionHeading}><Text style={styles.title}>结果</Text>{!selecting && !selected.length ? <ListAction secondary label="管理作品" onPress={() => setSelecting(true)} /> : null}</View><Text style={styles.subtitle}>浏览、播放与管理生成的作品。</Text>
     {selecting || selected.length > 0 ? <View style={styles.selectionPanel}>
       <View style={styles.selectionHeading}><Text accessibilityLiveRegion="polite" style={styles.selectionTitle}>已选择 {selected.length} 项</Text><ListAction secondary disabled={removing} label="取消选择" onPress={() => { setSelected([]); setSelecting(false); }} /></View>
@@ -117,7 +118,7 @@ export default function GalleryScreen() {
         description={loading ? '正在整理视频与封面，请稍候。' : query || filter !== 'all' ? '试试其他关键词，或清除筛选查看全部作品。' : '生成的视频会汇集在这里，随时浏览、播放与管理。'}
         action={loading ? undefined : query || filter !== 'all' ? { label: '清除筛选', icon: 'refresh', onPress: clearFilters } : { label: '去生成视频', icon: 'movie_filter', onPress: () => router.push('/(tabs)/create') }}
         secondaryAction={!loading && (query || filter !== 'all') ? { label: '去生成视频', icon: 'movie_filter', onPress: () => router.push('/(tabs)/create') } : undefined} />} />
-  </View>;
+  </KeyboardSurface>;
 }
 
 const styles = StyleSheet.create({

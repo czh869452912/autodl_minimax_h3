@@ -1,7 +1,8 @@
+import { KeyboardSurface } from '../ui/KeyboardSurface';
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { KeyboardAvoidingView, Platform, Text } from 'react-native';
+import { Platform, Text } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { PromptVersionPanel } from './PromptVersionPanel';
 import { reconcilePromptVersions, type PromptVersion } from './promptVersions';
@@ -90,7 +91,7 @@ it('avoids Android keyboard overlap while keeping parameter inputs mounted', () 
   try {
     act(() => { tree = create(<PromptVersionPanel versions={versions} threadId="t" onSelect={() => undefined} onRestore={() => undefined} onExport={async () => undefined} />); });
     act(() => press(tree, '预览并带入创建页'));
-    expect(tree.root.findByType(KeyboardAvoidingView).props.enabled).not.toBe(false);
+    expect(tree.root.findByType(KeyboardSurface).props.enabled).not.toBe(false);
     const stopPropagation = jest.fn();
     const modalSurface = tree.root.findByProps({ accessibilityViewIsModal: true });
     act(() => {
@@ -102,7 +103,7 @@ it('avoids Android keyboard overlap while keeping parameter inputs mounted', () 
     for (const value of ['1', '16', '6']) {
       act(() => input.props.onChangeText(value));
       expect(tree.root.findByProps({ accessibilityLabel: '视频时长（Duration）' })).toBe(input);
-      expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBe('padding');
+      expect(tree.root.findByType(KeyboardSurface)).toBeTruthy();
     }
   } finally {
     if (tree) act(() => tree.unmount());

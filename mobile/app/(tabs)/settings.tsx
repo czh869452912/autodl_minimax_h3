@@ -1,3 +1,4 @@
+import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../../src/ui/KeyboardSurface';
 import { useLocalSearchParams } from 'expo-router';
 import { CompactWorkbench,IconAction,SettingRow, TextAction } from '../../src/creative/WorkbenchUI';
 import { readSettingsDraft, writeSettingsDraft } from '../../src/settings/draft';
@@ -6,8 +7,7 @@ import { CreativeAccountPanel } from '../../src/creative/CreativeAccountPanel';
 import { videoDecodeOptions } from '../../src/settings/videoDecodeMode';
 import { WorkflowSyncPanel } from '../../src/settings/WorkflowSyncPanel';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { readSettings, saveSettings } from '../../src/settings/storage';
 import { DEFAULT_LLM_ADVANCED_SETTINGS as advancedDefaults } from '../../src/config/llmDefaults';
 import { isDeepSeekV4, reasoningOptions } from '../../src/config/llmReasoning';
@@ -25,16 +25,8 @@ export default function SettingsScreen() {
   const [activeSection,setActiveSection]=useState(normalizeSection(section));
   useEffect(()=>setActiveSection(normalizeSection(section)),[section]);
   const layout = usePageLayout();
-  const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   useEffect(() => { scrollRef.current?.scrollTo({ y: 0, animated: false }); }, [activeSection]);
-  const revealFocusedInput = () => {
-    if (!Keyboard.isVisible()) return;
-    const focused = TextInput.State.currentlyFocusedInput();
-    // The responder measures from the scroll content origin; this screen is
-    // below the tabs' top SafeAreaView. Recheck after keyboard layout settles.
-    if (focused) scrollRef.current?.scrollResponderScrollNativeHandleToKeyboard(focused, insets.top + 16, true);
-  };
   const [values, setValues] = useState<Settings>({ ...advancedDefaults, llmEndpoint: 'https://api.openai.com/v1', llmModel: 'gpt-4o-mini', llmApiKey: '', autoExportToGallery: true, keepPrivateCopy: true });
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof Settings, string>>>({});
   const [saving, setSaving] = useState(false);
@@ -75,7 +67,7 @@ export default function SettingsScreen() {
     finally { saveLock.current = false; setSaving(false); }
   };
   if (!baseline) return <View style={styles.container}>{loadError ? <Pressable accessibilityRole="button" accessibilityLabel="重试读取设置" onPress={() => setLoadAttempt(value => value + 1)} style={styles.saveButton}><Text style={styles.saveText}>设置读取失败，点击重试</Text></Pressable> : <ActivityIndicator accessibilityLabel="正在读取设置" />}</View>;
-  return <CompactWorkbench><KeyboardAvoidingView style={styles.container} behavior="padding" keyboardVerticalOffset={insets.top}><ScrollView ref={scrollRef} onLayout={revealFocusedInput} style={styles.container} contentContainerStyle={[styles.content, layout.contentStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+  return <CompactWorkbench><KeyboardSurface style={styles.container}><ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={[styles.content, layout.contentStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
     {draftReadError ? <View style={styles.card}><Text accessibilityRole="alert" style={{ color: COLORS.danger }}>未保存草稿无法读取，已隔离；当前使用已保存设置。</Text><Pressable accessibilityRole="button" accessibilityLabel="丢弃无法读取的草稿" style={styles.resetAdvanced} onPress={() => { void writeSettingsDraft().then(() => { setDraftReadError(false); setDraftError(''); }).catch(() => setDraftError('无法丢弃草稿，请重试；已保存设置不受影响')); }}><Text>丢弃无法读取的草稿</Text></Pressable></View> : null}
     {pendingDraft ? <View style={styles.card}><Text>发现未保存的设置草稿</Text><Pressable accessibilityRole="button" style={styles.resetAdvanced} onPress={() => { setValues(current => ({ ...current, ...pendingDraft })); setPendingDraft(undefined); }}><Text>恢复未保存更改</Text></Pressable><Pressable accessibilityRole="button" style={styles.resetAdvanced} onPress={() => setPendingDraft(undefined)}><Text>丢弃草稿，使用已保存设置</Text></Pressable></View> : null}
     {draftError ? <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{draftError}</Text> : null}
@@ -124,7 +116,7 @@ export default function SettingsScreen() {
   </ScrollView>{dirty || ['assistant','storage','playback'].includes(activeSection??'') ? <View style={styles.saveBar}><View style={[layout.contentStyle, styles.saveContent]}>
     <Text accessibilityLiveRegion="polite" style={styles.help}>{saving ? '正在保存…' : dirty ? draftReadError ? '有未保存更改，草稿暂不可用；请保存设置' : '有未保存更改，草稿将加密保留；保存后生效' : '设置已保存'}</Text>
     <Pressable accessibilityRole="button" accessibilityLabel="保存设置" disabled={saving || !dirty} onPress={() => void save()} style={[styles.saveButton, (saving || !dirty) && styles.disabled]}><AppIcon name="save" size={20} color={COLORS.onPrimary} /><Text style={styles.saveText}>{saving ? '保存中…' : '保存设置'}</Text></Pressable>
-  </View></View> : null}</KeyboardAvoidingView></CompactWorkbench>;
+  </View></View> : null}</KeyboardSurface></CompactWorkbench>;
 }
 function Field({ label, secure, error, ...props }: { label: string; secure?: boolean; error?: string } & React.ComponentProps<typeof TextInput>) {
   const [visible, setVisible] = useState(false);

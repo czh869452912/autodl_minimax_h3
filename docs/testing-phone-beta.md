@@ -36,7 +36,7 @@
 - 独立链接协议、嵌入的 Expo config、JS bundle 和相应 native libraries。
 - APK 签名及原生 ELF / ZIP 对齐。
 
-测试版独立安装仅用于真实使用测试，不替代正式包的覆盖升级验收。本次交付不对手机或模拟器执行安装、卸载或设备仪器测试。
+测试版独立安装仅用于真实使用测试，不替代正式包的覆盖升级验收。各轮是否执行设备测试见下方交付记录；不自动操作用户手机。
 
 ## 2026-10-25 交付记录
 
@@ -57,3 +57,14 @@
 - 最终 APK 的独立包名、Beta.2 原生与 Expo 版本、双手机 ABI、安全 manifest、Hermes 产物和通知协议核验通过。
 - v2 签名验证通过，证书与上一 Beta 相同；可覆盖安装测试版并保留测试数据。86 个原生库与上一包内容相同，ELF / ZIP 对齐复核通过。
 - 检查结果在 `build/phone-beta/beta2-verification.json`，相邻 `beta2-*.txt` 为 APK 核验输出。未执行手机或模拟器安装，也未发起付费生成；新版触控和键盘体验仍需实机复测。
+
+## 2026-10-25 全应用键盘避让修正版
+
+- 版本：`1.5.0-preview.4-beta.3`，versionCode 42；APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.3-android.apk`。
+- 大小：158,516,567 字节；SHA-256：`AD0A70BDCDE28E1D42060CF92CF04835152A8848D23B391C87EADBCD8A9D0399`。
+- 全量检查 21 个文件的 39 处输入框声明及动态字段，统一原生窗口坐标避让和聚焦滚动；覆盖 Agent、设置、图片 / 视频、项目内容表单、弹窗和抽屉。图片生成设置的内嵌滚动面板也已接入。详见 [输入框审查记录](keyboard-input-audit-2026-10-25.md)。
+- TypeScript、完整 Jest 回归通过（244 个套件、1593 项测试；1 个套件 / 4 项测试跳过）；最后补充内嵌面板后，相关图片测试 15 项及公共组件测试 9 项再次通过。
+- 自包含 Debug QA 构建和双架构 Beta 构建通过。最终包的独立身份、Beta.3 原生 / Expo 版本、Hermes、通知协议、安全 manifest、v2 签名和 86 个原生库的内容及 ELF / ZIP 对齐检查通过，详见 `build/phone-beta/beta3-verification.json`。
+- 签名与前两版 Beta 相同，可覆盖安装测试版并保留测试数据；正式版身份不变。
+- 在独立新建的 Android QA 模拟器执行键盘交互抽查，确认 Agent 主输入框、设置页下方字段及连续切换焦点、创作信息抽屉、图片编辑和内嵌数字字段、视频提示词及底部 Seed 弹窗可见。完成后已关闭本轮 QA 模拟器；未操作用户手机、使用真实账号或提交付费生成。用户所用 OEM 输入法仍需原手机复测。
+- Android Lint 本轮未通过：第三方 `react-native-worklets:lintAnalyzeRelease` 的 Kotlin UAST 分析崩溃，错误为 `Cannot find a KaModule for the VirtualFile`，见 `mobile/keyboard-beta-lint.log`。没有将构建成功等同于 Lint 成功。

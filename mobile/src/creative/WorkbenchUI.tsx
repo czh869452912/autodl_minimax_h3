@@ -1,5 +1,6 @@
+import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../ui/KeyboardSurface';
 import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppIcon, type IconName } from '../ui/icons';
 import { COLORS } from '../ui/theme';
@@ -39,13 +40,13 @@ export function SegmentedChoices<T extends string>({ label, options, value, onCh
 export function ParameterSheet({ title, description, onClose, children, fullScreen = false }: { title: string; description?: string; onClose: () => void; children: ReactNode; fullScreen?:boolean }) {
   const compact=useCompactWorkbench();
   return <Modal transparent={!fullScreen} visible animationType="slide" onRequestClose={onClose}>
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={fullScreen ? {flex:1,backgroundColor:COLORS.surface} : w.modal}>
+    <KeyboardSurface style={fullScreen ? {flex:1,backgroundColor:COLORS.surface} : w.modal}>
       <Pressable accessibilityRole="button" accessibilityLabel={`关闭${title}`} onPress={onClose} style={StyleSheet.absoluteFill} />
       <SafeAreaView edges={fullScreen ? ['top','bottom','left','right'] : ['bottom', 'left', 'right']} style={fullScreen ? {flex:1,backgroundColor:COLORS.surface} : w.sheet}>
         <View style={w.sheetHeader}><View style={{ flex: 1 }}><Text accessibilityRole="header" style={w.sectionTitle}>{title}</Text>{description ? <Text style={w.caption}>{description}</Text> : null}</View><TextAction label="完成" onPress={onClose} /></View>
         <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: compact?12:20, gap: compact?10:16 }}>{children}</ScrollView>
       </SafeAreaView>
-    </KeyboardAvoidingView>
+    </KeyboardSurface>
   </Modal>;
 }
 

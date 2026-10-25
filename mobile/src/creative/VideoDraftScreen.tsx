@@ -1,6 +1,7 @@
+import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../ui/KeyboardSurface';
 import {useWorkbenchJobPending} from './useWorkbenchJobPending';
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {Alert,BackHandler,Image,Keyboard,KeyboardAvoidingView,Platform,Pressable,ScrollView,StyleSheet,Text,TextInput,View} from 'react-native';
+import { Alert, BackHandler, Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import {useFocusEffect,useRouter} from 'expo-router';
 import {useNavigation,usePreventRemove} from 'expo-router/react-navigation';
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -195,7 +196,7 @@ function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){
     </View>;
   };
   const hasResults=Boolean(resultDraft?.job_id),displayResult=view==='result'&&hasResults;
-  return <SafeAreaView edges={embedded?[]:['top','bottom','left','right']} style={s.screen}><KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'} style={{flex:1}}>
+  return <SafeAreaView edges={embedded?[]:['top','bottom','left','right']} style={s.screen}><KeyboardSurface style={{flex:1}}>
     {!embedded?<View style={v.header}><IconAction label="返回" icon="arrow_back" disabled={busy||saving} onPress={()=>{if(!closePanel())router.canGoBack()?router.back():router.replace('/(tabs)/create');}}/><Text style={[v.label,{flex:1}]}>视频创作</Text><IconAction label="创作账号" icon="key" onPress={()=>openSheet('account')}/></View>:null}
     <WorkbenchScope draft={draft}/>
     {hasResults?<View style={{flexDirection:'row',paddingHorizontal:12,gap:16}}>{(['create','result'] as const).map(tab=><Pressable key={tab} accessibilityRole="tab" accessibilityLabel={tab==='create'?(pending?'准备下一次':'创作'):(pending?'本次进度':'结果')} accessibilityState={{selected:view===tab}} onPress={()=>setView(tab)} style={[v.tab,view===tab&&{borderBottomColor:COLORS.primary}]}><Text style={[v.caption,view===tab&&{color:COLORS.primary,fontWeight:'600'}]}>{tab==='create'?(pending?'准备下一次':'创作'):(pending?'本次进度':'结果')}</Text></Pressable>)}</View>:null}
@@ -225,7 +226,7 @@ function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){
     {assist&&input?<PromptAssistSheet prompt={prompt} kind="video" onApply={value=>{setUndo(input);update(promptField,value);}} onClose={()=>setAssist(false)}/>:null}
     {picking?<CreativeAssetPicker kind={picking} projectId={draft?.project_id??undefined} onClose={()=>setPicking(undefined)} onChoose={version=>replaceReferences(picking,[...references.filter(ref=>(ref.slot==='audio')===(picking==='audio')).map(ref=>ref.version_id).filter(id=>id!==version.id),version.id])}/>:null}
     {preview?<ImagePreview uri={preview} onClose={()=>setPreview(undefined)}/>:null}
-  </KeyboardAvoidingView></SafeAreaView>;
+  </KeyboardSurface></SafeAreaView>;
 }
 const v=StyleSheet.create({
   header:{flexDirection:'row',alignItems:'center',paddingHorizontal:6,borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:COLORS.border},content:{padding:16,gap:18,paddingBottom:24,maxWidth:760,width:'100%',alignSelf:'center'},

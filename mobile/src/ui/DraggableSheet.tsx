@@ -1,21 +1,7 @@
+import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from './KeyboardSurface';
 import React, { createContext, useContext, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  Animated,
-  AccessibilityInfo,
-  findNodeHandle,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  PanResponder,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Animated, AccessibilityInfo, findNodeHandle, Keyboard, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { resolveBottomSheetRelease, type SheetSnap } from './draggableBottomSheet';
 import { COLORS } from './theme';
 import { AppIcon } from './icons';
@@ -135,8 +121,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
 
   return (
     <Modal visible={visible} transparent statusBarTranslucent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={close} onShow={() => { const target = findNodeHandle(headingRef.current); if (target) AccessibilityInfo.setAccessibilityFocus(target); }}>
-      <KeyboardAvoidingView
-        behavior="padding"
+      <KeyboardSurface
         enabled={hasInputFocus}
         style={styles.modalSurface}
       >
@@ -158,7 +143,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
             </View>
           </Animated.View>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardSurface>
     </Modal>
   );
 });

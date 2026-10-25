@@ -1,3 +1,4 @@
+import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../ui/KeyboardSurface';
 import { creativeError } from './creativeError';
 import { useUnsavedChanges } from './useUnsavedChanges';
 import { ProjectOverview } from './ProjectOverview';
@@ -7,7 +8,7 @@ import {PdfVersionPreview} from './PdfVersionPreview';
 import { AudioVersionPreview } from './AudioVersionPreview';
 import { TextVersionEditor } from './TextVersionEditor';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import { creativeService, importCreativeImage, exportCreativeVersion, creativeFiles, restoreCreativeImage, restoreCreativeImageFromBackup, migrateCreativeHistory } from './runtime';
@@ -122,7 +123,7 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
   const addImages = () => run(async () => { for (const image of await pickImagesFromGallery(9)) await importCreativeImage(image, mode === 'projects' ? selected : undefined); });
   const action = (label: string, onPress: () => void, secondary = true) => secondary ? <TextAction label={label} onPress={onPress} disabled={busy} /> : <ListAction label={label} onPress={onPress} disabled={busy} />;
   if (projectId && mode === 'projects' && !current) return <View style={styles.content}>{action('返回项目列表', back)}<Text style={styles.body}>{error || '正在读取项目…'}</Text></View>;
-  return <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+  return <KeyboardSurface style={styles.screen}><ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <View style={styles.row}>{projectId || assetId ? action('返回',back) : null}<Text accessibilityRole="header" style={styles.heading}>{activeAsset?.title ?? current?.title ?? (mode === 'projects' ? '项目' : '素材')}</Text>{action(manage ? '收起更多' : '更多', () => setManage(!manage))}</View>
     {manage && !activeAsset ? <View style={styles.row}>{action('历史作品', () => router.push('/(tabs)/gallery'))}{action('创作草稿', () => router.push('/creative-drafts'))}</View> : null}
     {current && projectView === 'assets' && !current.archivedAt && !activeAsset ? action('制作图片', () => void run(async () => { const result = await command({ name: 'draft.createImage', payload: { projectId: current.id } }); if (result.status === 'completed') router.push({ pathname: '/image-draft/[id]', params: { id: result.value.draftId } }); })) : null}
@@ -211,7 +212,7 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
       {manage ? action('迁入历史作品（可中断）', () => void run(async () => { const result = await migrateCreativeHistory(); setMigrationNotice(`本批迁入或更新 ${result.imported} 项。${result.pending ? '还有记录，点击继续迁入。' : '已追平当前历史记录。'} 待处理变更 ${result.audit.pendingJournal}，未迁入 ${result.audit.unmapped}，待更新映射 ${result.audit.staleMappings}，原件不可用 ${result.audit.unavailableFiles}。${result.audit.missingPins||result.audit.brokenMappings||result.audit.foreignKeyViolations?'检测到一致性异常，请保留备份并停止清理文件。':''}${result.audit.writersReady?'':'旧入口仍处于兼容追平阶段，尚未切换写入源。'}`); })) : null}
       {migrationNotice ? <Text accessibilityLiveRegion="polite" style={styles.body}>{migrationNotice}</Text> : null}
     </> : null}
-  </ScrollView>;
+  </ScrollView></KeyboardSurface>;
 }
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.background }, content: { padding: 16, gap: 12, paddingBottom: 40 },

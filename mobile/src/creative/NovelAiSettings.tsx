@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, Switch, Text, View } from 'react-native';
+import { KeyboardAwareScrollView as ScrollView } from '../ui/KeyboardSurface';
 import { isNovelAiMedium, NOVELAI_MODELS, NOVELAI_SAMPLERS, novelAiModelName, samplerNames, type NovelAiDraftInput } from './novelAiProtocol';
 import { IconAction, ParameterSheet, SectionHeading, SegmentedChoices, TextAction, useCompactWorkbench } from './WorkbenchUI';
 import { creativeUI as s } from './creativeUI';

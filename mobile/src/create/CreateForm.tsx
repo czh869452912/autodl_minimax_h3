@@ -1,19 +1,9 @@
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../ui/KeyboardSurface';
 import { settingsEvents } from '../settings/events';
 import { defaultDraftDependencies, defaultSubmissionDependencies, type CreateFormDraftDependencies, type CreateFormSubmissionDependencies } from './createServices';
 export type { CreateFormDraftDependencies, CreateFormSubmissionDependencies } from './createServices';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import type { TaskMediaInput } from '../media/types';
 import { AppIcon } from '../ui/icons';
@@ -83,7 +73,6 @@ export function CreateForm({
   draftDependencies?: CreateFormDraftDependencies;
 }) {
   const layout = usePageLayout();
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [settingsNotice, setSettingsNotice] = useState('');
   useFocusEffect(useCallback(() => {
@@ -396,7 +385,7 @@ export function CreateForm({
   const submitDisabled = submitting || switching || picking || loadingDraft || awaitingDraft || Boolean(appliedDraft && acknowledgedDraft !== appliedDraft) || !definition || !activeRecord;
   const summary = definition ? canonicalInputs(definition, workflowValues) : {};
   return (
-    <KeyboardAvoidingView style={styles.container} behavior="padding" keyboardVerticalOffset={insets.top}><ScrollView ref={scrollRef}
+    <KeyboardSurface style={styles.container}><ScrollView ref={scrollRef}
       style={styles.container}
       contentContainerStyle={[styles.content, layout.contentStyle]}
       keyboardShouldPersistTaps="handled"
@@ -533,7 +522,7 @@ export function CreateForm({
       <Text style={styles.footnote}>
         提交后可在任务页查看进度
       </Text>
-    </View></View></KeyboardAvoidingView>
+    </View></View></KeyboardSurface>
   );
 }
 

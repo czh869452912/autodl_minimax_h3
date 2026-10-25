@@ -1,0 +1,86 @@
+[
+  {
+    "file": "app/(tabs)/gallery.tsx",
+    "declarations": 1
+  },
+  {
+    "file": "app/(tabs)/settings.tsx",
+    "declarations": 2
+  },
+  {
+    "file": "src/agent/HistoryList.tsx",
+    "declarations": 2
+  },
+  {
+    "file": "src/agent/PromptAssistantUi.tsx",
+    "declarations": 6
+  },
+  {
+    "file": "src/creative/AgentCreativePanel.tsx",
+    "declarations": 1
+  },
+  {
+    "file": "src/creative/AgentWorkspace.tsx",
+    "declarations": 1
+  },
+  {
+    "file": "src/creative/CreativeAccountPanel.tsx",
+    "declarations": 1
+  },
+  {
+    "file": "src/creative/CreativeAssetPicker.tsx",
+    "declarations": 1
+  },
+  {
+    "file": "src/creative/CreativeWorkspace.tsx",
+    "declarations": 7
+  },
+  {
+    "file": "src/creative/ImageDraftScreen.tsx",
+    "declarations": 1
+  },
+  {
+    "file": "src/creative/NovelAiNumberField.tsx",
+    "declarations": 1
+  },
+  {
+    "file": "src/creative/NovelAiPromptEditor.tsx",
+    "declarations": 2
+  },
+  {
+    "file": "src/creative/NovelAiTags.tsx",
+    "declarations": 1
+  },
+  {
+    "file": "src/creative/ProjectPlans.tsx",
+    "declarations": 1
+  },
+  {
+    "file": "src/creative/ProjectShots.tsx",
+    "declarations": 2
+  },
+  {
+    "file": "src/creative/PromptAssistSheet.tsx",
+    "declarations": 2
+  },
+  {
+    "file": "src/creative/TextAssetEditor.tsx",
+    "declarations": 2
+  },
+  {
+    "file": "src/creative/TextVersionEditor.tsx",
+    "declarations": 1
+  },
+  {
+    "file": "src/creative/VideoDraftScreen.tsx",
+    "declarations": 1
+  },
+  {
+    "file": "src/workflows/renderer/renderers.tsx",
+    "declarations": 2
+  },
+  {
+    "file": "src/workflows/renderer/WorkflowParameterFields.tsx",
+    "declarations": 1
+  }
+]

@@ -2,7 +2,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { creativeError } from './creativeError';
 import type { CreativeDraft } from './drafts';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Modal, KeyboardAvoidingView, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Text, TextInput, View } from 'react-native';
+import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../ui/KeyboardSurface';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { CreativeAssetPicker } from './CreativeAssetPicker';
 import { VersionThumbnail } from './VersionThumbnail';
@@ -78,7 +79,7 @@ export function ProjectShots({ projectId, archived = false, onEditorState }: { p
     </View>)}
     {!shots.length ? <Text style={{ color: COLORS.textMuted }}>添加镜头，逐个确定参考图和视频成果。</Text> : null}
     {!archived ? action(adding ? '取消编辑镜头' : '添加镜头', () => switchEditor(() => {setError('');setAdding(!adding);setEditing(undefined);setTitle('');setDescription('');})) : null}
-    {!archived && adding ? <Modal visible animationType="slide" onRequestClose={() => switchEditor(closeEditor)}><SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }}><KeyboardAvoidingView behavior="padding" style={{flex:1}}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, gap: 16 }}><ListAction label="关闭镜头编辑" secondary disabled={busy} onPress={() => switchEditor(closeEditor)} />
+    {!archived && adding ? <Modal visible animationType="slide" onRequestClose={() => switchEditor(closeEditor)}><SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }}><KeyboardSurface style={{flex:1}}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, gap: 16 }}><ListAction label="关闭镜头编辑" secondary disabled={busy} onPress={() => switchEditor(closeEditor)} />
       <Text style={{ color: COLORS.text, fontWeight: '700' }}>{editing ? '编辑镜头' : '添加镜头'}</Text>
       {error ? <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{error}</Text> : null}
       <Text style={{ color: COLORS.text }}>镜头名称</Text>
@@ -90,6 +91,6 @@ export function ProjectShots({ projectId, archived = false, onEditorState }: { p
         setEditing(undefined); setTitle(''); setDescription(''); setAdding(false);
       }), false)}
       {editing ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{Object.entries(labels).map(([status, label]) => <View key={status}>{action(`${editing.editorial_status === status ? '✓ ' : ''}${label}`, () => setEditing({ ...editing, editorial_status: status as CreativeShot['editorial_status'] }))}</View>)}</View> : null}
-    </ScrollView></KeyboardAvoidingView></SafeAreaView></Modal> : null}
+    </ScrollView></KeyboardSurface></SafeAreaView></Modal> : null}
   </View>;
 }

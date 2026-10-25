@@ -1,6 +1,7 @@
+import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../ui/KeyboardSurface';
 import { SheetScrollView } from '../ui/DraggableSheet';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { LIGHT_PROMPT_COLORS as colors } from '../ui/theme';
 import { diffPromptVersions, type PromptVersion } from './promptVersions';
@@ -159,7 +160,7 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onDe
     {restoreStatus ? <Text accessibilityLiveRegion="polite" style={styles.muted}>{restoreStatus}</Text> : null}
     </View>
     {activePreview && <Modal visible transparent statusBarTranslucent animationType="slide" onRequestClose={() => { if (!busy) setPreview(null); }}>
-      <KeyboardAvoidingView style={styles.overlay} behavior="padding">
+      <KeyboardSurface style={styles.overlay}>
         <View style={styles.modal} accessibilityViewIsModal onFocus={event => event.stopPropagation()} onBlur={event => event.stopPropagation()}>
           <Text style={styles.title}>带入创建页前确认</Text>
           <SheetScrollView style={styles.previewScroll} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.previewContent}>
@@ -184,7 +185,7 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onDe
           </SheetScrollView>
           <View style={styles.row}><Action label="取消" disabled={busy} onPress={() => setPreview(null)} /><Action label="带入创建页" primary disabled={cannotExport} onPress={exportPreview} />{busy && <Text accessibilityLiveRegion="polite" style={styles.muted}>正在带入…</Text>}</View>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardSurface>
     </Modal>}
   </View>;
 }

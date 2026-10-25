@@ -1,7 +1,8 @@
+import { KeyboardSurface } from '../ui/KeyboardSurface';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import * as Clipboard from 'expo-clipboard';
-import { Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Image, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { pickAssistantImages } from './assistantImagePicker';
 import { DraggableBottomSheet } from '../ui/DraggableSheet';
 
@@ -700,7 +701,7 @@ describe('Prompt assistant UI primitives', () => {
     act(() => { (manageAlert.mock.calls.at(-1)?.[2] as any[]).find(button => button.text === '重命名').onPress(); });
     manageAlert.mockRestore();
     expect(tree.root.findAllByType(Modal).some((node) => node.props.visible)).toBe(true);
-    expect(tree.root.findAllByType(KeyboardAvoidingView).length).toBeGreaterThanOrEqual(2);
+    expect(tree.root.findAllByType(KeyboardSurface).length).toBeGreaterThanOrEqual(2);
     act(() => tree.unmount());
   });
 
@@ -837,17 +838,10 @@ describe('Prompt assistant UI primitives', () => {
     let tree!: ReturnType<typeof create>;
     try {
       act(() => { tree = create(<PromptAssistantUi threads={[]} activeThreadId="t1" onSelect={() => undefined} onNew={() => undefined} onDelete={() => undefined} onRename={() => undefined} onExportPrompt={async () => undefined} />); });
-      const root = tree.root.findByType(KeyboardAvoidingView);
-      expect(root.props.behavior).toBe('padding');
-      // RN 0.86.3 integration probe: these private methods must be rechecked on RN upgrades.
-      // Edge-to-edge overlay: removing the tab bar grows the container to 800.
-      await act(async () => root.instance._onLayout({ persist() {}, nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 800 } } }));
-      expect(await root.instance._relativeKeyboardHeight({ screenY: 500, height: 300 })).toBe(300);
-      // Native adjustResize already brought the container above the keyboard.
-      await act(async () => root.instance._onLayout({ persist() {}, nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 500 } } }));
-      expect(await root.instance._relativeKeyboardHeight({ screenY: 500, height: 300 })).toBe(0);
+      const root = tree.root.findByType(KeyboardSurface);
+      expect(root.props.enabled).toBe(true);
       act(() => tree.root.findByProps({ accessibilityLabel: '打开对话历史' }).props.onPress());
-      expect(tree.root.findAllByType(KeyboardAvoidingView)[0].props.enabled).toBe(false);
+      expect(tree.root.findAllByType(KeyboardSurface)[0].props.enabled).toBe(false);
     } finally {
       act(() => tree?.unmount());
       Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
@@ -860,7 +854,7 @@ describe('Prompt assistant UI primitives', () => {
     try {
       act(() => { tree = create(<PromptAssistantUi threads={[]} activeThreadId="t1" onSelect={() => undefined} onNew={() => undefined} onDelete={() => undefined} onRename={() => undefined} onExportPrompt={async () => undefined} />); });
       act(() => tree.root.findByProps({ accessibilityLabel: '打开对话历史' }).props.onPress());
-      expect(tree.root.findAllByType(KeyboardAvoidingView)[0].props.enabled).toBe(true);
+      expect(tree.root.findAllByType(KeyboardSurface)[0].props.enabled).toBe(true);
     } finally { act(() => tree?.unmount()); dimensions.mockRestore(); }
   });
 
@@ -869,7 +863,7 @@ describe('Prompt assistant UI primitives', () => {
     let tree!: ReturnType<typeof create>;
     try {
       act(() => { tree = create(<PromptAssistantUi threads={[{ threadId: 't1', messages: [], state: {}, createdAt: 1, updatedAt: 1 }]} activeThreadId="t1" onSelect={() => undefined} onNew={() => undefined} onDelete={() => undefined} onRename={() => undefined} onExportPrompt={async () => undefined} />); });
-      const root = () => tree.root.findAllByType(KeyboardAvoidingView)[0];
+      const root = () => tree.root.findAllByType(KeyboardSurface)[0];
       expect(root().props.enabled).toBe(true);
       const manageAlert = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => undefined);
     act(() => tree.root.findAll(node => String(node.props.accessibilityLabel).startsWith('管理会话 '))[0].props.onPress());
@@ -899,8 +893,8 @@ describe('Prompt assistant UI primitives', () => {
           />,
         );
       });
-      expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBe('padding');
-      expect(tree.root.findByType(KeyboardAvoidingView).props.keyboardVerticalOffset).toBe(0);
+      expect(tree.root.findByType(KeyboardSurface)).toBeTruthy();
+      expect(tree.root.findByType(KeyboardSurface).props.keyboardVerticalOffset).toBeUndefined();
     } finally {
       act(() => tree?.unmount());
       Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });

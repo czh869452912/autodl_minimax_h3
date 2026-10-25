@@ -1,5 +1,6 @@
+import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../ui/KeyboardSurface';
 import { useCallback, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, Text, TextInput, View } from 'react-native';
 import { AppIcon } from '../ui/icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -48,7 +49,7 @@ export function AgentCreativePanel({ threadId, running, compact=false }: { threa
     {compact?<Pressable accessibilityRole="button" accessibilityLabel="切换创作项目" disabled={running || busy} onPress={()=>setExpanded(true)} style={{minHeight:44,flexDirection:'row',alignItems:'center',gap:4}}><Text numberOfLines={1} style={[s.title,{flexShrink:1}]}>{projectTitle}</Text><AppIcon name="expand_more" size={18}/></Pressable>:<View style={s.row}><Text style={s.muted}>当前项目：{projectTitle}</Text><TextAction label="项目" disabled={running || busy} onPress={() => setExpanded(true)} /></View>}
     {!selected && !compact ? <Text style={s.muted}>可先讨论想法。制作素材前，请选择项目或让助手创建项目后再选择。</Text> : null}
     {!expanded && notice && !compact ? <Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text> : null}
-    {expanded ? <Modal visible animationType="slide" onRequestClose={() => setExpanded(false)}><SafeAreaView style={s.screen}><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+    {expanded ? <Modal visible animationType="slide" onRequestClose={() => setExpanded(false)}><SafeAreaView style={s.screen}><KeyboardSurface style={{flex:1}}><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <View style={s.row}><Text style={s.heading}>选择创作项目</Text><ListAction label="关闭" secondary onPress={() => setExpanded(false)} /></View>
       <TextInput accessibilityLabel="搜索创作项目" placeholder="搜索项目" value={query} onChangeText={setQuery} style={s.input} />
       {projects.filter(p => p.title.includes(query)).map(p => <ListAction key={p.id} label={`${p.id === selected ? '✓ ' : ''}${p.title}`} secondary disabled={running || busy} onPress={() => void choose(p.id)} />)}
@@ -59,6 +60,6 @@ export function AgentCreativePanel({ threadId, running, compact=false }: { threa
         void creativeBudget().list().then(async rows => { for (const row of rows) if (row.project_id === selected && row.revoked_at == null) await creativeBudget().revoke(row.id); setNotice('当前项目授权已撤销'); }).catch(() => setNotice('撤销失败')).finally(() => { lock.current = false; setBusy(false); });
       }} /> : null}
       {notice ? <Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text> : null}
-    </ScrollView></SafeAreaView></Modal> : null}
+    </ScrollView></KeyboardSurface></SafeAreaView></Modal> : null}
   </View>;
 }

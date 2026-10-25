@@ -1,3 +1,4 @@
+import { KeyboardSurface } from '../ui/KeyboardSurface';
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,7 +37,7 @@ export function CreativeAssetPicker({ kind, projectId, onChoose, onClose }: { ki
     lock.current = true; setBusy(true); setError('');
     void creativeFiles().verify(chosen.version.id).then(() => onChoose(chosen.version)).then(onClose).catch(e => setError(e instanceof Error ? e.message : '选材失败')).finally(() => { lock.current = false; setBusy(false); });
   };
-  return <Modal visible animationType="slide" onRequestClose={() => { if (!busy) onClose(); }}><SafeAreaView style={s.screen}>
+  return <Modal visible animationType="slide" onRequestClose={() => { if (!busy) onClose(); }}><SafeAreaView style={s.screen}><KeyboardSurface style={{flex:1}}>
     <View style={{ paddingHorizontal: 20, paddingTop: 8, gap: 12 }}>
     <View style={s.row}><Text style={s.title}>{kind === 'image' ? '选择图片' : kind==='audio'?'选择音频':'选择视频'}</Text><TextAction label="取消" disabled={busy} onPress={onClose} /></View>
     <TextInput accessibilityLabel="搜索素材" placeholder="搜索素材名称" value={query} editable={!busy} onChangeText={setQuery} style={s.input} />
@@ -52,5 +53,5 @@ export function CreativeAssetPicker({ kind, projectId, onChoose, onClose }: { ki
       ListEmptyComponent={!loading ? <Text style={s.muted}>{query ? '没有匹配的可用版本，请调整搜索。' : `暂无可用${kind === 'image' ? '图片' : kind==='audio'?'音频':'视频'}。可先导入素材或生成候选。`}</Text> : null}
       ListFooterComponent={hasMore && limit < 1000 ? <TextAction label="加载更多素材" disabled={busy || loading} onPress={() => setLimit(n => n + 100)} /> : null} />
     <View style={s.footer}><Text style={s.muted}>{chosen ? `${chosen.title} · 版本 ${chosen.version.versionNo}` : '尚未选择素材'}</Text><ListAction label={busy ? '正在添加…' : kind === 'image' ? '使用所选图片' : kind==='audio'?'使用所选音频':'使用所选视频'} disabled={busy || loading || !chosen} onPress={confirm} /></View>
-  </SafeAreaView></Modal>;
+  </KeyboardSurface></SafeAreaView></Modal>;
 }

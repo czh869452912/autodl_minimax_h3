@@ -1,6 +1,7 @@
+import { KeyboardSurface } from './KeyboardSurface';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { AccessibilityInfo, Animated, Keyboard, KeyboardAvoidingView, Modal, Text } from 'react-native';
+import { AccessibilityInfo, Animated, Keyboard, Modal, Text } from 'react-native';
 import { DraggableBottomSheet } from './DraggableSheet';
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 24, bottom: 16, left: 0, right: 0 }) }));
 
@@ -17,7 +18,7 @@ describe('DraggableBottomSheet', () => {
       );
     });
     expect(tree.root.findByType(Modal).props.visible).toBe(true);
-    expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBe('padding');
+    expect(tree.root.findByType(KeyboardSurface)).toBeTruthy();
     expect(tree.root.findByProps({ accessibilityLabel: '拖动调整抽屉高度' }).props.style).toEqual(
       expect.objectContaining({ minHeight: 48 }),
     );
@@ -46,7 +47,7 @@ describe('DraggableBottomSheet', () => {
   it('expands for keyboard input and exposes both snap stops to accessibility', () => {
     const callbacks = new Map<string, (event: any) => void>();
     const listener = jest.spyOn(Keyboard, 'addListener').mockImplementation((name, callback) => {
-      callbacks.set(name, callback); return { remove: jest.fn() };
+      const previous=callbacks.get(name); const combined=(event:any)=>{previous?.(event);callback(event);}; callbacks.set(name,combined); return {remove:()=>{if(callbacks.get(name)===combined)callbacks.set(name,previous??(()=>undefined));}};
     });
     const close = jest.fn();
     let tree!: ReturnType<typeof create>;
@@ -64,7 +65,7 @@ describe('DraggableBottomSheet', () => {
 
   it('ignores another surface keyboard and restores its prior snap after its own keyboard hides', () => {
     const callbacks = new Map<string, (event: any) => void>();
-    jest.spyOn(Keyboard, 'addListener').mockImplementation((name, callback) => { callbacks.set(name, callback); return { remove: jest.fn() }; });
+    jest.spyOn(Keyboard, 'addListener').mockImplementation((name, callback) => { const previous=callbacks.get(name); const combined=(event:any)=>{previous?.(event);callback(event);}; callbacks.set(name,combined); return {remove:()=>{if(callbacks.get(name)===combined)callbacks.set(name,previous??(()=>undefined));}}; });
     let tree!: ReturnType<typeof create>;
     act(() => { tree = create(<DraggableBottomSheet visible title="编辑" onClose={() => undefined}><Text>输入</Text></DraggableBottomSheet>); });
     const handle = () => tree.root.findByProps({ accessibilityLabel: '拖动调整抽屉高度' });
