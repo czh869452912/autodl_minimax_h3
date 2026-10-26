@@ -18,3 +18,10 @@ test('audio waits for verification, never autoplays, replays from start and paus
   }finally{act(()=>tree?.unmount());}
   expect(mockPause).toHaveBeenCalled();
 });
+
+test('unmount tolerates a native player already released by the audio hook',async()=>{
+ mockVerify.mockResolvedValue({state:'AVAILABLE'});let tree!:ReturnType<typeof create>;
+ await act(async()=>{tree=create(<AudioVersionPreview version={version}/>);});
+ mockPause.mockImplementationOnce(()=>{throw new Error('Cannot use shared object that was already released');});
+ expect(()=>act(()=>tree.unmount())).not.toThrow();
+});

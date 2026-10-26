@@ -1,3 +1,4 @@
+jest.mock('./AudioVersionPreview',()=>({AudioVersionPreview:()=>null}));
 jest.mock('../storage/databaseClient',()=>({getDatabase:()=>({})}));
 jest.mock('./taskRecovery',()=>({unknownTaskReviewed:async()=>mockReviewed}));
 let mockReviewed=false,mockAccountReady=true,mockFocus=0;

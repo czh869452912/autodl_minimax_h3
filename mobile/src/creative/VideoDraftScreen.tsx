@@ -1,3 +1,4 @@
+import {VideoReferenceCards} from './VideoReferenceCards';
 import {ImageEditorDrawer} from './ImageEditorDrawer';
 import {VideoGenerationHistory} from './VideoGenerationHistory';
 import {useKeyboardVisible} from '../ui/useKeyboardVisible';
@@ -200,14 +201,7 @@ function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){
     if(!definition)return null;
     const rows=references.filter(ref=>(ref.slot==='audio')===(kind==='audio')),rules=mediaConstraints(definition,kind==='image'?'images':'audios'),label=kind==='image'?'参考图':'参考音频';
     if(!rules.maximum&&!rows.length)return null;
-    const full=rows.length>=rules.maximum;
-    return <View style={{gap:6}}><View style={s.row}><Text style={v.label}>{label}<Text style={v.caption}> · {rows.length}/{rules.maximum}{rules.minimum?` · 至少 ${rules.minimum}`:' · 可选'}</Text></Text></View>
-      <View style={{flexDirection:'row',gap:12,flexWrap:'wrap'}}><TextAction label={`添加${label}`} disabled={!editable||saving||full} onPress={()=>Alert.alert(`添加${label}`,'选择来源',[{text:'从设备导入',onPress:()=>void importReference(kind)},{text:'从素材库选择',onPress:()=>setPicking(kind)},{text:'取消',style:'cancel'}])}/></View>
-      {rows.length?<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:10,alignItems:'flex-start'}}>{rows.map((ref,i)=><View key={ref.version_id} style={{width:100,gap:2}}>
-        {kind==='image'?<Pressable accessibilityRole="button" accessibilityLabel={`预览${label} ${i+1}`} disabled={ref.state!=='AVAILABLE'} onPress={()=>setPreview(`${FileSystem.documentDirectory}${ref.relative_path}`)} style={[v.thumb,{width:100,height:72}]}>{ref.state==='AVAILABLE'?<Image source={{uri:`${FileSystem.documentDirectory}${ref.relative_path}`}} resizeMode="cover" style={{width:'100%',height:'100%',borderRadius:6}}/>:<Text style={v.caption}>待恢复</Text>}</Pressable>:<View style={[v.thumb,{width:100,height:48}]}><Text style={v.caption}>音频 {i+1}{ref.state!=='AVAILABLE'?' · 待恢复':''}</Text></View>}
-        <View style={{flexDirection:'row',justifyContent:'space-between'}}>{i>0?<IconAction label={`上移${label} ${i+1}`} icon="arrow_back" disabled={!editable||saving} onPress={()=>{const ids=rows.map(r=>r.version_id);[ids[i-1],ids[i]]=[ids[i],ids[i-1]];void replaceReferences(kind,ids).catch(()=>undefined);}}/>:<Text style={v.caption}>{i+1}</Text>}<IconAction label={`移除${label} ${i+1}`} icon="close" disabled={!editable||saving} onPress={()=>void replaceReferences(kind,rows.filter(r=>r!==ref).map(r=>r.version_id)).catch(()=>undefined)}/></View>
-      </View>)}</ScrollView>:null}
-    </View>;
+    return <VideoReferenceCards active={view==='create'&&!assist&&!sheet&&!picking} kind={kind} rows={rows} minimum={rules.minimum??0} maximum={rules.maximum??0} editable={editable&&!saving} onPreview={setPreview} onReplace={ids=>void replaceReferences(kind,ids).catch(()=>undefined)} onAdd={()=>Alert.alert(`添加${label}`,'选择来源',[{text:'从设备导入',onPress:()=>void importReference(kind)},{text:'从素材库选择',onPress:()=>setPicking(kind)},{text:'取消',style:'cancel'}])}/>;
   };
   const hasResults=Boolean(resultDraft?.job_id),displayResult=view==='result'&&hasResults;
   return <SafeAreaView edges={embedded?[]:['top','bottom','left','right']} style={s.screen}><KeyboardSurface style={{flex:1}}>

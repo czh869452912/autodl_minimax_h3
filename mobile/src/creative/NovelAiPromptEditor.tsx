@@ -1,3 +1,4 @@
+import {TagCompletionToggle} from './TagCompletionProvider';
 import {WeightedPromptInput} from './WeightedPromptInput';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
@@ -24,7 +25,7 @@ export function NovelAiPromptEditor({ input, update, editable, tab, setTab, onCl
   try { preview=JSON.parse(prepareNovelAiRequest({...input,action:'generate',enhance:false,enhancement:null},()=>0).requestJson); } catch { /* Incomplete input remains editable. */ }
   const content=<>
     {!inline?tabs:null}
-    {promptArea?<View style={{alignSelf:'flex-start',minWidth:160}}><SegmentedChoices singleRow label="提示词类型" options={[{id:'prompt',label:'正向'},{id:'negative',label:'UC · 负面'}]} value={tab==='negative'?'negative':'prompt'} onChange={setTab} /></View>:null}
+    {promptArea?<View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:8}}><View style={{flexShrink:1,minWidth:160}}><SegmentedChoices singleRow label="提示词类型" options={[{id:'prompt',label:'正向'},{id:'negative',label:'UC · 负面'}]} value={tab==='negative'?'negative':'prompt'} onChange={setTab} /></View><TagCompletionToggle/></View>:null}
     {promptArea && tab !== 'negative' ? <>
       {field('图片提示词',input.prompt,prompt=>update({prompt}))}
 <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}><TextAction label={`质量：${presetNames[input.qualityPreset]} · ${promptOptions?'收起选项':'选项'}`} onPress={()=>setPromptOptions(!promptOptions)} />{editable?<TextAction label="帮我写" icon="smart_toy" onPress={onAssist} />:null}</View>

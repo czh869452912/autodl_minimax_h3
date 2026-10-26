@@ -3,12 +3,12 @@ import {Keyboard,NativeModules,Pressable,Text,View} from 'react-native';
 import {COLORS} from '../ui/theme';
 import {localTags,officialTags,rankSuggestions,rememberTag,type TagSuggestion} from './tagDictionary';
 type Request={owner:object;query:string;model:string;target:number|null;apply:(tag:string)=>void};
-const Context=createContext<{show:(r:Request)=>void;hide:(owner:object)=>void}|null>(null);
+const Context=createContext<{show:(r:Request)=>void;hide:(owner:object)=>void;enabled:boolean;setEnabled:(enabled:boolean)=>void}|null>(null);
 export const useTagCompletion=()=>useContext(Context);
 export function TagCompletionProvider({children}:{children:ReactNode}){
  const [request,setRequest]=useState<Request>(),[items,setItems]=useState<TagSuggestion[]>([]),[top,setTop]=useState(0),[visibleRows,setVisibleRows]=useState(0),[online,setOnline]=useState(true),[enabled,setEnabled]=useState(true);
  const root=useRef<View>(null),live=useRef(request);live.current=request;
- const api=useMemo(()=>({show:(r:Request)=>setRequest(r),hide:(owner:object)=>setRequest(old=>old?.owner===owner?undefined:old)}),[]);
+ const api=useMemo(()=>({enabled,setEnabled,show:(r:Request)=>setRequest(r),hide:(owner:object)=>setRequest(old=>old?.owner===owner?undefined:old)}),[enabled]);
  useEffect(()=>{const sub=Keyboard.addListener('keyboardDidHide',()=>setRequest(undefined));return()=>sub.remove();},[]);
  useEffect(()=>{
   setItems([]);if(!request||!enabled)return;let active=true,local:TagSuggestion[]=[];setTop(0);
@@ -36,4 +36,9 @@ export function TagCompletionProvider({children}:{children:ReactNode}){
  <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,height:36}}><Text style={{flex:1,fontSize:11,color:COLORS.textMuted}}>标签补全</Text><Pressable accessibilityLabel="切换在线标签建议" onPress={()=>setOnline(!online)} style={{padding:8}}><Text style={{fontSize:11,color:COLORS.primary}}>{online?'官方＋离线':'仅离线'}</Text></Pressable><Pressable accessibilityLabel="本次关闭标签补全" onPress={()=>{setEnabled(false);setItems([]);}} style={{padding:8}}><Text style={{color:COLORS.textMuted}}>×</Text></Pressable></View>
  {items.slice(0,visibleRows).map(item=><Pressable key={item.name} accessibilityLabel={`补全标签 ${item.name}`} onPress={()=>{if(live.current!==request)return;rememberTag(item.name);request.apply(item.name);setRequest(undefined);}} style={{height:32,paddingHorizontal:10,paddingVertical:5,flexDirection:'row',gap:8}}><Text numberOfLines={1} style={{flex:1,color:COLORS.text,fontSize:13}}>{item.name.replaceAll('_',' ')}{item.translation?` · ${item.translation}`:''}</Text><Text style={{fontSize:10,color:COLORS.textMuted}}>{item.source==='official'?'官方':({0:'标签',1:'画师',3:'作品',4:'角色',5:'其他'} as Record<number,string>)[item.category??0]}</Text></Pressable>)}
  </View>:null}</View></Context.Provider>;
+}
+
+export function TagCompletionToggle(){
+ const api=useTagCompletion();if(!api)return null;
+ return <Pressable accessibilityRole="switch" accessibilityLabel="标签补全" accessibilityState={{checked:api.enabled}} onPress={()=>api.setEnabled(!api.enabled)} style={{paddingHorizontal:8,paddingVertical:10}}><Text style={{fontSize:12,color:api.enabled?COLORS.primary:COLORS.textMuted}}>标签补全：{api.enabled?'开':'关'}</Text></Pressable>;
 }

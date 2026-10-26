@@ -9,7 +9,10 @@ import {ListAction} from '../ui/ListPageUI';
 import {COLORS} from '../ui/theme';
 function AudioPlayback({uri}:{uri:string}){
   const player=useAudioPlayer(uri),status=useAudioPlayerStatus(player),[error,setError]=useState('');
-  useFocusEffect(useCallback(()=>()=>{player.pause();},[player]));
+  useFocusEffect(useCallback(()=>()=>{
+    // The audio hook may release its native shared object before focus cleanup on unmount.
+    try{player.pause();}catch{/* Already released: playback has stopped with the player. */}
+  },[player]));
   return <View style={{gap:8}}><Text style={{color:COLORS.textMuted}}>{Math.floor(status.currentTime??0)} / {Math.round(status.duration??0)} 秒</Text>
     <ListAction label={status.playing?'暂停试听':'播放音频'} secondary disabled={!status.isLoaded} onPress={()=>{void(async()=>{
       setError('');if(status.playing){player.pause();return;}
