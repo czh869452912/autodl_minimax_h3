@@ -2,6 +2,7 @@ const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 
 const config = getDefaultConfig(__dirname);
+if (!config.resolver.assetExts.includes('db')) config.resolver.assetExts.push('db');
 const defaultResolver = config.resolver.resolveRequest;
 
 // CopilotKit shared currently imports its Node Segment telemetry client from

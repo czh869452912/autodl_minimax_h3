@@ -1,5 +1,5 @@
 import React,{forwardRef,useCallback,useEffect,useRef,useState} from 'react';
-import {Keyboard,Platform,ScrollView,StyleSheet,TextInput,View,type KeyboardEvent,type ScrollViewProps,type ViewProps} from 'react-native';
+import {Keyboard,NativeModules,findNodeHandle,Platform,ScrollView,StyleSheet,TextInput,View,type KeyboardEvent,type ScrollViewProps,type ViewProps} from 'react-native';
 import {keyboardOverlap,focusedInputScrollOffset,type KeyboardFrame} from './keyboardGeometry';
 
 /** Avoid the actual window intersection, without guessing status bar or ancestor header heights. */
@@ -41,9 +41,13 @@ export const KeyboardAwareScrollView=forwardRef<ScrollView,ScrollViewProps>(func
     native.measureInWindow((x,y,width,height)=>focused.measureInWindow((fx,fy,fw,fh)=>{
       if(version!==epoch.current || scroll.current!==target || focused!==TextInput.State.currentlyFocusedInput())return;
       // Only scroll descendants of this scroll view; another modal may own the focused field.
-      focused.measureLayout(native,()=>{
+      focused.measureLayout(native,async()=>{
         if(version!==epoch.current || focused!==TextInput.State.currentlyFocusedInput())return;
-        const next=focusedInputScrollOffset({x,y,width,height},{x:fx,y:fy,width:fw,height:fh},offset.current,keyboard);
+        let caret;
+        try { if(NativeModules.AutoDLMedia?.focusedInputCaret)caret=await NativeModules.AutoDLMedia.focusedInputCaret(findNodeHandle(focused as unknown as Parameters<typeof findNodeHandle>[0])); } catch { /* Keep the current visible portion if native measurement is unavailable. */ }
+        if(version!==epoch.current || focused!==TextInput.State.currentlyFocusedInput())return;
+        const rect=caret && caret.target===findNodeHandle(focused as unknown as Parameters<typeof findNodeHandle>[0])?caret:{x:fx,y:fy,width:fw,height:fh};
+        const next=focusedInputScrollOffset({x,y,width,height},rect,offset.current,keyboard);
         if(Math.abs(next-offset.current)>1){offset.current=next;target.scrollTo({y:next,animated:false});}
       },()=>undefined);
     }));
@@ -56,7 +60,7 @@ export const KeyboardAwareScrollView=forwardRef<ScrollView,ScrollViewProps>(func
     const subscriptions=[Keyboard.addListener('keyboardDidShow',schedule),Keyboard.addListener('keyboardDidChangeFrame',schedule)];
     return ()=>{subscriptions.forEach(subscription=>subscription.remove());++epoch.current;if(raf.current!==undefined)cancelAnimationFrame(raf.current);};
   },[schedule]);
-  return <ScrollView {...props} ref={node=>{scroll.current=node;if(typeof forwardedRef==='function')forwardedRef(node);else if(forwardedRef)forwardedRef.current=node;}} keyboardShouldPersistTaps={props.keyboardShouldPersistTaps??'handled'} keyboardDismissMode={props.keyboardDismissMode??'on-drag'} scrollEventThrottle={props.scrollEventThrottle??16} automaticallyAdjustKeyboardInsets={false}
+  return <ScrollView {...props} ref={node=>{scroll.current=node;if(typeof forwardedRef==='function')forwardedRef(node);else if(forwardedRef)forwardedRef.current=node;}} keyboardShouldPersistTaps={props.keyboardShouldPersistTaps??'handled'} keyboardDismissMode={props.keyboardDismissMode??'none'} scrollEventThrottle={props.scrollEventThrottle??16} automaticallyAdjustKeyboardInsets={false}
     onFocus={event=>{onFocus?.(event);schedule();}} onLayout={event=>{onLayout?.(event);schedule();}} onContentSizeChange={(width,height)=>{onContentSizeChange?.(width,height);schedule();}}
     onScroll={event=>{offset.current=event.nativeEvent.contentOffset.y;onScroll?.(event);}}/>;
 });

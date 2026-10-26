@@ -252,8 +252,7 @@ test('compact settings retain batch size and Medium and one click submits the ba
     act(()=>button(tree,'生成设置').props.onPress());
     act(()=>button(tree,'4').props.onPress());
     act(()=>button(tree,'Medium').props.onPress());
-    expect(tree.root.findAllByProps({accessibilityLabel:'步数'})).toHaveLength(0);
-    act(()=>button(tree,'专业参数').props.onPress());
+
     const fields=tree.root.findAllByType(TextInput);
     expect(fields.find(n=>n.props.accessibilityLabel==='步数')?.props).toMatchObject({value:'14',editable:false});
     expect(button(tree,'Euler Ancestral').props.accessibilityState.disabled).toBe(true);

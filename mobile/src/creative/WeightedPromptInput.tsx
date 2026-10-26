@@ -1,5 +1,7 @@
-import {useMemo} from 'react';
-import {Text,TextInput,type TextInputProps} from 'react-native';
+import {useTagCompletion} from './TagCompletionProvider';
+import {completionToken,replaceCompletion} from './tagCompletion';
+import {useEffect,useMemo,useRef,useState} from 'react';
+import {Text,TextInput,findNodeHandle,type TextInputProps} from 'react-native';
 
 export function promptWeightRuns(value:string){
   const runs:Array<{text:string;weight:number}>=[],stack=[1];
@@ -25,9 +27,26 @@ export function promptWeightColor(weight:number){
 }
 
 /** Styled native text spans keep selection, multiline editing and IME composition in one input. */
-export function WeightedPromptInput({value='',...props}:Omit<TextInputProps,'value'|'children'> & {value?:string}){
-  const runs=useMemo(()=>promptWeightRuns(value),[value]);
-  return <TextInput {...props} multiline underlineColorAndroid="transparent">
+export function WeightedPromptInput({value='',model,...props}:Omit<TextInputProps,'value'|'children'> & {value?:string;model?:string}){
+  const runs=useMemo(()=>promptWeightRuns(value),[value]),completion=useTagCompletion(),owner=useRef({}).current,input=useRef<TextInput>(null);
+  const [focused,setFocused]=useState(false),[selection,setSelection]=useState({start:0,end:0}),[replacement,setReplacement]=useState<{start:number;end:number}>();
+  const accepted=useRef<string|undefined>(undefined);
+  const live=useRef({value,selection});live.current={value,selection};
+  useEffect(()=>{
+    if(!completion||!model||!focused||props.editable===false)return;
+    if(accepted.current===value){completion.hide(owner);return;}
+    const token=completionToken(value,selection);if(!token){completion.hide(owner);return;}
+    completion.show({owner,query:token.query,model,target:findNodeHandle(input.current),apply:tag=>{
+      if(live.current.value!==value||live.current.selection.start!==selection.start||live.current.selection.end!==selection.end)return;
+      const next=replaceCompletion(value,token,tag);accepted.current=next.text;props.onChangeText?.(next.text);setSelection({start:next.caret,end:next.caret});setReplacement({start:next.caret,end:next.caret});
+      input.current?.focus();
+    }});
+    return()=>completion.hide(owner);
+  },[value,selection,focused,model,props.editable,completion,owner]);
+  return <TextInput {...props} ref={input} multiline underlineColorAndroid="transparent" selection={replacement??props.selection}
+    onFocus={event=>{setFocused(true);props.onFocus?.(event);}} onBlur={event=>{setFocused(false);completion?.hide(owner);props.onBlur?.(event);}}
+    onChangeText={text=>{setReplacement(undefined);props.onChangeText?.(text);}}
+    onSelectionChange={event=>{setReplacement(undefined);setSelection(event.nativeEvent.selection);props.onSelectionChange?.(event);}}>
     <Text>{runs.map((run,index)=><Text key={index} style={{backgroundColor:promptWeightColor(run.weight)}}>{run.text}</Text>)}</Text>
   </TextInput>;
 }

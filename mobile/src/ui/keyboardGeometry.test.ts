@@ -32,3 +32,8 @@ test('does not oscillate while editing a multiline field taller than the keyboar
   expect(focusedInputScrollOffset(view,{x:16,y:96,width:368,height:300},100,keyboard)).toBe(100);
   expect(focusedInputScrollOffset(view,{x:16,y:360,width:368,height:300},100,keyboard)).toBe(364);
 });
+
+test('keeps the visible middle of a long input when caret measurement is unavailable',()=>{
+  const view={x:0,y:80,width:400,height:200};
+  expect(focusedInputScrollOffset(view,{x:16,y:-450,width:368,height:1000},650,keyboard)).toBe(650);
+});

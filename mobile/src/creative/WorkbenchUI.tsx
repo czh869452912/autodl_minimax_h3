@@ -43,7 +43,7 @@ export function SettingRow({ label, value, onPress, expanded, disabled = false, 
 export function SegmentedChoices<T extends string>({ label, options, value, onChange, disabled = false, singleRow = false, variant='segments' }: { variant?:'segments'|'tabs';label: string; options: ReadonlyArray<{ id: T; label: string; icon?: IconName }>; value: T; onChange: (id: T) => void; disabled?: boolean; singleRow?: boolean }) {
   const compact=useCompactWorkbench();
   return <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[w.segments,compact && {padding:2,gap:2,borderRadius:10},singleRow && {flexWrap:'nowrap'},variant==='tabs' && {backgroundColor:'transparent',padding:0,gap:12}]}>{options.map(option => <Pressable key={option.id} hitSlop={compact?4:undefined} accessibilityRole="radio" accessibilityLabel={option.label} accessibilityState={{ checked: value === option.id, disabled }} disabled={disabled} onPress={() => onChange(option.id)} style={({ pressed }) => [w.segment,compact && {minHeight:32,padding:5,borderRadius:8,flexBasis:60},singleRow && {flexBasis:0,paddingHorizontal:4}, value === option.id && w.segmentSelected,variant==='tabs' && {borderRadius:0,backgroundColor:'transparent',elevation:0,shadowOpacity:0,borderBottomWidth:2,borderBottomColor:value===option.id?COLORS.primary:'transparent'}, pressed && w.pressed, disabled && w.disabled]}>
-    {option.icon ? <AppIcon name={option.icon} size={compact?16:19} color={value === option.id ? COLORS.primaryActive : COLORS.textMuted} /> : null}<Text style={[w.segmentText,compact && {fontSize:12}, value === option.id && w.segmentTextSelected]}>{option.label}</Text>
+    {option.icon ? <AppIcon name={option.icon} size={compact?16:19} color={value === option.id ? COLORS.primaryActive : COLORS.textMuted} /> : null}<Text numberOfLines={singleRow?1:undefined} adjustsFontSizeToFit={singleRow} minimumFontScale={0.85} style={[w.segmentText,compact && {fontSize:12}, value === option.id && w.segmentTextSelected]}>{option.label}</Text>
   </Pressable>)}</View>;
 }
 
@@ -54,7 +54,7 @@ export function ParameterSheet({ title, description, onClose, children, fullScre
       <Pressable accessibilityRole="button" accessibilityLabel={`关闭${title}`} onPress={onClose} style={StyleSheet.absoluteFill} />
       <SafeAreaView edges={fullScreen ? ['top','bottom','left','right'] : ['bottom', 'left', 'right']} style={fullScreen ? {flex:1,backgroundColor:COLORS.surface} : w.sheet}>
         <View style={w.sheetHeader}><View style={{ flex: 1 }}><Text accessibilityRole="header" style={w.sectionTitle}>{title}</Text>{description ? <Text style={w.caption}>{description}</Text> : null}</View><TextAction label="完成" onPress={onClose} /></View>
-        <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: compact?12:20, gap: compact?10:16 }}>{children}</ScrollView>
+        <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="none" contentContainerStyle={{ padding: compact?12:20, gap: compact?10:16 }}>{children}</ScrollView>
       </SafeAreaView>
     </KeyboardSurface>
   </Modal>;

@@ -41,3 +41,14 @@ test('standalone queries retry but exclusive transactions receive the original n
   await db.withExclusiveTransactionAsync(async t => { expect(t).toBe(txn); });
   expect(db.getFirstAsync).toBe(db.getFirstAsync);
 });
+
+test('retries released statement preparation once, but never retries execution/finalization',async()=>{
+  const preparation=new Error("Call to function NativeDatabase.prepareAsync rejected: Cannot use shared object that was already released");
+  const query=jest.fn().mockRejectedValueOnce(preparation).mockResolvedValueOnce(42);
+  const db=withRetryingQueries({getFirstAsync:query} as never);
+  expect(await db.getFirstAsync('SELECT 42')).toBe(42);expect(query).toHaveBeenCalledTimes(2);
+  query.mockReset().mockRejectedValue(preparation);
+  await expect(db.getFirstAsync('SELECT 42')).rejects.toThrow('already released');expect(query).toHaveBeenCalledTimes(2);
+  const write=jest.fn().mockRejectedValue(new Error('NativeStatement.finalizeAsync: shared object that was already released'));
+  await expect(withRetryingQueries({runAsync:write} as never).runAsync('INSERT INTO tasks VALUES (1)')).rejects.toThrow('finalize');expect(write).toHaveBeenCalledTimes(1);
+});

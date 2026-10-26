@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
+import {creativeError} from './creativeError';
 import { creativeService } from './runtime';
 import type { CreativeDraft } from './drafts';
 
@@ -21,7 +22,7 @@ export function useDraftSync(id: string, draft: CreativeDraft | undefined, dirty
           if (before.dirty) { setConflict(true); return; }
           await before.load(() => active && !current.current.dirty && !current.current.busy);
         }
-      } catch (e) { if (active) current.current.onError(e instanceof Error ? e.message : '草稿读取失败'); }
+      } catch (e) { if (active) current.current.onError(creativeError(e,'草稿读取失败')); }
       finally { reading = false; }
     };
     void check();

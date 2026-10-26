@@ -24,5 +24,6 @@ export function creativeError(error: unknown, fallback = '操作失败，请稍�
     return `请检查${names.join('、')}，填写有效内容后重试。`;
   }
   if (!(error instanceof Error)) return fallback;
+  if (/NativeDatabase|NativeStatement|shared object that was already released|expo\.modules\.sqlite/.test(error.message)) return '本地数据暂时读取失败，输入仍保留，请稍后重试。';
   return messages[error.message] ?? error.message;
 }

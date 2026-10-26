@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { creativeAccounts } from './accountRuntime';
@@ -7,17 +7,18 @@ import { IconAction, ParameterSheet, TextAction } from './WorkbenchUI';
 import { COLORS } from '../ui/theme';
 import { creativeUI as s } from './creativeUI';
 
-export function NovelAiUsageBar({ refreshKey, inline=false }: { refreshKey: string;inline?:boolean }) {
+export function NovelAiUsageBar({ refreshKey, inline=false,onUsage }: { refreshKey: string;inline?:boolean;onUsage?:(usage:NovelAiUsage|undefined)=>void }) {
   const router = useRouter();
   const [usage, setUsage] = useState<NovelAiUsage>();
   const [loading, setLoading] = useState(false), [error, setError] = useState('');
   const [connected, setConnected] = useState<boolean>(), [open, setOpen] = useState(false), [retry, setRetry] = useState(0);
+  useEffect(()=>{const timer=setInterval(()=>setRetry(value=>value+1),45000);return()=>clearInterval(timer);},[]);
   const generation = useRef<string | undefined>(undefined);
   useFocusEffect(useCallback(() => {
     let active = true;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 20000);
-    setLoading(true); setError('');
+    setLoading(true); setError('');onUsage?.(undefined);
     void (async () => {
       const accounts = creativeAccounts();
       const account = (await accounts.list()).find(row => row.provider_id === 'novelai');
@@ -31,13 +32,13 @@ export function NovelAiUsageBar({ refreshKey, inline=false }: { refreshKey: stri
       const result = await fetchNovelAiUsage(credential.token, controller.signal);
       const current = (await accounts.list()).find(row => row.provider_id === 'novelai');
       if (active) {
-        if (current?.credential_generation_id === credential.generationId) setUsage(result);
+        if (current?.credential_generation_id === credential.generationId) {setUsage(result);onUsage?.(result);}
         else { setUsage(undefined); setRetry(value => value + 1); }
       }
     })().catch(() => { if (active) setError('用量刷新失败，请检查网络或账号后重试'); })
       .finally(() => { clearTimeout(timer); if (active) setLoading(false); });
     return () => { active = false; clearTimeout(timer); controller.abort(); };
-  }, [refreshKey, retry]));
+  }, [refreshKey, retry,onUsage]));
   const accountSettings = () => { setOpen(false); router.push({ pathname: '/(tabs)/settings', params: { section: 'accounts' } }); };
   const recovery=usage?.limit ? usage.limit.percent>=100?'额度已满，恢复暂停':usage.limit.nextPercentSeconds===null?'恢复时间未提供':usage.limit.nextPercentSeconds===0?'额度恢复当前暂停':`查询时约 ${Math.ceil(usage.limit.nextPercentSeconds/60)} 分钟恢复下一百分点`:'恢复时间未提供';
   const summary = connected === false ? '连接 NovelAI 以查看用量' : usage ? `${usage.anlas === null ? 'Anlas 未提供' : `${usage.anlas.toLocaleString()} Anlas`} · ${usage.limit ? `Limit 剩余 ${usage.limit.percent}%${usage.limit.unavailable ? ' · 暂不可用' : ''}` : 'Limit 未提供'}` : loading ? '正在获取 NovelAI 用量…' : '用量暂不可用';

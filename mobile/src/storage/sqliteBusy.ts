@@ -30,6 +30,16 @@ export async function withWriteTransaction<T>(db: AppDatabase, work: (txn: AppDa
   });
 }
 
+// This bridge error occurs while creating the statement, before SQL execution.
+// Never retry a released handle from execute/finalize: a write may already have committed.
+export function isReleasedPreparation(error:unknown){
+  const message=error instanceof Error?error.message:String(error);
+  return /NativeDatabase\.prepareAsync/.test(message)&&/shared object that was already released/i.test(message);
+}
+export async function retryPreparation<T>(work:()=>Promise<T>):Promise<T>{
+  try{return await work();}catch(error){if(!isReleasedPreparation(error))throw error;return work();}
+}
+
 export function withRetryingQueries(db: SQLiteDatabase): SQLiteDatabase {
   const methods = new Map<PropertyKey, unknown>();
   return new Proxy(db, {
@@ -38,7 +48,7 @@ export function withRetryingQueries(db: SQLiteDatabase): SQLiteDatabase {
       if (typeof value !== 'function') return value;
       if (!methods.has(key)) {
         methods.set(key, ['runAsync', 'getFirstAsync', 'getAllAsync'].includes(String(key))
-          ? (...args: unknown[]) => retrySqliteBusy(() => value.apply(target, args))
+          ? (...args: unknown[]) => retrySqliteBusy(() => retryPreparation(() => value.apply(target, args)))
           : value.bind(target));
       }
       return methods.get(key);

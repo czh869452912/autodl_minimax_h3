@@ -11,9 +11,9 @@ export function keyboardOverlap(view:WindowRect,keyboard?:KeyboardFrame):number 
 export function focusedInputScrollOffset(view:WindowRect,input:WindowRect,offset:number,keyboard?:KeyboardFrame,gap=16):number {
   const top=view.y+gap,bottom=Math.min(view.y+view.height,keyboard?.height?keyboard.screenY:Infinity)-gap;
   if(bottom<=top)return offset;
-  // A tall multiline field scrolls internally; keep its top visible rather than chasing its bottom.
+  // Without caret geometry, preserve the visible part of a tall field instead of jumping to its top.
   const delta=input.height>bottom-top
-    ? (input.y<top || input.y>=bottom ? input.y-top : 0)
+    ? (input.y>=bottom ? input.y-top : input.y+input.height<=top ? input.y+input.height-bottom : 0)
     : input.y+input.height>bottom ? input.y+input.height-bottom : input.y<top ? input.y-top : 0;
   return Math.max(0,offset+delta);
 }

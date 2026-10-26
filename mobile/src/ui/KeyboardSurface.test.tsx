@@ -69,3 +69,23 @@ test('reveals a focused descendant when focus changes while the keyboard stays o
     expect(scroll).not.toHaveBeenCalled();
   }finally{act(()=>tree?.unmount());}
 });
+
+test('reveals the native caret rather than the top of an oversized input and keeps IME while scrolling',async()=>{
+  metrics=keyboard;let tree!:ReturnType<typeof create>;
+  const rn=require('react-native');
+  const focused={measureInWindow:(cb:Function)=>cb(16,-400,368,1200),measureLayout:(_parent:unknown,ok:Function)=>ok()};
+  jest.spyOn(TextInput.State,'currentlyFocusedInput').mockReturnValue(focused as never);
+  jest.spyOn(rn,'findNodeHandle').mockReturnValue(77);
+  rn.NativeModules.AutoDLMedia={focusedInputCaret:jest.fn(async()=>({target:77,x:16,y:650,width:1,height:24}))};
+  const native={measureInWindow:(cb:Function)=>cb(0,80,400,420)},ref=React.createRef<ScrollView>();
+  try{
+    act(()=>{tree=create(<KeyboardAwareScrollView ref={ref}/>);});
+    jest.spyOn(ref.current!,'getNativeScrollRef').mockReturnValue(native as never);
+    const scroll=jest.spyOn(ref.current!,'scrollTo').mockImplementation(()=>undefined);
+    const view=tree.root.findByType(ScrollView);
+    expect(view.props.keyboardDismissMode).toBe('none');
+    act(()=>view.props.onScroll({nativeEvent:{contentOffset:{y:600}}}));
+    await act(async()=>{view.props.onFocus({});jest.runOnlyPendingTimers();});
+    expect(scroll).toHaveBeenLastCalledWith({y:790,animated:false});
+  }finally{act(()=>tree?.unmount());delete rn.NativeModules.AutoDLMedia;}
+});

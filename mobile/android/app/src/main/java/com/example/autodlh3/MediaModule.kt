@@ -33,6 +33,28 @@ internal class MediaWorkExecutors(
 }
 
 class MediaModule(private val context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
+  /** Return the actual selection line in window dp, including internal text scrolling. */
+  @ReactMethod
+  fun focusedInputCaret(tag: Double, promise: Promise) {
+    context.runOnUiQueueThread {
+      val input = try {
+        com.facebook.react.uimanager.UIManagerHelper.getUIManagerForReactTag(context, tag.toInt())?.resolveView(tag.toInt()) as? android.widget.EditText
+      } catch (_: Exception) { null }
+      val layout = input?.layout
+      if (input == null || !input.hasFocus() || layout == null || input.selectionEnd < 0) { promise.resolve(null); return@runOnUiQueueThread }
+      val line = layout.getLineForOffset(input.selectionEnd.coerceAtMost(input.text.length))
+      val location = IntArray(2); input.getLocationInWindow(location)
+      val density = context.resources.displayMetrics.density
+      promise.resolve(Arguments.createMap().apply {
+        putInt("target", input.id)
+        putBoolean("composing", android.view.inputmethod.BaseInputConnection.getComposingSpanStart(input.text) >= 0)
+        putDouble("x", (location[0] + input.totalPaddingLeft).toDouble() / density)
+        putDouble("y", (location[1] + input.totalPaddingTop + layout.getLineTop(line) - input.scrollY).toDouble() / density)
+        putDouble("width", 1.0)
+        putDouble("height", (layout.getLineBottom(line) - layout.getLineTop(line)).toDouble() / density)
+      })
+    }
+  }
   private val executors = MediaWorkExecutors()
   private val publisher = MediaStorePublisher(context.contentResolver)
   private val creativePublisher = CreativeImagePublisher(

@@ -436,7 +436,7 @@ export function PromptAssistantUi({
             setBriefOpen(false);
           }}><Text style={briefStyles.submitText}>加入草稿</Text></Pressable>
       }>
-        <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={briefStyles.fields}>
+        <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="none" contentContainerStyle={briefStyles.fields}>
           <Text style={briefStyles.hint}>填写已确定的内容，其余可以和助手继续讨论。</Text>
           {([['subject', '主体与动作', '谁在做什么，例如：一位少女穿过雨巷'], ['camera', '镜头与运动', '例如：近景起镜，缓慢后拉'], ['style', '风格与氛围', '例如：电影感、暖色、安静'], ['duration', '期望时长', '例如：8 秒']] as const).map(([key, label, placeholder]) => <View key={key} style={{ gap: 6 }}>
             <Text style={briefStyles.label}>{label}</Text>

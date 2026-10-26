@@ -7,10 +7,9 @@ import { InlineWorkbenchPanel, IconAction, ParameterSheet, SectionHeading, Segme
 import { NovelAiToggle } from './NovelAiSettings';
 import { creativeUI as s } from './creativeUI';
 import { COLORS } from '../ui/theme';
-import { NovelAiTags } from './NovelAiTags';
 import { NovelAiNumberField } from './NovelAiNumberField';
 
-export function NovelAiPromptEditor({ input, update, editable, tab, setTab, onClose, references, onAssist,onImport,focusPrompt=false, inline=false, description='提示词、角色与底图自动保存在本草稿' }: { input: NovelAiDraftInput; update: (patch: Partial<NovelAiDraftInput>) => void; editable: boolean; tab: string; setTab: (tab: string) => void; onClose: () => void; references: ReactNode;onAssist:()=>void;onImport?:()=>void;focusPrompt?:boolean; description?:string;inline?:boolean }) {
+export function NovelAiPromptEditor({ input, update, editable, tab, setTab, onClose, references, onAssist,focusPrompt=false, inline=false, description='提示词、角色与底图自动保存在本草稿' }: { input: NovelAiDraftInput; update: (patch: Partial<NovelAiDraftInput>) => void; editable: boolean; tab: string; setTab: (tab: string) => void; onClose: () => void; references: ReactNode;onAssist:()=>void;focusPrompt?:boolean; description?:string;inline?:boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [promptOptions,setPromptOptions]=useState(false);
   const [charactersOpen,setCharactersOpen]=useState(true);
@@ -20,18 +19,16 @@ export function NovelAiPromptEditor({ input, update, editable, tab, setTab, onCl
   const promptArea=['prompt','negative','characters'].includes(tab);
   const tabs=<SegmentedChoices variant="tabs" singleRow label="画面编辑分页" options={[{id:'prompt',label:'提示词'},{id:'references',label:'参考图'},{id:'chunks',label:'片段'}]} value={promptArea?'prompt':tab} onChange={setTab} />;
   const medium = isNovelAiMedium(input), maxCharacters=input.model.startsWith('nai-diffusion-5') ? 32 : 6;
-  const field = (label: string, value: string, onChangeText: (value: string) => void, disabled=false) => <WeightedPromptInput autoFocus={focusPrompt&&label==='图片提示词'} accessibilityLabel={label} placeholder={label} placeholderTextColor={COLORS.textMuted} value={value} editable={editable && !disabled} multiline onChangeText={onChangeText} style={[s.input,{minHeight:150,fontSize:13,lineHeight:20,textAlignVertical:'top',borderColor:COLORS.border,backgroundColor:COLORS.background,borderRadius:12,padding:12}]} />;
+  const field = (label: string, value: string, onChangeText: (value: string) => void, disabled=false) => <WeightedPromptInput model={input.model} autoFocus={focusPrompt&&label==='图片提示词'} accessibilityLabel={label} placeholder={label} placeholderTextColor={COLORS.textMuted} value={value} editable={editable && !disabled} multiline onChangeText={onChangeText} style={[s.input,{minHeight:150,fontSize:13,lineHeight:20,textAlignVertical:'top',borderColor:COLORS.border,backgroundColor:COLORS.background,borderRadius:12,padding:12}]} />;
   let preview: {input:string;parameters:{negative_prompt:string}} | undefined;
   try { preview=JSON.parse(prepareNovelAiRequest({...input,action:'generate',enhance:false,enhancement:null},()=>0).requestJson); } catch { /* Incomplete input remains editable. */ }
   const content=<>
     {!inline?tabs:null}
-    {promptArea?<View style={{alignSelf:'flex-start',minWidth:160}}><SegmentedChoices singleRow label="提示词类型" options={[{id:'prompt',label:input.characters.length?'Base Prompt':'Prompt'},{id:'negative',label:'UC · 负面'}]} value={tab==='negative'?'negative':'prompt'} onChange={setTab} /></View>:null}
+    {promptArea?<View style={{alignSelf:'flex-start',minWidth:160}}><SegmentedChoices singleRow label="提示词类型" options={[{id:'prompt',label:'正向'},{id:'negative',label:'UC · 负面'}]} value={tab==='negative'?'negative':'prompt'} onChange={setTab} /></View>:null}
     {promptArea && tab !== 'negative' ? <>
       {field('图片提示词',input.prompt,prompt=>update({prompt}))}
 <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}><TextAction label={`质量：${presetNames[input.qualityPreset]} · ${promptOptions?'收起选项':'选项'}`} onPress={()=>setPromptOptions(!promptOptions)} />{editable?<TextAction label="帮我写" icon="smart_toy" onPress={onAssist} />:null}</View>
       {promptOptions?<>
-      <NovelAiTags model={input.model} disabled={!editable} onChoose={tag=>update({prompt:[input.prompt,tag].filter(Boolean).join(', ')})} />
-      <SegmentedChoices label="画风模式" options={[{id:'anime',label:'Anime'},{id:'furry',label:'Furry'},{id:'background',label:'背景'}]} value={input.mode} disabled={!editable} onChange={mode=>update({mode})} />
       <SectionHeading title="质量预设" /><SegmentedChoices label="质量预设" options={QUALITY_PRESETS.filter(id=>input.model.startsWith('nai-diffusion-5') || id !== 'light').map(id=>({id,label:presetNames[id]}))} value={input.qualityPreset} disabled={!editable} onChange={qualityPreset=>update({qualityPreset})} />
 
       <Text style={s.muted}>用英文标签或自然语言描述。可用 1.2::内容:: 调整权重，用引号描述画面中的文字。</Text>
@@ -65,8 +62,8 @@ export function NovelAiPromptEditor({ input, update, editable, tab, setTab, onCl
       {field(`片段 ${index+1} 内容`,chunk.text,text=>update({chunks:input.chunks.map((c,i)=>i === index ? {...c,text} : c)}))}
       <View style={s.row}><TextAction label={`插入${chunk.name}`} disabled={!editable || !chunk.text.trim()} onPress={()=>{update({prompt:[input.prompt,chunk.text].filter(Boolean).join(', ')}); setTab('prompt');}} /><TextAction label={`移除片段 ${index+1}`} disabled={!editable} onPress={()=>update({chunks:input.chunks.filter((_,i)=>i !== index)})} /></View>
     </View>)}<TextAction label="新建片段" disabled={!editable || input.chunks.length>=50} onPress={()=>update({chunks:[...input.chunks,{name:`片段 ${input.chunks.length+1}`,text:''}]})} /></> : null}
-    <TextAction label={expanded ? '收起最终提示词' : '查看最终提示词'} onPress={()=>setExpanded(!expanded)} />
-    {expanded ? <View style={s.card}><Text style={s.title}>实际发送的描述</Text><Text selectable style={s.body}>{preview?.input || '填写描述后预览'}</Text><Text style={s.title}>实际发送的负面词</Text><Text selectable style={s.muted}>{preview?.parameters.negative_prompt || '无'}</Text></View> : null}
+    {promptArea?<TextAction label={expanded ? '收起最终提示词' : '查看最终提示词'} onPress={()=>setExpanded(!expanded)} />:null}
+    {promptArea && expanded ? <View style={s.card}><Text style={s.title}>实际发送的描述</Text><Text selectable style={s.body}>{preview?.input || '填写描述后预览'}</Text><Text style={s.title}>实际发送的负面词</Text><Text selectable style={s.muted}>{preview?.parameters.negative_prompt || '无'}</Text></View> : null}
   </>;
-  return inline?<InlineWorkbenchPanel title="画面编辑" header={<View style={{flexDirection:'row',alignItems:'center'}}><View style={{flex:1}}>{tabs}</View>{onImport?<IconAction label="导入图片或生成信息" icon="add_photo_alternate" disabled={!editable} onPress={onImport}/>:null}</View>} onClose={onClose}>{content}</InlineWorkbenchPanel>:<ParameterSheet fullScreen title="画面编辑" description={description} onClose={onClose}>{content}</ParameterSheet>;
+  return inline?<InlineWorkbenchPanel title="画面编辑" header={<View style={{flexDirection:'row',alignItems:'center'}}><View style={{flex:1}}>{tabs}</View></View>} onClose={onClose}>{content}</InlineWorkbenchPanel>:<ParameterSheet fullScreen title="画面编辑" description={description} onClose={onClose}>{content}</ParameterSheet>;
 }
