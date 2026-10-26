@@ -1,7 +1,7 @@
 import React from 'react';
 import {act,create} from 'react-test-renderer';
 import {Modal} from 'react-native';
-import {PromptAssistSheet} from './PromptAssistSheet';
+import {PromptDiscussion as PromptAssistSheet} from './PromptAssistSheet';
 const mockRun=jest.fn(),mockRead=jest.fn(),mockWrite=jest.fn(async()=>undefined);
 jest.mock('./promptAssistant',()=>({...jest.requireActual('./promptAssistant'),streamPromptAssistant:(...args:unknown[])=>mockRun(...args)}));
 jest.mock('./promptAssistantSession',()=>({readPromptSession:(id:string)=>mockRead(id),writePromptSession:(...args:unknown[])=>mockWrite(...args as [])}));

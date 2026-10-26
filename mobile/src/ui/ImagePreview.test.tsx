@@ -1,11 +1,12 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { AccessibilityInfo, Animated, Modal, PanResponder, View } from 'react-native';
+import { AccessibilityInfo, Animated, Modal, View } from 'react-native';
+import {GestureDetector} from 'react-native-gesture-handler';
 import { ImagePreview } from './ImagePreview';
 
 test('paging follows the finger, commits only after sliding, and springs back at the boundary',async()=>{
   jest.spyOn(AccessibilityInfo,'isReduceMotionEnabled').mockResolvedValue(false);
-  const pan=jest.spyOn(PanResponder,'create');
+
   const steps:Array<{config:any;finish?:({finished}:{finished:boolean})=>void}>=[];
   jest.spyOn(Animated,'timing').mockImplementation((_value,config)=>{
     const step:{config:any;finish?:({finished}:{finished:boolean})=>void}={config};steps.push(step);
@@ -18,7 +19,8 @@ test('paging follows the finger, commits only after sliding, and springs back at
     await act(async()=>{tree=create(<ImagePreview uri="file:///result.png" previousUri="file:///old.png" onPrevious={previous} onClose={()=>undefined}/>);});
     await act(async()=>tree.root.findByType(Modal).props.onShow());
     act(()=>tree.root.findAllByType(View).find(n=>n.props.onLayout)!.props.onLayout({nativeEvent:{layout:{width:360,height:600}}}));
-    const handlers=pan.mock.calls.at(-1)![0];
+    const native=tree.root.findByType(GestureDetector).props.gesture.gestures[1].handlers;
+    const handlers={onPanResponderGrant:(_e:unknown,_g:unknown)=>native.onBegin({}),onPanResponderMove:(_e:unknown,g:any)=>native.onUpdate({translationX:g.dx,translationY:g.dy,numberOfPointers:1}),onPanResponderRelease:(_e:unknown,g:any)=>native.onEnd({translationX:g.dx,translationY:g.dy,velocityX:g.vx},true)};
     const offset=()=>tree.root.findByProps({testID:'image-page-track'}).props.style.transform[0].translateX.__getValue();
     act(()=>handlers.onPanResponderGrant!(event(100),gesture(0)));
     act(()=>handlers.onPanResponderMove!(event(220),gesture(120)));
@@ -75,38 +77,24 @@ test('fullscreen animates in and delays unmount until the exit transition comple
   }finally{act(()=>tree?.unmount());jest.restoreAllMocks();}
 });
 
-test('pinch-to-pan stays continuous, clamps offsets, and near-unit zoom allows a later downward close', () => {
-  const spy = jest.spyOn(PanResponder, 'create');
-  const close = jest.fn();
-  let tree!: ReturnType<typeof create>;
-  try {
-    act(() => { tree = create(<ImagePreview uri="file:///image.png" onClose={close} />); });
-    const handlers = spy.mock.calls.at(-1)![0];
-    const event = (points: number[][]) => ({ nativeEvent: { touches: points.map(([pageX, pageY]) => ({ pageX, pageY })) } }) as never;
-    const gesture = (dx = 0, dy = 0) => ({ dx, dy }) as never;
-    const transform = () => tree.root.findByProps({ testID: 'reference-image-preview' }).props.style.transform;
-    act(() => tree.root.findAllByType(View).find(node => node.props.onLayout)!.props.onLayout({ nativeEvent: { layout: { width: 200, height: 400 } } }));
-    act(() => handlers.onPanResponderGrant!(event([[0, 0], [100, 0]]), gesture()));
-    act(() => handlers.onPanResponderMove!(event([[0, 0], [200, 0]]), gesture()));
+test('native pinch preserves focal point and remaining-finger pan never pages or closes',()=>{
+  const close=jest.fn(),previous=jest.fn();let tree!:ReturnType<typeof create>;
+  try{
+    act(()=>{tree=create(<ImagePreview uri="file:///image.png" onClose={close} onPrevious={previous}/>);});
+    act(()=>tree.root.findAllByType(View).find(n=>n.props.onLayout)!.props.onLayout({nativeEvent:{layout:{width:200,height:400}}}));
+    const [pinch,pan]=tree.root.findByType(GestureDetector).props.gesture.gestures.map((g:any)=>g.handlers);
+    const transform=()=>tree.root.findByProps({testID:'reference-image-preview'}).props.style.transform;
+    act(()=>{pan.onBegin({});pinch.onStart({focalX:100,focalY:200});pinch.onUpdate({scale:2,focalX:100,focalY:200});});
     expect(transform()[2].scale).toBe(2);
-    act(() => handlers.onPanResponderMove!(event([[120, 100]]), gesture(120, 100)));
-    expect(transform()[0].translateX).toBe(0);
-    act(() => handlers.onPanResponderMove!(event([[150, 120]]), gesture(150, 120)));
-    expect(transform()[0].translateX).toBe(30);
-    expect(transform()[1].translateY).toBe(20);
-    act(() => handlers.onPanResponderMove!(event([[1000, 1000]]), gesture()));
-    expect(transform()[0].translateX).toBe(100);
-    expect(transform()[1].translateY).toBe(200);
-    act(() => handlers.onPanResponderRelease!(event([]), gesture()));
-    act(() => handlers.onPanResponderGrant!(event([[0, 0], [200, 0]]), gesture()));
-    act(() => handlers.onPanResponderMove!(event([[0, 0], [100.001, 0]]), gesture()));
+    act(()=>{pinch.onFinalize({},true);pan.onUpdate({translationX:100,translationY:100,numberOfPointers:1});pan.onUpdate({translationX:130,translationY:120,numberOfPointers:1});});
+    expect(transform()[0].translateX).toBe(30);expect(transform()[1].translateY).toBe(20);
+    act(()=>pan.onEnd({translationX:130,translationY:120,velocityX:800},true));
+    expect(previous).not.toHaveBeenCalled();expect(close).not.toHaveBeenCalled();
+    act(()=>{pinch.onStart({focalX:100,focalY:200});pinch.onUpdate({scale:0.5,focalX:100,focalY:200});pinch.onFinalize({},true);});
     expect(transform()[2].scale).toBe(1);
-    act(() => handlers.onPanResponderRelease!(event([]), gesture(0, 150)));
-    expect(close).not.toHaveBeenCalled();
-    act(() => handlers.onPanResponderGrant!(event([[0, 0]]), gesture()));
-    act(() => handlers.onPanResponderRelease!(event([]), gesture(0, 150)));
-    expect(close).toHaveBeenCalledTimes(1);
-  } finally { act(() => tree?.unmount()); spy.mockRestore(); }
+    act(()=>pan.onEnd({translationX:0,translationY:150,velocityX:0},true));expect(close).not.toHaveBeenCalled();
+    act(()=>{pan.onBegin({});pan.onEnd({translationX:0,translationY:150,velocityX:0},true);});expect(close).toHaveBeenCalledTimes(1);
+  }finally{act(()=>tree?.unmount());}
 });
 
 test('original comparison retains the zoomed viewport and adjacent version controls remain available',()=>{

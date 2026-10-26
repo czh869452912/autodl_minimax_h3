@@ -7,14 +7,14 @@ export function nearestDrawerStop(height:number,current:number,velocity=0){
   const stops=drawerStops(height),projected=current-velocity*100;
   return stops.reduce((best,n,i)=>Math.abs(n-projected)<Math.abs(stops[best]-projected)?i:best,0);
 }
-export function ImageEditorDrawer({expanded,height,wide=false,summary,onExpand,onCollapse,children}:{expanded:boolean;height:number;wide?:boolean;summary:ReactNode;onExpand:()=>void;onCollapse:()=>void;children:ReactNode}){
+export function ImageEditorDrawer({expanded,height,wide=false,fill=false,summary,onExpand,onCollapse,children}:{expanded:boolean;height:number;wide?:boolean;fill?:boolean;summary:ReactNode;onExpand:()=>void;onCollapse:()=>void;children:ReactNode}){
   const extent=useRef(new Animated.Value(76)).current,current=useRef(76),start=useRef(76),snap=useRef(1);
   const [reduced,setReduced]=useState(true);
-  const live=useRef({expanded,height,onExpand,onCollapse,reduced});live.current={expanded,height,onExpand,onCollapse,reduced};
+  const live=useRef({expanded,height,onExpand,onCollapse,reduced,fill});live.current={expanded,height,onExpand,onCollapse,reduced,fill};
   useEffect(()=>{let active=true;void AccessibilityInfo.isReduceMotionEnabled().then(v=>{if(active)setReduced(v);}).catch(()=>undefined);const sub=AccessibilityInfo.addEventListener('reduceMotionChanged',setReduced);return()=>{active=false;sub.remove();};},[]);
   useEffect(()=>{const id=extent.addListener(({value})=>{current.current=value;});return()=>extent.removeListener(id);},[extent]);
-  const animate=(index:number)=>{snap.current=index||1;Animated.timing(extent,{toValue:drawerStops(live.current.height)[index],duration:live.current.reduced?0:220,easing:Easing.out(Easing.cubic),useNativeDriver:false}).start();};
-  useEffect(()=>{animate(expanded?snap.current:0);return()=>extent.stopAnimation();},[expanded,height,reduced]);
+  const animate=(index:number)=>{snap.current=index||1;Animated.timing(extent,{toValue:drawerStops(live.current.height)[index&&live.current.fill?2:index],duration:live.current.reduced?0:220,easing:Easing.out(Easing.cubic),useNativeDriver:false}).start();};
+  useEffect(()=>{animate(expanded?snap.current:0);return()=>extent.stopAnimation();},[expanded,height,reduced,fill]);
   const pan=useMemo(()=>PanResponder.create({
     onMoveShouldSetPanResponder:(_,g)=>Math.abs(g.dy)>5&&Math.abs(g.dy)>Math.abs(g.dx),
     onPanResponderGrant:()=>{extent.stopAnimation();start.current=current.current;},

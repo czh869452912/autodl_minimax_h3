@@ -20,6 +20,7 @@ import { ImageProcessingSheet } from './ImageProcessingSheet';
 import { ResultActionBar } from './ResultActionBar';
 import { CopySubmittedDraft } from './CopySubmittedDraft';
 import { DraftParametersSheet } from './DraftParametersSheet';
+import { ZoomableImage } from '../ui/ZoomableImage';
 import { ImagePreview } from '../ui/ImagePreview';
 import { HoldToCompare } from '../ui/HoldToCompare';
 import { VersionComparison } from './VersionComparison';
@@ -30,7 +31,7 @@ import { imageWorkbenchLayout } from './imageWorkbenchLayout';
 
 export const creativeJobLabel = (status: string) => ({ DRAFT: '准备中', VALIDATING: '检查生成条件', READY_TO_SUBMIT: '等待提交', SUBMITTING: '正在提交', QUEUED: '排队中', RUNNING: '正在生成', SUCCEEDED: '生成已完成', PARTIAL_SUCCEEDED: '部分生成完成', FAILED: '生成未完成，请查看原因', CANCELLED: '已取消', UNKNOWN: '暂时无法确认结果，请核查原任务' }[status] ?? '正在读取进度');
 
-export function CreativeResults({ draft, taskDetail=false, disabled = false, dock = false, canvas=false, onCurrentVersion, onJobStatus, onEnhance, onUpscale, onReuse, onUseImage, historySignal=0, initialVersionId,previewVisible=true,relatedAssetIds,historyVisible,onHistoryVisibilityChange }: { draft: CreativeDraft; taskDetail?:boolean; disabled?: boolean; dock?:boolean; canvas?:boolean; onCurrentVersion?:(version:AssetVersion|undefined)=>void; onJobStatus?:(status:string)=>void; onEnhance?:(version:AssetVersion)=>void; onUpscale?:(version:AssetVersion)=>void; onReuse?:(patch:Partial<NovelAiDraftInput>)=>void; onUseImage?:(version:AssetVersion,action:'img2img'|'infill')=>void; historySignal?:number; initialVersionId?:string;previewVisible?:boolean;relatedAssetIds?:string[];historyVisible?:boolean;onHistoryVisibilityChange?:(visible:boolean)=>void }) {
+export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabled = false, dock = false, canvas=false, onCurrentVersion, onJobStatus, onEnhance, onUpscale, onReuse, onUseImage, historySignal=0, initialVersionId,previewVisible=true,relatedAssetIds,historyVisible,onHistoryVisibilityChange }: { draft: CreativeDraft; onlyJob?:boolean; taskDetail?:boolean; disabled?: boolean; dock?:boolean; canvas?:boolean; onCurrentVersion?:(version:AssetVersion|undefined)=>void; onJobStatus?:(status:string)=>void; onEnhance?:(version:AssetVersion)=>void; onUpscale?:(version:AssetVersion)=>void; onReuse?:(patch:Partial<NovelAiDraftInput>)=>void; onUseImage?:(version:AssetVersion,action:'img2img'|'infill')=>void; historySignal?:number; initialVersionId?:string;previewVisible?:boolean;relatedAssetIds?:string[];historyVisible?:boolean;onHistoryVisibilityChange?:(visible:boolean)=>void }) {
   const router = useRouter();
   const { width,height,fontScale } = useWindowDimensions();
   const [bounds,setBounds]=useState({width,height:height*0.65});
@@ -71,7 +72,7 @@ export function CreativeResults({ draft, taskDetail=false, disabled = false, doc
       try {
         const rows = assetKey?(await Promise.all(assetKey.split('\n').map(id=>creativeService().versions(id)))).flat().sort((a,b)=>(b.createdAt??0)-(a.createdAt??0)||b.versionNo-a.versionNo):[];
         const job = draft.job_id ? await getDatabase().getFirstAsync<{ status: string }>('SELECT status FROM workflow_jobs WHERE id=?', draft.job_id) : null;
-        if (active) { setVersions(rows); setStatus(job?.status ?? ''); setReadError(''); }
+        if (active) { setVersions(onlyJob?rows.filter(v=>v.recipe.jobId===draft.job_id):rows); setStatus(job?.status ?? ''); setReadError(''); }
       } catch {
         if (active) setReadError('结果读取失败，正在重试');
       } finally { reading = false; }
@@ -79,7 +80,7 @@ export function CreativeResults({ draft, taskDetail=false, disabled = false, doc
     void refresh();
     const timer = setInterval(() => void refresh(), 2500);
     return () => { active = false; clearInterval(timer); };
-  }, [draft.id, draft.target_asset_id, draft.job_id,assetKey]));
+  }, [draft.id, draft.target_asset_id, draft.job_id,assetKey,onlyJob]));
   const current = versions.find(v => v.id === selected) ?? versions.find(v => v.recipe.jobId === draft.job_id) ?? versions[0];
   useEffect(()=>{
     let active=true;setExporting(undefined);setDelivery(undefined);setNotice('');setSaveRequested(false);
@@ -178,7 +179,7 @@ export function CreativeResults({ draft, taskDetail=false, disabled = false, doc
       {draft.shot_id?<IconAction label="用于此镜头" icon="image" disabled={unavailable} onPress={apply} />:null}
       <IconAction label="更多成果操作" icon="filter_list" onPress={()=>setMore(true)} />
     </View></View>:null}
-    {current.state==='AVAILABLE' && current.relativePath?image?<View testID="result-image-stage" style={{flex:1,minHeight:0,marginVertical:6,borderRadius:12,overflow:'hidden',backgroundColor:COLORS.surfaceRaised}}><Pressable accessibilityRole="button" accessibilityLabel="全屏查看图片" onPress={()=>setFullScreen(true)} style={{flex:1,minHeight:0}}><Image accessibilityLabel={`当前图片，版本 ${current.versionNo}`} source={{uri:`${FileSystem.documentDirectory}${current.relativePath}`}} resizeMode="contain" style={{flex:1,width:'100%'}} />{original?<Image testID="result-original-overlay" accessible={false} source={{uri:`${FileSystem.documentDirectory}${original.relativePath}`}} resizeMode="contain" style={{position:'absolute',inset:0,opacity:showingOriginal?1:0,backgroundColor:COLORS.surfaceRaised}} />:null}</Pressable>{original?<View testID="result-compare-overlay" style={{position:'absolute',right:10,bottom:10}}><HoldToCompare active={showingOriginal} onChange={held=>setHeldOriginal(held?current.id:undefined)} /></View>:null}</View>:<View style={{flex:1,minHeight:180}}><VideoPlayer source={`${FileSystem.documentDirectory}${current.relativePath}`} /></View>:<Text style={s.muted}>原文件尚不可用，请在素材详情中恢复。</Text>}
+    {current.state==='AVAILABLE' && current.relativePath?image?<View testID="result-image-stage" style={{flex:1,minHeight:0,marginVertical:6,borderRadius:12,overflow:'hidden',backgroundColor:COLORS.surfaceRaised}}><ZoomableImage uri={`${FileSystem.documentDirectory}${current.relativePath}`} identity={current.id} label={`当前图片，版本 ${current.versionNo}`} onOpen={()=>setFullScreen(true)} originalUri={original?`${FileSystem.documentDirectory}${original.relativePath}`:undefined} showOriginal={showingOriginal}/>{original?<View testID="result-compare-overlay" style={{position:'absolute',right:10,bottom:10}}><HoldToCompare active={showingOriginal} onChange={held=>setHeldOriginal(held?current.id:undefined)} /></View>:null}</View>:<View style={{flex:1,minHeight:180}}><VideoPlayer source={`${FileSystem.documentDirectory}${current.relativePath}`} /></View>:<Text style={s.muted}>原文件尚不可用，请在素材详情中恢复。</Text>}
     {image && !minimalChrome?<View style={{flexDirection:'row',alignItems:'center',gap:8,flexWrap:'wrap',paddingVertical:4}}>
       <Text selectable style={{fontSize:12,color:COLORS.textMuted,flex:1}}>Seed {currentInfo?.seed??'未记录'}</Text>
       {onReuse && currentInfo?.seed!==undefined?<TextAction label="复用 Seed" disabled={busy || disabled} onPress={()=>onReuse({seed:currentInfo.seed})} />:null}

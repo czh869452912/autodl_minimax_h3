@@ -31,6 +31,7 @@ jest.mock('./videoWorkbenchWorkflows',()=>({
 }));
 jest.mock('../native/imagePicker', () => ({ pickImagesFromGallery: (...args:any[]) => mockPick(...args) }));
 jest.mock('./videoRuntime', () => ({ prepareCreativeVideo:()=>mockPrepare(), confirmCreativeVideo:()=>mockConfirm() }));
+jest.mock('./VideoGenerationHistory',()=>({VideoGenerationHistory:(props:any)=>{const React=require('react');return React.createElement(require('./CreativeResults').CreativeResults,{draft:props.draft,onJobStatus:props.onLatestStatus,previewVisible:props.visible});}}));
 jest.mock('./CreativeResults', () => ({ CreativeResults: () => null }));
 jest.mock('./CreativeAccountPanel', () => ({ CreativeAccountPanel: () => null }));
 jest.mock('./DraftHeading', () => ({ DraftHeading: () => null }));
@@ -58,7 +59,7 @@ test('returning from account settings rechecks readiness even when the draft is 
     await act(async()=>tree.update(<VideoDraftScreen id="d"/>));
     expect(generate().props.disabled).toBe(true);
     expect(tree.root.findAllByType(TextInput).find(n=>n.props.accessibilityLabel==='视频镜头提示词')?.props.value).toBe('A camera pan');
-  }finally{act(()=>tree?.unmount());}
+  }finally{act(()=>tree?.unmount());jest.restoreAllMocks();}
 });
 
 test('an unavailable workflow still restores its submitted job and result observation',async()=>{
@@ -128,7 +129,8 @@ test('reference import locks duplicate taps and editing until picker cancellatio
   const button = () => tree.root.findAll(n => n.props.accessibilityLabel === '添加参考图' && typeof n.props.onPress === 'function')[0];
   try {
     await act(async () => { tree = create(<VideoDraftScreen id="d" />); });
-    act(() => { const onPress = button().props.onPress; onPress(); onPress(); });
+    const source=jest.spyOn(Alert,'alert').mockImplementation((_title,_message,buttons)=>{buttons?.find(b=>b.text==='从设备导入')?.onPress?.();});
+    act(() => { const onPress = button().props.onPress; onPress(); onPress(); });source.mockRestore();
     expect(mockPick).toHaveBeenCalledTimes(1);
     expect(tree.root.findByProps({ accessibilityLabel: '视频镜头提示词' }).props.editable).toBe(false);
     await act(async () => release([]));
@@ -233,6 +235,7 @@ test('an explicitly reviewed unknown request no longer blocks the next manual ge
 });
 
 test('adding references opens the corresponding multi-picker and associates the whole batch once',async()=>{
+  const source=jest.spyOn(Alert,'alert').mockImplementation((_title,_message,buttons)=>{buttons?.find(b=>b.text==='从设备导入')?.onPress?.();});
  const images=[{uri:'file:///a.png',name:'a.png',mimeType:'image/png',size:10},{uri:'file:///b.png',name:'b.png',mimeType:'image/png',size:10}];
  mockPick.mockResolvedValue(images);mockImport.mockImplementation(async(file:any)=>({status:'completed',value:{versionId:file.name}}));
  mockDocuments.mockResolvedValue({canceled:false,assets:[{uri:'file:///a.mp3',name:'a.mp3',mimeType:'audio/mpeg'},{uri:'file:///b.mp3',name:'b.mp3',mimeType:'audio/mpeg'}]});
