@@ -1,20 +1,7 @@
-import {Asset} from 'expo-asset';
-import * as FileSystem from 'expo-file-system/legacy';
-import {openDatabaseAsync,type SQLiteDatabase} from 'expo-sqlite';
+import {queryTagDictionary} from '../storage/tagDictionaryStore';
 import {NativeModules} from 'react-native';
 import {creativeAccounts} from './accountRuntime';
 export type TagSuggestion={name:string;category?:number;count?:number;translation?:string;source:'local'|'official'};
-let database:Promise<SQLiteDatabase>|undefined;
-function dictionary(){
- if(!database)database=(async()=>{
-  const asset=await Asset.fromModule(require('../../assets/tags/danbooru-v1.db')).downloadAsync();
-  if(!asset.localUri)throw new Error('TAG_DICTIONARY_UNAVAILABLE');
-  const directory=FileSystem.documentDirectory+'tag-dictionaries/';await FileSystem.makeDirectoryAsync(directory,{intermediates:true});
-  const path=directory+'danbooru-v1.db';if(!(await FileSystem.getInfoAsync(path)).exists)await FileSystem.copyAsync({from:asset.localUri,to:path});
-  const db=await openDatabaseAsync('danbooru-v1.db',{useNewConnection:true},directory);await db.execAsync('PRAGMA query_only=ON');return db;
- })().catch(error=>{database=undefined;throw error;});
- return database;
-}
 let remoteInFlight=false;
 const localCache=new Map<string,TagSuggestion[]>(),remoteCache=new Map<string,TagSuggestion[]>(),recent=new Map<string,number>();
 export function rememberTag(name:string){recent.delete(name);recent.set(name,Date.now());if(recent.size>100)recent.delete(recent.keys().next().value!);}
@@ -28,7 +15,7 @@ export function rankSuggestions(items:TagSuggestion[],query:string){
 }
 export async function localTags(query:string):Promise<TagSuggestion[]>{
  const key=query.toLowerCase().replaceAll('_',' ');if(localCache.has(key))return localCache.get(key)!;
- const db=await dictionary();const rows=await db.getAllAsync<{name:string;category:number;count:number;translation:string}>(`SELECT DISTINCT t.name,t.category,t.count,t.translation FROM terms s JOIN tags t ON t.name=s.tag WHERE s.term>=? AND s.term<? ORDER BY (s.term=?) DESC,t.count DESC LIMIT 24`,key,key+'\uffff',key);
+ const rows=await queryTagDictionary(key);
  const result=rows.map(row=>({...row,source:'local' as const}));localCache.set(key,result);if(localCache.size>64)localCache.delete(localCache.keys().next().value!);return result;
 }
 export async function officialTags(model:string,query:string):Promise<TagSuggestion[]>{
