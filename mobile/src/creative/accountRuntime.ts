@@ -1,3 +1,4 @@
+import {clearWalletCredential} from './autodlWallet';
 import * as SecureStore from 'expo-secure-store';
 import { getDatabase } from '../storage/databaseClient';
 import { createCreativeAccounts } from './accounts';
@@ -23,8 +24,8 @@ export function creativeAccounts(db=getDatabase()){
   const current=accounts(db);
   return {...current,
     async list(){await migrateAutodl(db);return current.list();},
-    async connect(provider:Parameters<typeof current.connect>[0],token:string){if(provider==='autodl')await migrateAutodl(db);const result=await current.connect(provider,token);if(provider==='autodl')await SecureStore.deleteItemAsync('autodl.token');return result;},
-    async disconnect(provider:Parameters<typeof current.disconnect>[0]){if(provider==='autodl')await migrateAutodl(db);await current.disconnect(provider);if(provider==='autodl')await SecureStore.deleteItemAsync('autodl.token');},
+    async connect(provider:Parameters<typeof current.connect>[0],token:string){if(provider==='autodl'){await migrateAutodl(db);await clearWalletCredential();}const result=await current.connect(provider,token);if(provider==='autodl')await SecureStore.deleteItemAsync('autodl.token');return result;},
+    async disconnect(provider:Parameters<typeof current.disconnect>[0]){if(provider==='autodl'){await migrateAutodl(db);await clearWalletCredential();}await current.disconnect(provider);if(provider==='autodl')await SecureStore.deleteItemAsync('autodl.token');},
   };
 }
 export async function defaultAutodlCredential(db=getDatabase()){

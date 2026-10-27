@@ -30,3 +30,15 @@ test('unified credentials take priority over an obsolete legacy token, and lost 
     expect(SecureStore.getItemAsync).toHaveBeenCalled();
   }finally{db.close();}
 });
+
+
+test('changing the generation account clears independent wallet credentials',async()=>{
+ const db=createInitializedRealSqliteTestDb();
+ try{
+  const accounts=creativeAccounts(db as never);await accounts.connect('autodl','first-secret');
+  mockSecrets.set('autodl.wallet.developer','old-wallet');
+  await accounts.connect('autodl','replacement-secret');expect(mockSecrets.has('autodl.wallet.developer')).toBe(false);
+  mockSecrets.set('autodl.wallet.developer','new-wallet');
+  await accounts.disconnect('autodl');expect(mockSecrets.has('autodl.wallet.developer')).toBe(false);
+ }finally{db.close();}
+});

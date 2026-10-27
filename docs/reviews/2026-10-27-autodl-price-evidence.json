@@ -1,0 +1,41 @@
+{
+  "checked_on": "2026-10-27",
+  "source": "https://www.autodl.art/api/v1/comfyui/workflows/minimax_h3_image_audio_to_video_v2_15s",
+  "public_response": {
+    "uuid": "minimax_h3_image_audio_to_video_v2_15s",
+    "price": 0,
+    "price_type": "minimax_h3",
+    "billing_interval_seconds": 0,
+    "billing_config": {
+      "minimax_h3": [
+        {
+          "resolution": "480p",
+          "price": 40,
+          "off_peak_price": 30
+        },
+        {
+          "resolution": "768p",
+          "price": 50,
+          "off_peak_price": 40
+        }
+      ]
+    }
+  },
+  "frontend_sources": [
+    "https://www.autodl.art/assets/detail.55eb8f36.js",
+    "https://www.autodl.art/assets/utils.6745955e.js",
+    "https://www.autodl.art/assets/index.6c852371.js"
+  ],
+  "verified_frontend_behavior": {
+    "currency_divisor": 1000,
+    "price_unit": "CNY per video second",
+    "displayed_peak": "08:00–24:00",
+    "displayed_off_peak": "00:00–08:00",
+    "wallet_copy": "AutoDL.Art和AutoDL同一账号共享钱包和代金券余额"
+  },
+  "unverified": [
+    "Time zone and whether submission/start/settlement determines price period",
+    "Developer token account binding and authenticated balance response",
+    "Actual task charge and discount eligibility"
+  ]
+}

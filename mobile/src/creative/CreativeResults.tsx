@@ -63,6 +63,7 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
   const assetKey=[...new Set([...(relatedAssetIds??[]),...(draft.target_asset_id?[draft.target_asset_id]:[])])].sort().join('\n');
   useEffect(()=>{setSelected(initialVersionId);},[draft.job_id]);
   useFocusEffect(useCallback(() => {
+    if(!previewVisible)return;
     let active = true, reading = false;
     setStatus('');
     setReadError('');
@@ -80,9 +81,10 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
     void refresh();
     const timer = setInterval(() => void refresh(), 2500);
     return () => { active = false; clearInterval(timer); };
-  }, [draft.id, draft.target_asset_id, draft.job_id,assetKey,onlyJob]));
+  }, [draft.id, draft.target_asset_id, draft.job_id,assetKey,onlyJob,previewVisible]));
   const current = versions.find(v => v.id === selected) ?? versions.find(v => v.recipe.jobId === draft.job_id) ?? versions[0];
   useEffect(()=>{
+    if(!previewVisible)return;
     let active=true,reading=false;setExporting(undefined);setDelivery(undefined);setNotice('');setSaveRequested(false);
     const refresh=async()=>{if(!current||reading)return;reading=true;try{
       const rows=await creativeService().deliveries(current.id);
@@ -90,7 +92,7 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
     }catch{/* Retry automatic-save discovery on the next poll. */}finally{reading=false;}};
     void refresh();const timer=setInterval(()=>void refresh(),2000);
     return()=>{active=false;clearInterval(timer);};
-  },[current?.id]);
+  },[current?.id,previewVisible]);
   useEffect(()=>{onCurrentVersion?.(current);},[current?.id,current?.state,onCurrentVersion]);
   useEffect(()=>{onJobStatus?.(status);},[status,onJobStatus]);
   useEffect(()=>{if(historySignal)setHistory(true);},[historySignal]);
@@ -156,12 +158,12 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
     {draft.job_id && !taskDetail?<View style={[s.row,{paddingVertical:4}]}><View style={{flexDirection:'row',alignItems:'center',gap:8,flex:1}}>{pending?<ActivityIndicator size="small" />:null}<Text accessibilityLiveRegion="polite" style={needsAttention?s.error:s.muted}>{creativeJobLabel(status)}</Text></View><TextAction label={status==='UNKNOWN'?'核查原任务':'查看本次任务'} onPress={()=>router.push({pathname:'/creative-task/[id]',params:{id:draft.job_id!,returnToWorkbench:'1'}})} /></View>:null}
     {current?<>
       <View style={s.row}><SectionHeading title={draft.state==='EDITING'?'参考结果':'创作结果'} detail={`版本 ${current.versionNo}`} /><View style={{flexDirection:'row',gap:12}}>
-        {!image?<><IconAction label={videoSaved?'已保存到系统相册':videoSaving?'正在保存到系统相册':delivery?.status==='FAILED'?'重试保存到系统相册':'保存视频到系统相册'} icon={videoSaved?'check':'download'} selected={videoSaved} disabled={unavailable||videoSaved||videoSaving} onPress={saveVideo}/>{draft.shot_id?<TextAction label="用于此镜头" onPress={apply} disabled={unavailable}/>:null}</>:null}
+        {!image&&!onlyJob?<><IconAction label={videoSaved?'已保存到系统相册':videoSaving?'正在保存到系统相册':delivery?.status==='FAILED'?'重试保存到系统相册':'保存视频到系统相册'} icon={videoSaved?'check':'download'} selected={videoSaved} disabled={unavailable||videoSaved||videoSaving} onPress={saveVideo}/>{draft.shot_id?<TextAction label="用于此镜头" onPress={apply} disabled={unavailable}/>:null}</>:null}
         {image?<><IconAction label="保存图片到系统相册" icon="download" disabled={unavailable} onPress={()=>void work(async()=>{setSaveRequested(true);await exportCreativeVersion(current.id);setExporting({versionId:current.id,generation:1});})}/><ImageMetadataPanel key={current.id} version={current} label="信息" onReuse={reuse} /></>:null}
         {draft.state==='SUBMITTED'?<IconAction label="更多成果操作" icon="more_horiz" onPress={()=>setMore(true)} />:null}
       </View></View>
       {current.state==='AVAILABLE' && current.relativePath?current.mime?.startsWith('video/')?<View testID="result-video-stage" style={{height:Math.min(420,Math.max(220,(width-32)/aspect)),width:'100%',borderRadius:12,overflow:'hidden'}}><VideoPlayer source={`${FileSystem.documentDirectory}${current.relativePath}`} /></View>:<Pressable accessibilityRole="button" accessibilityLabel="全屏查看图片" onPress={()=>setFullScreen(true)}><Image accessibilityLabel={`当前图片，版本 ${current.versionNo}`} source={{uri:`${FileSystem.documentDirectory}${current.relativePath}`}} resizeMode="contain" style={{width:'100%',height:Math.min(taskDetail?300:dock?400:640,Math.max(200,(width-32)/aspect)),borderRadius:16,backgroundColor:COLORS.mediaBackground}} /></Pressable>:<Text style={s.muted}>原文件尚不可用，请在素材详情中恢复。</Text>}
-      {dimensions?.width?<Text style={s.muted}>{dimensions.width} × {dimensions.height}{draft.job_id && current.recipe.jobId!==draft.job_id?' · 历史结果':''}</Text>:null}
+      {!onlyJob&&dimensions?.width?<Text style={s.muted}>{dimensions.width} × {dimensions.height}{draft.job_id && current.recipe.jobId!==draft.job_id?' · 历史结果':''}</Text>:null}
       {versions.length>1?<View style={s.row}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:8}}>{versionChoices(candidates)}</ScrollView><TextAction label={`版本历史 · ${versions.length}`} onPress={()=>setHistory(true)} /></View>:null}
     </>:<View style={[s.card,{minHeight:160,justifyContent:'center',borderWidth:0}]}><Text style={s.title}>{draft.job_id?(needsAttention?'本次尚无可用成果':'创作进行中'):'从画面描述开始'}</Text><Text style={s.muted}>{draft.job_id?'结果会显示在这里，你可以离开后再回来。':'生成后可在这里看图和继续创作。'}</Text><TextAction label="任务与草稿操作" onPress={()=>setMore(true)} /></View>}
     {saveStatus}
@@ -197,6 +199,7 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
     {processing && current?<ImageProcessingSheet version={current} projectId={draft.project_id??undefined} shotId={draft.shot_id??undefined} replace onClose={()=>setProcessing(false)} />:null}
     {more?<ParameterSheet title="成果操作" onClose={()=>setMore(false)}>
       {canvas && current && image?<ImageMetadataPanel key={current.id} version={current} label="图片信息" onReuse={reuse} />:null}
+      {draft.provider_id==='autodl'&&onlyJob?<><TextAction label={videoSaved?'已保存到系统相册':videoSaving?'正在保存到系统相册':'保存视频到系统相册'} disabled={!current||unavailable||videoSaved||videoSaving} onPress={()=>{setMore(false);saveVideo();}}/>{draft.shot_id?<TextAction label="用于此镜头" disabled={unavailable} onPress={apply}/>:null}<TextAction label="查看本轮任务" onPress={()=>{setMore(false);router.push({pathname:'/creative-task/[id]',params:{id:draft.job_id!,returnToWorkbench:'1'}});}}/></>:null}
       {versions.length>1?<TextAction label="比较版本与参数" onPress={()=>{setMore(false);setComparing(true);}} />:null}
       {canvas && versions.length>1?<TextAction label={`版本历史 · ${versions.length}`} onPress={()=>{setMore(false);setHistory(true);}} />:null}
       {current && draft.provider_id==='novelai'?<><TextAction label="以此图生成" disabled={unavailable} onPress={()=>{setMore(false);if(onUseImage)onUseImage(current,'img2img');else void work(()=>continueWith(false,'img2img'));}} /><TextAction label="局部重绘" disabled={unavailable} onPress={()=>{setMore(false);if(onUseImage)onUseImage(current,'infill');else void work(()=>continueWith(false,'infill'));}} /><TextAction label="制作视频" disabled={unavailable} onPress={()=>{setMore(false);void work(()=>continueWith(true));}} /></>:null}

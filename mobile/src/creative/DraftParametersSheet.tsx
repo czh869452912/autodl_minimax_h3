@@ -1,3 +1,4 @@
+import {quoteLabel,type VideoQuote} from './autodlPricing';
 import { useEffect, useState } from 'react';
 import { Image, Text, View } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -11,10 +12,12 @@ export function DraftParametersSheet({ draft, onClose }: { draft: CreativeDraft;
   const [references, setReferences] = useState<Awaited<ReturnType<typeof readDraftInputs>>>([]);
   const [error, setError] = useState('');
   const [raw, setRaw] = useState(false);
+  const [cost,setCost]=useState<VideoQuote>();
   const [submitted,setSubmitted]=useState<Record<string,unknown>>();
   useEffect(() => {
     let active = true;
-    const db=getDatabase();setSubmitted(undefined);
+    const db=getDatabase();setSubmitted(undefined);setCost(undefined);
+    if(draft.job_id)void db.getFirstAsync<{input_snapshot_json:string}>('SELECT input_snapshot_json FROM creative_job_contexts WHERE job_id=?',draft.job_id).then(row=>{if(active&&row){const q=JSON.parse(row.input_snapshot_json)._costEstimate;if(q?.unit==='CNY'&&Number.isFinite(q.minimum)&&Number.isFinite(q.maximum))setCost(q);}}).catch(()=>undefined);
     void Promise.all([readDraftInputs(db,draft.id),draft.job_id?db.getFirstAsync<{input_json:string}>('SELECT input_json FROM workflow_jobs WHERE id=?',draft.job_id):Promise.resolve(null)]).then(([rows,job])=>{
       if(!active)return;setReferences(rows);
       if(job?.input_json){const snapshot=JSON.parse(job.input_json);if(snapshot&&typeof snapshot==='object')setSubmitted(snapshot);}
@@ -28,6 +31,7 @@ export function DraftParametersSheet({ draft, onClose }: { draft: CreativeDraft;
   const summary = [input.model, input.resolution, input.width && input.height ? `${input.width} × ${input.height}` : '', input.duration ? `${input.duration} 秒` : '', input.seed !== null && input.seed !== undefined && input.seed !== '' ? `种子 ${input.seed}` : '随机种子'].filter(Boolean).join(' · ');
   return <ParameterSheet title="本次生成参数" fullScreen description="提交时的参数快照" onClose={onClose}>
     <Text style={s.muted}>{summary}</Text>
+    {cost?<Text style={s.muted}>提交时{quoteLabel(cost)} · 非实际扣款</Text>:null}
     {input.workflow?<Text style={s.muted}>工作流：{String((input.workflow as {title?:string;id?:string}).title??(input.workflow as {id?:string}).id??draft.workflow_id)} · v{String((input.workflow as {version?:string}).version??'')}</Text>:null}
     <Text style={s.title}>画面描述</Text><Text selectable style={s.body}>{typeof input.prompt === 'string' ? input.prompt : '未记录描述'}</Text>
     {references.length ? <View style={{ gap: 12 }}><Text style={s.title}>参考素材 · {references.length}</Text>{references.map((reference, index) => <View key={reference.version_id} style={{ gap: 4 }}>

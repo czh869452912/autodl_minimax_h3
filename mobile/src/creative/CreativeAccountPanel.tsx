@@ -1,3 +1,4 @@
+import {AutodlWalletPanel} from './AutodlWalletPanel';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Alert,Linking, Text, TextInput, View } from 'react-native';
@@ -28,6 +29,7 @@ export function CreativeAccountPanel({ provider = 'novelai', compact = false }: 
       <Text style={{ color: COLORS.textMuted }}>{!loaded ? '正在检查账号…' : connected ? `${name} · ${provider === 'autodl' ? '已绑定' : '已连接'}` : `${name} · 尚未连接`}</Text>
       <TextAction label={connected ? '管理账号' : `连接 ${name}`} icon="key" onPress={() => setExpanded(true)} />
     </View>
+    {provider==='autodl'?<AutodlWalletPanel key={String(connected)}/>:null}
     {notice ? <Text accessibilityLiveRegion="polite" style={{ color: COLORS.textMuted }}>{notice}</Text> : null}
   </View>;
   return <View style={{ paddingVertical: 8, gap: 8, borderBottomWidth: 1, borderColor: COLORS.border }}>
@@ -42,6 +44,7 @@ export function CreativeAccountPanel({ provider = 'novelai', compact = false }: 
     } }])} /> : null}
     <Text style={{ color: COLORS.textMuted }}>更换凭据只影响后续生成，已提交任务仍使用其原绑定查询。</Text>
     {provider==='autodl'?<ListAction label="打开 AutoDL Token 获取页面" onPress={()=>void Linking.openURL('https://autodl.art/large-model/tokens').catch(()=>setNotice('请在浏览器访问 autodl.art 获取 Token'))}/>:null}
+    {provider==='autodl'?<AutodlWalletPanel key={String(connected)}/>:null}
     {notice ? <Text accessibilityLiveRegion="polite" style={{ color: COLORS.text }}>{notice}</Text> : null}
   </View>;
 }

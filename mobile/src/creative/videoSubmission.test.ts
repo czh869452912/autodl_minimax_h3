@@ -1,3 +1,4 @@
+import * as videoPricing from './autodlPricing';
 import {resolveJobCredential} from '../tasks/credentialBinding';
 import {acknowledgeUnknownTask,unknownTaskReviewed} from './taskRecovery';
 import {recoverUnsentCreativeJobs} from './unsentRecovery';
@@ -309,4 +310,19 @@ test('reviewing an unknown dispatched request permits another draft without rewr
     const copy=await f.service.execute({name:'draft.copySubmitted',payload:{id:f.draft.id}},'copy-after-review');expect(copy.status).toBe('completed');
     expect(f.db.getAllSync('SELECT id FROM workflow_jobs')).toHaveLength(1);
   }finally{f.db.close();}
+});
+
+
+test('display-only price snapshot is persisted without changing provider inputs or budget certainty',async()=>{
+ const f=await fixture();
+ const quote={minimum:.4,maximum:.5,unit:'CNY' as const,duration:10,resolution:'768p横',checkedAt:100,source:'public metadata'};
+ const spy=jest.spyOn(videoPricing,'cachedVideoQuote').mockReturnValue(quote);
+ try{
+  const task=await f.submit();
+  const context=f.db.getFirstSync<{input_snapshot_json:string}>('SELECT input_snapshot_json FROM creative_job_contexts WHERE job_id=?',task.id)!;
+  expect(JSON.parse(context.input_snapshot_json)._costEstimate).toEqual(quote);
+  const job=f.db.getFirstSync<{input_json:string}>('SELECT input_json FROM workflow_jobs WHERE id=?',task.id)!;
+  expect(JSON.parse(job.input_json)).toEqual(f.input.prepared.inputSnapshot);
+  expect(f.input.prepared.requestInput).not.toHaveProperty('_costEstimate');
+ }finally{spy.mockRestore();f.db.close();}
 });
