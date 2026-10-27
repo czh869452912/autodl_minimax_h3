@@ -159,3 +159,15 @@ test('compact cards retain their summary and timing while only actions expand',a
   expect(text()).toContain('A moving camera');expect(text()).toContain('排队 1分00秒');
  }finally{act(()=>tree?.unmount());}
 });
+
+test('collapsed task exposes download progress and opens video results directly',async()=>{
+ const item:TaskCard={id:'progress',prompt:'Camera move',status:'SUCCESS',resolution:'720p',duration:5,createdAt:1,updatedAt:2,downloadState:'DOWNLOADING',downloadProgress:.42,exportState:'NOT_REQUESTED'};
+ const open=jest.fn();let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<TaskCardRow compact item={item} busy={false} onOpen={open} onDownload={jest.fn()} onExport={jest.fn()} onRemove={jest.fn()}/>);});
+  expect(tree.root.findByProps({accessibilityLabel:'下载进度'}).props.accessibilityValue.now).toBe(42);
+  act(()=>tree.root.findByProps({accessibilityLabel:'查看创作结果'}).props.onPress());
+  expect(open).toHaveBeenCalledWith('progress');
+  expect(tree.root.findAllByProps({accessibilityLabel:'移除任务记录'})).toHaveLength(0);
+ }finally{act(()=>tree?.unmount());}
+});

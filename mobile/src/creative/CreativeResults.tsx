@@ -83,24 +83,17 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
   }, [draft.id, draft.target_asset_id, draft.job_id,assetKey,onlyJob]));
   const current = versions.find(v => v.id === selected) ?? versions.find(v => v.recipe.jobId === draft.job_id) ?? versions[0];
   useEffect(()=>{
-    let active=true;setExporting(undefined);setDelivery(undefined);setNotice('');setSaveRequested(false);
-    if(current)void (async()=>{try{
+    let active=true,reading=false;setExporting(undefined);setDelivery(undefined);setNotice('');setSaveRequested(false);
+    const refresh=async()=>{if(!current||reading)return;reading=true;try{
       const rows=await creativeService().deliveries(current.id);
-      if(active && rows[0]){setDelivery(rows[0]);setExporting({versionId:current.id,generation:rows[0].generation});}
-    }catch{}})();
-    return()=>{active=false;};
+      if(active)setDelivery(rows[0]);
+    }catch{/* Retry automatic-save discovery on the next poll. */}finally{reading=false;}};
+    void refresh();const timer=setInterval(()=>void refresh(),2000);
+    return()=>{active=false;clearInterval(timer);};
   },[current?.id]);
   useEffect(()=>{onCurrentVersion?.(current);},[current?.id,current?.state,onCurrentVersion]);
   useEffect(()=>{onJobStatus?.(status);},[status,onJobStatus]);
   useEffect(()=>{if(historySignal)setHistory(true);},[historySignal]);
-  useEffect(()=>{
-    if(!exporting)return;
-    let active=true;
-    const refresh=async()=>{const rows=await creativeService().deliveries(exporting.versionId);if(active){setDelivery(rows[0]);if(rows[0] && ['EXPORTED','FAILED','DELIVERY_UNKNOWN','QUARANTINED'].includes(rows[0].status))clearInterval(timer);}};
-    const timer=setInterval(()=>void refresh().catch(()=>{if(active)setError('保存状态读取失败，可重新查看');}),2000);
-    void refresh().catch(()=>{if(active)setError('保存状态读取失败，可重新查看');});
-    return()=>{active=false;clearInterval(timer);};
-  },[exporting]);
   const work = async (fn: () => Promise<unknown>) => {
     if (lock.current || disabled) return;
     lock.current = true; setBusy(true); setError('');
@@ -147,10 +140,13 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
     for(const row of rows){try{await exportCreativeVersion(row.id);}catch{failed=true;}}
     if(failed)throw new Error('部分保存请求未成功');
   };
-  const deliveryNotice=exporting && delivery?({QUEUED:'等待存入系统相册',PUBLISHING:'正在存入系统相册',EXPORTED:'已存入系统相册',FAILED:'存入相册失败',DELIVERY_UNKNOWN:'保存结果不确定，请先检查系统相册',QUARANTINED:'保存操作已隔离，请查看任务详情'} as Record<string,string>)[delivery.status]:undefined;
-  const saveStatus=<>{deliveryNotice?<Text accessibilityLiveRegion="polite" style={s.muted}>{deliveryNotice}</Text>:notice?<Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text>:null}{delivery?.status==='FAILED' && exporting?<TextAction label="重试存入相册" disabled={busy || disabled} onPress={()=>void work(async()=>{const generation=delivery.generation+1;await exportCreativeVersion(exporting.versionId,generation);setDelivery(undefined);setExporting({versionId:exporting.versionId,generation});})} />:null}</>;
+  const deliveryNotice=delivery?({QUEUED:'等待存入系统相册',PUBLISHING:'正在存入系统相册',EXPORTED:'已存入系统相册',FAILED:'存入相册失败',DELIVERY_UNKNOWN:'保存结果不确定，请先检查系统相册',QUARANTINED:'保存操作已隔离，请查看任务详情'} as Record<string,string>)[delivery.status]:undefined;
+  const saveStatus=<>{deliveryNotice?<Text accessibilityLiveRegion="polite" style={s.muted}>{deliveryNotice}</Text>:notice?<Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text>:null}{image && delivery?.status==='FAILED' && current?<TextAction label="重试存入相册" disabled={busy || disabled} onPress={()=>void work(async()=>{const generation=delivery.generation+1;await exportCreativeVersion(current.id,generation);setDelivery(undefined);setExporting({versionId:current.id,generation});})} />:null}</>;
+  const videoSaved=delivery?.status==='EXPORTED';
+  const videoSaving=['QUEUED','PUBLISHING'].includes(delivery?.status??'');
+  const saveVideo=()=>void work(async()=>{if(!current||videoSaved||videoSaving)return;const generation=delivery?.status==='FAILED'?delivery.generation+1:1;await exportCreativeVersion(current.id,generation);setDelivery({status:'QUEUED',generation});setExporting({versionId:current.id,generation});});
   const edit = draft.state==='SUBMITTED' && draft.provider_id==='novelai' && current?.recipe.input ? ()=>void work(()=>continueWith(false)) : undefined;
-  const actions=current && draft.state==='SUBMITTED'?<ResultActionBar primaryLabel={draft.shot_id?'用于此镜头':'保存到相册'} onPrimary={apply} onEdit={edit} onProcess={image?()=>setProcessing(true):undefined} disabled={unavailable} />:null;
+  const actions=current && image && draft.state==='SUBMITTED'?<ResultActionBar primaryLabel={draft.shot_id?'用于此镜头':'保存到相册'} onPrimary={apply} onEdit={edit} onProcess={image?()=>setProcessing(true):undefined} disabled={unavailable} />:null;
   const candidates=versions.slice(0,4);
   if(current && !candidates.some(v=>v.id===current.id))candidates[candidates.length-1]=current;
   const versionChoices=(rows:AssetVersion[])=>rows.map(v=><Pressable key={v.id} accessibilityRole="button" accessibilityLabel={`查看版本 ${v.versionNo}`} accessibilityState={{selected:v.id===current?.id}} onPress={()=>{setSelected(v.id);setHistory(false);}} style={{padding:4,minWidth:64,minHeight:48,borderWidth:v.id===current?.id?2:0,borderRadius:10,borderColor:COLORS.primary,gap:4}}>
@@ -160,8 +156,9 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
     {draft.job_id && !taskDetail?<View style={[s.row,{paddingVertical:4}]}><View style={{flexDirection:'row',alignItems:'center',gap:8,flex:1}}>{pending?<ActivityIndicator size="small" />:null}<Text accessibilityLiveRegion="polite" style={needsAttention?s.error:s.muted}>{creativeJobLabel(status)}</Text></View><TextAction label={status==='UNKNOWN'?'核查原任务':'查看本次任务'} onPress={()=>router.push({pathname:'/creative-task/[id]',params:{id:draft.job_id!,returnToWorkbench:'1'}})} /></View>:null}
     {current?<>
       <View style={s.row}><SectionHeading title={draft.state==='EDITING'?'参考结果':'创作结果'} detail={`版本 ${current.versionNo}`} /><View style={{flexDirection:'row',gap:12}}>
+        {!image?<><IconAction label={videoSaved?'已保存到系统相册':videoSaving?'正在保存到系统相册':delivery?.status==='FAILED'?'重试保存到系统相册':'保存视频到系统相册'} icon={videoSaved?'check':'download'} selected={videoSaved} disabled={unavailable||videoSaved||videoSaving} onPress={saveVideo}/>{draft.shot_id?<TextAction label="用于此镜头" onPress={apply} disabled={unavailable}/>:null}</>:null}
         {image?<><IconAction label="保存图片到系统相册" icon="download" disabled={unavailable} onPress={()=>void work(async()=>{setSaveRequested(true);await exportCreativeVersion(current.id);setExporting({versionId:current.id,generation:1});})}/><ImageMetadataPanel key={current.id} version={current} label="信息" onReuse={reuse} /></>:null}
-        {draft.state==='SUBMITTED'?<TextAction label="更多成果操作" onPress={()=>setMore(true)} />:null}
+        {draft.state==='SUBMITTED'?<IconAction label="更多成果操作" icon="more_horiz" onPress={()=>setMore(true)} />:null}
       </View></View>
       {current.state==='AVAILABLE' && current.relativePath?current.mime?.startsWith('video/')?<View testID="result-video-stage" style={{height:Math.min(420,Math.max(220,(width-32)/aspect)),width:'100%',borderRadius:12,overflow:'hidden'}}><VideoPlayer source={`${FileSystem.documentDirectory}${current.relativePath}`} /></View>:<Pressable accessibilityRole="button" accessibilityLabel="全屏查看图片" onPress={()=>setFullScreen(true)}><Image accessibilityLabel={`当前图片，版本 ${current.versionNo}`} source={{uri:`${FileSystem.documentDirectory}${current.relativePath}`}} resizeMode="contain" style={{width:'100%',height:Math.min(taskDetail?300:dock?400:640,Math.max(200,(width-32)/aspect)),borderRadius:16,backgroundColor:COLORS.mediaBackground}} /></Pressable>:<Text style={s.muted}>原文件尚不可用，请在素材详情中恢复。</Text>}
       {dimensions?.width?<Text style={s.muted}>{dimensions.width} × {dimensions.height}{draft.job_id && current.recipe.jobId!==draft.job_id?' · 历史结果':''}</Text>:null}

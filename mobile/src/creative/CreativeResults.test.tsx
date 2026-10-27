@@ -7,18 +7,19 @@ import {defaultNovelAiDraft} from './novelAiProtocol';
 import {NativeModules,StyleSheet} from 'react-native';
 import {ImagePreview} from '../ui/ImagePreview';
 import { createEnhanceInput } from './novelAiEnhancement';
+const mockDeliveries=jest.fn(async()=>[] as Array<{status:string;generation:number}>);
 const mockPush = jest.fn(), mockReplace = jest.fn(), mockExecute = jest.fn();
 const mockReadStatus=jest.fn(async()=>({status:mockStatus}));
 let mockStatus = 'SUCCEEDED', mockVersions: AssetVersion[] = [];
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, replace: mockReplace }), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
-jest.mock('./runtime', () => ({ creativeService: () => ({ versions: async (id:string) => mockVersions.filter(v=>v.assetId===id), execute: mockExecute }), creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})}), exportCreativeVersion: jest.fn() }));
+jest.mock('./runtime', () => ({ creativeService: () => ({ deliveries:mockDeliveries, versions: async (id:string) => mockVersions.filter(v=>v.assetId===id), execute: mockExecute }), creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})}), exportCreativeVersion: jest.fn() }));
 jest.mock('../storage/databaseClient', () => ({ getDatabase: () => ({ getFirstAsync: ()=>mockReadStatus() }) }));
 jest.mock('./MediaPreview', () => ({ MediaPreview: () => null }));
 jest.mock('../media/VideoPlayer', () => ({ VideoPlayer: () => null }));
 const draft: CreativeDraft = { id: 'draft', project_id: 'project', shot_id: 'shot', target_asset_id: 'asset', provider_id: 'novelai', workflow_id: 'image', input_json: '{}', revision: 1, state: 'SUBMITTED', job_id: 'job' };
 const findButton = (tree: ReturnType<typeof create>, label: string) => tree.root.findAll(n => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function')[0];
 beforeEach(() => {
-  jest.clearAllMocks(); mockReadStatus.mockReset().mockImplementation(async()=>({status:mockStatus}));mockStatus = 'SUCCEEDED';
+  jest.clearAllMocks();mockDeliveries.mockReset().mockResolvedValue([]); mockReadStatus.mockReset().mockImplementation(async()=>({status:mockStatus}));mockStatus = 'SUCCEEDED';
   mockVersions = [2, 1].map(n => ({ id: `version-${n}`, assetId: 'asset', versionNo: n, source: 'generated', state: 'AVAILABLE', relativePath: `${n}.png`, mime: 'image/png', recipe: { jobId: 'job',input:defaultNovelAiDraft } }));
   mockExecute.mockResolvedValue({ status: 'completed', value: { draftId: 'next' } });
 });
@@ -213,4 +214,22 @@ test('video task detail provides measurable playback bounds inside the scrolling
   expect(StyleSheet.flatten(tree.root.findByProps({testID:'result-video-stage'}).props.style).height).toBeGreaterThanOrEqual(220);
   expect(tree.root.findByType(require('../media/VideoPlayer').VideoPlayer).props.source).toContain('movie.mp4');
  }finally{act(()=>tree?.unmount());}
+});
+
+
+test('video discovers a delayed automatic save and never shows a large save action',async()=>{
+ jest.useFakeTimers();let tree!:ReturnType<typeof create>;
+ mockVersions=[{...mockVersions[0],mime:'video/mp4',relativePath:'video.mp4'}];
+ try{
+  await act(async()=>{tree=create(<CreativeResults draft={{...draft,provider_id:'autodl',shot_id:null}} dock/>);});
+  expect(findButton(tree,'保存到相册')).toBeUndefined();
+  expect(findButton(tree,'保存视频到系统相册')).toBeDefined();
+  mockDeliveries.mockResolvedValue([{status:'PUBLISHING',generation:1}]);
+  await act(async()=>jest.advanceTimersByTime(2000));
+  expect(findButton(tree,'正在保存到系统相册').props.disabled).toBe(true);
+  mockDeliveries.mockResolvedValue([{status:'EXPORTED',generation:1}]);
+  await act(async()=>jest.advanceTimersByTime(2000));
+  expect(findButton(tree,'已保存到系统相册').props.disabled).toBe(true);
+  expect(findButton(tree,'保存视频到系统相册')).toBeUndefined();
+ }finally{act(()=>tree?.unmount());jest.useRealTimers();}
 });
