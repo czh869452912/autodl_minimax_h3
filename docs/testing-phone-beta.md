@@ -108,3 +108,12 @@
 - 本次双 ARM 手机包构建成功，包名、版本、ABI、签名及 16 KB ZIP 对齐核验通过；签名与 beta.12 相同，可覆盖升级测试版。
 - APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.13-android.apk`；169,000,606 字节；arm64-v8a / armeabi-v7a，最低 Android 8.0。
 - SHA-256：`3CA339B3A414E16AC4E9DCDECA8B2F551C91B3FB7F6B53FF423EDE7574E6EF1F`。
+
+## 2026-10-27 · beta.14 视频保存与任务列表
+
+- 版本 `1.5.0-preview.4-beta.14`，versionCode 53；功能提交 `b459e01e`。
+- 视频结果取消底部大保存按钮，标题栏显示保存、保存中、已保存或失败重试；持续发现延迟创建的自动保存记录。任务卡片按状态、缩略图、提示词与耗时分层展示，下载进度折叠可见，删除重复详情入口。
+- 上一轮 TypeScript、3 套件 35 项测试通过，最后标题栏调整后的结果页 15 项测试再次通过；x86_64 模拟器验证窄屏任务布局及展开收起。视频自动保存状态由组件回归验证，未发起付费生成。
+- 本次手机双 ARM 构建成功，包名、版本、ABI、v2 签名与 16 KB ZIP 对齐核验通过；签名与 beta.13 一致，可覆盖升级。最终 ARM 包未安装到真实手机。
+- APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.14-android.apk`；169,002,138 字节；arm64-v8a / armeabi-v7a，最低 Android 8.0。
+- SHA-256：`9BC58E1E9EA4E33072ACAACE93C4CDBC074ECDD0CC44DDAEF393F6756B644235`。
