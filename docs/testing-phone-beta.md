@@ -117,3 +117,13 @@
 - 本次手机双 ARM 构建成功，包名、版本、ABI、v2 签名与 16 KB ZIP 对齐核验通过；签名与 beta.13 一致，可覆盖升级。最终 ARM 包未安装到真实手机。
 - APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.14-android.apk`；169,002,138 字节；arm64-v8a / armeabi-v7a，最低 Android 8.0。
 - SHA-256：`9BC58E1E9EA4E33072ACAACE93C4CDBC074ECDD0CC44DDAEF393F6756B644235`。
+
+## 2026-10-27 · beta.15 预览手势与 Enhance 面板
+
+- 版本 `1.5.0-preview.4-beta.15`，versionCode 54；本轮功能提交 `522b407d`，同时包含最近任务优化 `4fbd454a`。
+- 移除预览和全屏双击缩放、预览单击全屏手势；保留双指缩放与拖动，通过按钮进入全屏；统一全屏、还原、放大和缩小按钮样式。
+- Enhance 面板改为覆盖层，修复排在画布后被裁掉的问题；普通生成设置与增强临时参数分离。已在登录的官方页面确认 Enhance 与普通设置面板的交互。
+- 上一轮 TypeScript、3 套件 / 21 项测试通过；x86_64 模拟器验证窄屏增强面板、普通设置切换、单击不打开全屏、全屏按钮及缩放还原按钮。未发起付费生成。
+- 本次双 ARM 手机包构建成功，包名、版本、ABI、v2 签名和 16 KB ZIP 对齐核验通过，签名与 beta.14 一致，可覆盖安装测试版。最终 ARM 包未安装到真实手机。
+- APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.15-android.apk`；169,001,946 字节；arm64-v8a / armeabi-v7a，最低 Android 8.0。
+- SHA-256：`6BA4B54587B7D615392810D43B93337BD6C12D5CA807C668E41784373EB1F970`。
