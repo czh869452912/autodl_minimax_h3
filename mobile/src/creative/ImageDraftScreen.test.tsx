@@ -136,7 +136,7 @@ afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); });
 
 const button=(tree:ReturnType<typeof create>,label:string)=>tree.root.findAll(n=>n.props.accessibilityLabel===label && typeof n.props.onPress==='function')[0];
 
-test('opening and closing inline Enhance preserves the manual prompt without creating or submitting a draft', async () => {
+test('Enhance keeps its prompt separate while ordinary settings persist to the manual draft', async () => {
   NativeModules.AutoDLMedia = { readCreativeImageInfo: jest.fn(async () => ({ width: 832, height: 1216 })) };
   mockDraft.input_json = JSON.stringify({ ...defaultNovelAiDraft, prompt: 'my next scene' });
   const source = { id: 'selected-original', assetId: 'asset', versionNo: 2, source: 'generated', state: 'AVAILABLE', relativePath: 'original.png', mime: 'image/png', recipe: { input: { ...defaultNovelAiDraft, prompt: 'original image' } } };
@@ -150,13 +150,14 @@ test('opening and closing inline Enhance preserves the manual prompt without cre
     act(() => prompt().props.onChangeText('enhanced original'));
     act(() => button(tree, '生成设置').props.onPress());
     expect(tree.root.findAllByType(resultsType)).toHaveLength(1);
+    expect(tree.root.findByType(require('./NovelAiSettings').NovelAiSettings).props.input.enhancement).toBeNull();
     act(() => button(tree, 'Medium').props.onPress());
     act(() => button(tree, '关闭生成设置').props.onPress());
     act(() => button(tree, '关闭增强').props.onPress());
     expect(prompt().props.value).toBe('my next scene');
-    expect(JSON.parse(mockDraft.input_json).effort).toBe('high');
     await act(async () => jest.advanceTimersByTime(650));
-    expect(mockExecute).not.toHaveBeenCalled();
+    expect(JSON.parse(mockDraft.input_json)).toMatchObject({effort:'medium',prompt:'my next scene',enhancement:null});
+    expect(mockExecute.mock.calls.every(call=>call[0].name==='draft.updateImage')).toBe(true);
     expect(mockPrepare).not.toHaveBeenCalled();
     expect(require('./novelAiRuntime').confirmCreativeImage).not.toHaveBeenCalled();
   } finally { act(() => tree?.unmount()); delete NativeModules.AutoDLMedia; }
@@ -184,6 +185,7 @@ test('Enhance panel edits scale, magnitude and advanced parameters before direct
   try {
     await act(async()=>{tree=create(<ImageDraftScreen id="d" />);});
     expect(button(tree,'Max').props.accessibilityState.checked).toBe(true);
+    expect(require('react-native').StyleSheet.flatten(tree.root.findByProps({testID:'image-processing-overlay'}).props.style).position).toBe('absolute');
     act(()=>button(tree,'1.5×').props.onPress());
     act(()=>button(tree,'5').props.onPress());
     expect(JSON.stringify(tree.toJSON())).toContain('1280');

@@ -20,6 +20,9 @@ test('inline native pinch supports focal zoom, drag, comparison and reset on ver
     expect(transform()[2].scale).toBe(2);
     expect(tree.root.findByProps({testID:'result-original-overlay'}).props.style.opacity).toBe(1);
     expect(open).not.toHaveBeenCalled();
+    expect(tree.root.findByType(GestureDetector).props.gesture.gestures).toHaveLength(2);
+    act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='全屏查看图片'&&n.props.onPress)[0].props.onPress());
+    expect(open).toHaveBeenCalledTimes(1);
     act(()=>tree.update(render('two')));
     expect(transform()).toEqual([{translateX:0},{translateY:0},{scale:1}]);
   }finally{act(()=>tree?.unmount());}

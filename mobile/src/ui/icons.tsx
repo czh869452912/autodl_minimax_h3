@@ -3,7 +3,7 @@ import type { ComponentProps } from 'react';
 import { COLORS } from './theme';
 
 export const ICON_NAMES = [
-  'check', 'image', 'edit', 'tune', 'chevron_right', 'more_horiz',
+  'zoom_in', 'zoom_out', 'check', 'image', 'edit', 'tune', 'chevron_right', 'more_horiz',
   'movie_filter', 'list_alt', 'grid_view', 'settings', 'open_in_full', 'close_fullscreen', 'arrow_downward',
   'add_photo_alternate', 'alternate_email', 'library_music', 'close', 'delete', 'play_arrow',
   'pause', 'lock', 'search', 'filter_list', 'download', 'refresh', 'info', 'bolt', 'add', 'send', 'auto_awesome', 'key', 'smart_toy', 'save', 'content_copy', 'expand_more', 'expand_less', 'notifications', 'notifications_active', 'arrow_back',
@@ -11,6 +11,7 @@ export const ICON_NAMES = [
 export type IconName = (typeof ICON_NAMES)[number];
 
 const ICON_MAP: Record<IconName, ComponentProps<typeof MaterialCommunityIcons>['name']> = {
+  zoom_in:'magnify-plus-outline', zoom_out:'magnify-minus-outline',
   check: 'check',
   lock: 'lock-outline',
   more_horiz: 'dots-horizontal',

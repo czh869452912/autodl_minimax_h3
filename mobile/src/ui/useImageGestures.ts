@@ -3,7 +3,7 @@ import type {LayoutChangeEvent} from 'react-native';
 import {Gesture} from 'react-native-gesture-handler';
 
 type Transform={scale:number;x:number;y:number};
-type Options={identity:string;blocked?:()=>boolean;onTap?:()=>void;onSwipeMove?:(x:number,y:number)=>void;onSwipeEnd?:(x:number,y:number,velocity:number)=>void;onCancelSwipe?:()=>void};
+type Options={identity:string;blocked?:()=>boolean;onSwipeMove?:(x:number,y:number)=>void;onSwipeEnd?:(x:number,y:number,velocity:number)=>void;onCancelSwipe?:()=>void};
 export function clampImageTransform(scale:number,x:number,y:number,width:number,height:number):Transform {
   scale=Math.max(1,Math.min(4,scale));if(scale<1.01)scale=1;
   return {scale,x:Math.max(-width*(scale-1)/2,Math.min(width*(scale-1)/2,x)),y:Math.max(-height*(scale-1)/2,Math.min(height*(scale-1)/2,y))};
@@ -38,11 +38,7 @@ export function useImageGestures(options:Options){
         }else if(!session.current.hadPinch)live.current.onSwipeMove?.(e.translationX,e.translationY);
       }).onEnd(e=>{if(!live.current.blocked?.()&&!session.current.hadPinch&&current.current.scale===1)live.current.onSwipeEnd?.(e.translationX,e.translationY,e.velocityX);})
       .onFinalize((_e,success)=>{session.current.panReady=false;if(!success)live.current.onCancelSwipe?.();});
-    const double=Gesture.Tap().numberOfTaps(2).maxDelay(280).runOnJS(true).onEnd((e,success)=>{
-      if(success&&!live.current.blocked?.()){const scale=current.current.scale>1?1:2;update(scale,-(e.x-size.current.width/2)*(scale-1),-(e.y-size.current.height/2)*(scale-1));}
-    });
-    const tap=Gesture.Tap().runOnJS(true).onEnd((_e,success)=>{if(success&&!live.current.blocked?.())live.current.onTap?.();});
-    return Gesture.Simultaneous(pinch,pan,Gesture.Exclusive(double,tap));
+    return Gesture.Simultaneous(pinch,pan);
   },[]);
   const onLayout=(event:LayoutChangeEvent)=>{size.current=event.nativeEvent.layout;update(current.current.scale,current.current.x,current.current.y);};
   return {gesture,transform,current,update,onLayout};

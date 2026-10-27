@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useImageGestures } from './useImageGestures';
 import { HoldToCompare } from './HoldToCompare';
+import {ImageOverlayAction} from './ImageOverlayAction';
 import { COLORS } from './theme';
 export function ImagePreview({ uri, onClose, title, onPrevious, onNext, previousUri, nextUri, imageKey, comparison }: { uri: string | null; onClose(): void; title?:string; onPrevious?:()=>void; onNext?:()=>void; previousUri?:string; nextUri?:string; imageKey?:string; comparison?:{uri:string;label:string} }) {
   const [original,setOriginal]=useState(false);
@@ -68,21 +69,21 @@ export function ImagePreview({ uri, onClose, title, onPrevious, onNext, previous
   };
   useEffect(() => { setOriginal(false); update(1); }, [uri]);
   const { scale, x, y } = transform;
-  const action=(label:string,onPress:()=>void)=><Pressable key={label} accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={{minHeight:48,paddingHorizontal:12,justifyContent:'center'}}><Text style={{color:COLORS.onPrimary}}>{label==="上一个版本"?"‹":label==="下一个版本"?"›":label}</Text></Pressable>;
+  const action=(label:string,onPress:()=>void)=><ImageOverlayAction key={label} label={label} icon={label==='上一个版本'?'arrow_back':label==='下一个版本'?'chevron_right':label==='缩小'?'zoom_out':'zoom_in'} onPress={onPress} dark/>;
   return <Modal visible={Boolean(uri)} transparent statusBarTranslucent animationType="none" onRequestClose={close} onShow={() => { setShown(true); update(1);setOriginal(false); const target = findNodeHandle(closeRef.current); if (target) AccessibilityInfo.setAccessibilityFocus(target); }}>
     <GestureHandlerRootView style={{flex:1}}><Animated.View testID="image-preview-transition" style={{flex:1,opacity:transition,backgroundColor:'#0c1013'}} accessibilityViewIsModal>
       {uri?<StatusBar barStyle="light-content" backgroundColor="#0c1013"/>:null}
       <SafeAreaView style={{flex:1}}>
         <View style={{height:52,flexDirection:'row',alignItems:'center',paddingHorizontal:12,gap:12}}>
-          <View style={{flex:1}}><Text numberOfLines={1} style={{color:'#fff',fontSize:15,fontWeight:'600'}}>{original && comparison?comparison.label:title||'图片预览'}</Text><Text style={{color:'#aab3bb',fontSize:11,marginTop:2}}>双指缩放 · 双击放大 · 下滑关闭</Text></View>
-          <Pressable ref={closeRef} accessibilityRole="button" accessibilityLabel="关闭图片预览" onPress={close} style={{width:44,height:44,borderRadius:22,alignItems:'center',justifyContent:'center',backgroundColor:'#252c31'}}><Text style={{color:'#fff',fontSize:26}}>×</Text></Pressable>
+          <View style={{flex:1}}><Text numberOfLines={1} style={{color:'#fff',fontSize:15,fontWeight:'600'}}>{original && comparison?comparison.label:title||'图片预览'}</Text><Text style={{color:'#aab3bb',fontSize:11,marginTop:2}}>双指缩放 · 放大后拖动 · 原比例下滑关闭</Text></View>
+          <View ref={closeRef} accessible accessibilityLabel="关闭图片预览"><ImageOverlayAction label="关闭图片预览" icon="close" onPress={close} dark/></View>
         </View>
         <Animated.View style={{flex:1,minHeight:0,transform:[{scale:transition.interpolate({inputRange:[0,1],outputRange:[0.96,1]})}]}}>
           <GestureDetector gesture={zoom.gesture}><View collapsable={false} onLayout={event => { viewport.current = event.nativeEvent.layout; zoom.onLayout(event); }} style={{flex:1,overflow:'hidden'}}>
             <Animated.View pointerEvents="none" testID="image-page-track" style={{width:'100%',height:'100%',transform:[{translateX:pageX}]}}>
               {previousUri?<Image fadeDuration={0} accessible={false} source={{uri:previousUri}} resizeMode="contain" style={{position:'absolute',left:'-100%',width:'100%',height:'100%'}}/>:null}
               {nextUri?<Image fadeDuration={0} accessible={false} source={{uri:nextUri}} resizeMode="contain" style={{position:'absolute',left:'100%',width:'100%',height:'100%'}}/>:null}
-            {uri?<Image fadeDuration={0} key={imageKey??uri} onLoad={()=>{if(handoff?.uri===uri){requestAnimationFrame(()=>{setHandoff(undefined);paging.current=false;});}}} testID="reference-image-preview" accessibilityLabel="图片预览，双指缩放，双击放大，向下滑动关闭" source={{uri:original && comparison?comparison.uri:uri}} resizeMode="contain" style={{width:'100%',height:'100%',transform:[{translateX:x},{translateY:y},{scale}]}}/>:null}
+            {uri?<Image fadeDuration={0} key={imageKey??uri} onLoad={()=>{if(handoff?.uri===uri){requestAnimationFrame(()=>{setHandoff(undefined);paging.current=false;});}}} testID="reference-image-preview" accessibilityLabel="图片预览，双指缩放，放大后拖动，原比例下滑关闭" source={{uri:original && comparison?comparison.uri:uri}} resizeMode="contain" style={{width:'100%',height:'100%',transform:[{translateX:x},{translateY:y},{scale}]}}/>:null}
             </Animated.View>
           </View></GestureDetector>
           {handoff?<Image fadeDuration={0} testID="page-handoff" source={{uri:handoff.uri}} resizeMode="contain" style={{position:'absolute',inset:0,backgroundColor:'#0c1013'}} onLoad={()=>{
@@ -95,7 +96,7 @@ export function ImagePreview({ uri, onClose, title, onPrevious, onNext, previous
         <View style={{flexDirection:'row',alignItems:'center',justifyContent:'center',paddingHorizontal:8,paddingVertical:6,gap:4}}>
           {onPrevious?action('上一个版本',()=>settlePage(1)):null}
           {action('缩小',()=>update(current.current.scale-0.5))}
-          <Pressable accessibilityRole="button" accessibilityLabel="还原图片缩放" onPress={()=>update(1)} style={{minWidth:54,minHeight:44,justifyContent:'center'}}><Text style={{color:'#aab3bb',textAlign:'center',fontSize:12}}>{Math.round(scale*100)}%</Text></Pressable>
+          <Text style={{color:'#aab3bb',fontSize:12,minWidth:44,textAlign:'center'}}>{Math.round(scale*100)}%</Text><ImageOverlayAction label="还原图片缩放" icon="refresh" onPress={()=>update(1)} dark/>
           {action('放大',()=>update(current.current.scale+0.5))}
           {onNext?action('下一个版本',()=>settlePage(-1)):null}
         </View>
