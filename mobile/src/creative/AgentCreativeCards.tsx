@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { createContext, useContext, useCallback, useRef, useState, useEffect, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { ImagePreview } from '../ui/ImagePreview';
@@ -14,14 +14,11 @@ import type { CreativeDraft } from './drafts';
 import { ListAction } from '../ui/ListPageUI';
 import { creativeUI as s } from './creativeUI';
 
-export function AgentCreativeCards({ threadId, running }: { threadId: string; running: boolean }) {
-  const router = useRouter();
-  const [cards, setCards] = useState<AgentCreativeActivity[]>([]), [error, setError] = useState(''), [notice, setNotice] = useState('');
-  const [busy, setBusy] = useState(false),[open,setOpen]=useState(false),[preview,setPreview]=useState<string>(),[readError,setReadError]=useState(''),[loading,setLoading]=useState(true);
-  const lock = useRef(false);
-  const [allowance, setAllowance] = useState<Record<string, number>>({});
+const ActivityContext=createContext({cards:[] as AgentCreativeActivity[],allowance:{} as Record<string,number>,readError:'',loading:true});
+export function AgentActivityProvider({threadId,children}:{threadId:string;children:ReactNode}) {
+  const [cards,setCards]=useState<AgentCreativeActivity[]>([]),[allowance,setAllowance]=useState<Record<string,number>>({}),[readError,setReadError]=useState(''),[loading,setLoading]=useState(true);
   useFocusEffect(useCallback(() => {
-    let active = true, reading = false;setCards([]);setReadError('');setLoading(true);setPreview(undefined);setOpen(false);setError('');setNotice('');
+    let active = true, reading = false;setCards([]);setReadError('');setLoading(true);
     const refresh = async () => {
       if (reading) return; reading = true;
       try {
@@ -36,6 +33,18 @@ export function AgentCreativeCards({ threadId, running }: { threadId: string; ru
     const timer = setInterval(() => void refresh().catch(() => {if(active)setReadError('创作状态读取失败，正在重试');}), 2500);
     return () => { active = false; clearInterval(timer); };
   }, [threadId]));
+  return <ActivityContext.Provider value={{cards,allowance,readError,loading}}>{children}</ActivityContext.Provider>;
+}
+
+export function AgentCreativeCards({ threadId, running, runId }: { threadId: string; running: boolean; runId?:string }) {
+  const router=useRouter();
+  const state=useContext(ActivityContext);
+  const cards=runId?state.cards.filter(card=>card.runId===runId):state.cards;
+  const {allowance,readError,loading}=state;
+  const [error,setError]=useState(''),[notice,setNotice]=useState('');
+  const [busy,setBusy]=useState(false),[open,setOpen]=useState(false),[preview,setPreview]=useState<string>();
+  const lock=useRef(false);
+  useEffect(()=>{setOpen(false);setPreview(undefined);setError('');setNotice('');},[threadId,runId]);
   const grant = async (draft: CreativeDraft) => {
     if (!draft.project_id || lock.current) return;
     lock.current = true; setBusy(true); setError('');
@@ -59,12 +68,13 @@ export function AgentCreativeCards({ threadId, running }: { threadId: string; ru
   };
   const image=cards.flatMap(card=>card.outputs).find(output=>output.state==='AVAILABLE' && output.relativePath && output.mime?.startsWith('image/'));
   const summary=readError || (loading?'正在读取创作状态…':agentCreativeActivitySummary(cards));
+  if(runId && !cards.length)return null;
   return <View>
-    <Pressable testID="agent-creative-summary" accessibilityRole="button" accessibilityLabel={`本会话创作，${summary}`} onPress={()=>setOpen(true)} style={{minHeight:44,flexDirection:'row',alignItems:'center',gap:8,paddingHorizontal:8}}>
+    <Pressable testID="agent-creative-summary" accessibilityRole="button" accessibilityLabel={`${runId?'本轮成果':'本会话创作'}，${summary}`} onPress={()=>setOpen(true)} style={{minHeight:44,flexDirection:'row',alignItems:'center',gap:8,paddingHorizontal:8}}>
       {image?<MediaPreview version={image} label="最新生成图片" style={{width:32,height:32,borderRadius:4}}/>:<AppIcon name="image" size={18} color={COLORS.primary}/>}
-      <Text numberOfLines={1} accessibilityLiveRegion="polite" style={{flex:1,color:COLORS.textMuted,fontSize:12}}>本会话创作 · {summary}</Text><AppIcon name="chevron_right" size={18}/>
+      <Text numberOfLines={1} accessibilityLiveRegion="polite" style={{flex:1,color:COLORS.textMuted,fontSize:12}}>{runId?'本轮成果':'本会话创作'} · {summary}</Text><AppIcon name="chevron_right" size={18}/>
     </Pressable>
-    {open?<ParameterSheet title="本会话的创作" onClose={()=>setOpen(false)}>
+    {open?<ParameterSheet title={runId?'本轮的创作':'本会话的创作'} onClose={()=>setOpen(false)}>
       {!cards.length?<Text style={s.muted}>{readError || (loading?'正在读取创作状态…':'尚未创建生成任务。助手准备好草稿后，可在这里查看草稿、授权和实际成果。')}</Text>:null}
       {cards.map(card=><View key={card.id} style={s.card}>
         <Text style={s.title}>{card.name}</Text>

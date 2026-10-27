@@ -64,7 +64,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
     async asset(id: string) { const row = await db.getFirstAsync<Row>('SELECT * FROM creative_assets WHERE id=?', id); return row ? asset(row) : undefined; },
     versionAsset: (id: string) => db.getFirstAsync<{ asset_id: string }>('SELECT asset_id FROM creative_asset_versions WHERE id=?', id),
     async covers(){return db.getAllAsync<{project_id:string;version_id:string;relative_path:string|null;state:string|null}>("SELECT c.*,b.relative_path,f.state FROM creative_project_covers c LEFT JOIN creative_version_files f ON f.version_id=c.version_id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256");},
-    async projectTab(id:string){return (await db.getFirstAsync<{tab:'brief'|'shots'|'assets'|'plans'|'activity'}>('SELECT tab FROM creative_project_views WHERE project_id=?',id))?.tab??'brief';},
+    async projectTab(id:string){return (await db.getFirstAsync<{tab:'brief'|'shots'|'assets'|'plans'|'activity'}>('SELECT tab FROM creative_project_views WHERE project_id=?',id))?.tab??'shots';},
     async saveProjectTab(projectId:string,tab:'brief'|'shots'|'assets'|'plans'|'activity'){await withWriteTransaction(db,tx=>tx.runAsync('INSERT INTO creative_project_views VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET tab=excluded.tab',projectId,tab).then(()=>undefined));},
     async description(assetId:string){return db.getFirstAsync<{description:string;tags_json:string}>('SELECT * FROM creative_asset_descriptions WHERE asset_id=?',assetId);},
     async assets(options: { projectId?: string; query?: string; inbox?: boolean; trash?:boolean; kind?: string; limit?: number } = {}): Promise<CreativeAsset[]> {
@@ -73,6 +73,16 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
     },
     async versions(assetId: string): Promise<AssetVersion[]> {
       return (await db.getAllAsync<Row>(`SELECT v.*,f.blob_sha256,COALESCE(r.state,f.state) AS state,b.relative_path,b.mime FROM creative_asset_versions v LEFT JOIN creative_file_resources r ON r.version_id=v.id AND r.role='original' LEFT JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE v.asset_id=? ORDER BY v.version_no DESC`, assetId)).map(r => ({ id: r.id, assetId: r.asset_id, versionNo: r.version_no, createdAt: r.created_at, source: r.source, recipe: JSON.parse(r.recipe_json), blobSha256: r.blob_sha256 ?? undefined, relativePath: r.relative_path ?? undefined, mime: r.mime ?? undefined, state: r.state ?? 'PENDING' }));
+    },
+    async latestVersions(assetIds: string[]): Promise<AssetVersion[]> {
+      if (!assetIds.length) return [];
+      const result:AssetVersion[]=[];
+      const unique=[...new Set(assetIds)];
+      for(let offset=0;offset<unique.length;offset+=200){
+        const batch=unique.slice(offset,offset+200);
+        result.push(...(await db.getAllAsync<Row>(`SELECT v.*,f.blob_sha256,COALESCE(r.state,f.state) AS state,b.relative_path,b.mime FROM creative_asset_versions v LEFT JOIN creative_file_resources r ON r.version_id=v.id AND r.role='original' LEFT JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE v.asset_id IN (${batch.map(()=>'?').join(',')}) AND v.version_no=(SELECT MAX(v2.version_no) FROM creative_asset_versions v2 WHERE v2.asset_id=v.asset_id)`, ...batch)).map(r => ({ id: r.id, assetId: r.asset_id, versionNo: r.version_no, createdAt: r.created_at, source: r.source, recipe: JSON.parse(r.recipe_json), blobSha256: r.blob_sha256 ?? undefined, relativePath: r.relative_path ?? undefined, mime: r.mime ?? undefined, state: r.state ?? 'PENDING' })));
+      }
+      return result;
     },
     async links(assetId: string) { return db.getAllAsync<{ project_id: string; title: string; pinned_version_id: string | null; revision: number }>('SELECT p.*,j.title FROM creative_project_assets p JOIN creative_projects j ON j.id=p.project_id WHERE asset_id=?', assetId); },
     async deliveries(versionId: string) { return db.getAllAsync<{ id: string; status: string; generation: number; destination_uri: string | null; error_code: string | null }>('SELECT * FROM creative_deliveries WHERE version_id=? ORDER BY generation DESC', versionId); },

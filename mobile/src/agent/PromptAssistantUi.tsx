@@ -1,13 +1,15 @@
+import { ConversationInput, ConversationSend } from '../conversation/ConversationInput';
+import { ConversationList } from '../conversation/ConversationList';
 import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../ui/KeyboardSurface';
 import { isCompactLayout as isCompactPromptLayout } from '../ui/adaptiveLayout';
 import { ImagePreview } from '../ui/ImagePreview';
-import { styles, sentStyles, markdownStyles } from './PromptAssistantStyles';
+import { styles, sentStyles } from './PromptAssistantStyles';
 import { HistoryList, type HistoryProps } from './HistoryList';
 import { ToolTimeline } from './ToolTimeline';
 export { ToolTimeline } from './ToolTimeline';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useCopilotChatContext } from '@copilotkit/react-native';
-import { CopilotMarkdown } from '@copilotkit/react-native/components';
+import { ConversationMessage, ConversationText } from '../conversation/ConversationMessage';
 import { getSourceUrl } from '@copilotkit/shared';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -89,7 +91,7 @@ export function PromptAssistantUi({
   onLoadMoreHistory,
   transcript,
   transcriptRevision,
-  creativeCards,
+  renderRunArtifacts,
   headerContext,
   workflowDefinition,
   workflows,
@@ -109,7 +111,7 @@ export function PromptAssistantUi({
   onAccept?: (input: { id: string; text: string; attachments: unknown[]; draftRevision: number }) => Promise<void>;
   transcript?: readonly unknown[];
   transcriptRevision?: number;
-  creativeCards?: React.ReactNode;
+  renderRunArtifacts?: (runId:string)=>React.ReactNode;
   headerContext?: React.ReactNode;
   workflowDefinition?: WorkflowDefinition;
   workflows?: WorkflowChoice[];
@@ -361,6 +363,7 @@ export function PromptAssistantUi({
               setVersionsOpen(true);
             }}
             runIssue={runIssue?.runId && runs.some(run => run.id === runIssue.runId && run.error === runIssue.message) ? null : runIssue}
+            renderRunArtifacts={renderRunArtifacts}
             runs={runs}
             completedMessageIds={completedMessageIds}
             latestVersionMessageId={versions.at(-1)?.sourceMessageId}
@@ -370,7 +373,6 @@ export function PromptAssistantUi({
             onSelectSuggestion={applySuggestion}
           />
           <View testID="conversation-composer-dock" style={styles.composerDock}>
-            {creativeCards}
             <Composer
               value={draft}
               onChangeText={handleDraftChange}
@@ -460,6 +462,7 @@ export function ConversationTimeline({
   completedMessageIds = [],
   runs = [],
   latestVersionMessageId,
+  renderRunArtifacts,
   bottomInset = 0,
 }: {
   rows: ReturnType<typeof normalizeMessages>;
@@ -473,6 +476,7 @@ export function ConversationTimeline({
   completedMessageIds?: readonly string[];
   runs?: PromptRun[];
   latestVersionMessageId?: string;
+  renderRunArtifacts?: (runId:string)=>React.ReactNode;
   bottomInset?: number;
 }) {
   const listRef = useRef<FlatList<ReturnType<typeof projectRunTimeline>[number]>>(null);
@@ -517,10 +521,10 @@ export function ConversationTimeline({
   }, [setFollow]);
   return (
       <View style={{ flex: 1 }}>
-        <FlatList
+        <ConversationList
           maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
           ListHeaderComponent={allRows.length > visibleCount ? <Pressable accessibilityRole="button" accessibilityLabel="加载更早消息" style={{ minHeight: 48, justifyContent: 'center', alignItems: 'center' }} onPress={() => { setFollow(false); setVisibleCount(count => count + 50); }}><Text>加载更早消息</Text></Pressable> : null}
-          ref={listRef}
+          listRef={listRef}
           data={timelineRows}
           keyExtractor={(item) => item.id}
           style={styles.timeline}
@@ -558,13 +562,13 @@ export function ConversationTimeline({
             </View>
           }
           renderItem={({ item }) =>
-        item.kind === 'run' ? <RunTimelineRow run={item.run} entries={item.entries} disabled={isRunning} onRetry={onRetry} onInspect={inspectProcess} /> : <TimelineMessageRow
+        item.kind === 'run' ? <View><RunTimelineRow run={item.run} entries={item.entries} disabled={isRunning} onRetry={onRetry} onInspect={inspectProcess} />{allRows.filter(row=>row.kind==='run' && row.run.id===item.run.id).at(-1)?.id===item.id?renderRunArtifacts?.(item.run.id):null}</View> : <TimelineMessageRow
           item={item}
           completed={completedMessageIds.includes(item.id)}
           streaming={isRunning && (runs.length ? runs.some(run => run.status === 'running' && run.messageIds.at(-1) === item.id) : item.id === rows.at(-1)?.id)}
           ready={!isRunning && completedMessageIds.includes(item.id)}
           latest={latestVersionMessageId ? item.id === latestVersionMessageId : undefined}
-          showTools={item.kind === 'assistant'}
+          showTools={item.kind === 'assistant' && !runs.some(run=>run.messageIds.includes(item.id))}
           onPreview={setPreviewImage}
           onExportPrompt={exportPrompt}
         />
@@ -611,30 +615,21 @@ const TimelineMessageRow = React.memo(function TimelineMessageRow({ item, comple
                 ))}
               </ScrollView>
             ) : null}
-            <View style={styles.userBubble}>
+            <ConversationMessage role="user">
               <UserMessageText
                 text={item.text || '（已添加参考图）'}
                 attachments={item.attachments}
                 onPreview={onPreview}
               />
-            </View>
+            </ConversationMessage>
           </View>
         ) : (
-          <View style={styles.assistantRow}>
-            <View style={styles.assistantMark}>
-              <AppIcon
-                name="smart_toy"
-                size={16}
-                color={LIGHT_PROMPT_COLORS.ink}
-              />
-            </View>
-            <View style={styles.assistantContent}>
+          <ConversationMessage role="assistant">
               {(completed ? item.prose ?? item.text : item.text).trim() ? (
                 <>
-                  <CopilotMarkdown
-                    content={completed ? item.prose ?? item.text : item.text}
-                    streamingAnimation={streaming}
-                    style={markdownStyles}
+                  <ConversationText
+                    text={completed ? item.prose ?? item.text : item.text}
+                    streaming={streaming}
                   />
                   <ResponseCopyButton id={item.id} text={item.text} />
                 </>
@@ -649,8 +644,7 @@ const TimelineMessageRow = React.memo(function TimelineMessageRow({ item, comple
                   onExport={prompt => onExportPrompt(prompt, 'id' in candidate ? candidate.id as string : undefined)}
                 />
               ))}
-            </View>
-          </View>
+          </ConversationMessage>
         );
 }, (previous, next) => {
   if (previous.completed !== next.completed || previous.streaming !== next.streaming || previous.ready !== next.ready || previous.latest !== next.latest || previous.showTools !== next.showTools || previous.onPreview !== next.onPreview || previous.onExportPrompt !== next.onExportPrompt) return false;
@@ -1062,8 +1056,7 @@ export function Composer({
   selection?: { start: number; end: number };
   onSelectionChange?: (event: { nativeEvent: { selection: { start: number; end: number } } }) => void;
 }) {
-  const [editing, setEditing] = useState(false),[toolsOpen,setToolsOpen]=useState(false),[inputHeight,setInputHeight]=useState(40);
-  useEffect(()=>{if(!value)setInputHeight(40);},[value]);
+  const [editing, setEditing] = useState(false),[toolsOpen,setToolsOpen]=useState(false);
   const [focused, setFocused] = useState(false);
   const insets = useSafeAreaInsets();
   const editorRef = useRef<TextInput>(null);
@@ -1114,27 +1107,10 @@ export function Composer({
       <View style={styles.composerRow}>
         <Pressable accessibilityRole="button" accessibilityLabel="添加图片附件" onPress={()=>void onOpenPicker()} style={styles.addButton}><AppIcon name="add_photo_alternate" size={19} color={LIGHT_PROMPT_COLORS.ink}/></Pressable>
         <View testID="composer-input-area" style={styles.inputArea}>
-          <TextInput ref={inputRef} value={value} onChangeText={onChangeText} accessibilityLabel="创作想法" onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} placeholder="发消息，开始创作…" placeholderTextColor={LIGHT_PROMPT_COLORS.placeholder} multiline style={[styles.input,{height:inputHeight}]} onContentSizeChange={event=>setInputHeight(Math.max(40,Math.min(104,event.nativeEvent.contentSize.height)))} editable scrollEnabled textAlignVertical="top" selection={selection} onSelectionChange={onSelectionChange}/>
+          <ConversationInput inputRef={inputRef} value={value} onChangeText={onChangeText} accessibilityLabel="创作想法" onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} placeholder="发消息，开始创作…" selection={selection} onSelectionChange={onSelectionChange}/>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="更多创作操作" onPress={()=>{Keyboard.dismiss();setToolsOpen(true);}} style={styles.addButton}><AppIcon name="more_horiz" size={20} color={LIGHT_PROMPT_COLORS.muted}/></Pressable>
-        <Pressable
-          accessibilityLabel={isRunning ? '停止生成' : submitting ? '发送中' : '发送消息'}
-          accessibilityState={{ disabled: !isRunning && disabled, busy: submitting }}
-          disabled={!isRunning && disabled}
-          onPress={() => { if (isRunning) onCancel(); else if (!disabled) onSubmit(value); }}
-          style={[
-            styles.sendButton,
-            !isRunning && disabled && styles.sendDisabled,
-          ]}
-        >
-          {submitting && !isRunning ? <ActivityIndicator size="small" color={LIGHT_PROMPT_COLORS.muted} /> : <AppIcon
-            name={isRunning ? 'close' : 'send'}
-            size={18}
-            color={
-              isRunning || !disabled ? '#FFFFFF' : LIGHT_PROMPT_COLORS.muted
-            }
-          />}
-        </Pressable>
+        <ConversationSend running={isRunning} busy={submitting} disabled={disabled} onSend={()=>{if(!disabled)onSubmit(value);}} onStop={onCancel}/>
       </View>
       {counter}
       <DraggableBottomSheet visible={toolsOpen} title="创作操作" onClose={()=>setToolsOpen(false)}>

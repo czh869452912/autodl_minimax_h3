@@ -1,3 +1,4 @@
+import { RecordRow } from '../ui/RecordRow';
 import { KeyboardSurface } from '../ui/KeyboardSurface';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, SectionList, Text, TextInput, View } from 'react-native';
@@ -97,20 +98,13 @@ export function HistoryList({
         keyExtractor={(thread) => thread.threadId}
         renderSectionHeader={({ section }) => <Text style={styles.groupLabel}>{section.title}</Text>}
         renderItem={({ item: thread }) => (
-          <Pressable
-            accessibilityRole="button" accessibilityState={{ selected: thread.threadId === activeThreadId }} onPress={() => onSelect(thread.threadId)}
-            style={[styles.historyItem, thread.threadId === activeThreadId && styles.historyItemActive]}
-          >
-            <View style={styles.historyItemMain}>
-              <Text numberOfLines={1} style={styles.historyTitle}>{sessionDisplayTitle(thread, threads)}</Text>
-              <Text style={styles.historyMeta}>{sessionMessageCount(thread)} 条消息 · {sessionRunLabel(thread.state) || new Date(thread.updatedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
-            </View>
+          <RecordRow title={sessionDisplayTitle(thread, threads)} detail={`${sessionMessageCount(thread)} 条消息 · ${sessionRunLabel(thread.state) || new Date(thread.updatedAt).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}`} selected={thread.threadId===activeThreadId} onPress={()=>onSelect(thread.threadId)} trailing={
             <Pressable accessibilityRole="button" accessibilityLabel={`管理会话 ${sessionTitle(thread)}`} style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }} onPress={() => Alert.alert('管理会话', sessionTitle(thread), [
               { text: '取消', style: 'cancel' },
               { text: '重命名', onPress: () => { setRenameError(''); setRenameTarget(thread); setRenameValue(sessionTitle(thread)); } },
               { text: '删除', style: 'destructive', onPress: () => Alert.alert('删除会话', '删除后无法恢复本机会话记录；此会话正在运行的请求也会停止。', [{ text: '取消', style: 'cancel' }, { text: '删除', style: 'destructive', onPress: () => onDelete(thread.threadId) }]) },
             ])}><Text style={styles.more}>•••</Text></Pressable>
-          </Pressable>
+          }/>
         )}
       />
       <Modal

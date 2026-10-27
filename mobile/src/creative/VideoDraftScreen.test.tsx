@@ -1,3 +1,4 @@
+jest.mock('@copilotkit/react-native/components',()=>({CopilotMarkdown:({content}:{content:string})=>require('react').createElement(require('react-native').Text,null,content)}));
 jest.mock('./AudioVersionPreview',()=>({AudioVersionPreview:()=>null}));
 jest.mock('../storage/databaseClient',()=>({getDatabase:()=>({})}));
 jest.mock('./taskRecovery',()=>({unknownTaskReviewed:async()=>mockReviewed}));
@@ -88,7 +89,7 @@ test('returning from workflow settings refreshes choices without replacing unsav
     await act(async()=>tree.update(<VideoDraftScreen id="d"/>));
     expect(prompt().props.value).toBe('Keep my new direction');
     act(()=>button('MiniMax H3 · 切换').props.onPress());
-    expect(button('选择工作流 Newly installed')).toBeDefined();
+    expect(button('Newly installed')).toBeDefined();
     expect(mockPrepare).not.toHaveBeenCalled();expect(mockConfirm).not.toHaveBeenCalled();
   }finally{act(()=>tree?.unmount());}
 });
@@ -177,15 +178,15 @@ test('switching workflows renders their own parameters and restores each saved d
     act(()=>prompt().props.onChangeText('H3 motion'));
     await act(async()=>jest.advanceTimersByTime(650));
     act(()=>button('MiniMax H3 · 切换').props.onPress());
-    await act(async()=>button('选择工作流 另一个视频工作流').props.onPress());
+    await act(async()=>button('另一个视频工作流').props.onPress());
     expect(JSON.stringify(tree.toJSON())).toContain('运动风格');
     act(()=>prompt().props.onChangeText('Alternate motion'));
     await act(async()=>jest.advanceTimersByTime(650));
     act(()=>button('另一个视频工作流 · 切换').props.onPress());
-    await act(async()=>button('选择工作流 MiniMax H3 Image/Audio to Video').props.onPress());
+    await act(async()=>button('MiniMax H3 Image/Audio to Video').props.onPress());
     expect(prompt().props.value).toBe('H3 motion');
     act(()=>button('MiniMax H3 · 切换').props.onPress());
-    await act(async()=>button('选择工作流 另一个视频工作流').props.onPress());
+    await act(async()=>button('另一个视频工作流').props.onPress());
     expect(prompt().props.value).toBe('Alternate motion');
     expect(mockExecute.mock.calls.filter(([command])=>command.name==='draft.switchVideoWorkflow')).toHaveLength(1);
     expect(mockPrepare).not.toHaveBeenCalled();expect(mockConfirm).not.toHaveBeenCalled();
@@ -214,8 +215,8 @@ test('switching back to an immutable legacy submission restores its own input in
     await act(async()=>{tree=create(<VideoDraftScreen id="d"/>);});
     act(()=>tree.root.findByType(require('./CreativeResults').CreativeResults).props.onJobStatus('SUCCEEDED'));
     act(()=>button('调整后再生成').props.onPress());
-    act(()=>button('MiniMax H3 · 切换').props.onPress());await act(async()=>button('选择工作流 Alternate').props.onPress());
-    act(()=>button('Alternate · 切换').props.onPress());await act(async()=>button('选择工作流 MiniMax H3 Image/Audio to Video').props.onPress());
+    act(()=>button('MiniMax H3 · 切换').props.onPress());await act(async()=>button('Alternate').props.onPress());
+    act(()=>button('Alternate · 切换').props.onPress());await act(async()=>button('MiniMax H3 Image/Audio to Video').props.onPress());
     expect(tree.root.findByProps({accessibilityLabel:'视频镜头提示词'}).props.value).toBe('Original motion');
     expect(mockDraft.state).toBe('EDITING');expect(JSON.parse(mockDraft.input_json)).toMatchObject({duration:7,seed:'42'});
     expect(mockPrevious.find(row=>row.id==='d')).toMatchObject({state:'SUBMITTED',job_id:'original-job'});
@@ -252,5 +253,18 @@ test('adding references opens the corresponding multi-picker and associates the 
   expect(mockDocuments).toHaveBeenCalledWith(expect.objectContaining({multiple:true}));expect(mockFileImport).toHaveBeenCalledTimes(2);
   expect(mockExecute.mock.calls.filter(([c])=>c.name==='draft.replaceVideoMedia').at(-1)?.[0].payload.audioVersionIds).toEqual(['audio-a.mp3','audio-b.mp3']);
   expect(tree.root.findAll(n=>n.props.title==='参考素材')).toHaveLength(0);
+ }finally{act(()=>tree?.unmount());}
+});
+
+test('H3 price explanation shares the generate row and cannot submit a task',async()=>{
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<VideoDraftScreen id="d"/>);});
+  const row=tree.root.findByProps({testID:'video-generate-row'});
+  expect(row.findAll(n=>n.props.accessibilityLabel==='生成视频'&&n.props.onPress).length).toBeGreaterThan(0);
+  const hint=row.findAll(n=>n.props.accessibilityLabel==='视频预估费用说明'&&n.props.onPress)[0];
+  act(()=>hint.props.onPress());
+  expect(Alert.alert).toHaveBeenCalledWith('视频预估费用',expect.any(String));
+  expect(mockPrepare).not.toHaveBeenCalled();expect(mockConfirm).not.toHaveBeenCalled();
  }finally{act(()=>tree?.unmount());}
 });

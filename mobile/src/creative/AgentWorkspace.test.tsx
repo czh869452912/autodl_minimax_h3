@@ -39,8 +39,8 @@ test('new project is created before entering chat, and duplicate taps do not cre
   let tree!: ReturnType<typeof create>;
   try {
     await act(async () => { tree = create(<AgentWorkspace />); });
-    act(() => button(tree, '新建项目并开始对话').props.onPress());
-    act(() => tree.root.findByType(TextInput).props.onChangeText(' 新短片 '));
+    act(() => button(tree, '新建项目').props.onPress());
+    act(() => tree.root.findByProps({accessibilityLabel:'Agent 项目名称'}).props.onChangeText(' 新短片 '));
     const submit = button(tree, '创建并进入对话').props.onPress;
     act(() => { submit(); submit(); });
     expect(mockSetParams).not.toHaveBeenCalled();
@@ -56,10 +56,10 @@ test('failed project creation keeps the name and never enters a nonexistent chat
   let tree!: ReturnType<typeof create>;
   try {
     await act(async () => { tree = create(<AgentWorkspace />); });
-    act(() => button(tree, '新建项目并开始对话').props.onPress());
-    act(() => tree.root.findByType(TextInput).props.onChangeText('保留名称'));
+    act(() => button(tree, '新建项目').props.onPress());
+    act(() => tree.root.findByProps({accessibilityLabel:'Agent 项目名称'}).props.onChangeText('保留名称'));
     await act(async () => button(tree, '创建并进入对话').props.onPress());
-    expect(tree.root.findByType(TextInput).props.value).toBe('保留名称');
+    expect(tree.root.findByProps({accessibilityLabel:'Agent 项目名称'}).props.value).toBe('保留名称');
     expect(JSON.stringify(tree.toJSON())).toContain('本地存储暂不可用');
     expect(mockSetParams).not.toHaveBeenCalled();
   } finally { act(() => tree?.unmount()); }

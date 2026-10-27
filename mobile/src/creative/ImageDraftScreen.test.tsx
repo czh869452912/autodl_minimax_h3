@@ -1,3 +1,4 @@
+jest.mock('@copilotkit/react-native/components',()=>({CopilotMarkdown:({content}:{content:string})=>require('react').createElement(require('react-native').Text,null,content)}));
 jest.mock('../storage/databaseClient',()=>({getDatabase:()=>({})}));
 jest.mock('./taskRecovery',()=>({unknownTaskReviewed:async()=>mockReviewed}));
 let mockReviewed=false;
@@ -310,5 +311,18 @@ test('opening the editor overlays an open history without resizing the preview o
   expect(results().props.historyVisible).toBe(true);expect(stage()).toEqual(before);
   expect(StyleSheet.flatten(tree.root.findAllByProps({testID:'image-workbench-tools'})[0].props.style).position).toBe('absolute');
   act(()=>button(tree,'关闭画面编辑').props.onPress());expect(stage()).toEqual(before);
+ }finally{act(()=>tree?.unmount());}
+});
+
+test('reuse exposes only a temporary toolbar undo and expires without reverting edits',async()=>{
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<ImageDraftScreen id="d"/>);});
+  act(()=>tree.root.findByType(require('./CreativeResults').CreativeResults).props.onReuse({prompt:'new landscape'}));
+  expect(button(tree,'撤销修改')).toBeDefined();
+  expect(tree.root.findAllByType(require('react-native').Text).some(n=>n.props.children==='已应用提示词或参数')).toBe(false);
+  await act(async()=>jest.advanceTimersByTime(10_000));
+  expect(button(tree,'撤销修改')).toBeUndefined();
+  expect(JSON.parse(mockDraft.input_json).prompt).toBe('new landscape');
  }finally{act(()=>tree?.unmount());}
 });

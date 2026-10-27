@@ -72,7 +72,7 @@ test('archive remains in project detail with a restore action', async () => {
   mockExecute.mockImplementationOnce(async () => { mockService.projects.mockResolvedValue([{ ...project, archivedAt: 42, revision: 2 }]); return { status: 'completed', receiptId: 'r', value: {} }; });
   let tree!: ReturnType<typeof create>;
   try {
-    await act(async () => { tree = create(<CreativeWorkspace mode="projects" projectId="p" />); });
+    await act(async () => { tree = create(<CreativeWorkspace mode="projects" projectId="p" initialTab="brief" />); });
     act(() => press(tree, '更多'));
     await act(async () => press(tree, '归档项目'));
     expect(content(tree)).toContain('恢复项目');
@@ -86,7 +86,7 @@ test('unsaved project brief blocks route removal and tab changes until explicitl
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   let tree!: ReturnType<typeof create>;
   try {
-    await act(async () => { tree = create(<CreativeWorkspace mode="projects" projectId="p" />); });
+    await act(async () => { tree = create(<CreativeWorkspace mode="projects" projectId="p" initialTab="brief" />); });
     act(() => tree.root.findByType(require('./ProjectOverview').ProjectOverview).props.onEdit());
     act(() => tree.root.findByProps({ accessibilityLabel: '创作简报' }).props.onChangeText('Unsaved brief'));
     expect(usePreventRemove).toHaveBeenLastCalledWith(true, expect.any(Function));

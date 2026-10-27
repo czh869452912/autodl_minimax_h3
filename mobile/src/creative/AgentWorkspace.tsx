@@ -1,3 +1,4 @@
+import { RecordRow } from '../ui/RecordRow';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -15,6 +16,7 @@ import { COLORS } from '../ui/theme';
 export function AgentWorkspace() {
   const { projectId } = useLocalSearchParams<{ projectId?: string }>();
   const router = useRouter();
+  const [query,setQuery]=useState('');
   const [projects, setProjects] = useState<CreativeProject[]>([]);
   const [creating, setCreating] = useState(false), [title, setTitle] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false), [loaded, setLoaded] = useState(false), [legacy,setLegacy]=useState(false);
   const lock = useRef(false);
@@ -30,21 +32,22 @@ export function AgentWorkspace() {
     } catch (e) { setError(e instanceof Error ? e.message : '项目创建失败'); }
     finally { lock.current = false; setBusy(false); }
   };
-  if(legacy)return <View style={s.screen}><View style={{paddingHorizontal:16}}><TextAction label="返回项目选择" onPress={()=>setLegacy(false)} /></View><AgentScreen /></View>;
+  if(legacy && !projectId)return <View style={s.screen}><View style={{paddingHorizontal:16}}><TextAction label="返回项目选择" onPress={()=>setLegacy(false)} /></View><AgentScreen /></View>;
   if (projectId) return <View style={s.screen}>
     <AgentScreen key={projectId} projectId={projectId} />
   </View>;
   return <View style={s.screen}><ScrollView contentContainerStyle={s.content}>
-    <Text accessibilityRole="header" style={s.heading}>围绕项目，与 Agent 协作</Text>
+    <View style={s.row}><Text accessibilityRole="header" style={s.heading}>项目协作</Text><TextAction label="新建项目" onPress={()=>setCreating(true)}/></View>
     <Text style={s.muted}>在对话中规划画面、制作图片与视频，并审阅结果。</Text>
-    <ListAction label="新建项目并开始对话" onPress={() => setCreating(true)} />
+    <TextInput accessibilityLabel="搜索项目" placeholder="搜索项目名称或简报" value={query} onChangeText={setQuery} style={s.input}/>
     <Text style={s.title}>继续项目</Text>
-    {projects.map(p => <Pressable key={p.id} accessibilityRole="button" accessibilityLabel={p.title} onPress={()=>enter(p.id)} style={({pressed})=>({flexDirection:'row',alignItems:'center',gap:12,minHeight:72,paddingVertical:12,borderBottomWidth:1,borderBottomColor:COLORS.border,opacity:pressed?0.65:1})}><View style={{flex:1,gap:4}}><Text style={s.title}>{p.title}</Text><Text numberOfLines={2} style={s.muted}>{p.brief || '从项目对话继续创作'}</Text></View><AppIcon name="chevron_right" size={20} color={COLORS.textMuted} /></Pressable>)}
+    {projects.filter(p=>(p.title+' '+p.brief).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())).map(p=><RecordRow key={p.id} title={p.title} detail={p.brief || '继续对话、草稿与成果'} meta={new Date(p.updatedAt).toLocaleDateString('zh-CN')} onPress={()=>enter(p.id)}/>)}
+    {projects.length && !projects.some(p=>(p.title+' '+p.brief).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))?<Text style={s.muted}>没有匹配的项目</Text>:null}
     {loaded && !projects.length ? <Text style={s.muted}>建立第一个项目，让对话、草稿和成果保存在一起。</Text> : null}
     {!loaded && !error ? <Text style={s.muted}>正在读取项目…</Text> : null}
     <TextAction label="管理项目与分镜" onPress={() => router.push('/(tabs)/projects')} />
     <TextAction label="全部对话记录" onPress={()=>setLegacy(true)} />
-    <Text style={s.muted}>当前为实验模式，使用已接入的创作工具。实际生成仍按项目授权执行。</Text>
+
     {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
   </ScrollView>{creating ? <ParameterSheet title="新建创作项目" onClose={() => { if (!busy) setCreating(false); }}>
     <TextInput accessibilityLabel="Agent 项目名称" placeholder="项目名称" value={title} onChangeText={setTitle} maxLength={200} editable={!busy} style={s.input} autoFocus />

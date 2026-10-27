@@ -28,7 +28,7 @@ import { createAppWorkflowCatalog } from '../workflows/registry/builtin';
 import { registryRecordToDefinition } from '../workflows/registry/catalog';
 import type { RegistryRecord } from '../workflows/registry/types';
 import type { WorkflowDefinition } from '../workflows/schema/types';
-import { AgentCreativeCards } from '../creative/AgentCreativeCards';
+import { AgentCreativeCards, AgentActivityProvider } from '../creative/AgentCreativeCards';
 import { AgentCreativePanel } from '../creative/AgentCreativePanel';
 import { bindProjectConversation } from '../creative/projectAgentScope';
 
@@ -397,10 +397,10 @@ function AgentSession({
         agentId={agent.agentId}
         attachments={{ enabled: false }}
       >
-        <PromptAssistantUi
+        <AgentActivityProvider threadId={snapshot.threadId}><PromptAssistantUi
           {...uiProps}
           headerContext={<AgentCreativePanel compact threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />}
-          creativeCards={<AgentCreativeCards threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />}
+          renderRunArtifacts={runId=><AgentCreativeCards threadId={snapshot.threadId} running={Boolean(agent.isRunning)} runId={runId}/>}
           onExportPrompt={onExportPrompt}
           onExportHandoff={onExportHandoff}
           clientState={liveSnapshot.state as Record<string, unknown>}
@@ -435,7 +435,7 @@ function AgentSession({
               });
             }
           }}
-        />
+        /></AgentActivityProvider>
       </CopilotChat>
     </LocalCopilotKitProvider>
   );

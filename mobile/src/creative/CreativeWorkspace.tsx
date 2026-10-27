@@ -1,3 +1,4 @@
+import { RecordRow } from '../ui/RecordRow';
 import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../ui/KeyboardSurface';
 import { creativeError } from './creativeError';
 import { useUnsavedChanges } from './useUnsavedChanges';
@@ -38,7 +39,7 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
   const [projects, setProjects] = useState<CreativeProject[]>([]);
   const [covers,setCovers]=useState<Record<string,{version_id:string;relative_path:string|null;state:string|null}>>({});
   const [selected, setSelected] = useState<string | undefined>(projectId);
-  const [projectView, setProjectView] = useState<'brief' | 'shots' | 'assets' | 'plans' | 'activity'>(initialTab === 'shots' || initialTab === 'plans' || initialTab === 'activity' || initialTab === 'assets' ? initialTab : 'brief');
+  const [projectView, setProjectView] = useState<'brief' | 'shots' | 'assets' | 'plans' | 'activity'>(initialTab === 'shots' || initialTab === 'plans' || initialTab === 'activity' || initialTab === 'assets' || initialTab === 'brief' ? initialTab : 'shots');
   const [assetLimit, setAssetLimit] = useState(100);
   const [importOpen,setImportOpen]=useState(false);
   const [comparing, setComparing] = useState(false),[processing,setProcessing]=useState(false);
@@ -133,7 +134,8 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
     {mode === 'projects' && selected && !activeAsset ? <View style={styles.row}>{action(projectView === 'brief' ? '✓ 概览' : '概览', () => changeProjectView('brief'))}{action(projectView === 'shots' ? '✓ 镜头' : '镜头', () => changeProjectView('shots'))}{action(projectView === 'assets' ? '✓ 素材' : '素材', () => changeProjectView('assets'))}</View> : null}
     {mode === 'projects' && !activeAsset ? <>
       {!selected ? <View style={styles.row}>{action('新建项目', () => creating ? confirmLeave(discardBrief) : setCreating(true), false)}{action(archived ? '查看进行中项目' : '查看归档项目', () => { setArchived(!archived); setSelected(undefined); })}{selected ? action('全部项目', () => { setSelected(undefined); setTitle(''); setBrief(''); }) : null}</View> : null}
-      {!selected ? projects.map(p => <Pressable accessibilityRole="button" accessibilityLabel={`打开项目 ${p.title}`} key={p.id} style={styles.card} onPress={() => void run(()=>openProject(p))}>{covers[p.id]?.state==='AVAILABLE'&&covers[p.id]?.relative_path?<Image accessibilityLabel={`${p.title} 封面`} source={{uri:`${FileSystem.documentDirectory}${covers[p.id].relative_path}`}} style={{height:140,width:'100%'}} resizeMode="cover"/>:null}<Text style={styles.title}>{p.title}</Text><Text style={styles.body} numberOfLines={3}>{p.brief || '尚未填写创作简报'}</Text></Pressable>) : null}
+      {!selected?<TextInput accessibilityLabel="搜索项目" placeholder="搜索项目或简报" value={projectQuery} onChangeText={setProjectQuery} style={styles.input}/>:null}
+      {!selected ? projects.filter(p=>(p.title+' '+p.brief).toLocaleLowerCase().includes(projectQuery.trim().toLocaleLowerCase())).map(p => <RecordRow key={p.id} title={p.title} detail={p.brief || '分镜、素材与创作记录'} meta={new Date(p.updatedAt).toLocaleDateString('zh-CN')} leading={covers[p.id]?.state==='AVAILABLE'&&covers[p.id]?.relative_path?<Image accessibilityLabel={`${p.title} 封面`} source={{uri:`${FileSystem.documentDirectory}${covers[p.id].relative_path}`}} style={{height:56,width:56,borderRadius:8}} resizeMode="cover"/>:undefined} onPress={()=>void run(()=>openProject(p))}/>) : null}
       {!projects.length ? <Text style={styles.body}>创建项目，将创作简报与素材组织在一起。</Text> : null}
       {current && projectView === 'brief' && !editingBrief ? <ProjectOverview project={current} onShots={() => changeProjectView('shots')} onEdit={() => setEditingBrief(true)} /> : null}
       {(!selected && creating) || (selected && projectView === 'brief' && editingBrief) ? <View style={styles.card}><Text style={styles.title}>{selected ? '项目简报' : '新建项目'}</Text>

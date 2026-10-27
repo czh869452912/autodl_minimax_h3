@@ -1,3 +1,4 @@
+jest.mock('@copilotkit/react-native/components',()=>({CopilotMarkdown:({content}:{content:string})=>require('react').createElement(require('react-native').Text,null,content)}));
 import React from 'react';
 import {act,create} from 'react-test-renderer';
 import {Modal} from 'react-native';
@@ -24,18 +25,18 @@ test('inline conversation supports follow-ups, explicit apply, undo and conflict
   act(()=>tree.update(render('moonlit cabin')));
   act(()=>button(tree,'撤销上次采用').props.onPress());expect(apply).toHaveBeenLastCalledWith('cabin');
   act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='提示词修改方向'&&n.props.onChangeText)[0].props.onChangeText('减少月光'));
-  await act(async()=>button(tree,'发送').props.onPress());
+  await act(async()=>button(tree,'发送消息').props.onPress());
   expect(mockRun.mock.calls[1][1]).toEqual(expect.arrayContaining([expect.objectContaining({role:'assistant',proposal:expect.objectContaining({prompt:'moonlit cabin'})}),expect.objectContaining({content:'减少月光'})]));
  }finally{act(()=>tree?.unmount());}
 });
 test('reopening restores only the selected draft conversation',async()=>{
  mockRead.mockResolvedValue([{role:'user',content:'之前的构图要求'},{role:'assistant',content:'已记住'}]);let tree!:ReturnType<typeof create>;
- try{await act(async()=>{tree=create(<PromptAssistSheet sessionId="draft-b" prompt="" kind="video" onApply={jest.fn()} onClose={jest.fn()}/>);});expect(mockRead).toHaveBeenCalledWith('draft-b');expect(JSON.stringify(tree.toJSON())).toContain('之前的构图要求');}finally{act(()=>tree?.unmount());}
+ try{await act(async()=>{tree=create(<PromptAssistSheet sessionId="draft-b" prompt="" kind="video" onApply={jest.fn()} onClose={jest.fn()}/>);});expect(mockRead).toHaveBeenCalledWith('draft-b');expect(tree.root.findAllByType(require('react-native').Text).some(node=>node.props.children==='之前的构图要求')).toBe(true);}finally{act(()=>tree?.unmount());}
 });
 test('stop cancels the request and never exposes its late proposal',async()=>{
  let finish!:(value:any)=>void;mockRun.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));let tree!:ReturnType<typeof create>;
  try{await act(async()=>{tree=create(<PromptAssistSheet sessionId="draft-c" prompt="cabin" kind="video" onApply={jest.fn()} onClose={jest.fn()}/>);});
- act(()=>button(tree,'润色，保留原意').props.onPress());act(()=>button(tree,'停止').props.onPress());expect(mockRun.mock.calls[0][2].aborted).toBe(true);
+ act(()=>button(tree,'润色，保留原意').props.onPress());act(()=>button(tree,'停止本轮').props.onPress());expect(mockRun.mock.calls[0][2].aborted).toBe(true);
  await act(async()=>finish({content:'late',proposal:{summary:'late',prompt:'late'}}));expect(button(tree,'采用全部修改')).toBeUndefined();
  }finally{act(()=>tree?.unmount());}
 });

@@ -1,7 +1,8 @@
 import type { PresentationMessage } from './agentPresentation';
 import type { PromptRun, PromptRunTool } from './runState';
 
-export type ProcessEntry = { id: string; kind: 'text' | 'reasoning'; text: string } | { id: string; kind: 'tool'; tool: PromptRunTool };
+import type { ProcessEntry } from '../conversation/types';
+export type { ProcessEntry } from '../conversation/types';
 export type ProcessRow = { id: string; kind: 'run'; run: PromptRun; entries: ProcessEntry[] };
 
 export function indexRunTools(transcript: readonly unknown[]) {
@@ -30,56 +31,37 @@ export function enrichRunTools(runs: PromptRun[], transcript: readonly unknown[]
   });
 }
 
-export function projectRunTimeline(rows: PresentationMessage[], runs: PromptRun[], completedIds: readonly string[]): Array<PresentationMessage | ProcessRow> {
-  const completed = new Set(completedIds);
-  const owners = new Map<string, string>();
-  for (const run of runs) for (const id of run.messageIds) owners.set(id, run.id);
-  const consumed = new Set<string>();
-  const before = new Map<string, ProcessRow[]>();
+/** Keep prose and human steering visible; only adjacent activity is collapsible. */
+export function projectRunTimeline(rows: PresentationMessage[], runs: PromptRun[], _completedIds: readonly string[]): Array<PresentationMessage | ProcessRow> {
   const after = new Map<string, ProcessRow[]>();
-  const unanchored: ProcessRow[] = [];
+  const orphaned: ProcessRow[] = [];
   const rowIds = new Set(rows.map(row => row.id));
-  const messagesByRun = new Map<string, Array<Extract<PresentationMessage, { kind: 'assistant' }>>>();
-  for (const row of rows) {
-    const owner = owners.get(row.id);
-    if (row.kind !== 'assistant' || !owner) continue;
-    const group = messagesByRun.get(owner) ?? [];
-    group.push(row); messagesByRun.set(owner, group);
-  }
   for (const run of runs) {
-    const messages = messagesByRun.get(run.id) ?? [];
-    const entries: ProcessEntry[] = [];
-    const byId = new Map<string, ProcessEntry>();
-    for (const message of messages) {
-      const final = completed.has(message.id);
-      const text = final ? '' : message.text;
-      if (text.trim()) byId.set(`text:${message.id}`, { id: `text:${message.id}`, kind: 'text', text });
-      if (!final) consumed.add(message.id);
+    const messages = rows.filter((row): row is Extract<PresentationMessage,{kind:'assistant'}> => row.kind === 'assistant' && run.messageIds.includes(row.id));
+    const buckets = new Map<string, ProcessEntry[]>();
+    const fallback = messages[0]?.id ?? run.userMessageId;
+    const add = (anchor:string, entry:ProcessEntry) => { const list=buckets.get(anchor)??[]; if(!list.some(e=>e.id===entry.id))list.push(entry); buckets.set(anchor,list); };
+    const toolMap = new Map(run.tools.map(tool=>[tool.id,tool]));
+    for(const message of messages)for(const tool of message.tools)if(!toolMap.has(tool.id))toolMap.set(tool.id,{...tool,startedAt:0,parentMessageId:message.id});
+    for(const activity of run.activities??[]) {
+      const anchor=rowIds.has(activity.messageId)?activity.messageId:fallback;
+      if(activity.kind==='reasoning' && activity.text?.trim())add(anchor,{id:activity.id,kind:'reasoning',text:activity.text});
+      if(activity.kind==='tool') {const tool=toolMap.get(activity.id);if(tool){add(anchor,{id:tool.id,kind:'tool',tool});toolMap.delete(tool.id);}}
     }
-    for (const tool of run.tools) byId.set(tool.id, { id: tool.id, kind: 'tool', tool });
-    for (const message of messages) for (const tool of message.tools) {
-      if (!byId.has(tool.id)) byId.set(tool.id, { id: tool.id, kind: 'tool', tool: { ...tool, startedAt: run.startedAt, endedAt: run.endedAt } });
+    for(const tool of toolMap.values()) {
+      const owner=tool.parentMessageId ?? messages.find(m=>m.tools.some(t=>t.id===tool.id))?.id;
+      add(owner && rowIds.has(owner)?owner:fallback,{id:tool.id,kind:'tool',tool});
     }
-    for (const activity of run.activities ?? []) {
-      if (activity.kind === 'reasoning' && activity.text?.trim()) entries.push({ id: activity.id, kind: 'reasoning', text: activity.text });
-      else {
-        const entry = byId.get(activity.id);
-        if (entry) { entries.push(entry); byId.delete(activity.id); }
-      }
-    }
-    // Older runs have no activity ledger. Recover order from their transcript.
-    for (const message of messages) {
-      for (const id of [`text:${message.id}`, ...message.tools.map(tool => tool.id)]) {
-        const entry = byId.get(id);
-        if (entry) { entries.push(entry); byId.delete(id); }
-      }
-    }
-    entries.push(...byId.values());
-    const process: ProcessRow = { id: `run-${run.id}`, kind: 'run', run, entries };
-    const anchor = messages[0]?.id;
-    if (anchor) before.set(anchor, [...(before.get(anchor) ?? []), process]);
-    else if (rowIds.has(run.userMessageId)) after.set(run.userMessageId, [...(after.get(run.userMessageId) ?? []), process]);
-    else unanchored.push(process);
+    if(!buckets.size)buckets.set(messages.at(-1)?.id??run.userMessageId,[]);
+    const anchors=[...buckets.keys()].sort((a,b)=>rows.findIndex(r=>r.id===a)-rows.findIndex(r=>r.id===b));
+    anchors.forEach((anchor,index)=>{
+      const terminal=index===anchors.length-1;
+      const entries=buckets.get(anchor)!;
+      const tools=entries.flatMap(e=>e.kind==='tool'?[e.tool]:[]);
+      const segment=terminal?{...run,tools}:{...run,tools,status:'completed' as const,error:undefined,retryOf:undefined,endedAt:tools.at(-1)?.endedAt??run.startedAt};
+      const item:ProcessRow={id:index===0?`run-${run.id}`:`run-${run.id}-${anchor}`,kind:'run',run:segment,entries};
+      if(rowIds.has(anchor))after.set(anchor,[...(after.get(anchor)??[]),item]);else orphaned.push(item);
+    });
   }
-  return [...unanchored.sort((a, b) => a.run.startedAt - b.run.startedAt), ...rows.flatMap(row => [...(before.get(row.id) ?? []), ...(consumed.has(row.id) ? [] : [row]), ...(after.get(row.id) ?? [])])];
+  return [...orphaned.sort((a,b)=>a.run.startedAt-b.run.startedAt),...rows.flatMap(row=>[row,...(after.get(row.id)??[])])];
 }

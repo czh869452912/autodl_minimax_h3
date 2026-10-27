@@ -125,7 +125,7 @@ android {
         // dev.jdtech.mpv:libmpv:1.0.0 declares and supports Android API 26+.
         minSdkVersion Math.max(26, rootProject.ext.minSdkVersion as int)
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 55
+        versionCode 56
         versionName "1.5.0-preview.4"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "boolean", "ARTIFACT_DOH_PROTOTYPE", "${findProperty('artifactDohPrototype') == 'true'}"
@@ -156,7 +156,7 @@ android {
         beta {
             initWith release
             applicationIdSuffix '.beta'
-            versionNameSuffix '-beta.16'
+            versionNameSuffix '-beta.17'
             manifestPlaceholders += [appLabel: 'AutoDL H3 测试版', appScheme: 'autodlh3-beta']
             buildConfigField "String", "APP_SCHEME", '"autodlh3-beta"'
             signingConfig signingConfigs.debug

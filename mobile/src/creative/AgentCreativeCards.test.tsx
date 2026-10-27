@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { AgentCreativeCards } from './AgentCreativeCards';
+import { AgentCreativeCards, AgentActivityProvider } from './AgentCreativeCards';
 import { ImagePreview } from '../ui/ImagePreview';
 import { readAgentCreativeActivity, type AgentCreativeActivity } from './agentCreativeActivity';
 import type { AssetVersion } from './types';
@@ -29,7 +29,7 @@ test('polls the actual job and lets the user open its archived original image or
   read.mockImplementation(async()=>rows);
   let tree!:ReturnType<typeof create>;
   try{
-    await act(async()=>{tree=create(<AgentCreativeCards threadId="thread" running={false}/>);});
+    await act(async()=>{tree=create(<AgentActivityProvider threadId="thread"><AgentCreativeCards threadId="thread" running={false}/></AgentActivityProvider>);});
     expect(tree.root.findByProps({testID:'agent-creative-summary'}).props.accessibilityLabel).toContain('排队中');
     rows=[{...rows[0],status:'SUCCEEDED',outputs:[output]}];
     await act(async()=>{jest.advanceTimersByTime(2500);});
@@ -40,7 +40,7 @@ test('polls the actual job and lets the user open its archived original image or
     act(()=>tree.root.findByType(ImagePreview).props.onClose());
     act(()=>button(tree,'查看生成任务详情').props.onPress());
     expect(mockPush).toHaveBeenCalledWith({pathname:'/creative-task/[id]',params:{id:'job'}});
-    await act(async()=>tree.update(<AgentCreativeCards threadId="another-thread" running={false}/>));
+    await act(async()=>tree.update(<AgentActivityProvider threadId="another-thread"><AgentCreativeCards threadId="another-thread" running={false}/></AgentActivityProvider>));
     expect(tree.root.findByType(ImagePreview).props.uri).toBeNull();
     expect(button(tree,'查看生成成果 1')).toBeUndefined();
   }finally{act(()=>tree?.unmount());}
@@ -50,9 +50,23 @@ test('reports failed reads instead of claiming no generation and recovers on the
   read.mockRejectedValueOnce(new Error('db busy')).mockResolvedValue([]);
   let tree!:ReturnType<typeof create>;
   try{
-    await act(async()=>{tree=create(<AgentCreativeCards threadId="thread" running={false}/>);});
+    await act(async()=>{tree=create(<AgentActivityProvider threadId="thread"><AgentCreativeCards threadId="thread" running={false}/></AgentActivityProvider>);});
     expect(tree.root.findByProps({testID:'agent-creative-summary'}).props.accessibilityLabel).toContain('读取失败');
     await act(async()=>{jest.advanceTimersByTime(2500);});
     expect(tree.root.findByProps({testID:'agent-creative-summary'}).props.accessibilityLabel).toContain('尚无生成任务');
   }finally{act(()=>tree?.unmount());}
+});
+
+test('shares one poll across run cards and shows results only under the owning run',async()=>{
+ read.mockResolvedValue([{id:'draft',runId:'run-a',name:'图片创作',draft,outputs:[output]}]);
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<AgentActivityProvider threadId="thread"><AgentCreativeCards threadId="thread" running={false} runId="run-a"/><AgentCreativeCards threadId="thread" running={false} runId="run-b"/></AgentActivityProvider>);});
+  expect(read).toHaveBeenCalledTimes(1);
+  const groups=tree.root.findAllByType(AgentCreativeCards);
+  expect(groups[0].findAllByProps({testID:'agent-creative-summary'}).length).toBeGreaterThan(0);
+  expect(groups[1].findAllByProps({testID:'agent-creative-summary'})).toHaveLength(0);
+  await act(async()=>{jest.advanceTimersByTime(2500);});
+  expect(read).toHaveBeenCalledTimes(2);
+ }finally{act(()=>tree?.unmount());}
 });

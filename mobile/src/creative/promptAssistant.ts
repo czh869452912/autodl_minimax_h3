@@ -1,3 +1,5 @@
+import type { PromptRun, PromptRunTool } from '../conversation/types';
+import { createId } from '../ids';
 import { z } from 'zod';
 import { NativeModules } from 'react-native';
 import { AIMessageChunk, ToolMessage } from '@langchain/core/messages';
@@ -12,7 +14,7 @@ export type PromptContext={prompt:string;kind:'image'|'video';image?:NovelAiDraf
 const character=z.object({index:z.number().int().min(0).max(31),prompt:z.string().max(10000).optional(),negative:z.string().max(10000).optional()}).strict();
 export const proposalSchema=z.object({summary:z.string().min(1).max(1000),prompt:z.string().max(10000).optional(),negative:z.string().max(10000).optional(),characters:z.array(character).max(32).optional()}).strict();
 export type PromptProposal=z.infer<typeof proposalSchema>;
-export type AssistMessage={role:'user'|'assistant';content:string;proposal?:PromptProposal;base?:string};
+export type AssistMessage={id?:string;run?:PromptRun;role:'user'|'assistant';content:string;proposal?:PromptProposal;base?:string};
 export function promptContext(context:PromptContext){
   const i=context.image;
   return {kind:context.kind,prompt:context.prompt,workflow:context.workflow,...(i?{model:i.model,effort:i.effort,negative:i.negative,characters:i.characters,action:i.action,mode:i.mode,qualityPreset:i.qualityPreset,negativePreset:i.negativePreset,width:i.width,height:i.height,transparent:i.transparent,chunks:i.chunks,referenceAttached:Boolean(i.sourceVersionId),referenceAnalysis:'Only attachment presence is provided. Image pixels are NOT sent or analyzed.'}:{})};
@@ -35,7 +37,7 @@ export function proposalPatch(proposal:PromptProposal,context:PromptContext):Pro
 }
 const tool=(name:string,description:string,parameters:object)=>({type:'function' as const,function:{name,description,parameters}});
 const proposalParameters={type:'object',properties:{summary:{type:'string'},prompt:{type:'string'},negative:{type:'string'},characters:{type:'array',items:{type:'object',properties:{index:{type:'integer'},prompt:{type:'string'},negative:{type:'string'}},required:['index'],additionalProperties:false}}},required:['summary'],additionalProperties:false};
-export async function streamPromptAssistant(context:PromptContext,messages:AssistMessage[],signal:AbortSignal,onText:(text:string)=>void,onStatus:(status:string)=>void):Promise<{content:string;proposal?:PromptProposal}> {
+export async function streamPromptAssistant(context:PromptContext,messages:AssistMessage[],signal:AbortSignal,onText:(text:string)=>void,onStatus:(status:string)=>void,onTool?:(tool:PromptRunTool)=>void):Promise<{content:string;proposal?:PromptProposal}> {
   const {createOpenAICompatibleModel,getH3AgentConfigError}=require('../agent/modelAdapter') as typeof import('../agent/modelAdapter');
   const config=toH3AgentConfig(await readSettings());
   if(getH3AgentConfigError(config))throw new Error('请先在设置中配置助手模型');
@@ -74,11 +76,13 @@ export async function streamPromptAssistant(context:PromptContext,messages:Assis
     for(const call of calls){
       if(signal.aborted)throw new Error('已停止');
       let result:unknown;
+      const activity:PromptRunTool={id:call.id??createId(),name:call.name,status:'running',startedAt:Date.now(),arguments:JSON.stringify(call.args)};
+      onTool?.(activity);
       try{
         if(call.name==='propose_prompt' || call.name==='validate_prompt'){
           onStatus('检查模型与角色约束…');
           const proposal=proposalSchema.parse(call.args);proposalPatch(proposal,context);
-          if(call.name==='propose_prompt')return {content:text.trim()||proposal.summary,proposal};
+          if(call.name==='propose_prompt'){onTool?.({...activity,status:'complete',endedAt:Date.now(),summary:proposal.summary});return {content:text.trim()||proposal.summary,proposal};}
           result={valid:true};
         }else if(call.name==='search_tags'){
           onStatus('查找官方标签…');
@@ -93,7 +97,8 @@ export async function streamPromptAssistant(context:PromptContext,messages:Assis
           result={tags:Array.isArray(body.tags)?body.tags.filter((t:any)=>typeof t?.tag==='string').slice(0,12).map((t:any)=>t.tag.slice(0,200)):[]};
         }else result={error:'Tool not available in prompt assistance'};
       }catch(e){result={error:e instanceof Error?e.message:'工具执行失败'};}
-      if(signal.aborted)throw new Error('已停止');
+      if(signal.aborted){onTool?.({...activity,status:'cancelled',endedAt:Date.now()});throw new Error('已停止');}
+      onTool?.({...activity,status:result && typeof result==='object' && 'error' in result?'failed':'complete',endedAt:Date.now(),output:JSON.stringify(result)});
       history.push(new ToolMessage({tool_call_id:call.id??'',content:JSON.stringify(result)}));
     }
   }

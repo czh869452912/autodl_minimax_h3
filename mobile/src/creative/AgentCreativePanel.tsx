@@ -1,11 +1,11 @@
+import { RecordRow } from '../ui/RecordRow';
 import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../ui/KeyboardSurface';
 import { useCallback, useRef, useState } from 'react';
 import { Modal, Pressable, Text, TextInput, View } from 'react-native';
 import { AppIcon } from '../ui/icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { getDatabase } from '../storage/databaseClient';
-import { withWriteTransaction } from '../storage/sqliteBusy';
 import { creativeService } from './runtime';
 import { creativeBudget } from './accountRuntime';
 import { ListAction } from '../ui/ListPageUI';
@@ -15,7 +15,6 @@ import { creativeUI as s } from './creativeUI';
 
 export function AgentCreativePanel({ threadId, running, compact=false }: { threadId: string; running: boolean; compact?:boolean }) {
   const router = useRouter();
-  const { projectId } = useLocalSearchParams<{ projectId?: string }>();
   const [expanded, setExpanded] = useState(false), [projects, setProjects] = useState<CreativeProject[]>([]), [selected, setSelected] = useState<string | null>(null);
   const [notice, setNotice] = useState(''), [query, setQuery] = useState(''), [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -32,18 +31,11 @@ export function AgentCreativePanel({ threadId, running, compact=false }: { threa
   }, [threadId]));
   const choose = async (id: string | null) => {
     if (running || lock.current) return;
-    if (projectId) { router.setParams({projectId:id ?? ''}); setExpanded(false); return; }
-    lock.current = true; setBusy(true);
-    try {
-      await withWriteTransaction(getDatabase(), async tx => {
-        if (!await tx.getFirstAsync('SELECT thread_id FROM agent_thread_index WHERE thread_id=? AND deleted=0', threadId)) throw new Error('会话不存在');
-        if (id && !await tx.getFirstAsync('SELECT id FROM creative_projects WHERE id=? AND archived_at IS NULL', id)) throw new Error('项目已不可用');
-        await tx.runAsync('INSERT INTO creative_agent_scopes VALUES(?,?,0,?) ON CONFLICT(thread_id) DO UPDATE SET project_id=excluded.project_id,revision=creative_agent_scopes.revision+1,updated_at=excluded.updated_at', threadId, id, Date.now());
-      });
-      setSelected(id); setExpanded(false); setNotice('项目已切换，已提交的任务仍归属原项目。');
-    } catch (e) { setNotice(e instanceof Error ? e.message : '项目切换失败'); }
-    finally { lock.current = false; setBusy(false); }
+    // Open the target project's own conversation; never retarget this transcript.
+    if (id) router.setParams({projectId:id});
+    setExpanded(false);
   };
+
   const projectTitle=projects.find(p => p.id === selected)?.title ?? (selected ? '项目不可用' : '选择项目');
   return <View style={compact?{flex:1}:{ paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}>
     {compact?<Pressable accessibilityRole="button" accessibilityLabel="切换创作项目" disabled={running || busy} onPress={()=>setExpanded(true)} style={{minHeight:44,flexDirection:'row',alignItems:'center',gap:4}}><Text numberOfLines={1} style={[s.title,{flexShrink:1}]}>{projectTitle}</Text><AppIcon name="expand_more" size={18}/></Pressable>:<View style={s.row}><Text style={s.muted}>当前项目：{projectTitle}</Text><TextAction label="项目" disabled={running || busy} onPress={() => setExpanded(true)} /></View>}
@@ -52,9 +44,9 @@ export function AgentCreativePanel({ threadId, running, compact=false }: { threa
     {expanded ? <Modal visible animationType="slide" onRequestClose={() => setExpanded(false)}><SafeAreaView style={s.screen}><KeyboardSurface style={{flex:1}}><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <View style={s.row}><Text style={s.heading}>选择创作项目</Text><ListAction label="关闭" secondary onPress={() => setExpanded(false)} /></View>
       <TextInput accessibilityLabel="搜索创作项目" placeholder="搜索项目" value={query} onChangeText={setQuery} style={s.input} />
-      {projects.filter(p => p.title.includes(query)).map(p => <ListAction key={p.id} label={`${p.id === selected ? '✓ ' : ''}${p.title}`} secondary disabled={running || busy} onPress={() => void choose(p.id)} />)}
+      {projects.filter(p => p.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(p => <RecordRow key={p.id} title={p.title} detail={p.brief || '项目会话与创作成果'} selected={p.id===selected} disabled={running || busy} onPress={() => void choose(p.id)} />)}
       <ListAction label="查看项目与新建项目" secondary onPress={() => { setExpanded(false); router.push('/(tabs)/projects'); }} />
-      <ListAction label="清除项目范围，仅讨论或创建项目" secondary disabled={running || busy} onPress={() => void choose(null)} />
+
       {selected ? <ListAction label="撤销当前项目全部生成授权" secondary disabled={busy} onPress={() => {
         if (lock.current) return; lock.current = true; setBusy(true);
         void creativeBudget().list().then(async rows => { for (const row of rows) if (row.project_id === selected && row.revoked_at == null) await creativeBudget().revoke(row.id); setNotice('当前项目授权已撤销'); }).catch(() => setNotice('撤销失败')).finally(() => { lock.current = false; setBusy(false); });

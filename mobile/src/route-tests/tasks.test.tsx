@@ -46,7 +46,7 @@ test('first projection and manual refresh finish while worker and maintenance re
   expect(tree.root.findByType(FlatList).props.refreshing).toBe(true);
   await act(async () => { release({ revision: 1, items: [mockCard], activity: mockActivity }); });
   expect(tree.root.findByType(FlatList).props.refreshing).toBe(false);
-  expect(tree.root.findByProps({ accessibilityLabel: '查看任务详情' }).props.disabled).toBeFalsy();
+  expect(tree.root.findByProps({ accessibilityLabel: '查看创作结果' }).props.disabled).toBeFalsy();
 });
 
 test('download and export acknowledge persistence, monitoring uses off-page activity, pagination reads larger window', async () => {

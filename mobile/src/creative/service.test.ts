@@ -84,3 +84,15 @@ test('asset type filtering precedes the page limit, so older matching assets rem
   expect((await f.service.assets({kind:'image',limit:200})).length).toBe(104);
  } finally { f.db.close(); }
 });
+
+test('batch record covers select the latest version of each asset without duplicate rows',async()=>{
+ const f=fixture();try{
+   const a=await f.image(),b=await f.image();
+   f.db.runSync("INSERT INTO creative_asset_versions VALUES('latest',?,2,'generated','{}',200)",a.assetId);
+   const covers=await f.service.latestVersions([a.assetId,b.assetId,a.assetId,'missing']);
+   expect(covers).toHaveLength(2);
+   expect(covers.find(v=>v.assetId===a.assetId)).toMatchObject({id:'latest',state:'PENDING'});
+   expect(covers.find(v=>v.assetId===b.assetId)?.id).toBe(b.versionId);
+   expect(await f.service.latestVersions([])).toEqual([]);
+ }finally{f.db.close();}
+});

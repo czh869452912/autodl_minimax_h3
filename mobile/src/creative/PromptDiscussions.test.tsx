@@ -1,3 +1,4 @@
+jest.mock('@copilotkit/react-native/components',()=>({CopilotMarkdown:({content}:{content:string})=>require('react').createElement(require('react-native').Text,null,content)}));
 import React from 'react';
 import {act,create} from 'react-test-renderer';
 import {PromptAssistSheet} from './PromptAssistSheet';
@@ -14,17 +15,18 @@ test('new discussion excludes old messages and ignores a late stream; switching 
     await act(async()=>{tree=create(<PromptAssistSheet sessionId="isolation" prompt="cabin" kind="video" onApply={()=>{}} onClose={()=>{}}/>);});
     act(()=>button(tree,'润色，保留原意').props.onPress());
     const old=mockRun.mock.calls[0];
+    act(()=>button(tree,'已有讨论 ▾').props.onPress());
     await act(async()=>button(tree,'新建讨论').props.onPress());
     expect(old[2].aborted).toBe(true);
     await act(async()=>{old[3]('late stream');complete({content:'late result',proposal:{summary:'late',prompt:'wrong'}});});
-    expect(JSON.stringify(tree.toJSON())).not.toContain('late stream');
-    expect(JSON.stringify(tree.toJSON())).not.toContain('late result');
+    expect(tree.root.findAllByType(require('react-native').Text).map(n=>[n.props.children].flat().join('')).join(' ')).not.toContain('late stream');
+    expect(tree.root.findAllByType(require('react-native').Text).map(n=>[n.props.children].flat().join('')).join(' ')).not.toContain('late result');
     await act(async()=>button(tree,'精简重复描述').props.onPress());
-    expect(mockRun.mock.calls[1][1]).toEqual([{role:'user',content:'精简重复描述'}]);
+    expect(mockRun.mock.calls[1][1]).toEqual([{id:expect.any(String),role:'user',content:'精简重复描述'}]);
     act(()=>button(tree,'新讨论 2 ▾').props.onPress());
     await act(async()=>button(tree,'已有讨论').props.onPress());
-    expect(JSON.stringify(tree.toJSON())).toContain('润色，保留原意');
-    expect(JSON.stringify(tree.toJSON())).not.toContain('B response');
+    expect(tree.root.findAllByType(require('react-native').Text).map(n=>[n.props.children].flat().join('')).join(' ')).toContain('润色，保留原意');
+    expect(tree.root.findAllByType(require('react-native').Text).map(n=>[n.props.children].flat().join('')).join(' ')).not.toContain('B response');
   }finally{act(()=>tree?.unmount());}
 });
 test('index migration is repeatable, scope changes cannot inherit the same legacy history',async()=>{
