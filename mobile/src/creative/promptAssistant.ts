@@ -1,4 +1,5 @@
-import type { PromptRun, PromptRunTool } from '../conversation/types';
+import { textOf, reasoningOf } from '../conversation/modelContent';
+import type { PromptRun, PromptRunTool, RunActivity } from '../conversation/types';
 import { createId } from '../ids';
 import { z } from 'zod';
 import { NativeModules } from 'react-native';
@@ -37,7 +38,7 @@ export function proposalPatch(proposal:PromptProposal,context:PromptContext):Pro
 }
 const tool=(name:string,description:string,parameters:object)=>({type:'function' as const,function:{name,description,parameters}});
 const proposalParameters={type:'object',properties:{summary:{type:'string'},prompt:{type:'string'},negative:{type:'string'},characters:{type:'array',items:{type:'object',properties:{index:{type:'integer'},prompt:{type:'string'},negative:{type:'string'}},required:['index'],additionalProperties:false}}},required:['summary'],additionalProperties:false};
-export async function streamPromptAssistant(context:PromptContext,messages:AssistMessage[],signal:AbortSignal,onText:(text:string)=>void,onStatus:(status:string)=>void,onTool?:(tool:PromptRunTool)=>void):Promise<{content:string;proposal?:PromptProposal}> {
+export async function streamPromptAssistant(context:PromptContext,messages:AssistMessage[],signal:AbortSignal,onText:(text:string)=>void,onStatus:(status:string)=>void,onTool?:(tool:PromptRunTool)=>void,onActivity?:(activity:RunActivity)=>void):Promise<{content:string;proposal?:PromptProposal}> {
   const {createOpenAICompatibleModel,getH3AgentConfigError}=require('../agent/modelAdapter') as typeof import('../agent/modelAdapter');
   const config=toH3AgentConfig(await readSettings());
   if(getH3AgentConfigError(config))throw new Error('请先在设置中配置助手模型');
@@ -56,6 +57,8 @@ export async function streamPromptAssistant(context:PromptContext,messages:Assis
   if(cost()>budget)throw new Error('当前草稿超出助手上下文预算，请缩短提示词或提高模型上下文设置');
   let text='';
   for(let round=0;round<4;round++){
+    const messageId=createId();
+    let roundText='',reasoning='';
     if(signal.aborted)throw new Error('已停止');
     if(cost()>budget)throw new Error('本轮讨论超过上下文预算，请缩小修改范围');
     onStatus(round?'继续整理建议…':'正在构思…');
@@ -64,8 +67,16 @@ export async function streamPromptAssistant(context:PromptContext,messages:Assis
     for await(const chunk of stream){
       if(signal.aborted)throw new Error('已停止');
       whole=whole?whole.concat(chunk):chunk;
-      const delta=typeof chunk.content==='string'?chunk.content:chunk.content.filter(p=>p.type==='text').map(p=>p.text).join('');
-      text+=delta;if(text.length>20000)throw new Error('回答过长，请缩小修改范围');onText(text);
+      const thought=reasoningOf(chunk);
+      if(thought){
+        reasoning=chunk.additional_kwargs?.reasoning_content_mode==='snapshot'?thought:reasoning+thought;
+        onActivity?.({id:`reasoning:${messageId}`,messageId,kind:'reasoning',text:reasoning});
+      }
+      const delta=textOf(chunk.content);
+      if(delta && !roundText && text)text+='\n\n';
+      roundText+=delta;text+=delta;
+      if(delta)onActivity?.({id:`text:${messageId}`,messageId,kind:'text',text:roundText});
+      if(text.length>20000)throw new Error('回答过长，请缩小修改范围');onText(text);
     }
     if(!whole)throw new Error('助手未返回内容');
     const calls=whole.tool_calls??[];
@@ -76,7 +87,8 @@ export async function streamPromptAssistant(context:PromptContext,messages:Assis
     for(const call of calls){
       if(signal.aborted)throw new Error('已停止');
       let result:unknown;
-      const activity:PromptRunTool={id:call.id??createId(),name:call.name,status:'running',startedAt:Date.now(),arguments:JSON.stringify(call.args)};
+      const activity:PromptRunTool={id:call.id??createId(),name:call.name,parentMessageId:messageId,status:'running',startedAt:Date.now(),arguments:JSON.stringify(call.args)};
+      onActivity?.({id:activity.id,messageId,kind:'tool'});
       onTool?.(activity);
       try{
         if(call.name==='propose_prompt' || call.name==='validate_prompt'){

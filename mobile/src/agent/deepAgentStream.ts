@@ -1,3 +1,4 @@
+import { textOf, reasoningOf } from '../conversation/modelContent';
 import { H3_EVENTS } from './eventContract';
 import { AIMessageChunk } from '@langchain/core/messages';
 
@@ -24,21 +25,6 @@ function messagesOf(item: unknown): RecordValue[] {
   if ('content' in value || 'kwargs' in value || 'tool_calls' in value || 'tool_call_chunks' in value) return [value];
   return Object.values(value).flatMap(part => part && typeof part === 'object' ? messagesOf(part) : []);
 }
-function textOf(content: unknown): string {
-  if (typeof content === 'string') return content;
-  return Array.isArray(content) ? content.map(part => typeof part === 'string' ? part : ['thinking', 'reasoning'].includes(rec(part).type) ? '' : String(rec(part).text ?? '')).join('') : '';
-}
-
-function reasoningOf(message: RecordValue): string {
-  const extra = message.additional_kwargs;
-  if (typeof extra?.reasoning_content === 'string') return extra.reasoning_content;
-  if (typeof extra?.reasoning === 'string') return extra.reasoning;
-  return Array.isArray(message.content) ? message.content.map((part: unknown) => {
-    const block = rec(part);
-    return ['thinking', 'reasoning'].includes(block.type) ? String(block.thinking ?? block.reasoning ?? block.text ?? '') : '';
-  }).join('') : '';
-}
-
 type ToolState = { id: string; name: string; args: string; started: boolean; ended: boolean };
 type MessageState = { text: string; reasoning: string; opened: boolean; ended: boolean; tools: Map<string, ToolState> };
 

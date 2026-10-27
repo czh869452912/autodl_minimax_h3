@@ -269,7 +269,7 @@ describe('Prompt assistant UI primitives', () => {
       expect(project).toHaveBeenCalledTimes(1);
     } finally { if (tree) act(() => tree.unmount()); factory.mockRestore(); }
   });
-  it('keeps runs collapsed by default, preserves manual expansion and bounds expanded text', () => {
+  it('shows running steps, preserves manual choices and bounds expanded text', () => {
     const run = { id: 'r', userMessageId: 'u', messageIds: [], status: 'queued' as const, startedAt: 1, tools: [] };
     const onInspect = jest.fn();
     const entries = [{ id: 'private-id', kind: 'reasoning' as const, text: 'x'.repeat(9000) + 'END' }];
@@ -278,8 +278,7 @@ describe('Prompt assistant UI primitives', () => {
     act(() => { tree = create(render('queued')); });
     expect(tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.accessibilityState.expanded).toBe(false);
     act(() => tree.update(render('running')));
-    expect(tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.accessibilityState.expanded).toBe(false);
-    act(() => tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.onPress());
+    expect(tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.accessibilityState.expanded).toBe(true);
     const item = tree.root.findByProps({ testID: 'process-item-private-id' });
     expect(item.props.accessibilityLabel).toBe('思考');
     act(() => item.props.onPress());
@@ -300,11 +299,11 @@ describe('Prompt assistant UI primitives', () => {
     const entries = [{id:'submit',kind:'tool' as const,tool}];
     let tree!:ReturnType<typeof create>;
     act(()=>{tree=create(<RunTimelineRow run={run} entries={entries} disabled onRetry={async()=>undefined}/>);});
-    act(()=>tree.root.findByProps({accessibilityLabel:'查看运行 r'}).props.onPress());
+    act(()=>tree.root.findByProps({testID:'process-item-submit'}).props.onPress());
     expect(tree.root.findByProps({testID:'process-item-submit'}).props.accessibilityLabel).toContain('未成功');
     act(()=>tree.update(<RunTimelineRow run={{...run,status:'completed',endedAt:3}} entries={entries} disabled onRetry={async()=>undefined}/>));
     expect(tree.root.findByProps({accessibilityLabel:'查看运行 r'}).props.accessibilityState.expanded).toBe(true);
-    expect(renderedText(tree).join('')).toContain('有操作未成功');
+    expect(renderedText(tree).join('')).toContain('部分操作未成功');
     act(()=>tree.unmount());
   });
   it('folds process messages together and expands complete tool output on demand', () => {
@@ -315,7 +314,7 @@ describe('Prompt assistant UI primitives', () => {
     act(() => { tree = create(<RunTimelineRow run={run} entries={entries} disabled={false} onRetry={async () => undefined} />); });
     expect(renderedText(tree).join('')).not.toContain('Inspect reference');
     act(() => tree.root.findByProps({ accessibilityLabel: '查看运行 r' }).props.onPress());
-    expect(renderedText(tree).join('')).not.toContain('Inspect reference');
+    expect(renderedText(tree).join('')).toContain('Inspect reference');
     act(() => tree.root.findByProps({ testID: 'process-item-reason' }).props.onPress());
     expect(renderedText(tree).join('')).toContain('Inspect reference');
     expect(renderedText(tree).join('')).toContain('/guide.md');
@@ -336,7 +335,7 @@ describe('Prompt assistant UI primitives', () => {
     const run = { id: 'r', userMessageId: 'u', messageIds: ['thinking', 'tools'], status: 'completed' as const, startedAt: 1, endedAt: 2, tools: [{ id: 't1', name: 'read_file', status: 'complete' as const, startedAt: 1, endedAt: 2 }] };
     let tree!: ReturnType<typeof create>;
     act(() => { tree = create(<ConversationTimeline rows={rows} runs={[run]} isRunning={false} onExportPrompt={async () => undefined} />); });
-    expect(tree.root.findByType(FlatList).props.data.map((row: { id: string }) => row.id)).toEqual(['u', 'run-r', 'mixed']);
+    expect(tree.root.findByType(FlatList).props.data.map((row: { id: string }) => row.id)).toEqual(['u', 'run-r-tools-after', 'mixed']);
     expect(tree.root.findByType(ToolTimeline).props.steps.map((step: { id: string }) => step.id)).toEqual(['t2']);
     act(() => tree.unmount());
   });
@@ -1214,4 +1213,12 @@ describe('Prompt assistant UI primitives', () => {
     expect(setSelection).toHaveBeenCalledWith({ start: 9, end: 9 });
     expect(focus).toHaveBeenCalledTimes(1);
   });
+});
+
+it('keeps copy actions on the settled final reply rather than every progress update',()=>{
+ const rows=normalizeMessages([{id:'a',role:'assistant',content:'Checking constraints'}, {id:'b',role:'assistant',content:'Final suggestion'}]);
+ const run={id:'r',userMessageId:'u',messageIds:['a','b'],status:'completed' as const,startedAt:1,endedAt:2,tools:[]};
+ let tree!:ReturnType<typeof create>;act(()=>{tree=create(<ConversationTimeline rows={rows} runs={[run]} isRunning={false} onExportPrompt={async()=>undefined}/>);});
+ expect(tree.root.findAll(n=>n.props.accessibilityLabel==='复制回答 Checking constraints')).toHaveLength(0);
+ expect(tree.root.findByProps({accessibilityLabel:'复制回答 Final suggestion'})).toBeTruthy();act(()=>tree.unmount());
 });

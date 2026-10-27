@@ -1,3 +1,4 @@
+import { useDisclosure } from './disclosure';
 import React, { memo, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { RUN_LABELS, toolActivity } from './activityLabels';
@@ -6,22 +7,25 @@ import { COLORS } from '../ui/theme';
 import { AppIcon } from '../ui/icons';
 import type { ProcessEntry } from './types';
 
-export function ActivityGroup({ run, entries = [], disabled, onRetry, onInspect }: { run: PromptRun; entries?: ProcessEntry[]; disabled?: boolean; onRetry?: (id: string) => Promise<void>; onInspect?: () => void }) {
-  const [expanded, setExpanded] = useState(false);
+export function ActivityGroup({ run, entries = [], disabled, onRetry, onInspect, disclosureId, activeTurn }: { activeTurn?: boolean; disclosureId?: string; run: PromptRun; entries?: ProcessEntry[]; disabled?: boolean; onRetry?: (id: string) => Promise<void>; onInspect?: () => void }) {
+  const [expanded, setExpanded] = useDisclosure(disclosureId ?? run.id, (activeTurn ?? run.status === 'running') || run.status === 'failed' || run.status === 'interrupted');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const active = run.tools.find(tool => tool.status === 'running');
+  const active = [...run.tools].reverse().find(tool => tool.status === 'running');
+  const counts = new Map<string, number>();
+  for (const entry of entries) if (entry.kind === 'tool') { const label = toolActivity(entry.tool.name); counts.set(label, (counts.get(label) ?? 0) + 1); }
+  const summary = [...counts].map(([label, count]) => `${label}${count > 1 ? ` ×${count}` : ''}`).join(' · ') || (entries.some(e => e.kind === 'reasoning') ? '思考过程' : '准备回复');
   const failedTool = run.tools.some(tool => tool.status === 'failed' || creativeToolError(tool.output)) || entries.some(entry => entry.kind === 'tool' && (entry.tool.status === 'failed' || creativeToolError(entry.tool.output)));
   if(run.status==='completed' && !entries.length && !run.error)return null;
   return <View style={styles.container}>
-    <Pressable accessibilityRole="button" accessibilityLabel={`查看运行 ${run.id}`} accessibilityState={{ expanded }} onPress={() => { if (!expanded) onInspect?.(); setExpanded(value => !value); }} style={({ pressed }) => [styles.toggle, pressed && styles.pressed]}>
+    {!activeTurn ? <Pressable accessibilityRole="button" accessibilityLabel={`查看运行 ${run.id}`} accessibilityState={{ expanded }} onPress={() => { if (!expanded) onInspect?.(); setExpanded(!expanded); }} style={({ pressed }) => [styles.toggle, pressed && styles.pressed]}>
       {run.status === 'running' ? <ActivityIndicator size="small" color={COLORS.primary} /> : <AppIcon name={run.status === 'failed' || run.status === 'interrupted' ? 'info' : 'list_alt'} size={18} color={COLORS.textMuted} />}
-      <Text style={styles.label}>{run.status === 'running' && active ? toolActivity(active.name) : `执行过程 · ${run.status === 'completed' && failedTool ? '有操作未成功' : RUN_LABELS[run.status]}`}{run.retryOf ? ' · 重试' : ''}</Text>
-      <Text style={styles.meta}>{entries.length} 项 · <Elapsed startedAt={run.startedAt} endedAt={run.endedAt} active={run.status === 'running'} /></Text>
+      <Text numberOfLines={2} style={styles.label}>{run.status === 'running' && active ? toolActivity(active.name) : run.status === 'completed' ? (failedTool ? '部分操作未成功' : summary) : RUN_LABELS[run.status]}{run.retryOf ? ' · 重试' : ''}</Text>
+      <Text style={styles.meta}>{run.startedAt > 0 ? <Elapsed startedAt={run.startedAt} endedAt={run.endedAt} active={run.status === 'running'} /> : null}</Text>
       <AppIcon name={expanded ? 'expand_less' : 'expand_more'} size={18} color={COLORS.textMuted} />
-    </Pressable>
-    {expanded ? <View style={styles.details}>
-      {entries.map(entry => <ProcessItem key={entry.id} entry={entry} onInspect={onInspect} />)}
+    </Pressable> : null}
+    {(activeTurn || expanded) ? <View style={styles.details}>
+      {entries.map(entry => <ProcessItem key={entry.id} disclosureId={`${disclosureId ?? run.id}:${entry.id}`} entry={entry} onInspect={() => { setExpanded(true); onInspect?.(); }} />)}
       {!entries.length && run.status === 'running' ? <Text style={styles.meta}>正在准备回复…</Text> : null}
     </View> : null}
     {run.error ? <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{run.error}</Text> : null}
@@ -51,8 +55,21 @@ function creativeToolError(output?: string): string {
   } catch { return ''; }
 }
 
-const ProcessItem = memo(function ProcessItem({ entry, onInspect }: { entry: ProcessEntry; onInspect?: () => void }) {
-  const [expanded, setExpanded] = useState(false);
+function summarizeOutput(output?: string): string {
+  if (!output) return '';
+  try {
+    const value = JSON.parse(output);
+    if (value.valid === true) return '约束检查通过';
+    if (Array.isArray(value.tags)) return value.tags.filter((tag: unknown) => typeof tag === 'string').join(' · ');
+    return [value.summary, value.message, value.description].find(item => typeof item === 'string') ?? '';
+  } catch { return output; }
+}
+function readTodos(args?: string): Array<{ content: string; status: string }> {
+  try { const value = JSON.parse(args ?? '{}'); return Array.isArray(value.todos) ? value.todos.filter((t: any) => typeof t?.content === 'string') : []; } catch { return []; }
+}
+
+const ProcessItem = memo(function ProcessItem({ entry, onInspect, disclosureId }: { entry: ProcessEntry; onInspect?: () => void; disclosureId: string }) {
+  const [expanded, setExpanded] = useDisclosure(disclosureId, false);
   const tool = entry.kind === 'tool' ? entry.tool : undefined;
   const title = tool ? toolActivity(tool.name) : entry.kind === 'reasoning' ? '思考' : '中间回复';
   const text = tool ? tool.output ?? tool.summary ?? '' : entry.kind !== 'tool' ? entry.text : '';
@@ -60,14 +77,18 @@ const ProcessItem = memo(function ProcessItem({ entry, onInspect }: { entry: Pro
   const failed = tool?.status === 'failed' || Boolean(toolError);
   const status = tool ? failed ? '未成功' : ({ complete: '完成', running: '执行中', failed: '失败', cancelled: '已停止' } as const)[tool.status] : '';
   const target = toolTarget(tool?.arguments);
+  const preview = tool ? tool.summary || summarizeOutput(tool.output) : text;
+  const todos = tool?.name === 'write_todos' ? readTodos(tool.arguments) : [];
   return <View style={styles.step}>
-    <Pressable testID={`process-item-${entry.id}`} accessibilityRole="button" accessibilityLabel={`${title}${target ? `，${target}` : ''}${status ? `，${status}` : ''}`} accessibilityState={{ expanded }} onPress={() => { if (!expanded) onInspect?.(); setExpanded(value => !value); }} style={({ pressed }) => [styles.itemToggle, pressed && styles.pressed]}>
+    <Pressable testID={`process-item-${entry.id}`} accessibilityRole="button" accessibilityLabel={`${title}${target ? `，${target}` : ''}${status ? `，${status}` : ''}`} accessibilityState={{ expanded }} onPress={() => { if (!expanded) onInspect?.(); setExpanded(!expanded); }} style={({ pressed }) => [styles.itemToggle, pressed && styles.pressed]}>
       {tool?.status === 'running' ? <ActivityIndicator size="small" color={COLORS.primary} /> : <AppIcon name={tool ? failed ? 'info' : 'list_alt' : entry.kind === 'reasoning' ? 'auto_awesome' : 'smart_toy'} size={16} color={failed ? COLORS.danger : COLORS.textMuted} />}
       <Text style={styles.itemLabel}>{title}</Text>
-      {tool ? <Text style={[styles.meta, failed && styles.failure]}>{status} · <Elapsed startedAt={tool.startedAt} endedAt={tool.endedAt} active={tool.status === 'running'} /></Text> : null}
+      {tool ? <Text style={[styles.meta, failed && styles.failure]}>{status}{tool.startedAt > 0 ? <> · <Elapsed startedAt={tool.startedAt} endedAt={tool.endedAt} active={tool.status === 'running'} /></> : null}</Text> : null}
       <AppIcon name={expanded ? 'expand_less' : 'expand_more'} size={16} color={COLORS.textMuted} />
     </Pressable>
     {target ? <Text style={styles.target} numberOfLines={expanded ? undefined : 1} selectable={expanded}>{target}</Text> : null}
+    {todos.map((todo, index) => <View key={index} style={styles.todo}><AppIcon name={todo.status === 'completed' ? 'check' : todo.status === 'in_progress' ? 'more_horiz' : 'chevron_right'} size={15} color={todo.status === 'in_progress' ? COLORS.primary : COLORS.textSubtle}/><Text style={styles.stepText}>{todo.content}</Text></View>)}
+    {!expanded && !todos.length && preview && !toolError ? <Text numberOfLines={entry.kind === 'reasoning' ? 1 : 2} style={styles.preview}>{preview.slice(0, 180)}</Text> : null}
     {expanded && tool?.arguments ? <View style={styles.payload}><Text style={styles.meta}>输入 · {tool.name}</Text><PagedText text={tool.arguments} onInspect={onInspect} /></View> : null}
     {!expanded && toolError ? <Text style={styles.failure} numberOfLines={2}>{toolError}</Text> : null}
     {expanded && text ? <View style={styles.payload}>
@@ -80,8 +101,10 @@ const ProcessItem = memo(function ProcessItem({ entry, onInspect }: { entry: Pro
 function Elapsed({ startedAt, endedAt, active }: { startedAt: number; endedAt?: number; active: boolean }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { if (!active) return; const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, [active]);
-  if (!startedAt) return <Text>未记录耗时</Text>;
-  return <Text>{Math.max(0, Math.floor(((endedAt ?? (active ? now : startedAt)) - startedAt) / 1000))} 秒</Text>;
+  if (!startedAt) return null;
+  if (!active && endedAt === undefined) return null;
+  const seconds = Math.max(0, Math.floor(((endedAt ?? now) - startedAt) / 1000));
+  return <Text>{seconds >= 60 ? `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒` : `${seconds} 秒`}</Text>;
 }
 
 function PagedText({ text, onInspect }: { text: string; onInspect?: () => void }) {
@@ -109,9 +132,10 @@ const styles = StyleSheet.create({
   itemToggle: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 6 },
   itemLabel: { flex: 1, color: COLORS.text, fontSize: 13, fontWeight: '600' },
   target: { fontSize: 12, lineHeight: 18, color: COLORS.primary, marginLeft: 22 },
-  preview: { marginLeft: 22 },
+  preview: { marginLeft: 22, color: COLORS.textMuted, fontSize: 12, lineHeight: 19 },
+  todo: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, paddingLeft: 22, paddingRight: 12 },
   payload: { paddingVertical: 8, gap: 5 },
   code: { fontSize: 12, lineHeight: 19, color: COLORS.textMuted },
   failure: { color: COLORS.danger },
-  stepText: { fontSize: 13, lineHeight: 20, color: COLORS.text },
+  stepText: { flex: 1, fontSize: 13, lineHeight: 20, color: COLORS.text },
 });

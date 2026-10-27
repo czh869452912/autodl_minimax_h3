@@ -1,13 +1,13 @@
 import { ConversationInput, ConversationSend } from '../conversation/ConversationInput';
 import { ConversationList } from '../conversation/ConversationList';
 import { ConversationMessage } from '../conversation/ConversationMessage';
-import { ActivityGroup } from '../conversation/ActivityGroup';
+import { AssistantTurn } from '../conversation/AssistantTurn';
 import { RecordRow } from '../ui/RecordRow';
 import { createId } from '../ids';
 import { endPromptRun, type PromptRun } from '../agent/runState';
 import type {ComponentProps,ReactNode} from 'react';
 import {readDiscussions,writeDiscussions,newDiscussion,readDiscussionComposer,writeDiscussionComposer,deleteDiscussionFiles,type DiscussionIndex} from './promptDiscussions';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Keyboard, ScrollView, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { IconAction, TextAction } from './WorkbenchUI';
@@ -22,9 +22,11 @@ export function PromptDiscussion({prompt,kind,onApply,onApplyPatch,onClose,sessi
   const context:PromptContext={prompt,kind,image,workflow},contextKey=promptContextKey(context);
   const current=useRef(context);current.current=context;
   const composer=useRef({text:'',offset:0}),composerReady=useRef(false);
-  useEffect(()=>{let active=true;void readDiscussionComposer(sessionId).then(value=>{if(active){composer.current=value;composerReady.current=true;setInstruction(value.text);follow.current=value.offset===0;requestAnimationFrame(()=>scroll.current?.scrollToOffset({offset:value.offset,animated:false}));}}).catch(()=>undefined);return()=>{active=false;if(composerReady.current)void writeDiscussionComposer(sessionId,composer.current).catch(()=>undefined);};},[sessionId]);
+  useEffect(()=>{let active=true;void readDiscussionComposer(sessionId).then(value=>{if(active){composer.current=value;composerReady.current=true;setInstruction(value.text);follow.current=value.offset===0;setAway(value.offset>0);requestAnimationFrame(()=>scroll.current?.scrollToOffset({offset:value.offset,animated:false}));}}).catch(()=>undefined);return()=>{active=false;if(composerReady.current)void writeDiscussionComposer(sessionId,composer.current).catch(()=>undefined);};},[sessionId]);
+  const [away,setAway]=useState(false),userScrolling=useRef(false);
+  const inspectProcess=useCallback(()=>{follow.current=false;setAway(true);},[]);
   const [messages,setMessages]=useState<AssistMessage[]>([]),history=useRef<AssistMessage[]>([]);
-  const [ready,setReady]=useState(false),[instruction,setInstruction]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[storageError,setStorageError]=useState(''),[live,setLive]=useState(''),[status,setStatus]=useState('');
+  const [ready,setReady]=useState(false),[instruction,setInstruction]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[storageError,setStorageError]=useState('');
   useEffect(()=>{if(!composerReady.current)return;const timer=setTimeout(()=>{void writeDiscussionComposer(sessionId,composer.current).catch(()=>{if(mounted.current)setStorageError('输入草稿尚未保存，请关闭前重试。');});},400);return()=>clearTimeout(timer);},[instruction,sessionId]);
   const [proposalId,setProposalId]=useState<string>();
   const [proposal,setProposal]=useState<PromptProposal>(),[base,setBase]=useState(''),[before,setBefore]=useState<PromptContext>();
@@ -37,7 +39,7 @@ export function PromptDiscussion({prompt,kind,onApply,onApplyPatch,onClose,sessi
   const persist=(rows:AssistMessage[])=>{history.current=rows.map(row=>row.id?row:{...row,id:createId()});if(mounted.current)setMessages(history.current);void writePromptSession(sessionId,history.current).catch(()=>{if(mounted.current)setStorageError('讨论尚未保存到设备，请重试保存。');});};
   const send=async(value=instruction)=>{
     if(controller.current || !value.trim() || !ready)return;
-    const request=new AbortController();controller.current=request;setBusy(true);setError('');setNotice('');setLive('');setProposal(undefined);follow.current=true;
+    const request=new AbortController();controller.current=request;setBusy(true);setError('');setNotice('');setProposal(undefined);follow.current=true;setAway(false);
     const snapshot=current.current,key=promptContextKey(snapshot);
     const userId=createId(),replyId=createId();
     const rows=[...history.current,{id:userId,role:'user' as const,content:value.trim()}];
@@ -46,13 +48,13 @@ export function PromptDiscussion({prompt,kind,onApply,onApplyPatch,onClose,sessi
     checkpoint('');setInstruction('');composer.current.text='';
     let partial='',lastSaved=0;
     try{
-      const result=await streamPromptAssistant(snapshot,rows,request.signal,text=>{partial=text;if(mounted.current&&controller.current===request&&!request.signal.aborted){setLive(text);if(Date.now()-lastSaved>750){lastSaved=Date.now();checkpoint(text);}};},text=>{if(mounted.current&&controller.current===request&&!request.signal.aborted)setStatus(text);},tool=>{run={...run,tools:run.tools.some(t=>t.id===tool.id)?run.tools.map(t=>t.id===tool.id?tool:t):[...run.tools,tool]};checkpoint(partial);});
+      const result=await streamPromptAssistant(snapshot,rows,request.signal,text=>{partial=text;if(mounted.current&&controller.current===request&&!request.signal.aborted){setMessages([...rows,{id:replyId,role:'assistant',content:text,run}]);if(Date.now()-lastSaved>750){lastSaved=Date.now();checkpoint(text);}};},()=>undefined,tool=>{run={...run,tools:run.tools.some(t=>t.id===tool.id)?run.tools.map(t=>t.id===tool.id?tool:t):[...run.tools,tool]};checkpoint(partial);},activity=>{run={...run,activities:run.activities?.some(a=>a.id===activity.id)?run.activities.map(a=>a.id===activity.id?activity:a):[...(run.activities??[]),activity]};});
       if(request.signal.aborted){run=endPromptRun(run,'cancelled',Date.now());checkpoint(partial);return;}
       run=endPromptRun(run,'completed',Date.now());
       const next=[...rows,{id:replyId,role:'assistant' as const,...result,base:key,run}];
-      if(mounted.current&&controller.current===request){persist(next);setProposalId(replyId);setProposal(result.proposal);setBase(key);setBefore(snapshot);setLive('');}
-    }catch(e){run=endPromptRun(run,request.signal.aborted?'cancelled':'failed',Date.now(),request.signal.aborted?undefined:e instanceof Error?e.message:'获取建议失败');checkpoint(partial);if(mounted.current&&controller.current===request){if(request.signal.aborted)setNotice('已停止，可继续补充要求。');else{setError(e instanceof Error?e.message:'获取建议失败，请重试');setInstruction(value);composer.current.text=value;}setLive('');}}
-    finally{const owns=controller.current===request;if(owns)controller.current=null;if(mounted.current&&owns){setBusy(false);setStatus('');if(request.signal.aborted){setLive('');setNotice('已停止，可继续补充要求。');}}}
+      if(mounted.current&&controller.current===request){persist(next);setProposalId(replyId);setProposal(result.proposal);setBase(key);setBefore(snapshot);}
+    }catch(e){run=endPromptRun(run,request.signal.aborted?'cancelled':'failed',Date.now(),request.signal.aborted?undefined:e instanceof Error?e.message:'获取建议失败');checkpoint(partial);if(mounted.current&&controller.current===request){if(request.signal.aborted)setNotice('已停止，可继续补充要求。');else{setInstruction(value);composer.current.text=value;}}}
+    finally{const owns=controller.current===request;if(owns)controller.current=null;if(mounted.current&&owns){setBusy(false);if(request.signal.aborted){setNotice('已停止，可继续补充要求。');}}}
   };
   const applyPatch=(patch:PromptPatch)=>{if(onApplyPatch)onApplyPatch(patch);else if(patch.prompt!==undefined)onApply(patch.prompt);};
   const apply=(part:PromptProposal)=>{
@@ -75,20 +77,24 @@ export function PromptDiscussion({prompt,kind,onApply,onApplyPatch,onClose,sessi
       </View>:null;
   return <View style={{flex:1,minHeight:0,backgroundColor:COLORS.surface}}>
     <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:10,borderBottomWidth:0.5,borderBottomColor:COLORS.border}}><View style={{flex:1,paddingVertical:8}}>{discussionHeader??<Text style={{fontSize:14,fontWeight:'700',color:COLORS.text}}>提示词协作</Text>}<Text style={{fontSize:10,color:COLORS.textMuted}}>{image?`${image.model.replace('nai-diffusion-','')} · ${image.effort}`:workflowTitle||'视频镜头'} · 当前草稿{image?.sourceVersionId?' · 参考图未参与分析':''}</Text></View><IconAction label="助手模型设置" icon="settings" onPress={()=>{onClose();router.push({pathname:'/(tabs)/settings',params:{section:'assistant'}});}}/><IconAction label="关闭提示词协作" icon="close" onPress={onClose}/></View>
-    {discussionList??<ConversationList listRef={scroll} data={messages} keyExtractor={item=>item.id!} keyboardShouldPersistTaps="handled" keyboardDismissMode="none" onScroll={event=>{const {contentOffset,contentSize,layoutMeasurement}=event.nativeEvent;composer.current.offset=contentOffset.y;follow.current=contentSize.height-contentOffset.y-layoutMeasurement.height<60;}} scrollEventThrottle={100} onContentSizeChange={()=>{if(follow.current)scroll.current?.scrollToEnd({animated:false});}} contentContainerStyle={{padding:12,gap:12}}
+    {discussionList??<ConversationList listRef={scroll} data={messages} keyExtractor={item=>item.id!} keyboardShouldPersistTaps="handled" keyboardDismissMode="none" onScroll={event=>{const {contentOffset,contentSize,layoutMeasurement}=event.nativeEvent;composer.current.offset=contentOffset.y;if(userScrolling.current){follow.current=contentSize.height-contentOffset.y-layoutMeasurement.height<60;setAway(!follow.current);}}} onScrollBeginDrag={()=>{userScrolling.current=true;}} onScrollEndDrag={()=>{userScrolling.current=false;}} onMomentumScrollBegin={()=>{userScrolling.current=true;}} onMomentumScrollEnd={()=>{userScrolling.current=false;}} scrollEventThrottle={100} onContentSizeChange={()=>{if(follow.current)scroll.current?.scrollToEnd({animated:false});}} contentContainerStyle={{padding:12,gap:12}}
       ListHeaderComponent={!messages.length?<><Text style={s.muted}>使用当前草稿，不包含其他讨论。说说想怎么改；建议不会直接生成媒体。</Text><View style={s.row}>{['润色，保留原意','补充光线与构图','精简重复描述',...(kind==='image'?['整理为适合当前模型的标签']:[])].map(value=><TextAction key={value} label={value} disabled={!ready||busy} onPress={()=>void send(value)}/>)}</View></>:null}
-      renderItem={({item:message})=><ConversationMessage key={message.id} role={message.role} text={busy && message.run?.status==='running' ? live || message.content : message.content} streaming={busy && message.run?.status==='running'}>
-        {message.run?<ActivityGroup run={message.run} entries={message.run.tools.map(tool=>({id:tool.id,kind:'tool',tool}))} onInspect={()=>{follow.current=false;}}/>:null}
-        {message.proposal && proposalId!==message.id?<TextAction label="查看修改建议" disabled={busy} onPress={()=>{setProposalId(message.id);setProposal(message.proposal);setBase(message.base??'');setBefore(current.current);follow.current=false;}}/>:null}
-        {proposalId===message.id?proposalCard:null}
-      </ConversationMessage>}
-      ListFooterComponent={<View style={{gap:8}}>      {busy && status?<Text accessibilityLiveRegion="polite" style={s.muted}>{status}</Text>:null}
+      renderItem={({item:message})=>{
+        const result=<>
+          {message.proposal && proposalId!==message.id?<TextAction label="查看修改建议" disabled={busy} onPress={()=>{setProposalId(message.id);setProposal(message.proposal);setBase(message.base??'');setBefore(current.current);follow.current=false;}}/>:null}
+          {proposalId===message.id?proposalCard:null}
+        </>;
+        return message.run ? <AssistantTurn run={message.run} text={message.content} onInspect={inspectProcess}>{result}</AssistantTurn>
+          : <ConversationMessage role={message.role} text={message.content}>{result}</ConversationMessage>;
+      }}
+      ListFooterComponent={<View style={{gap:8}}>
       {notice?<Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text>:null}
       {undo?<TextAction label="撤销上次采用" disabled={disabled||busy||undo.expected!==contextKey} onPress={()=>{applyPatch(undo.patch);setUndo(undefined);setNotice('已撤销上次采用。');persist([...history.current,{role:'user',content:'已撤销上次采用，请以当前草稿为准。'}]);}}/>:null}
       {error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}
       {storageError?<><Text accessibilityRole="alert" style={s.error}>{storageError}</Text>{ready?<TextAction label="重试保存讨论" onPress={()=>void writePromptSession(sessionId,history.current).then(()=>setStorageError('')).catch(()=>setStorageError('保存失败，请重试。'))}/>:null}</>:null}
 </View>}
     />}
+    {!discussionList && away?<TextAction label={busy?'查看最新进展 ↓':'回到最新消息 ↓'} onPress={()=>{userScrolling.current=false;follow.current=true;setAway(false);scroll.current?.scrollToEnd({animated:true});}}/>:null}
     {!discussionList?<View style={{padding:8,gap:6,flexDirection:'row',alignItems:'flex-end',borderTopWidth:0.5,borderTopColor:COLORS.border}}><ConversationInput accessibilityLabel="提示词修改方向" placeholder="继续描述修改方向…" value={instruction} onChangeText={text=>{composer.current.text=text;setInstruction(text);}} maxLength={4000}/><ConversationSend running={busy} disabled={!ready||!instruction.trim()} onSend={()=>void send()} onStop={()=>controller.current?.abort()}/></View>:null}
   </View>;
 }

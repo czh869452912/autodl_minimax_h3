@@ -1,3 +1,4 @@
+import { RunProgress } from '../conversation/RunProgress';
 import { ConversationInput, ConversationSend } from '../conversation/ConversationInput';
 import { ConversationList } from '../conversation/ConversationList';
 import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../ui/KeyboardSurface';
@@ -479,7 +480,7 @@ export function ConversationTimeline({
   renderRunArtifacts?: (runId:string)=>React.ReactNode;
   bottomInset?: number;
 }) {
-  const listRef = useRef<FlatList<ReturnType<typeof projectRunTimeline>[number]>>(null);
+  const listRef = useRef<FlatList<ReturnType<typeof projectRunTimeline<PresentationMessage>>[number]>>(null);
   const [visibleCount, setVisibleCount] = useState(50);
   const [viewportHeight, setViewportHeight] = useState(0);
   const allRows = useMemo(() => {
@@ -506,7 +507,7 @@ export function ConversationTimeline({
   const bottomDistance = useRef(0);
   const [unread, setUnread] = useState(false);
   useEffect(() => { if (!followingLatestRef.current) setUnread(true); }, [allRows]);
-  const inspectProcess = useCallback(() => { if (bottomDistance.current > 80) setFollow(false); }, [setFollow]);
+  const inspectProcess = useCallback(() => setFollow(false), [setFollow]);
   const scrollToLatest = useCallback((animated = !isRunning) => {
     // Keep the inspiration header visible when the empty page exceeds the viewport.
     if (allRows.length && followingLatestRef.current) listRef.current?.scrollToEnd({ animated });
@@ -556,19 +557,20 @@ export function ConversationTimeline({
           }
           ListFooterComponent={
             <View style={{ paddingBottom: bottomInset }}>
-            {runIssue ? <RunIssueRow issue={runIssue} onRetry={runIssue.kind === 'submit' ? onResend ?? (async () => undefined) : onRetry} onDismiss={onDismissIssue} disabled={isRunning} /> : !runs.length && allRows.length > 0 && isRunning ? (
-              <RunningIndicator compact />
+            {runIssue ? <RunIssueRow issue={runIssue} onRetry={runIssue.kind === 'submit' ? onResend ?? (async () => undefined) : onRetry} onDismiss={onDismissIssue} disabled={isRunning} /> : allRows.length > 0 && isRunning ? (
+              <RunProgress startedAt={runs.find(run => run.status === 'running')?.startedAt} />
             ) : null}
             </View>
           }
           renderItem={({ item }) =>
-        item.kind === 'run' ? <View><RunTimelineRow run={item.run} entries={item.entries} disabled={isRunning} onRetry={onRetry} onInspect={inspectProcess} />{allRows.filter(row=>row.kind==='run' && row.run.id===item.run.id).at(-1)?.id===item.id?renderRunArtifacts?.(item.run.id):null}</View> : <TimelineMessageRow
+        item.kind === 'run' ? <View><RunTimelineRow activeTurn={item.live} disclosureId={item.id} run={item.run} entries={item.entries} disabled={isRunning} onRetry={item.terminal ? onRetry : undefined} onInspect={inspectProcess} />{item.terminal?renderRunArtifacts?.(item.run.id):null}</View> : <TimelineMessageRow
           item={item}
           completed={completedMessageIds.includes(item.id)}
           streaming={isRunning && (runs.length ? runs.some(run => run.status === 'running' && run.messageIds.at(-1) === item.id) : item.id === rows.at(-1)?.id)}
           ready={!isRunning && completedMessageIds.includes(item.id)}
           latest={latestVersionMessageId ? item.id === latestVersionMessageId : undefined}
-          showTools={item.kind === 'assistant' && !runs.some(run=>run.messageIds.includes(item.id))}
+          showActions={!runs.some(run => run.messageIds.includes(item.id) && (run.status === 'running' || run.messageIds.at(-1) !== item.id))}
+            showTools={item.kind === 'assistant' && !runs.some(run=>run.messageIds.includes(item.id))}
           onPreview={setPreviewImage}
           onExportPrompt={exportPrompt}
         />
@@ -594,8 +596,8 @@ export function ConversationTimeline({
   );
 }
 
-const TimelineMessageRow = React.memo(function TimelineMessageRow({ item, completed, streaming, ready, latest, showTools, onPreview, onExportPrompt }: {
-  item: PresentationMessage; completed: boolean; streaming: boolean; ready: boolean; latest?: boolean; showTools: boolean;
+const TimelineMessageRow = React.memo(function TimelineMessageRow({ item, completed, streaming, ready, latest, showTools, showActions, onPreview, onExportPrompt }: {
+  item: PresentationMessage; completed: boolean; streaming: boolean; ready: boolean; latest?: boolean; showTools: boolean; showActions: boolean;
   onPreview: (uri: string) => void;
   onExportPrompt: (prompt: string, artifactId?: string) => Promise<void>;
 }) {
@@ -631,7 +633,7 @@ const TimelineMessageRow = React.memo(function TimelineMessageRow({ item, comple
                     text={completed ? item.prose ?? item.text : item.text}
                     streaming={streaming}
                   />
-                  <ResponseCopyButton id={item.id} text={item.text} />
+                  {showActions && !streaming ? <ResponseCopyButton id={item.id} text={item.text} /> : null}
                 </>
               ) : null}
               {showTools && item.tools.length ? <ToolTimeline steps={item.tools} /> : null}
@@ -647,7 +649,7 @@ const TimelineMessageRow = React.memo(function TimelineMessageRow({ item, comple
           </ConversationMessage>
         );
 }, (previous, next) => {
-  if (previous.completed !== next.completed || previous.streaming !== next.streaming || previous.ready !== next.ready || previous.latest !== next.latest || previous.showTools !== next.showTools || previous.onPreview !== next.onPreview || previous.onExportPrompt !== next.onExportPrompt) return false;
+  if (previous.completed !== next.completed || previous.streaming !== next.streaming || previous.ready !== next.ready || previous.latest !== next.latest || previous.showTools !== next.showTools || previous.showActions !== next.showActions || previous.onPreview !== next.onPreview || previous.onExportPrompt !== next.onExportPrompt) return false;
   const a = previous.item, b = next.item;
   if (a === b) return true;
   if (a.id !== b.id || a.kind !== b.kind || a.text !== b.text) return false;
