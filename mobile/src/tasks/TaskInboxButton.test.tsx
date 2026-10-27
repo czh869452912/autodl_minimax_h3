@@ -1,5 +1,6 @@
 import React from 'react';
 import {act,create} from 'react-test-renderer';
+import {ScrollView} from 'react-native';
 import {TaskInboxButton} from './TaskInboxButton';
 const mockPush=jest.fn(),mockNavigate=jest.fn();
 jest.mock('expo-router',()=>({useRouter:()=>({push:mockPush,navigate:mockNavigate}),useFocusEffect:(fn:()=>void)=>require('react').useEffect(fn,[fn])}));
@@ -15,5 +16,22 @@ test('header exposes active count and opens a compact inbox with direct task nav
   expect(JSON.stringify(tree.toJSON())).toContain('执行 ');
   act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='查看任务 image-job'&&n.props.onPress)[0].props.onPress());
   expect(mockPush).toHaveBeenCalledWith({pathname:'/creative-task/[id]',params:{id:'image-job'}});
+ }finally{act(()=>tree?.unmount());}
+});
+
+
+test('all tasks remains outside scrolling results and explicit close dismisses the inbox',async()=>{
+ let tree!:ReturnType<typeof create>;
+ const button=(label:string)=>tree.root.findAll(n=>n.props.accessibilityLabel===label&&n.props.onPress)[0];
+ try{
+  await act(async()=>{tree=create(<TaskInboxButton/>,{createNodeMock:()=>({measureInWindow:(cb:any)=>cb(200,20,36,40)})});});
+  act(()=>button('打开任务中心，2 个任务进行中').props.onPress());
+  expect(tree.root.findByType(ScrollView).findAll(n=>n.props.accessibilityLabel==='全部任务')).toHaveLength(0);
+  act(()=>button('收起最近任务').props.onPress());
+  expect(button('查看任务 image-job')).toBeUndefined();
+  act(()=>button('打开任务中心，2 个任务进行中').props.onPress());
+  act(()=>button('全部任务').props.onPress());
+  expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/tasks');
+  expect(button('查看任务 image-job')).toBeUndefined();
  }finally{act(()=>tree?.unmount());}
 });
