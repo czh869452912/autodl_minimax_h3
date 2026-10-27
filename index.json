@@ -1,7 +1,7 @@
 {
   "apiVersion": "autodl.workflow-registry/v1",
   "registryId": "autodl-official",
-  "sequence": 1,
+  "sequence": 2,
   "entries": [
     {
       "workflowId": "autodl.minimax-h3.i2v-15s",
@@ -10,11 +10,23 @@
       "url": "https://raw.githubusercontent.com/czh869452912/autodl_minimax_h3/workflow-registry/packages/fe166625b82f953d23eac160ed509f468b2383b7d7c8be6383abca9096381897.json"
     },
     {
+      "workflowId": "autodl.minimax-h3.zm-nono",
+      "version": "1.0.0",
+      "contentHash": "cc8c122cfa01e63e089a5df8521879651cd837716116746d7e46dacea243e05a",
+      "url": "https://raw.githubusercontent.com/czh869452912/autodl_minimax_h3/workflow-registry/packages/cc8c122cfa01e63e089a5df8521879651cd837716116746d7e46dacea243e05a.json"
+    },
+    {
       "workflowId": "autodl.minimax-h3.zm-u24",
       "version": "1.0.0",
       "contentHash": "43853b1f576594dec7f64c797d31a801ebd0609477ed42edee71aebf9ef4862b",
       "url": "https://raw.githubusercontent.com/czh869452912/autodl_minimax_h3/workflow-registry/packages/43853b1f576594dec7f64c797d31a801ebd0609477ed42edee71aebf9ef4862b.json"
+    },
+    {
+      "workflowId": "autodl.minimax-h3.zm-u30",
+      "version": "1.0.0",
+      "contentHash": "24b5a08dab267c7004819c074af35d5ff32b4d3f7637004cfe5530b55840d1fc",
+      "url": "https://raw.githubusercontent.com/czh869452912/autodl_minimax_h3/workflow-registry/packages/24b5a08dab267c7004819c074af35d5ff32b4d3f7637004cfe5530b55840d1fc.json"
     }
   ],
-  "signature": "750a24e6c5a6f1a72f88eecb79ebe1b9e6d75ee0cbf12373995d56a4e37fc345c12980b9eab1d85aa64739a299466b69f27cf9702dd724b290eaacff8ef1c30d"
+  "signature": "65b97935af69cb1a5dd516a57f0899bb84d7aa33a1fd5acb03da60e300b18496097f4bc19a046fe518732838be372eb5db04f95c033b7ffbbe946f62a02fce08"
 }
