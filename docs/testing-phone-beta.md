@@ -127,3 +127,12 @@
 - 本次双 ARM 手机包构建成功，包名、版本、ABI、v2 签名和 16 KB ZIP 对齐核验通过，签名与 beta.14 一致，可覆盖安装测试版。最终 ARM 包未安装到真实手机。
 - APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.15-android.apk`；169,001,946 字节；arm64-v8a / armeabi-v7a，最低 Android 8.0。
 - SHA-256：`6BA4B54587B7D615392810D43B93337BD6C12D5CA807C668E41784373EB1F970`。
+
+## 2026-10-27 · beta.16 画廊、视频记录与费用信息
+
+- 功能提交：`e4bd212d`；版本 `1.5.0-preview.4-beta.16`，versionCode 55。
+- APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.16-android.apk`，169,005,514 字节；包含 arm64-v8a / armeabi-v7a，最低 Android 8.0。
+- SHA-256：`1AEBCC33E8BB51CAF8FA83AFF9087BBA7C04B284ED06A506015BC61E93DC28BC`。
+- 精简图片全屏操作并复用相邻图片；视频生成记录增加紧凑封面、状态筛选与宽屏侧栏；加入 H3 动态估价、提交时报价快照和独立开发者 Token 余额查询。
+- 上一轮相关回归 74 项通过、1 项原有跳过，类型检查通过；模拟器确认费用与余额设置布局。手机双 ARM beta 构建成功，APK v2 签名、版本、ABI、16KB ZIP 对齐通过，证书与 beta.15 相同，可覆盖升级测试版。
+- 真实开发者 Token 余额查询和真实多轮视频播放仍待实机验证。本次未发送付费生成请求，也未操作用户手机。
