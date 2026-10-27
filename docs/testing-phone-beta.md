@@ -148,3 +148,13 @@
 - 功能提交：`1105b3eb`。手机 APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.17-android.apk`，169,030,922 字节；双 ARM 架构，最低 Android 8.0。
 - SHA-256：`2C2866362F07A5CB6B3D0EDD8C57FFD6C2313D3675F3FB7D71D27A65E797E0B9`。
 - 最终 APK 包名、versionCode 56、beta.17 版本、ABI、v2 签名与 16 KB ZIP 对齐校验通过；签名证书与 beta.16 一致。ARM 手机包未安装到真实手机；模拟器验证使用同源码的 x86_64 包。
+
+## 2026-10-28 · beta.18 智能体时间线与中间过程
+
+- 功能提交：`d626a4a8`；版本 `1.5.0-preview.4-beta.18`，versionCode 57。
+- 手工助手与 Agent 共用有序过程投影、步骤展示、展开状态和运行尾部提示；修复思考/回复/工具错序、并发工具误标完成、虚拟列表回收丢失展开状态。运行时直接呈现步骤，结束后收拢过程，保留手动检查的详情。中间回复去除重复复制操作，增加待办和校验等可读摘要。
+- 本轮功能全量回归 267 套 / 1681 项通过；最终相关 8 套 / 111 项通过，TypeScript 通过。原生 x86_64 回放验证运行、完成、过程展开及两个入口；临时回放页面已从源码移除，正式构建完成后覆盖安装到模拟器。未验证真实线上模型调用。
+- 手机双 ARM beta 构建成功；APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.18-android.apk`，169,042,002 字节，最低 Android 8.0。
+- SHA-256：`6D9710C54130A5A0F25CDCC96A6DF12BCDF4C24118702914508D1A9D834064E5`。
+- 最终 APK 包名、版本码、版本名、双 ARM 架构、Hermes bundle、v2 签名和 16KB ZIP 对齐验证通过；证书与 beta.17 相同，可覆盖升级测试版。验证记录：`build/phone-beta/beta18-verification.json`。
+- 手机 ARM 包未安装到用户手机；此前界面验证使用同功能源码的 x86_64 构建。本轮仅更新版本并打包，不重复触发生成任务。
