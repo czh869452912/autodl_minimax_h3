@@ -3,6 +3,18 @@ import { enrichRunTools, projectRunTimeline } from './runTimeline';
 import { reducePromptRunEvent, type PromptRun } from './runState';
 
 const run: PromptRun = { id: 'r', userMessageId: 'u', status: 'completed', startedAt: 1, endedAt: 9, messageIds: ['a', 'b'], tools: [{ id: 't', name: 'read_file', status: 'complete', startedAt: 2, endedAt: 3 }] };
+it('keeps second-round reasoning after the previous reply and tool while its message is pending',()=>{
+  const rows=normalizeMessages([{id:'u',role:'user',content:'Go'},{id:'a',role:'assistant',content:'Checking'}]);
+  const state:PromptRun={...run,status:'running',activities:[
+    {id:'text:a',kind:'text',messageId:'a'}, {id:'t',kind:'tool',messageId:'a'},
+    {id:'reason:b',kind:'reasoning',messageId:'b',text:'Next round'},
+  ]};
+  const pending=projectRunTimeline(rows,[state]);
+  expect(pending.map(r=>r.id)).toEqual(['u','a','run-r-a-after','run-r-b-before']);
+  expect(pending.at(-1)).toMatchObject({terminal:true,run:{status:'running'}});
+  const complete=projectRunTimeline([...rows,...normalizeMessages([{id:'b',role:'assistant',content:'Answer'}])],[state]);
+  expect(complete.map(r=>r.id)).toEqual([...pending.map(r=>r.id),'b']);
+});
 it('does not allocate a run for repeated text deltas after its activity is recorded', () => {
   const first = reducePromptRunEvent({ ...run, status: 'running' }, { type: 'TEXT_MESSAGE_CONTENT', messageId: 'a', delta: 'A' }, 2);
   expect(reducePromptRunEvent(first, { type: 'TEXT_MESSAGE_CONTENT', messageId: 'a', delta: 'B' }, 3)).toBe(first);

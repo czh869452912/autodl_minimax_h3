@@ -36,7 +36,21 @@ export function projectRunTimeline<T extends TimelineMessage>(rows: T[], runs: P
       add(owner ?? fallback, false, { id: tool.id, kind: 'tool', tool });
     }
     if (!buckets.length) buckets.push({ anchor: messages.at(-1)?.id ?? run.userMessageId, before: false, entries: [] });
-    buckets.sort((a,b) => rows.findIndex(r => r.id === a.anchor) - rows.findIndex(r => r.id === b.anchor) || Number(b.before) - Number(a.before));
+    // A reasoning/tool event can precede creation of its assistant message. Anchor
+    // that pending round after its preceding reply, never back at the initial input.
+    const placement = (bucket: typeof buckets[number]) => {
+      if (rowIds.has(bucket.anchor)) return { anchor: bucket.anchor, before: bucket.before };
+      const activityIndex = (run.activities ?? []).findIndex(a => a.messageId === bucket.anchor);
+      const preceding = activityIndex >= 0
+        ? (run.activities ?? []).slice(0,activityIndex).map(a=>a.messageId)
+        : run.messageIds.slice(0,run.messageIds.indexOf(bucket.anchor) < 0 ? undefined : run.messageIds.indexOf(bucket.anchor));
+      const anchor = preceding.reverse().find(id=>rowIds.has(id)) ?? run.userMessageId;
+      return { anchor, before: false };
+    };
+    buckets.sort((a,b) => {
+      const left=placement(a),right=placement(b);
+      return rows.findIndex(r=>r.id===left.anchor)-rows.findIndex(r=>r.id===right.anchor) || Number(right.before)-Number(left.before);
+    });
     buckets.forEach((bucket,index) => {
       const terminal = index === buckets.length - 1;
       const tools = bucket.entries.flatMap(e => e.kind === 'tool' ? [e.tool] : []);
@@ -47,13 +61,10 @@ export function projectRunTimeline<T extends TimelineMessage>(rows: T[], runs: P
       const segment: PromptRun = { ...run, tools, status, startedAt: buckets.length === 1 ? run.startedAt : startedAt,
         endedAt: buckets.length === 1 ? run.endedAt : endedAt, error: terminal ? run.error : undefined, retryOf: terminal ? run.retryOf : undefined };
       const item: ProcessRow = { id: `run-${run.id}-${bucket.anchor}-${bucket.before ? 'before' : 'after'}`, kind: 'run', run: segment, entries: bucket.entries, terminal, live: run.status === 'running' };
-      if (rowIds.has(bucket.anchor)) {
-        const target = bucket.before ? before : after;
-        target.set(bucket.anchor, [...(target.get(bucket.anchor) ?? []), item]);
-      } else if (rowIds.has(run.userMessageId)) {
-        // Reasoning can arrive before its assistant message exists. Keep it after the user,
-        // with the same identity it will have once that message arrives.
-        after.set(run.userMessageId, [...(after.get(run.userMessageId) ?? []), item]);
+      const location=placement(bucket);
+      if (rowIds.has(location.anchor)) {
+        const target = location.before ? before : after;
+        target.set(location.anchor, [...(target.get(location.anchor) ?? []), item]);
       } else orphaned.push(item);
     });
   }
