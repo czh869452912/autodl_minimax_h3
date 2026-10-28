@@ -1,0 +1,142 @@
+{
+  "evidenceType": "controlled logic and query-plan experiments; no Android timings",
+  "node": "v22.21.0",
+  "scheduling": [
+    {
+      "recoveryMs": 100,
+      "recoveries": 3,
+      "claims": 3,
+      "rounds": [
+        {
+          "claimed": 1,
+          "remainingDue": 1
+        },
+        {
+          "claimed": 1,
+          "remainingDue": 1
+        },
+        {
+          "claimed": 1,
+          "remainingDue": 1
+        }
+      ]
+    },
+    {
+      "recoveryMs": 2100,
+      "recoveries": 3,
+      "claims": 0,
+      "rounds": [
+        {
+          "claimed": 0,
+          "remainingDue": 1
+        },
+        {
+          "claimed": 0,
+          "remainingDue": 1
+        },
+        {
+          "claimed": 0,
+          "remainingDue": 1
+        }
+      ]
+    }
+  ],
+  "agentAmplification": {
+    "fixture": {
+      "cards": 20,
+      "versionsOnSharedAsset": 300
+    },
+    "versionReads": 20,
+    "parsedVersions": 6000,
+    "databaseQueries": 83
+  },
+  "verifyAmplification": {
+    "fixture": "300 unchanged AVAILABLE resources; hash and transaction I/O mocked",
+    "hashes": 300,
+    "resourceReads": 600,
+    "transactions": 300,
+    "sqlWrites": 600
+  },
+  "sqlite": {
+    "schemaVersion": 27,
+    "excludedIndexes": [],
+    "plans": [
+      {
+        "name": "draft_by_job",
+        "sql": "SELECT * FROM creative_generation_drafts WHERE job_id=?",
+        "details": [
+          "SCAN creative_generation_drafts"
+        ]
+      },
+      {
+        "name": "decision_by_plan",
+        "sql": "SELECT * FROM creative_decision_requests WHERE plan_id=?",
+        "details": [
+          "SCAN creative_decision_requests"
+        ]
+      },
+      {
+        "name": "video_step_by_plan",
+        "sql": "SELECT * FROM creative_plan_steps WHERE plan_id=? AND kind='video'",
+        "details": [
+          "SCAN creative_plan_steps"
+        ]
+      },
+      {
+        "name": "agent_receipts",
+        "sql": "SELECT r.id,o.run_id,r.result_json FROM creative_command_receipts r JOIN creative_execution_origins o ON o.id=r.execution_origin_id WHERE o.thread_id=? AND (r.command_name LIKE 'draft.%' OR r.command_name LIKE 'plan.%' OR r.command_name IN ('project.update','shot.update')) ORDER BY r.created_at DESC,r.rowid DESC LIMIT 100",
+        "details": [
+          "SCAN r USING INDEX sqlite_autoindex_creative_command_receipts_2",
+          "SEARCH o USING INDEX sqlite_autoindex_creative_execution_origins_1 (id=?)",
+          "USE TEMP B-TREE FOR ORDER BY"
+        ]
+      },
+      {
+        "name": "version_number_lookup_control",
+        "sql": "SELECT * FROM creative_asset_versions WHERE asset_id=? ORDER BY version_no DESC",
+        "details": [
+          "SEARCH creative_asset_versions USING INDEX sqlite_autoindex_creative_asset_versions_2 (asset_id=?)"
+        ]
+      },
+      {
+        "name": "operation_due_control",
+        "sql": "SELECT * FROM workflow_operations WHERE kind=? AND state='PENDING' AND next_retry_at<=? AND (lease_expires_at IS NULL OR lease_expires_at<=?) ORDER BY next_retry_at,created_at,id LIMIT ?",
+        "details": [
+          "SEARCH workflow_operations USING INDEX idx_workflow_operations_due (kind=? AND state=? AND next_retry_at<?)",
+          "USE TEMP B-TREE FOR LAST 2 TERMS OF ORDER BY"
+        ]
+      }
+    ]
+  },
+  "duplicateStorage": {
+    "physicalCas": {
+      "imports": 2,
+      "casFileCount": 1,
+      "partCount": 0,
+      "casHashReads": 4,
+      "initialImporterHashesExcluded": true
+    },
+    "logicalImport": {
+      "commandsWithDistinctKeys": 2,
+      "replayedSameKey": 1,
+      "creative_assets": 2,
+      "creative_asset_versions": 2,
+      "creative_version_files": 2,
+      "artifact_blobs": 1
+    },
+    "crashGap": {
+      "publishedButNotRegisteredFiles": 1,
+      "databaseDrivenGcDeleted": 0
+    },
+    "backups": {
+      "backups": 2,
+      "sourcePaths": [
+        "cas/parts/stale.part",
+        "cas/sha256/aa/content",
+        "posters/preview.jpg"
+      ],
+      "backupOriginalCopies": 2,
+      "backupStalePartCopies": 2
+    }
+  }
+}
