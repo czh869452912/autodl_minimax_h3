@@ -1,6 +1,7 @@
 import {enqueueVersionExport} from './enqueueVersionExport';
 import {readResultHistoryPage} from './resultHistory';
 import {readVideoHistory} from './videoHistory';
+import {readCreationRecords} from './creationRecords';
 import CryptoJS from 'crypto-js';
 import { recoverNovelAiMetadata } from './novelAiMetadata';
 import { storySchemas, applyStoryCommand, listCreativeShots } from './story';
@@ -60,6 +61,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
     videoHistory: (draft: Parameters<typeof readVideoHistory>[1]) => readVideoHistory(db,draft),
     shots: (projectId: string) => listCreativeShots(db, projectId),
     draft: (id: string) => readCreativeDraft(db, id),
+    creationRecords: () => readCreationRecords(db),
     draftInputs: (id: string) => readDraftInputs(db, id),
     drafts: (projectId?: string) => db.getAllAsync<import('./drafts').CreativeDraft>("SELECT d.*,EXISTS(SELECT 1 FROM creative_draft_inputs i WHERE i.draft_id=d.id) AS has_inputs FROM creative_generation_drafts d WHERE (? IS NULL OR project_id=?) AND state!='DISCARDED' ORDER BY updated_at DESC,id DESC LIMIT 100", projectId ?? null, projectId ?? null),
     async projects(archived = false): Promise<CreativeProject[]> { return (await db.getAllAsync<Row>('SELECT * FROM creative_projects WHERE (archived_at IS NOT NULL)=? ORDER BY updated_at DESC,id DESC', archived ? 1 : 0)).map(project); },
