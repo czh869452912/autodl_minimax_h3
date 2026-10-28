@@ -23,7 +23,7 @@ export async function readAgentCreativeActivity(db:AppDatabase,threadId:string):
       const job=draft.job_id?await db.getFirstAsync<{status:string}>('SELECT status FROM workflow_jobs WHERE id=?',draft.job_id):null;
       const links=draft.job_id?await db.getAllAsync<{version_id:string}>('SELECT version_id FROM creative_output_links WHERE job_id=? ORDER BY artifact_id',draft.job_id):[];
       const ids=new Set(links.map(link=>link.version_id));
-      const outputs=draft.target_asset_id?(await service.versions(draft.target_asset_id)).filter(version=>ids.has(version.id)):[];
+      const outputs=(await service.versionsByIds([...ids])).filter(version=>version.assetId===draft.target_asset_id);
       cards.push({id:draft.id,runId:row.run_id,name:draft.provider_id==='novelai'?'图片创作':'视频创作',draft,jobId:draft.job_id??undefined,status:job?.status,outputs});
     }else if(result.value?.planId || result.value?.proposalId){
       const id=result.value.planId??result.value.proposalId;

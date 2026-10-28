@@ -238,3 +238,14 @@ test('expired deadline leaves operations unclaimed', async () => {
     expect(value.executor.handle).not.toHaveBeenCalled();
   } finally { value.db.close(); }
 });
+
+test('slow recovery does not starve dispatch when the cycle supplies a separate admission budget', async () => {
+  const value=setup();const clock=jest.spyOn(Date,'now');let now=100;
+  clock.mockImplementation(()=>now);
+  try {
+    enqueue(value.operations,'SUBMIT',0);
+    value.executor.recover.mockImplementation(async()=>{now+=2100;});
+    expect(await value.tick.run({reason:'foreground',now:100,deadline:2100,dispatchBudgetMs:2000})).toMatchObject({claimed:1,succeeded:1});
+    expect(value.executor.recover).toHaveBeenCalledTimes(1);
+  } finally {clock.mockRestore();value.db.close();}
+});

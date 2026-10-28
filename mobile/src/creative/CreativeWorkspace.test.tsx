@@ -8,7 +8,7 @@ import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { CreativeWorkspace } from './CreativeWorkspace';
 const mockExecute = jest.fn(async () => ({ status: 'completed', receiptId: 'r', value: {} }));
-const mockService = { saveProjectTab: jest.fn(async () => undefined), asset: jest.fn<Promise<any>, [string]>(async () => undefined), project: jest.fn(), description: jest.fn(async () => null), versions: jest.fn<Promise<any[]>, [string]>(async () => []), links: jest.fn(async () => []), isTrashed: jest.fn(async () => false), deliveries: jest.fn(async () => []), covers:jest.fn(async()=>[]),projects: jest.fn<Promise<any[]>, any[]>(async () => []), assets: jest.fn(async () => []), execute: mockExecute };
+const mockService = { latestDeliveries: jest.fn(async () => []), saveProjectTab: jest.fn(async () => undefined), asset: jest.fn<Promise<any>, [string]>(async () => undefined), project: jest.fn(), description: jest.fn(async () => null), versions: jest.fn<Promise<any[]>, [string]>(async () => []), links: jest.fn(async () => []), isTrashed: jest.fn(async () => false), deliveries: jest.fn(async () => []), covers:jest.fn(async()=>[]),projects: jest.fn<Promise<any[]>, any[]>(async () => []), assets: jest.fn(async () => []), execute: mockExecute };
 jest.mock('./runtime', () => ({ creativeService: () => mockService, importCreativeImage: jest.fn(), creativeFiles: () => ({ verify: jest.fn(async () => true) }) }));
 jest.mock('../native/imagePicker', () => ({ pickImagesFromGallery: jest.fn(async () => []) }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }), useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]) }));

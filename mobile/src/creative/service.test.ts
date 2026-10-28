@@ -96,3 +96,23 @@ test('batch record covers select the latest version of each asset without duplic
    expect(await f.service.latestVersions([])).toEqual([]);
  }finally{f.db.close();}
 });
+
+test('targeted versions do not parse unrelated history and deduplicate requested ids',async()=>{
+ const f=fixture();try{
+  const a=await f.image();
+  f.db.runSync("INSERT INTO creative_asset_versions VALUES('unrelated',?,2,'generated','malformed unused recipe',200)",a.assetId);
+  expect((await f.service.versionsByIds([a.versionId,a.versionId,'missing'])).map(v=>v.id)).toEqual([a.versionId]);
+  expect(await f.service.versionsByIds([])).toEqual([]);
+ }finally{f.db.close();}
+});
+
+test('batch delivery state returns the latest generation for each requested version',async()=>{
+ const f=fixture();try{
+  const a=await f.image(),b=await f.image();
+  await f.service.execute({name:'asset.export',payload:{versionId:a.versionId,generation:1}},'save-a');
+  await f.service.execute({name:'asset.export',payload:{versionId:a.versionId,generation:2}},'save-a2');
+  await f.service.execute({name:'asset.export',payload:{versionId:b.versionId,generation:1}},'save-b');
+  expect(await f.service.latestDeliveries([a.versionId,a.versionId])).toEqual([expect.objectContaining({version_id:a.versionId,generation:2})]);
+  expect(await f.service.latestDeliveries([])).toEqual([]);
+ }finally{f.db.close();}
+});

@@ -63,11 +63,14 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
   const [versions, setVersions] = useState<AssetVersion[]>([]);
   const [deliveries, setDeliveries] = useState<Record<string, { status: string; generation: number } | undefined>>({});
   useFocusEffect(useCallback(() => {
-    let cancelled = false;
+    let cancelled = false, reading = false;
     const poll = async () => {
-      if (!activeAsset) return;
-      const rows = await Promise.all(versions.map(async v => [v.id, (await creativeService().deliveries(v.id))[0]] as const));
-      if (!cancelled) setDeliveries(Object.fromEntries(rows));
+      if (!activeAsset || cancelled || reading) return;
+      reading = true;
+      try {
+        const rows = await creativeService().latestDeliveries(versions.map(v => v.id));
+        if (!cancelled) setDeliveries(Object.fromEntries(rows.map(row => [row.version_id, row])));
+      } finally { reading = false; }
     };
     void poll().catch(() => undefined);
     const timer = setInterval(() => { void poll().catch(() => undefined); }, 2000);
@@ -103,7 +106,7 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
   const inspect = useCallback(async (asset: CreativeAsset, isActive: () => boolean = () => true) => {
     const service = creativeService();
     const description = await service.description(asset.id);
-    for (const version of await service.versions(asset.id)) await creativeFiles().verify(version.id);
+    // Browsing uses recorded availability; consumption/export still verifies the selected original.
     const [rows, links, trashed] = await Promise.all([service.versions(asset.id), service.links(asset.id), service.isTrashed(asset.id)]);
     if (!isActive()) return;
     setAssetTitle(asset.title); setAssetDescription(description?.description ?? '');

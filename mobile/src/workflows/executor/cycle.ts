@@ -54,6 +54,8 @@ export function createExecutorCycle(deps: CycleDeps) {
         maxOperations: remainingOperationBudget,
         now: timestamp,
         deadline,
+        // Recovery must finish before claims, but cannot consume their entire admission budget.
+        dispatchBudgetMs: options.deadline == null ? 2000 : undefined,
       });
       result.passes += 1;
       result.claimed += Math.min(pass.claimed, remainingOperationBudget);

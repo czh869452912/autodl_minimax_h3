@@ -12,7 +12,7 @@ export type TickSummary = {
   remainingScheduled: number;
   nextWakeAt?: number;
 };
-export type TickOptions = { reason: 'foreground' | 'background' | 'service'; maxOperations?: number; now?: number; deadline?: number };
+export type TickOptions = { reason: 'foreground' | 'background' | 'service'; maxOperations?: number; now?: number; deadline?: number; dispatchBudgetMs?: number };
 
 const laneOrder = OPERATION_LANES;
 const concurrency: Record<OperationKind, number> = { SUBMIT: 1, STATUS_SYNC: 4, ARTIFACT_DOWNLOAD: 1, EXPORT: 1 };
@@ -68,13 +68,14 @@ export function createExecutorTick(deps: TickDeps) {
     };
     if (await deps.isReadonly()) return { ...summary, ...(await remaining()) };
     await deps.executor.recover(timestamp);
+    const dispatchDeadline = options.dispatchBudgetMs == null ? options.deadline : Date.now() + Math.max(1, Math.min(2000, options.dispatchBudgetMs));
     const snapshot = await dueSnapshot(deps.operations, timestamp, maxOperations);
     const owner = deps.owner();
     const runLane = async (items: WorkflowOperation[], limit: number) => {
       let cursor = 0;
       const worker = async () => {
         while (cursor < items.length) {
-          if (options.deadline != null && Date.now() >= options.deadline) break;
+          if (dispatchDeadline != null && Date.now() >= dispatchDeadline) break;
           const candidate = items[cursor++];
           const claimed = await deps.operations.claimById(candidate.id, owner, options.now == null ? Date.now() : timestamp, deps.leaseMs ?? 120_000);
           if (!claimed) continue;

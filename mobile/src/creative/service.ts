@@ -74,6 +74,23 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
     async versions(assetId: string): Promise<AssetVersion[]> {
       return (await db.getAllAsync<Row>(`SELECT v.*,f.blob_sha256,COALESCE(r.state,f.state) AS state,b.relative_path,b.mime FROM creative_asset_versions v LEFT JOIN creative_file_resources r ON r.version_id=v.id AND r.role='original' LEFT JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE v.asset_id=? ORDER BY v.version_no DESC`, assetId)).map(r => ({ id: r.id, assetId: r.asset_id, versionNo: r.version_no, createdAt: r.created_at, source: r.source, recipe: JSON.parse(r.recipe_json), blobSha256: r.blob_sha256 ?? undefined, relativePath: r.relative_path ?? undefined, mime: r.mime ?? undefined, state: r.state ?? 'PENDING' }));
     },
+    async versionsByIds(ids: string[]): Promise<AssetVersion[]> {
+      const result: AssetVersion[] = [], unique = [...new Set(ids)];
+      for (let offset = 0; offset < unique.length; offset += 200) {
+        const batch = unique.slice(offset, offset + 200);
+        result.push(...(await db.getAllAsync<Row>(`SELECT v.*,f.blob_sha256,COALESCE(r.state,f.state) AS state,b.relative_path,b.mime FROM creative_asset_versions v LEFT JOIN creative_file_resources r ON r.version_id=v.id AND r.role='original' LEFT JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE v.id IN (${batch.map(()=>'?').join(',')}) ORDER BY v.version_no DESC`, ...batch)).map(r => ({ id: r.id, assetId: r.asset_id, versionNo: r.version_no, createdAt: r.created_at, source: r.source, recipe: JSON.parse(r.recipe_json), blobSha256: r.blob_sha256 ?? undefined, relativePath: r.relative_path ?? undefined, mime: r.mime ?? undefined, state: r.state ?? 'PENDING' })));
+      }
+      return result;
+    },
+    async latestDeliveries(versionIds: string[]) {
+      const result: Array<{version_id:string; status:string; generation:number}> = [];
+      const unique = [...new Set(versionIds)];
+      for (let offset=0; offset<unique.length; offset+=200) {
+        const batch=unique.slice(offset,offset+200);
+        result.push(...await db.getAllAsync<{version_id:string;status:string;generation:number}>(`SELECT d.version_id,d.status,d.generation FROM creative_deliveries d WHERE d.version_id IN (${batch.map(()=>'?').join(',')}) AND d.generation=(SELECT MAX(d2.generation) FROM creative_deliveries d2 WHERE d2.version_id=d.version_id)`,...batch));
+      }
+      return result;
+    },
     async latestVersions(assetIds: string[]): Promise<AssetVersion[]> {
       if (!assetIds.length) return [];
       const result:AssetVersion[]=[];
