@@ -181,3 +181,12 @@
 - 包名、版本码、版本名、Hermes bundle、双 ARM、签名与 16KB ZIP 对齐校验通过；证书与 beta.18 一致。校验报告：`build/phone-beta/beta19-verification.json`。手机包未安装到用户手机。
 - 本轮已完成与后续性能事项详见 `docs/reviews/2026-10-28-beta19-implementation.md`，不将本次 beta 视为全部审查项关闭。
 
+
+## 2026-10-28 · beta.21 创作记录与时间线修复
+
+- 版本 `1.5.0-preview.4-beta.21`，versionCode 60；功能提交 `04c2fbed`、`6e2de271`、`3218177d`、`40ceabcd`。
+- 完整统计创作组生成次数；旧编辑器入口改为当前工作流管理；图片底栏改为固定工具栏样式；修复后续 Agent 思考插回首条用户消息下方的问题。
+- 功能相关 4 套 / 24 项测试及 TypeScript 检查通过。此次为手机打包，未进行手机安装实测。
+- 双 ARM APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.21-android.apk`，169069038 字节，最低 Android 8.0。
+- SHA-256：`B6CCF211B5C5BCC6B25280AA22ACF854C67AB2D4C53960FA72BB178256C4A897`。
+- 包名、版本码、版本名、双 ARM 架构、签名和 16KB ZIP 对齐检查通过；签名证书与 beta.20 一致，可覆盖升级。
