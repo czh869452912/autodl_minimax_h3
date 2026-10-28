@@ -43,6 +43,34 @@ class NovelAiTransportTest {
       assertThrows(IllegalArgumentException::class.java) { NovelAiTransport(dir).generate(key, request, hash, "private-token") }
     } finally { dir.deleteRecursively() }
   }
+  @Test fun lookupDoesNotWaitForAnUnrelatedNetworkRequest() {
+    val dir = Files.createTempDirectory("nai-nonblocking").toFile()
+    val server = MockWebServer(); server.start()
+    val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+    try {
+      server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("{}").setBodyDelay(3, java.util.concurrent.TimeUnit.SECONDS))
+      val transport = NovelAiTransport(dir, endpoint = server.url("/").toString())
+      val sending = pool.submit<java.io.File> { transport.generate(key, request, hash, "private-token") }
+      assertNotNull(server.takeRequest(2, java.util.concurrent.TimeUnit.SECONDS))
+      assertNull(pool.submit<java.io.File?> { transport.lookup("b".repeat(64), hash) }.get(1, java.util.concurrent.TimeUnit.SECONDS))
+      sending.get(10, java.util.concurrent.TimeUnit.SECONDS)
+      assertNotNull(transport.lookup(key, hash))
+    } finally { pool.shutdownNow(); server.shutdown(); dir.deleteRecursively() }
+  }
+  @Test fun generationDoesNotOccupyMediaReceiptOrSuggestionWorkers() {
+    val executors = MediaWorkExecutors()
+    val started = java.util.concurrent.CountDownLatch(2)
+    val release = java.util.concurrent.CountDownLatch(1)
+    val completed = java.util.concurrent.CountDownLatch(3)
+    try {
+      repeat(2) { executors.executeGeneration { started.countDown(); release.await(5, java.util.concurrent.TimeUnit.SECONDS) } }
+      assertTrue(started.await(2, java.util.concurrent.TimeUnit.SECONDS))
+      executors.executeMedia { completed.countDown() }
+      executors.executeReceipt { completed.countDown() }
+      executors.executeSuggestion { completed.countDown() }
+      assertTrue(completed.await(1, java.util.concurrent.TimeUnit.SECONDS))
+    } finally { release.countDown(); executors.shutdown() }
+  }
   private val key = "a".repeat(64)
   private val request = "{\"input\":\"observatory\"}"
   private val hash = MessageDigest.getInstance("SHA-256").digest(request.toByteArray()).joinToString("") { "%02x".format(it) }

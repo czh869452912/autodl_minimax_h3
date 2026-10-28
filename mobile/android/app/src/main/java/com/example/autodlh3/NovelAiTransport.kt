@@ -24,17 +24,25 @@ class NovelAiTransport(
     return File(root, key).also { require(it.mkdirs() || it.isDirectory) { "NOVELAI_STORAGE_UNAVAILABLE" } }
   }
   private fun hash(value: ByteArray) = MessageDigest.getInstance("SHA-256").digest(value).joinToString("") { "%02x".format(it) }
-  @Synchronized fun lookup(key: String, requestHash: String): File? {
+  private fun hashFile(file: File): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input ->
+      val buffer = ByteArray(8192)
+      while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
+  }
+  fun lookup(key: String, requestHash: String): File? {
     require(requestHash.matches(Regex("[a-f0-9]{64}")))
     val dir = directory(key); val marker = File(dir, "sent")
     if (!marker.exists()) return null
     require(marker.readText() == requestHash) { "NOVELAI_REQUEST_CONFLICT" }
     val body = File(dir, "response.json"); val checksum = File(dir, "response.sha256")
     if (!body.isFile || !checksum.isFile) return null
-    require(body.length() in 1..MAX_BODY && hash(body.readBytes()) == checksum.readText()) { "NOVELAI_RESPONSE_CORRUPT" }
+    require(body.length() in 1..MAX_BODY && hashFile(body) == checksum.readText()) { "NOVELAI_RESPONSE_CORRUPT" }
     return body
   }
-  @Synchronized fun generate(key: String, requestJson: String, requestHash: String, token: String, upscale: Boolean = false): File {
+  fun generate(key: String, requestJson: String, requestHash: String, token: String, upscale: Boolean = false): File {
     require(requestJson.toByteArray().size <= 36 * 1024 * 1024 && hash(requestJson.toByteArray()) == requestHash) { "NOVELAI_REQUEST_INVALID" }
     lookup(key, requestHash)?.let { return it }
     require(token.length in 8..4096 && !token.contains('\n') && !token.contains('\r')) { "NOVELAI_CREDENTIAL_INVALID" }
@@ -62,8 +70,9 @@ class NovelAiTransport(
         } }
         val published = File(dir, "response.json")
         check(part.renameTo(published)) { "NOVELAI_RESPONSE_PUBLISH_FAILED" }
-        val checksum = File(dir, "response.sha256")
+        val checksum = File(dir, "response.sha256.part")
         FileOutputStream(checksum).use { it.write(digest.digest().joinToString("") { b -> "%02x".format(b) }.toByteArray()); it.fd.sync() }
+        check(checksum.renameTo(File(dir, "response.sha256"))) { "NOVELAI_RESPONSE_PUBLISH_FAILED" }
         return published
       } finally { part.delete() }
     }

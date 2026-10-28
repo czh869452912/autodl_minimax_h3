@@ -23,10 +23,19 @@ internal class MediaWorkExecutors(
   private val mediaExecutor: ExecutorService = Executors.newFixedThreadPool(2),
   private val cancellationExecutor: ExecutorService = Executors.newSingleThreadExecutor(),
 ) {
+  private val generationExecutor = Executors.newFixedThreadPool(2)
+  private val receiptExecutor = Executors.newSingleThreadExecutor()
+  private val suggestionExecutor = Executors.newSingleThreadExecutor()
+  fun executeGeneration(work: () -> Unit) = generationExecutor.execute(work)
+  fun executeReceipt(work: () -> Unit) = receiptExecutor.execute(work)
+  fun executeSuggestion(work: () -> Unit) = suggestionExecutor.execute(work)
   fun executeMedia(work: () -> Unit) = mediaExecutor.execute(work)
   fun executeCancellation(work: () -> Unit) = cancellationExecutor.execute(work)
 
   fun shutdown() {
+    generationExecutor.shutdownNow()
+    receiptExecutor.shutdownNow()
+    suggestionExecutor.shutdownNow()
     mediaExecutor.shutdownNow()
     cancellationExecutor.shutdownNow()
   }
@@ -384,7 +393,7 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
 
   @ReactMethod
   fun upscaleNovelAi(key: String, requestJson: String, hash: String, token: String, promise: Promise) {
-    executors.executeMedia {
+    executors.executeGeneration {
       try { promise.resolve(Uri.fromFile(novelAi.generate(key,requestJson,hash,token,true)).toString()) }
       catch(error:Exception){
         val code=error.message?.takeIf { it.matches(Regex("NOVELAI_HTTP_[0-9]{3}")) }
@@ -395,7 +404,7 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
 
   @ReactMethod
   fun generateNovelAi(key: String, requestJson: String, hash: String, token: String, promise: Promise) {
-    executors.executeMedia {
+    executors.executeGeneration {
       try { promise.resolve(Uri.fromFile(novelAi.generate(key, requestJson, hash, token)).toString()) }
       catch (error: Exception) {
         val code = error.message?.takeIf { it.matches(Regex("NOVELAI_HTTP_[0-9]{3}")) }
@@ -406,7 +415,7 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
 
   @ReactMethod
   fun suggestNovelAiTags(model: String, prompt: String, token: String, promise: Promise) {
-    executors.executeMedia {
+    executors.executeSuggestion {
       try { promise.resolve(NovelAiTagSuggestions().search(model, prompt, token)) }
       catch (_: Exception) { promise.reject("NOVELAI_TAGS_UNAVAILABLE", "标签查询失败") }
     }
@@ -414,7 +423,7 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
 
   @ReactMethod
   fun lookupNovelAi(key: String, hash: String, promise: Promise) {
-    executors.executeMedia {
+    executors.executeReceipt {
       try { promise.resolve(novelAi.lookup(key, hash)?.let { Uri.fromFile(it).toString() }) }
       catch (error: Exception) { promise.reject("NOVELAI_RESPONSE_UNAVAILABLE", "保存的生成回执不可用") }
     }
