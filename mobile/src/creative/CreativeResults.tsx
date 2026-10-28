@@ -64,16 +64,21 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
   useEffect(()=>{setSelected(initialVersionId);},[draft.job_id]);
   useFocusEffect(useCallback(() => {
     if(!previewVisible)return;
-    let active = true, reading = false;
+    let active = true, reading = false, stamp: string | undefined;
     setStatus('');
     setReadError('');
     const refresh = async () => {
       if (!active || reading) return;
       reading = true;
       try {
-        const rows = assetKey?(await Promise.all(assetKey.split('\n').map(id=>creativeService().versions(id)))).flat().sort((a,b)=>(b.createdAt??0)-(a.createdAt??0)||b.versionNo-a.versionNo):[];
         const job = draft.job_id ? await getDatabase().getFirstAsync<{ status: string }>('SELECT status FROM workflow_jobs WHERE id=?', draft.job_id) : null;
-        if (active) { setVersions(onlyJob?rows.filter(v=>v.recipe.jobId===draft.job_id):rows); setStatus(job?.status ?? ''); setReadError(''); }
+        if(active)setStatus(job?.status??'');
+        const nextStamp=await creativeService().versionStamp(assetKey?assetKey.split('\n'):[]);
+        if(nextStamp!==stamp){
+          const rows = assetKey?(await Promise.all(assetKey.split('\n').map(id=>creativeService().versions(id)))).flat().sort((a,b)=>(b.createdAt??0)-(a.createdAt??0)||b.versionNo-a.versionNo):[];
+          if(active){setVersions(onlyJob?rows.filter(v=>v.recipe.jobId===draft.job_id):rows);stamp=nextStamp;}
+        }
+        if(active)setReadError('');
       } catch {
         if (active) setReadError('结果读取失败，正在重试');
       } finally { reading = false; }

@@ -10,9 +10,10 @@ import { createEnhanceInput } from './novelAiEnhancement';
 const mockDeliveries=jest.fn(async()=>[] as Array<{status:string;generation:number}>);
 const mockPush = jest.fn(), mockReplace = jest.fn(), mockExecute = jest.fn();
 const mockReadStatus=jest.fn(async()=>({status:mockStatus}));
+const mockReadVersions=jest.fn(async(id:string)=>mockVersions.filter(v=>v.assetId===id));
 let mockStatus = 'SUCCEEDED', mockVersions: AssetVersion[] = [];
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, replace: mockReplace }), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
-jest.mock('./runtime', () => ({ creativeService: () => ({ deliveries:mockDeliveries, versions: async (id:string) => mockVersions.filter(v=>v.assetId===id), execute: mockExecute }), creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})}), exportCreativeVersion: jest.fn() }));
+jest.mock('./runtime', () => ({ creativeService: () => ({ deliveries:mockDeliveries, versionStamp:async()=>JSON.stringify(mockVersions), versions:mockReadVersions, execute: mockExecute }), creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})}), exportCreativeVersion: jest.fn() }));
 jest.mock('../storage/databaseClient', () => ({ getDatabase: () => ({ getFirstAsync: ()=>mockReadStatus() }) }));
 jest.mock('./MediaPreview', () => ({ MediaPreview: () => null }));
 jest.mock('../media/VideoPlayer', () => ({ VideoPlayer: () => null }));
@@ -232,4 +233,18 @@ test('video discovers a delayed automatic save and never shows a large save acti
   expect(findButton(tree,'已保存到系统相册').props.disabled).toBe(true);
   expect(findButton(tree,'保存视频到系统相册')).toBeUndefined();
  }finally{act(()=>tree?.unmount());jest.useRealTimers();}
+});
+
+
+test('unchanged history does not reload recipes, but file-state changes refresh it',async()=>{
+  jest.useFakeTimers();let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<CreativeResults draft={draft}/>);});
+    expect(mockReadVersions).toHaveBeenCalledTimes(1);
+    await act(async()=>jest.advanceTimersByTime(2500));
+    expect(mockReadVersions).toHaveBeenCalledTimes(1);
+    mockVersions=[{...mockVersions[0],state:'MISSING'},mockVersions[1]];
+    await act(async()=>jest.advanceTimersByTime(2500));
+    expect(mockReadVersions).toHaveBeenCalledTimes(2);
+  }finally{act(()=>tree?.unmount());jest.useRealTimers();}
 });

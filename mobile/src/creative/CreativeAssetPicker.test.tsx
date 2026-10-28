@@ -3,7 +3,7 @@ import { act, create } from 'react-test-renderer';
 import { CreativeAssetPicker } from './CreativeAssetPicker';
 const mockVerify = jest.fn();
 const mockVersion = { id: 'version', assetId: 'asset', versionNo: 2, state: 'AVAILABLE', mime: 'image/png', relativePath: 'a.png', recipe: {} };
-jest.mock('./runtime', () => ({ creativeService: () => ({ assets: async () => [{ id: 'asset', kind: 'image', title: 'Forest' }], versions: async () => [mockVersion] }), creativeFiles: () => ({ verify: (...args: unknown[]) => mockVerify(...args) }) }));
+jest.mock('./runtime', () => ({ creativeService: () => ({ availableVersionPage: async () => ({items:[{title:'Forest',version:mockVersion}],next:undefined}) }), creativeFiles: () => ({ verify: (...args: unknown[]) => mockVerify(...args) }) }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));
 const button = (tree: ReturnType<typeof create>, label: string) => tree.root.findAll(n => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function')[0];
 beforeEach(() => jest.clearAllMocks());

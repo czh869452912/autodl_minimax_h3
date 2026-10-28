@@ -20,6 +20,32 @@ function fixture() {
   return { db, service, blob, project, image };
 }
 
+test('version pages retain older candidates without duplicates when new versions arrive between pages',async()=>{
+  const f=fixture();
+  try{
+    const projectId=await f.project(),a=await f.image(projectId);
+    await f.image();
+    for(let i=2;i<=5;i++){
+      f.db.runSync("INSERT INTO creative_asset_versions VALUES(?,?,?,'generated','{}',100)",`page-${i}`,a.assetId,i);
+      f.db.runSync("INSERT INTO creative_version_files VALUES(?,'original',?,'AVAILABLE')",`page-${i}`,f.blob);
+    }
+    const first=await f.service.availableVersionPage({kind:'image',projectId,limit:2});
+    expect(first.items.map(i=>i.version.id)).toEqual(['page-5','page-4']);
+    f.db.runSync("INSERT INTO creative_asset_versions VALUES('new',?,6,'generated','{}',101)",a.assetId);
+    f.db.runSync("INSERT INTO creative_version_files VALUES('new','original',?,'AVAILABLE')",f.blob);
+    const second=await f.service.availableVersionPage({kind:'image',projectId,limit:2,after:first.next});
+    expect(second.items.map(i=>i.version.id)).toEqual(['page-3','page-2']);
+    const last=await f.service.availableVersionPage({kind:'image',projectId,limit:2,after:second.next});
+    expect(last.items.map(i=>i.version.id)).toEqual([a.versionId]);
+    expect(last.next).toBeUndefined();
+    expect((await f.service.availableVersionPage({kind:'audio',projectId})).items).toEqual([]);
+    expect((await f.service.availableVersionPage({kind:'image',query:'missing'})).items).toEqual([]);
+    const stamp=await f.service.versionStamp([a.assetId]);
+    f.db.runSync("UPDATE creative_file_resources SET state='MISSING' WHERE version_id='new'");
+    expect(await f.service.versionStamp([a.assetId])).not.toBe(stamp);
+  }finally{f.db.close();}
+});
+
 test('commands are idempotent, conflict on reused keys and reject stale revisions', async () => {
   const f = fixture();
   try {

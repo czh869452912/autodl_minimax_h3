@@ -74,6 +74,30 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
     async versions(assetId: string): Promise<AssetVersion[]> {
       return (await db.getAllAsync<Row>(`SELECT v.*,f.blob_sha256,COALESCE(r.state,f.state) AS state,b.relative_path,b.mime FROM creative_asset_versions v LEFT JOIN creative_file_resources r ON r.version_id=v.id AND r.role='original' LEFT JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE v.asset_id=? ORDER BY v.version_no DESC`, assetId)).map(r => ({ id: r.id, assetId: r.asset_id, versionNo: r.version_no, createdAt: r.created_at, source: r.source, recipe: JSON.parse(r.recipe_json), blobSha256: r.blob_sha256 ?? undefined, relativePath: r.relative_path ?? undefined, mime: r.mime ?? undefined, state: r.state ?? 'PENDING' }));
     },
+    async availableVersionPage(options: { kind: 'image'|'video'|'audio'; projectId?: string; query?: string; after?: { createdAt: number; id: string }; limit?: number }) {
+      const limit = Math.min(100, Math.max(1, options.limit ?? 40));
+      const rows = await db.getAllAsync<Row>(`SELECT v.id,v.created_at,a.title FROM creative_asset_versions v
+        JOIN creative_assets a ON a.id=v.asset_id
+        JOIN creative_version_files f ON f.version_id=v.id AND f.role='original'
+        LEFT JOIN creative_file_resources r ON r.version_id=v.id AND r.role='original'
+        WHERE a.kind=? AND COALESCE(r.state,f.state)='AVAILABLE'
+        AND NOT EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=a.id)
+        AND (? IS NULL OR EXISTS(SELECT 1 FROM creative_project_assets p WHERE p.asset_id=a.id AND p.project_id=?))
+        AND instr(lower(a.title || COALESCE((SELECT description || tags_json FROM creative_asset_descriptions WHERE asset_id=a.id),'')),lower(?))>0
+        AND (? IS NULL OR v.created_at<? OR (v.created_at=? AND v.id<?))
+        ORDER BY v.created_at DESC,v.id DESC LIMIT ?`, options.kind, options.projectId??null,options.projectId??null, options.query??'', options.after?.createdAt??null,options.after?.createdAt??null,options.after?.createdAt??null,options.after?.id??null,limit+1);
+      const page=rows.slice(0,limit), versions=await this.versionsByIds(page.map(r=>r.id)), byId=new Map(versions.map(v=>[v.id,v]));
+      const last=page[page.length-1];
+      return { items:page.flatMap(r=>{const version=byId.get(r.id);return version?[{title:r.title as string,version}]:[];}), next:rows.length>limit&&last?{createdAt:last.created_at as number,id:last.id as string}:undefined };
+    },
+    async versionStamp(assetIds: string[]) {
+      const rows: unknown[]=[];
+      for(let offset=0;offset<assetIds.length;offset+=200){
+        const batch=assetIds.slice(offset,offset+200);
+        rows.push(...await db.getAllAsync(`SELECT v.id,COALESCE(r.state,f.state) AS state,f.blob_sha256 FROM creative_asset_versions v LEFT JOIN creative_file_resources r ON r.version_id=v.id AND r.role='original' LEFT JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' WHERE v.asset_id IN (${batch.map(()=>'?').join(',')}) ORDER BY v.id`,...batch));
+      }
+      return JSON.stringify(rows);
+    },
     async versionsByIds(ids: string[]): Promise<AssetVersion[]> {
       const result: AssetVersion[] = [], unique = [...new Set(ids)];
       for (let offset = 0; offset < unique.length; offset += 200) {
