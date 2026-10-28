@@ -26,7 +26,7 @@ function RecentCreation({ draft, generations, version, selected, onPress }: { dr
   return <RecordRow title={name} selected={selected} detail={`${draft.provider_id==='novelai'?'图片':'视频'} · ${generations?`${generations} 次生成`:'草稿'}${draft.state==='EDITING'?' · 可继续编辑':''}`} meta={draft.updated_at?new Date(draft.updated_at).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):undefined} leading={<MediaPreview version={version} kind={draft.provider_id==='novelai'?'image':'video'} label="创作预览" style={{width:56,height:56,borderRadius:8}}/>} onPress={onPress}/>;
 }
 
-export function CreativeHome({ onLegacyVideo }: { onLegacyVideo: () => void }) {
+export function CreativeHome() {
   const router=useRouter();
   const [recordQuery,setRecordQuery]=useState(''),[recordMode,setRecordMode]=useState<'all'|WorkbenchMode>('all'),[recordLimit,setRecordLimit]=useState(30),[covers,setCovers]=useState<Record<string,AssetVersion>>({});
   const [idea,setIdea]=useState<CreativeIdea>({mode:'image',image:'',video:''});
@@ -75,7 +75,7 @@ export function CreativeHome({ onLegacyVideo }: { onLegacyVideo: () => void }) {
       {groups.length>recordLimit?<TextAction label={`加载更多 · 还有 ${groups.length-recordLimit} 组`} onPress={()=>setRecordLimit(count=>count+30)}/>:null}
       <View style={{flexDirection:'row',flexWrap:'wrap',gap:12}}>
         <TextAction label="项目与素材" onPress={()=>{setRecords(false);router.push('/(tabs)/projects');}}/>
-        <TextAction label="高级工作流编辑器" onPress={()=>void change(async()=>{setRecords(false);onLegacyVideo();})}/>
+        <TextAction label="管理工作流" onPress={()=>{setRecords(false);router.push({pathname:"/(tabs)/settings",params:{section:"workflows"}});}}/>
       </View>
     </ParameterSheet>:null}
 

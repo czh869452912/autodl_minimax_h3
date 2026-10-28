@@ -9,7 +9,7 @@ export default function CreateScreen() {
   const { prompt, draftId } = useLocalSearchParams<{ prompt?: string | string[]; draftId?: string | string[] }>();
   const [legacy, setLegacy] = useState(Boolean(prompt || draftId));
   useEffect(() => { if (prompt || draftId) setLegacy(true); }, [prompt, draftId]);
-  if (!legacy) return <CreativeHome onLegacyVideo={() => setLegacy(true)} />;
+  if (!legacy) return <CreativeHome />;
   return <View style={{ flex: 1 }}>
     <View style={{ padding: 12 }}><ListAction label="返回创作首页" secondary onPress={() => setLegacy(false)} /></View>
     <CreateForm initialPrompt={Array.isArray(prompt) ? prompt[0] : prompt || ''} draftId={Array.isArray(draftId) ? draftId[0] : draftId} />

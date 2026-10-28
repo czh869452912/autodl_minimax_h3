@@ -16,10 +16,20 @@ jest.mock('expo-router',()=>({useRouter:()=>({push:mockPush,navigate:mockNavigat
 const button=(tree:ReturnType<typeof create>,label:string)=>tree.root.findAll(n=>n.props.accessibilityLabel===label && typeof n.props.onPress==='function')[0];
 beforeEach(()=>{jest.clearAllMocks();mockRows=[];mockCanLeave=true;for(const key of Object.keys(mockStore))delete mockStore[key];});
 
+test('creation records route workflow management to current settings',async()=>{
+ let tree!:ReturnType<typeof create>;
+ try {
+  await act(async()=>{tree=create(<CreativeHome/>);});
+  await act(async()=>button(tree,'创作记录').props.onPress());
+  await act(async()=>button(tree,'管理工作流').props.onPress());
+  expect(mockPush).toHaveBeenCalledWith({pathname:'/(tabs)/settings',params:{section:'workflows'}});
+ }finally{act(()=>tree?.unmount());}
+});
+
 test('first entry opens a workspace directly and transfers the legacy description only once',async()=>{
  let tree!:ReturnType<typeof create>;
  try{
-  await act(async()=>{tree=create(<CreativeHome onLegacyVideo={()=>undefined}/>);});
+  await act(async()=>{tree=create(<CreativeHome/>);});
   expect(tree.root.findByProps({testID:'image-workbench'}).props.children).toBe('new-0');
   expect(mockExecute).toHaveBeenCalledTimes(1);
   expect(mockExecute).toHaveBeenCalledWith(expect.objectContaining({name:'draft.createImage',payload:expect.objectContaining({input:expect.objectContaining({prompt:'Portrait'})})}),expect.any(String));
@@ -32,7 +42,7 @@ test('restores an existing workspace without creating blank drafts or replacing 
  mockRows=[{id:'image',provider_id:'novelai',revision:1,state:'EDITING',input_json:JSON.stringify(defaultNovelAiDraft)},{id:'video',provider_id:'autodl',revision:1,state:'EDITING',input_json:JSON.stringify({prompt:'Pan'})}];
  let tree!:ReturnType<typeof create>;
  try{
-  await act(async()=>{tree=create(<CreativeHome onLegacyVideo={()=>undefined}/>);});
+  await act(async()=>{tree=create(<CreativeHome/>);});
   expect(tree.root.findByProps({testID:'image-workbench'}).props.children).toBe('image');
   mockCanLeave=false;
   await act(async()=>button(tree,'视频').props.onPress());
@@ -48,7 +58,7 @@ test('restores an existing workspace without creating blank drafts or replacing 
 test('switching to Agent saves through the existing leave guard and does not create another draft',async()=>{
   let tree!:ReturnType<typeof create>;
   try{
-    await act(async()=>{tree=create(<CreativeHome onLegacyVideo={()=>undefined}/>);});
+    await act(async()=>{tree=create(<CreativeHome/>);});
     const calls=mockExecute.mock.calls.length;
     const switcher=()=>tree.root.findByType(require('../ui/WorkbenchModeSwitcher').WorkbenchModeSwitcher);
     mockCanLeave=false;
