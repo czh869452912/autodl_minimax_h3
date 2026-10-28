@@ -1,5 +1,15 @@
 # 可与正式版共存的手机测试版
 
+## 2026-10-28 · beta.20 历史分页与媒体性能
+
+- 版本 `1.5.0-preview.4-beta.20`，versionCode 59；版本提交 `6e45de1d`。
+- 包含结果历史游标分页、全历史搜索、跨页原图浏览、版本列表虚拟化、640px 缩略图及有界解码缓存、视频记录批量读取。数据库从 v27 升级到 v28，新增历史分页索引。
+- 功能实现及验收详见 `docs/reviews/2026-10-28-history-media-performance.md`：全量 270 套 / 1700 项通过，另补分页竞态 2 项和最终结果页相关 19 项回归通过；类型检查、原生缓存测试、x86_64 构建及模拟器缩略图/历史/全屏验证通过。
+- 本次双 ARM 手机构建成功，APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.20-android.apk`，169,066,102 字节，最低 Android 8.0。
+- SHA-256：`D5EF357BEA08BAA8AB605AD797C12080F0D1BBA76914FA7374098FDD7A76A371`。
+- 包名、版本码、版本名、双 ARM 架构、Hermes bundle、签名及 16KB ZIP 对齐通过；证书与 beta.19 相同，可覆盖升级测试版。报告：`build/phone-beta/beta20-verification.json`。
+- 手机 ARM 包未安装到用户手机。本次仅更新版本并打包，没有重复发起付费生成；沿用上一轮功能验收证据。
+
 测试构建使用独立 Android 应用身份，不覆盖正式版：
 
 | 项目 | 正式版 | 手机测试版 |
