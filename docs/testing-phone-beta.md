@@ -190,3 +190,12 @@
 - 双 ARM APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.21-android.apk`，169069038 字节，最低 Android 8.0。
 - SHA-256：`B6CCF211B5C5BCC6B25280AA22ACF854C67AB2D4C53960FA72BB178256C4A897`。
 - 包名、版本码、版本名、双 ARM 架构、签名和 16KB ZIP 对齐检查通过；签名证书与 beta.20 一致，可覆盖升级。
+
+## 2026-10-29 · beta.22 提示词助手交互与角色创建
+
+- 版本 `1.5.0-preview.4-beta.22`，versionCode 61；功能提交 `72b2b308`、`981cc7d1`，版本提交 `4c84d884`。
+- 图片/视频助手新建与历史入口分离，历史显示主题、摘要及轮数；扩大阅读区域，支持长建议展开和按需编辑；NovelAI 助手支持提议新增角色并显式采用。
+- 功能验证：7 套 / 46 项测试、TypeScript 检查和 x86_64 模拟器布局检查通过，详见 `docs/reviews/2026-10-29-prompt-assistant-ux.md`。未验证真实模型的创作质量。
+- 双 ARM 手机 APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.22-android.apk`，169076326 字节，最低 Android 8.0。
+- SHA-256：`278AA7D23376A5FED589646C122EEE28A3E57790122E937DB3A4D9F0CF0B0AB2`。
+- 包名、版本、双 ARM、签名和 16KB ZIP 对齐校验通过；证书与 beta.21 一致，可覆盖升级。校验报告 `build/phone-beta/beta22-verification.json`。手机分发包未安装到真实手机。
