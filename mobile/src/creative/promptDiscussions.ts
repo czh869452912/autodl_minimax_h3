@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import CryptoJS from 'crypto-js';
 import {createId} from '../ids';
-export type Discussion={id:string;title:string;createdAt:number};
+export type Discussion={id:string;title:string;createdAt:number;preview?:string;turns?:number;updatedAt?:number;customTitle?:boolean};
 export type DiscussionIndex={active:string;items:Discussion[]};
 const queues=new Map<string,Promise<void>>();
 const path=(scope:string)=>`${FileSystem.documentDirectory}prompt-assistant/index-${CryptoJS.SHA256(scope)}.json`;
@@ -62,4 +62,16 @@ export async function deleteDiscussionFiles(id:string){
   await FileSystem.deleteAsync(path(`composer:${id}`),{idempotent:true});
   const {writePromptSession}=await import('./promptAssistantSession');
   await writePromptSession(id,[]);
+}
+
+export function describeDiscussion(item:Discussion,messages:import('./promptAssistant').AssistMessage[]):Discussion {
+  const requests=messages.filter(m=>m.role==='user'&&!m.content.startsWith('已采用修改：')&&!m.content.startsWith('已撤销上次采用'));
+  const last=messages.filter(m=>m.role==='assistant').at(-1);
+  const compact=(text:string)=>text.replace(/\s+/g,' ').trim();
+  const customTitle=item.customTitle??(!item.preview&&!/^(已有讨论|新讨论)( \d+)?$/.test(item.title));
+  const request=requests[0]?.content;
+  const generic=request&&['润色，保留原意','补充光线与构图','精简重复描述','整理为适合当前模型的标签'].includes(request);
+  const topic=generic?messages.find(m=>m.proposal)?.proposal?.summary:undefined;
+  return {...item,customTitle,title:customTitle?item.title:compact(topic||request||item.title).slice(0,60),
+    preview:compact(last?.proposal?.summary||last?.content||requests.at(-1)?.content||'尚未发送消息').slice(0,140),turns:requests.length};
 }

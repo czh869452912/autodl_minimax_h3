@@ -3,12 +3,43 @@ import React from 'react';
 import {act,create} from 'react-test-renderer';
 import {Modal} from 'react-native';
 import {PromptDiscussion as PromptAssistSheet} from './PromptAssistSheet';
-const mockRun=jest.fn(),mockRead=jest.fn(),mockWrite=jest.fn(async()=>undefined);
+import {defaultNovelAiDraft} from './novelAiProtocol';
+const mockRun=jest.fn(),mockRead=jest.fn(),mockWrite=jest.fn(async(..._args:unknown[])=>undefined);
 jest.mock('./promptAssistant',()=>({...jest.requireActual('./promptAssistant'),streamPromptAssistant:(...args:unknown[])=>mockRun(...args)}));
 jest.mock('./promptAssistantSession',()=>({readPromptSession:(id:string)=>mockRead(id),writePromptSession:(...args:unknown[])=>mockWrite(...args as [])}));
 jest.mock('expo-router',()=>({useRouter:()=>({push:jest.fn()})}));
 const button=(tree:ReturnType<typeof create>,label:string)=>tree.root.findAll(n=>n.props.accessibilityLabel===label&&typeof n.props.onPress==='function')[0];
 beforeEach(()=>{jest.clearAllMocks();mockRead.mockResolvedValue([]);mockRun.mockResolvedValue({content:'保留主体，增加月光',proposal:{summary:'增强光线',prompt:'moonlit cabin'}});});
+
+test('new characters require explicit adoption and cannot be appended twice from the same proposal',async()=>{
+ mockRun.mockResolvedValue({content:'按人物拆分',proposal:{summary:'两个人物',addCharacters:[{prompt:'tennis player'},{prompt:'referee'}]}});
+ let tree!:ReturnType<typeof create>;const apply=jest.fn();
+ try{
+  await act(async()=>{tree=create(<PromptAssistSheet sessionId="new-characters" prompt="" image={defaultNovelAiDraft} kind="image" onApply={()=>{}} onApplyPatch={apply} onClose={()=>{}}/>);});
+  await act(async()=>button(tree,'将不同人物拆分为角色提示词').props.onPress());
+  expect(apply).not.toHaveBeenCalled();
+  act(()=>button(tree,'采用全部修改').props.onPress());
+  expect(apply.mock.calls[0][0].characters).toHaveLength(2);
+  expect(button(tree,'采用全部修改')).toBeUndefined();
+ }finally{act(()=>tree?.unmount());}
+});
+
+test('long suggestions are readable before editing, can expand, and adopted patches stay compact',async()=>{
+ const prompt='long scene description, '.repeat(100);
+ mockRun.mockResolvedValue({content:'建议如下',proposal:{summary:'完整场景',prompt}});
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<PromptAssistSheet sessionId="long-answer" prompt="" kind="video" onApply={()=>{}} onClose={()=>{}}/>);});
+  await act(async()=>button(tree,'润色，保留原意').props.onPress());
+  const text=()=>tree.root.findAllByType(require('react-native').Text).find(n=>n.props.children===prompt)!;
+  expect(text().props.numberOfLines).toBe(4);
+  act(()=>button(tree,'展开完整描述').props.onPress());
+  expect(text().props.numberOfLines).toBeUndefined();
+  act(()=>button(tree,'采用描述').props.onPress());
+  expect(tree.root.findAllByType(require('react-native').Text).some(n=>typeof n.props.children==='string'&&n.props.children.startsWith('已采用修改：'))).toBe(false);
+  expect(mockWrite.mock.calls.at(-1)?.[1]).toEqual(expect.arrayContaining([expect.objectContaining({content:expect.stringContaining('已采用修改：')})]));
+ }finally{act(()=>tree?.unmount());}
+});
 test('inline conversation supports follow-ups, explicit apply, undo and conflict protection',async()=>{
  let tree!:ReturnType<typeof create>;const apply=jest.fn(),close=jest.fn();
  const render=(prompt:string)=><PromptAssistSheet sessionId="draft-a" prompt={prompt} kind="video" onApply={apply} onClose={close}/>;
