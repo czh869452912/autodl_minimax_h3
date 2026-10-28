@@ -42,6 +42,15 @@ internal class MediaWorkExecutors(
 }
 
 class MediaModule(private val context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
+  private val previewCache = PreviewDiskCache(File(context.cacheDir, "creative-previews"))
+
+  @ReactMethod
+  fun createImageThumbnail(source: String, key: String, promise: Promise) {
+    executors.executeMedia {
+      try { promise.resolve(imageThumbnail(context, source, key, previewCache)) }
+      catch (_: Exception) { promise.reject("THUMBNAIL_FAILED", "缩略图暂不可用，原件不受影响") }
+    }
+  }
   /** Return the actual selection line in window dp, including internal text scrolling. */
   @ReactMethod
   fun focusedInputCaret(tag: Double, promise: Promise) {
@@ -299,10 +308,15 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
       try {
         val uri = Uri.parse(source)
         require(uri.scheme in setOf("file", "content"))
-        val dir = File(context.filesDir, "posters").apply { mkdirs() }
-        val hash = java.security.MessageDigest.getInstance("SHA-256").digest((key + "\n" + source).toByteArray()).joinToString("") { "%02x".format(it) }
-        val file = File(dir, "sw-v3-$hash.jpg")
-        part = File(dir, "sw-v3-$hash-${java.util.UUID.randomUUID()}.jpg")
+        // Legacy task records persist poster URIs; keep those files durable.
+        val cache = if (key.startsWith("creative-preview:")) previewCache else PreviewDiskCache(File(context.filesDir, "posters"), Long.MAX_VALUE, Int.MAX_VALUE)
+        val file = cache.file(source, key, "jpg")
+        if (validPreview(file)) {
+          file.setLastModified(System.currentTimeMillis())
+          promise.resolve(file.toURI().toString())
+          return@executeMedia
+        }
+        part = File(file.parentFile, "${file.name}-${java.util.UUID.randomUUID()}.part")
         val fd = if (uri.scheme == "content") context.contentResolver.openFileDescriptor(uri, "r") else null
         try {
           val input = if (uri.scheme == "content") "/proc/self/fd/${requireNotNull(fd).fd}" else requireNotNull(uri.path)
@@ -311,11 +325,12 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
           val result = FFmpegKit.executeWithArguments(arrayOf("-v", "error", "-nostdin", "-xerror",
             "-hwaccel", "none", "-threads", "2", "-protocol_whitelist", "file", "-i", input,
             "-map", "0:v:0", "-frames:v", "1", "-an", "-vf",
-            "scale=640:640:force_original_aspect_ratio=decrease,format=yuvj420p", "-y", part.absolutePath))
+            "scale=640:640:force_original_aspect_ratio=decrease,format=yuvj420p", "-f", "image2", "-c:v", "mjpeg", "-y", part.absolutePath))
           check(ReturnCode.isSuccess(result.returnCode) && part.length() > 0)
           val bitmap = android.graphics.BitmapFactory.decodeFile(part.absolutePath) ?: error("poster invalid")
           bitmap.recycle()
           check(part.renameTo(file))
+          cache.trim(file)
           promise.resolve(file.toURI().toString())
         } finally { fd?.close() }
       } catch (_: Exception) { promise.reject("POSTER_FAILED", "无法读取视频封面，原件仍可播放") }

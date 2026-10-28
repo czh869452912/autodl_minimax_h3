@@ -4,7 +4,8 @@ import { Image } from 'react-native';
 import { MediaPreview } from './MediaPreview';
 import type { AssetVersion } from './types';
 const mockExtract = jest.fn();
-jest.mock('../native/media', () => ({ extractPoster: (...args: unknown[]) => mockExtract(...args) }));
+const mockThumbnail=jest.fn();
+jest.mock('../native/media', () => ({ extractPoster: (...args: unknown[]) => mockExtract(...args),createImageThumbnail:(...args:unknown[])=>mockThumbnail(...args) }));
 const version = (id: string): AssetVersion => ({ id, assetId: 'asset', versionNo: 1, source: 'generated', state: 'AVAILABLE', relativePath: `${id}.mp4`, mime: 'video/mp4', recipe: {} });
 
 afterEach(() => { jest.clearAllMocks(); });
@@ -42,4 +43,14 @@ test('missing originals do not trigger native extraction', async () => {
     expect(mockExtract).not.toHaveBeenCalled();
     expect(JSON.stringify(tree.toJSON())).toContain('原文件待恢复');
   } finally { act(() => tree?.unmount()); }
+});
+
+test('image grids decode the cached thumbnail instead of mounting the original image',async()=>{
+  mockThumbnail.mockResolvedValue('file:///cache/small.png');let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<MediaPreview version={{...version('large-image'),mime:'image/png',relativePath:'original-16k.png'}} label="Image"/>);});
+    expect(mockThumbnail).toHaveBeenCalledTimes(1);
+    expect(tree.root.findByType(Image).props.source.uri).toBe('file:///cache/small.png');
+    expect(tree.root.findByType(Image).props.resizeMethod).toBe('resize');
+  }finally{act(()=>tree?.unmount());}
 });

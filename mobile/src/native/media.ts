@@ -1,6 +1,7 @@
 import { NativeModules, Platform } from 'react-native';
 
 type AutoDLMediaModule = {
+  createImageThumbnail?(source:string,key:string):Promise<string>;
   extractPoster?(source: string, key: string): Promise<string>;
   exportVideo?(source: string, mediaId: string, displayName: string): Promise<ExportVideoResult>;
   sha256File?(source: string): Promise<string>;
@@ -58,6 +59,13 @@ export async function extractPoster(source: string, key: string): Promise<string
   const module = NativeModules.AutoDLMedia as AutoDLMediaModule | undefined;
   if (Platform.OS !== 'android' || !module?.extractPoster || !source.trim()) return undefined;
   return module.extractPoster(source, key);
+}
+
+export async function createImageThumbnail(source:string,key:string):Promise<string|undefined>{
+  const module=NativeModules.AutoDLMedia as AutoDLMediaModule|undefined;
+  if(Platform.OS!=='android')return source;
+  if(!module?.createImageThumbnail)return undefined;
+  return module.createImageThumbnail(source,key);
 }
 
 export async function exportVideo(
