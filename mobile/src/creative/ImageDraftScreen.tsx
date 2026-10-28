@@ -236,7 +236,7 @@ const c=StyleSheet.create({
   headerTitle:{fontSize:15,fontWeight:'600',color:COLORS.text,flex:1},
   caption:{fontSize:12,lineHeight:18,color:COLORS.textMuted},
   notice:{paddingHorizontal:12,paddingVertical:6},
-  composer:{borderWidth:StyleSheet.hairlineWidth,borderColor:COLORS.border,borderTopLeftRadius:16,borderTopRightRadius:16,backgroundColor:COLORS.surface,paddingHorizontal:10,paddingTop:8,paddingBottom:6,gap:4,shadowColor:'#172b23',shadowOffset:{width:0,height:-2},shadowOpacity:0.04,shadowRadius:8,elevation:2},
+  composer:{borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:COLORS.border,backgroundColor:COLORS.surface,paddingHorizontal:10,paddingTop:8,paddingBottom:6,gap:4},
   promptRow:{flexDirection:'row',alignItems:'center',paddingLeft:8,backgroundColor:COLORS.background,borderRadius:10},
   prompt:{flex:1,height:52,minHeight:52,maxHeight:52,textAlignVertical:'center',fontSize:13,lineHeight:18,color:COLORS.text,paddingVertical:8,paddingHorizontal:4},
   generateRow:{flexDirection:'row',alignItems:'center',gap:6},
