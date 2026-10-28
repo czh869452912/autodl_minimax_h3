@@ -14,5 +14,5 @@ export function WorkbenchScope({draft}:{draft?:CreativeDraft}){
     return()=>{active=false;};
   },[draft?.project_id,draft?.shot_id]);
   if(!draft?.project_id)return null;
-  return <Pressable accessibilityRole="button" accessibilityLabel={`打开所属项目：${label}`} onPress={()=>router.push({pathname:'/creative-project/[id]',params:{id:draft.project_id!}})} style={{paddingHorizontal:12,paddingVertical:5}}><Text numberOfLines={1} style={{fontSize:12,color:COLORS.textMuted}}>{label}</Text></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={`打开所属项目：${label}`} onPress={()=>router.push({pathname:'/creative-project/[id]',params:{id:draft.project_id!,...(draft.shot_id?{tab:'shots',shotId:draft.shot_id}:{})}})} style={{paddingHorizontal:12,paddingVertical:5}}><Text numberOfLines={1} style={{fontSize:12,color:COLORS.textMuted}}>{label}</Text></Pressable>;
 }

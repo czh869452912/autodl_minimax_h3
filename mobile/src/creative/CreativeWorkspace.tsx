@@ -33,7 +33,7 @@ import { SettingRow, TextAction } from './WorkbenchUI';
 import { ImageProcessingSheet } from './ImageProcessingSheet';
 import {ImageMetadataPanel} from './ImageMetadataPanel';
 
-export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initialVersionId, initialTrash = false }: { mode: 'projects' | 'assets'; projectId?: string; assetId?: string; initialTab?: string; initialVersionId?: string; initialTrash?: boolean }) {
+export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initialShotId, initialVersionId, initialTrash = false }: { mode: 'projects' | 'assets'; projectId?: string; assetId?: string; initialTab?: string; initialShotId?:string; initialVersionId?: string; initialTrash?: boolean }) {
   const router = useRouter();
   const [shotEditor, setShotEditor] = useState({ dirty: false, busy: false });
   const [projects, setProjects] = useState<CreativeProject[]>([]);
@@ -154,7 +154,7 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
       {current && manage ? action(current.archivedAt ? '恢复项目' : '归档项目', () => void run(async () => { await command({ name: 'project.archive', payload: { id: current.id, archived: !current.archivedAt, expectedRevision: current.revision } }); setEditingBrief(false); })) : null}
       {manage&&current&&covers[current.id]?action('移除项目封面',()=>void run(()=>command({name:'project.setCover',payload:{id:current.id,expectedRevision:current.revision,versionId:null}}))):null}
     </> : null}
-    {mode === 'projects' && selected && projectView === 'shots' && !activeAsset ? <ProjectShots key={selected} onEditorState={setShotEditor} projectId={selected} archived={Boolean(current?.archivedAt)} /> : null}
+    {mode === 'projects' && selected && projectView === 'shots' && !activeAsset ? <ProjectShots key={selected} initialShotId={initialShotId} onEditorState={setShotEditor} projectId={selected} archived={Boolean(current?.archivedAt)} /> : null}
     {manage && mode === 'projects' && selected && !activeAsset ? action('选图与视频计划',()=>changeProjectView('plans')) : null}
     {mode === 'projects' && selected && projectView === 'plans' && !activeAsset ? <ProjectPlans key={selected} projectId={selected} archived={Boolean(current?.archivedAt)} /> : null}
     {mode === 'projects' && selected && !activeAsset ? action('修改建议与活动',()=>changeProjectView('activity')) : null}

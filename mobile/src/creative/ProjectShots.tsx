@@ -14,8 +14,9 @@ import { COLORS } from '../ui/theme';
 import type { CreativeShot } from './story';
 import type { CreativeCommand } from './types';
 
-export function ProjectShots({ projectId, archived = false, onEditorState }: { projectId: string; archived?: boolean; onEditorState?: (state: { dirty: boolean; busy: boolean }) => void }) {
+export function ProjectShots({ projectId, archived = false, initialShotId, onEditorState }: { projectId: string; archived?: boolean; initialShotId?:string; onEditorState?: (state: { dirty: boolean; busy: boolean }) => void }) {
   const router = useRouter();
+  const [focused,setFocused]=useState(initialShotId);
   const [drafts, setDrafts] = useState<CreativeDraft[]>([]);
   const [shots, setShots] = useState<CreativeShot[]>([]);
   const [expanded, setExpanded] = useState<string>(), [adding, setAdding] = useState(false);
@@ -57,7 +58,8 @@ export function ProjectShots({ projectId, archived = false, onEditorState }: { p
       await command({ name: 'shot.selectOutput', payload: { id: choosing.shot.id, expectedRevision: choosing.shot.revision, slot: choosing.slot, versionId: v.id } });
       await refresh();
     }} /> : null}
-    {shots.map((shot, index) => <View key={shot.id} style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 12, gap: 8 }}>
+    {focused?<View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center'}}><Text style={{color:COLORS.textMuted}}>{shots.some(s=>s.id===focused)?'当前创作镜头':'原镜头已不可用'}</Text><ListAction label="全部镜头" secondary onPress={()=>setFocused(undefined)}/></View>:null}
+    {shots.filter(shot=>!focused||!shots.some(s=>s.id===focused)||shot.id===focused).map(shot => {const index=shots.indexOf(shot);return <View key={shot.id} style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 12, gap: 8 }}>
       <Text style={{ color: COLORS.text, fontWeight: '700' }}>{index + 1}. {shot.title} · {labels[shot.editorial_status]}</Text><Text style={{ color: COLORS.textMuted }}>{shot.description || '尚未填写镜头描述'}</Text>
       {shot.selected_image ? <VersionThumbnail versionId={shot.selected_image} /> : null}
       <Text style={{ color: COLORS.textMuted }}>图片：{shot.selected_image ? '已固定版本' : '未选定'} · 视频：{shot.selected_video ? '已固定版本' : '未选定'}</Text>
@@ -67,6 +69,7 @@ export function ProjectShots({ projectId, archived = false, onEditorState }: { p
         if (!shot.selected_image) { choose(shot,'selected_image'); return; }
         void work(async () => { const r=await command({name:'draft.createVideo',payload:{shotId:shot.id,projectId}});if(r.status==='completed')router.push({pathname:'/creative-draft/[id]',params:{id:r.value.draftId}}); });
       }} />
+      {shot.selected_video && continuing(shot)?<ListAction label="生成记录与候选" secondary disabled={busy||dirty} onPress={()=>openDraft(continuing(shot)!)}/>:null}
       {!shot.selected_image && !continuing(shot) ? action('制作新的参考图', () => void work(async () => { const r=await command({name:'draft.createImage',payload:{projectId,shotId:shot.id}});if(r.status==='completed')router.push({pathname:'/image-draft/[id]',params:{id:r.value.draftId}}); })) : null}
       {action(expanded===shot.id?'收起镜头操作':'更多镜头操作', () => setExpanded(expanded===shot.id?undefined:shot.id))}
       {expanded===shot.id ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -76,7 +79,7 @@ export function ProjectShots({ projectId, archived = false, onEditorState }: { p
         {index > 0 ? action('上移', () => void reorder(index, -1)) : null}{index < shots.length - 1 ? action('下移', () => void reorder(index, 1)) : null}
         {action('移除镜头', () => Alert.alert('移除镜头', '素材和版本仍保留在资产库。', [{ text: '取消', style: 'cancel' }, { text: '移除', onPress: () => void work(async () => { await command({ name: 'shot.delete', payload: { id: shot.id, expectedRevision: shot.revision } }); if (editing?.id === shot.id) { setEditing(undefined); setTitle(''); setDescription(''); } }) }]))}
       </View> : null}
-    </View>)}
+    </View>;})}
     {!shots.length ? <Text style={{ color: COLORS.textMuted }}>添加镜头，逐个确定参考图和视频成果。</Text> : null}
     {!archived ? action(adding ? '取消编辑镜头' : '添加镜头', () => switchEditor(() => {setError('');setAdding(!adding);setEditing(undefined);setTitle('');setDescription('');})) : null}
     {!archived && adding ? <Modal visible animationType="slide" onRequestClose={() => switchEditor(closeEditor)}><SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }}><KeyboardSurface style={{flex:1}}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, gap: 16 }}><ListAction label="关闭镜头编辑" secondary disabled={busy} onPress={() => switchEditor(closeEditor)} />

@@ -13,7 +13,7 @@ const mockReadStatus=jest.fn(async()=>({status:mockStatus}));
 const mockReadVersions=jest.fn(async(id:string)=>mockVersions.filter(v=>v.assetId===id));
 let mockStatus = 'SUCCEEDED', mockVersions: AssetVersion[] = [];
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, replace: mockReplace }), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
-jest.mock('./runtime', () => ({ creativeService: () => ({ deliveries:mockDeliveries, versionStamp:async()=>JSON.stringify(mockVersions), versions:mockReadVersions, execute: mockExecute }), creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})}), exportCreativeVersion: jest.fn() }));
+jest.mock('./runtime', () => ({ creativeService: () => ({ shots:async()=>[{id:'shot',revision:7}], deliveries:mockDeliveries, versionStamp:async()=>JSON.stringify(mockVersions), versions:mockReadVersions, execute: mockExecute }), creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})}), exportCreativeVersion: jest.fn() }));
 jest.mock('../storage/databaseClient', () => ({ getDatabase: () => ({ getFirstAsync: ()=>mockReadStatus() }) }));
 jest.mock('./MediaPreview', () => ({ MediaPreview: () => null }));
 jest.mock('../media/VideoPlayer', () => ({ VideoPlayer: () => null }));
@@ -247,4 +247,18 @@ test('unchanged history does not reload recipes, but file-state changes refresh 
     await act(async()=>jest.advanceTimersByTime(2500));
     expect(mockReadVersions).toHaveBeenCalledTimes(2);
   }finally{act(()=>tree?.unmount());jest.useRealTimers();}
+});
+
+
+test('adopting a video explicitly selects the candidate and returns to its original shot',async()=>{
+  mockVersions=[{...mockVersions[0],mime:'video/mp4',relativePath:'video.mp4'}];
+  let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<CreativeResults draft={{...draft,provider_id:'autodl'}}/>);});
+    expect(mockExecute).not.toHaveBeenCalled();
+    await act(async()=>findButton(tree,'用于此镜头').props.onPress());
+    expect(mockExecute).toHaveBeenCalledWith({name:'shot.selectOutput',payload:{id:'shot',expectedRevision:7,slot:'selected_video',versionId:'version-2'}},expect.any(String));
+    act(()=>findButton(tree,'返回此镜头').props.onPress());
+    expect(mockPush).toHaveBeenCalledWith({pathname:'/creative-project/[id]',params:{id:'project',tab:'shots',shotId:'shot'}});
+  }finally{act(()=>tree?.unmount());}
 });

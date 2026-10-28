@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getDatabase } from '../storage/databaseClient';
-import { creativeService, exportCreativeVersion } from './runtime';
+import { creativeService, creativeFiles, exportCreativeVersion } from './runtime';
 import type { CreativeDraft } from './drafts';
 import type { AssetVersion } from './types';
 import { VideoPlayer } from '../media/VideoPlayer';
@@ -130,6 +130,7 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
     if (draft.shot_id && draft.project_id) {
       const shot=(await creativeService().shots(draft.project_id)).find(s=>s.id===draft.shot_id);
       if(!shot)throw new Error('镜头已不存在，请返回项目检查');
+      await creativeFiles().verify(current.id);
       await creativeService().execute({name:'shot.selectOutput',payload:{id:shot.id,expectedRevision:shot.revision,slot:draft.provider_id==='novelai'?'selected_image':'selected_video',versionId:current.id}},createId());
       setNotice('此镜头已采用当前版本');
     } else { await exportCreativeVersion(current.id);setExporting({versionId:current.id,generation:1});setNotice('已在素材库 · 正在存入系统相册'); }
@@ -172,6 +173,7 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
       {versions.length>1?<View style={s.row}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:8}}>{versionChoices(candidates)}</ScrollView><TextAction label={`版本历史 · ${versions.length}`} onPress={()=>setHistory(true)} /></View>:null}
     </>:<View style={[s.card,{minHeight:160,justifyContent:'center',borderWidth:0}]}><Text style={s.title}>{draft.job_id?(needsAttention?'本次尚无可用成果':'创作进行中'):'从画面描述开始'}</Text><Text style={s.muted}>{draft.job_id?'结果会显示在这里，你可以离开后再回来。':'生成后可在这里看图和继续创作。'}</Text><TextAction label="任务与草稿操作" onPress={()=>setMore(true)} /></View>}
     {saveStatus}
+    {notice==='此镜头已采用当前版本'&&draft.project_id?<TextAction label="返回此镜头" onPress={()=>router.push({pathname:'/creative-project/[id]',params:{id:draft.project_id!,tab:'shots',shotId:draft.shot_id!}})}/>:null}
     {error || readError?<Text accessibilityRole="alert" style={s.error}>{error || readError}</Text>:null}
   </View>;
   const canvasContent=<View style={{flex:1,minHeight:0,minWidth:0,paddingHorizontal:8}}>

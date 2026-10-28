@@ -25,3 +25,17 @@ test('archived project still allows reviewing adopted video', async () => {
  try { await act(async () => { tree = create(<ProjectShots projectId="p" archived />); }); await act(async () => press(tree,'审阅视频成果')); expect(mockPush).toHaveBeenCalledWith({pathname:'/creative-asset/[id]',params:{id:'asset',versionId:'video',projectId:'p'}}); }
  finally { act(() => tree.unmount()); }
 });
+
+
+test('adopted video keeps generation candidates reachable without creating another draft',async()=>{
+  mockShot.selected_video='video';mockDrafts[0].state='SUBMITTED';let tree!:ReturnType<typeof create>;
+  try{
+    await act(async()=>{tree=create(<ProjectShots projectId="p" initialShotId="s"/>);});
+    act(()=>press(tree,'生成记录与候选'));
+    expect(mockPush).toHaveBeenCalledWith({pathname:'/creative-draft/[id]',params:{id:'existing'}});
+    expect(mockExecute).not.toHaveBeenCalled();
+    expect(JSON.stringify(tree.toJSON())).toContain('当前创作镜头');
+    act(()=>press(tree,'全部镜头'));
+    expect(JSON.stringify(tree.toJSON())).not.toContain('当前创作镜头');
+  }finally{act(()=>tree?.unmount());}
+});
