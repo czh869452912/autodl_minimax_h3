@@ -1,20 +1,19 @@
-import {useEffect,useRef,useState} from 'react';
+import {useCallback,useEffect,useRef,useState} from 'react';
+import {useFocusEffect} from 'expo-router';
 import {FlatList,Pressable,Text,View,useWindowDimensions} from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import CryptoJS from 'crypto-js';
 import {creativeService} from './runtime';
-import {getDatabase} from '../storage/databaseClient';
-import {videoSessionDrafts} from './workbenchSessions';
 import {videoSession} from './videoDraftState';
 import type {CreativeDraft} from './drafts';
-import type {AssetVersion} from './types';
+import type {VideoHistoryJob,VideoHistoryRound} from './videoHistory';
 import {CreativeResults} from './CreativeResults';
 import {MediaPreview} from './MediaPreview';
 import {TextAction} from './WorkbenchUI';
 import {COLORS} from '../ui/theme';
 
-type Job={id:string;status:string;created_at:number;started_at:number|null;execution_duration:number|null;updated_at:number};
-export type VideoRound={draft:CreativeDraft;job:Job;versions:AssetVersion[];ordinal?:number};
+type Job=VideoHistoryJob;
+export type VideoRound=VideoHistoryRound;
 export function videoRoundTimes(job:Job,now=Date.now()){
   const pending=['SUBMITTING','QUEUED','RUNNING','READY_TO_SUBMIT'].includes(job.status);
   const format=(seconds:number|null)=>seconds===null?'未记录':seconds<60?`${Math.floor(seconds)}秒`:`${Math.floor(seconds/60)}分${Math.floor(seconds%60)}秒`;
@@ -26,29 +25,32 @@ export function VideoGenerationHistory({draft,disabled,onLatestStatus,visible=tr
   const {width}=useWindowDimensions();
   const [expanded,setExpanded]=useState(false),[filter,setFilter]=useState('all');
   const [rounds,setRounds]=useState<VideoRound[]>([]),[selected,setSelected]=useState<string>(),[ready,setReady]=useState(false),[error,setError]=useState('');
+  const [,setClock]=useState(0);
   const chosen=useRef<string|undefined>(undefined),statusCallback=useRef(onLatestStatus);statusCallback.current=onLatestStatus;
   const scope=videoSession(JSON.parse(draft.input_json),draft.target_asset_id??draft.id);
   const key=`video.history.${CryptoJS.SHA256(`${draft.provider_id}:${draft.project_id}:${draft.shot_id}:${scope}`)}`;
-  useEffect(()=>{let active=true;setReady(false);chosen.current=undefined;setSelected(undefined);SecureStore.getItemAsync(key).then(id=>{if(active&&id){chosen.current=id;setSelected(id);}}).catch(()=>undefined).finally(()=>{if(active)setReady(true);});return()=>{active=false;};},[key]);
-  useEffect(()=>{
+  useEffect(()=>{let active=true;setReady(false);setRounds([]);chosen.current=undefined;setSelected(undefined);SecureStore.getItemAsync(key).then(id=>{if(active&&id){chosen.current=id;setSelected(id);}}).catch(()=>undefined).finally(()=>{if(active)setReady(true);});return()=>{active=false;};},[key]);
+  useFocusEffect(useCallback(()=>{
     if(!visible)return;
-    let active=true,reading=false,needsRefresh=true;
+    let active=true,reading=false,needsRefresh=true,stamp='';
+    const orderKey=`${key}.order`;
+    const orderReady=SecureStore.getItemAsync(orderKey).then(raw=>{
+      try{const value=JSON.parse(raw??'[]');return Array.isArray(value)&&value.every(id=>typeof id==='string')?value as string[]:[];}catch{return [];}
+    }).catch(()=>[] as string[]);
     const refresh=async()=>{if(!active||reading||!needsRefresh)return;reading=true;try{
-      const drafts=videoSessionDrafts(draft,await creativeService().drafts(draft.project_id??undefined)).filter(row=>row.job_id);
-      const assets=new Map<string,AssetVersion[]>();
-      await Promise.all([...new Set(drafts.map(row=>row.target_asset_id).filter((id):id is string=>Boolean(id)))].map(async id=>assets.set(id,await creativeService().versions(id))));
-      const rows=await Promise.all(drafts.map(async row=>{const job=await getDatabase().getFirstAsync<Job>('SELECT id,status,created_at,started_at,execution_duration,updated_at FROM workflow_jobs WHERE id=?',row.job_id!);return job?{draft:row,job,versions:(assets.get(row.target_asset_id??'')??[]).filter(v=>v.recipe.jobId===job.id)}:null;}));
-      const seen=new Set<string>(),next=rows.filter((r):r is VideoRound=>Boolean(r)).filter(r=>{if(seen.has(r.job.id))return false;seen.add(r.job.id);return true;}).sort((a,b)=>b.job.created_at-a.job.created_at||b.job.id.localeCompare(a.job.id));
-      const orderKey=`${key}.order`;let order:string[]=[];
-      try{const stored=JSON.parse(await SecureStore.getItemAsync(orderKey)??'[]');if(Array.isArray(stored)&&stored.every(id=>typeof id==='string'))order=stored;}catch{/* Rebuild from submission times. */}
-      for(const row of [...next].reverse())if(!order.includes(row.job.id))order.push(row.job.id);
-      if(!active)return;void SecureStore.setItemAsync(orderKey,JSON.stringify(order)).catch(()=>undefined);
-      next.forEach(row=>{(row as VideoRound).ordinal=order.indexOf(row.job.id)+1;});
+      const snapshot=await creativeService().videoHistory(draft),next=snapshot.rounds;
+      const order=await orderReady,previousOrder=order.length,ordinals=new Map(order.map((id,index)=>[id,index+1]));
+      for(const row of [...next].reverse())if(!ordinals.has(row.job.id)){order.push(row.job.id);ordinals.set(row.job.id,order.length);}
+      if(!active)return;
+      if(order.length!==previousOrder)void SecureStore.setItemAsync(orderKey,JSON.stringify(order)).catch(()=>undefined);
+      next.forEach(row=>{row.ordinal=ordinals.get(row.job.id);});
       needsRefresh=next.some(row=>['READY_TO_SUBMIT','SUBMITTING','QUEUED','RUNNING','UNKNOWN'].includes(row.job.status)||['SUCCEEDED','PARTIAL_SUCCEEDED'].includes(row.job.status)&&(!row.versions.length||row.versions.some(v=>v.state==='PENDING')));
-      if(active){setRounds(old=>!needsRefresh&&JSON.stringify(old)===JSON.stringify(next)?old:next);setError('');const latest=next.find(r=>r.job.id===draft.job_id);if(latest)statusCallback.current(latest.job.status);}
+      if(snapshot.stamp!==stamp){setRounds(next);stamp=snapshot.stamp;}
+      if(needsRefresh)setClock(value=>value+1);
+      setError('');const latest=next.find(r=>r.job.id===draft.job_id);if(latest)statusCallback.current(latest.job.status);
     }catch{if(active)setError('生成记录读取失败，正在重试');}finally{reading=false;}};
     void refresh();const timer=setInterval(()=>void refresh(),2500);return()=>{active=false;clearInterval(timer);};
-  },[draft.job_id,key,visible]);
+  },[draft.job_id,key,visible]));
   const current=rounds.find(r=>r.job.id===selected)??rounds.find(r=>r.versions.some(v=>v.state==='AVAILABLE'))??rounds[0];
   const choose=(id:string)=>{chosen.current=id;setSelected(id);void SecureStore.setItemAsync(key,id).catch(()=>setError('预览位置未保存，当前选择仍可使用'));};
   useEffect(()=>{if(ready&&current&&!chosen.current){chosen.current=current.job.id;setSelected(current.job.id);}},[ready,current?.job.id]);

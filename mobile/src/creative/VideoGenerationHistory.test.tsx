@@ -5,11 +5,10 @@ import {CreativeResults} from './CreativeResults';
 const mockStored=new Map<string,string>();
 let mockRows:any[]=[],mockJobs:any={},mockVersions:any[]=[],mockReads=0;
 jest.mock('expo-secure-store',()=>({getItemAsync:async(k:string)=>mockStored.get(k)??null,setItemAsync:async(k:string,v:string)=>{mockStored.set(k,v);}}));
-jest.mock('./runtime',()=>({creativeService:()=>({drafts:async()=>{mockReads++;return mockRows;},versions:async(id:string)=>mockVersions.filter(v=>v.assetId===id)})}));
-jest.mock('../storage/databaseClient',()=>({getDatabase:()=>({getFirstAsync:async(_sql:string,id:string)=>mockJobs[id]})}));
+jest.mock('./runtime',()=>({creativeService:()=>({videoHistory:async()=>{mockReads++;const rounds=mockRows.filter(d=>mockJobs[d.job_id]).map(draft=>({draft,job:{...mockJobs[draft.job_id]},versions:mockVersions.filter(v=>v.recipe.jobId===draft.job_id)}));return {rounds,stamp:JSON.stringify(rounds)};}})}));
 jest.mock('./MediaPreview',()=>({MediaPreview:()=>null}));
 jest.mock('./CreativeResults',()=>({CreativeResults:()=>null,creativeJobLabel:(s:string)=>s}));
-jest.mock('expo-router',()=>({useRouter:()=>({push:jest.fn()})}));
+jest.mock('expo-router',()=>({useRouter:()=>({push:jest.fn()}),useFocusEffect:(fn:()=>void)=>require('react').useEffect(fn,[fn])}));
 const make=(id:string)=>({id,provider_id:'autodl',project_id:null,shot_id:null,target_asset_id:'asset',job_id:id,workflow_id:'wf',input_json:'{}',state:'SUBMITTED'});
 test('old selection survives new results and reopening; unfinished rounds are visible',async()=>{
  jest.useFakeTimers();let tree!:ReturnType<typeof create>;

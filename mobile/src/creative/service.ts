@@ -1,5 +1,6 @@
 import {enqueueVersionExport} from './enqueueVersionExport';
 import {readResultHistoryPage} from './resultHistory';
+import {readVideoHistory} from './videoHistory';
 import CryptoJS from 'crypto-js';
 import { recoverNovelAiMetadata } from './novelAiMetadata';
 import { storySchemas, applyStoryCommand, listCreativeShots } from './story';
@@ -56,6 +57,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
   };
   return {
     resultHistoryPage: (options: Parameters<typeof readResultHistoryPage>[1]) => readResultHistoryPage(db,options),
+    videoHistory: (draft: Parameters<typeof readVideoHistory>[1]) => readVideoHistory(db,draft),
     shots: (projectId: string) => listCreativeShots(db, projectId),
     draft: (id: string) => readCreativeDraft(db, id),
     draftInputs: (id: string) => readDraftInputs(db, id),
