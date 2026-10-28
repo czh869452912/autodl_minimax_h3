@@ -10,10 +10,15 @@ import { createEnhanceInput } from './novelAiEnhancement';
 const mockDeliveries=jest.fn(async()=>[] as Array<{status:string;generation:number}>);
 const mockPush = jest.fn(), mockReplace = jest.fn(), mockExecute = jest.fn();
 const mockReadStatus=jest.fn(async()=>({status:mockStatus}));
-const mockReadVersions=jest.fn(async(id:string)=>mockVersions.filter(v=>v.assetId===id));
+const mockReadVersions=jest.fn(async(ids:string[])=>mockVersions.filter(v=>ids.includes(v.id)));
+const mockHistoryPage=jest.fn(async({assetIds,jobId,after,before,limit=40}:any)=>{
+ const all=mockVersions.filter(v=>assetIds.includes(v.assetId)&&(!jobId||v.recipe.jobId===jobId)).sort((a,b)=>(b.createdAt??0)-(a.createdAt??0)||b.versionNo-a.versionNo);
+ const rows=(after?all.slice(all.findIndex(v=>v.id===after.id)+1):before?all.slice(0,all.findIndex(v=>v.id===before.id)).reverse():all).slice(0,limit);
+ return {ids:rows.map(v=>v.id),stamp:JSON.stringify(rows)};
+});
 let mockStatus = 'SUCCEEDED', mockVersions: AssetVersion[] = [];
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, replace: mockReplace }), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
-jest.mock('./runtime', () => ({ creativeService: () => ({ shots:async()=>[{id:'shot',revision:7}], deliveries:mockDeliveries, versionStamp:async()=>JSON.stringify(mockVersions), versions:mockReadVersions, execute: mockExecute }), creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})}), exportCreativeVersion: jest.fn() }));
+jest.mock('./runtime', () => ({ creativeService: () => ({ shots:async()=>[{id:'shot',revision:7}], deliveries:mockDeliveries, resultHistoryPage:mockHistoryPage, versionsByIds:mockReadVersions, execute: mockExecute }), creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})}), exportCreativeVersion: jest.fn() }));
 jest.mock('../storage/databaseClient', () => ({ getDatabase: () => ({ getFirstAsync: ()=>mockReadStatus() }) }));
 jest.mock('./MediaPreview', () => ({ MediaPreview: () => null }));
 jest.mock('../media/VideoPlayer', () => ({ VideoPlayer: () => null }));
@@ -43,9 +48,9 @@ test('holding the floating compare control reveals the original without opening 
     act(()=>control().props.onPressOut());
     expect(overlay().props.style.opacity).toBe(0);
     act(()=>control().props.onPressIn());
-    act(()=>findButton(tree,'上一张结果').props.onPress());
+    await act(async()=>findButton(tree,'上一张结果').props.onPress());
     expect(tree.root.findAllByProps({testID:'result-original-overlay'})).toHaveLength(0);
-    act(()=>findButton(tree,'下一张结果').props.onPress());
+    await act(async()=>findButton(tree,'下一张结果').props.onPress());
     expect(overlay().props.style.opacity).toBe(0);
   }finally{act(()=>tree?.unmount());}
 });
@@ -240,12 +245,12 @@ test('unchanged history does not reload recipes, but file-state changes refresh 
   jest.useFakeTimers();let tree!:ReturnType<typeof create>;
   try{
     await act(async()=>{tree=create(<CreativeResults draft={draft}/>);});
-    expect(mockReadVersions).toHaveBeenCalledTimes(1);
+    const reads=mockReadVersions.mock.calls.length;
     await act(async()=>jest.advanceTimersByTime(2500));
-    expect(mockReadVersions).toHaveBeenCalledTimes(1);
+    expect(mockReadVersions).toHaveBeenCalledTimes(reads);
     mockVersions=[{...mockVersions[0],state:'MISSING'},mockVersions[1]];
     await act(async()=>jest.advanceTimersByTime(2500));
-    expect(mockReadVersions).toHaveBeenCalledTimes(2);
+    expect(mockReadVersions.mock.calls.length).toBeGreaterThan(reads);
   }finally{act(()=>tree?.unmount());jest.useRealTimers();}
 });
 

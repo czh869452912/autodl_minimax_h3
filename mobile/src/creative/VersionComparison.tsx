@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, FlatList, Text, View } from 'react-native';
 import type { AssetVersion } from './types';
 import { compareRecipeFields } from './recipeDiff';
 import { COLORS } from '../ui/theme';
 import { TextVersionPreview } from './TextVersionPreview';
 import { MediaPreview } from './MediaPreview';
-import { SectionHeading, SegmentedChoices, SettingRow } from './WorkbenchUI';
+import { SectionHeading, SegmentedChoices, SettingRow, TextAction } from './WorkbenchUI';
 import { creativeUI as s } from './creativeUI';
 
 const recipe = (v: AssetVersion) => v.recipe.input ?? v.recipe.inputSnapshot ?? { prompt: v.recipe.prompt ?? null, jobId: v.recipe.jobId ?? null };
@@ -15,7 +15,7 @@ function differenceLabel(path: string) {
   return labels[path.split('/')[1]] ?? '其他参数';
 }
 
-export function VersionComparison({ versions }: { versions: AssetVersion[] }) {
+export function VersionComparison({ versions, onLoadMore, loading }: { versions: AssetVersion[]; onLoadMore?:()=>void; loading?:boolean }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [side, setSide] = useState('a');
   const [details, setDetails] = useState(false), [raw, setRaw] = useState(false);
@@ -26,12 +26,10 @@ export function VersionComparison({ versions }: { versions: AssetVersion[] }) {
   const fields = [...new Set(diff?.rows.map(row => differenceLabel(row.path)))];
   return <View style={{ gap: 14 }}>
     <SectionHeading title="比较两个版本" detail="仅预览，不改变采用版本" />
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-      {versions.map(v => <Pressable key={v.id} accessibilityRole="button" accessibilityLabel={`比较版本 ${v.versionNo}`} accessibilityState={{ selected: selected.includes(v.id) }} onPress={() => { setSelected(previous => previous.includes(v.id) ? previous.filter(id => id !== v.id) : [...previous.slice(-1), v.id]); setSide('a'); }} style={{ padding: 4, borderRadius: 12, borderWidth: 2, borderColor: selected.includes(v.id) ? COLORS.primary : COLORS.border, gap: 4, minHeight: 48 }}>
+    <FlatList horizontal data={versions} keyExtractor={v=>v.id} initialNumToRender={8} windowSize={5} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }} onEndReached={onLoadMore} ListFooterComponent={onLoadMore?<TextAction label="加载更早版本" disabled={loading} onPress={onLoadMore}/>:null} renderItem={({item:v})=> <Pressable key={v.id} accessibilityRole="button" accessibilityLabel={`比较版本 ${v.versionNo}`} accessibilityState={{ selected: selected.includes(v.id) }} onPress={() => { setSelected(previous => previous.includes(v.id) ? previous.filter(id => id !== v.id) : [...previous.slice(-1), v.id]); setSide('a'); }} style={{ padding: 4, borderRadius: 12, borderWidth: 2, borderColor: selected.includes(v.id) ? COLORS.primary : COLORS.border, gap: 4, minHeight: 48 }}>
         <MediaPreview version={v} kind={v.mime?.startsWith('video/') ? 'video' : v.mime?.startsWith('image/') ? 'image' : 'document'} label={`版本 ${v.versionNo} 缩略图`} style={{ width: 72, aspectRatio: 1 }} />
         <Text style={[s.muted, { textAlign: 'center' }]}>{selected.indexOf(v.id) >= 0 ? `${selected.indexOf(v.id) === 0 ? 'A' : 'B'} · ` : ''}版本 {v.versionNo}</Text>
-      </Pressable>)}
-    </ScrollView>
+      </Pressable>} />
     {pair.length === 2 && current ? <>
       <SegmentedChoices label="切换比较画面" options={[{ id: 'a', label: `A · 版本 ${pair[0].versionNo}` }, { id: 'b', label: `B · 版本 ${pair[1].versionNo}` }]} value={side} onChange={setSide} />
       {current.mime?.startsWith('image/') || current.mime?.startsWith('video/') ? <MediaPreview version={current} kind={current.mime.startsWith('video/') ? 'video' : 'image'} label={`比较画面：版本 ${current.versionNo}`} contain style={{ aspectRatio: 4 / 3 }} /> : null}

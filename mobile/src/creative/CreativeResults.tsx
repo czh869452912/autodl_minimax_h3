@@ -1,3 +1,4 @@
+import { useResultHistory } from './useResultHistory';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,7 +38,8 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
   const [bounds,setBounds]=useState({width,height:height*0.65});
   const layout=imageWorkbenchLayout(bounds.width,bounds.height,fontScale);
 
-  const [versions, setVersions] = useState<AssetVersion[]>([]);
+  const [selectedVersion,setSelectedVersion]=useState<AssetVersion>();
+  const [sourceVersion,setSourceVersion]=useState<AssetVersion>();
   const [selected, setSelected] = useState<string|undefined>(initialVersionId);
   const [status, setStatus] = useState('');
   const [notice, setNotice] = useState('');
@@ -62,32 +64,33 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
   const lock = useRef(false);
   const assetKey=[...new Set([...(relatedAssetIds??[]),...(draft.target_asset_id?[draft.target_asset_id]:[])])].sort().join('\n');
   useEffect(()=>{setSelected(initialVersionId);},[draft.job_id]);
+  const historyScope={assetIds:assetKey?assetKey.split('\n'):[],jobId:onlyJob?draft.job_id??undefined:undefined};
+  const paged=useResultHistory(historyScope,previewVisible,'',true,draft.job_id);
+  const versions=paged.rows;
+  const preferredId=selected??versions.find(v=>v.recipe.jobId===draft.job_id)?.id??versions[0]?.id;
   useFocusEffect(useCallback(() => {
     if(!previewVisible)return;
-    let active = true, reading = false, stamp: string | undefined;
-    setStatus('');
-    setReadError('');
-    const refresh = async () => {
-      if (!active || reading) return;
-      reading = true;
-      try {
-        const job = draft.job_id ? await getDatabase().getFirstAsync<{ status: string }>('SELECT status FROM workflow_jobs WHERE id=?', draft.job_id) : null;
-        if(active)setStatus(job?.status??'');
-        const nextStamp=await creativeService().versionStamp(assetKey?assetKey.split('\n'):[]);
-        if(nextStamp!==stamp){
-          const rows = assetKey?(await Promise.all(assetKey.split('\n').map(id=>creativeService().versions(id)))).flat().sort((a,b)=>(b.createdAt??0)-(a.createdAt??0)||b.versionNo-a.versionNo):[];
-          if(active){setVersions(onlyJob?rows.filter(v=>v.recipe.jobId===draft.job_id):rows);stamp=nextStamp;}
-        }
-        if(active)setReadError('');
-      } catch {
-        if (active) setReadError('结果读取失败，正在重试');
-      } finally { reading = false; }
+    let active=true,reading=false;
+    const refresh=async()=>{
+      if(!active||reading)return;reading=true;
+      try{
+        const job=draft.job_id?await getDatabase().getFirstAsync<{status:string}>('SELECT status FROM workflow_jobs WHERE id=?',draft.job_id):null;
+        if(active){setStatus(job?.status??'');setReadError('');}
+      }catch{if(active)setReadError('结果读取失败，正在重试');}finally{reading=false;}
     };
-    void refresh();
-    const timer = setInterval(() => void refresh(), 2500);
-    return () => { active = false; clearInterval(timer); };
-  }, [draft.id, draft.target_asset_id, draft.job_id,assetKey,onlyJob,previewVisible]));
-  const current = versions.find(v => v.id === selected) ?? versions.find(v => v.recipe.jobId === draft.job_id) ?? versions[0];
+    void refresh();const timer=setInterval(()=>void refresh(),2500);
+    return()=>{active=false;clearInterval(timer);};
+  },[draft.job_id,previewVisible]));
+  useEffect(()=>{
+    if(!previewVisible)return;
+    let active=true;
+    if(!preferredId){setSelectedVersion(undefined);return;}
+    void creativeService().versionsByIds([preferredId]).then(rows=>{
+      if(active)setSelectedVersion(rows.find(v=>historyScope.assetIds.includes(v.assetId)&&(!onlyJob||v.recipe.jobId===draft.job_id)));
+    }).catch(()=>{if(active)setReadError('所选结果读取失败，请重新选择');});
+    return()=>{active=false;};
+  },[preferredId,previewVisible,assetKey,onlyJob,draft.job_id,versions.find(v=>v.id===preferredId)?.state]);
+  const current=versions.find(v=>v.id===preferredId)??(selectedVersion?.id===preferredId?selectedVersion:undefined);
   useEffect(()=>{
     if(!previewVisible)return;
     let active=true,reading=false;setExporting(undefined);setDelivery(undefined);setNotice('');setSaveRequested(false);
@@ -137,11 +140,31 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
   });
   const reuse=onReuse?((patch:Partial<NovelAiDraftInput>)=>{setMore(false);onReuse(patch);}):undefined;
   const sourceId=(current?.recipe.input as {sourceVersionId?:string}|undefined)?.sourceVersionId;
-  const original=versions.find(v=>v.id===sourceId && v.state==='AVAILABLE' && v.relativePath);
+  useEffect(()=>{
+    let active=true;setSourceVersion(undefined);
+    if(sourceId&&previewVisible)void creativeService().versionsByIds([sourceId]).then(rows=>{if(active)setSourceVersion(rows[0]);}).catch(()=>undefined);
+    return()=>{active=false;};
+  },[sourceId,previewVisible]);
+  const candidateOriginal=versions.find(v=>v.id===sourceId)??(sourceVersion?.id===sourceId?sourceVersion:undefined);
+  const original=candidateOriginal?.state==='AVAILABLE'&&candidateOriginal.relativePath?candidateOriginal:undefined;
   const showingOriginal=Boolean(original && heldOriginal===current?.id);
   useEffect(()=>{setHeldOriginal(undefined);},[current?.id,previewVisible,fullScreen]);
   const available=versions.filter(v=>v.state==='AVAILABLE' && v.relativePath && v.mime?.startsWith('image/'));
   const currentIndex=available.findIndex(v=>v.id===current?.id);
+  const [neighbors,setNeighbors]=useState<{id:string;older?:AssetVersion;newer?:AssetVersion}>();
+  useEffect(()=>{
+    if(!current||!image||!previewVisible)return;
+    let active=true;
+    const service=creativeService(),cursor={id:current.id,createdAt:current.createdAt??0};
+    void Promise.all([service.resultHistoryPage({...historyScope,after:cursor,limit:1,availableOnly:true}),service.resultHistoryPage({...historyScope,before:cursor,limit:1,availableOnly:true})]).then(async([older,newer])=>{
+      const rows=await service.versionsByIds([...older.ids,...newer.ids]);
+      if(active)setNeighbors({id:current.id,older:rows.find(v=>v.id===older.ids[0]),newer:rows.find(v=>v.id===newer.ids[0])});
+    }).catch(()=>undefined);
+    return()=>{active=false;};
+  },[current?.id,assetKey,onlyJob,draft.job_id,previewVisible,image]);
+  const older=neighbors?.id===current?.id&&neighbors?.older?.state==='AVAILABLE'?neighbors.older:undefined;
+  const newer=neighbors?.id===current?.id&&neighbors?.newer?.state==='AVAILABLE'?neighbors.newer:undefined;
+  const selectNeighbor=(version:AssetVersion)=>{setSelectedVersion(version);setSelected(version.id);};
   const toggleHistoryLock=()=>setHistoryLocked(value=>!value);
   const exportHistory=async(rows:AssetVersion[])=>{
     let failed=false;
@@ -174,7 +197,7 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
     </>:<View style={[s.card,{minHeight:160,justifyContent:'center',borderWidth:0}]}><Text style={s.title}>{draft.job_id?(needsAttention?'本次尚无可用成果':'创作进行中'):'从画面描述开始'}</Text><Text style={s.muted}>{draft.job_id?'结果会显示在这里，你可以离开后再回来。':'生成后可在这里看图和继续创作。'}</Text><TextAction label="任务与草稿操作" onPress={()=>setMore(true)} /></View>}
     {saveStatus}
     {notice==='此镜头已采用当前版本'&&draft.project_id?<TextAction label="返回此镜头" onPress={()=>router.push({pathname:'/creative-project/[id]',params:{id:draft.project_id!,tab:'shots',shotId:draft.shot_id!}})}/>:null}
-    {error || readError?<Text accessibilityRole="alert" style={s.error}>{error || readError}</Text>:null}
+    {error || readError || paged.error?<Text accessibilityRole="alert" style={s.error}>{error || readError || paged.error}</Text>:null}
   </View>;
   const canvasContent=<View style={{flex:1,minHeight:0,minWidth:0,paddingHorizontal:8}}>
 
@@ -190,18 +213,18 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
       <Text selectable style={{fontSize:12,color:COLORS.textMuted,flex:1}}>Seed {currentInfo?.seed??'未记录'}</Text>
       {onReuse && currentInfo?.seed!==undefined?<TextAction label="复用 Seed" disabled={busy || disabled} onPress={()=>onReuse({seed:currentInfo.seed})} />:null}
       <Text style={{fontSize:12,color:COLORS.textMuted}}>{currentIndex>=0?`${available.length-currentIndex} / ${available.length}`:''}</Text>
-      <IconAction label="上一张结果" icon="arrow_back" disabled={currentIndex<0 || currentIndex>=available.length-1} onPress={()=>setSelected(available[currentIndex+1].id)} />
-      <IconAction label="下一张结果" icon="chevron_right" disabled={currentIndex<=0} onPress={()=>setSelected(available[currentIndex-1].id)} />
+      <IconAction label="上一张结果" icon="arrow_back" disabled={!older} onPress={()=>older&&selectNeighbor(older)} />
+      <IconAction label="下一张结果" icon="chevron_right" disabled={!newer} onPress={()=>newer&&selectNeighbor(newer)} />
     </View>:null}
-    {image && !minimalChrome && !history && versions.length>1?<View style={{height:54}}><FlatList horizontal data={versions} keyExtractor={v=>v.id} showsHorizontalScrollIndicator={false} initialNumToRender={8} contentContainerStyle={{gap:6}} renderItem={({item:v})=><Pressable accessibilityRole="button" accessibilityLabel={`预览历史版本 ${v.versionNo}`} accessibilityState={{selected:v.id===current?.id}} onPress={()=>setSelected(v.id)} style={{width:48,padding:2,borderWidth:2,borderRadius:6,borderColor:v.id===current?.id?COLORS.primary:'transparent'}}><MediaPreview version={v} kind="image" label={`历史缩略图 ${v.versionNo}`} style={{width:40,height:36,aspectRatio:undefined}} /><Text style={{fontSize:10,color:COLORS.textMuted,textAlign:'center'}}>v{v.versionNo}</Text></Pressable>} /></View>:null}
+    {image && !minimalChrome && !history && versions.length>1?<View style={{height:54}}><FlatList horizontal data={versions} keyExtractor={v=>v.id} onEndReached={paged.next?paged.loadMore:undefined} onEndReachedThreshold={0.5} windowSize={5} showsHorizontalScrollIndicator={false} initialNumToRender={8} contentContainerStyle={{gap:6}} renderItem={({item:v})=><Pressable accessibilityRole="button" accessibilityLabel={`预览历史版本 ${v.versionNo}`} accessibilityState={{selected:v.id===current?.id}} onPress={()=>setSelected(v.id)} style={{width:48,padding:2,borderWidth:2,borderRadius:6,borderColor:v.id===current?.id?COLORS.primary:'transparent'}}><MediaPreview version={v} kind="image" label={`历史缩略图 ${v.versionNo}`} style={{width:40,height:36,aspectRatio:undefined}} /><Text style={{fontSize:10,color:COLORS.textMuted,textAlign:'center'}}>v{v.versionNo}</Text></Pressable>} /></View>:null}
 
     </>:<View style={{flex:1,alignItems:'center',justifyContent:'center',gap:6}}><Text style={{fontSize:15,color:COLORS.textMuted}}>{draft.job_id?(status==='UNKNOWN'?'结果待核查':status==='FAILED'?'本次生成未完成':status==='CANCELLED'?'本次生成已取消':'正在等待结果'):'写下描述，开始创作'}</Text></View>}
-    {error || readError?<Text accessibilityRole="alert" style={s.error}>{error || readError}</Text>:null}
+    {error || readError || paged.error?<Text accessibilityRole="alert" style={s.error}>{error || readError || paged.error}</Text>:null}
   </View>;
   if(!previewVisible)return null;
   return <View style={dock || canvas?{flex:1}:{gap:12}}>
     {canvas && (saveRequested&&deliveryNotice||notice)?<View style={{position:'absolute',bottom:8,left:12,right:12,zIndex:10,padding:8,borderRadius:10,backgroundColor:COLORS.surfaceRaised}}>{saveStatus}<TextAction label="关闭保存提示" onPress={()=>{setSaveRequested(false);setNotice('');}}/></View>:null}
-    {canvas?<View onLayout={event=>setBounds(event.nativeEvent.layout)} style={{flex:1,minHeight:0,flexDirection:layout.sideBySide?'row':'column'}}>{canvasContent}<WorkbenchRegion visible={history && draft.provider_id==='novelai'} size={layout.sideBySide?layout.panelWidth:layout.panelHeight} horizontal={layout.sideBySide} testID="inline-image-history" style={{borderRadius:14,borderWidth:0.5,borderColor:COLORS.border,backgroundColor:COLORS.surface}}><ImageHistorySheet inline rail={layout.sideBySide} versions={versions} selectedId={current?.id} locked={historyLocked} onLock={toggleHistoryLock} onSelect={version=>setSelected(version.id)} onExport={exportHistory} onClose={()=>setHistory(false)} /></WorkbenchRegion></View>:dock?<ScrollView contentContainerStyle={{padding:16,gap:12}}>{content}</ScrollView>:content}
+    {canvas?<View onLayout={event=>setBounds(event.nativeEvent.layout)} style={{flex:1,minHeight:0,flexDirection:layout.sideBySide?'row':'column'}}>{canvasContent}<WorkbenchRegion visible={history && draft.provider_id==='novelai'} size={layout.sideBySide?layout.panelWidth:layout.panelHeight} horizontal={layout.sideBySide} testID="inline-image-history" style={{borderRadius:14,borderWidth:0.5,borderColor:COLORS.border,backgroundColor:COLORS.surface}}><ImageHistorySheet source={history?historyScope:undefined} inline rail={layout.sideBySide} versions={versions} selectedId={current?.id} locked={historyLocked} onLock={toggleHistoryLock} onSelect={version=>{setSelectedVersion(version);setSelected(version.id);}} onExport={exportHistory} onClose={()=>setHistory(false)} /></WorkbenchRegion></View>:dock?<ScrollView contentContainerStyle={{padding:16,gap:12}}>{content}</ScrollView>:content}
     {!canvas?actions:null}
     {processing && current?<ImageProcessingSheet version={current} projectId={draft.project_id??undefined} shotId={draft.shot_id??undefined} replace onClose={()=>setProcessing(false)} />:null}
     {more?<ParameterSheet title="成果操作" onClose={()=>setMore(false)}>
@@ -215,8 +238,8 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
       {draft.state==='SUBMITTED'?<CopySubmittedDraft id={draft.id} />:null}
     </ParameterSheet>:null}
     {parameters?<DraftParametersSheet draft={parameterDraft??draft} onClose={()=>setParameters(false)} />:null}
-    {history && !(canvas && draft.provider_id==='novelai')?draft.provider_id==='novelai'?<ImageHistorySheet versions={versions} selectedId={current?.id} locked={historyLocked} onLock={toggleHistoryLock} onSelect={version=>setSelected(version.id)} onExport={exportHistory} onClose={()=>setHistory(false)} />:<ParameterSheet fullScreen={!canvas} title="版本历史" description="选择仅改变预览，不改变项目采用" onClose={()=>setHistory(false)}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:10}}>{versionChoices(versions)}</ScrollView></ParameterSheet>:null}
-    {comparing?<ParameterSheet fullScreen title="版本对照" onClose={()=>setComparing(false)}><VersionComparison versions={versions} /></ParameterSheet>:null}
-    {fullScreen && current?.relativePath?<ImagePreview imageKey={current.id} uri={`${FileSystem.documentDirectory}${current.relativePath}`} title={`版本 ${current.versionNo}`} previousUri={currentIndex>=0 && currentIndex<available.length-1?`${FileSystem.documentDirectory}${available[currentIndex+1].relativePath}`:undefined} nextUri={currentIndex>0?`${FileSystem.documentDirectory}${available[currentIndex-1].relativePath}`:undefined} onClose={()=>setFullScreen(false)} comparison={original?{uri:`${FileSystem.documentDirectory}${original.relativePath}`,label:`原图 · v${original.versionNo}`}:undefined} onPrevious={currentIndex>=0 && currentIndex<available.length-1?()=>setSelected(available[currentIndex+1].id):undefined} onNext={currentIndex>0?()=>setSelected(available[currentIndex-1].id):undefined} />:null}
+    {history && !(canvas && draft.provider_id==='novelai')?draft.provider_id==='novelai'?<ImageHistorySheet source={historyScope} versions={versions} selectedId={current?.id} locked={historyLocked} onLock={toggleHistoryLock} onSelect={version=>{setSelectedVersion(version);setSelected(version.id);}} onExport={exportHistory} onClose={()=>setHistory(false)} />:<ParameterSheet fullScreen={!canvas} title="版本历史" description="选择仅改变预览，不改变项目采用" onClose={()=>setHistory(false)}><FlatList horizontal data={versions} keyExtractor={v=>v.id} initialNumToRender={8} windowSize={5} onEndReached={paged.next?paged.loadMore:undefined} renderItem={({item})=><>{versionChoices([item])}</>} ListFooterComponent={paged.next?<TextAction label="加载更早结果" disabled={paged.loading} onPress={paged.loadMore}/>:null}/></ParameterSheet>:null}
+    {comparing?<ParameterSheet fullScreen title="版本对照" onClose={()=>setComparing(false)}><VersionComparison versions={versions} onLoadMore={paged.next?paged.loadMore:undefined} loading={paged.loading} /></ParameterSheet>:null}
+    {fullScreen && current?.relativePath?<ImagePreview imageKey={current.id} uri={`${FileSystem.documentDirectory}${current.relativePath}`} title={`版本 ${current.versionNo}`} previousUri={older?.relativePath?`${FileSystem.documentDirectory}${older.relativePath}`:undefined} nextUri={newer?.relativePath?`${FileSystem.documentDirectory}${newer.relativePath}`:undefined} onClose={()=>setFullScreen(false)} comparison={original?{uri:`${FileSystem.documentDirectory}${original.relativePath}`,label:`原图 · v${original.versionNo}`}:undefined} onPrevious={older?()=>selectNeighbor(older):undefined} onNext={newer?()=>selectNeighbor(newer):undefined} />:null}
   </View>;
 }

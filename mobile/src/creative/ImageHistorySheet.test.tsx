@@ -1,3 +1,4 @@
+jest.mock('expo-router',()=>({useFocusEffect:(fn:()=>void)=>require('react').useEffect(fn,[fn])}));
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { ImageHistorySheet, resultImageDetails } from './ImageHistorySheet';

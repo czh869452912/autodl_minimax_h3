@@ -15,7 +15,7 @@ test('A/B switches the compared image in place while raw snapshots stay behind t
     act(() => press(tree, '比较版本 2'));
     expect(tree.root.findAllByProps({ accessibilityLabel: '比较画面：版本 1' }).length).toBeGreaterThan(0);
     expect(JSON.stringify(tree.toJSON())).toContain('画面描述、随机种子');
-    expect(JSON.stringify(tree.toJSON())).not.toContain('Scene 1');
+    expect(tree.root.findAll(n=>n.type===require('react-native').Text&&(JSON.stringify(n.props.children)??'').includes('Scene 1'))).toHaveLength(0);
     act(() => press(tree, 'B · 版本 2'));
     expect(tree.root.findAllByProps({ accessibilityLabel: '比较画面：版本 2' }).length).toBeGreaterThan(0);
     expect(JSON.stringify(versions)).toBe(original);

@@ -1,4 +1,5 @@
 import {enqueueVersionExport} from './enqueueVersionExport';
+import {readResultHistoryPage} from './resultHistory';
 import CryptoJS from 'crypto-js';
 import { recoverNovelAiMetadata } from './novelAiMetadata';
 import { storySchemas, applyStoryCommand, listCreativeShots } from './story';
@@ -54,6 +55,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
     if (!await tx.getFirstAsync("SELECT v.id FROM creative_asset_versions v JOIN creative_version_files f ON f.version_id=v.id WHERE v.id=? AND v.asset_id=? AND NOT EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=v.asset_id) AND f.role='original' AND f.state='AVAILABLE'", versionId, assetId)) throw new Error('VERSION_NOT_AVAILABLE');
   };
   return {
+    resultHistoryPage: (options: Parameters<typeof readResultHistoryPage>[1]) => readResultHistoryPage(db,options),
     shots: (projectId: string) => listCreativeShots(db, projectId),
     draft: (id: string) => readCreativeDraft(db, id),
     draftInputs: (id: string) => readDraftInputs(db, id),
