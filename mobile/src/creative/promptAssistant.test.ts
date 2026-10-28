@@ -7,6 +7,19 @@ jest.mock('../settings/storage',()=>({readSettings:async()=>({llmEndpoint:'https
 const context={kind:'image' as const,prompt:'cabin',image:{...defaultNovelAiDraft,effort:'high' as const,characters:[{prompt:'red hair',negative:'',x:0.2,y:0.3,enabled:true}]}};
 const chunks=(items:AIMessageChunk[])=>(async function*(){for(const item of items)yield item;})();
 beforeEach(()=>jest.clearAllMocks());
+
+test('creates separate characters from an empty draft and preserves existing identities when appending',()=>{
+ const additions={summary:'双人场景',prompt:'tennis court, afternoon',addCharacters:[{prompt:'red hair, tennis player'},{prompt:'blue hair, referee'}]};
+ const empty={...context,image:{...context.image,characters:[]}};
+ expect(proposalPatch(additions,empty).characters).toEqual(additions.addCharacters.map(c=>({...c,negative:'',enabled:true,x:0.5,y:0.5})));
+ const patch=proposalPatch({...additions,characters:[{index:0,prompt:'updated identity'}]},context);
+ expect(patch.characters).toHaveLength(3);
+ expect(patch.characters?.[0]).toMatchObject({prompt:'updated identity',x:0.2,y:0.3});
+ expect(context.image.characters).toHaveLength(1);
+ expect(()=>proposalPatch(additions,{kind:'video',prompt:''})).toThrow('视频');
+ expect(()=>proposalPatch({summary:'too many',addCharacters:Array.from({length:6},()=>({prompt:'person'}))},{...context,image:{...context.image,model:'nai-diffusion-4-5-full'}})).toThrow('6');
+ expect(()=>proposalPatch({summary:'negative',addCharacters:[{prompt:'person',negative:'bad'}]},{...empty,image:{...empty.image,effort:'medium'}})).toThrow('Medium');
+});
 test('streams text, executes validation, then returns a typed proposal without changing the draft',async()=>{
  mockStream.mockResolvedValueOnce(chunks([new AIMessageChunk({content:'检查角色',tool_calls:[{id:'a',name:'validate_prompt',args:{summary:'保留角色',characters:[{index:0,prompt:'red hair, moonlight'}]}}]})])).mockResolvedValueOnce(chunks([new AIMessageChunk({content:'建议如下',tool_calls:[{id:'b',name:'propose_prompt',args:{summary:'增加月光',prompt:'moonlit cabin'}}]})]));
  const text=jest.fn(),status=jest.fn(),events=jest.fn(),activities=jest.fn();const result=await streamPromptAssistant(context,[{role:'user',content:'增加月光'}],new AbortController().signal,text,status,events,activities);
