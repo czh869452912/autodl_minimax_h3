@@ -19,3 +19,13 @@ test('failed previews can retry and an evicted URI is rebuilt',async()=>{
   queue.invalidate('a');
   expect(await queue.request('a',async()=>'rebuilt').promise).toBe('rebuilt');
 });
+test('a saturated queue asks visible callers to retry instead of retaining unbounded decoder work',async()=>{
+  const queue=createPreviewQueue(1,1);let finish!:(uri:string)=>void;
+  queue.request('running',()=>new Promise(resolve=>{finish=resolve;}));
+  const waiting=queue.request('waiting',async()=>'later');
+  const run=jest.fn(async()=>'visible');
+  const saturated=queue.request('visible',run);
+  expect(saturated.retryAfter).toBe(250);expect(await saturated.promise).toBeUndefined();
+  expect(run).not.toHaveBeenCalled();waiting.release();await flush();finish('done');await flush();
+  expect(await queue.request('visible',run).promise).toBe('visible');
+});

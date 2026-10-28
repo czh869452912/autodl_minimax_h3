@@ -20,16 +20,16 @@ export function createPreviewQueue(concurrency=2,maxWaiting=48,maxCached=128){
     invalidate:(key:string)=>{cache.delete(key);},
     request(key:string,run:()=>Promise<string|undefined>){
       const cached=cache.get(key);
-      if(cached){cache.delete(key);cache.set(key,cached);return {promise:Promise.resolve(cached),release:()=>{}};}
+      if(cached){cache.delete(key);cache.set(key,cached);return {promise:Promise.resolve(cached),retryAfter:undefined as number|undefined,release:()=>{}};}
       let entry=entries.get(key);
       if(!entry){
-        if(entries.size-running>=maxWaiting)return {promise:Promise.resolve(undefined),release:()=>{}};
+        if(entries.size-running>=maxWaiting)return {promise:Promise.resolve(undefined),retryAfter:250,release:()=>{}};
         let resolve!:(uri:string|undefined)=>void;
         const promise=new Promise<string|undefined>(done=>{resolve=done;});
         entry={users:0,started:false,resolve,promise,run};entries.set(key,entry);
       }
       entry.users++;pump();let released=false;const owned=entry;
-      return {promise:entry.promise,release:()=>{
+      return {promise:entry.promise,retryAfter:undefined as number|undefined,release:()=>{
         if(released)return;released=true;owned.users--;
         if(!owned.users&&!owned.started){entries.delete(key);owned.resolve(undefined);}
       }};

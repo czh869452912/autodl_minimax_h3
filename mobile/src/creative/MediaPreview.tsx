@@ -17,11 +17,11 @@ export function MediaPreview({ version, kind = 'image', label, style, contain = 
   const previewKey=`${video?'video':'image'}:${version?.blobSha256??version?.id}:${uri}`;
   useEffect(()=>{setRetry(0);setFailed(undefined);},[previewKey]);
   useEffect(() => {
-    let active = true;
+    let active = true,timer:ReturnType<typeof setTimeout>|undefined;
     if(!uri||!version||!video&&!image)return;
     const request=previewQueue.request(previewKey,()=>video?extractPoster(uri,`creative-preview:${version.blobSha256??version.id}`):createImageThumbnail(uri,version.blobSha256??version.id));
-    void request.promise.then(value=>{if(active){setPoster({source:uri,uri:value});setFailed(undefined);}});
-    return () => { active = false;request.release(); };
+    void request.promise.then(value=>{if(active&&request.retryAfter){timer=setTimeout(()=>setRetry(n=>n+1),request.retryAfter);return;}if(active){setPoster({source:uri,uri:value});setFailed(undefined);}});
+    return () => { active = false;clearTimeout(timer);request.release(); };
   }, [uri, video,image,previewKey,retry]);
   const source = poster?.source === uri ? poster?.uri : undefined;
   return <View style={[styles.frame, style]}>
