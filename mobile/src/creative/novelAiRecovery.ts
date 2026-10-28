@@ -6,13 +6,17 @@ import {isNovelAiUpscaleRequest,upscaleExpectedSize} from './novelAiUpscale';
 
 /** Read-only external reconciliation: only a verified local response can resume import. */
 export async function recoverNovelAiResponses(db: AppDatabase, jobs: JobStateRepository, store: NovelAiResponseStore, now = Date.now()) {
-  const rows = await db.getAllAsync<{ id: string; payload_json: string; request_hash: string }>(`SELECT j.id,o.payload_json,c.request_hash FROM workflow_jobs j
+  const rows = await db.getAllAsync<{ id: string; payload_json: string; request_hash: string; operation_id: string }>(`SELECT j.id,o.id AS operation_id,o.payload_json,c.request_hash FROM workflow_jobs j
     JOIN creative_job_contexts c ON c.job_id=j.id JOIN creative_execution_state e ON e.id=1 AND e.epoch=c.execution_epoch
     JOIN workflow_operations o ON o.job_id=j.id AND o.kind='SUBMIT' AND o.state='BLOCKED'
-    WHERE j.adapter_id='novelai-image' AND j.status='UNKNOWN'
-    AND NOT EXISTS(SELECT 1 FROM creative_restore_quarantine q WHERE q.entity_kind='job' AND q.entity_id=j.id) LIMIT 32`);
+    WHERE j.adapter_id='novelai-image' AND j.status='UNKNOWN' AND o.next_retry_at<=?
+    AND NOT EXISTS(SELECT 1 FROM creative_restore_quarantine q WHERE q.entity_kind='job' AND q.entity_id=j.id) ORDER BY o.next_retry_at,o.id LIMIT 4`,now);
   let recovered = 0;
   for (const row of rows) {
+    // Persist the next read-only probe before I/O so errors/restarts cannot hot-loop.
+    // This remains BLOCKED: scheduling a probe never permits a paid resubmission.
+    const reserved = await db.runAsync("UPDATE workflow_operations SET next_retry_at=? WHERE id=? AND state='BLOCKED' AND next_retry_at<=?",now+30000,row.operation_id,now);
+    if (!reserved.changes) continue;
     const prepared = JSON.parse(row.payload_json).prepared;
     if (!prepared || creativeRequestHash(prepared) !== row.request_hash) continue;
     let upscaleSize;

@@ -222,3 +222,20 @@ test('enhanced output dimensions remain separate from reproducible input paramet
     }, null, 2));
   } finally { f.db.close(); }
 });
+
+test('unknown probes persist a delay without unlocking or resending the submit operation',async()=>{
+ const f=await fixture();try{
+  (f.store.generate as jest.Mock).mockRejectedValue(new Error('timeout'));
+  (f.store.lookup as jest.Mock).mockResolvedValue(null);
+  await f.handle('SUBMIT');
+  (f.store.lookup as jest.Mock).mockClear();
+  await recoverNovelAiResponses(f.db as never,f.jobs,f.store,200);
+  expect(f.store.lookup).toHaveBeenCalledTimes(1);
+  await recoverNovelAiResponses(f.db as never,f.jobs,f.store,201);
+  expect(f.store.lookup).toHaveBeenCalledTimes(1);
+  expect(f.db.getFirstSync("SELECT state,next_retry_at FROM workflow_operations WHERE kind='SUBMIT'")).toMatchObject({state:'BLOCKED',next_retry_at:30200});
+  await recoverNovelAiResponses(f.db as never,f.jobs,f.store,30200);
+  expect(f.store.lookup).toHaveBeenCalledTimes(2);
+  expect(f.store.generate).toHaveBeenCalledTimes(1);
+ }finally{f.db.close();}
+});
