@@ -158,3 +158,16 @@
 - SHA-256：`6D9710C54130A5A0F25CDCC96A6DF12BCDF4C24118702914508D1A9D834064E5`。
 - 最终 APK 包名、版本码、版本名、双 ARM 架构、Hermes bundle、v2 签名和 16KB ZIP 对齐验证通过；证书与 beta.17 相同，可覆盖升级测试版。验证记录：`build/phone-beta/beta18-verification.json`。
 - 手机 ARM 包未安装到用户手机；此前界面验证使用同功能源码的 x86_64 构建。本轮仅更新版本并打包，不重复触发生成任务。
+# 2026-10-28 · beta.19 执行恢复、素材读取与镜头回路
+
+- 版本 `1.5.0-preview.4-beta.19`，versionCode 58；功能提交 `fcb73e50`、`0224cbb1`、`fc02212f`、`38ad086f`、`28635cbf`，版本提交 `95eb262d`。
+- 默认执行周期保留恢复后的派发预算；UNKNOWN 查询限制每轮数量并持久化退避；原生生成、回执和媒体工作隔离，回执采用流式校验。未增加自动重发付费请求。
+- 素材选择按版本分页，未变化结果不再重复解析完整 recipes；镜头采用前检查文件，采用与预览选择分离，保留候选记录入口并支持返回原镜头。
+- TypeScript 通过；全量 Jest 267 套 / 1693 项通过，原有 1 套 / 4 项跳过。原生回执相关 9 项通过；跨进程恢复 5 场景 / 10 进程通过；工作流与内置技能包校验通过。
+- 同源码 x86_64 beta 包覆盖安装成功，验证新增镜头、项目/全局选材切换、同素材历史版本选择、固定参考图创建视频草稿、所属项目返回原镜头、继续已有草稿。检查 360dp / 1.3 倍字体滚动可达性，随后恢复模拟器显示配置。应用 crash buffer 无记录；启动阶段遇到一次模拟器 System UI 无响应，等待后恢复。
+- QA 截图：`build/conversation-qa/beta19-picker.png`、`beta19-shot-return.png`、`beta19-shot-360-large.png`。候选采用和不会隐式提交由组件/数据库回归覆盖，未用真实账号执行付费生成。
+- 双 ARM APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.19-android.apk`；169,047,246 字节；arm64-v8a / armeabi-v7a；最低 Android 8.0。
+- SHA-256：`CC1C0E968C06F4CE3E84B933A472CA3420BFA73DAF7ECE4D37D48B85C4CC3F4B`。
+- 包名、版本码、版本名、Hermes bundle、双 ARM、签名与 16KB ZIP 对齐校验通过；证书与 beta.18 一致。校验报告：`build/phone-beta/beta19-verification.json`。手机包未安装到用户手机。
+- 本轮已完成与后续性能事项详见 `docs/reviews/2026-10-28-beta19-implementation.md`，不将本次 beta 视为全部审查项关闭。
+
