@@ -63,10 +63,10 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
   const [delivery,setDelivery]=useState<{status:string;generation:number}>();
   const lock = useRef(false);
   const assetKey=[...new Set([...(relatedAssetIds??[]),...(draft.target_asset_id?[draft.target_asset_id]:[])])].sort().join('\n');
-  useEffect(()=>{setSelected(initialVersionId);},[draft.job_id]);
-  const historyScope={assetIds:assetKey?assetKey.split('\n'):[],jobId:onlyJob?draft.job_id??undefined:undefined};
+  useEffect(()=>{setSelected(initialVersionId);setSelectedVersion(undefined);},[draft.job_id,initialVersionId,assetKey]);
+  const historyScope={assetIds:assetKey&&(!onlyJob||draft.job_id)?assetKey.split('\n'):[],jobId:onlyJob?draft.job_id??undefined:undefined};
   const paged=useResultHistory(historyScope,previewVisible,'',true,draft.job_id);
-  const versions=paged.rows;
+  const versions=paged.rows.filter(v=>historyScope.assetIds.includes(v.assetId)&&(!onlyJob||v.recipe.jobId===draft.job_id));
   const preferredId=selected??versions.find(v=>v.recipe.jobId===draft.job_id)?.id??versions[0]?.id;
   useFocusEffect(useCallback(() => {
     if(!previewVisible)return;
@@ -90,7 +90,7 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
     }).catch(()=>{if(active)setReadError('所选结果读取失败，请重新选择');});
     return()=>{active=false;};
   },[preferredId,previewVisible,assetKey,onlyJob,draft.job_id,versions.find(v=>v.id===preferredId)?.state]);
-  const current=versions.find(v=>v.id===preferredId)??(selectedVersion?.id===preferredId?selectedVersion:undefined);
+  const current=versions.find(v=>v.id===preferredId)??(selectedVersion&&selectedVersion.id===preferredId&&historyScope.assetIds.includes(selectedVersion.assetId)&&(!onlyJob||selectedVersion.recipe.jobId===draft.job_id)?selectedVersion:undefined);
   useEffect(()=>{
     if(!previewVisible)return;
     let active=true,reading=false;setExporting(undefined);setDelivery(undefined);setNotice('');setSaveRequested(false);

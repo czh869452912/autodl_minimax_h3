@@ -38,7 +38,7 @@ export default function CreativeTask() {
     return () => { active = false; clearInterval(timer); };
   }, [id]));
   return <CompactWorkbench><SafeAreaView style={s.screen}><View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8}}><IconAction label="返回" icon="arrow_back" onPress={()=>router.canGoBack()?router.back():router.replace('/(tabs)/tasks')}/><Text style={s.title}>任务与结果</Text></View><ScrollView contentContainerStyle={s.content}>
-    {draft?.target_asset_id?<CreativeResults draft={draft} taskDetail/>:null}
+    {draft?.target_asset_id?<CreativeResults key={id} draft={draft} taskDetail onlyJob/>:null}
     {job ? <View style={s.card}>
       <Text accessibilityLiveRegion="polite" style={s.title}>{creativeJobLabel(job.status)}</Text>
       <Text numberOfLines={2} style={s.body}>{String(job.inputSnapshot.prompt ?? job.inputSnapshot.input ?? '创作任务')}</Text>
@@ -56,6 +56,7 @@ export default function CreativeTask() {
       {/CREDENTIAL|AUTH/.test(job.lastError?.code??job.error?.code??'')?<ListAction label="管理创作账号" onPress={()=>router.push({pathname:'/(tabs)/settings',params:{section:'accounts'}})}/>:null}
     </View> : null}
     {draft ? <ListAction label="返回创作与结果" onPress={returnToDraft} /> : null}
+    {draft ? <ListAction label="查看完整创作历史" onPress={() => router.push({pathname:draft.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:draft.id}})} /> : null}
     <ListAction label="打开任务中心处理下载或异常" onPress={() => router.push('/(tabs)/tasks')} />
     {notice ? <Text style={s.muted}>{notice}</Text> : null}
     {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}

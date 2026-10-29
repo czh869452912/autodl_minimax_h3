@@ -83,7 +83,7 @@ export function AgentCreativeCards({ threadId, running, runId }: { threadId: str
           <Text style={s.body} numberOfLines={3}>{JSON.parse(card.draft.input_json).prompt || JSON.parse(card.draft.input_json).values?.prompt || '待补充描述'}</Text>
           {card.outputs.length?<ScrollView horizontal contentContainerStyle={{gap:8}}>{card.outputs.map(output=><Pressable key={output.id} accessibilityRole="button" accessibilityLabel={`查看生成成果 ${output.versionNo}`} disabled={output.state!=='AVAILABLE' || !output.relativePath} onPress={()=>{
             if(output.mime?.startsWith('image/'))setPreview(`${FileSystem.documentDirectory}${output.relativePath}`);
-            else {setOpen(false);router.push({pathname:'/creative-draft/[id]',params:{id:card.draft!.id}});}
+            else {setOpen(false);router.push({pathname:'/creative-output/[id]',params:{id:output.id,assetId:output.assetId,jobId:card.jobId??card.draft!.job_id??'',draftId:card.draft!.id}});}
           }}><MediaPreview version={output} kind={card.draft!.provider_id==='novelai'?'image':'video'} label={`生成成果 ${output.versionNo}`} style={{width:180,height:180}} contain/></Pressable>)}</ScrollView>:null}
           <ListAction label={card.draft.state==='EDITING'?'编辑这份草稿':'查看成果与进度'} secondary onPress={()=>{setOpen(false);router.push({pathname:card.draft!.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:card.draft!.id}});}}/>
           {card.jobId?<ListAction label="查看生成任务详情" secondary onPress={()=>{setOpen(false);router.push({pathname:'/creative-task/[id]',params:{id:card.jobId!}});}}/>:null}

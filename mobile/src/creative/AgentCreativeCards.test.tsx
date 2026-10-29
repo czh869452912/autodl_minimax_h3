@@ -24,6 +24,17 @@ const draft={id:'draft',project_id:'project',shot_id:null,target_asset_id:'asset
 beforeEach(()=>{jest.useFakeTimers();jest.clearAllMocks();});
 afterEach(()=>{jest.useRealTimers();});
 
+test('video candidate opens its exact output identity rather than the remembered draft round',async()=>{
+  read.mockResolvedValue([{id:'draft',name:'视频创作',draft:{...draft,provider_id:'autodl'},jobId:'job',outputs:[{...output,mime:'video/mp4',recipe:{jobId:'job'}}]}]);
+  let tree!:ReturnType<typeof create>;
+  try {
+    await act(async()=>{tree=create(<AgentActivityProvider threadId="thread"><AgentCreativeCards threadId="thread" running={false}/></AgentActivityProvider>);});
+    act(()=>tree.root.findByProps({testID:'agent-creative-summary'}).props.onPress());
+    act(()=>button(tree,'查看生成成果 1').props.onPress());
+    expect(mockPush).toHaveBeenCalledWith({pathname:'/creative-output/[id]',params:{id:'output',assetId:'asset',jobId:'job',draftId:'draft'}});
+  } finally { act(()=>tree?.unmount()); }
+});
+
 test('polls the actual job and lets the user open its archived original image or task details',async()=>{
   let rows:AgentCreativeActivity[]=[{id:'draft',name:'图片创作',draft,jobId:'job',status:'QUEUED',outputs:[]}];
   read.mockImplementation(async()=>rows);

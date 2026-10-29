@@ -52,18 +52,39 @@ test('ordinary asset preview keeps management details hidden and is not presente
   } finally {act(()=>tree?.unmount());}
 });
 
-test('missing requested version falls back and trash status comes from storage', async () => {
+test('missing requested version requires an explicit switch and trash status comes from storage', async () => {
   mockService.asset.mockResolvedValueOnce({ id: 'a', kind: 'image', title: 'A', revision: 1 });
   mockService.isTrashed.mockResolvedValueOnce(true);
   mockService.versions.mockResolvedValue([{ id: 'v', assetId: 'a', versionNo: 1, state: 'AVAILABLE', recipe: { input: {} }, mime: 'image/png', relativePath: 'a.png' }]);
   let tree!: ReturnType<typeof create>;
   try {
     await act(async () => { tree = create(<CreativeWorkspace mode="assets" assetId="a" initialVersionId="removed" />); });
+    expect(content(tree)).toContain('该版本不可用');
+    expect(content(tree)).not.toContain('版本 1 预览');
+    expect(content(tree)).not.toContain('保存到系统相册');
+    act(() => press(tree, '查看其他版本'));
     expect(content(tree)).toContain('版本 1 预览');
     expect(content(tree)).toContain('从回收站恢复');
     expect(content(tree)).not.toContain('从此版本创建视频草稿');
     expect(content(tree)).not.toContain('恢复参数并继续出图');
   } finally { act(() => tree?.unmount()); mockService.versions.mockResolvedValue([]); }
+});
+
+test('ordinary browsing uses the default version while a missing original keeps its exact identity', async () => {
+  mockService.asset.mockResolvedValue({ id:'a', kind:'image', title:'A', revision:1, currentVersionId:'v1' });
+  mockService.versions.mockResolvedValue([1,2].map(n=>({ id:`v${n}`, assetId:'a', versionNo:n, state:n===1?'MISSING':'AVAILABLE', recipe:{}, mime:'image/png', relativePath:n===2?'2.png':undefined })));
+  let tree!:ReturnType<typeof create>;
+  try {
+    await act(async()=>{tree=create(<CreativeWorkspace mode="assets" assetId="a"/>);});
+    expect(content(tree)).toContain('版本 1 预览');
+    expect(content(tree)).toContain('文件待恢复');
+    expect(content(tree)).not.toContain('该版本不可用');
+    await act(async()=>tree.update(<CreativeWorkspace mode="assets" assetId="a" initialVersionId="v2"/>));
+    expect(content(tree)).toContain('版本 2 预览');
+    await act(async()=>tree.update(<CreativeWorkspace mode="assets" assetId="a" initialVersionId="removed"/>));
+    expect(content(tree)).not.toContain('版本 2 预览');
+    expect(content(tree)).toContain('该版本不可用');
+  } finally { act(()=>tree?.unmount()); mockService.asset.mockResolvedValue(undefined); mockService.versions.mockResolvedValue([]); }
 });
 
 test('archive remains in project detail with a restore action', async () => {

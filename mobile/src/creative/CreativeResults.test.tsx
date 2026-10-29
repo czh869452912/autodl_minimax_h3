@@ -30,6 +30,32 @@ beforeEach(() => {
   mockExecute.mockResolvedValue({ status: 'completed', value: { draftId: 'next' } });
 });
 
+test('task results exclude other jobs from preview, history and neighbor navigation', async () => {
+  mockVersions.push({...mockVersions[0],id:'foreign',versionNo:99,recipe:{jobId:'other'}});
+  let tree!:ReturnType<typeof create>;
+  try {
+    await act(async()=>{tree=create(<CreativeResults draft={draft} onlyJob taskDetail/>);});
+    expect(findButton(tree,'查看版本 99')).toBeUndefined();
+    expect(findButton(tree,'查看版本 1')).toBeDefined();
+    expect(findButton(tree,'查看版本 2')).toBeDefined();
+    expect(mockHistoryPage.mock.calls.every(([scope])=>scope.jobId==='job')).toBe(true);
+    await act(async()=>tree.update(<CreativeResults draft={draft} onlyJob taskDetail initialVersionId="foreign"/>));
+    expect(tree.root.findAllByProps({accessibilityLabel:'当前图片，版本 99'})).toHaveLength(0);
+  } finally { act(()=>tree?.unmount()); }
+});
+
+test('an explicit result outside the first page loads by ID and updates within the same job', async () => {
+  mockVersions = Array.from({length:45},(_,i)=>({...mockVersions[0],id:`v${i}`,versionNo:i+1,createdAt:i,relativePath:`${i}.png`}));
+  let tree!:ReturnType<typeof create>;
+  try {
+    await act(async()=>{tree=create(<CreativeResults draft={draft} onlyJob initialVersionId="v0"/>);});
+    expect(tree.root.findAllByProps({accessibilityLabel:'当前图片，版本 1'}).length).toBeGreaterThan(0);
+    await act(async()=>tree.update(<CreativeResults draft={draft} onlyJob initialVersionId="v1"/>));
+    expect(tree.root.findAllByProps({accessibilityLabel:'当前图片，版本 2'}).length).toBeGreaterThan(0);
+    expect(tree.root.findAllByProps({accessibilityLabel:'当前图片，版本 1'})).toHaveLength(0);
+  } finally { act(()=>tree?.unmount()); }
+});
+
 test('holding the floating compare control reveals the original without opening fullscreen or moving the stage',async()=>{
   mockVersions[0].recipe.input={...defaultNovelAiDraft,sourceVersionId:'version-1'};
   let tree!:ReturnType<typeof create>;

@@ -115,14 +115,15 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
     setActiveAsset(asset); setVersions(rows); setLinks(links); setTrash(trashed);
   }, []);
   useEffect(() => { if (current && !editingBrief) { setTitle(current.title); setBrief(current.brief); } }, [current?.id, current?.revision, editingBrief]);
-  useEffect(() => { setVersionId(initialVersionId); }, [initialVersionId]);
+  useEffect(() => { setVersionId(initialVersionId); setProcessing(false); setProjectActions(false); }, [assetId, initialVersionId]);
   useFocusEffect(useCallback(() => {
     if (!assetId || metadataDirtyRef.current) return;
     let active = true;
     void creativeService().asset(assetId).then(a => { if (active && a) return inspect(a, () => active); if (active) setError('素材不存在'); }).catch(e => { if (active) setError(e.message); });
     return () => { active = false; };
   }, [assetId, inspect]));
-  const visibleVersion = versions.find(v => v.id === versionId) ?? versions.find(v => v.id === activeAsset?.currentVersionId) ?? versions[0];
+  const visibleVersion = versionId ? versions.find(v => v.id === versionId) : versions.find(v => v.id === activeAsset?.currentVersionId) ?? versions[0];
+  const missingVersion = Boolean(versionId && !visibleVersion);
   const visibleAssets = assets.filter(a => kind === 'all' || (kind === 'document' ? !['image','video'].includes(a.kind) : a.kind === kind));
   const back = () => router.canGoBack() ? router.back() : router.replace(mode === 'projects' ? '/(tabs)/projects' : '/(tabs)/assets');
   const revealImports=()=>{setQuery('');setKind('all');setInbox(false);setTrash(false);};
@@ -170,6 +171,7 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
         {action('移入回收站',()=>Alert.alert('移入回收站','仍被项目、镜头或草稿引用的资产会阻止此操作。回收站保留文件，可恢复。',[{text:'取消',style:'cancel'},{text:'移入',onPress:()=>void run(async()=>{await command({name:'asset.trash',payload:{id:activeAsset.id,expectedRevision:activeAsset.revision}});back();})}]))}
       </> : null}
       {versions.length>1?<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>{versions.map(v => <Pressable key={v.id} accessibilityRole="button" accessibilityLabel={`查看版本 ${v.versionNo}`} accessibilityState={{ selected: visibleVersion?.id === v.id }} onPress={() => { setVersionId(v.id); setProjectActions(false); }} style={{ borderWidth: 2, borderColor: visibleVersion?.id === v.id ? COLORS.primary : COLORS.border, borderRadius: 12, padding: 4, gap: 4, minHeight: 48 }}><MediaPreview version={v} kind={activeAsset.kind} label={`版本 ${v.versionNo} 缩略图`} style={{ width: 64, aspectRatio: 1 }} /><Text style={styles.body}>版本 {v.versionNo}</Text></Pressable>)}</ScrollView>:null}
+      {missingVersion ? <View><Text accessibilityRole="alert" style={styles.error}>该版本不可用，记录可能已移除。尚未切换到其他版本。</Text>{versions.length ? action('查看其他版本', () => { setVersionId(undefined); setProcessing(false); setProjectActions(false); }) : null}</View> : null}
       {versions.filter(v => v.id === visibleVersion?.id).map(v => <View key={v.id} style={{ gap: 16 }}>
         <Text style={styles.body}>版本 {v.versionNo} · {activeAsset.currentVersionId === v.id ? '素材默认版本' : '历史版本'} · {v.state === 'AVAILABLE' ? '本地可用' : '文件待恢复'}</Text>
         {v.mime?.startsWith('image/') ? <MediaPreview version={v} label={`版本 ${v.versionNo} 预览`} contain style={{ aspectRatio: 4 / 3 }} /> : null}
