@@ -116,8 +116,8 @@ export default function GalleryScreen() {
       ListEmptyComponent={error ? null : <ListEmptyState icon={query || filter !== 'all' ? 'search' : 'movie_filter'} loading={loading}
         title={loading ? '正在加载作品' : query || filter !== 'all' ? '没有符合条件的作品' : '还没有视频作品'}
         description={loading ? '正在整理视频与封面，请稍候。' : query || filter !== 'all' ? '试试其他关键词，或清除筛选查看全部作品。' : '生成的视频会汇集在这里，随时浏览、播放与管理。'}
-        action={loading ? undefined : query || filter !== 'all' ? { label: '清除筛选', icon: 'refresh', onPress: clearFilters } : { label: '去生成视频', icon: 'movie_filter', onPress: () => router.push('/(tabs)/create') }}
-        secondaryAction={!loading && (query || filter !== 'all') ? { label: '去生成视频', icon: 'movie_filter', onPress: () => router.push('/(tabs)/create') } : undefined} />} />
+        action={loading ? undefined : query || filter !== 'all' ? { label: '清除筛选', icon: 'refresh', onPress: clearFilters } : { label: '去生成视频', icon: 'movie_filter', onPress: () => router.navigate({pathname:'/(tabs)/create',params:{mode:'video',requestId:String(Date.now())}}) }}
+        secondaryAction={!loading && (query || filter !== 'all') ? { label: '去生成视频', icon: 'movie_filter', onPress: () => router.navigate({pathname:'/(tabs)/create',params:{mode:'video',requestId:String(Date.now())}}) } : undefined} />} />
   </KeyboardSurface>;
 }
 

@@ -22,12 +22,14 @@ export async function listVideoWorkflows():Promise<VideoWorkflowEntry[]>{
 export async function videoAccountReady(){try{return Boolean(await defaultAutodlCredential(getDatabase()));}catch{return false;}}
 export async function rememberVideoWorkflow(id:string){await SecureStore.setItemAsync(preference,id);}
 export async function preferredVideoWorkflow(){return SecureStore.getItemAsync(preference);}
-export async function createVideoWorkbenchDraft(prompt:string){
+export async function createVideoWorkbenchDraft(prompt:string,commandKey=createId()){
+  const old=await getDatabase().getFirstAsync<{result_json:string}>('SELECT result_json FROM creative_command_receipts WHERE idempotency_key=?',commandKey);
+  if(old)return JSON.parse(old.result_json) as Awaited<ReturnType<ReturnType<typeof creativeService>['execute']>>;
   const available=(await listVideoWorkflows()).filter(item=>!item.reason),preferred=await preferredVideoWorkflow();
   const entry=available.find(item=>item.record.workflowId===preferred)??available.find(item=>item.record.workflowId===H3_CREATIVE_WORKFLOW_ID)??available[0];
   if(!entry)throw new Error('没有可用的视频工作流，请在设置中导入或同步');
-  const {input}=alignVideoState(entry.record,entry.definition,createId(),{prompt});
-  return creativeService().execute({name:'draft.createVideo',payload:{input}},createId());
+  const {input}=alignVideoState(entry.record,entry.definition,commandKey,{prompt});
+  return creativeService().execute({name:'draft.createVideo',payload:{input}},commandKey);
 }
 export async function resolveVideoWorkbench(row:CreativeDraft,entries:VideoWorkflowEntry[]){
   const raw=JSON.parse(row.input_json),entry=entries.find(item=>item.record.workflowId===creativeVideoWorkflowId(row.workflow_id));

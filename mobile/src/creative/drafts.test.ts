@@ -9,6 +9,17 @@ import type {RegistryRecord} from '../workflows/registry/types';
 
 const videoInput=(sessionId:string,workflowId=definition.id)=>alignVideoState({workflowId,version:definition.version,contentHash:'pinned'} as RegistryRecord,definition as WorkflowDefinition,sessionId,{prompt:'Original motion'}).input;
 
+test('handoff draft creation attaches media atomically and repeated delivery reuses its receipt',async()=>{
+ const f=await fixture();try{
+  const command:CreativeCommand={name:'draft.createVideo',payload:{input:videoInput('handoff'),imageVersionIds:[f.asset.versionId],audioVersionIds:[]}};
+  const a=await f.execute(command,'handoff-once'),b=await f.execute(command,'handoff-once');
+  expect(a).toEqual(b);expect(await f.service.draftInputs(a.draftId)).toHaveLength(1);
+  const count=f.db.getAllSync('SELECT id FROM creative_generation_drafts').length;
+  await expect(f.execute({name:'draft.createVideo',payload:{input:videoInput('broken'),imageVersionIds:['missing']}})).rejects.toThrow('DRAFT_INPUT_NOT_AVAILABLE');
+  expect(f.db.getAllSync('SELECT id FROM creative_generation_drafts')).toHaveLength(count);
+ }finally{f.db.close();}
+});
+
 test('workflow switches preserve original inputs and independently freeze image and audio versions',async()=>{
   const f=await fixture();
   try{

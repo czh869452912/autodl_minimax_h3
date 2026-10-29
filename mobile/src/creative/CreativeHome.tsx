@@ -19,6 +19,8 @@ import type { AssetVersion } from './types';
 import { WorkbenchModeSwitcher } from '../ui/WorkbenchModeSwitcher';
 import { COLORS } from '../ui/theme';
 import {createVideoWorkbenchDraft} from './videoWorkbenchWorkflows';
+import {importLegacyCreativeDraft} from './legacyCreativeHandoff';
+import type {OpenCreativeRequest} from './openCreativeRequest';
 
 function RecentCreation({ draft, generations, version, selected, onPress }: { draft: CreativeDraft; generations:number; version?:AssetVersion; selected:boolean; onPress: () => void }) {
   let input:Record<string,any>={};try{input=JSON.parse(draft.input_json);}catch{}
@@ -26,7 +28,7 @@ function RecentCreation({ draft, generations, version, selected, onPress }: { dr
   return <RecordRow title={name} selected={selected} detail={`${draft.provider_id==='novelai'?'图片':'视频'} · ${generations?`${generations} 次生成`:'草稿'}${draft.state==='EDITING'?' · 可继续编辑':''}`} meta={draft.updated_at?new Date(draft.updated_at).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):undefined} leading={<MediaPreview version={version} kind={draft.provider_id==='novelai'?'image':'video'} label="创作预览" style={{width:56,height:56,borderRadius:8}}/>} onPress={onPress}/>;
 }
 
-export function CreativeHome() {
+export function CreativeHome({openRequest,onRequestConsumed,opening=false}:{openRequest?:OpenCreativeRequest;onRequestConsumed?:()=>void;opening?:boolean}={}) {
   const router=useRouter();
   const [recordQuery,setRecordQuery]=useState(''),[recordMode,setRecordMode]=useState<'all'|WorkbenchMode>('all'),[recordLimit,setRecordLimit]=useState(30),[covers,setCovers]=useState<Record<string,AssetVersion>>({});
   const [idea,setIdea]=useState<CreativeIdea>({mode:'image',image:'',video:''});
@@ -35,22 +37,25 @@ export function CreativeHome() {
   const [recordGroups,setRecordGroups]=useState<Array<{draft:CreativeDraft;generations:number}>>([]);
   const [drafts,setDrafts]=useState<CreativeDraft[]>([]),[records,setRecords]=useState(false);
   const lock=useRef(false),leave=useRef<()=>Promise<boolean>>(async()=>true),activeRef=useRef(active);activeRef.current=active;
+  const latestRequest=useRef(openRequest);latestRequest.current=openRequest;
+  const attempted=useRef('');
+  const handled=useRef(new Set<string>()),[requestAttempt,setRequestAttempt]=useState(0),[notice,setNotice]=useState('');
   const navigation=useMemo(()=>({register:(guard:()=>Promise<boolean>)=>{leave.current=guard;return()=>{if(leave.current===guard)leave.current=async()=>true;};}}),[]);
   const refresh=async()=>{const rows=await creativeService().drafts();setDrafts(rows);return rows;};
   useEffect(()=>{let live=true;void readCreativeIdea().then(value=>{if(live){setIdea(value);setReady(true);}}).catch(()=>{if(live)setError('工作区恢复失败，请重试');});return()=>{live=false;};},[]);
   useFocusEffect(useCallback(()=>{let live=true;void creativeService().drafts().then(rows=>{if(live)setDrafts(rows);}).catch(()=>{if(live)setError('创作记录读取失败');});return()=>{live=false;};},[]));
-  const createDraft=async(mode:WorkbenchMode)=>{
-    const result=mode==='image'?await creativeService().execute({name:'draft.createImage',payload:{input:{...defaultNovelAiDraft,prompt:idea.image}}},createId()):await createVideoWorkbenchDraft(idea.video);
+  const createDraft=async(mode:WorkbenchMode,requestKey?:string)=>{
+    const result=mode==='image'?await creativeService().execute({name:'draft.createImage',payload:{input:{...defaultNovelAiDraft,prompt:requestKey?'':idea.image}}},requestKey??createId()):await createVideoWorkbenchDraft(requestKey?'':idea.video,requestKey);
     if(result.status!=='completed')throw new Error('无法创建工作区');
     const row=await creativeService().draft(result.value.draftId);if(!row)throw new Error('工作区读取失败');
     const next={...idea,[mode]:''};await writeCreativeIdea(next);setIdea(next);return row;
   };
   useEffect(()=>{
-    if(!ready || activeRef.current[idea.mode] || lock.current)return;
+    if(!ready || opening || openRequest || activeRef.current[idea.mode] || lock.current)return;
     let live=true;lock.current=true;setBusy(true);
-    void (async()=>{const rows=await creativeService().drafts();const row=await recentWorkbenchDraft(idea.mode,rows)??await createDraft(idea.mode);if(live){setDrafts(rows);setActive(old=>({...old,[idea.mode]:row}));}})().catch(e=>{if(live)setError(e.message??'工作区读取失败');}).finally(()=>{lock.current=false;if(live)setBusy(false);});
+    void (async()=>{const rows=await creativeService().drafts();const row=await recentWorkbenchDraft(idea.mode,rows)??await createDraft(idea.mode);if(live){setDrafts(rows);setActive(old=>({...old,[idea.mode]:row}));}})().catch(e=>{if(live)setError(e.message??'工作区读取失败');}).finally(()=>{lock.current=false;setBusy(false);});
     return()=>{live=false;};
-  },[ready,idea.mode]);
+  },[ready,idea.mode,openRequest?.requestId,opening]);
   const change=async(action:()=>Promise<void>)=>{
     if(lock.current)return;
     lock.current=true;setBusy(true);setError('');
@@ -59,12 +64,31 @@ export function CreativeHome() {
     finally{lock.current=false;setBusy(false);}
   };
   const chooseMode=(mode:WorkbenchMode)=>{if(mode===idea.mode)return;void change(async()=>{const rows=await refresh(),restored=await recentWorkbenchDraft(mode,rows),row=restored??await createDraft(mode);const next=restored?{...idea,mode}:{...idea,mode,[mode]:''};await writeCreativeIdea(next);setActive(old=>({...old,[mode]:row}));setIdea(next);});};
+  useEffect(()=>{
+    if(!ready||!openRequest||lock.current)return;
+    const attempt=`${openRequest.requestId}:${requestAttempt}`;
+    if(attempted.current===attempt)return;
+    attempted.current=attempt;
+    if(handled.current.has(openRequest.requestId)){onRequestConsumed?.();return;}
+    void change(async()=>{
+      const request=openRequest;
+      const row=request.kind==='legacy'?await importLegacyCreativeDraft(request.legacyId):request.kind==='draft'?await creativeService().draft(request.draftId):request.kind==='new'?await createDraft(request.mode,`open.${request.requestId}`):await recentWorkbenchDraft(request.mode,await refresh())??await createDraft(request.mode,`open.${request.requestId}`);
+      if(latestRequest.current?.requestId!==request.requestId)return;
+      if(!row||row.state==='DISCARDED')throw new Error('指定创作已不可用，原画布已保留');
+      const mode:WorkbenchMode=row.provider_id==='novelai'?'image':'video';
+      await writeCreativeIdea({...idea,mode});setIdea(old=>({...old,mode}));setActive(old=>({...old,[mode]:row}));
+      if(request.kind==='legacy')setNotice('提示词、参数与素材已带入独立视频草稿，请核对后生成。未自动绑定项目或镜头。');
+      handled.current.add(request.requestId);if(latestRequest.current?.requestId===request.requestId)onRequestConsumed?.();
+    });
+  },[ready,openRequest?.requestId,requestAttempt,busy]);
   const mode=idea.mode,current=active[mode];
   const groups=useMemo(()=>recordGroups.filter(g=>(recordMode==='all'||(g.draft.provider_id==='novelai'?'image':'video')===recordMode)&&g.draft.input_json.toLocaleLowerCase().includes(recordQuery.trim().toLocaleLowerCase())).sort((a,b)=>(b.draft.updated_at??0)-(a.draft.updated_at??0)),[recordGroups,recordMode,recordQuery]);
   const coverKey=records?groups.slice(0,recordLimit).map(g=>g.draft.target_asset_id).filter(Boolean).join('|'):'';
   useEffect(()=>{let live=true;if(coverKey)void creativeService().latestVersions(coverKey.split('|')).then(rows=>{if(live)setCovers(Object.fromEntries(rows.map(v=>[v.assetId,v])));}).catch(()=>undefined);return()=>{live=false;};},[coverKey,drafts]);
   return <CompactWorkbench><View style={s.screen}>
-    <View style={{flexDirection:'row',alignItems:'center',gap:4,paddingHorizontal:8,borderBottomWidth:1,borderBottomColor:COLORS.border}}><WorkbenchModeSwitcher mode="create" disabled={busy || !ready} onSelect={id=>void change(async()=>{router.navigate(`/(tabs)/${id}`);})}/><View style={{width:112,flexShrink:1}}><SegmentedChoices singleRow label="创作类型" options={[{id:'image',label:'图片'},{id:'video',label:'视频'}]} value={mode} disabled={!ready || busy} onChange={chooseMode} /></View><View style={{flex:1}}/><IconAction label="新建创作" icon="add" disabled={busy || !ready} onPress={()=>void change(async()=>{const row=await createDraft(mode);setActive(old=>({...old,[mode]:row}));})} /><IconAction label="创作记录" icon="grid_view" onPress={()=>{setRecords(true);void creativeService().creationRecords().then(setRecordGroups).catch(()=>setError('创作记录读取失败'));}} /><TaskInboxButton/><IconAction label="打开设置" icon="settings" onPress={()=>router.push('/(tabs)/settings')} /></View>
+    <View style={{flexDirection:'row',alignItems:'center',gap:4,paddingHorizontal:8,borderBottomWidth:1,borderBottomColor:COLORS.border}}><WorkbenchModeSwitcher mode="create" disabled={busy || !ready} onSelect={id=>void change(async()=>{router.navigate(`/(tabs)/${id}`);})}/><View style={{width:112,flexShrink:1}}><SegmentedChoices singleRow label="创作类型" options={[{id:'image',label:'图片'},{id:'video',label:'视频'}]} value={mode} disabled={!ready || busy} onChange={chooseMode} /></View><View style={{flex:1}}/><IconAction label="新建创作" icon="add" disabled={busy || !ready} onPress={()=>void change(async()=>{const row=await createDraft(mode);setActive(old=>({...old,[mode]:row}));})} /><IconAction label="创作记录" icon="grid_view" onPress={()=>{setRecords(true);void creativeService().creationRecords().then(setRecordGroups).catch(()=>setError('创作记录读取失败'));}} /><TaskInboxButton beforeOpen={async()=>{if(lock.current)return false;let saved=false;try{saved=await leave.current();}catch{}if(!saved)setError('请等待输入保存，或先处理工作区中的错误');return saved;}}/><IconAction label="打开设置" icon="settings" onPress={()=>void change(async()=>{router.push('/(tabs)/settings');})} /></View>
+    {notice?<Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text>:null}
+    {openRequest && error?<View><TextAction label="重试打开创作" onPress={()=>setRequestAttempt(n=>n+1)}/><TextAction label="保留原画布" onPress={()=>{setError('');onRequestConsumed?.();}}/></View>:null}
     {error?<View style={{paddingHorizontal:12,paddingVertical:4}}><Text accessibilityRole="alert" style={s.error}>{error}</Text>{!current?<TextAction label="重试恢复工作区" onPress={()=>{setReady(false);void readCreativeIdea().then(value=>{setIdea(value);setError('');setReady(true);}).catch(()=>setError('工作区恢复失败'));}} />:null}</View>:null}
     <WorkbenchNavigationContext.Provider value={navigation}>{current?mode==='image'?<ImageDraftScreen key={current.id} id={current.id} embedded />:<VideoDraftScreen key={current.id} id={current.id} embedded />:<View style={{flex:1,alignItems:'center',justifyContent:'center'}}><ActivityIndicator /><Text style={s.muted}>正在恢复工作区…</Text></View>}</WorkbenchNavigationContext.Provider>
     {records?<ParameterSheet title="创作记录" description="恢复输入与生成历史" onClose={()=>setRecords(false)}>
@@ -74,8 +98,8 @@ export function CreativeHome() {
       {!groups.length?<Text style={s.muted}>完成编辑或生成后，创作会保存在这里。</Text>:null}
       {groups.length>recordLimit?<TextAction label={`加载更多 · 还有 ${groups.length-recordLimit} 组`} onPress={()=>setRecordLimit(count=>count+30)}/>:null}
       <View style={{flexDirection:'row',flexWrap:'wrap',gap:12}}>
-        <TextAction label="项目与素材" onPress={()=>{setRecords(false);router.push('/(tabs)/projects');}}/>
-        <TextAction label="管理工作流" onPress={()=>{setRecords(false);router.push({pathname:"/(tabs)/settings",params:{section:"workflows"}});}}/>
+        <TextAction label="项目与素材" onPress={()=>void change(async()=>{setRecords(false);router.push('/(tabs)/projects');})}/>
+        <TextAction label="管理工作流" onPress={()=>void change(async()=>{setRecords(false);router.push({pathname:"/(tabs)/settings",params:{section:"workflows"}});})}/>
       </View>
     </ParameterSheet>:null}
 

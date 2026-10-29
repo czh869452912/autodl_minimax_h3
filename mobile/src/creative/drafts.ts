@@ -13,7 +13,7 @@ export const draftSchemas = {
   'draft.copySubmitted':z.object({id}).strict(),
   'draft.createImage': z.object({ projectId: id.optional(), shotId: id.optional(), input: novelAiDraftInput.optional(), fromVersionId: id.optional() }).strict(),
   'draft.updateImage': z.object({ id, expectedRevision: revision, input: novelAiDraftInput }).strict(),
-  'draft.createVideo': z.object({ projectId: id.optional(), shotId: id.optional(), versionId: id.optional(), prompt: z.string().max(10000).default(''),input:workflowVideoInput.optional() }).strict(),
+  'draft.createVideo': z.object({ projectId: id.optional(), shotId: id.optional(), versionId: id.optional(), prompt: z.string().max(10000).default(''),input:workflowVideoInput.optional(),imageVersionIds:z.array(id).max(9).optional(),audioVersionIds:z.array(id).max(3).optional() }).strict(),
   'draft.updateVideo': z.object({ id, expectedRevision: revision, input: editableVideoInput }).strict(),
   'draft.switchVideoWorkflow':z.object({id,expectedRevision:revision,input:workflowVideoInput,imageVersionIds:z.array(id).max(9).default([]),audioVersionIds:z.array(id).max(3).default([])}).strict(),
   'draft.replaceVideoMedia':z.object({id,expectedRevision:revision,imageVersionIds:z.array(id).max(9),audioVersionIds:z.array(id).max(3)}).strict(),
@@ -110,7 +110,9 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     await project(projectId);
     const draftId = makeId();
     await tx.runAsync("INSERT INTO creative_generation_drafts VALUES(?,?,?,NULL,'autodl',?,?,0,'EDITING',NULL,?,?)", draftId, projectId, p.shotId ?? null, p.input?.workflow.id??H3_WORKFLOW_ID, JSON.stringify(p.input??{ schemaVersion: 1, prompt, resolution: '480p竖', duration: 5, seed: '' }), now, now);
-    if (selectedVersion) await inputs(draftId, [selectedVersion]);
+    if (p.imageVersionIds) await inputs(draftId, p.imageVersionIds);
+    else if (selectedVersion) await inputs(draftId, [selectedVersion]);
+    if (p.audioVersionIds) await inputs(draftId, p.audioVersionIds, 'audio');
     return { draftId };
   }
   const draft = await readCreativeDraft(tx, p.id);

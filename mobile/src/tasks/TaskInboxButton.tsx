@@ -11,7 +11,7 @@ import {IconAction,TextAction} from '../creative/WorkbenchUI';
 const inboxStatus:Record<string,string>={DRAFT:'准备中',VALIDATING:'检查中',READY_TO_SUBMIT:'等待提交',SUBMITTING:'提交中',QUEUED:'排队中',RUNNING:'生成中',SUCCEEDED:'已完成',PARTIAL_SUCCEEDED:'部分完成',FAILED:'失败',CANCELLED:'已取消',UNKNOWN:'待核查'};
 
 type InboxRow={id:string;status:string;input_json:string;adapter_id?:string;creative?:number;created_at:number;updated_at:number;started_at?:number;execution_duration?:number};
-export function TaskInboxButton(){
+export function TaskInboxButton({beforeOpen}:{beforeOpen?:()=>Promise<boolean>}={}){
  const anchor=useRef<View>(null),[top,setTop]=useState(60);const {width,height}=useWindowDimensions();
  const panelTop=Math.max(8,Math.min(top,height-180));
  const router=useRouter();const [open,setOpen]=useState(false),[count,setCount]=useState(0),[attention,setAttention]=useState(0),[rows,setRows]=useState<InboxRow[]>([]),[error,setError]=useState('');
@@ -25,7 +25,7 @@ export function TaskInboxButton(){
   void refresh();const timer=setInterval(()=>void refresh(),3000),unsubscribe=taskProjectionEvents.subscribe(()=>void refresh());
   return()=>{active=false;clearInterval(timer);unsubscribe();};
  },[]));
- return <><View ref={anchor} collapsable={false}><Pressable accessibilityRole="button" accessibilityLabel={`打开任务中心${count?`，${count} 个任务进行中`:''}`} onPress={()=>{Keyboard.dismiss();setOpen(true);anchor.current?.measureInWindow((_x,y,_w,h)=>{setTop(y+h+6);setOpen(true);});}} style={{width:36,height:40,alignItems:'center',justifyContent:'center'}}>
+ return <><View ref={anchor} collapsable={false}><Pressable accessibilityRole="button" accessibilityLabel={`打开任务中心${count?`，${count} 个任务进行中`:''}`} onPress={()=>{void (async()=>{if(beforeOpen&&!await beforeOpen())return;Keyboard.dismiss();setOpen(true);anchor.current?.measureInWindow((_x,y,_w,h)=>{setTop(y+h+6);setOpen(true);});})();}} style={{width:36,height:40,alignItems:'center',justifyContent:'center'}}>
   <AppIcon name="list_alt" size={22}/>{count||attention?<View style={{position:'absolute',right:0,top:2,minWidth:16,borderRadius:8,backgroundColor:attention?COLORS.danger:COLORS.primary,paddingHorizontal:3}}><Text style={{color:'#fff',fontSize:10,textAlign:'center'}}>{count?count>99?'99+':count:'!'}</Text></View>:null}
  </Pressable></View>{open?<Modal visible transparent animationType="fade" onRequestClose={()=>setOpen(false)}><Pressable accessibilityRole="button" accessibilityLabel="关闭最近任务" onPress={()=>setOpen(false)} style={{flex:1,backgroundColor:'rgba(0,0,0,0.12)'}}/><View style={{position:'absolute',top:panelTop,right:8,width:Math.min(width-16,360),maxHeight:Math.max(120,Math.min(540,height-panelTop-16)),backgroundColor:COLORS.surface,borderRadius:14,borderWidth:0.5,borderColor:COLORS.border,elevation:10,overflow:'hidden'}}><View style={{paddingHorizontal:14,paddingVertical:8,flexDirection:'row',alignItems:'center',borderBottomWidth:0.5,borderBottomColor:COLORS.border}}><View style={{flex:1,gap:2}}><Text style={{fontWeight:'600',color:COLORS.text,fontSize:15}}>最近任务</Text><Text style={{fontSize:11,color:COLORS.textMuted}}>{[count?count+' 进行中':'',attention?attention+' 待处理':''].filter(Boolean).join(' · ')||'最近 6 次创作'}</Text></View><IconAction label="收起最近任务" icon="close" onPress={()=>setOpen(false)}/></View><ScrollView style={{flexShrink:1}} keyboardShouldPersistTaps="handled">
   {error?<Text accessibilityRole="alert" style={{padding:14,color:COLORS.danger,fontSize:12}}>{error}</Text>:null}

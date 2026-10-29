@@ -9,7 +9,7 @@ const mockMediaUpsert = jest.fn(async (_value: unknown) => undefined);
 const mockResolveLocal = jest.fn(async () => 'file:///video.mp4' as string | undefined);
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, navigate: mockPush }),
   useFocusEffect: (effect: () => void) => { require('react').useEffect(effect, [effect]); },
 }));
 jest.mock('../storage/databaseClient', () => ({ getDatabase: jest.fn(() => ({})) }));
@@ -122,7 +122,7 @@ it('clears both search and status from an empty filtered result and still opens 
     expect(tree.root.findByProps({ accessibilityRole: 'radio', accessibilityLabel: '全部' }).props.accessibilityState.checked).toBe(true);
     expect(mockPage).toHaveBeenLastCalledWith(expect.objectContaining({ query: '', status: undefined }));
     act(() => tree.root.findByProps({ accessibilityRole: 'button', accessibilityLabel: '去生成视频' }).props.onPress());
-    expect(mockPush).toHaveBeenLastCalledWith('/(tabs)/create');
+    expect(mockPush).toHaveBeenLastCalledWith({pathname:'/(tabs)/create',params:{mode:'video',requestId:expect.any(String)}});
   } finally {
     act(() => tree?.unmount());
     mockPage.mockReset();

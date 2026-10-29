@@ -2,6 +2,7 @@ import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { CreativeHome } from './CreativeHome';
 import { defaultNovelAiDraft } from './novelAiProtocol';
+jest.mock('./legacyCreativeHandoff',()=>({importLegacyCreativeDraft:jest.fn()}));
 let mockRows:any[]=[],mockCanLeave=true;
 const mockStore:Record<string,string>={};
 const mockNavigate=jest.fn(),mockPush=jest.fn(),mockWrite=jest.fn(async(_value:unknown)=>undefined);
@@ -15,6 +16,29 @@ jest.mock('./CreativeAccountPanel',()=>({CreativeAccountPanel:()=>null}));
 jest.mock('expo-router',()=>({useRouter:()=>({push:mockPush,navigate:mockNavigate}),useFocusEffect:(fn:()=>void)=>require('react').useEffect(fn,[fn])}));
 const button=(tree:ReturnType<typeof create>,label:string)=>tree.root.findAll(n=>n.props.accessibilityLabel===label && typeof n.props.onPress==='function')[0];
 beforeEach(()=>{jest.clearAllMocks();mockRows=[];mockCanLeave=true;for(const key of Object.keys(mockStore))delete mockStore[key];});
+
+test('an explicit video request opens video even when the remembered mode is image and is consumed once',async()=>{
+ mockRows=[{id:'video',provider_id:'autodl',state:'EDITING',input_json:'{}'}];
+ const consumed=jest.fn(),request={kind:'recent' as const,mode:'video' as const,requestId:'r'};
+ let tree!:ReturnType<typeof create>;
+ try{await act(async()=>{tree=create(<CreativeHome openRequest={request} onRequestConsumed={consumed}/>);});
+ expect(tree.root.findByProps({testID:'video-workbench'}).props.children).toBe('video');
+ expect(mockExecute).not.toHaveBeenCalled();expect(consumed).toHaveBeenCalledTimes(1);
+ await act(async()=>tree.update(<CreativeHome openRequest={{...request}} onRequestConsumed={consumed}/>));
+ expect(consumed).toHaveBeenCalledTimes(1);
+ }finally{act(()=>tree?.unmount());}
+});
+
+test('failed save preserves the original canvas and an incoming draft can be retried',async()=>{
+ mockRows=[{id:'a',provider_id:'novelai',state:'EDITING',input_json:'{}'},{id:'b',provider_id:'autodl',state:'EDITING',input_json:'{}'}];
+ const consumed=jest.fn();let tree!:ReturnType<typeof create>;
+ try{await act(async()=>{tree=create(<CreativeHome/>);});mockCanLeave=false;
+ await act(async()=>tree.update(<CreativeHome openRequest={{kind:'draft',draftId:'b',requestId:'r'}} onRequestConsumed={consumed}/>));
+ expect(consumed).not.toHaveBeenCalled();expect(tree.root.findByProps({testID:'image-workbench'}).props.children).toBe('a');
+ mockCanLeave=true;await act(async()=>button(tree,'重试打开创作').props.onPress());
+ expect(tree.root.findByProps({testID:'video-workbench'}).props.children).toBe('b');expect(consumed).toHaveBeenCalledTimes(1);
+ }finally{act(()=>tree?.unmount());}
+});
 
 test('creation records route workflow management to current settings',async()=>{
  let tree!:ReturnType<typeof create>;
@@ -69,4 +93,20 @@ test('switching to Agent saves through the existing leave guard and does not cre
     expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/agent');
     expect(mockExecute).toHaveBeenCalledTimes(calls);
   }finally{act(()=>tree?.unmount());}
+});
+
+
+test('a newer open request wins while an older import is pending',async()=>{
+ mockRows=[{id:'a',provider_id:'novelai',state:'EDITING',input_json:'{}'},{id:'b',provider_id:'autodl',state:'EDITING',input_json:'{}'}];
+ let resolve!:(value:unknown)=>void;
+ require('./legacyCreativeHandoff').importLegacyCreativeDraft.mockReturnValue(new Promise(r=>{resolve=r;}));
+ const consumed=jest.fn();let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<CreativeHome/>);});
+  await act(async()=>tree.update(<CreativeHome openRequest={{kind:'legacy',legacyId:'old',requestId:'old'}} onRequestConsumed={consumed}/>));
+  await act(async()=>tree.update(<CreativeHome openRequest={{kind:'draft',draftId:'b',requestId:'new'}} onRequestConsumed={consumed}/>));
+  await act(async()=>resolve({id:'old-result',provider_id:'novelai',state:'EDITING'}));
+  expect(tree.root.findByProps({testID:'video-workbench'}).props.children).toBe('b');
+  expect(consumed).toHaveBeenCalledTimes(1);
+ }finally{act(()=>tree?.unmount());}
 });
