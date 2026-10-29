@@ -8,6 +8,7 @@ import {NativeModules,StyleSheet} from 'react-native';
 import {ImagePreview} from '../ui/ImagePreview';
 import { createEnhanceInput } from './novelAiEnhancement';
 const mockDeliveries=jest.fn(async()=>[] as Array<{status:string;generation:number}>);
+const mockDismissTo=jest.fn();
 const mockPush = jest.fn(), mockReplace = jest.fn(), mockExecute = jest.fn();
 const mockReadStatus=jest.fn(async()=>({status:mockStatus}));
 const mockReadVersions=jest.fn(async(ids:string[])=>mockVersions.filter(v=>ids.includes(v.id)));
@@ -17,8 +18,8 @@ const mockHistoryPage=jest.fn(async({assetIds,jobId,after,before,limit=40}:any)=
  return {ids:rows.map(v=>v.id),stamp:JSON.stringify(rows)};
 });
 let mockStatus = 'SUCCEEDED', mockVersions: AssetVersion[] = [];
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, replace: mockReplace }), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
-jest.mock('./runtime', () => ({ creativeService: () => ({ shots:async()=>[{id:'shot',revision:7}], deliveries:mockDeliveries, resultHistoryPage:mockHistoryPage, versionsByIds:mockReadVersions, execute: mockExecute }), creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})}), exportCreativeVersion: jest.fn() }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, dismissTo:mockDismissTo, replace: mockReplace }), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
+jest.mock('./runtime', () => ({ creativeService: () => ({ project:async()=>({id:'project'}),shots:async()=>[{id:'shot',revision:7}], deliveries:mockDeliveries, resultHistoryPage:mockHistoryPage, versionsByIds:mockReadVersions, execute: mockExecute }), creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})}), exportCreativeVersion: jest.fn() }));
 jest.mock('../storage/databaseClient', () => ({ getDatabase: () => ({ getFirstAsync: ()=>mockReadStatus() }) }));
 jest.mock('./MediaPreview', () => ({ MediaPreview: () => null }));
 jest.mock('../media/VideoPlayer', () => ({ VideoPlayer: () => null }));
@@ -289,7 +290,22 @@ test('adopting a video explicitly selects the candidate and returns to its origi
     expect(mockExecute).not.toHaveBeenCalled();
     await act(async()=>findButton(tree,'用于此镜头').props.onPress());
     expect(mockExecute).toHaveBeenCalledWith({name:'shot.selectOutput',payload:{id:'shot',expectedRevision:7,slot:'selected_video',versionId:'version-2'}},expect.any(String));
-    act(()=>findButton(tree,'返回此镜头').props.onPress());
-    expect(mockPush).toHaveBeenCalledWith({pathname:'/creative-project/[id]',params:{id:'project',tab:'shots',shotId:'shot'}});
+    await act(async()=>findButton(tree,'返回此镜头').props.onPress());
+    expect(mockDismissTo).toHaveBeenCalledWith({pathname:'/creative-project/[id]',params:expect.objectContaining({id:'project',tab:'shots',shotId:'shot'})});
   }finally{act(()=>tree?.unmount());}
+});
+
+
+test('editing a task result preserves its source while editing inside a workbench replaces the editor',async()=>{
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<CreativeResults draft={draft} host="task" taskDetail onlyJob/>);});
+  await act(async()=>findButton(tree,'更多成果操作').props.onPress());
+  await act(async()=>findButton(tree,'以此图生成').props.onPress());
+  expect(mockPush).toHaveBeenCalledWith({pathname:'/image-draft/[id]',params:{id:'next'}});expect(mockReplace).not.toHaveBeenCalled();
+  await act(async()=>tree.update(<CreativeResults draft={draft}/>));
+  await act(async()=>findButton(tree,'更多成果操作').props.onPress());
+  await act(async()=>findButton(tree,'以此图生成').props.onPress());
+  expect(mockReplace).toHaveBeenCalledWith({pathname:'/image-draft/[id]',params:{id:'next'}});
+ }finally{act(()=>tree?.unmount());}
 });

@@ -1,3 +1,4 @@
+import {useFallbackBack} from '../navigation/useFallbackBack';
 import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +15,7 @@ import { creativeUI as s } from './creativeUI';
 /** A result preview never resolves a draft session to its latest submission. */
 export function CreativeOutputPreview({ versionId, assetId, jobId, draftId }: { versionId: string; assetId: string; jobId: string; draftId: string }) {
   const router = useRouter();
+  useFallbackBack(()=>router.replace('/(tabs)/tasks'));
   const [result, setResult] = useState<{ key: string; version?: AssetVersion; draft?: CreativeDraft; error?: string }>();
   const key = JSON.stringify([versionId, assetId, jobId, draftId]);
   useFocusEffect(useCallback(() => {

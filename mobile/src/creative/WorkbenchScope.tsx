@@ -1,5 +1,6 @@
+import {returnToProject} from '../navigation/creativeNavigation';
 import {useEffect,useState} from 'react';
-import {Pressable,Text} from 'react-native';
+import {Alert,Pressable,Text} from 'react-native';
 import {useRouter} from 'expo-router';
 import type {CreativeDraft} from './drafts';
 import {creativeService} from './runtime';
@@ -14,5 +15,5 @@ export function WorkbenchScope({draft}:{draft?:CreativeDraft}){
     return()=>{active=false;};
   },[draft?.project_id,draft?.shot_id]);
   if(!draft?.project_id)return null;
-  return <Pressable accessibilityRole="button" accessibilityLabel={`打开所属项目：${label}`} onPress={()=>router.push({pathname:'/creative-project/[id]',params:{id:draft.project_id!,...(draft.shot_id?{tab:'shots',shotId:draft.shot_id}:{})}})} style={{paddingHorizontal:12,paddingVertical:5}}><Text numberOfLines={1} style={{fontSize:12,color:COLORS.textMuted}}>{label}</Text></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={`返回所属项目：${label}`} onPress={()=>void returnToProject(router,{projectId:draft.project_id!,shotId:draft.shot_id??undefined}).catch(()=>Alert.alert('项目读取失败','请稍后重试'))} style={{paddingHorizontal:12,paddingVertical:5}}><Text numberOfLines={1} style={{fontSize:12,color:COLORS.textMuted}}>{label}</Text></Pressable>;
 }

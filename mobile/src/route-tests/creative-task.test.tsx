@@ -24,7 +24,7 @@ test.each(['novelai','autodl'])('%s unknown task exposes provider-specific revie
     await act(async()=>{tree=create(<CreativeTask/>);});
     expect(tree.root.findByType(CreativeResults).props.onlyJob).toBe(true);
     expect(tree.root.findByType(CreativeResults).props.draft.job_id).toBe('original');
-    expect(button('查看完整创作历史')).toBeDefined();
+    expect(button('打开这次创作与完整历史')).toBeDefined();
     expect(button(`打开 ${provider==='novelai'?'NovelAI':'AutoDL'} 核查`)).toBeDefined();
     if(provider==='novelai')expect(tree.root.findAllByType(Text).map(n=>n.props.children).join('')).not.toContain('AutoDL');
     if(provider==='novelai'){act(()=>button('已核查，解除本次等待').props.onPress());
@@ -32,7 +32,7 @@ test.each(['novelai','autodl'])('%s unknown task exposes provider-specific revie
     await act(async()=>alert.mock.calls[0][2]!.find(action=>action.text==='已核查，继续创作')!.onPress!());
     expect(mockAcknowledge).toHaveBeenCalledWith(expect.anything(),'original');}else{expect(mockAcknowledge).not.toHaveBeenCalled();expect(JSON.stringify(tree.toJSON())).toContain('可返回工作台继续提交新视频');}
     expect(button('已核查，解除本次等待')).toBeUndefined();
-    act(()=>button('返回创作与结果').props.onPress());
+    act(()=>button('返回').props.onPress());
     expect(mockBack).toHaveBeenCalledTimes(1);
   }finally{act(()=>tree?.unmount());jest.restoreAllMocks();}
 });

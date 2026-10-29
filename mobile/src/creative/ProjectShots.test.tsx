@@ -22,7 +22,7 @@ test('reports unsaved shot fields to the parent navigation guard', async () => {
 });
 test('archived project still allows reviewing adopted video', async () => {
  mockShot.selected_video='video'; let tree!: ReturnType<typeof create>;
- try { await act(async () => { tree = create(<ProjectShots projectId="p" archived />); }); await act(async () => press(tree,'审阅视频成果')); expect(mockPush).toHaveBeenCalledWith({pathname:'/creative-asset/[id]',params:{id:'asset',versionId:'video',projectId:'p'}}); }
+ try { await act(async () => { tree = create(<ProjectShots projectId="p" archived />); }); await act(async () => press(tree,'审阅视频成果')); expect(mockPush).toHaveBeenCalledWith({pathname:'/creative-shot/[id]',params:{id:'s',projectId:'p'}}); }
  finally { act(() => tree.unmount()); }
 });
 

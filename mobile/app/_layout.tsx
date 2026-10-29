@@ -1,3 +1,4 @@
+import {projectScreenIdentity} from '../src/navigation/creativeNavigation';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Alert, AppState, BackHandler, StatusBar } from 'react-native';
@@ -113,7 +114,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
-      {startupState.mode === 'legacy' ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Text>AutoDL H3</Text><Text>请先处理旧版本数据</Text></View> : <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.background } }} />}
+      {startupState.mode === 'legacy' ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Text>AutoDL H3</Text><Text>请先处理旧版本数据</Text></View> : <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.background } }}><Stack.Screen name="creative-project/[id]" dangerouslySingular={projectScreenIdentity}/></Stack>}
     </SafeAreaProvider>
   );
 }

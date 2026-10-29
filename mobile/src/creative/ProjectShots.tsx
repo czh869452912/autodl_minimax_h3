@@ -14,9 +14,10 @@ import { COLORS } from '../ui/theme';
 import type { CreativeShot } from './story';
 import type { CreativeCommand } from './types';
 
-export function ProjectShots({ projectId, archived = false, initialShotId, onEditorState }: { projectId: string; archived?: boolean; initialShotId?:string; onEditorState?: (state: { dirty: boolean; busy: boolean }) => void }) {
+export function ProjectShots({ projectId, archived = false, initialShotId, requestId, onEditorState }: { projectId: string; archived?: boolean; initialShotId?:string;requestId?:string; onEditorState?: (state: { dirty: boolean; busy: boolean }) => void }) {
   const router = useRouter();
   const [focused,setFocused]=useState(initialShotId);
+  useEffect(()=>setFocused(initialShotId),[initialShotId,requestId]);
   const [drafts, setDrafts] = useState<CreativeDraft[]>([]);
   const [shots, setShots] = useState<CreativeShot[]>([]);
   const [expanded, setExpanded] = useState<string>(), [adding, setAdding] = useState(false);
@@ -64,7 +65,7 @@ export function ProjectShots({ projectId, archived = false, initialShotId, onEdi
       {shot.selected_image ? <VersionThumbnail versionId={shot.selected_image} /> : null}
       <Text style={{ color: COLORS.textMuted }}>图片：{shot.selected_image ? '已固定版本' : '未选定'} · 视频：{shot.selected_video ? '已固定版本' : '未选定'}</Text>
       <ListAction label={shot.selected_video ? '审阅视频成果' : continuing(shot) ? continuing(shot)!.state === 'EDITING' ? '继续已有草稿' : '查看生成进度与候选' : shot.selected_image ? '制作视频' : '选择参考图'} disabled={busy || dirty || (archived && !shot.selected_video)} onPress={() => {
-        if (shot.selected_video) { void work(async () => { const v=await creativeService().versionAsset(shot.selected_video!); if (!v) throw new Error('视频版本不存在'); router.push({pathname:'/creative-asset/[id]',params:{id:v.asset_id,versionId:shot.selected_video!,projectId}}); }, true); return; }
+        if (shot.selected_video) { void work(async () => { router.push({pathname:'/creative-shot/[id]',params:{id:shot.id,projectId}}); }, true); return; }
         const existing = continuing(shot); if (existing) { openDraft(existing); return; }
         if (!shot.selected_image) { choose(shot,'selected_image'); return; }
         void work(async () => { const r=await command({name:'draft.createVideo',payload:{shotId:shot.id,projectId}});if(r.status==='completed')router.push({pathname:'/creative-draft/[id]',params:{id:r.value.draftId}}); });

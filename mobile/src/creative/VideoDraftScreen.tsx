@@ -41,7 +41,7 @@ import {listVideoWorkflows,resolveVideoWorkbench,rememberVideoWorkflow,videoAcco
 
 type MediaRow=Awaited<ReturnType<ReturnType<typeof creativeService>['draftInputs']>>[number];
 type Sheet='workflow'|'orientation'|'quality'|'duration'|'settings'|'account'|undefined;
-export function VideoDraftScreen({id,embedded=false}:{id:string;embedded?:boolean}){return <CompactWorkbench><VideoCanvas initialId={id} embedded={embedded}/></CompactWorkbench>;}
+export function VideoDraftScreen({id,embedded=false}:{id:string;embedded?:boolean}){return <CompactWorkbench><VideoCanvas key={id} initialId={id} embedded={embedded}/></CompactWorkbench>;}
 
 
 function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){

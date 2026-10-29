@@ -1,3 +1,4 @@
+import {returnToProject} from '../navigation/creativeNavigation';
 import { useResultHistory } from './useResultHistory';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
@@ -32,7 +33,7 @@ import { imageWorkbenchLayout } from './imageWorkbenchLayout';
 
 export const creativeJobLabel = (status: string) => ({ DRAFT: '准备中', VALIDATING: '检查生成条件', READY_TO_SUBMIT: '等待提交', SUBMITTING: '正在提交', QUEUED: '排队中', RUNNING: '正在生成', SUCCEEDED: '生成已完成', PARTIAL_SUCCEEDED: '部分生成完成', FAILED: '生成未完成，请查看原因', CANCELLED: '已取消', UNKNOWN: '暂时无法确认结果，请核查原任务' }[status] ?? '正在读取进度');
 
-export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabled = false, dock = false, canvas=false, onCurrentVersion, onJobStatus, onEnhance, onUpscale, onReuse, onUseImage, historySignal=0, initialVersionId,previewVisible=true,relatedAssetIds,historyVisible,onHistoryVisibilityChange }: { draft: CreativeDraft; onlyJob?:boolean; taskDetail?:boolean; disabled?: boolean; dock?:boolean; canvas?:boolean; onCurrentVersion?:(version:AssetVersion|undefined)=>void; onJobStatus?:(status:string)=>void; onEnhance?:(version:AssetVersion)=>void; onUpscale?:(version:AssetVersion)=>void; onReuse?:(patch:Partial<NovelAiDraftInput>)=>void; onUseImage?:(version:AssetVersion,action:'img2img'|'infill')=>void; historySignal?:number; initialVersionId?:string;previewVisible?:boolean;relatedAssetIds?:string[];historyVisible?:boolean;onHistoryVisibilityChange?:(visible:boolean)=>void }) {
+export function CreativeResults({ draft, host='workbench', onlyJob=false, taskDetail=false, disabled = false, dock = false, canvas=false, onCurrentVersion, onJobStatus, onEnhance, onUpscale, onReuse, onUseImage, historySignal=0, initialVersionId,previewVisible=true,relatedAssetIds,historyVisible,onHistoryVisibilityChange }: { draft: CreativeDraft; host?:'workbench'|'task'; onlyJob?:boolean; taskDetail?:boolean; disabled?: boolean; dock?:boolean; canvas?:boolean; onCurrentVersion?:(version:AssetVersion|undefined)=>void; onJobStatus?:(status:string)=>void; onEnhance?:(version:AssetVersion)=>void; onUpscale?:(version:AssetVersion)=>void; onReuse?:(patch:Partial<NovelAiDraftInput>)=>void; onUseImage?:(version:AssetVersion,action:'img2img'|'infill')=>void; historySignal?:number; initialVersionId?:string;previewVisible?:boolean;relatedAssetIds?:string[];historyVisible?:boolean;onHistoryVisibilityChange?:(visible:boolean)=>void }) {
   const router = useRouter();
   const { width,height,fontScale } = useWindowDimensions();
   const [bounds,setBounds]=useState({width,height:height*0.65});
@@ -118,7 +119,7 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
       : { name: 'draft.createImage', payload: { fromVersionId: current.id, projectId: draft.project_id ?? undefined, shotId: draft.shot_id ?? undefined, ...(action ? {input:{...recipe,action,enhance:false,enhancement:null,sourceVersionId:current.id,maskVersionId:null,maskStrokes:[]}} : recipe.enhancement || recipe.enhance ? {input:{...recipe,action:'generate',enhance:false,enhancement:null,sourceVersionId:null,maskVersionId:null,maskStrokes:[]}} : {}) } }, createId());
     if (result.status === 'completed') {
       const target = { pathname: video ? '/creative-draft/[id]' as const : '/image-draft/[id]' as const, params: { id: result.value.draftId } };
-      if (video) router.push(target); else router.replace(target);
+      if (video || host==='task') router.push(target); else router.replace(target);
     }
   };
   const pending = ['VALIDATING', 'READY_TO_SUBMIT', 'SUBMITTING', 'QUEUED', 'RUNNING'].includes(status);
@@ -196,7 +197,7 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
       {versions.length>1?<View style={s.row}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:8}}>{versionChoices(candidates)}</ScrollView><TextAction label={`版本历史 · ${versions.length}${paged.next?'+':''}`} onPress={()=>setHistory(true)} /></View>:null}
     </>:<View style={[s.card,{minHeight:160,justifyContent:'center',borderWidth:0}]}><Text style={s.title}>{draft.job_id?(needsAttention?'本次尚无可用成果':'创作进行中'):'从画面描述开始'}</Text><Text style={s.muted}>{draft.job_id?'结果会显示在这里，你可以离开后再回来。':'生成后可在这里看图和继续创作。'}</Text><TextAction label="任务与草稿操作" onPress={()=>setMore(true)} /></View>}
     {saveStatus}
-    {notice==='此镜头已采用当前版本'&&draft.project_id?<TextAction label="返回此镜头" onPress={()=>router.push({pathname:'/creative-project/[id]',params:{id:draft.project_id!,tab:'shots',shotId:draft.shot_id!}})}/>:null}
+    {notice==='此镜头已采用当前版本'&&draft.project_id?<TextAction label="返回此镜头" onPress={()=>void work(()=>returnToProject(router,{projectId:draft.project_id!,shotId:draft.shot_id!}))}/>:null}
     {error || readError || paged.error?<Text accessibilityRole="alert" style={s.error}>{error || readError || paged.error}</Text>:null}
   </View>;
   const canvasContent=<View style={{flex:1,minHeight:0,minWidth:0,paddingHorizontal:8}}>
@@ -226,7 +227,7 @@ export function CreativeResults({ draft, onlyJob=false, taskDetail=false, disabl
     {canvas && (saveRequested&&deliveryNotice||notice)?<View style={{position:'absolute',bottom:8,left:12,right:12,zIndex:10,padding:8,borderRadius:10,backgroundColor:COLORS.surfaceRaised}}>{saveStatus}<TextAction label="关闭保存提示" onPress={()=>{setSaveRequested(false);setNotice('');}}/></View>:null}
     {canvas?<View onLayout={event=>setBounds(event.nativeEvent.layout)} style={{flex:1,minHeight:0,flexDirection:layout.sideBySide?'row':'column'}}>{canvasContent}<WorkbenchRegion visible={history && draft.provider_id==='novelai'} size={layout.sideBySide?layout.panelWidth:layout.panelHeight} horizontal={layout.sideBySide} testID="inline-image-history" style={{borderRadius:14,borderWidth:0.5,borderColor:COLORS.border,backgroundColor:COLORS.surface}}><ImageHistorySheet source={history?historyScope:undefined} inline rail={layout.sideBySide} versions={versions} selectedId={current?.id} locked={historyLocked} onLock={toggleHistoryLock} onSelect={version=>{setSelectedVersion(version);setSelected(version.id);}} onExport={exportHistory} onClose={()=>setHistory(false)} /></WorkbenchRegion></View>:dock?<ScrollView contentContainerStyle={{padding:16,gap:12}}>{content}</ScrollView>:content}
     {!canvas?actions:null}
-    {processing && current?<ImageProcessingSheet version={current} projectId={draft.project_id??undefined} shotId={draft.shot_id??undefined} replace onClose={()=>setProcessing(false)} />:null}
+    {processing && current?<ImageProcessingSheet version={current} projectId={draft.project_id??undefined} shotId={draft.shot_id??undefined} replace={host==='workbench'} onClose={()=>setProcessing(false)} />:null}
     {more?<ParameterSheet title="成果操作" onClose={()=>setMore(false)}>
       {canvas && current && image?<ImageMetadataPanel key={current.id} version={current} label="图片信息" onReuse={reuse} />:null}
       {draft.provider_id==='autodl'&&onlyJob?<><TextAction label={videoSaved?'已保存到系统相册':videoSaving?'正在保存到系统相册':'保存视频到系统相册'} disabled={!current||unavailable||videoSaved||videoSaving} onPress={()=>{setMore(false);saveVideo();}}/>{draft.shot_id?<TextAction label="用于此镜头" disabled={unavailable} onPress={apply}/>:null}<TextAction label="查看本轮任务" onPress={()=>{setMore(false);router.push({pathname:'/creative-task/[id]',params:{id:draft.job_id!,returnToWorkbench:'1'}});}}/></>:null}

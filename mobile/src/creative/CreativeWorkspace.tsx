@@ -33,7 +33,7 @@ import { SettingRow, TextAction } from './WorkbenchUI';
 import { ImageProcessingSheet } from './ImageProcessingSheet';
 import {ImageMetadataPanel} from './ImageMetadataPanel';
 
-export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initialShotId, initialVersionId, initialTrash = false }: { mode: 'projects' | 'assets'; projectId?: string; assetId?: string; initialTab?: string; initialShotId?:string; initialVersionId?: string; initialTrash?: boolean }) {
+export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initialShotId, requestId, initialVersionId, initialTrash = false }: { mode: 'projects' | 'assets'; projectId?: string; assetId?: string; initialTab?: string; initialShotId?:string; requestId?:string; initialVersionId?: string; initialTrash?: boolean }) {
   const router = useRouter();
   const [shotEditor, setShotEditor] = useState({ dirty: false, busy: false });
   const [projects, setProjects] = useState<CreativeProject[]>([]);
@@ -103,6 +103,11 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
   const command = (input: CreativeCommand) => creativeService().execute(input, createId());
   const openProject=async(p:CreativeProject)=>{router.push({pathname:'/creative-project/[id]',params:{id:p.id}});};
   const changeProjectView=(tab:typeof projectView)=>{ if (tab === projectView) return; confirmLeave(() => { discardBrief(); setProjectView(tab); if(selected)void creativeService().saveProjectTab(selected,tab).catch(()=>setError('页签保存失败')); }); };
+  useEffect(()=>{
+    if(initialTab==='shots'||initialTab==='plans'||initialTab==='activity'||initialTab==='assets'||initialTab==='brief'){
+      if(initialTab!==projectView)confirmLeave(()=>{discardBrief();setProjectView(initialTab);});
+    }
+  },[initialTab,initialShotId,requestId]);
   const inspect = useCallback(async (asset: CreativeAsset, isActive: () => boolean = () => true) => {
     const service = creativeService();
     const description = await service.description(asset.id);
@@ -155,7 +160,7 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
       {current && manage ? action(current.archivedAt ? '恢复项目' : '归档项目', () => void run(async () => { await command({ name: 'project.archive', payload: { id: current.id, archived: !current.archivedAt, expectedRevision: current.revision } }); setEditingBrief(false); })) : null}
       {manage&&current&&covers[current.id]?action('移除项目封面',()=>void run(()=>command({name:'project.setCover',payload:{id:current.id,expectedRevision:current.revision,versionId:null}}))):null}
     </> : null}
-    {mode === 'projects' && selected && projectView === 'shots' && !activeAsset ? <ProjectShots key={selected} initialShotId={initialShotId} onEditorState={setShotEditor} projectId={selected} archived={Boolean(current?.archivedAt)} /> : null}
+    {mode === 'projects' && selected && projectView === 'shots' && !activeAsset ? <ProjectShots key={selected} initialShotId={initialShotId} requestId={requestId} onEditorState={setShotEditor} projectId={selected} archived={Boolean(current?.archivedAt)} /> : null}
     {manage && mode === 'projects' && selected && !activeAsset ? action('选图与视频计划',()=>changeProjectView('plans')) : null}
     {mode === 'projects' && selected && projectView === 'plans' && !activeAsset ? <ProjectPlans key={selected} projectId={selected} archived={Boolean(current?.archivedAt)} /> : null}
     {mode === 'projects' && selected && !activeAsset ? action('修改建议与活动',()=>changeProjectView('activity')) : null}

@@ -1,3 +1,5 @@
+import {useFallbackBack} from '../../src/navigation/useFallbackBack';
+import {returnToProject} from '../../src/navigation/creativeNavigation';
 import {TaskTiming} from '../../src/tasks/TaskCardRow';
 import { useCallback, useState } from 'react';
 import { Alert,Linking,ScrollView, Text, View } from 'react-native';
@@ -15,8 +17,9 @@ import { getTaskServices } from '../../src/tasks/taskServices';
 import { taskProviderPresentation } from '../../src/tasks/providerPresentation';
 
 export default function CreativeTask() {
-  const { id, returnToWorkbench } = useLocalSearchParams<{ id: string; returnToWorkbench?:string }>();
+  const { id, projectId, planId, stepId } = useLocalSearchParams<{ id: string; projectId?:string;planId?:string;stepId?:string }>();
   const router = useRouter();
+  useFallbackBack(()=>router.replace('/(tabs)/tasks'));
   const [job, setJob] = useState<JobRecord>();
   const [draft, setDraft] = useState<CreativeDraft | null>(null);
   const [error, setError] = useState('');
@@ -24,21 +27,20 @@ export default function CreativeTask() {
   const [reviewed,setReviewed]=useState(false);
   const [busy,setBusy]=useState(false);
   const provider=taskProviderPresentation(job?.adapterId);
-  const returnToDraft=()=>{if(!draft)return;if(returnToWorkbench==='1'&&router.canGoBack())router.back();else router.replace({pathname:draft.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:draft.id}});};
   useFocusEffect(useCallback(() => {
-    let active = true;
+    let active = true;setJob(undefined);setDraft(null);setError('');setNotice('');
     const load = async () => {
       const db = getDatabase(); const job = await createJobRepository(db).get(id);
       const draft = await db.getFirstAsync<CreativeDraft>('SELECT * FROM creative_generation_drafts WHERE job_id=?', id);
       const reviewed=await unknownTaskReviewed(db,id);
       if (active) { setReviewed(reviewed);setJob(job); setDraft(draft); setError(job ? '' : '未找到此任务，原记录可能已移除'); }
     };
-    void load().catch(() => setError('读取任务失败'));
+    void load().catch(() => {if(active)setError('读取任务失败');});
     const timer = setInterval(() => void load().catch(() => undefined), 2500);
     return () => { active = false; clearInterval(timer); };
   }, [id]));
   return <CompactWorkbench><SafeAreaView style={s.screen}><View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8}}><IconAction label="返回" icon="arrow_back" onPress={()=>router.canGoBack()?router.back():router.replace('/(tabs)/tasks')}/><Text style={s.title}>任务与结果</Text></View><ScrollView contentContainerStyle={s.content}>
-    {draft?.target_asset_id?<CreativeResults key={id} draft={draft} taskDetail onlyJob/>:null}
+    {draft?.target_asset_id?<CreativeResults key={id} draft={draft} taskDetail onlyJob host="task"/>:null}
     {job ? <View style={s.card}>
       <Text accessibilityLiveRegion="polite" style={s.title}>{creativeJobLabel(job.status)}</Text>
       <Text numberOfLines={2} style={s.body}>{String(job.inputSnapshot.prompt ?? job.inputSnapshot.input ?? '创作任务')}</Text>
@@ -55,8 +57,8 @@ export default function CreativeTask() {
       {job.providerHandle&&!['SUCCEEDED','PARTIAL_SUCCEEDED','FAILED','CANCELLED'].includes(job.status)?<ListAction label="同步任务状态" onPress={()=>void getTaskServices().taskCommandService.requestRefresh({maintenance:'force-next-slice'}).then(()=>setNotice('已请求查询，不会重新生成')).catch(e=>setError(e.message))}/>:null}
       {/CREDENTIAL|AUTH/.test(job.lastError?.code??job.error?.code??'')?<ListAction label="管理创作账号" onPress={()=>router.push({pathname:'/(tabs)/settings',params:{section:'accounts'}})}/>:null}
     </View> : null}
-    {draft ? <ListAction label="返回创作与结果" onPress={returnToDraft} /> : null}
-    {draft ? <ListAction label="查看完整创作历史" onPress={() => router.push({pathname:draft.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:draft.id}})} /> : null}
+    {projectId && planId ? <ListAction label="返回来源计划" onPress={()=>void returnToProject(router,{projectId,planId}).catch(()=>setError('来源项目读取失败'))}/> : null}
+    {draft ? <ListAction label="打开这次创作与完整历史" onPress={() => router.push({pathname:draft.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:draft.id}})} /> : null}
     <ListAction label="打开任务中心处理下载或异常" onPress={() => router.push('/(tabs)/tasks')} />
     {notice ? <Text style={s.muted}>{notice}</Text> : null}
     {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
