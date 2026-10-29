@@ -392,14 +392,14 @@ export function CreateForm({
       keyboardDismissMode="none"
     >
       {incomingPrompt ? <View style={styles.card}><Text>收到新的提示词，请选择如何带入。当前编辑内容已保留。</Text>{(['替换','追加','取消'] as const).map(action => <Pressable key={action} accessibilityRole="button" disabled={submitting || switching} style={styles.mediaButton} onPress={() => { if (action !== '取消') { const field = definition ? inputField(definition, 'prompt') : 'prompt'; setWorkflowValues(current => ({ ...current, [field]: action === '追加' ? [String(current[field] ?? ''), incomingPrompt].filter(Boolean).join('\n') : incomingPrompt })); editRevision.current++; } setIncomingPrompt(''); }}><Text>{action}</Text></Pressable>)}</View> : null}
-      {catalogLoading ? <ActivityIndicator accessibilityLabel="正在加载工作流" /> : !definition && !loadError ? <Pressable accessibilityRole="button" onPress={() => router.navigate({pathname:'/(tabs)/settings',params:{section:'workflows'}})} style={styles.mediaButton}><Text>暂无工作流，前往设置同步</Text></Pressable> : null}
+      {catalogLoading ? <ActivityIndicator accessibilityLabel="正在加载工作流" /> : !definition && !loadError ? <Pressable accessibilityRole="button" onPress={() => router.navigate({pathname:'/settings-panel',params:{section:'workflows'}})} style={styles.mediaButton}><Text>暂无工作流，前往设置同步</Text></Pressable> : null}
       <Text style={styles.title}>生成视频</Text>
       <Text style={styles.subtitle}>
         {loadError ?? (definition ? '描述画面、选择素材，然后生成你的视频。' : '正在加载工作流…')}
       </Text>
       {loadError ? <Pressable accessibilityRole="button" accessibilityLabel="重试加载工作流" onPress={() => setCatalogRevision(value => value + 1)} style={styles.mediaButton}><Text style={styles.mediaText}>重试加载工作流</Text></Pressable> : null}
       {submitting || switching ? <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator /><Text style={styles.help}>{submitting ? '正在提交，参数暂时锁定…' : '正在切换工作流…'}</Text></View> : null}
-      {settingsNotice ? <View style={styles.card}><Text accessibilityRole="alert" style={styles.help}>{settingsNotice}</Text><Pressable accessibilityRole="button" accessibilityLabel="前往设置配置生成" style={styles.mediaButton} onPress={() => router.navigate({pathname:'/(tabs)/settings',params:{section:'accounts'}})}><Text style={styles.mediaText}>前往设置</Text></Pressable></View> : null}
+      {settingsNotice ? <View style={styles.card}><Text accessibilityRole="alert" style={styles.help}>{settingsNotice}</Text><Pressable accessibilityRole="button" accessibilityLabel="前往设置配置生成" style={styles.mediaButton} onPress={() => router.navigate({pathname:'/settings-panel',params:{section:'accounts'}})}><Text style={styles.mediaText}>前往设置</Text></Pressable></View> : null}
       <WorkflowSelector definitions={records.map(registryRecordToDefinition)} selectedId={definition?.id} onSelect={id => void selectWorkflow(id)} disabled={submitting || switching || picking || loadingDraft || awaitingDraft || Boolean(appliedDraft && acknowledgedDraft !== appliedDraft)} />
       {alignmentNotices.map((notice, index) => <Text key={index} style={styles.help}>{notice}</Text>)}
       {handoffNotice ? <Text accessibilityLiveRegion="polite" style={styles.help}>{handoffNotice}</Text> : null}

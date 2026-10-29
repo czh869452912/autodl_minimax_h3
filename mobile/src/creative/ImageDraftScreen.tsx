@@ -205,7 +205,7 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
     </>:<Text style={s.muted}>从文字开始创作。V5 的底图支持图生图与局部重绘；Vibe 和 Precise Reference 不适用于 V5。</Text>}
   </View>:null;
   return <SafeAreaView edges={embedded?[]:['top','bottom','left','right']} style={s.screen}><KeyboardSurface style={{flex:1}}>
-    {!embedded?<View style={c.header}><IconAction label="返回" icon="arrow_back" disabled={busy || saving} onPress={()=>{if(!closePanel())router.canGoBack()?router.back():router.replace('/(tabs)/create');}} /><Text style={c.headerTitle}>图片创作</Text><Text numberOfLines={1} style={c.caption}>{activeInput?novelAiModelName(activeInput.model):'读取中…'}</Text><IconAction label="创作账号" icon="key" onPress={()=>router.push({pathname:'/(tabs)/settings',params:{section:'accounts'}})} /></View>:null}
+    {!embedded?<View style={c.header}><IconAction label="返回" icon="arrow_back" disabled={busy || saving} onPress={()=>{if(!closePanel())router.canGoBack()?router.back():router.replace('/(tabs)/create');}} /><Text style={c.headerTitle}>图片创作</Text><Text numberOfLines={1} style={c.caption}>{activeInput?novelAiModelName(activeInput.model):'读取中…'}</Text><IconAction label="创作账号" icon="key" onPress={()=>router.push({pathname:'/settings-panel',params:{section:'accounts'}})} /></View>:null}
     {conflict?<View style={c.notice}><Text style={s.error}>草稿已在其他入口更新，本页输入已保留。</Text><TextAction label="载入最新草稿" disabled={busy || saving} onPress={()=>Alert.alert('载入最新草稿','这会放弃本页尚未保存的修改。',[{text:'保留本页',style:'cancel'},{text:'载入最新',onPress:()=>void reload().catch(e=>setError(creativeError(e)))}])} /></View>:null}
     {error?<View style={c.notice}><Text accessibilityRole="alert" style={s.error}>{error}</Text>{dirty?<TextAction label="重试保存草稿" disabled={busy || saving} onPress={()=>void save()} />:null}</View>:null}
     <WorkbenchScope draft={draft} />
@@ -226,7 +226,7 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
       <Text accessibilityLiveRegion="polite" style={c.cost}>{saving?'正在保存输入…':dirty?'输入待保存':pending?'生成中可继续编辑下一张，完成后再提交':`${input.width} × ${input.height} · ${input.steps} 步 · ${input.seed===null?'随机 Seed':`Seed ${input.seed}`} · ${anlasEstimateLabel(estimateAnlas(activeInput??input,pricingUsage,Math.max(pricingClock,Date.now()),processing))}`}</Text>
     </View>:null}
     {importing&&input?<NovelAiImageImport image={importing} input={input} onClose={()=>setImporting(undefined)} onApply={patch=>{setUndoInput(input);update(patch);openEditor('prompt');}} onUseImage={async()=>{const result=await importCreativeImage(importing,draft?.project_id??undefined);if(result.status!=='completed')throw new Error('图片导入未完成');choose(result.value.versionId,'source');openEditor('references');}}/>:null}
-    {picking?<CreativeAssetPicker kind="image" projectId={draft?.project_id??undefined} onClose={()=>setPicking(undefined)} onChoose={async version=>choose(version.id,picking)} />:null}
+    {picking?<CreativeAssetPicker kind="image" purpose={picking==='mask'?'mask':'source'} target="当前图片创作" projectId={draft?.project_id??undefined} onClose={()=>setPicking(undefined)} onChoose={async version=>choose(version.id,picking)} />:null}
 
   </KeyboardSurface></SafeAreaView>;
 }

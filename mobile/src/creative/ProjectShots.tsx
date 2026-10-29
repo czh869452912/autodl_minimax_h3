@@ -55,7 +55,7 @@ export function ProjectShots({ projectId, archived = false, initialShotId, reque
     <Text accessibilityRole="header" style={{ color: COLORS.text, fontSize: 20, fontWeight: '700' }}>镜头清单</Text>
     {dirty ? <Text style={{ color: COLORS.textMuted }}>镜头修改尚未保存，请保存或取消编辑后继续制作。</Text> : null}
     {error ? <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{error}</Text> : null}
-    {choosing ? <CreativeAssetPicker kind={choosing.slot === 'selected_image' ? 'image' : 'video'} projectId={projectId} onClose={() => setChoosing(undefined)} onChoose={async v => {
+    {choosing ? <CreativeAssetPicker purpose="adopt" target={choosing.shot.title} kind={choosing.slot === 'selected_image' ? 'image' : 'video'} projectId={projectId} onClose={() => setChoosing(undefined)} onChoose={async v => {
       await command({ name: 'shot.selectOutput', payload: { id: choosing.shot.id, expectedRevision: choosing.shot.revision, slot: choosing.slot, versionId: v.id } });
       await refresh();
     }} /> : null}

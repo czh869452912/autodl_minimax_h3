@@ -39,7 +39,7 @@ jest.mock('./CreativeAccountPanel', () => ({ CreativeAccountPanel: () => null })
 jest.mock('./DraftHeading', () => ({ DraftHeading: () => null }));
 jest.mock('./CopySubmittedDraft', () => ({ CopySubmittedDraft: () => null }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn,mockFocus]) }));
-jest.mock('expo-router/react-navigation', () => ({ useNavigation: () => ({}), usePreventRemove: jest.fn() }));
+jest.mock('expo-router/react-navigation', () => ({ useNavigation: () => ({}), usePreventRemove: jest.fn(),useIsFocused:()=>true }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));
 beforeEach(()=>{jest.clearAllMocks();mockReviewed=false;mockAccountReady=true;mockFocus=0;mockPrevious=[];const definition=require('../workflows/definitions/autodl/minimax-h3-i2v-15s-v1.0.1.json');mockEntries=[{definition,record:{workflowId:definition.id,version:definition.version,contentHash:'hash'},reason:''}];mockDraft={id:'d',provider_id:'autodl',workflow_id:definition.id,state:'EDITING',revision:1,project_id:null,shot_id:null,target_asset_id:null,input_json:JSON.stringify({schemaVersion:1,prompt:'',resolution:RESOLUTION_OPTIONS[0],duration:5,seed:''})};});
 

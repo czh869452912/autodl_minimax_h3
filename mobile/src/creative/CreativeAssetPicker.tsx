@@ -10,7 +10,7 @@ import { MediaPreview } from './MediaPreview';
 import { TextAction } from './WorkbenchUI';
 import { COLORS } from '../ui/theme';
 
-export function CreativeAssetPicker({ kind, projectId, onChoose, onClose }: { kind: 'image' | 'video'|'audio'; projectId?: string; onChoose: (version: AssetVersion) => Promise<void>; onClose: () => void }) {
+export function CreativeAssetPicker({ kind, projectId, purpose, target, onChoose, onClose }: { kind: 'image' | 'video'|'audio'; projectId?: string;purpose?:'reference'|'source'|'mask'|'adopt';target?:string; onChoose: (version: AssetVersion) => Promise<void>; onClose: () => void }) {
   const [items, setItems] = useState<Array<{ title: string; version: AssetVersion }>>([]);
   const [query, setQuery] = useState('');
   const [all, setAll] = useState(!projectId);
@@ -42,6 +42,7 @@ export function CreativeAssetPicker({ kind, projectId, onChoose, onClose }: { ki
       .finally(()=>{if(active)setLoading(false);});
     return () => { active = false; };
   }, [scope, cursor, retry]);
+  const intent=purpose==='mask'?'作为重绘遮罩':purpose==='source'?'作为图生图原图':purpose==='adopt'?'采用为镜头成果':purpose==='reference'?'加入参考素材':'';
   const chosen = items.find(item => item.version.id === selected);
   const confirm = () => {
     if (lock.current || !chosen || waiting) return;
@@ -51,6 +52,7 @@ export function CreativeAssetPicker({ kind, projectId, onChoose, onClose }: { ki
   return <Modal visible animationType="slide" onRequestClose={() => { if (!busy) onClose(); }}><SafeAreaView style={s.screen}><KeyboardSurface style={{flex:1}}>
     <View style={{ paddingHorizontal: 20, paddingTop: 8, gap: 12 }}>
     <View style={s.row}><Text style={s.title}>{kind === 'image' ? '选择图片' : kind==='audio'?'选择音频':'选择视频'}</Text><TextAction label="取消" disabled={busy} onPress={onClose} /></View>
+    {intent?<Text style={s.muted}>{intent}{target?' · '+target:''}</Text>:null}
     <TextInput accessibilityLabel="搜索素材" placeholder="搜索素材名称" value={query} editable={!busy} onChangeText={setQuery} style={s.input} />
     {projectId ? <TextAction label={all ? '仅看本项目' : '从全部素材选择'} disabled={busy} onPress={() => setAll(!all)} /> : null}
     <Text style={s.muted}>{loading ? '正在读取素材…' : `点选画面后确认 · ${items.length} 个可用版本`}</Text>
@@ -63,6 +65,6 @@ export function CreativeAssetPicker({ kind, projectId, onChoose, onClose }: { ki
       </Pressable>}
       ListEmptyComponent={!loading ? <Text style={s.muted}>{query ? '没有匹配的可用版本，请调整搜索。' : `暂无可用${kind === 'image' ? '图片' : kind==='audio'?'音频':'视频'}。可先导入素材或生成候选。`}</Text> : null}
       ListFooterComponent={next ? <TextAction label="加载更多素材" disabled={busy || waiting} onPress={() => setCursor(next)} /> : null} />
-    <View style={s.footer}><Text style={s.muted}>{chosen ? `${chosen.title} · 版本 ${chosen.version.versionNo}` : '尚未选择素材'}</Text><ListAction label={busy ? '正在添加…' : kind === 'image' ? '使用所选图片' : kind==='audio'?'使用所选音频':'使用所选视频'} disabled={busy || waiting || !chosen} onPress={confirm} /></View>
+    <View style={s.footer}><Text style={s.muted}>{chosen ? `${chosen.title} · 版本 ${chosen.version.versionNo}` : '尚未选择素材'}</Text><ListAction label={busy ? '正在添加…' : intent || (kind === 'image' ? '使用所选图片' : kind==='audio'?'使用所选音频':'使用所选视频')} disabled={busy || waiting || !chosen} onPress={confirm} /></View>
   </KeyboardSurface></SafeAreaView></Modal>;
 }

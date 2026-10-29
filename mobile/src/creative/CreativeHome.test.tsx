@@ -46,7 +46,7 @@ test('creation records route workflow management to current settings',async()=>{
   await act(async()=>{tree=create(<CreativeHome/>);});
   await act(async()=>button(tree,'创作记录').props.onPress());
   await act(async()=>button(tree,'管理工作流').props.onPress());
-  expect(mockPush).toHaveBeenCalledWith({pathname:'/(tabs)/settings',params:{section:'workflows'}});
+  expect(mockPush).toHaveBeenCalledWith({pathname:'/settings-panel',params:{section:'workflows'}});
  }finally{act(()=>tree?.unmount());}
 });
 
@@ -108,5 +108,18 @@ test('a newer open request wins while an older import is pending',async()=>{
   await act(async()=>resolve({id:'old-result',provider_id:'novelai',state:'EDITING'}));
   expect(tree.root.findByProps({testID:'video-workbench'}).props.children).toBe('b');
   expect(consumed).toHaveBeenCalledTimes(1);
+ }finally{act(()=>tree?.unmount());}
+});
+
+
+test('a consumed request can be explicitly opened again without creating another draft',async()=>{
+ mockRows=[{id:'a',provider_id:'novelai',state:'EDITING',input_json:'{}'},{id:'b',provider_id:'autodl',state:'EDITING',input_json:'{}'}];
+ const request={kind:'draft' as const,draftId:'b',requestId:'same'};let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<CreativeHome openRequest={request}/>);});
+  await act(async()=>tree.update(<CreativeHome/>));
+  await act(async()=>button(tree,'图片').props.onPress());
+  await act(async()=>tree.update(<CreativeHome openRequest={request}/>));
+  expect(tree.root.findByProps({testID:'video-workbench'}).props.children).toBe('b');expect(mockExecute).not.toHaveBeenCalled();
  }finally{act(()=>tree?.unmount());}
 });

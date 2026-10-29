@@ -445,7 +445,7 @@ function StatusView({
         {message ?? '正在加载 Prompt 助手…'}
       </Text>
       {!loading ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="打开 LLM 设置" onPress={() => router.navigate({ pathname: '/(tabs)/settings', params: { section: 'assistant' } })} style={{ minHeight: 48, padding: 12, justifyContent: 'center' }}><Text style={{ color: COLORS.primaryActive }}>打开设置</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="打开 LLM 设置" onPress={() => router.navigate({ pathname: '/settings-panel', params: { section: 'assistant' } })} style={{ minHeight: 48, padding: 12, justifyContent: 'center' }}><Text style={{ color: COLORS.primaryActive }}>打开设置</Text></Pressable>
       ) : null}
     </View>
   );

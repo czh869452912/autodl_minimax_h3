@@ -15,24 +15,26 @@ import { prepareSettingsForSave, SettingsValidationError } from '../../src/setti
 import { AppIcon } from '../../src/ui/icons';
 import { COLORS, SPACING } from '../../src/ui/theme';
 
+import {useNavigation,usePreventRemove} from 'expo-router/react-navigation';
 import { usePageLayout } from '../../src/ui/adaptiveLayout';
 import { DisplayDiagnostics } from '../../src/settings/DisplayDiagnostics';
 
 type Settings = Awaited<ReturnType<typeof readSettings>>;
-export default function SettingsScreen() {
+export default function SettingsScreen({standalone=false}:{standalone?:boolean}={}) {
   const router=useRouter();
-  const { section } = useLocalSearchParams<{ section?: string }>();
+  const { section, requestId } = useLocalSearchParams<{ section?: string;requestId?:string }>();
+  const navigation=useNavigation();
   const normalizeSection=(value?:string)=>value==='legacy'?'accounts':value;
+  const [directEntry,setDirectEntry]=useState(standalone&&!!section);
   const [activeSection,setActiveSection]=useState(normalizeSection(section));
-  useEffect(()=>setActiveSection(normalizeSection(section)),[section]);
-  const back=()=>activeSection?setActiveSection(undefined):router.canGoBack()?router.back():router.navigate('/(tabs)/create');
-  useFocusEffect(useCallback(()=>{const sub=BackHandler.addEventListener('hardwareBackPress',()=>{if(!activeSection)return false;setActiveSection(undefined);return true;});return()=>sub.remove();},[activeSection]));
+  useEffect(()=>{setActiveSection(normalizeSection(section));setDirectEntry(standalone&&!!section);},[section,requestId,standalone]);
+
   const layout = usePageLayout();
   const scrollRef = useRef<ScrollView>(null);
   useEffect(() => { scrollRef.current?.scrollTo({ y: 0, animated: false }); }, [activeSection]);
   const [values, setValues] = useState<Settings>({ ...advancedDefaults, llmEndpoint: 'https://api.openai.com/v1', llmModel: 'gpt-4o-mini', llmApiKey: '', autoExportToGallery: true, keepPrivateCopy: true });
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof Settings, string>>>({});
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState(false),[savedNotice,setSavedNotice]=useState('');
   const saveLock = useRef(false);
   const [pendingDraft, setPendingDraft] = useState<Partial<Settings>>();
   const [draftError, setDraftError] = useState('');
@@ -54,6 +56,16 @@ export default function SettingsScreen() {
     void writeSettingsDraft(dirty ? values : undefined).then(() => { if (active) setDraftError(''); }).catch(() => { if (active) setDraftError('草稿保存失败，请保存设置后再退出'); });
     return () => { active = false; };
   }, [values, baseline, pendingDraft, dirty, draftReadError]);
+  const leave=async(action:()=>void)=>{
+    if(saveLock.current){setDraftError('正在保存，请稍后返回');return;}
+    try{if(dirty)await writeSettingsDraft(values);action();}catch{setDraftError('草稿保存失败，当前输入仍保留，请保存设置后再返回');}
+  };
+  const back=()=>{
+    if(activeSection&&!(directEntry)){setActiveSection(undefined);return;}
+    void leave(()=>router.canGoBack()?router.back():router.navigate('/(tabs)/create'));
+  };
+  usePreventRemove(dirty||saving,({data})=>{void leave(()=>navigation.dispatch(data.action));});
+  useFocusEffect(useCallback(()=>{const sub=BackHandler.addEventListener('hardwareBackPress',()=>{back();return true;});return()=>sub.remove();},[activeSection,directEntry,dirty,values,saving]));
   const update = (key: keyof Settings, value: string | boolean) => setValues(current => {
     const next = { ...current, [key]: value };
     if (key === 'llmModel' && !reasoningOptions(String(value)).some(option => option.value === (current.llmReasoningEffort ?? 'default'))) next.llmReasoningEffort = 'default';
@@ -65,19 +77,21 @@ export default function SettingsScreen() {
     try {
       const prepared = prepareSettingsForSave(values); setFieldErrors({});
       await saveSettings(prepared);
-      setValues(current => current === values ? prepared : current); setBaseline(prepared);
+      setValues(current => current === values ? prepared : current); setBaseline(prepared);setSavedNotice('设置已保存，返回后生效');
     } catch (error) { if (error instanceof SettingsValidationError) { setFieldErrors(Object.fromEntries(error.fields.map(field => [field, error.message]))); setAdvancedOpen(true); setActiveSection(error.fields.some(field => field.startsWith('llm')) ? 'assistant' : 'storage'); } else Alert.alert('保存失败', error instanceof Error ? error.message : '无法保存设置'); }
     finally { saveLock.current = false; setSaving(false); }
   };
-  if (!baseline) return <View style={styles.container}>{loadError ? <Pressable accessibilityRole="button" accessibilityLabel="重试读取设置" onPress={() => setLoadAttempt(value => value + 1)} style={styles.saveButton}><Text style={styles.saveText}>设置读取失败，点击重试</Text></Pressable> : <ActivityIndicator accessibilityLabel="正在读取设置" />}</View>;
-  return <CompactWorkbench><KeyboardSurface style={styles.container}><View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,borderBottomWidth:0.5,borderBottomColor:COLORS.border}}><IconAction label={activeSection?"返回设置分类":"返回工作台"} icon="arrow_back" onPress={back}/><Text style={{fontSize:16,fontWeight:'600',color:COLORS.text}}>{activeSection?({accounts:'创作账号',assistant:'助手模型',workflows:'工作流',storage:'存储与导出',playback:'视频播放',advanced:'显示与诊断'} as Record<string,string>)[activeSection]:'设置'}</Text></View><ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={[styles.content, layout.contentStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+  if (!baseline) return <View style={styles.container}><TextAction label="返回来源" onPress={back}/>{loadError ? <Pressable accessibilityRole="button" accessibilityLabel="重试读取设置" onPress={() => setLoadAttempt(value => value + 1)} style={styles.saveButton}><Text style={styles.saveText}>设置读取失败，点击重试</Text></Pressable> : <ActivityIndicator accessibilityLabel="正在读取设置" />}</View>;
+  return <CompactWorkbench><KeyboardSurface style={styles.container}><View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,borderBottomWidth:0.5,borderBottomColor:COLORS.border}}><IconAction label={activeSection&&!(directEntry)?"返回设置分类":"返回来源"} icon="arrow_back" onPress={back}/><Text style={{fontSize:16,fontWeight:'600',color:COLORS.text}}>{activeSection?({accounts:'创作账号',assistant:'助手模型',workflows:'工作流',storage:'存储与导出',playback:'视频播放',advanced:'显示与诊断'} as Record<string,string>)[activeSection]:'设置'}</Text></View><ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={[styles.content, layout.contentStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
     {draftReadError ? <View style={styles.card}><Text accessibilityRole="alert" style={{ color: COLORS.danger }}>未保存草稿无法读取，已隔离；当前使用已保存设置。</Text><Pressable accessibilityRole="button" accessibilityLabel="丢弃无法读取的草稿" style={styles.resetAdvanced} onPress={() => { void writeSettingsDraft().then(() => { setDraftReadError(false); setDraftError(''); }).catch(() => setDraftError('无法丢弃草稿，请重试；已保存设置不受影响')); }}><Text>丢弃无法读取的草稿</Text></Pressable></View> : null}
     {pendingDraft ? <View style={styles.card}><Text>发现未保存的设置草稿</Text><Pressable accessibilityRole="button" style={styles.resetAdvanced} onPress={() => { setValues(current => ({ ...current, ...pendingDraft })); setPendingDraft(undefined); }}><Text>恢复未保存更改</Text></Pressable><Pressable accessibilityRole="button" style={styles.resetAdvanced} onPress={() => setPendingDraft(undefined)}><Text>丢弃草稿，使用已保存设置</Text></Pressable></View> : null}
+    {savedNotice?<Text accessibilityLiveRegion="polite" style={{color:COLORS.textMuted}}>{savedNotice}</Text>:null}
     {draftError ? <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{draftError}</Text> : null}
 
+    {directEntry?<TextAction label="全部设置" onPress={()=>{setDirectEntry(false);setActiveSection(undefined);}}/>:null}
     {!activeSection?<>
       <Text style={styles.groupLabel}>连接与能力</Text><View style={styles.group}>
-      {([['accounts','创作账号','NovelAI · AutoDL'],['assistant','助手模型','提示词与创作辅助'],['workflows','工作流','已安装能力与同步']] as const).map(([key,label,value])=><SettingRow key={key} label={label} value={value} onPress={()=>setActiveSection(key)}/>)}
+      {([['accounts','创作账号','NovelAI · AutoDL'],['assistant','助手模型','提示词与创作辅助'],['workflows','工作流','已安装能力与同步']] as const).map(([key,label,value])=><SettingRow key={key} label={label} value={value} onPress={()=>{setDirectEntry(false);setActiveSection(key);}}/>)}
       </View><Text style={styles.groupLabel}>使用偏好</Text><View style={styles.group}>
       {([['storage','存储与导出','保存、备份与恢复'],['playback','视频播放','解码模式'],['advanced','显示与诊断','布局与运行信息']] as const).map(([key,label,value])=><SettingRow key={key} label={label} value={value} onPress={()=>setActiveSection(key)}/>)}
       </View><Text style={styles.help}>密钥加密保存在本机，账号连接与工作流配置分开管理。</Text>

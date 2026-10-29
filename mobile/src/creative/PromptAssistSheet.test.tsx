@@ -71,3 +71,14 @@ test('stop cancels the request and never exposes its late proposal',async()=>{
  await act(async()=>finish({content:'late',proposal:{summary:'late',prompt:'late'}}));expect(button(tree,'采用全部修改')).toBeUndefined();
  }finally{act(()=>tree?.unmount());}
 });
+
+
+test('opening model settings keeps discussion input and the current proposal mounted',async()=>{
+ const close=jest.fn();let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<PromptAssistSheet sessionId="settings-return" prompt="scene" kind="video" onApply={()=>{}} onClose={close}/>);});
+  act(()=>tree.root.findByProps({accessibilityLabel:'提示词修改方向'}).props.onChangeText('Keep this idea'));
+  act(()=>button(tree,'助手模型设置').props.onPress());
+  expect(close).not.toHaveBeenCalled();expect(tree.root.findByProps({accessibilityLabel:'提示词修改方向'}).props.value).toBe('Keep this idea');
+ }finally{act(()=>tree?.unmount());}
+});

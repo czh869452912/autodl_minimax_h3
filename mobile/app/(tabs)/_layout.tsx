@@ -18,7 +18,7 @@ export default function TabsLayout() {
         <Text style={{ flex: 1, color: COLORS.text, fontSize: 15, fontWeight: '700' }}>{activeId === 'agent' ? '' : ({assets:'素材',projects:'项目',tasks:'任务',settings:'设置',gallery:'历史作品'} as Record<string,string>)[activeId]}</Text>
         {!auxiliary ? <Pressable accessibilityRole="button" accessibilityLabel="打开素材库" style={{ minHeight: 48, minWidth: 48, alignItems:'center', justifyContent:'center' }} onPress={() => router.navigate('/(tabs)/assets')}><AppIcon name="grid_view" size={22} /></Pressable> : null}
         <TaskInboxButton/>
-        <Pressable accessibilityRole="button" accessibilityLabel="打开设置" style={{ minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center' }} onPress={() => router.navigate('/(tabs)/settings')}><AppIcon name="settings" size={22} /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="打开设置" style={{ minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center' }} onPress={() => router.navigate('/settings-panel')}><AppIcon name="settings" size={22} /></Pressable>
       </View>:null}
       <Tabs
         initialRouteName="create"

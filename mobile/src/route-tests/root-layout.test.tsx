@@ -16,7 +16,7 @@ const mockRecoveryScreen = jest.fn((_props: { diagnostic: string; backupNames?: 
 let mockNetworkListener: ((state: { isConnected?: boolean; isInternetReachable?: boolean }) => void) | undefined;
 const mockNetworkRemove = jest.fn();
 jest.mock('../storage/databaseClient', () => ({ getDatabase: jest.fn(() => mockDatabase), getDatabaseStartupState: () => mockStartupState() }));
-jest.mock('expo-router', () => ({ Stack: (props: { children?: React.ReactNode }) => <>{props.children}</> }));
+jest.mock('expo-router', () => ({ Stack: Object.assign((props: { children?: React.ReactNode }) => <>{props.children}</>,{Screen:()=>null}) }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: (props: { children?: React.ReactNode }) => <>{props.children}</> }));
 jest.mock('../tasks/background', () => ({ registerBackgroundSync: jest.fn(async () => undefined), backgroundRegistration: { resume: jest.fn(), pause: jest.fn(), stop: jest.fn() }, unusedOldSync: jest.fn(async () => undefined), resumeTaskSyncAfterReconnect: jest.fn(async () => undefined) }));
 jest.mock('expo-network', () => ({ addNetworkStateListener: jest.fn((listener) => { mockNetworkListener = listener; return { remove: mockNetworkRemove }; }) }));

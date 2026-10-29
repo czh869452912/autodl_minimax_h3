@@ -1,6 +1,8 @@
+jest.mock('expo-router/react-navigation',()=>({useNavigation:()=>({dispatch:jest.fn()}),usePreventRemove:jest.fn()}));
+const mockBack=jest.fn();let mockRequestId='first';
 let mockSection:string|undefined='assistant';
 beforeEach(()=>{mockSection='assistant';});
-jest.mock('expo-router', () => ({ useRouter:()=>({back:jest.fn(),canGoBack:()=>true,navigate:jest.fn()}), useLocalSearchParams: () => ({section:mockSection}), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
+jest.mock('expo-router', () => ({ useRouter:()=>({back:mockBack,canGoBack:()=>true,navigate:jest.fn()}), useLocalSearchParams: () => ({section:mockSection,requestId:mockRequestId}), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { Alert, Linking, ScrollView, Text } from 'react-native';
@@ -204,4 +206,33 @@ it.each(['{broken', '{"llmApiKey":42}', '{"futureSetting":"new"}'])('isolates an
     act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='返回设置分类' && typeof n.props.onPress==='function')[0].props.onPress());
     expect(tree.root.findAllByProps({accessibilityLabel:'LLM API Key'})).toHaveLength(0);
   }finally{act(()=>tree?.unmount());}
+});
+
+
+it('direct settings return to the source while category navigation returns to categories, including repeated section requests',async()=>{
+ mockBack.mockClear();mockSection='assistant';mockRequestId='first';
+ let tree!:ReturnType<typeof create>;
+ const press=(label:string)=>tree.root.findAll(n=>n.props.accessibilityLabel?.startsWith(label)&&typeof n.props.onPress==='function')[0].props.onPress();
+ try{
+  await act(async()=>{tree=create(<SettingsScreen standalone/>);});
+  await act(async()=>press('返回来源'));expect(mockBack).toHaveBeenCalledTimes(1);
+  act(()=>press('全部设置'));act(()=>press('助手模型'));
+  act(()=>press('返回设置分类'));expect(mockBack).toHaveBeenCalledTimes(1);
+  mockRequestId='second';await act(async()=>tree.update(<SettingsScreen standalone/>));
+  expect(tree.root.findAllByProps({accessibilityLabel:'LLM 模型'}).length).toBeGreaterThan(0);
+  await act(async()=>press('返回来源'));expect(mockBack).toHaveBeenCalledTimes(2);
+ }finally{act(()=>tree?.unmount());}
+});
+
+
+it('blocks returning when an unsaved settings draft cannot be persisted',async()=>{
+ const secure=require('expo-secure-store');mockBack.mockClear();let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<SettingsScreen standalone/>);});
+  secure.setItemAsync.mockRejectedValue(new Error('disk full'));
+  await act(async()=>tree.root.findByProps({accessibilityLabel:'LLM 模型'}).props.onChangeText('changed'));
+  await act(async()=>tree.root.findAll(n=>n.props.accessibilityLabel==='返回来源'&&typeof n.props.onPress==='function')[0].props.onPress());
+  expect(mockBack).not.toHaveBeenCalled();expect(tree.root.findByProps({accessibilityLabel:'LLM 模型'}).props.value).toBe('changed');
+  expect(JSON.stringify(tree.toJSON())).toContain('草稿保存失败');
+ }finally{secure.setItemAsync.mockResolvedValue(undefined);act(()=>tree?.unmount());}
 });

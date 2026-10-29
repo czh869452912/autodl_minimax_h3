@@ -55,7 +55,7 @@ export default function CreativeTask() {
       {reviewed?<Text style={s.muted}>已完成本次核查，可返回工作台调整输入并重新生成。原任务结果仍待确认。</Text>:null}
       </>:null}
       {job.providerHandle&&!['SUCCEEDED','PARTIAL_SUCCEEDED','FAILED','CANCELLED'].includes(job.status)?<ListAction label="同步任务状态" onPress={()=>void getTaskServices().taskCommandService.requestRefresh({maintenance:'force-next-slice'}).then(()=>setNotice('已请求查询，不会重新生成')).catch(e=>setError(e.message))}/>:null}
-      {/CREDENTIAL|AUTH/.test(job.lastError?.code??job.error?.code??'')?<ListAction label="管理创作账号" onPress={()=>router.push({pathname:'/(tabs)/settings',params:{section:'accounts'}})}/>:null}
+      {/CREDENTIAL|AUTH/.test(job.lastError?.code??job.error?.code??'')?<ListAction label="管理创作账号" onPress={()=>router.push({pathname:'/settings-panel',params:{section:'accounts'}})}/>:null}
     </View> : null}
     {projectId && planId ? <ListAction label="返回来源计划" onPress={()=>void returnToProject(router,{projectId,planId}).catch(()=>setError('来源项目读取失败'))}/> : null}
     {draft ? <ListAction label="打开这次创作与完整历史" onPress={() => router.push({pathname:draft.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:draft.id}})} /> : null}

@@ -39,7 +39,7 @@ export function CreativeHome({openRequest,onRequestConsumed,opening=false}:{open
   const lock=useRef(false),leave=useRef<()=>Promise<boolean>>(async()=>true),activeRef=useRef(active);activeRef.current=active;
   const latestRequest=useRef(openRequest);latestRequest.current=openRequest;
   const attempted=useRef('');
-  const handled=useRef(new Set<string>()),[requestAttempt,setRequestAttempt]=useState(0),[notice,setNotice]=useState('');
+  const [requestAttempt,setRequestAttempt]=useState(0),[notice,setNotice]=useState('');
   const navigation=useMemo(()=>({register:(guard:()=>Promise<boolean>)=>{leave.current=guard;return()=>{if(leave.current===guard)leave.current=async()=>true;};}}),[]);
   const refresh=async()=>{const rows=await creativeService().drafts();setDrafts(rows);return rows;};
   useEffect(()=>{let live=true;void readCreativeIdea().then(value=>{if(live){setIdea(value);setReady(true);}}).catch(()=>{if(live)setError('工作区恢复失败，请重试');});return()=>{live=false;};},[]);
@@ -65,11 +65,11 @@ export function CreativeHome({openRequest,onRequestConsumed,opening=false}:{open
   };
   const chooseMode=(mode:WorkbenchMode)=>{if(mode===idea.mode)return;void change(async()=>{const rows=await refresh(),restored=await recentWorkbenchDraft(mode,rows),row=restored??await createDraft(mode);const next=restored?{...idea,mode}:{...idea,mode,[mode]:''};await writeCreativeIdea(next);setActive(old=>({...old,[mode]:row}));setIdea(next);});};
   useEffect(()=>{
-    if(!ready||!openRequest||lock.current)return;
+    if(!openRequest){attempted.current='';return;}
+    if(!ready||lock.current)return;
     const attempt=`${openRequest.requestId}:${requestAttempt}`;
     if(attempted.current===attempt)return;
     attempted.current=attempt;
-    if(handled.current.has(openRequest.requestId)){onRequestConsumed?.();return;}
     void change(async()=>{
       const request=openRequest;
       const row=request.kind==='legacy'?await importLegacyCreativeDraft(request.legacyId):request.kind==='draft'?await creativeService().draft(request.draftId):request.kind==='new'?await createDraft(request.mode,`open.${request.requestId}`):await recentWorkbenchDraft(request.mode,await refresh())??await createDraft(request.mode,`open.${request.requestId}`);
@@ -78,7 +78,7 @@ export function CreativeHome({openRequest,onRequestConsumed,opening=false}:{open
       const mode:WorkbenchMode=row.provider_id==='novelai'?'image':'video';
       await writeCreativeIdea({...idea,mode});setIdea(old=>({...old,mode}));setActive(old=>({...old,[mode]:row}));
       if(request.kind==='legacy')setNotice('提示词、参数与素材已带入独立视频草稿，请核对后生成。未自动绑定项目或镜头。');
-      handled.current.add(request.requestId);if(latestRequest.current?.requestId===request.requestId)onRequestConsumed?.();
+      if(latestRequest.current?.requestId===request.requestId)onRequestConsumed?.();
     });
   },[ready,openRequest?.requestId,requestAttempt,busy]);
   const mode=idea.mode,current=active[mode];
@@ -86,7 +86,7 @@ export function CreativeHome({openRequest,onRequestConsumed,opening=false}:{open
   const coverKey=records?groups.slice(0,recordLimit).map(g=>g.draft.target_asset_id).filter(Boolean).join('|'):'';
   useEffect(()=>{let live=true;if(coverKey)void creativeService().latestVersions(coverKey.split('|')).then(rows=>{if(live)setCovers(Object.fromEntries(rows.map(v=>[v.assetId,v])));}).catch(()=>undefined);return()=>{live=false;};},[coverKey,drafts]);
   return <CompactWorkbench><View style={s.screen}>
-    <View style={{flexDirection:'row',alignItems:'center',gap:4,paddingHorizontal:8,borderBottomWidth:1,borderBottomColor:COLORS.border}}><WorkbenchModeSwitcher mode="create" disabled={busy || !ready} onSelect={id=>void change(async()=>{router.navigate(`/(tabs)/${id}`);})}/><View style={{width:112,flexShrink:1}}><SegmentedChoices singleRow label="创作类型" options={[{id:'image',label:'图片'},{id:'video',label:'视频'}]} value={mode} disabled={!ready || busy} onChange={chooseMode} /></View><View style={{flex:1}}/><IconAction label="新建创作" icon="add" disabled={busy || !ready} onPress={()=>void change(async()=>{const row=await createDraft(mode);setActive(old=>({...old,[mode]:row}));})} /><IconAction label="创作记录" icon="grid_view" onPress={()=>{setRecords(true);void creativeService().creationRecords().then(setRecordGroups).catch(()=>setError('创作记录读取失败'));}} /><TaskInboxButton beforeOpen={async()=>{if(lock.current)return false;let saved=false;try{saved=await leave.current();}catch{}if(!saved)setError('请等待输入保存，或先处理工作区中的错误');return saved;}}/><IconAction label="打开设置" icon="settings" onPress={()=>void change(async()=>{router.push('/(tabs)/settings');})} /></View>
+    <View style={{flexDirection:'row',alignItems:'center',gap:4,paddingHorizontal:8,borderBottomWidth:1,borderBottomColor:COLORS.border}}><WorkbenchModeSwitcher mode="create" disabled={busy || !ready} onSelect={id=>void change(async()=>{router.navigate(`/(tabs)/${id}`);})}/><View style={{width:112,flexShrink:1}}><SegmentedChoices singleRow label="创作类型" options={[{id:'image',label:'图片'},{id:'video',label:'视频'}]} value={mode} disabled={!ready || busy} onChange={chooseMode} /></View><View style={{flex:1}}/><IconAction label="新建创作" icon="add" disabled={busy || !ready} onPress={()=>void change(async()=>{const row=await createDraft(mode);setActive(old=>({...old,[mode]:row}));})} /><IconAction label="创作记录" icon="grid_view" onPress={()=>{setRecords(true);void creativeService().creationRecords().then(setRecordGroups).catch(()=>setError('创作记录读取失败'));}} /><TaskInboxButton beforeOpen={async()=>{if(lock.current)return false;let saved=false;try{saved=await leave.current();}catch{}if(!saved)setError('请等待输入保存，或先处理工作区中的错误');return saved;}}/><IconAction label="打开设置" icon="settings" onPress={()=>void change(async()=>{router.push('/settings-panel');})} /></View>
     {notice?<Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text>:null}
     {openRequest && error?<View><TextAction label="重试打开创作" onPress={()=>setRequestAttempt(n=>n+1)}/><TextAction label="保留原画布" onPress={()=>{setError('');onRequestConsumed?.();}}/></View>:null}
     {error?<View style={{paddingHorizontal:12,paddingVertical:4}}><Text accessibilityRole="alert" style={s.error}>{error}</Text>{!current?<TextAction label="重试恢复工作区" onPress={()=>{setReady(false);void readCreativeIdea().then(value=>{setIdea(value);setError('');setReady(true);}).catch(()=>setError('工作区恢复失败'));}} />:null}</View>:null}
@@ -100,7 +100,7 @@ export function CreativeHome({openRequest,onRequestConsumed,opening=false}:{open
       <View style={{flexDirection:'row',flexWrap:'wrap',gap:12}}>
         <TextAction label="项目" onPress={()=>void change(async()=>{setRecords(false);router.push('/(tabs)/projects');})}/>
         <TextAction label="素材库" onPress={()=>void change(async()=>{setRecords(false);router.push('/(tabs)/assets');})}/>
-        <TextAction label="管理工作流" onPress={()=>void change(async()=>{setRecords(false);router.push({pathname:"/(tabs)/settings",params:{section:"workflows"}});})}/>
+        <TextAction label="管理工作流" onPress={()=>void change(async()=>{setRecords(false);router.push({pathname:"/settings-panel",params:{section:"workflows"}});})}/>
       </View>
     </ParameterSheet>:null}
 
