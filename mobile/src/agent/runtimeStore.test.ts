@@ -548,3 +548,14 @@ it('does not let a queued delta debounce bypass the disk failure retry interval'
     expect(writes).toBe(2);
   } finally { await registry.disposeAll(); jest.useRealTimers(); }
 });
+
+
+it('flushAll reports failed durable saves without disposing the live runtime',async()=>{
+ let fail=true;const persistence={save:async()=>{if(fail)throw new Error('full');}} as unknown as LocalThreadStore;
+ const registry=createPromptRuntimeRegistry(()=>fakeAgent() as never),runtime=registry.ensure(config,snapshot('flush-fail'),persistence);
+ try{
+  (runtime.agent as any).emitMessages([{id:'a',role:'assistant',content:'keep'}],{});
+  await expect(registry.flushAll()).rejects.toThrow('full');expect(runtime.disposed()).toBe(false);
+  fail=false;await expect(registry.flushAll()).resolves.toBeUndefined();
+ }finally{fail=false;await registry.disposeAll();}
+});

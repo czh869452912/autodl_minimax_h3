@@ -1,3 +1,4 @@
+import { createAgentRuntimeAdapter } from './agentRuntimeAdapter';
 import { CopilotChat } from '@copilotkit/react-native';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -5,7 +6,7 @@ import { getDatabase } from '../storage/databaseClient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { readSettings } from '../settings/storage';
 import { COLORS } from '../ui/theme';
-import { LocalCopilotKitProvider, createLocalCopilotKitCore } from './LocalCopilotKitProvider';
+import { LocalCopilotKitProvider } from './LocalCopilotKitProvider';
 import { createAgentId } from './submissionCommands';
 import { promptRuntimeRegistry } from './runtimeStore';
 import {
@@ -361,6 +362,7 @@ function AgentSession({
     () => promptRuntimeRegistry.ensure(config, snapshot, threadStore),
     [config, snapshot.threadId, threadStore],
   );
+  const adapter = useMemo(() => createAgentRuntimeAdapter(runtime), [runtime]);
   const agent = runtime.agent;
   const liveSnapshot = useSyncExternalStore(runtime.subscribeView, runtime.getViewSnapshot, runtime.getViewSnapshot);
   const [isVisible, setVisible] = useState(false);
@@ -370,11 +372,11 @@ function AgentSession({
     return () => { subscription.remove(); setVisible(false); };
   }, []));
   useEffect(() => {
-    const unsubscribe = runtime.subscribe((event) => {
+    const unsubscribe = adapter.subscribe((event) => {
       if (event.type === 'error') setNotice(event.message);
     });
     return unsubscribe;
-  }, [runtime]);
+  }, [adapter]);
   return (
     <LocalCopilotKitProvider
       agent={agent}
@@ -400,23 +402,17 @@ function AgentSession({
           persistentNotice={Boolean(persistenceIssue)} notice={persistenceIssue ?? operationIssue ?? notice}
           runIssue={runIssue}
           onRunIssueChange={setRunIssue}
+          onCancel={adapter.cancel}
           onAccept={async input => {
             const runId = createAgentId();
-            const receipt = await runtime.accept({ id: input.id, runId, draftRevision: input.draftRevision, message: { id: `user-${input.id}`, role: 'user', content: input.text, attachments: input.attachments } as never });
-            if (runtime.disposed() || receipt.executionReady === false) return;
-            void createLocalCopilotKitCore(agent).runAgent({ agent, runId }).catch(reason => setRunIssue({ kind: 'error', runId, message: reason instanceof Error ? reason.message : '运行失败' }));
+            const handle = await adapter.start({ id: input.id, runId, draftRevision: input.draftRevision, message: { id: `user-${input.id}`, role: 'user', content: input.text, attachments: input.attachments } as never });
+            void handle.completion.catch(reason => setRunIssue({ kind: 'error', runId, message: reason instanceof Error ? reason.message : '运行失败' }));
           }}
           onRetry={async (runId) => {
             setRunIssue(null);
             try {
-              agent.prepareRetry(runId);
-              const retry = agent.getPreparedRetry();
-              const message = agent.messages.find(item => item.id === retry?.userMessageId);
-              if (!message) throw new Error('没有可重试的用户消息');
-              const nextRunId = createAgentId();
-              const receipt = await runtime.accept({ id: createAgentId(), runId: nextRunId, draftRevision: -1, message, retryOf: retry?.retryOf });
-              if (runtime.disposed() || receipt.executionReady === false) return;
-              await createLocalCopilotKitCore(agent).runAgent({ agent, runId: nextRunId });
+              const handle = await adapter.retry(runId);
+              await handle.completion;
             } catch (reason) {
               setRunIssue({
                 kind: 'error',

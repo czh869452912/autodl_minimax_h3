@@ -88,6 +88,7 @@ export function PromptAssistantUi({
   onRunIssueChange = () => undefined,
   onRetry = async () => undefined,
   onAccept,
+  onCancel,
   onSearchHistory,
   onLoadMoreHistory,
   transcript,
@@ -109,6 +110,7 @@ export function PromptAssistantUi({
   runIssue?: RunIssue | null;
   onRunIssueChange?: (issue: RunIssue | null) => void;
   onRetry?: (runId?: string) => Promise<void>;
+  onCancel?:()=>void;
   onAccept?: (input: { id: string; text: string; attachments: unknown[]; draftRevision: number }) => Promise<void>;
   transcript?: readonly unknown[];
   transcriptRevision?: number;
@@ -384,7 +386,7 @@ export function PromptAssistantUi({
               onOpenVersions={versions.length?()=>setVersionsOpen(true):undefined}
               onCancel={() => {
                 if (!isRunning) return;
-                agent.abortRun?.();
+                if(onCancel)onCancel();else agent.abortRun?.();
                 onRunIssueChange({ kind: 'aborted', message: '已停止生成' });
               }}
               isRunning={isRunning}

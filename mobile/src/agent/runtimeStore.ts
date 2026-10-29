@@ -407,7 +407,9 @@ export function createPromptRuntimeRegistry(
       if (runtimes.get(threadId) === entry) runtimes.delete(threadId);
     },
     async flushAll(): Promise<void> {
-      await Promise.all([...runtimes.values()].map(entry => entry.runtime.flush()));
+      const results=await Promise.all([...runtimes.values()].map(entry => entry.runtime.flush()));
+      const failed=results.find(result=>result.kind==='failed');
+      if(failed?.kind==='failed')throw failed.error;
     },
     async disposeAll(): Promise<void> {
       const entries = [...runtimes.values()];
