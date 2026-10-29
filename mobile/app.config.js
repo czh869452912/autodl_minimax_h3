@@ -4,7 +4,7 @@ module.exports = ({ config }) => {
     ...config,
     name: 'AutoDL H3 测试版',
     scheme: 'autodlh3-beta',
-    version: `${config.version}-beta.22`,
+    version: `${config.version}-beta.23`,
     android: { ...config.android, package: 'com.example.autodlh3.beta' },
   };
 };

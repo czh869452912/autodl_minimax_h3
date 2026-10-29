@@ -199,3 +199,14 @@
 - 双 ARM 手机 APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.22-android.apk`，169076326 字节，最低 Android 8.0。
 - SHA-256：`278AA7D23376A5FED589646C122EEE28A3E57790122E937DB3A4D9F0CF0B0AB2`。
 - 包名、版本、双 ARM、签名和 16KB ZIP 对齐校验通过；证书与 beta.21 一致，可覆盖升级。校验报告 `build/phone-beta/beta22-verification.json`。手机分发包未安装到真实手机。
+
+## 2026-10-29 · beta.23 导航闭环与本地技能
+
+- 版本 `1.5.0-preview.4-beta.23`，versionCode 62；包含本轮 b80d8621 至 8595a825 的生产调整，文档收口 2d090a7d。
+- 修复精确结果版本、旧任务产物范围、旧交接转换、工作台输入保护、镜头返回、项目/提案定位及设置工具恢复；增加最小运行适配层、本地文本技能导入/启用/固定快照/撤销，强化计划依赖及全部步骤完成条件。
+- 数据库由 v28 升至 v29，迁移前自动备份；技能版本与运行引用包含在完整本地备份中。降级旧 APK 不能直接写入新数据库。DeepAgents 仍为 1.13.2；隔离的 1.16.0 与 3D 实验没有进入手机包。
+- 功能基线：全量 282 组、1760 项通过，原有 1 组/4 项跳过；TypeScript 与同源码 x86_64 APK/模拟器验证通过，详情见 [本轮调整验收](reviews/2026-10-29-research-adoption-and-adjustment-plan.md)。本次只递增测试版身份并打包，没有重复收费生成。
+- 双 ARM 手机 APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.23-android.apk`，169249662 字节，最低 Android 8.0。
+- SHA-256：`21AAC04EFD4A81AC565DA0732E10A74C160051EABBFC10F8443FB35618178E4A`。
+- 最终包的包名/版本、独立协议与 FileProvider、非 debuggable、禁止明文/系统备份、嵌入 Expo 身份、Hermes 字节码、双 ARM、v2 签名、16 KB ZIP 对齐及 arm64 ELF 对齐通过；86 个 native libraries 已检查，证书与 beta.22 一致，可覆盖升级测试版。32 位 ABI 不套用 64 位的 16 KB ELF 门槛，参见 [Android 官方说明](https://developer.android.com/guide/practices/page-sizes)。
+- 校验报告 `build/phone-beta/beta23-verification.json`；构建日志 `build/phone-beta23-build.log`。ARM 分发包未安装到真实手机，未推送或发布远端 Release。
