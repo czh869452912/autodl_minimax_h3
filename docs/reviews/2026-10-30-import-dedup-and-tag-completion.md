@@ -36,3 +36,5 @@ Android 17 x86_64 模拟器、同源码 debug 构建：
 - 未执行收费生成；原模拟器数据库已恢复并核对 SHA-256，无 WAL 遗留。ARM 手机及不同输入法组合仍需实机验收。
 
 证据：`build/tags-inserted-marker.xml`、`build/tags-scroll-selected.xml`、`build/tags-existing-comma.xml`、`build/tags-scrolled-more.png`、`build/tags-assets-deduplicated.png`。
+
+最终回归：Jest 288 组 / 1797 项通过，原有 1 组 / 4 项跳过；TypeScript 通过。日志 `build/tags-final-tests.log`、`build/tags-final-typecheck.log`。素材去重提交 `2d272081`，标签与原生输入修复提交 `01bf5227`。

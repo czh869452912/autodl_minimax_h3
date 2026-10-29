@@ -223,3 +223,14 @@
 - SHA-256：F2A32B0417198EBFC251723274646DE41743B934A10B6339B0CDDB4BA09E463B。
 - 包名/版本、独立协议/FileProvider、非 debuggable、禁止明文及系统备份、嵌入 Expo 身份、Hermes、双 ARM、86 个原生库、v2 签名、16 KB ZIP 和 arm64 ELF 对齐通过。签名与 beta.23 相同，可覆盖升级测试版；未推送或发布远端。
 - 日志与校验：build/phone-beta24-build.log、build/phone-beta/beta24-verification.json、build/followup-final-tests.log、build/followup-final-typecheck.log、build/followup-device-verification.json。
+
+## 2026-10-30 · beta.25 素材去重与标签补全
+
+- 版本 `1.5.0-preview.4-beta.25`，versionCode 64；功能提交 `2d272081`、`01bf5227`。
+- 相同类型、相同原件的独立外部导入复用素材与真实文件；历史重复项归并展示，保留旧引用。导入到不同项目只增加关联，不覆盖用户编辑的资料。
+- 标签候选带滚动条，最多 40 项；本地支持多词、词中前缀、包含、别名和现有翻译匹配。修复补全后光标偏移及吞掉右侧文本，兼容已有逗号和权重闭合。
+- 全量 288 组 / 1797 项通过，原有 1 组 / 4 项跳过；TypeScript 通过。Android 17 x86_64 模拟器验证滚动选择第八项、插入后继续输入的光标落点、保留后续文本和历史音频去重显示；原数据库已恢复并核对 SHA-256。详见 [实现与验收记录](reviews/2026-10-30-import-dedup-and-tag-completion.md)。
+- 双 ARM APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.25-android.apk`，186,176,021 字节，最低 Android 8.0。新版词库增加约 23 MB 未压缩体积，APK 比 beta.24 增加约 16.9 MB。
+- SHA-256：`B926F0BC0692AE65BE42210CEF36FBDB51ED7B00CB3B623283D091EEF310DB6E`。
+- 最终包名/版本、独立协议/FileProvider、非 debuggable、禁止明文及系统备份、嵌入 Expo 身份、Hermes、双 ARM、86 个原生库、v2 签名、16 KB ZIP 和 arm64 ELF 对齐、新词库内容哈希校验通过。签名与 beta.24 一致，可覆盖升级测试版。
+- 构建与校验：`build/phone-beta25-build.log`、`build/phone-beta/beta25-verification.json`。未运行收费生成，ARM 手机及不同输入法组合尚未实机验收；未推送或发布远端。
