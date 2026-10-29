@@ -1,6 +1,6 @@
 <h1><img src="mobile/assets/icon.png" alt="AutoDL H3 图标" width="42" align="center" /> AutoDL MiniMax H3 移动创作助手</h1>
 
-一个面向 Android 手机的 MiniMax H3 视频创作客户端：让用户可以在移动端访问 AutoDL 的 [MiniMax H3 Image/Audio to Video V2 15s 工作流](https://autodl.art/large-model/comfyui/minimax_h3_image_audio_to_video_v2_15s)，并通过内置的官方 H3 Prompt Skill，以智能体对话的方式完成提示词构思、整理和交付。
+一个面向 Android 的本地创作工作台，连接 AutoDL MiniMax H3 视频工作流、NovelAI 图片生成和用户配置的 LLM。支持独立快速创作，也能按项目组织简报、镜头、草稿、版本素材、生成任务与助手对话。
 
 这个项目希望把原本需要在桌面浏览器中完成的工作流操作，变成一套适合手机使用的创作流程：从构思 Prompt、准备参考图和音频，到创建生成任务、跟踪进度、预览视频和管理成片，都可以在同一个应用里完成。
 
@@ -8,12 +8,23 @@
 
 - 让用户通过 Android 手机直接创建和管理 AutoDL MiniMax H3 视频任务。
 - 用智能体辅助 MiniMax H3 Prompt 撰写，降低复杂镜头、动作、声音和氛围描述的门槛。
-- 将 Prompt、参考素材、生成任务和最终视频逐步组织为可持续管理的创作项目。
+- 将 Prompt、参考素材、生成任务和最终视频组织为可持续管理的创作项目。
 - 保持移动端本地优先：会话、任务索引和媒体缓存保存在应用私有目录，敏感配置使用 Android Keystore 保护。
 
-## 当前已实现
+## 当前源码已实现
 
-- **手动同步工作流（1.4.17）**：设置页从官方签名仓库同步已兼容的 AutoDL H3 工作流。创建页和 Prompt 助手导入预览可选择工作流，按目标 schema 对齐参数和素材约束。新增的升级画质 `zm-u24` 包作为远端发布源提供；首次发布前仍使用内置工作流。发布方法见 [工作流仓库发布指南](docs/workflow-registry-publishing.md)。
+以下描述当前开发分支；GitHub Release 的能力以对应版本说明为准。
+
+- **项目与镜头**：项目简报、镜头图像/视频采用版本、关联素材、项目页签恢复和成果审阅。快速创作不强制创建项目。
+- **统一创作入口**：图片和视频工作台，自动保存草稿；旧助手交接可转换为正式草稿，保留来源且重复打开不重复创建。
+- **NovelAI 图片创作**：图片生成、参考图、修图/遮罩及图片处理，复用本地任务、资产与授权链路。
+- **版本素材与精确结果**：图片、视频、音频、Prompt 和文档资产；任务只显示本次产物，指定版本失效时不悄悄替换为其他版本。
+- **Agent 创作工具**：按用户选定项目读取素材、准备草稿、提出项目/镜头修改建议，并在有限结构化授权内提交生成。修改提案需用户审阅；助手不能自行批准。
+- **持久两步计划**：用户选图后生成视频，等待选择和授权、重启核查、避免重复消费；所有必要步骤成功才完成计划。当前不是通用任意流程引擎。
+- **本地文本技能库**：粘贴或导入 SKILL.md/单技能 ZIP，检查、安装不可变版本、显式启用；新运行固定版本，支持停用撤销。详见[技能使用与持久化契约](docs/architecture/local-agent-skills.md)。
+- **本地备份与资源恢复**：数据库和私有文件完整备份、缺失原件定位与按哈希恢复；恢复的执行记录隔离，不自动重新消费。
+
+- **手动同步工作流**：设置页从官方签名仓库同步已兼容的 AutoDL H3 工作流。创建页和 Prompt 助手导入预览可选择工作流，按目标 schema 对齐参数和素材约束。新增的升级画质 `zm-u24` 包作为远端发布源提供；首次发布前仍使用内置工作流。发布方法见 [工作流仓库发布指南](docs/workflow-registry-publishing.md)。
 
 - **视频任务创建**：填写 Prompt、分辨率、时长和 Seed，最多添加 9 张参考图与 3 段参考音频。
 - **Prompt 智能体**：使用内置的官方 MiniMax H3 Prompt Skill，通过多轮对话梳理主体、动作、镜头、声音和氛围，并把完成的 Prompt 发送到任务创建页面。
@@ -38,7 +49,7 @@
 
 ### 已知限制
 
-部分升级画质工作流输出 H.264 High 10（10-bit）视频，可能下载成功但无法在设备上正常播放或生成封面。v1.4.17 尚未提供客户端转码；影响范围、临时处理和后续方案见 [已知问题 MEDIA-001](docs/known-issues.md#media-001h264-high-10-视频的设备解码兼容性)。
+本地视频已统一使用 Media3 控件和 libmpv 引擎；系统相册等外部播放器的编码支持可能不同。真机多编码和超长后台操作的验收范围见[已知问题](docs/known-issues.md)。进程退出后的 Agent 运行显示为中断，不承诺任意工具边界续跑或后台常驻。
 
 ### 方式一：从 Release 下载
 
@@ -100,7 +111,7 @@ AUTODL_UPLOAD_KEY_PASSWORD
 
 ### 首次配置
 
-安装后打开应用，进入“设置”，完成以下两项配置。
+安装后打开应用，进入“设置”，按所用能力配置账号：H3 视频需要 AutoDL，助手需要 LLM，NovelAI 图片需要对应账号。手工查看本地项目与已有素材无需模型配置。
 
 #### 1. AutoDL Access Token
 
@@ -119,9 +130,7 @@ Prompt 智能体需要一个兼容 OpenAI API 格式、并支持所需多模态�
 - **API Key**：服务商签发的密钥。
 - **Timeout / Retries**：可按网络情况调整超时和重试次数。
 
-推荐使用 DeepSeek 的 `deepseek-v4-flash-vision-exp`。可以前往 [DeepSeek 开放平台](https://platform.deepseek.com/) 创建 API Key，并按照平台当前文档填写 Endpoint 和模型名称。实验模型的名称与可用性可能调整，请以 DeepSeek 控制台显示为准。
-
-也可以使用其他兼容 OpenAI API 的 LLM 服务，但模型需要能够满足 Prompt 助手使用的文本或视觉输入需求。
+按服务商控制台提供的实际模型名称与接口填写配置。文本、视觉、工具调用和流式输出能力需要与当前使用场景匹配；不把实验模型名当作长期可用的默认配置。
 
 ### 创建第一个任务
 
@@ -137,13 +146,13 @@ Prompt 智能体需要一个兼容 OpenAI API 格式、并支持所需多模态�
 
 Prompt 助手不是一个简单的文本输入框。它在 APK 内运行 DeepAgents 与 AG-UI 会话逻辑，并使用 CopilotKit React Native 渲染对话、Markdown、流式响应、附件和工具调用状态。
 
-内置的 MiniMax H3 Prompt Skill 会根据输入类型组织适合 T2VA、I2VA、FL2VA、L2VA 和 Ref2VA 等场景的提示词结构。智能体负责帮助用户完成创作前期的 Prompt 方案；实际的视频生成由 AutoDL 上的 ComfyUI 工作流执行。
+内置的 MiniMax H3 Prompt Skill 会根据输入类型组织适合 T2VA、I2VA、FL2VA、L2VA 和 Ref2VA 等场景的提示词结构。智能体可准备 Prompt 与正式创作草稿，调用已注册的创作工具；实际的视频生成由 AutoDL 上的 ComfyUI 工作流执行，图片生成由 NovelAI 执行。生成权限来自用户配置的有限额度授权，技能正文与聊天内容不能扩大权限。
 
 当前版本不会假装调用未接入的 MiniMax Hub 画布工具。如果某个 Skill 流程依赖应用尚未提供的外部工具，智能体应交付可执行的 Prompt 与创作准备材料，并明确说明边界。
 
 ## 工作流与产品边界
 
-- 当前版本面向 [MiniMax H3 Image/Audio to Video V2 15s](https://autodl.art/large-model/comfyui/minimax_h3_image_audio_to_video_v2_15s) 工作流。
+- 视频连接已适配的 AutoDL H3 工作流，图片连接 NovelAI；新服务商仍需完整输入、输出、授权与恢复适配。
 - 应用是 AutoDL 工作流的移动客户端，不在手机本地运行 MiniMax H3 模型或 ComfyUI。
 - 生成速度、队列时间和任务结果由 AutoDL 工作流及其运行环境决定。
 - Prompt 智能体依赖用户配置的外部 LLM API；视频任务依赖用户自己的 AutoDL Access Token。
@@ -158,8 +167,10 @@ Prompt 助手不是一个简单的文本输入框。它在 APK 内运行 DeepAge
 | 主要平台 | Android |
 | 客户端技术 | React Native、Expo Router |
 | Prompt UI | CopilotKit React Native |
-| Agent Runtime | DeepAgents JS、AG-UI，本地会话恢复 |
-| Prompt 能力 | APK 内置官方 MiniMax H3 Prompt Skill bundle |
+| Agent Runtime | DeepAgents 1.13.2、AG-UI，本地会话持久化；中断可见，不是任意 checkpoint 续跑 |
+| Prompt 能力 | APK 内置只读 H3 Skill bundle + 不可变本地文本技能版本/运行快照 |
+| 图片生成 | NovelAI |
+| 项目编排 | 固定的选图 → 视频两步计划 |
 | 视频生成 | AutoDL 托管的 ComfyUI 工作流 |
 | LLM 接口 | 用户配置的 OpenAI-compatible Endpoint、Model 和 API Key |
 | 本地数据 | SQLite 索引、应用私有文件目录、SecureStore |
@@ -178,39 +189,24 @@ Prompt 助手不是一个简单的文本输入框。它在 APK 内运行 DeepAge
 
 ## Roadmap
 
-### ✅ 当前阶段：单工作流移动创作闭环（已完成）
+### 后续方向与验证门槛
 
-- Android 原生安装和移动端适配。
-- AutoDL Token 与 OpenAI-compatible LLM 配置。
-- MiniMax H3 Prompt 智能体和本地会话。
-- 参考图、参考音频和 Prompt 的任务提交。
-- 任务跟踪、后台同步、失败重试和结果下载。
-- 本地画廊、视频详情、全屏播放和系统相册导出。
+- **技能提炼与角色库**：在现有导入/启用/运行闭环上增加用户选择证据、草稿审阅、发布和独立启用；当前不提供模型自动提炼或复杂角色管理。
+- **静态 3D 导演台**：离线 WebView/Three.js 已有独立 Android 实验，验证取景、保存、PNG 和 context 恢复；尚未接入生产项目/素材/草稿。目标实机与资源预算通过后再产品化，见[实验记录](experiments/scene-probe/README.md)。
+- **通用持久流程**：当前保持 selection/video；实际第三种业务步骤交付后再推广 handler、人工节点和执行租约，不增加空步骤。
+- **DeepAgents 升级**：固定候选 1.16.0 的隔离实验已解决最小 Metro 入口阻塞并编译 Hermes 字节码；完整 APK、视觉/流式/旧会话迁移未验收，生产未升级，见[兼容实验](experiments/deepagents-1.16/README.md)。
+- **编辑与复用**：完整 Prompt 版本对比、创作模板、场景文档、时间线、运动轨道和视频编码按实际编辑需求引入。
+- **跨设备与协作**：本地完整备份已有；项目分享包、跨设备同步和多人协作尚未交付。
 
-### 规划中
-
-- **多工作流适配（M1/M2/B 内核已完成）**：已建立 WorkflowPackage → compiler → adapter/runtime 的本地链路，支持 builtin/local/remote Registry、活动/回滚指针、签名与版本兼容校验、固定 Git commit-attestation 和 Registry 驱动创建页。后续仍需补充完整 Draft/附件 JSON Pointer 绑定、第二平台和 Agent 直提交。
-- **智能体直接创建任务**：让智能体根据对话选择工作流、补齐参数、展示提交预览，并在用户确认后直接创建任务。
-- **创作项目管理**：以项目为单位管理创作 Brief、分镜、Prompt、素材、生成任务和最终交付物。
-- **创作资产管理**：统一管理角色、场景、参考图、音频、视频和风格资产，支持标签、搜索、版本和跨项目复用。
-- **Prompt 版本管理**：保存每次修改，支持版本对比、回滚、收藏和模板化。
-- **批量生成与方案对比**：对 Prompt、Seed、分辨率或工作流参数创建多组变体，并集中比较结果。
-- **任务通知与队列控制**：提供更可靠的完成通知、失败原因、暂停/重试策略和批量任务操作。
-- **成本与配额提示**：在提交前展示预估消耗、账户额度和关键参数校验，减少无效任务。
-- **创作模板与复用**：沉淀常用镜头、角色设定、声音设计和工作流配置，一键创建新的创作方案。
-- **跨设备同步与备份**：在用户可控的前提下同步项目、Prompt、任务记录和资产元数据。
-- **分享与协作**：导出项目包、分享 Prompt/配置，并支持团队审阅和反馈。
-- **工作流健康诊断**：检查 Token、LLM、AutoDL 网络和工作流参数，给出可操作的错误说明。
-
-Roadmap 表示产品方向，不代表已经交付；具体优先级会根据实际创作流程和 AutoDL 工作流演进调整。
+当前调整的逐项决策、提交批次与测试边界见[研究采纳及调整计划](docs/reviews/2026-10-29-research-adoption-and-adjustment-plan.md)。Roadmap 表示后续方向，不代表所有能力都已实现。
 
 ## 数据、安全与权限
 
 - Agent 会话、任务索引和画廊元数据保存在本地。
 - 视频和首帧默认存储在应用私有文件目录，用户可选择导出到系统相册。
-- 参考素材仅在创建任务需要时随请求提交。
+- 参考素材会在生成任务或用户选用的视觉助手调用需要时发送给对应服务商；技能文本会随模型实际读取进入该次模型上下文。
 - AutoDL Token 和 LLM API Key 使用 Expo SecureStore 保存，并由 Android Keystore 提供系统级保护。
-- 应用需要网络权限以访问 AutoDL 和 LLM API；媒体权限仅用于选择素材和导出作品。
+- 应用需要网络权限以访问 AutoDL、NovelAI 和 LLM API；媒体权限仅用于选择素材和导出作品。
 - 应用不依赖业务后端、云端任务管理或对象存储。工作流订阅（如启用）只接受固定仓库中的签名、声明式 workflow package，并在本地验证 commit 签名和内容 hash 后安装。
 - AutoDL H3 的工作流 metadata 以 `ref_image_0..8` 和 `ref_audio_0..2` 为准；客户端在提交前才准备 data URI，具体 MIME、数量和请求体限制以 provider contract 为准，不把单文件大小写成 API 永久承诺。
 
@@ -238,4 +234,4 @@ Remove-Item Env:AUTODL_CONTRACT_LIVE
 
 ## 项目状态
 
-当前 Android 单工作流版本已经形成从 Prompt 辅助、任务创建、进度跟踪到作品管理的完整闭环。项目仍在持续演进，后续重点是从“单个工作流客户端”升级为“由智能体驱动的移动创作工作台”。
+当前开发分支已包含独立图片/视频创作、项目与镜头、版本素材、受授权约束的 Agent 创作工具、本地文本技能和持久两步计划。3D、通用编排、复杂角色及依赖升级仍按实验结果和验收门槛推进。
