@@ -88,7 +88,7 @@ export function AgentCreativeCards({ threadId, running, runId }: { threadId: str
           <ListAction label={card.draft.state==='EDITING'?'编辑这份草稿':'查看成果与进度'} secondary onPress={()=>{setOpen(false);router.push({pathname:card.draft!.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:card.draft!.id}});}}/>
           {card.jobId?<ListAction label="查看生成任务详情" secondary onPress={()=>{setOpen(false);router.push({pathname:'/creative-task/[id]',params:{id:card.jobId!}});}}/>:null}
           {card.draft.state==='EDITING'?<ListAction label={allowance[card.draft.provider_id]?`本项目可用授权 ${allowance[card.draft.provider_id]} 次`:'授权本项目 1 次生成'} secondary disabled={busy||running||Boolean(allowance[card.draft.provider_id])} onPress={()=>void grant(card.draft!)}/>:null}
-        </>:<ListAction label="查看并处理" onPress={()=>{setOpen(false);router.push({pathname:'/creative-project/[id]',params:{id:card.projectId!,tab:card.name.includes('修改')?'activity':'plans'}});}}/>}
+        </>:<ListAction label="查看并处理" onPress={()=>{setOpen(false);router.push({pathname:'/creative-project/[id]',params:{id:card.projectId!,tab:card.kind==='proposal'?'activity':'plans',...(card.kind==='proposal'?{proposalId:card.id}:{planId:card.id}),requestId:String(Date.now())}});}}/>}
       </View>)}
       {notice?<Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text>:null}
       {error||readError?<Text accessibilityRole="alert" style={s.error}>{error||readError}</Text>:null}

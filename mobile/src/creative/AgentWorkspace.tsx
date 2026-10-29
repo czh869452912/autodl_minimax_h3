@@ -1,5 +1,5 @@
 import { RecordRow } from '../ui/RecordRow';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import AgentScreen from '../agent/AgentScreen';
@@ -14,13 +14,15 @@ import { COLORS } from '../ui/theme';
 
 /** Project selection is separate from chat; existing conversations keep their scope. */
 export function AgentWorkspace() {
-  const { projectId } = useLocalSearchParams<{ projectId?: string }>();
+  const { projectId, view, createProject, requestId } = useLocalSearchParams<{ projectId?: string;view?:string;createProject?:string;requestId?:string }>();
   const router = useRouter();
   const [query,setQuery]=useState('');
   const [projects, setProjects] = useState<CreativeProject[]>([]);
   const [creating, setCreating] = useState(false), [title, setTitle] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false), [loaded, setLoaded] = useState(false), [legacy,setLegacy]=useState(false);
   const lock = useRef(false);
   useFocusEffect(useCallback(() => { let active = true; void creativeService().projects().then(rows => { if (active) { setProjects(rows); setLoaded(true); } }).catch(() => { if (active) setError('项目读取失败，请重新进入工作台'); }); return () => { active = false; }; }, []));
+  useEffect(()=>{if(createProject==='1'){setCreating(true);router.setParams({createProject:undefined});}},[createProject,requestId]);
+  useEffect(()=>setLegacy(view==='all'),[view,requestId]);
   const enter = (id: string) => router.setParams({ projectId: id });
   const create = async () => {
     if (lock.current || !title.trim()) return;
@@ -32,8 +34,8 @@ export function AgentWorkspace() {
     } catch (e) { setError(e instanceof Error ? e.message : '项目创建失败'); }
     finally { lock.current = false; setBusy(false); }
   };
-  if(legacy && !projectId)return <View style={s.screen}><View style={{paddingHorizontal:16}}><TextAction label="返回项目选择" onPress={()=>setLegacy(false)} /></View><AgentScreen /></View>;
-  if (projectId) return <View style={s.screen}>
+  if(legacy && !projectId)return <View style={s.screen}><View style={{paddingHorizontal:16}}><TextAction label="返回项目选择" onPress={()=>{setLegacy(false);router.setParams({view:undefined});}} /></View><AgentScreen /></View>;
+  if (projectId) return <View style={s.screen}><View style={{paddingHorizontal:12,flexDirection:'row',gap:12}}><TextAction label="返回项目选择" onPress={()=>router.setParams({projectId:undefined,view:undefined})}/><TextAction label="全部对话记录" onPress={()=>router.setParams({projectId:undefined,view:'all'})}/></View>
     <AgentScreen key={projectId} projectId={projectId} />
   </View>;
   return <View style={s.screen}><ScrollView contentContainerStyle={s.content}>

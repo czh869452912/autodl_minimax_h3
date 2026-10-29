@@ -33,7 +33,7 @@ import { SettingRow, TextAction } from './WorkbenchUI';
 import { ImageProcessingSheet } from './ImageProcessingSheet';
 import {ImageMetadataPanel} from './ImageMetadataPanel';
 
-export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initialShotId, requestId, initialVersionId, initialTrash = false }: { mode: 'projects' | 'assets'; projectId?: string; assetId?: string; initialTab?: string; initialShotId?:string; requestId?:string; initialVersionId?: string; initialTrash?: boolean }) {
+export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initialShotId, initialPlanId, initialProposalId, requestId, initialVersionId, initialTrash = false }: { mode: 'projects' | 'assets'; projectId?: string; assetId?: string; initialTab?: string; initialShotId?:string;initialPlanId?:string;initialProposalId?:string; requestId?:string; initialVersionId?: string; initialTrash?: boolean }) {
   const router = useRouter();
   const [shotEditor, setShotEditor] = useState({ dirty: false, busy: false });
   const [projects, setProjects] = useState<CreativeProject[]>([]);
@@ -102,12 +102,17 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
   };
   const command = (input: CreativeCommand) => creativeService().execute(input, createId());
   const openProject=async(p:CreativeProject)=>{router.push({pathname:'/creative-project/[id]',params:{id:p.id}});};
-  const changeProjectView=(tab:typeof projectView)=>{ if (tab === projectView) return; confirmLeave(() => { discardBrief(); setProjectView(tab); if(selected)void creativeService().saveProjectTab(selected,tab).catch(()=>setError('页签保存失败')); }); };
+  const tabRevision=useRef(0);
+  const changeProjectView=(tab:typeof projectView)=>{ if (tab === projectView) return; confirmLeave(() => { tabRevision.current++; discardBrief(); setProjectView(tab); if(selected)void creativeService().saveProjectTab(selected,tab).catch(()=>setError('页签保存失败')); }); };
   useEffect(()=>{
+    let live=true;const revision=++tabRevision.current;
     if(initialTab==='shots'||initialTab==='plans'||initialTab==='activity'||initialTab==='assets'||initialTab==='brief'){
       if(initialTab!==projectView)confirmLeave(()=>{discardBrief();setProjectView(initialTab);});
+    }else if(selected){
+      void creativeService().projectTab(selected).then(tab=>{if(live&&revision===tabRevision.current)setProjectView(tab);}).catch(()=>{if(live)setError('上次页签读取失败，已打开镜头');});
     }
-  },[initialTab,initialShotId,requestId]);
+    return()=>{live=false;};
+  },[selected,initialTab,initialShotId,requestId]);
   const inspect = useCallback(async (asset: CreativeAsset, isActive: () => boolean = () => true) => {
     const service = creativeService();
     const description = await service.description(asset.id);
@@ -140,7 +145,7 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
     {manage && !activeAsset ? <View style={styles.row}>{action('历史作品', () => router.push('/(tabs)/gallery'))}{action('创作草稿', () => router.push('/creative-drafts'))}</View> : null}
     {current && projectView === 'assets' && !current.archivedAt && !activeAsset ? action('制作图片', () => void run(async () => { const result = await command({ name: 'draft.createImage', payload: { projectId: current.id } }); if (result.status === 'completed') router.push({ pathname: '/image-draft/[id]', params: { id: result.value.draftId } }); })) : null}
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-    {mode === 'projects' && selected && !activeAsset ? <View style={styles.row}>{action(projectView === 'brief' ? '✓ 概览' : '概览', () => changeProjectView('brief'))}{action(projectView === 'shots' ? '✓ 镜头' : '镜头', () => changeProjectView('shots'))}{action(projectView === 'assets' ? '✓ 素材' : '素材', () => changeProjectView('assets'))}</View> : null}
+    {mode === 'projects' && selected && !activeAsset ? <View style={styles.row}>{action(projectView === 'brief' ? '✓ 概览' : '概览', () => changeProjectView('brief'))}{action(projectView === 'shots' ? '✓ 镜头' : '镜头', () => changeProjectView('shots'))}{action(projectView === 'assets' ? '✓ 素材' : '素材', () => changeProjectView('assets'))}{action(projectView === 'plans' ? '✓ 计划' : '计划', () => changeProjectView('plans'))}</View> : null}
     {mode === 'projects' && !activeAsset ? <>
       {!selected ? <View style={styles.row}>{action('新建项目', () => creating ? confirmLeave(discardBrief) : setCreating(true), false)}{action(archived ? '查看进行中项目' : '查看归档项目', () => { setArchived(!archived); setSelected(undefined); })}{selected ? action('全部项目', () => { setSelected(undefined); setTitle(''); setBrief(''); }) : null}</View> : null}
       {!selected?<TextInput accessibilityLabel="搜索项目" placeholder="搜索项目或简报" value={projectQuery} onChangeText={setProjectQuery} style={styles.input}/>:null}
@@ -152,7 +157,7 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
         <TextInput accessibilityLabel="创作简报" placeholder="目标、角色、场景、风格和交付要求" multiline value={brief} onChangeText={setBrief} style={[styles.input, styles.multiline]} />
         {action(selected ? '保存简报' : '创建项目', () => void run(async () => {
           if (current) await command({ name: 'project.update', payload: { id: current.id, title, brief, expectedRevision: current.revision } });
-          else { await command({ name: 'project.create', payload: { title, brief } }); setTitle(''); setBrief(''); setCreating(false); }
+          else { const result=await command({ name: 'project.create', payload: { title, brief } }); if(result.status!=='completed')throw new Error('项目未创建');setTitle(''); setBrief(''); setCreating(false);router.push({pathname:'/creative-project/[id]',params:{id:result.value.projectId}}); }
           setEditingBrief(false);
         }), false)}
         {action('取消编辑', () => confirmLeave(discardBrief))}
@@ -162,9 +167,9 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
     </> : null}
     {mode === 'projects' && selected && projectView === 'shots' && !activeAsset ? <ProjectShots key={selected} initialShotId={initialShotId} requestId={requestId} onEditorState={setShotEditor} projectId={selected} archived={Boolean(current?.archivedAt)} /> : null}
     {manage && mode === 'projects' && selected && !activeAsset ? action('选图与视频计划',()=>changeProjectView('plans')) : null}
-    {mode === 'projects' && selected && projectView === 'plans' && !activeAsset ? <ProjectPlans key={selected} projectId={selected} archived={Boolean(current?.archivedAt)} /> : null}
+    {mode === 'projects' && selected && projectView === 'plans' && !activeAsset ? <ProjectPlans key={selected} projectId={selected} initialPlanId={initialPlanId} archived={Boolean(current?.archivedAt)} /> : null}
     {mode === 'projects' && selected && !activeAsset ? action('修改建议与活动',()=>changeProjectView('activity')) : null}
-    {mode === 'projects' && selected && projectView === 'activity' && !activeAsset ? <ProjectActivity key={selected} projectId={selected} /> : null}
+    {mode === 'projects' && selected && projectView === 'activity' && !activeAsset ? <ProjectActivity key={selected} projectId={selected} initialProposalId={initialProposalId} /> : null}
     {activeAsset ? <View style={styles.card}>
       {!trash && manage ? action(metadata ? '收起素材信息' : '编辑名称与标签', () => setMetadata(!metadata)) : trash ? <Text style={styles.body}>此素材位于回收站，恢复后可继续创作。</Text> : null}
       {trash ? action('从回收站恢复',()=>void run(async()=>{await command({name:'asset.restore',payload:{id:activeAsset.id,expectedRevision:activeAsset.revision}});back();})) : metadata ? <>

@@ -25,7 +25,7 @@ beforeEach(()=>{jest.useFakeTimers();jest.clearAllMocks();});
 afterEach(()=>{jest.useRealTimers();});
 
 test('video candidate opens its exact output identity rather than the remembered draft round',async()=>{
-  read.mockResolvedValue([{id:'draft',name:'视频创作',draft:{...draft,provider_id:'autodl'},jobId:'job',outputs:[{...output,mime:'video/mp4',recipe:{jobId:'job'}}]}]);
+  read.mockResolvedValue([{kind:'draft',id:'draft',name:'视频创作',draft:{...draft,provider_id:'autodl'},jobId:'job',outputs:[{...output,mime:'video/mp4',recipe:{jobId:'job'}}]}]);
   let tree!:ReturnType<typeof create>;
   try {
     await act(async()=>{tree=create(<AgentActivityProvider threadId="thread"><AgentCreativeCards threadId="thread" running={false}/></AgentActivityProvider>);});
@@ -36,7 +36,7 @@ test('video candidate opens its exact output identity rather than the remembered
 });
 
 test('polls the actual job and lets the user open its archived original image or task details',async()=>{
-  let rows:AgentCreativeActivity[]=[{id:'draft',name:'图片创作',draft,jobId:'job',status:'QUEUED',outputs:[]}];
+  let rows:AgentCreativeActivity[]=[{kind:'draft',id:'draft',name:'图片创作',draft,jobId:'job',status:'QUEUED',outputs:[]}];
   read.mockImplementation(async()=>rows);
   let tree!:ReturnType<typeof create>;
   try{
@@ -69,7 +69,7 @@ test('reports failed reads instead of claiming no generation and recovers on the
 });
 
 test('shares one poll across run cards and shows results only under the owning run',async()=>{
- read.mockResolvedValue([{id:'draft',runId:'run-a',name:'图片创作',draft,outputs:[output]}]);
+ read.mockResolvedValue([{kind:'draft',id:'draft',runId:'run-a',name:'图片创作',draft,outputs:[output]}]);
  let tree!:ReturnType<typeof create>;
  try{
   await act(async()=>{tree=create(<AgentActivityProvider threadId="thread"><AgentCreativeCards threadId="thread" running={false} runId="run-a"/><AgentCreativeCards threadId="thread" running={false} runId="run-b"/></AgentActivityProvider>);});
@@ -79,5 +79,16 @@ test('shares one poll across run cards and shows results only under the owning r
   expect(groups[1].findAllByProps({testID:'agent-creative-summary'})).toHaveLength(0);
   await act(async()=>{jest.advanceTimersByTime(2500);});
   expect(read).toHaveBeenCalledTimes(2);
+ }finally{act(()=>tree?.unmount());}
+});
+
+
+test('proposal navigation uses structural identity even when display names change',async()=>{
+ read.mockResolvedValue([{id:'proposal-a',kind:'proposal',name:'待处理',projectId:'project',outputs:[]}]);
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<AgentActivityProvider threadId="thread"><AgentCreativeCards threadId="thread" running={false}/></AgentActivityProvider>);});
+  act(()=>tree.root.findByProps({testID:'agent-creative-summary'}).props.onPress());act(()=>button(tree,'查看并处理').props.onPress());
+  expect(mockPush).toHaveBeenCalledWith({pathname:'/creative-project/[id]',params:expect.objectContaining({id:'project',tab:'activity',proposalId:'proposal-a'})});
  }finally{act(()=>tree?.unmount());}
 });

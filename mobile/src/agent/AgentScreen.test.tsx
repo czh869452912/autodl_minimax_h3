@@ -183,3 +183,15 @@ test('history search, pagination and rename failures preserve the mounted sessio
     expect(runtime.disposed()).toBe(false);
   } finally { list.mockRestore(); rename.mockRestore(); }
 });
+
+
+test('closing an Agent surface flushes but keeps another live session and its subscription',async()=>{
+ mockRows.set('a',thread('a'));mockRows.set('b',thread('b'));
+ const other=promptRuntimeRegistry.ensure(config,thread('b'),mockStore as never);
+ await act(async()=>{tree=create(<AgentScreen/>);});
+ await act(async()=>tree.unmount());
+ expect(other.disposed()).toBe(false);
+ expect(promptRuntimeRegistry.ensure(config,thread('b'),mockStore as never)).toBe(other);
+ (other.agent as any).emit([{id:'later',role:'assistant',content:'still active'}]);
+ await other.flush();expect(mockRows.get('b')?.messages).toEqual([{id:'later',role:'assistant',content:'still active'}]);
+});

@@ -3,7 +3,7 @@ import { createCreativeService } from './service';
 import type { CreativeDraft } from './drafts';
 import type { AssetVersion } from './types';
 
-export type AgentCreativeActivity = { id:string; runId?:string; name:string; draft?:CreativeDraft; jobId?:string; status?:string; projectId?:string; outputs:AssetVersion[] };
+export type AgentCreativeActivity = { id:string;kind:'draft'|'plan'|'proposal'; runId?:string; name:string; draft?:CreativeDraft; jobId?:string; status?:string; projectId?:string; outputs:AssetVersion[] };
 
 /** Read durable command receipts and archived outputs, never the assistant's claim of completion. */
 export async function readAgentCreativeActivity(db:AppDatabase,threadId:string):Promise<AgentCreativeActivity[]> {
@@ -24,7 +24,7 @@ export async function readAgentCreativeActivity(db:AppDatabase,threadId:string):
       const links=draft.job_id?await db.getAllAsync<{version_id:string}>('SELECT version_id FROM creative_output_links WHERE job_id=? ORDER BY artifact_id',draft.job_id):[];
       const ids=new Set(links.map(link=>link.version_id));
       const outputs=(await service.versionsByIds([...ids])).filter(version=>version.assetId===draft.target_asset_id);
-      cards.push({id:draft.id,runId:row.run_id,name:draft.provider_id==='novelai'?'图片创作':'视频创作',draft,jobId:draft.job_id??undefined,status:job?.status,outputs});
+      cards.push({kind:'draft',id:draft.id,runId:row.run_id,name:draft.provider_id==='novelai'?'图片创作':'视频创作',draft,jobId:draft.job_id??undefined,status:job?.status,outputs});
     }else if(result.value?.planId || result.value?.proposalId){
       const id=result.value.planId??result.value.proposalId;
       if(seen.has(id))continue;
@@ -32,7 +32,7 @@ export async function readAgentCreativeActivity(db:AppDatabase,threadId:string):
         ?await db.getFirstAsync<{project_id:string;state:string}>('SELECT project_id,state FROM creative_plans WHERE id=?',id)
         :await db.getFirstAsync<{project_id:string;state:string}>('SELECT project_id,state FROM creative_change_proposals WHERE id=?',id);
       if(object?.project_id===scope.project_id && ['ACTIVE','WAITING'].includes(object.state)){
-        seen.add(id);cards.push({id,runId:row.run_id,name:result.value.planId?'选图与后续制作':'修改建议待审阅',projectId:object.project_id,outputs:[]});
+        seen.add(id);cards.push({kind:result.value.planId?'plan':'proposal',id,runId:row.run_id,name:result.value.planId?'选图与后续制作':'修改建议待审阅',projectId:object.project_id,outputs:[]});
       }
     }
     if(cards.length>=20)break;

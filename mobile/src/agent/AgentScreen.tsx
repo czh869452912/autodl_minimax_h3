@@ -42,21 +42,10 @@ export default function AgentScreen({ projectId }: {projectId?:string} = {}) {
     const subscription = AppState.addEventListener('change', state => {
       if (state !== 'active') void promptRuntimeRegistry.flushAll().then(() => { if (mounted) setPersistenceIssue(undefined); }).catch(report);
     });
-    return () => { mounted = false; subscription.remove(); void promptRuntimeRegistry.disposeAll().catch(report); };
+    return () => { mounted = false; subscription.remove(); void promptRuntimeRegistry.flushAll().catch(report); };
   }, []);
   const [config, setConfig] = useState<AgentConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const runtimeAvailable = Boolean(
-    !error
-      && config
-      && isH3AgentConfigReady(config)
-      && !getH3AgentConfigError(config),
-  );
-  useEffect(() => {
-    let current = true;
-    if (!runtimeAvailable) void promptRuntimeRegistry.disposeAll().catch(reason => { if (current) setPersistenceIssue(reason instanceof Error ? reason.message : '会话保存失败'); else console.error('Prompt session persistence failed', reason); });
-    return () => { current = false; };
-  }, [runtimeAvailable]);
   const refresh = useCallback(() => {
     let active = true;
     void readSettings()

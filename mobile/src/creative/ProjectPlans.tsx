@@ -12,21 +12,23 @@ import {COLORS} from '../ui/theme';
 import {planVideoSummary,type CreativePlan,type CreativeDecision,type CreativePlanStep} from './plans';
 import type {CreativeShot} from './story';
 type Card={plan:CreativePlan;decision:CreativeDecision;step:CreativePlanStep;candidates:Array<{version_id:string;title:string;relative_path:string|null}>};
-export function ProjectPlans({projectId,archived=false,compact=false}:{projectId:string;archived?:boolean;compact?:boolean}){
+export function ProjectPlans({projectId,archived=false,compact=false,initialPlanId}:{projectId:string;initialPlanId?:string;archived?:boolean;compact?:boolean}){
   const router=useRouter(),lock=useRef(false);
   const [cards,setCards]=useState<Card[]>([]),[shots,setShots]=useState<CreativeShot[]>([]),[shotId,setShotId]=useState(''),[prompt,setPrompt]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const [choices,setChoices]=useState<Array<{id:string;title:string}>>([]),[selected,setSelected]=useState<string[]>([]);
+  const readEpoch=useRef(0);
   const refresh=useCallback(async()=>{
-    const db=getDatabase(),plans=await db.getAllAsync<CreativePlan>('SELECT * FROM creative_plans WHERE project_id=? ORDER BY updated_at DESC LIMIT 30',projectId);
+    const epoch=++readEpoch.current;
+    const db=getDatabase(),plans=await db.getAllAsync<CreativePlan>('SELECT * FROM creative_plans WHERE project_id=? AND (? IS NULL OR id=?) ORDER BY updated_at DESC LIMIT 30',projectId,initialPlanId??null,initialPlanId??null);
     const rows:Card[]=[];
     for(const plan of plans){
       const decision=await db.getFirstAsync<CreativeDecision>('SELECT * FROM creative_decision_requests WHERE plan_id=?',plan.id);
       const step=await db.getFirstAsync<CreativePlanStep>("SELECT * FROM creative_plan_steps WHERE plan_id=? AND kind='video'",plan.id);
       if(decision&&step)rows.push({plan,decision,step,candidates:await db.getAllAsync("SELECT c.version_id,a.title,b.relative_path FROM creative_decision_candidates c JOIN creative_asset_versions v ON v.id=c.version_id JOIN creative_assets a ON a.id=v.asset_id LEFT JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE c.decision_id=?",decision.id)});
     }
-    setCards(rows);setShots(await creativeService().shots(projectId));
-  },[projectId]);
-  useEffect(()=>{let live=true;const poll=()=>{if(live)void refresh().catch(()=>{if(live)setError('计划读取失败');});};poll();const timer=setInterval(poll,2000);return()=>{live=false;clearInterval(timer);};},[refresh]);
+    const shots=await creativeService().shots(projectId);if(epoch===readEpoch.current){setCards(rows);setShots(shots);}
+  },[projectId,initialPlanId]);
+  useEffect(()=>{let live=true;const poll=()=>{if(live)void refresh().catch(()=>{if(live)setError('计划读取失败');});};poll();const timer=setInterval(poll,2000);return()=>{live=false;readEpoch.current++;clearInterval(timer);};},[refresh]);
   const work=async(fn:()=>Promise<unknown>)=>{if(lock.current||archived)return;lock.current=true;setBusy(true);setError('');try{await fn();executorWakePort.signal('command');await refresh();}catch(e){setError(e instanceof Error?e.message:'操作失败');}finally{lock.current=false;setBusy(false);}};
   const action=(label:string,fn:()=>void)=><ListAction label={label} secondary disabled={busy||archived} onPress={fn}/>;
   const authorize=(card:Card)=>void work(async()=>{
@@ -43,8 +45,9 @@ export function ProjectPlans({projectId,archived=false,compact=false}:{projectId
     {!compact ? <Text style={{color:COLORS.textMuted}}>计划会保留候选、选定版本与生成状态。视频结果归档为候选，不会覆盖镜头已选成果。</Text> : null}
     {error?<Text accessibilityRole="alert" style={{color:COLORS.danger}}>{error}</Text>:null}
     {compact&&!cards.some(c=>c.plan.state==='ACTIVE')?<Text style={{color:COLORS.textMuted}}>暂无等待处理的选图计划。</Text>:null}
+    {initialPlanId&&!cards.length?<Text style={{color:COLORS.textMuted}}>指定计划已不可用或不属于此项目。</Text>:null}
     {cards.filter(c=>!compact||c.plan.state==='ACTIVE').map(card=><View key={card.plan.id} style={{borderWidth:1,borderColor:COLORS.border,borderRadius:12,padding:12,gap:8}}>
-      <Text style={{color:COLORS.text,fontWeight:'700'}}>{card.plan.title}</Text>
+      <Text style={{color:COLORS.text,fontWeight:'700'}}>{initialPlanId?'当前计划 · ':''}{card.plan.title}</Text>
       <Text style={{color:COLORS.textMuted}}>{({ACTIVE:'进行中',COMPLETED:'已归档视频候选',CANCELLED:'已取消',QUARANTINED:'备份恢复后已隔离，不会自动生成'} as Record<string,string>)[card.plan.state]} · {({PENDING:'等待选图',READY:'等待提交',BLOCKED:'待处理',DISPATCHED:'已提交任务',SUCCEEDED:'完成',FAILED:'任务未完成',CANCELLED:'已取消'} as Record<string,string>)[card.step.state]}</Text>
       <Text style={{color:COLORS.textMuted}}>{planVideoSummary(card.step.input_binding_json)}{'\n'}视频提示词：{JSON.parse(card.step.input_binding_json).prompt}</Text>
       {card.step.error_json?<Text style={{color:COLORS.textMuted}}>{JSON.parse(card.step.error_json).message}</Text>:null}

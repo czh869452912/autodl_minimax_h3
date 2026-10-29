@@ -7,11 +7,12 @@ jest.mock('./AudioVersionPreview',()=>({AudioVersionPreview:()=>null}));
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { CreativeWorkspace } from './CreativeWorkspace';
-const mockExecute = jest.fn(async () => ({ status: 'completed', receiptId: 'r', value: {} }));
-const mockService = { latestDeliveries: jest.fn(async () => []), saveProjectTab: jest.fn(async () => undefined), asset: jest.fn<Promise<any>, [string]>(async () => undefined), project: jest.fn(), description: jest.fn(async () => null), versions: jest.fn<Promise<any[]>, [string]>(async () => []), links: jest.fn(async () => []), isTrashed: jest.fn(async () => false), deliveries: jest.fn(async () => []), covers:jest.fn(async()=>[]),projects: jest.fn<Promise<any[]>, any[]>(async () => []), assets: jest.fn(async () => []), execute: mockExecute };
+const mockPush=jest.fn();
+const mockExecute = jest.fn<Promise<any>,any[]>(async () => ({ status: 'completed', receiptId: 'r', value: {projectId:'created'} }));
+const mockService = { projectTab:jest.fn<Promise<any>,[string]>(async()=> 'shots'), latestDeliveries: jest.fn(async () => []), saveProjectTab: jest.fn(async () => undefined), asset: jest.fn<Promise<any>, [string]>(async () => undefined), project: jest.fn(), description: jest.fn(async () => null), versions: jest.fn<Promise<any[]>, [string]>(async () => []), links: jest.fn(async () => []), isTrashed: jest.fn(async () => false), deliveries: jest.fn(async () => []), covers:jest.fn(async()=>[]),projects: jest.fn<Promise<any[]>, any[]>(async () => []), assets: jest.fn(async () => []), execute: mockExecute };
 jest.mock('./runtime', () => ({ creativeService: () => mockService, importCreativeImage: jest.fn(), creativeFiles: () => ({ verify: jest.fn(async () => true) }) }));
 jest.mock('../native/imagePicker', () => ({ pickImagesFromGallery: jest.fn(async () => []) }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }), useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]) }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }), useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]) }));
 
 test('project creation uses the shared command and prevents simultaneous duplicate taps', async () => {
   let tree!: ReturnType<typeof create>;
@@ -135,4 +136,19 @@ test('import is an action separate from asset filters and does not change the se
     await act(async()=>press(tree,'从相册导入图片'));
     expect(selected.props.accessibilityState.checked).toBe(true);
   }finally{act(()=>tree?.unmount());}
+});
+
+
+test('saved project tab restores but cannot override a newer user selection or explicit target',async()=>{
+ mockService.projects.mockResolvedValue([{id:'p',title:'Project',brief:'',revision:1}]);
+ let resolve!:(tab:any)=>void;mockService.projectTab.mockImplementationOnce(()=>new Promise(r=>{resolve=r;}));
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<CreativeWorkspace mode="projects" projectId="p"/>);});
+  act(()=>press(tree,'概览'));
+  await act(async()=>resolve('assets'));
+  expect(content(tree)).toContain('✓ 概览');
+  await act(async()=>tree.update(<CreativeWorkspace mode="projects" projectId="p" initialTab="assets" requestId="new"/>));
+  expect(content(tree)).toContain('✓ 素材');
+ }finally{act(()=>tree?.unmount());mockService.projects.mockResolvedValue([]);}
 });

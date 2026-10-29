@@ -45,7 +45,7 @@ export function AgentCreativePanel({ threadId, running, compact=false }: { threa
       <View style={s.row}><Text style={s.heading}>选择创作项目</Text><ListAction label="关闭" secondary onPress={() => setExpanded(false)} /></View>
       <TextInput accessibilityLabel="搜索创作项目" placeholder="搜索项目" value={query} onChangeText={setQuery} style={s.input} />
       {projects.filter(p => p.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(p => <RecordRow key={p.id} title={p.title} detail={p.brief || '项目会话与创作成果'} selected={p.id===selected} disabled={running || busy} onPress={() => void choose(p.id)} />)}
-      <ListAction label="查看项目与新建项目" secondary onPress={() => { setExpanded(false); router.push('/(tabs)/projects'); }} />
+      <ListAction label="新建项目并进入助手" secondary onPress={() => { setExpanded(false); router.setParams({projectId:undefined,view:undefined,createProject:'1',requestId:String(Date.now())}); }} />
 
       {selected ? <ListAction label="撤销当前项目全部生成授权" secondary disabled={busy} onPress={() => {
         if (lock.current) return; lock.current = true; setBusy(true);

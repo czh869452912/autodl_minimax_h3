@@ -8,21 +8,22 @@ import {ListAction} from '../ui/ListPageUI';
 import {COLORS} from '../ui/theme';
 import {createId} from '../ids';
 import type {ChangeProposal} from './changeReview';
-export function ProjectActivity({projectId}:{projectId:string}){
+export function ProjectActivity({projectId,initialProposalId}:{projectId:string;initialProposalId?:string}){
   const router=useRouter(),[rows,setRows]=useState<Entry[]>([]),[error,setError]=useState('');
   const [proposals,setProposals]=useState<ChangeProposal[]>([]),[busy,setBusy]=useState(false),lock=useRef(false);
-  useEffect(()=>{let live=true;const load=async()=>{const p=await getDatabase().getAllAsync<ChangeProposal>("SELECT * FROM creative_change_proposals WHERE project_id=? AND state='WAITING' ORDER BY created_at DESC LIMIT 30",projectId);if(live)setProposals(p);};void load().catch(()=>setError('建议读取失败'));const timer=setInterval(()=>void load().catch(()=>undefined),2000);return()=>{live=false;clearInterval(timer);};},[projectId]);
-  const resolve=async(id:string,accept:boolean)=>{if(lock.current)return;lock.current=true;setBusy(true);setError('');try{await creativeService().execute({name:'change.resolve',payload:{id,accept}},createId());setProposals(p=>p.filter(v=>v.id!==id));}catch(e){setError(e instanceof Error?e.message:'处理失败');}finally{lock.current=false;setBusy(false);}};
+  useEffect(()=>{let live=true;const load=async()=>{const p=await getDatabase().getAllAsync<ChangeProposal>("SELECT * FROM creative_change_proposals WHERE project_id=? AND ((? IS NULL AND state='WAITING') OR id=?) ORDER BY created_at DESC LIMIT 30",projectId,initialProposalId??null,initialProposalId??null);if(live)setProposals(p);};void load().catch(()=>setError('建议读取失败'));const timer=setInterval(()=>void load().catch(()=>undefined),2000);return()=>{live=false;clearInterval(timer);};},[projectId,initialProposalId]);
+  const resolve=async(id:string,accept:boolean)=>{if(lock.current)return;lock.current=true;setBusy(true);setError('');try{await creativeService().execute({name:'change.resolve',payload:{id,accept}},createId());setProposals(p=>initialProposalId?p.map(v=>v.id===id?{...v,state:accept?'APPLIED':'REJECTED'}:v):p.filter(v=>v.id!==id));}catch(e){setError(e instanceof Error?e.message:'处理失败');}finally{lock.current=false;setBusy(false);}};
   useEffect(()=>{let live=true;const refresh=async()=>{try{const rows=await readProjectActivity(getDatabase(),projectId);if(live)setRows(rows);}catch{if(live)setError('活动读取失败');}};void refresh();const timer=setInterval(()=>void refresh(),3000);return()=>{live=false;clearInterval(timer);};},[projectId]);
   return <View style={{gap:12}}><Text style={{color:COLORS.text,fontSize:20,fontWeight:'700'}}>项目活动</Text>
     {error?<Text style={{color:COLORS.danger}}>{error}</Text>:null}
+    {initialProposalId&&!proposals.length?<Text style={{color:COLORS.textMuted}}>指定建议已不可用或不属于此项目。</Text>:null}
     {proposals.map(p=><View key={p.id} style={{padding:12,borderWidth:1,borderColor:COLORS.border,borderRadius:10,gap:8}}>
-      <Text style={{color:COLORS.text,fontWeight:'700'}}>Agent 修改建议 · 待审阅</Text>
+      <Text style={{color:COLORS.text,fontWeight:'700'}}>{initialProposalId?'当前建议 · ':''}Agent 修改建议 · {p.state==='WAITING'?'待审阅':p.state}</Text>
       {Object.entries(JSON.parse(p.before_json) as Record<string,string>).map(([field,before])=><View key={field} style={{gap:4}}>
         <Text style={{color:COLORS.textMuted}}>{({title:'名称',brief:'简报',description:'镜头描述',status:'状态'} as Record<string,string>)[field]??field} · 原内容</Text><Text selectable style={{color:COLORS.text}}>{before||'（空）'}</Text>
         <Text style={{color:COLORS.textMuted}}>建议改为</Text><Text selectable style={{color:COLORS.text}}>{JSON.parse(p.payload_json)[field]||'（空）'}</Text>
       </View>)}
-      <ListAction label="采用这项修改" disabled={busy} onPress={()=>void resolve(p.id,true)}/><ListAction label="拒绝建议" secondary disabled={busy} onPress={()=>void resolve(p.id,false)}/>
+      <ListAction label="采用这项修改" disabled={busy||p.state!=='WAITING'} onPress={()=>void resolve(p.id,true)}/><ListAction label="拒绝建议" secondary disabled={busy||p.state!=='WAITING'} onPress={()=>void resolve(p.id,false)}/>
       <Text style={{color:COLORS.textMuted}}>若原内容已被编辑，采用会提示修订冲突；不会覆盖较新的内容。</Text>
     </View>)}
     {!rows.length?<Text style={{color:COLORS.textMuted}}>尚无活动。</Text>:null}
