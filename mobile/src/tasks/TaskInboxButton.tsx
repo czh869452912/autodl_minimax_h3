@@ -18,8 +18,8 @@ export function TaskInboxButton({beforeOpen}:{beforeOpen?:()=>Promise<boolean>}=
  useFocusEffect(useCallback(()=>{let active=true,reading=false;
   const refresh=async()=>{if(reading)return;reading=true;try{
    const db=getDatabase();
-   const count=await db.getFirstAsync<{n:number;attention:number}>("SELECT SUM(CASE WHEN status NOT IN ('SUCCEEDED','PARTIAL_SUCCEEDED','FAILED','CANCELLED','UNKNOWN') THEN 1 ELSE 0 END) AS n,SUM(CASE WHEN status IN ('FAILED','UNKNOWN','PARTIAL_SUCCEEDED') THEN 1 ELSE 0 END) AS attention FROM workflow_jobs j WHERE NOT EXISTS(SELECT 1 FROM task_archives a WHERE a.task_id=j.id)");
-   const rows=await db.getAllAsync<InboxRow>("SELECT j.id,j.status,j.input_json,j.adapter_id,j.created_at,j.updated_at,j.started_at,j.execution_duration,EXISTS(SELECT 1 FROM creative_job_contexts c WHERE c.job_id=j.id) AS creative FROM workflow_jobs j WHERE NOT EXISTS(SELECT 1 FROM task_archives a WHERE a.task_id=j.id) ORDER BY created_at DESC LIMIT 6");
+   const count=await db.getFirstAsync<{n:number;attention:number}>("SELECT SUM(CASE WHEN status NOT IN ('SUCCEEDED','PARTIAL_SUCCEEDED','FAILED','CANCELLED','UNKNOWN') THEN 1 ELSE 0 END) AS n,SUM(CASE WHEN status IN ('FAILED','UNKNOWN','PARTIAL_SUCCEEDED') THEN 1 ELSE 0 END) AS attention FROM workflow_jobs j WHERE NOT EXISTS(SELECT 1 FROM task_removals r WHERE r.task_id=j.id) AND NOT EXISTS(SELECT 1 FROM task_archives a WHERE a.task_id=j.id)");
+   const rows=await db.getAllAsync<InboxRow>("SELECT j.id,j.status,j.input_json,j.adapter_id,j.created_at,j.updated_at,j.started_at,j.execution_duration,EXISTS(SELECT 1 FROM creative_job_contexts c WHERE c.job_id=j.id) AS creative FROM workflow_jobs j WHERE NOT EXISTS(SELECT 1 FROM task_removals r WHERE r.task_id=j.id) AND NOT EXISTS(SELECT 1 FROM task_archives a WHERE a.task_id=j.id) ORDER BY created_at DESC LIMIT 6");
    if(active){setCount(count?.n??0);setAttention(count?.attention??0);setRows(rows);setError('');}
   }catch{if(active)setError('任务状态暂不可用');}finally{reading=false;}};
   void refresh();const timer=setInterval(()=>void refresh(),3000),unsubscribe=taskProjectionEvents.subscribe(()=>void refresh());

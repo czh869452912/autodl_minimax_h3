@@ -143,7 +143,7 @@ export function createTaskProjectionRepository(db: AppDatabase, filter: 'all' | 
     const rows = await db.getAllAsync<TaskCardRow>(
       `SELECT ${taskCardColumns}
        FROM tasks
-       WHERE ${filter === 'archived' ? '' : 'NOT'} EXISTS(SELECT 1 FROM task_archives a WHERE a.task_id=tasks.id) AND (${filter === 'active' ? "status IN ('QUEUED','RUNNING','UNKNOWN') OR download_state IN ('ENQUEUED','DOWNLOADING') OR export_state IN ('QUEUED','EXPORTING')" : filter === 'failed' ? "status='FAILED' OR download_state='DOWNLOAD_FAILED' OR export_state='EXPORT_FAILED'" : '1=1'}) AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
+       WHERE NOT EXISTS(SELECT 1 FROM task_removals r WHERE r.task_id=tasks.id) AND ${filter === 'archived' ? '' : 'NOT'} EXISTS(SELECT 1 FROM task_archives a WHERE a.task_id=tasks.id) AND (${filter === 'active' ? "status IN ('QUEUED','RUNNING','UNKNOWN') OR download_state IN ('ENQUEUED','DOWNLOADING') OR export_state IN ('QUEUED','EXPORTING')" : filter === 'failed' ? "status='FAILED' OR download_state='DOWNLOAD_FAILED' OR export_state='EXPORT_FAILED'" : '1=1'}) AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
        ORDER BY created_at DESC, id DESC
        LIMIT ?`,
       cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.id ?? null, bounded + 1,

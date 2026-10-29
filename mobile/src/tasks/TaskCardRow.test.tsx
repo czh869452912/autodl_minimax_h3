@@ -171,3 +171,24 @@ test('collapsed task exposes download progress and opens video results directly'
   expect(tree.root.findAllByProps({accessibilityLabel:'移除任务记录'})).toHaveLength(0);
  }finally{act(()=>tree?.unmount());}
 });
+
+
+test.each(['FAILED', 'CANCELLED', 'SUCCESS'] as const)('terminal %s task exposes archive, restore and removal', async status => {
+  const item: TaskCard = { id: 'ended', prompt: 'p', status, resolution: '720p', duration: 5, createdAt: 1, updatedAt: 2, downloadState: 'IDLE', exportState: 'NOT_REQUESTED' };
+  const archive = jest.fn(), remove = jest.fn(), alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  let tree!: ReturnType<typeof create>;
+  const props = { item, busy: false, onDownload: jest.fn(), onExport: jest.fn(), onOpen: jest.fn(), onRemove: remove, onArchive: archive };
+  try {
+    await act(async () => { tree = create(<TaskCardRow {...props} />); });
+    act(() => tree.root.findByProps({ accessibilityLabel: '归档任务' }).props.onPress());
+    act(() => alert.mock.calls.at(-1)![2]!.find(b => b.text === '归档')!.onPress!());
+    expect(archive).toHaveBeenCalledWith('ended', true);
+    expect(tree.root.findByProps({ accessibilityLabel: '移除任务记录' }).props.disabled).toBe(false);
+    act(() => tree.root.findByProps({ accessibilityLabel: '移除任务记录' }).props.onPress());
+    act(() => alert.mock.calls.at(-1)![2]!.find(b => b.text === '移除')!.onPress!());
+    expect(remove).toHaveBeenCalledWith('ended');
+    act(() => tree.update(<TaskCardRow {...props} archived />));
+    act(() => tree.root.findByProps({ accessibilityLabel: '恢复任务' }).props.onPress());
+    expect(archive).toHaveBeenCalledWith('ended', false);
+  } finally { act(() => tree?.unmount()); alert.mockRestore(); }
+});

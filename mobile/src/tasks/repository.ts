@@ -76,7 +76,6 @@ export function createTaskRepository(db: AppDatabase) {
       let rows: any[] = [];
       let assets: any[] = [];
       transaction(db, () => {
-        if (db.getFirstSync('SELECT job_id FROM creative_job_contexts WHERE job_id=? UNION ALL SELECT job_id FROM creative_output_links WHERE job_id=? LIMIT 1', id,id)) throw new Error('创作任务保留资产与消费记录，请使用归档');
         const active = db.getFirstSync<{ status: string }>('SELECT status FROM tasks WHERE id=?', id);
         if (active && ['QUEUED','RUNNING','UNKNOWN'].includes(active.status)) throw new Error('活跃任务请使用归档，以保留服务端追踪记录');
         const activeOperation = db.getFirstSync<{ id: string }>(
@@ -84,6 +83,15 @@ export function createTaskRepository(db: AppDatabase) {
           id,
         );
         if (activeOperation) throw new Error('TASK_OPERATION_IN_PROGRESS');
+        const job = db.getFirstSync<{ status: string }>('SELECT status FROM workflow_jobs WHERE id=?', id);
+        if (job && !['SUCCEEDED','PARTIAL_SUCCEEDED','FAILED','CANCELLED'].includes(job.status)) throw new Error('活跃任务请使用归档，以保留服务端追踪记录');
+        const creative = db.getFirstSync('SELECT job_id FROM creative_job_contexts WHERE job_id=? UNION ALL SELECT job_id FROM creative_output_links WHERE job_id=? UNION ALL SELECT job_id FROM creative_generation_drafts WHERE job_id=? UNION ALL SELECT job_id FROM creative_plan_steps WHERE job_id=? LIMIT 1', id, id, id, id);
+        if (creative) {
+          // Keep immutable job, budget, draft and output references; remove only inbox membership.
+          db.runSync('INSERT OR IGNORE INTO task_removals(task_id,removed_at) VALUES(?,?)', id, Date.now());
+          db.runSync('DELETE FROM task_archives WHERE task_id=?', id);
+          return;
+        }
         rows = db.getAllSync<any>('SELECT local_uri, thumbnail_url FROM tasks WHERE id = ? LIMIT 1', id);
         assets = db.getAllSync<any>('SELECT local_path, poster_path FROM media_assets WHERE task_id = ?', id);
         db.runSync('DELETE FROM workflow_operations WHERE job_id = ?', id);

@@ -285,3 +285,44 @@ test('rolls back every task projection delete when one delete fails', async () =
     expect(db.getFirstSync("SELECT id FROM media_assets WHERE id='asset-1'")).toEqual({ id: 'asset-1' });
   } finally { db.close(); }
 });
+
+
+test.each(['FAILED', 'CANCELLED', 'SUCCESS'])('removes a terminal creative task (%s) without destroying its immutable history or resurrecting on projection repair', async status => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const store = createTaskRepository(db as never);
+    const task = { id: 'creative', prompt: 'x', status: status as TaskRecord['status'], resolution: '720p', duration: 5, createdAt: 1, updatedAt: 2 };
+    await store.upsert(task);
+    db.runSync("INSERT INTO workflow_jobs(id,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,status,created_at,updated_at) VALUES('creative','h3','1','hash','a','1','{}',?,1,2)", status === 'SUCCESS' ? 'SUCCEEDED' : status);
+    db.runSync("INSERT INTO creative_assets(id,kind,title,revision,created_at,updated_at) VALUES('asset','video','x',0,1,1)");
+    db.runSync("INSERT INTO creative_generation_drafts(id,provider_id,workflow_id,input_json,state,job_id,created_at,updated_at) VALUES('draft','a','h3','{}','SUBMITTED','creative',1,2)");
+    db.runSync("INSERT INTO creative_job_contexts(job_id,draft_id,draft_revision,target_asset_id,input_snapshot_json,request_hash,execution_epoch,created_at) VALUES('creative','draft',0,'asset','{}','hash','epoch',1)");
+    const { createTaskCommandService } = require('./taskCommandService');
+    const { createTaskProjectionRepository } = require('./projectionRepository');
+    const commands = createTaskCommandService({ db, fileExists: async () => false, resolveCasUri: (p: string) => p, invalidate: () => {} });
+    await commands.setArchived('creative', true);
+    expect((await createTaskProjectionRepository(db, 'archived').readWindow()).items).toHaveLength(1);
+    await commands.setArchived('creative', false);
+    expect((await createTaskProjectionRepository(db).readWindow()).items).toHaveLength(1);
+    await store.remove('creative');
+    await store.remove('creative');
+    await store.upsertWorkflowProjection(task);
+    for (const filter of ['all', 'failed', 'active', 'archived']) expect((await createTaskProjectionRepository(db, filter).readWindow()).items).toHaveLength(0);
+    expect(db.getFirstSync('SELECT job_id FROM creative_job_contexts')).toEqual({ job_id: 'creative' });
+    expect(db.getFirstSync('SELECT job_id FROM creative_generation_drafts')).toEqual({ job_id: 'creative' });
+    expect(db.getFirstSync('SELECT id FROM workflow_jobs')).toEqual({ id: 'creative' });
+    expect(db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
+    await expect(commands.setArchived('creative', false)).rejects.toThrow('任务已从列表移除');
+  } finally { db.close(); }
+});
+
+test('a stale failed projection cannot remove an active authoritative job', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    const store = createTaskRepository(db as never);
+    await store.upsert({ id: 'a', prompt: 'x', status: 'FAILED', resolution: '720p', duration: 5, createdAt: 1, updatedAt: 2 });
+    db.runSync("INSERT INTO workflow_jobs(id,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,status,created_at,updated_at) VALUES('a','h3','1','hash','a','1','{}','RUNNING',1,2)");
+    await expect(store.remove('a')).rejects.toThrow('活跃任务');
+    expect(db.getFirstSync('SELECT id FROM tasks')).toEqual({ id: 'a' });
+  } finally { db.close(); }
+});

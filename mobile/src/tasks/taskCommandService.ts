@@ -65,6 +65,7 @@ export function createTaskCommandService(options: {
     },
     async setArchived(taskId: string, archived: boolean) {
       await withWriteTransaction(options.db, async db => {
+        if (await db.getFirstAsync('SELECT task_id FROM task_removals WHERE task_id=?', taskId)) throw new Error('任务已从列表移除');
         if (archived) await db.runAsync('INSERT OR IGNORE INTO task_archives(task_id,archived_at) SELECT id,? FROM tasks WHERE id=?', now(), taskId);
         else await db.runAsync('DELETE FROM task_archives WHERE task_id=?', taskId);
       });

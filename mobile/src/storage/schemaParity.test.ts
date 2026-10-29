@@ -20,14 +20,14 @@ test.each([5, 6, 7, 8])('frozen v%s upgrades to fresh schema including constrain
     ensureAppDatabase(historical as never);
     expect(fresh.getFirstSync('PRAGMA user_version')).toEqual({ user_version: APP_SCHEMA_VERSION });
     const v10Names = new Set(['task_archives', 'archive_revision_insert', 'archive_revision_delete', 'archive_task_delete', 'task_monitor_events', 'task_monitor_event_insert', 'task_monitor_event_delete', 'media_asset_tombstones', 'idx_media_tombstones_task', 'media_assets_respect_deletion', 'media_refs_respect_deletion', 'media_deliveries_respect_deletion']);
-    expect(schema(fresh).filter(row => !v10Names.has(row.name) && !row.name.startsWith('creative_') && !row.name.startsWith('agent_skill_'))).toEqual(terminalSchema.objects);
-    expect(schema(historical).filter(row => !v10Names.has(row.name) && !row.name.startsWith('creative_') && !row.name.startsWith('agent_skill_'))).toEqual(terminalSchema.objects);
+    expect(schema(fresh).filter(row => !v10Names.has(row.name) && !row.name.startsWith('creative_') && !row.name.startsWith('agent_skill_') && !row.name.startsWith('task_removals'))).toEqual(terminalSchema.objects);
+    expect(schema(historical).filter(row => !v10Names.has(row.name) && !row.name.startsWith('creative_') && !row.name.startsWith('agent_skill_') && !row.name.startsWith('task_removals'))).toEqual(terminalSchema.objects);
     expect(schema(historical)).toEqual(schema(fresh));
     expect(historical.getFirstSync('SELECT prompt FROM tasks WHERE id=?', 'preserved')).toEqual({ prompt: 'original' });
     expect(fresh.getAllSync<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").map(row => row.name).sort()).toEqual([...APP_TABLES].sort());
     const expected = schema(fresh);
     resetAppDatabase(historical as never);
-    expect(schema(historical).filter(row => !v10Names.has(row.name) && !row.name.startsWith('creative_') && !row.name.startsWith('agent_skill_'))).toEqual(terminalSchema.objects);
+    expect(schema(historical).filter(row => !v10Names.has(row.name) && !row.name.startsWith('creative_') && !row.name.startsWith('agent_skill_') && !row.name.startsWith('task_removals'))).toEqual(terminalSchema.objects);
     expect(schema(historical)).toEqual(expected);
     expect(historical.getAllSync('SELECT id FROM tasks')).toEqual([]);
   } finally { historical.close(); fresh.close(); }
@@ -99,5 +99,20 @@ test('v12 upgrade adds reversible archives without changing task state', () => {
     db.runSync("INSERT INTO task_archives VALUES('preserved',2)");
     db.runSync("DELETE FROM tasks WHERE id='preserved'");
     expect(db.getAllSync('SELECT * FROM task_archives')).toEqual([]);
+  } finally { db.close(); }
+});
+
+
+test('v29 migration preserves archived failed tasks and adds an empty removal ledger', () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    db.execSync('DROP TRIGGER task_removals_revision_insert; DROP TABLE task_removals; PRAGMA user_version=29');
+    db.runSync("INSERT INTO tasks(id,prompt,status,resolution,duration,created_at,updated_at) VALUES('failed','original','FAILED','720p',5,1,2)");
+    db.runSync("INSERT INTO task_archives VALUES('failed',2)");
+    ensureAppDatabase(db as never);
+    expect(db.getFirstSync('PRAGMA user_version')).toEqual({ user_version: APP_SCHEMA_VERSION });
+    expect(db.getFirstSync('SELECT status FROM tasks')).toEqual({ status: 'FAILED' });
+    expect(db.getFirstSync('SELECT task_id FROM task_archives')).toEqual({ task_id: 'failed' });
+    expect(db.getAllSync('SELECT * FROM task_removals')).toEqual([]);
   } finally { db.close(); }
 });
