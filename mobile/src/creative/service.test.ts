@@ -59,7 +59,7 @@ test('commands are idempotent, conflict on reused keys and reject stale revision
   } finally { f.db.close(); }
 });
 
-test('shared blobs keep separate assets; removing a project link preserves the asset and file pin', async () => {
+test('reimport shares an asset; removing a project link preserves its other project and file pin', async () => {
   const f = fixture();
   try {
     const p1 = await f.project(), p2 = await f.project('second');
@@ -68,9 +68,10 @@ test('shared blobs keep separate assets; removing a project link preserves the a
     await f.service.execute({ name: 'asset.unlinkFromProject', payload: { projectId: p1, assetId: a.assetId, expectedRevision: 0 } }, 'unlink');
     expect(await f.service.assets({ projectId: p1 })).toEqual([]);
     expect((await f.service.assets({ projectId: p2 }))[0].id).toBe(a.assetId);
-    expect((await f.service.assets({ inbox: true }))[0].id).toBe(b.assetId);
+    expect(b).toEqual(a);
+    expect(await f.service.assets({ inbox: true })).toEqual([]);
     expect(f.db.getAllSync('SELECT * FROM artifact_blobs')).toHaveLength(1);
-    expect(f.db.getAllSync("SELECT * FROM artifact_blob_refs WHERE owner_type='creative_version'")).toHaveLength(2);
+    expect(f.db.getAllSync("SELECT * FROM artifact_blob_refs WHERE owner_type='creative_version'")).toHaveLength(1);
     expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
   } finally { f.db.close(); }
 });
@@ -113,7 +114,9 @@ test('asset type filtering precedes the page limit, so older matching assets rem
 
 test('batch record covers select the latest version of each asset without duplicate rows',async()=>{
  const f=fixture();try{
-   const a=await f.image(),b=await f.image();
+   const a=await f.image();
+   const secondBlob='b'.repeat(64);f.db.runSync('INSERT INTO artifact_blobs VALUES(?,10,?,?,1,1)',secondBlob,'image/png',`cas/${secondBlob}`);
+   const second=await f.service.execute({name:'asset.import',payload:{title:'second',kind:'image',blobSha256:secondBlob}},'second-image');if(second.status!=='completed')throw new Error('expected');const b=second.value;
    f.db.runSync("INSERT INTO creative_asset_versions VALUES('latest',?,2,'generated','{}',200)",a.assetId);
    const covers=await f.service.latestVersions([a.assetId,b.assetId,a.assetId,'missing']);
    expect(covers).toHaveLength(2);

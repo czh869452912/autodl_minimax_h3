@@ -1,3 +1,4 @@
+import {importedAssetPeers} from './importIdentity';
 import { z } from 'zod';
 import type { AppDatabase } from '../storage/appDatabase';
 const id=z.string().min(1).max(200),revision=z.number().int().nonnegative();
@@ -7,9 +8,19 @@ export const lifecycleSchemas={
   'asset.restore':z.object({id,expectedRevision:revision}).strict(),
 };
 export type LifecycleCommand={[K in keyof typeof lifecycleSchemas]:{name:K;payload:z.input<typeof lifecycleSchemas[K]>}}[keyof typeof lifecycleSchemas];
-export async function applyAssetLifecycle(tx:AppDatabase,name:string,p:any,now:number){
+export async function applyAssetLifecycle(tx:AppDatabase,name:string,p:any,now:number,single=false){
   const asset=await tx.getFirstAsync<{revision:number}>('SELECT revision FROM creative_assets WHERE id=?',p.id);
   if(!asset||asset.revision!==p.expectedRevision)throw new Error('REVISION_CONFLICT');
+  if(!single && (name==='asset.trash'||name==='asset.restore')){
+    const peers=await importedAssetPeers(tx,p.id);
+    if(peers.length>1){
+      for(const peer of peers){
+        const row=await tx.getFirstAsync<{revision:number}>('SELECT revision FROM creative_assets WHERE id=?',peer);
+        await applyAssetLifecycle(tx,name,{id:peer,expectedRevision:row!.revision},now,true);
+      }
+      return {assetId:p.id};
+    }
+  }
   if(name==='asset.trash'){
     const used=await tx.getFirstAsync(`SELECT asset_id FROM creative_project_assets WHERE asset_id=? UNION ALL
       SELECT v.asset_id FROM creative_shot_assets s JOIN creative_asset_versions v ON v.id=s.version_id JOIN creative_shots h ON h.id=s.shot_id WHERE v.asset_id=? AND h.deleted_at IS NULL UNION ALL

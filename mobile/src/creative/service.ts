@@ -1,3 +1,4 @@
+import { importedOriginals } from './importIdentity';
 import {enqueueVersionExport} from './enqueueVersionExport';
 import {readResultHistoryPage} from './resultHistory';
 import {readVideoHistory} from './videoHistory';
@@ -74,7 +75,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
     async saveProjectTab(projectId:string,tab:'brief'|'shots'|'assets'|'plans'|'activity'){await withWriteTransaction(db,tx=>tx.runAsync('INSERT INTO creative_project_views VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET tab=excluded.tab',projectId,tab).then(()=>undefined));},
     async description(assetId:string){return db.getFirstAsync<{description:string;tags_json:string}>('SELECT * FROM creative_asset_descriptions WHERE asset_id=?',assetId);},
     async assets(options: { projectId?: string; query?: string; inbox?: boolean; trash?:boolean; kind?: string; limit?: number } = {}): Promise<CreativeAsset[]> {
-      const rows = await db.getAllAsync<Row>(`SELECT a.* FROM creative_assets a WHERE EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=a.id)=? AND (? IS NULL OR EXISTS(SELECT 1 FROM creative_project_assets p WHERE p.asset_id=a.id AND p.project_id=?)) AND (?=0 OR NOT EXISTS(SELECT 1 FROM creative_project_assets p WHERE p.asset_id=a.id)) AND (?='all' OR (?='document' AND a.kind NOT IN ('image','video')) OR a.kind=?) AND instr(lower(a.title || COALESCE((SELECT description || tags_json FROM creative_asset_descriptions WHERE asset_id=a.id),'')),lower(?))>0 ORDER BY a.updated_at DESC,a.id DESC LIMIT ?`, options.trash ? 1 : 0, options.projectId ?? null, options.projectId ?? null, options.inbox ? 1 : 0, options.kind ?? 'all', options.kind ?? 'all', options.kind ?? 'all', options.query ?? '', Math.min(1000, Math.max(1, options.limit ?? 100)));
+      const rows = await db.getAllAsync<Row>(`WITH originals AS (${importedOriginals}), candidates AS (SELECT a.*,ROW_NUMBER() OVER(PARTITION BY COALESCE(o.kind || ':' || o.blob_sha256,a.id) ORDER BY a.created_at,a.id) AS import_rank FROM creative_assets a LEFT JOIN originals o ON o.asset_id=a.id WHERE EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=a.id)=? AND (? IS NULL OR EXISTS(SELECT 1 FROM creative_project_assets p WHERE p.asset_id=a.id AND p.project_id=?)) AND (?=0 OR NOT EXISTS(SELECT 1 FROM creative_project_assets p WHERE p.asset_id=a.id)) AND (?='all' OR (?='document' AND a.kind NOT IN ('image','video')) OR a.kind=?) AND instr(lower(a.title || COALESCE((SELECT description || tags_json FROM creative_asset_descriptions WHERE asset_id=a.id),'')),lower(?))>0) SELECT * FROM candidates WHERE import_rank=1 ORDER BY updated_at DESC,id DESC LIMIT ?`, options.trash ? 1 : 0, options.projectId ?? null, options.projectId ?? null, options.inbox ? 1 : 0, options.kind ?? 'all', options.kind ?? 'all', options.kind ?? 'all', options.query ?? '', Math.min(1000, Math.max(1, options.limit ?? 100)));
       return rows.map(asset);
     },
     async versions(assetId: string): Promise<AssetVersion[]> {
@@ -82,16 +83,18 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
     },
     async availableVersionPage(options: { kind: 'image'|'video'|'audio'; projectId?: string; query?: string; after?: { createdAt: number; id: string }; limit?: number }) {
       const limit = Math.min(100, Math.max(1, options.limit ?? 40));
-      const rows = await db.getAllAsync<Row>(`SELECT v.id,v.created_at,a.title FROM creative_asset_versions v
+      const rows = await db.getAllAsync<Row>(`WITH originals AS (${importedOriginals}), candidates AS (SELECT v.id,v.created_at,a.title,ROW_NUMBER() OVER(PARTITION BY COALESCE(o.kind || ':' || o.blob_sha256,v.id) ORDER BY v.created_at,v.id) AS import_rank FROM creative_asset_versions v
         JOIN creative_assets a ON a.id=v.asset_id
+        LEFT JOIN originals o ON o.version_id=v.id
         JOIN creative_version_files f ON f.version_id=v.id AND f.role='original'
         LEFT JOIN creative_file_resources r ON r.version_id=v.id AND r.role='original'
         WHERE a.kind=? AND COALESCE(r.state,f.state)='AVAILABLE'
         AND NOT EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=a.id)
         AND (? IS NULL OR EXISTS(SELECT 1 FROM creative_project_assets p WHERE p.asset_id=a.id AND p.project_id=?))
         AND instr(lower(a.title || COALESCE((SELECT description || tags_json FROM creative_asset_descriptions WHERE asset_id=a.id),'')),lower(?))>0
-        AND (? IS NULL OR v.created_at<? OR (v.created_at=? AND v.id<?))
-        ORDER BY v.created_at DESC,v.id DESC LIMIT ?`, options.kind, options.projectId??null,options.projectId??null, options.query??'', options.after?.createdAt??null,options.after?.createdAt??null,options.after?.createdAt??null,options.after?.id??null,limit+1);
+        ) SELECT id,created_at,title FROM candidates WHERE import_rank=1
+        AND (? IS NULL OR created_at<? OR (created_at=? AND id<?))
+        ORDER BY created_at DESC,id DESC LIMIT ?`, options.kind, options.projectId??null,options.projectId??null, options.query??'', options.after?.createdAt??null,options.after?.createdAt??null,options.after?.createdAt??null,options.after?.id??null,limit+1);
       const page=rows.slice(0,limit), versions=await this.versionsByIds(page.map(r=>r.id)), byId=new Map(versions.map(v=>[v.id,v]));
       const last=page[page.length-1];
       return { items:page.flatMap(r=>{const version=byId.get(r.id);return version?[{title:r.title as string,version}]:[];}), next:rows.length>limit&&last?{createdAt:last.created_at as number,id:last.id as string}:undefined };
@@ -172,6 +175,17 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
             if (p.projectId) await requireProject(tx, p.projectId);
             const blob = await tx.getFirstAsync<{ mime: string }>('SELECT mime FROM artifact_blobs WHERE sha256=?', p.blobSha256);
             if (!blob || (['image','video','audio'].includes(p.kind) && !blob.mime.startsWith(`${p.kind}/`))) throw new Error('ASSET_BLOB_INVALID');
+            const existing = await tx.getFirstAsync<{asset_id:string;version_id:string}>(`SELECT o.asset_id,o.version_id FROM (${importedOriginals}) o JOIN creative_assets a ON a.id=o.asset_id
+              WHERE o.kind=? AND o.blob_sha256=? ORDER BY EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=o.asset_id),a.created_at,a.id LIMIT 1`,p.kind,p.blobSha256);
+            if (existing) {
+              const {asset_id:assetId,version_id:versionId}=existing;
+              await tx.runAsync('DELETE FROM creative_asset_trash WHERE asset_id=?',assetId);
+              await tx.runAsync("UPDATE creative_version_files SET state='AVAILABLE' WHERE version_id=? AND role='original'",versionId);
+              await tx.runAsync("UPDATE creative_file_resources SET blob_sha256=?,state='AVAILABLE',last_verified_at=?,error_code=NULL,revision=revision+1,updated_at=? WHERE version_id=? AND role='original'",p.blobSha256,now,now,versionId);
+              if(p.projectId) await tx.runAsync('INSERT OR IGNORE INTO creative_project_assets VALUES(?,?,?,0)',p.projectId,assetId,versionId);
+              if(p.sourceUri) await tx.runAsync("INSERT INTO creative_recovery_sources(id,resource_id,kind,locator_json,persisted_permission,created_at) SELECT ?,?,'import_uri',?,0,? WHERE NOT EXISTS(SELECT 1 FROM creative_recovery_sources WHERE resource_id=? AND kind='import_uri' AND locator_json=?)",deps.id(),versionId+':original',JSON.stringify({uri:p.sourceUri}),now,versionId+':original',JSON.stringify({uri:p.sourceUri}));
+              value={assetId,versionId}; break;
+            }
             const assetId = deps.id(), versionId = deps.id();
             await tx.runAsync('INSERT INTO creative_assets VALUES(?,?,?,?,0,?,?)', assetId, p.kind, p.title, versionId, now, now);
             await tx.runAsync("INSERT INTO creative_asset_versions VALUES(?,?,1,'import',?,?)", versionId, assetId, JSON.stringify(p.metadata ? recoverNovelAiMetadata(p.metadata) : {}), now);
