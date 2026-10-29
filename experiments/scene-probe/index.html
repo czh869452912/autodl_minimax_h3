@@ -1,0 +1,5 @@
+<!doctype html><html lang="zh"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'">
+<title>离线静态取景实验</title><style>
+body{margin:0;padding:32px 12px 24px;background:#eff3ef;color:#182a23;font:16px sans-serif}h1{font-size:22px}button{padding:12px;margin:4px;border:1px solid #789788;border-radius:6px;background:white;color:#182a23}canvas{display:block;width:100%;height:100%;touch-action:none}#status{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}#view{aspect-ratio:16/9;background:#dbe5df}p{line-height:1.5}</style>
+<h1>离线静态取景实验</h1><p>拖动画面调整摄影机；实验文件独立保存。</p><div id="view"></div><div>
+<button id="save">保存场景</button><button id="load">重开场景</button><button id="export">导出 PNG</button><button id="context">丢失并恢复上下文</button><button id="bench20">20 对象测试</button><button id="bench100">100 对象测试</button></div><p id="status">启动渲染器…</p><script src="scene.js"></script></html>

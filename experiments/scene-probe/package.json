@@ -1,0 +1,14 @@
+{
+  "name": "autodl-offline-scene-probe",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bundle": "node bundle.mjs"
+  },
+  "dependencies": {
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10"
+  }
+}
