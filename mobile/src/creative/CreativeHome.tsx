@@ -98,7 +98,8 @@ export function CreativeHome({openRequest,onRequestConsumed,opening=false}:{open
       {!groups.length?<Text style={s.muted}>完成编辑或生成后，创作会保存在这里。</Text>:null}
       {groups.length>recordLimit?<TextAction label={`加载更多 · 还有 ${groups.length-recordLimit} 组`} onPress={()=>setRecordLimit(count=>count+30)}/>:null}
       <View style={{flexDirection:'row',flexWrap:'wrap',gap:12}}>
-        <TextAction label="项目与素材" onPress={()=>void change(async()=>{setRecords(false);router.push('/(tabs)/projects');})}/>
+        <TextAction label="项目" onPress={()=>void change(async()=>{setRecords(false);router.push('/(tabs)/projects');})}/>
+        <TextAction label="素材库" onPress={()=>void change(async()=>{setRecords(false);router.push('/(tabs)/assets');})}/>
         <TextAction label="管理工作流" onPress={()=>void change(async()=>{setRecords(false);router.push({pathname:"/(tabs)/settings",params:{section:"workflows"}});})}/>
       </View>
     </ParameterSheet>:null}

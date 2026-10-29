@@ -21,6 +21,7 @@ import { probeVideoStructure } from '../../src/native/media';
 export default function VideoDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const back=()=>router.canGoBack()?router.back():router.replace('/(tabs)/gallery');
   const [task, setTask] = useState<TaskRecord | null>(null);
   const [asset, setAsset] = useState<MediaAsset | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -63,7 +64,7 @@ export default function VideoDetailScreen() {
   }, [reloadTaskAndAsset]));
 
   if (!loaded) return <View style={styles.center}><ActivityIndicator color={COLORS.primaryActive} /><Text style={styles.muted}>正在加载作品…</Text></View>;
-  if (loadError && !task) return <View style={styles.center}><Text accessibilityRole="alert">{loadError}</Text><Pressable accessibilityRole="button" accessibilityLabel="重试读取作品" onPress={() => void reloadTaskAndAsset()} style={styles.backAction}><Text style={styles.backActionText}>重试</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="返回上一页" onPress={() => router.back()} style={styles.backAction}><Text style={styles.backActionText}>返回上一页</Text></Pressable></View>;
+  if (loadError && !task) return <View style={styles.center}><Text accessibilityRole="alert">{loadError}</Text><Pressable accessibilityRole="button" accessibilityLabel="重试读取作品" onPress={() => void reloadTaskAndAsset()} style={styles.backAction}><Text style={styles.backActionText}>重试</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="返回上一页" onPress={back} style={styles.backAction}><Text style={styles.backActionText}>返回上一页</Text></Pressable></View>;
   if (!task) return <View style={styles.center}><Text style={styles.title}>作品不存在或已删除</Text><Pressable accessibilityRole="button" accessibilityLabel="返回上一页" onPress={() => router.back()} style={styles.backAction}><Text style={styles.backGlyph}>‹</Text><Text style={styles.backActionText}>返回上一页</Text></Pressable></View>;
 
   const generated = task.status === 'SUCCESS' || task.status === 'PARTIAL_SUCCESS';
