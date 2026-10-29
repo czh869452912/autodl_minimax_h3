@@ -210,3 +210,16 @@
 - SHA-256：`21AAC04EFD4A81AC565DA0732E10A74C160051EABBFC10F8443FB35618178E4A`。
 - 最终包的包名/版本、独立协议与 FileProvider、非 debuggable、禁止明文/系统备份、嵌入 Expo 身份、Hermes 字节码、双 ARM、v2 签名、16 KB ZIP 对齐及 arm64 ELF 对齐通过；86 个 native libraries 已检查，证书与 beta.22 一致，可覆盖升级测试版。32 位 ABI 不套用 64 位的 16 KB ELF 门槛，参见 [Android 官方说明](https://developer.android.com/guide/practices/page-sizes)。
 - 校验报告 `build/phone-beta/beta23-verification.json`；构建日志 `build/phone-beta23-build.log`。ARM 分发包未安装到真实手机，未推送或发布远端 Release。
+
+
+## 2026-10-29 · beta.24 失败任务整理与技能提炼
+
+- 版本 1.5.0-preview.4-beta.24，versionCode 63；功能提交 c578c3a1、a8ef7079、e2b8b580。
+- 失败任务可归档/恢复；终态创作任务可从全部、失败、归档和最近任务列表移除，保留草稿/成果/消费引用，后台投影修复不复活记录。
+- 本地技能新增“从对话提炼技能”：选择已保存文本证据、脱敏并审阅发送内容、生成可编辑草稿、保存恢复、检查发布、独立启用。没有自动发布或自动启用，未运行付费模型验收。
+- schema 29 → 30 → 31，增加任务移除记录和技能提炼草稿，沿用迁移前备份与完整本地备份；旧 APK 不可直接写入升级后的数据库。
+- 全量 285 组/1777 项通过，原有 1 组/4 项跳过；最终 TypeScript 检查通过。Android 17 x86_64 模拟器验证归档/恢复/移除后重启、最近任务、证据脱敏、草稿重启恢复、审阅发布及单独启用；原数据库恢复且逐字节核对。真实模型的创作效果与 ARM 实机尚未验收。
+- 双 ARM APK：build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.24-android.apk，169282642 字节，最低 Android 8.0。
+- SHA-256：F2A32B0417198EBFC251723274646DE41743B934A10B6339B0CDDB4BA09E463B。
+- 包名/版本、独立协议/FileProvider、非 debuggable、禁止明文及系统备份、嵌入 Expo 身份、Hermes、双 ARM、86 个原生库、v2 签名、16 KB ZIP 和 arm64 ELF 对齐通过。签名与 beta.23 相同，可覆盖升级测试版；未推送或发布远端。
+- 日志与校验：build/phone-beta24-build.log、build/phone-beta/beta24-verification.json、build/followup-final-tests.log、build/followup-final-typecheck.log、build/followup-device-verification.json。
