@@ -50,3 +50,32 @@ test('a real graph discovers and reads the captured skill, rejects writes, and o
     expect((await store.runs()).find(run => run.runId === 'r2')?.snapshot.versions[0].id).toBe(next);
   } finally { db.close(); }
 });
+
+
+test('a reviewed extracted version is usable in two project conversations without carrying its source evidence', async () => {
+  const db = createInitializedRealSqliteTestDb();
+  const { createSkillDraftStore } = require('./draftStore');
+  try {
+    const drafts = createSkillDraftStore(db), skills = createSkillStore(db as never);
+    const draft = await drafts.save({ goal: 'Review scenes', evidence: 'SOURCE_PROJECT_PRIVATE_EXAMPLE', content: pkg('REUSABLE_REVIEW_METHOD').files['SKILL.md'] });
+    const id = await drafts.publish(draft); await skills.enable(id);
+    for (const project of ['p-a', 'p-b']) {
+      const threadId = project + '-thread';
+      db.runSync("INSERT INTO creative_projects(id,title,brief,revision,created_at,updated_at) VALUES(?,?, '',0,1,1)", project, project);
+      db.runSync('INSERT INTO creative_agent_scopes(thread_id,project_id,revision,updated_at) VALUES(?,?,0,1)', threadId, project);
+      const model = new ScriptedModel([
+        new AIMessage({ content: '', tool_calls: [{ id: 'read', name: 'read_file', args: { file_path: '/skills/local-' + id.slice(0, 58) + '/SKILL.md' } }] }),
+        new AIMessage('reviewed'),
+      ]);
+      const prepare = createSkillRunPreparer(db as never, config, (c, deps) => createH3Agent(c, { ...deps, modelFactory: (() => model) as never }));
+      const handle = await prepare({ threadId, runId: project + '-run' }, new AbortController().signal, jest.fn());
+      try {
+        const graph = handle.graph as unknown as ReturnType<typeof createH3Agent>;
+        const result = await graph.invoke({ messages: [{ role: 'user', content: 'Review this project scene.' }] });
+        expect(JSON.stringify(result.messages)).toContain('REUSABLE_REVIEW_METHOD');
+        expect(JSON.stringify(model.received)).not.toContain('SOURCE_PROJECT_PRIVATE_EXAMPLE');
+      } finally { handle.release(); }
+    }
+    expect(db.getAllSync('SELECT * FROM creative_budget_reservations')).toEqual([]);
+  } finally { db.close(); }
+});

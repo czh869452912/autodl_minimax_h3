@@ -116,3 +116,16 @@ test('v29 migration preserves archived failed tasks and adds an empty removal le
     expect(db.getAllSync('SELECT * FROM task_removals')).toEqual([]);
   } finally { db.close(); }
 });
+
+
+test('v30 upgrades skill drafts without changing installed versions or task removals', () => {
+  const db = createInitializedRealSqliteTestDb();
+  try {
+    db.execSync('DROP TRIGGER agent_skill_drafts_published_immutable; DROP TABLE agent_skill_drafts; PRAGMA user_version=30');
+    db.runSync("INSERT INTO task_removals VALUES('hidden',1)");
+    ensureAppDatabase(db as never);
+    expect(db.getFirstSync('PRAGMA user_version')).toEqual({ user_version: APP_SCHEMA_VERSION });
+    expect(db.getFirstSync('SELECT task_id FROM task_removals')).toEqual({ task_id: 'hidden' });
+    expect(db.getAllSync('SELECT * FROM agent_skill_drafts')).toEqual([]);
+  } finally { db.close(); }
+});

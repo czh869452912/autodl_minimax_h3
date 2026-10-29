@@ -1,3 +1,4 @@
+import { v31SkillDrafts } from './v31SkillDrafts';
 import { v30TaskRemoval } from './v30TaskRemoval';
 import { v29AgentSkills } from './v29AgentSkills';
 import { v16CreativeDomain } from './v16CreativeDomain';
@@ -61,6 +62,7 @@ const steps = new Map<number, MigrationStep>([
   [v28CreativeHistory.fromVersion, v28CreativeHistory],
   [v29AgentSkills.fromVersion, v29AgentSkills],
   [v30TaskRemoval.fromVersion, v30TaskRemoval],
+  [v31SkillDrafts.fromVersion, v31SkillDrafts],
 ]);
 
 function version(db: AppDatabase): number {

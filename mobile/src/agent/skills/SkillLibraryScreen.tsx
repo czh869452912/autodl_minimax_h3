@@ -45,6 +45,7 @@ export function SkillLibraryScreen() {
       <ListAction label="返回" secondary onPress={back} />
       <Text accessibilityRole="header" style={s.heading}>本地技能</Text>
       <Text style={s.muted}>内置 H3 技能随应用提供且只读。本地技能是可复用的文本指导，启用后供默认助手及项目对话的新运行使用；不会增加工具或生成额度。</Text>
+      <ListAction label="从对话提炼技能" secondary disabled={busy} onPress={() => router.push('/agent-skill-extract')} />
       <TextInput accessibilityLabel="技能文本" placeholder="粘贴带有 name、description 头部的 SKILL.md" value={text} onChangeText={setText} editable={!busy} multiline maxLength={SKILL_BYTES} style={[s.input, { minHeight: 160, textAlignVertical: 'top' }]} />
       <ListAction label="填入技能示例" secondary disabled={busy} onPress={() => setText(template)} />
       <ListAction label="检查粘贴的技能" disabled={busy || !text.trim()} onPress={() => void run(async () => { setPreview(validateSkillPackage({ 'SKILL.md': text })); })} />
