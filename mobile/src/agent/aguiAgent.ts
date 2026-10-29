@@ -16,6 +16,11 @@ type AgentExecutionOptions = {
   includeReasoningHistory?: boolean;
   workspace?: Pick<typeof import('./agentWorkspace'), 'prepareWorkspaceRun' | 'captureWorkspaceState'>;
   budget?: import('./agentTypes').H3ContextBudget;
+  prepareRun?: (input: RunAgentInput, signal: AbortSignal, cancel: () => void) => Promise<{
+    graph: DeepAgentGraph;
+    workspace: NonNullable<AgentExecutionOptions['workspace']>;
+    release: () => void;
+  }>;
 };
 const rec = (value: unknown): Record<string, any> => value && typeof value === 'object' ? value as Record<string, any> : {};
 const imageContentPart = (part: Record<string, any>): Record<string, unknown> | null => {
@@ -204,6 +209,9 @@ export class H3AgUiAgent extends AbstractAgent {
 
   private async runStream(input: RunAgentInput, signal: AbortSignal, subscriber: { next: (event: BaseEvent) => void }) {
     subscriber.next({ type: EventType.RUN_STARTED, threadId: input.threadId, runId: input.runId });
+    const preparedRun = await this.execution.prepareRun?.(input, signal, () => this.abortRun());
+    try {
+    if (signal.aborted) return;
     const retry = this.preparedRetry;
     this.preparedRetry = undefined;
     const state = rec(input.state);
@@ -220,13 +228,13 @@ export class H3AgUiAgent extends AbstractAgent {
     });
     const modelInput = await hydrateModelImages(messagesForDeepAgent(modelMessages));
     if (signal.aborted) return;
-    const workspaceAdapter = this.execution.workspace;
+    const workspaceAdapter = preparedRun?.workspace ?? this.execution.workspace;
     const budget = this.execution.budget;
     const baseWorkspace = retry ? retry.workspace : state.h3Workspace;
     const prepared = workspaceAdapter?.prepareWorkspaceRun(baseWorkspace, modelInput, this.execution.budget);
     let workspace = baseWorkspace;
     const revision = Math.max(0, Number(state.h3Workspace?.revision) || 0) + 1;
-    const rawStream = await this.graph.stream(prepared?.input ?? { messages: modelInput, files: getOfficialH3SkillFiles() }, { configurable: { thread_id: input.threadId, creative_run_id: input.runId }, context: prepared?.context, signal, streamMode: workspaceAdapter ? ['messages', 'values'] : 'messages' });
+    const rawStream = await (preparedRun?.graph ?? this.graph).stream(prepared?.input ?? { messages: modelInput, files: getOfficialH3SkillFiles() }, { configurable: { thread_id: input.threadId, creative_run_id: input.runId }, context: prepared?.context, signal, streamMode: workspaceAdapter ? ['messages', 'values'] : 'messages' });
     const stream = (async function* () {
       for await (const value of rawStream) {
         if (signal.aborted) return;
@@ -276,5 +284,6 @@ export class H3AgUiAgent extends AbstractAgent {
       return;
     }
     subscriber.next({ type: EventType.RUN_FINISHED, threadId: input.threadId, runId: input.runId, outcome: { type: 'success' } });
+    } finally { preparedRun?.release(); }
   }
 }

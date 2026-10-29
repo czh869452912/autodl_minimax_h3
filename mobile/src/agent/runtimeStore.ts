@@ -40,7 +40,10 @@ function defaultAgentFactory(config: PromptAgentConfig): H3AgUiAgent {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { H3AgUiAgent } = require('./aguiAgent') as typeof import('./aguiAgent');
   const workspace = require('./agentWorkspace') as typeof import('./agentWorkspace');
+  const { createSkillRunPreparer } = require('./skills/runtime') as typeof import('./skills/runtime');
+  const { getDatabase } = require('../storage/databaseClient') as typeof import('../storage/databaseClient');
   return new H3AgUiAgent(createH3Agent(config) as never, {}, {
+    prepareRun: createSkillRunPreparer(getDatabase(), config),
     workspace, budget: workspace.getH3ContextBudget(config), deadlineMs: Math.max(60000, config.timeoutMs * 2),
     includeReasoningHistory: isDeepSeekV4(config.model) && config.reasoningEffort !== 'none',
   });

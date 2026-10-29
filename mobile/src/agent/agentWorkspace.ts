@@ -48,8 +48,11 @@ class ReadOnlySkillsBackend extends StateBackend {
     return files.map(([path]) => ({ path, error: 'permission_denied' as const }));
   }
 }
-export function createH3WorkspaceBackend(): CompositeBackend {
-  const files = Object.fromEntries(Object.entries(getOfficialH3SkillFiles()).map(([path, file]) => [path.slice('/skills'.length), file]));
+export function createH3WorkspaceBackend(localFiles: Record<string, FileData> = {}): CompositeBackend {
+  for (const path of Object.keys(localFiles)) {
+    if (!/^\/skills\/local-[a-f0-9]{58}\//.test(path) || path.includes('..') || path.includes('\\')) throw new Error('Invalid local skill path');
+  }
+  const files = Object.fromEntries(Object.entries({ ...getOfficialH3SkillFiles(), ...localFiles }).map(([path, file]) => [path.slice('/skills'.length), file]));
   return new CompositeBackend(new StateBackend(), { '/skills/': new ReadOnlySkillsBackend({ state: { files } }) });
 }
 
@@ -71,10 +74,10 @@ function copyFiles(value: unknown): H3WorkspaceRecord['files'] {
 const todosSchema = z.array(z.object({ content: z.string().max(2000), status: z.enum(['pending', 'in_progress', 'completed']) })).max(100);
 const summarySchema = z.object({ cutoffIndex: z.number().int().positive(), prefixHash: z.string().regex(/^[a-f0-9]{64}$/), throughMessageId: z.string(), content: z.string(), filePath: z.string().nullable(), sessionId: z.string().max(200) });
 
-export function captureWorkspaceState(value: unknown, revision: number, budget = getH3ContextBudget()): H3WorkspaceRecord {
+export function captureWorkspaceState(value: unknown, revision: number, budget = getH3ContextBudget(), skills = currentSkillVersion()): H3WorkspaceRecord {
   if (!Number.isSafeInteger(revision) || revision < 0) throw new Error('Invalid workspace revision');
   const state = record(value);
-  const output: H3WorkspaceRecord = { schemaVersion: 1, graphVersion: H3_GRAPH_VERSION, skillVersion: currentSkillVersion(), budgetKey: budgetKey(budget), revision, files: copyFiles(state.files), todos: todosSchema.parse(state.todos ?? []) };
+  const output: H3WorkspaceRecord = { schemaVersion: 1, graphVersion: H3_GRAPH_VERSION, skillVersion: skills, budgetKey: budgetKey(budget), revision, files: copyFiles(state.files), todos: todosSchema.parse(state.todos ?? []) };
   const event = record(state._summarizationEvent);
   const messages: unknown[] = Array.isArray(state.messages) ? state.messages : [];
   if (Number.isInteger(event.cutoffIndex) && event.cutoffIndex > 0 && event.cutoffIndex <= messages.length && typeof event.summaryMessage?.content === 'string') {
@@ -86,7 +89,7 @@ export function captureWorkspaceState(value: unknown, revision: number, budget =
   return output;
 }
 
-export function prepareWorkspaceRun(workspace: unknown, messages: readonly unknown[], budget = getH3ContextBudget()) {
+export function prepareWorkspaceRun(workspace: unknown, messages: readonly unknown[], budget = getH3ContextBudget(), skills = currentSkillVersion()) {
   const context: { h3Summary?: { event: { cutoffIndex: number; summaryMessage: HumanMessage; filePath: string | null }; sessionId: string } } = {};
   let files: H3WorkspaceRecord['files'] = {};
   let todos: H3WorkspaceRecord['todos'] = [];
@@ -95,7 +98,7 @@ export function prepareWorkspaceRun(workspace: unknown, messages: readonly unkno
     if (saved.schemaVersion !== 1 || saved.graphVersion !== H3_GRAPH_VERSION) throw new Error('Unsupported workspace codec version');
     files = copyFiles(saved.files);
     todos = todosSchema.parse(saved.todos ?? []);
-    if (saved.summary && saved.skillVersion === currentSkillVersion() && saved.budgetKey === budgetKey(budget)) {
+    if (saved.summary && saved.skillVersion === skills && saved.budgetKey === budgetKey(budget)) {
       const parsed = summarySchema.safeParse(saved.summary);
       if (parsed.success) {
         const summary = parsed.data;

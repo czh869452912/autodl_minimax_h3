@@ -1,3 +1,4 @@
+import { v29AgentSkills } from './v29AgentSkills';
 import { v16CreativeDomain } from './v16CreativeDomain';
 import { v17CreativeDeliveries } from './v17CreativeDeliveries';
 import { v18CreativeFiles } from './v18CreativeFiles';
@@ -57,6 +58,7 @@ const steps = new Map<number, MigrationStep>([
   [v26CreativeProjectPresentation.fromVersion, v26CreativeProjectPresentation],
   [v27CreativeReview.fromVersion, v27CreativeReview],
   [v28CreativeHistory.fromVersion, v28CreativeHistory],
+  [v29AgentSkills.fromVersion, v29AgentSkills],
 ]);
 
 function version(db: AppDatabase): number {

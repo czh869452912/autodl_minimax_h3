@@ -34,9 +34,9 @@ export function AgentWorkspace() {
     } catch (e) { setError(e instanceof Error ? e.message : '项目创建失败'); }
     finally { lock.current = false; setBusy(false); }
   };
-  if(legacy && !projectId)return <View style={s.screen}><View style={{paddingHorizontal:16}}><TextAction label="返回项目选择" onPress={()=>{setLegacy(false);router.setParams({view:undefined});}} /></View><AgentScreen /></View>;
+  if(legacy && !projectId)return <View style={s.screen}><View style={{paddingHorizontal:16}}><TextAction label="返回项目选择" onPress={()=>{setLegacy(false);router.setParams({view:undefined});}} /></View><TextAction label="本地技能" onPress={()=>router.push('/agent-skills')} /><AgentScreen /></View>;
   if (projectId) return <View style={s.screen}><View style={{paddingHorizontal:12,flexDirection:'row',gap:12}}><TextAction label="返回项目选择" onPress={()=>router.setParams({projectId:undefined,view:undefined})}/><TextAction label="全部对话记录" onPress={()=>router.setParams({projectId:undefined,view:'all'})}/></View>
-    <AgentScreen key={projectId} projectId={projectId} />
+    <TextAction label="本地技能" onPress={()=>router.push('/agent-skills')} /><AgentScreen key={projectId} projectId={projectId} />
   </View>;
   return <View style={s.screen}><ScrollView contentContainerStyle={s.content}>
     <View style={s.row}><Text accessibilityRole="header" style={s.heading}>项目协作</Text><TextAction label="新建项目" onPress={()=>setCreating(true)}/></View>
@@ -49,6 +49,7 @@ export function AgentWorkspace() {
     {!loaded && !error ? <Text style={s.muted}>正在读取项目…</Text> : null}
     <TextAction label="管理项目与分镜" onPress={() => router.push('/(tabs)/projects')} />
     <TextAction label="全部对话记录" onPress={()=>setLegacy(true)} />
+    <TextAction label="本地技能" onPress={()=>router.push('/agent-skills')} />
 
     {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
   </ScrollView>{creating ? <ParameterSheet title="新建创作项目" onClose={() => { if (!busy) setCreating(false); }}>

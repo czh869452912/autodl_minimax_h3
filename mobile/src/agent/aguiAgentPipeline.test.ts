@@ -3,6 +3,30 @@ import { AIMessage, AIMessageChunk } from '@langchain/core/messages';
 import { H3AgUiAgent } from './aguiAgent';
 import { reducePromptRunEvent, type PromptRun } from './runState';
 
+it('uses a fresh prepared graph per run and releases its authority subscription on success or cancellation', async () => {
+  const releases = [jest.fn(), jest.fn()];
+  let cancel!: () => void, started!: () => void, unblock!: () => void;
+  const waiting = new Promise<void>(resolve => { started = resolve; });
+  let count = 0;
+  const fallback = { stream: jest.fn() };
+  const prepareRun = jest.fn(async (_input: unknown, _signal: AbortSignal, stop: () => void) => {
+    const index = count++; cancel = stop;
+    return { release: releases[index], workspace: {
+      prepareWorkspaceRun: (_saved: unknown, messages: readonly unknown[]) => ({ input: { messages }, context: {} }),
+      captureWorkspaceState: jest.fn(),
+    } as any, graph: { stream: async function* () {
+      if (index) { started(); await new Promise<void>(resolve => { unblock = resolve; }); }
+      yield ['messages', [new AIMessageChunk({ id: `a${index}`, content: 'answer' }), {}]];
+    } } };
+  });
+  const agent = new H3AgUiAgent(fallback as never, {}, { prepareRun });
+  await agent.runAgent({ runId: 'first' }); expect(releases[0]).toHaveBeenCalledTimes(1);
+  const second = agent.runAgent({ runId: 'second' }); await waiting; cancel(); await second;
+  expect(agent.isRunning).toBe(false); unblock(); await new Promise(resolve => setTimeout(resolve, 0));
+  expect(releases[1]).toHaveBeenCalledTimes(1); expect(fallback.stream).not.toHaveBeenCalled();
+  expect(prepareRun).toHaveBeenCalledTimes(2);
+});
+
 it.each(['length', 'stop'])('persists reasoning-only %s as failed through the real SDK pipeline', async reason => {
   let run: PromptRun = { id: 'r', userMessageId: 'u', status: 'running', startedAt: 1, messageIds: [], tools: [] };
   const agent = new H3AgUiAgent({ stream: async function* () {
