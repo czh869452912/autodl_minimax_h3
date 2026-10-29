@@ -22,7 +22,11 @@ test.each([false,true])('old-entry generation archives within original commit, r
     expect(db.getAllSync('SELECT * FROM creative_asset_versions')).toHaveLength(1);
     expect(db.getFirstSync('SELECT current_version_id FROM creative_assets')).toEqual({current_version_id:null});
     expect(db.getAllSync("SELECT * FROM artifact_blob_refs WHERE owner_type='creative_version'")).toHaveLength(1);
-    await expect(createTaskRepository(db as never).remove('old-job')).rejects.toThrow('归档');
+    await createTaskRepository(db as never).remove('old-job');
+    expect(db.getFirstSync('SELECT task_id FROM task_removals')).toEqual({task_id:'old-job'});
+    expect(db.getAllSync('SELECT * FROM creative_output_links')).toHaveLength(1);
+    expect(db.getAllSync('SELECT * FROM creative_asset_versions')).toHaveLength(1);
+    expect(db.getAllSync("SELECT * FROM artifact_blob_refs WHERE owner_type='creative_version'")).toHaveLength(1);
     expect(db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
   }finally{db.close();}
 });

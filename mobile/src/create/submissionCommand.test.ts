@@ -67,6 +67,8 @@ test('submission atomically retains CAS task inputs and completes the applied ha
     expect(db.getAllSync('SELECT * FROM artifact_blob_refs')).toHaveLength(1);
     db.runSync("UPDATE tasks SET status='SUCCESS' WHERE id=?", task.id);
     expect(db.getAllSync('SELECT * FROM artifact_blob_refs')).toHaveLength(1);
+    await expect(createTaskRepository(db as never).remove(task.id)).rejects.toThrow('活跃任务');
+    db.runSync("UPDATE workflow_jobs SET status='SUCCEEDED' WHERE id=?", task.id);
     await createTaskRepository(db as never).remove(task.id);
     expect(db.getAllSync('SELECT * FROM artifact_blob_refs')).toHaveLength(0);
   } finally { db.close(); }
