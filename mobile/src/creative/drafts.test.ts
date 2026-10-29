@@ -133,7 +133,8 @@ test('archived projects, missing files and cross-project shots cannot create exe
 test('image source and mask are atomically pinned to immutable versions across modes and failed saves',async()=>{
   const f=await fixture();
   try{
-    const mask=await f.execute({name:'asset.import',payload:{title:'Mask',kind:'image',blobSha256:f.hash}});
+    const maskHash='f'.repeat(64);f.db.runSync('INSERT INTO artifact_blobs VALUES(?,10,?,?,1,1)',maskHash,'image/png',`cas/${maskHash}`);
+    const mask=await f.execute({name:'asset.import',payload:{title:'Mask',kind:'image',blobSha256:maskHash}});
     const input={...defaultNovelAiDraft,prompt:'observatory',action:'infill' as const,sourceVersionId:f.asset.versionId,maskVersionId:mask.versionId};
     const {draftId}=await f.execute({name:'draft.createImage',payload:{input}});
     expect((await f.service.draftInputs(draftId)).map(r=>r.version_id)).toEqual([f.asset.versionId,mask.versionId]);

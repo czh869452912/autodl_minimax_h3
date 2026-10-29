@@ -1,20 +1,22 @@
+import {normalizeTagQuery,tagMatchRank} from './tagMatching';
 import {queryTagDictionary} from '../storage/tagDictionaryStore';
 import {NativeModules} from 'react-native';
 import {creativeAccounts} from './accountRuntime';
-export type TagSuggestion={name:string;category?:number;count?:number;translation?:string;source:'local'|'official'};
+export type TagSuggestion={name:string;category?:number;count?:number;translation?:string;matchRank?:number;source:'local'|'official'};
 let remoteInFlight=false;
 const localCache=new Map<string,TagSuggestion[]>(),remoteCache=new Map<string,TagSuggestion[]>(),recent=new Map<string,number>();
 export function rememberTag(name:string){recent.delete(name);recent.set(name,Date.now());if(recent.size>100)recent.delete(recent.keys().next().value!);}
 export function rankSuggestions(items:TagSuggestion[],query:string){
- const normalized=query.toLowerCase().replaceAll('_',' ');
- const merged=new Map<string,TagSuggestion>();for(const item of items){const key=item.name.replaceAll('_',' ');merged.set(key,{...merged.get(key),...item});}
+ const normalized=normalizeTagQuery(query);
+ const merged=new Map<string,TagSuggestion>();for(const item of items){const key=normalizeTagQuery(item.name),previous=merged.get(key);merged.set(key,{...previous,...item,matchRank:Math.min(previous?.matchRank??4,item.matchRank??tagMatchRank(item.name,normalized))});}
  return [...merged.values()].sort((a,b)=>{
-  const score=(t:TagSuggestion)=>(t.name.replaceAll('_',' ')===normalized?1000:0)+(recent.has(t.name)?200:0)+(t.source==='official'?100:0)+Math.log10((t.count??0)+1);
-  return score(b)-score(a);
- }).slice(0,6);
+  const rank=(t:TagSuggestion)=>Math.min(t.matchRank??4,tagMatchRank(t.name,normalized));
+  const score=(t:TagSuggestion)=>(recent.has(t.name)?2:0)+(t.source==='official'?1:0)+Math.log10((t.count??0)+1);
+  return rank(a)-rank(b)||score(b)-score(a)||a.name.localeCompare(b.name);
+ }).slice(0,40);
 }
 export async function localTags(query:string):Promise<TagSuggestion[]>{
- const key=query.toLowerCase().replaceAll('_',' ');if(localCache.has(key))return localCache.get(key)!;
+ const key=normalizeTagQuery(query);if(localCache.has(key))return localCache.get(key)!;
  const rows=await queryTagDictionary(key);
  const result=rows.map(row=>({...row,source:'local' as const}));localCache.set(key,result);if(localCache.size>64)localCache.delete(localCache.keys().next().value!);return result;
 }

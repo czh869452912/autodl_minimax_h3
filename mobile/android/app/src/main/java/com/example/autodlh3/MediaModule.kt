@@ -51,6 +51,25 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
       catch (_: Exception) { promise.reject("THUMBNAIL_FAILED", "缩略图暂不可用，原件不受影响") }
     }
   }
+  @ReactMethod
+  fun replaceFocusedPrompt(tag: Double, expected: String, start: Int, end: Int, replacement: String, caret: Int, promise: Promise) {
+    context.runOnUiQueueThread {
+      try {
+        val input = com.facebook.react.uimanager.UIManagerHelper.getUIManagerForReactTag(context, tag.toInt())?.resolveView(tag.toInt()) as? android.widget.EditText
+        if (input == null || !input.hasFocus() || input.text.toString() != expected || input.selectionStart != start || input.selectionEnd != end ||
+          android.view.inputmethod.BaseInputConnection.getComposingSpanStart(input.text) >= 0 || caret !in 0..replacement.length) {
+          promise.resolve(false); return@runOnUiQueueThread
+        }
+        // Commit text and caret together; TextWatcher emits the normal RN change event.
+        input.beginBatchEdit()
+        try {
+          input.text.replace(0, input.text.length, replacement)
+          input.setSelection(caret.coerceAtMost(input.text.length))
+        } finally { input.endBatchEdit() }
+        promise.resolve(true)
+      } catch (_: Exception) { promise.reject("PROMPT_COMPLETION_FAILED", "无法插入标签，请重新选择") }
+    }
+  }
   /** Return the actual selection line in window dp, including internal text scrolling. */
   @ReactMethod
   fun focusedInputCaret(tag: Double, promise: Promise) {
@@ -65,6 +84,8 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
       val density = context.resources.displayMetrics.density
       promise.resolve(Arguments.createMap().apply {
         putInt("target", input.id)
+        putInt("selectionStart", input.selectionStart)
+        putInt("selectionEnd", input.selectionEnd)
         putBoolean("composing", android.view.inputmethod.BaseInputConnection.getComposingSpanStart(input.text) >= 0)
         putDouble("x", (location[0] + input.totalPaddingLeft).toDouble() / density)
         putDouble("y", (location[1] + input.totalPaddingTop + layout.getLineTop(line) - input.scrollY).toDouble() / density)
