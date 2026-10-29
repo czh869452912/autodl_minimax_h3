@@ -102,6 +102,36 @@ test('ordinary submit cannot bypass a frozen plan and no completion before outpu
     expect((await f.service.shots(f.projectId))[0].selected_video).toBeNull();
   }finally{f.db.close();}
 });
+
+test('a ready step cannot dispatch before its persisted prerequisite succeeds',async()=>{
+  const f=await runnable();try{
+    f.db.runSync("UPDATE creative_plan_steps SET state='WAITING_DECISION' WHERE kind='selection'");
+    await runCreativePlans(f.db as never,f.prepare,200);
+    expect(f.prepare).not.toHaveBeenCalled();
+    expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toHaveLength(0);
+    expect(f.db.getFirstSync("SELECT state FROM creative_plan_steps WHERE kind='video'")).toEqual({state:'READY'});
+  }finally{f.db.close();}
+});
+
+test('job success does not complete a plan with another required step and reconciliation is idempotent',async()=>{
+  const f=await runnable();try{
+    await runCreativePlans(f.db as never,f.prepare,200);
+    const job=f.db.getFirstSync<{id:string}>('SELECT id FROM workflow_jobs')!;
+    f.db.runSync("UPDATE workflow_jobs SET status='SUCCEEDED' WHERE id=?",job.id);
+    f.db.runSync("INSERT INTO creative_output_links VALUES(?,'output','v2')",job.id);
+    // A persisted additional decision represents the expansion boundary; no fake handler is registered.
+    f.db.runSync("INSERT INTO creative_plan_steps VALUES('review',?,'selection',0,'WAITING_DECISION',NULL,NULL,'{}','{}',NULL)",f.plan.planId);
+    await reconcileCreativePlans(f.db as never,300);
+    expect(f.db.getFirstSync('SELECT state FROM creative_plans')).toEqual({state:'ACTIVE'});
+    expect(f.db.getFirstSync("SELECT state FROM creative_plan_steps WHERE kind='video'")).toEqual({state:'SUCCEEDED'});
+    f.db.runSync("UPDATE creative_plan_steps SET state='SUCCEEDED' WHERE id='review'");
+    await reconcileCreativePlans(f.db as never,400);
+    const complete=f.db.getFirstSync('SELECT state,revision,updated_at FROM creative_plans');
+    expect(complete).toMatchObject({state:'COMPLETED',updated_at:400});
+    await reconcileCreativePlans(f.db as never,500);
+    expect(f.db.getFirstSync('SELECT state,revision,updated_at FROM creative_plans')).toEqual(complete);
+  }finally{f.db.close();}
+});
 test('deleted originating chat stops an accepted but unsent plan without deleting its decision',async()=>{
   const f=await runnable();try{
     f.db.runSync("UPDATE creative_execution_origins SET origin_kind='agent',thread_id='deleted-thread',run_id='old-run' WHERE id=(SELECT execution_origin_id FROM creative_command_receipts WHERE command_name='plan.createSelection')");
