@@ -9,7 +9,7 @@ import type {CreativeDraft} from './drafts';
 import type {VideoHistoryJob,VideoHistoryRound} from './videoHistory';
 import {CreativeResults} from './CreativeResults';
 import {MediaPreview} from './MediaPreview';
-import {TextAction} from './WorkbenchUI';
+import {ParameterSheet,TextAction} from './WorkbenchUI';
 import {COLORS} from '../ui/theme';
 
 type Job=VideoHistoryJob;
@@ -21,8 +21,10 @@ export function videoRoundTimes(job:Job,now=Date.now()){
   const run=job.execution_duration??(job.status==='RUNNING'&&job.started_at!==null?Math.max(0,(now-job.started_at)/1000):null);
   return `排队 ${format(queue)} · 运行 ${format(run)}`;
 }
-export function VideoGenerationHistory({draft,disabled,onLatestStatus,visible=true}:{visible?:boolean;draft:CreativeDraft;disabled:boolean;onLatestStatus:(status:string)=>void}){
-  const {width}=useWindowDimensions();
+export function VideoGenerationHistory({draft,disabled,onLatestStatus,onEdit,visible=true}:{onEdit?:()=>void;visible?:boolean;draft:CreativeDraft;disabled:boolean;onLatestStatus:(status:string)=>void}){
+  const {width,fontScale}=useWindowDimensions();
+  const [availableHeight,setAvailableHeight]=useState(0);
+  const compact=availableHeight>0 && availableHeight<480*fontScale;
   const [expanded,setExpanded]=useState(false),[filter,setFilter]=useState('all');
   const [rounds,setRounds]=useState<VideoRound[]>([]),[selected,setSelected]=useState<string>(),[ready,setReady]=useState(false),[error,setError]=useState('');
   const [nextPage,setNextPage]=useState<{createdAt:number;id:string}>(),[loadingMore,setLoadingMore]=useState(false);
@@ -71,13 +73,13 @@ export function VideoGenerationHistory({draft,disabled,onLatestStatus,visible=tr
     <FlatList key={listMode?'list':'strip'} horizontal={!listMode} testID="video-rounds" data={listMode?filtered:rounds} keyExtractor={r=>r.job.id} showsHorizontalScrollIndicator={false} initialNumToRender={8} windowSize={5} contentContainerStyle={{padding:8,gap:6}}
       ListFooterComponent={nextPage?<TextAction label={loadingMore?"正在加载…":"加载更早记录"} disabled={loadingMore} onPress={()=>loadPage.current()}/>:null}
       ListEmptyComponent={()=> <Text style={{padding:12,color:COLORS.textMuted}}>暂无此类记录</Text>}
-      renderItem={({item})=>{const ordinal=item.ordinal??rounds.length-rounds.indexOf(item),selected=current?.job.id===item.job.id;return <Pressable accessibilityRole="button" accessibilityLabel={`查看第 ${ordinal} 轮视频`} accessibilityState={{selected}} onPress={()=>choose(item.job.id)} style={{width:listMode?'100%':112,padding:4,gap:6,flexDirection:listMode?'row':'column',alignItems:listMode?'center':undefined,borderWidth:1,borderColor:selected?COLORS.primary:COLORS.border,borderRadius:8,backgroundColor:selected?COLORS.surfaceRaised:COLORS.surface}}>
+      renderItem={({item})=>{const ordinal=item.ordinal??rounds.length-rounds.indexOf(item),selected=current?.job.id===item.job.id;return <Pressable accessibilityRole="button" accessibilityLabel={`查看第 ${ordinal} 轮视频`} accessibilityState={{selected}} onPress={()=>{choose(item.job.id);if(width<840)setExpanded(false);}} style={{width:listMode?'100%':112,padding:4,gap:6,flexDirection:listMode?'row':'column',alignItems:listMode?'center':undefined,borderWidth:1,borderColor:selected?COLORS.primary:COLORS.border,borderRadius:8,backgroundColor:selected?COLORS.surfaceRaised:COLORS.surface}}>
         <MediaPreview version={item.versions.find(v=>v.state==='AVAILABLE')??item.versions[0]} kind="video" contain label={`第 ${ordinal} 轮封面`} style={{width:listMode?88:102,height:listMode?50:58,aspectRatio:undefined,borderRadius:5}}/>
         <View style={listMode?{flex:1,gap:3}:undefined}><Text numberOfLines={1} style={{fontSize:12,color:selected?COLORS.primary:COLORS.text}}>第 {ordinal} 轮 · {shortStatus(item.job.status)}</Text>
         {listMode?<><Text numberOfLines={1} style={{fontSize:11,color:COLORS.textMuted}}>{title(item)} · {new Date(item.job.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</Text><Text style={{fontSize:11,color:COLORS.textMuted}}>{videoRoundTimes(item.job)}</Text></>:null}</View>
       </Pressable>;}}/>
   </View>;
-  return <View style={{flex:1,minHeight:0}}>
+  return <View testID="video-history-workspace" onLayout={event=>setAvailableHeight(event.nativeEvent.layout.height)} style={{flex:1,minHeight:0}}>
     <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:12}}><Text style={{flex:1,fontSize:12,color:COLORS.textMuted}}>已加载 {rounds.length} 轮{pendingCount?` · ${pendingCount} 项进行中`:''}</Text>
       {selected&&rounds[0]&&current?.job.id!==rounds[0].job.id?<TextAction label="查看最新一轮" onPress={()=>choose(rounds[0].job.id)}/>:null}
       {width<840?<TextAction label={expanded?'收起记录':`全部记录 · ${rounds.length}`} onPress={()=>setExpanded(!expanded)}/>:null}
@@ -85,10 +87,11 @@ export function VideoGenerationHistory({draft,disabled,onLatestStatus,visible=tr
     {error?<Text accessibilityRole="alert" style={{color:COLORS.danger,padding:8}}>{error}</Text>:null}
     <View style={{flex:1,minHeight:0,flexDirection:width>=840?'row':'column'}}>
       <View style={{flex:1,minHeight:0}}>{ready&&current?<>
-        <CreativeResults key={current.job.id} draft={current.draft} dock taskDetail disabled={disabled} onlyJob previewVisible={visible}/>
-        <View style={{paddingHorizontal:12,paddingBottom:6,gap:3}}><Text style={{fontSize:12,color:COLORS.textMuted}}>{shortStatus(current.job.status)} · {videoRoundTimes(current.job)}</Text><Text numberOfLines={1} style={{fontSize:11,color:COLORS.textMuted}}>{title(current)} · {new Date(current.job.created_at).toLocaleString()}</Text></View>
+        <CreativeResults key={current.job.id} draft={current.draft} canvas onEditVideo={onEdit} taskDetail disabled={disabled} onlyJob previewVisible={visible}/>
+        <View style={{paddingHorizontal:12,paddingBottom:6,gap:3}}><Text style={{fontSize:12,color:COLORS.textMuted}}>{shortStatus(current.job.status)} · {videoRoundTimes(current.job)}</Text></View>
       </>:<View style={{flex:1,justifyContent:'center',alignItems:'center'}}><Text style={{color:COLORS.textMuted}}>{ready?'暂无生成记录':'读取生成记录…'}</Text></View>}</View>
-      {records}
+      {width>=840 || !compact && !expanded?records:null}
     </View>
+    {expanded&&width<840?<ParameterSheet title="生成记录" onClose={()=>setExpanded(false)}><View style={{height:Math.max(160,Math.min(420,availableHeight*0.75))}}>{records}</View></ParameterSheet>:null}
   </View>;
 }

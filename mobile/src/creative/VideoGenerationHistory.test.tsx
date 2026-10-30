@@ -47,3 +47,23 @@ test('hidden history suspends reads and completed history stops polling',async()
   await act(async()=>tree.update(render(true)));expect(mockReads).toBe(2);
  }finally{act(()=>tree?.unmount());jest.useRealTimers();}
 });
+
+
+test('short viewport keeps preview bounded and opens records on demand without replacing selection',async()=>{
+ mockStored.clear();mockRows=[make('one')];mockJobs={one:{id:'one',status:'SUCCEEDED',created_at:1,started_at:2,execution_duration:2}};mockVersions=[{id:'v1',state:'AVAILABLE',recipe:{jobId:'one'}}];
+ const edit=jest.fn();let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<VideoGenerationHistory draft={mockRows[0]} disabled={false} onLatestStatus={()=>{}} onEdit={edit}/>);});
+  const before=tree.root.findByType(CreativeResults);
+  act(()=>tree.root.findByProps({testID:'video-history-workspace'}).props.onLayout({nativeEvent:{layout:{height:320,width:390}}}));
+  expect(tree.root.findAllByProps({testID:'video-rounds'})).toHaveLength(0);
+  expect(tree.root.findByType(CreativeResults)).toBe(before);
+  expect(before.props.canvas).toBe(true);
+  act(()=>before.props.onEditVideo());expect(edit).toHaveBeenCalledTimes(1);
+  act(()=>tree.root.findAll(n=>n.props.label==='全部记录 · 1'&&n.props.onPress)[0].props.onPress());
+  expect(tree.root.findAllByProps({testID:'video-rounds'}).length).toBeGreaterThan(0);
+  await act(async()=>tree.root.findAll(n=>n.props.accessibilityLabel==='查看第 1 轮视频'&&n.props.onPress)[0].props.onPress());
+  expect(tree.root.findAllByProps({testID:'video-rounds'})).toHaveLength(0);
+  expect(tree.root.findByType(CreativeResults)).toBe(before);
+ }finally{act(()=>tree?.unmount());}
+});

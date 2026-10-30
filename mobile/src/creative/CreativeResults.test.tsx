@@ -309,3 +309,15 @@ test('editing a task result preserves its source while editing inside a workbenc
   expect(mockReplace).toHaveBeenCalledWith({pathname:'/image-draft/[id]',params:{id:'next'}});
  }finally{act(()=>tree?.unmount());}
 });
+
+
+test('video canvas fits remaining height and exposes video actions without the scrolling detail layout',async()=>{
+ mockVersions=[{...mockVersions[0],mime:'video/mp4',relativePath:'movie.mp4'}];const edit=jest.fn();let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<CreativeResults draft={{...draft,provider_id:'autodl'}} canvas onlyJob onEditVideo={edit}/>);});
+  const stage=StyleSheet.flatten(tree.root.findByProps({testID:'result-video-stage'}).props.style);
+  expect(stage.flex).toBe(1);expect(stage.minHeight).toBe(0);expect(stage.height).toBeUndefined();
+  expect(findButton(tree,'保存视频到系统相册')).toBeDefined();expect(findButton(tree,'保存图片到系统相册')).toBeUndefined();
+  act(()=>findButton(tree,'调整后再生成').props.onPress());expect(edit).toHaveBeenCalledTimes(1);
+ }finally{act(()=>tree?.unmount());}
+});
