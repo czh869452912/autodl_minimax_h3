@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
+import {PrimaryNavigationProvider,PrimaryTabBar} from '../navigation/PrimaryNavigation';
 import { CreativeHome } from './CreativeHome';
 import { defaultNovelAiDraft } from './novelAiProtocol';
 jest.mock('./legacyCreativeHandoff',()=>({importLegacyCreativeDraft:jest.fn()}));
@@ -82,15 +83,15 @@ test('restores an existing workspace without creating blank drafts or replacing 
 test('switching to Agent saves through the existing leave guard and does not create another draft',async()=>{
   let tree!:ReturnType<typeof create>;
   try{
-    await act(async()=>{tree=create(<CreativeHome/>);});
+    await act(async()=>{tree=create(<PrimaryNavigationProvider><CreativeHome/><PrimaryTabBar state={{index:0,routes:[{name:'create',key:'create'},{name:'agent',key:'agent'}]}} navigation={{navigate:mockNavigate,emit:()=>({defaultPrevented:false})}}/></PrimaryNavigationProvider>);});
     const calls=mockExecute.mock.calls.length;
-    const switcher=()=>tree.root.findByType(require('../ui/WorkbenchModeSwitcher').WorkbenchModeSwitcher);
+
     mockCanLeave=false;
-    await act(async()=>switcher().props.onSelect('agent'));
+    await act(async()=>button(tree,'助手').props.onPress());
     expect(mockNavigate).not.toHaveBeenCalled();
     mockCanLeave=true;
-    await act(async()=>switcher().props.onSelect('agent'));
-    expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/agent');
+    await act(async()=>button(tree,'助手').props.onPress());
+    expect(mockNavigate).toHaveBeenCalledWith('agent');
     expect(mockExecute).toHaveBeenCalledTimes(calls);
   }finally{act(()=>tree?.unmount());}
 });

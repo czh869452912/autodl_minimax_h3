@@ -1,3 +1,4 @@
+import {usePrimaryNavigationGuard} from '../navigation/PrimaryNavigation';
 import { RecordRow } from '../ui/RecordRow';
 import { ListFilters } from '../ui/ListPageUI';
 import {TaskInboxButton} from '../tasks/TaskInboxButton';
@@ -16,7 +17,7 @@ import { ImageDraftScreen } from './ImageDraftScreen';
 import { VideoDraftScreen } from './VideoDraftScreen';
 import { groupWorkbenchDrafts, recentWorkbenchDraft, type WorkbenchMode } from './workbenchSessions';
 import type { AssetVersion } from './types';
-import { WorkbenchModeSwitcher } from '../ui/WorkbenchModeSwitcher';
+
 import { COLORS } from '../ui/theme';
 import {createVideoWorkbenchDraft} from './videoWorkbenchWorkflows';
 import {importLegacyCreativeDraft} from './legacyCreativeHandoff';
@@ -63,6 +64,7 @@ export function CreativeHome({openRequest,onRequestConsumed,opening=false}:{open
     catch(e){setError(e instanceof Error?e.message:'无法切换工作区');}
     finally{lock.current=false;setBusy(false);}
   };
+  usePrimaryNavigationGuard('create',proceed=>{void change(async()=>proceed());});
   const chooseMode=(mode:WorkbenchMode)=>{if(mode===idea.mode)return;void change(async()=>{const rows=await refresh(),restored=await recentWorkbenchDraft(mode,rows),row=restored??await createDraft(mode);const next=restored?{...idea,mode}:{...idea,mode,[mode]:''};await writeCreativeIdea(next);setActive(old=>({...old,[mode]:row}));setIdea(next);});};
   useEffect(()=>{
     if(!openRequest){attempted.current='';return;}
@@ -86,7 +88,7 @@ export function CreativeHome({openRequest,onRequestConsumed,opening=false}:{open
   const coverKey=records?groups.slice(0,recordLimit).map(g=>g.draft.target_asset_id).filter(Boolean).join('|'):'';
   useEffect(()=>{let live=true;if(coverKey)void creativeService().latestVersions(coverKey.split('|')).then(rows=>{if(live)setCovers(Object.fromEntries(rows.map(v=>[v.assetId,v])));}).catch(()=>undefined);return()=>{live=false;};},[coverKey,drafts]);
   return <CompactWorkbench><View style={s.screen}>
-    <View style={{flexDirection:'row',alignItems:'center',gap:4,paddingHorizontal:8,borderBottomWidth:1,borderBottomColor:COLORS.border}}><WorkbenchModeSwitcher mode="create" disabled={busy || !ready} onSelect={id=>void change(async()=>{router.navigate(`/(tabs)/${id}`);})}/><View style={{width:112,flexShrink:1}}><SegmentedChoices singleRow label="创作类型" options={[{id:'image',label:'图片'},{id:'video',label:'视频'}]} value={mode} disabled={!ready || busy} onChange={chooseMode} /></View><View style={{flex:1}}/><IconAction label="新建创作" icon="add" disabled={busy || !ready} onPress={()=>void change(async()=>{const row=await createDraft(mode);setActive(old=>({...old,[mode]:row}));})} /><IconAction label="创作记录" icon="grid_view" onPress={()=>{setRecords(true);void creativeService().creationRecords().then(setRecordGroups).catch(()=>setError('创作记录读取失败'));}} /><TaskInboxButton beforeOpen={async()=>{if(lock.current)return false;let saved=false;try{saved=await leave.current();}catch{}if(!saved)setError('请等待输入保存，或先处理工作区中的错误');return saved;}}/><IconAction label="打开设置" icon="settings" onPress={()=>void change(async()=>{router.push('/settings-panel');})} /></View>
+    <View style={{flexDirection:'row',alignItems:'center',gap:4,paddingHorizontal:8,borderBottomWidth:1,borderBottomColor:COLORS.border}}><Text style={{fontSize:18,fontWeight:'700',color:COLORS.text,marginRight:8}}>创作</Text><View style={{width:112,flexShrink:1}}><SegmentedChoices singleRow label="创作类型" options={[{id:'image',label:'图片'},{id:'video',label:'视频'}]} value={mode} disabled={!ready || busy} onChange={chooseMode} /></View><View style={{flex:1}}/><IconAction label="新建创作" icon="add" disabled={busy || !ready} onPress={()=>void change(async()=>{const row=await createDraft(mode);setActive(old=>({...old,[mode]:row}));})} /><IconAction label="创作记录" icon="grid_view" onPress={()=>{setRecords(true);void creativeService().creationRecords().then(setRecordGroups).catch(()=>setError('创作记录读取失败'));}} /><TaskInboxButton beforeOpen={async()=>{if(lock.current)return false;let saved=false;try{saved=await leave.current();}catch{}if(!saved)setError('请等待输入保存，或先处理工作区中的错误');return saved;}}/><IconAction label="打开设置" icon="settings" onPress={()=>void change(async()=>{router.push('/settings-panel');})} /></View>
     {notice?<Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text>:null}
     {openRequest && error?<View><TextAction label="重试打开创作" onPress={()=>setRequestAttempt(n=>n+1)}/><TextAction label="保留原画布" onPress={()=>{setError('');onRequestConsumed?.();}}/></View>:null}
     {error?<View style={{paddingHorizontal:12,paddingVertical:4}}><Text accessibilityRole="alert" style={s.error}>{error}</Text>{!current?<TextAction label="重试恢复工作区" onPress={()=>{setReady(false);void readCreativeIdea().then(value=>{setIdea(value);setError('');setReady(true);}).catch(()=>setError('工作区恢复失败'));}} />:null}</View>:null}

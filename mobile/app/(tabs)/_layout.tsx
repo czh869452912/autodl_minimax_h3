@@ -1,7 +1,8 @@
+import {PrimaryNavigationProvider,PrimaryTabBar} from '../../src/navigation/PrimaryNavigation';
 import {TaskInboxButton} from '../../src/tasks/TaskInboxButton';
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WorkbenchModeSwitcher } from '../../src/ui/WorkbenchModeSwitcher';
+
 import { COLORS, type AppTabId } from '../../src/ui/theme';
 import { Pressable, Text, View } from 'react-native';
 import { AppIcon } from '../../src/ui/icons';
@@ -10,20 +11,19 @@ export default function TabsLayout() {
   const pathname = usePathname();
   const router = useRouter();
   const activeId = ((pathname.split('/').filter(Boolean).pop() || 'create')) as AppTabId;
-  const auxiliary = !['create', 'agent'].includes(activeId);
+  const auxiliary = !['create', 'agent', 'projects', 'assets'].includes(activeId);
   return (
-    <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={{ flex: 1, backgroundColor: COLORS.background }}>
-      {activeId!=='create' && activeId!=='settings'?<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, minHeight: 48 }}>
-        {auxiliary ? <Pressable accessibilityRole="button" accessibilityLabel="返回工作台" style={{ minHeight: 48, minWidth: 48, justifyContent: 'center' }} onPress={() => router.canGoBack() ? router.back() : router.navigate('/(tabs)/create')}><AppIcon name="arrow_back" size={22} /></Pressable> : <WorkbenchModeSwitcher mode="agent" onSelect={id=>router.navigate(`/(tabs)/${id}`)} />}
-        <Text style={{ flex: 1, color: COLORS.text, fontSize: 15, fontWeight: '700' }}>{activeId === 'agent' ? '' : ({assets:'素材',projects:'项目',tasks:'任务',settings:'设置',gallery:'历史作品'} as Record<string,string>)[activeId]}</Text>
-        {!auxiliary ? <Pressable accessibilityRole="button" accessibilityLabel="打开素材库" style={{ minHeight: 48, minWidth: 48, alignItems:'center', justifyContent:'center' }} onPress={() => router.navigate('/(tabs)/assets')}><AppIcon name="grid_view" size={22} /></Pressable> : null}
+    <PrimaryNavigationProvider><SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={{ flex: 1, backgroundColor: COLORS.background }}>
+      {activeId!=='create' && activeId!=='settings' && activeId!=='projects' && activeId!=='assets'?<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, minHeight: 48 }}>
+        {auxiliary ? <Pressable accessibilityRole="button" accessibilityLabel="返回工作台" style={{ minHeight: 48, minWidth: 48, justifyContent: 'center' }} onPress={() => router.canGoBack() ? router.back() : router.navigate('/(tabs)/create')}><AppIcon name="arrow_back" size={22} /></Pressable> : null}
+        <Text style={{ flex: 1, color: COLORS.text, fontSize: 15, fontWeight: '700' }}>{activeId === 'agent' ? '助手' : ({assets:'素材',projects:'项目',tasks:'任务',settings:'设置',gallery:'历史作品'} as Record<string,string>)[activeId]}</Text>
         <TaskInboxButton/>
         <Pressable accessibilityRole="button" accessibilityLabel="打开设置" style={{ minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center' }} onPress={() => router.navigate('/settings-panel')}><AppIcon name="settings" size={22} /></Pressable>
       </View>:null}
       <Tabs
         initialRouteName="create"
         backBehavior="history"
-        tabBar={() => null}
+        tabBar={props => <PrimaryTabBar {...props} />}
         screenOptions={{
           headerShown: false,
         }}
@@ -36,6 +36,6 @@ export default function TabsLayout() {
         <Tabs.Screen name="gallery" options={{ title: '结果' }} />
         <Tabs.Screen name="settings" options={{ title: '设置' }} />
       </Tabs>
-    </SafeAreaView>
+    </SafeAreaView></PrimaryNavigationProvider>
   );
 }

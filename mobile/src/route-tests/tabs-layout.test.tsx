@@ -18,23 +18,11 @@ import TabsLayout from '../../app/(tabs)/_layout';
 
 describe('tabs shell layout', () => {
   beforeEach(() => { mockPathname = '/(tabs)/create'; jest.clearAllMocks(); });
-  it('returns from shared resources through navigation history to preserve the originating workbench', () => {
-    mockPathname = '/(tabs)/assets';
-    let tree!: ReturnType<typeof create>;
-    try {
-      act(() => { tree = create(<TabsLayout />); });
-      act(() => tree.root.findAll(node => node.props.accessibilityLabel === '返回工作台' && typeof node.props.onPress === 'function')[0].props.onPress());
-      expect(mockBack).toHaveBeenCalledTimes(1);
-      expect(mockNavigate).not.toHaveBeenCalled();
-    } finally { act(() => tree?.unmount()); }
-  });
-  it('uses the header mode switch in Agent and keeps bottom navigation absent',()=>{
-    mockPathname='/(tabs)/agent';
-    let tree!:ReturnType<typeof create>;
+  it('provides a persistent primary bar on the asset root without a back-to-workbench detour',()=>{
+    mockPathname='/(tabs)/assets';let tree! : ReturnType<typeof create>;
     try{act(()=>{tree=create(<TabsLayout/>);});
-      act(()=>tree.root.findByType(WorkbenchModeSwitcher).props.onSelect('create'));
-      expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/create');
-      expect(tree.root.findByType(require('expo-router').Tabs).props.tabBar()).toBeNull();
+    expect(tree.root.findAll(n=>n.props.accessibilityLabel==='返回工作台')).toHaveLength(0);
+    expect(typeof tree.root.findByType(require('expo-router').Tabs).props.tabBar).toBe('function');
     }finally{act(()=>tree?.unmount());}
   });
 
@@ -46,7 +34,7 @@ describe('tabs shell layout', () => {
     act(() => tree.unmount());
   });
 
-  it('keeps workspaces mounted without a bottom tab bar', () => {
+  it('keeps workspaces mounted with history-aware primary navigation', () => {
     let tree!: ReturnType<typeof create>;
     act(() => {
       tree = create(<TabsLayout />);
@@ -54,7 +42,7 @@ describe('tabs shell layout', () => {
     const tabs = tree.root.findByType(require('expo-router').Tabs);
     expect(tabs.props.initialRouteName).toBe('create');
     expect(tabs.props.backBehavior).toBe('history');
-    expect(tabs.props.tabBar()).toBeNull();
+    expect(typeof tabs.props.tabBar).toBe('function');
     act(() => tree.unmount());
   });
 
