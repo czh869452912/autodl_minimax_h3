@@ -88,11 +88,11 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
     const service = creativeService();
     const projects = await service.projects(archived);
     if (projectId && !projects.some(p => p.id === projectId)) { const p = await service.project(projectId); if (p) projects.push(p); else setError('项目不存在或已移除'); }
-    const covers=await service.covers();
-    const assets = await service.assets({ projectId: mode === 'projects' ? selected : undefined, query, inbox: mode === 'assets' && inbox,trash, kind, limit: assetLimit });
+    const covers=mode === 'projects' ? await service.covers() : [];
+    const assets = !assetId && (mode === 'assets' || selected && projectView === 'assets') ? await service.assets({ projectId: mode === 'projects' ? selected : undefined, query, inbox: mode === 'assets' && inbox,trash, kind, limit: assetLimit }) : [];
     if (generation !== readGeneration.current) return;
     setProjects(projects); setAssets(assets);setCovers(Object.fromEntries(covers.map(c=>[c.project_id,c])));
-  }, [selected, mode, query, archived, inbox,trash, projectId, kind, assetLimit]);
+  }, [selected, mode, query, archived, inbox,trash, projectId, kind, assetLimit, assetId, projectView]);
   useFocusEffect(useCallback(() => { void refresh().catch(e => setError(String(e.message))); }, [refresh]));
   const run = async (work: () => Promise<unknown>) => {
     if (writeLock.current) return;
@@ -141,7 +141,9 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
   const action = (label: string, onPress: () => void, secondary = true) => secondary ? <TextAction label={label} onPress={onPress} disabled={busy} /> : <ListAction label={label} onPress={onPress} disabled={busy} />;
   if (projectId && mode === 'projects' && !current) return <View style={styles.content}>{action('返回项目列表', back)}<Text style={styles.body}>{error || '正在读取项目…'}</Text></View>;
   return <KeyboardSurface style={styles.screen}><ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-    <View style={styles.row}>{projectId || assetId ? action('返回',back) : null}{mode==='assets' && !assetId?<View style={{flex:1}}/>:<Text accessibilityRole="header" style={styles.heading}>{activeAsset?.title ?? current?.title ?? (mode === 'projects' ? '项目' : '素材')}</Text>}{!assetId && !trash && (mode==='assets' || selected && projectView==='assets')?<ListAction label="导入素材" icon="add" disabled={busy} onPress={()=>setImportOpen(!importOpen)}/>:null}{action(manage ? '收起更多' : '更多', () => setManage(!manage))}</View>
+    <View style={styles.row}>{projectId || assetId ? action('返回',back) : null}<Text accessibilityRole="header" style={styles.heading}>{activeAsset?.title ?? current?.title ?? (mode === 'projects' ? '项目' : '素材库')}</Text>{!assetId && !trash && (mode==='assets' || selected && projectView==='assets')?<ListAction label="导入素材" icon="add" disabled={busy} onPress={()=>setImportOpen(!importOpen)}/>:null}{action(manage ? '收起更多' : '更多', () => setManage(!manage))}</View>
+    {!projectId && !assetId ? <View style={styles.card}><Text style={styles.title}>{mode === 'projects' ? '组织你的创作' : trash ? '素材回收站' : '管理创作资源'}</Text><Text style={styles.body}>{mode === 'projects' ? '按项目整理简报、镜头、素材和执行计划。' : trash ? '查看已移入的素材，恢复后可以重新使用。' : '图片、视频、音频与文档统一收纳；同一素材可用于多个项目。'}</Text><View style={styles.row}><ListAction secondary label="技能管理" onPress={()=>router.push('/agent-skills')} />{mode === 'assets' ? <ListAction secondary label={trash?'返回素材库':'回收站'} onPress={()=>{setTrash(!trash);setInbox(false);}} /> : <ListAction secondary label="打开素材库" onPress={()=>router.push('/(tabs)/assets')} />}</View><Text style={styles.body}>技能管理：导入、提炼和启用可复用的助手技能。</Text></View> : null}
+    {current && !activeAsset ? <View style={styles.card}><Text style={styles.title}>项目管理</Text><Text style={styles.body}>{current.archivedAt ? '已归档 · 保留成果与记录' : '进行中 · 简报、镜头与素材集中管理'}</Text><View style={styles.row}>{!current.archivedAt ? action('编辑项目简报',()=>confirmLeave(()=>{discardBrief();setProjectView('brief');setEditingBrief(true);})) : null}{action(manage?'收起项目管理':'归档与封面管理',()=>setManage(!manage))}{action('技能管理',()=>router.push('/agent-skills'))}</View></View> : null}
     {manage && !activeAsset ? <View style={styles.row}>{action('历史作品', () => router.push('/(tabs)/gallery'))}{action('创作草稿', () => router.push('/creative-drafts'))}</View> : null}
     {current && projectView === 'assets' && !current.archivedAt && !activeAsset ? action('制作图片', () => void run(async () => { const result = await command({ name: 'draft.createImage', payload: { projectId: current.id } }); if (result.status === 'completed') router.push({ pathname: '/image-draft/[id]', params: { id: result.value.draftId } }); })) : null}
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
@@ -171,7 +173,7 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
     {mode === 'projects' && selected && !activeAsset ? action('修改建议与活动',()=>changeProjectView('activity')) : null}
     {mode === 'projects' && selected && projectView === 'activity' && !activeAsset ? <ProjectActivity key={selected} projectId={selected} initialProposalId={initialProposalId} /> : null}
     {activeAsset ? <View style={styles.card}>
-      {!trash && manage ? action(metadata ? '收起素材信息' : '编辑名称与标签', () => setMetadata(!metadata)) : trash ? <Text style={styles.body}>此素材位于回收站，恢复后可继续创作。</Text> : null}
+      {!trash ? action(metadata ? '收起素材信息' : '编辑名称与标签', () => setMetadata(!metadata)) : trash ? <Text style={styles.body}>此素材位于回收站，恢复后可继续创作。</Text> : null}
       {trash ? action('从回收站恢复',()=>void run(async()=>{await command({name:'asset.restore',payload:{id:activeAsset.id,expectedRevision:activeAsset.revision}});back();})) : metadata ? <>
         <TextInput accessibilityLabel="资产名称" value={assetTitle} onChangeText={setAssetTitle} style={styles.input} />
         <TextInput accessibilityLabel="资产说明" placeholder="创作说明" multiline value={assetDescription} onChangeText={setAssetDescription} style={styles.input} />
@@ -205,7 +207,7 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
         {activeAsset.kind === 'image' && !v.recipe.input ? <Text style={styles.body}>没有可完整恢复的生成参数；保留原文件，不猜测原始提示词。</Text> : null}
         {v.state !== 'AVAILABLE' && activeAsset.kind !== 'image' ? <><Text style={styles.body}>原件尚不可用。版本与来源保留，只接受与已记录哈希相同的文件。</Text>{action('重新定位原文件',()=>void run(async()=>{await locateCreativeFile(v.id);await inspect(activeAsset);}))}{action('从备份恢复原文件',()=>void run(async()=>{await restoreCreativeFileFromBackup(v.id);await inspect(activeAsset);}))}</> : null}
         {!trash && manage && v.state === 'AVAILABLE' && activeAsset.kind === 'image' ? action('从此版本创建视频草稿', () => void run(async () => { const result = await command({ name: 'draft.createVideo', payload: { versionId: v.id, ...(selected ? { projectId: selected } : {}) } }); if (result.status === 'completed') router.push({ pathname: '/creative-draft/[id]', params: { id: result.value.draftId } }); })) : null}
-        {!trash && manage && v.state === 'AVAILABLE' ? action(projectActions ? '收起项目选择' : '加入项目或更新采用版本', () => setProjectActions(!projectActions)) : null}
+        {!trash && v.state === 'AVAILABLE' ? action(projectActions ? '收起项目选择' : '加入项目或更新采用版本', () => setProjectActions(!projectActions)) : null}
         {projectActions ? <><TextInput accessibilityLabel="搜索项目" placeholder="搜索项目" value={projectQuery} onChangeText={setProjectQuery} style={styles.input} />
         {projects.filter(p => p.title.includes(projectQuery) && !p.archivedAt && !links.some(l => l.project_id === p.id)).map(p => <View key={p.id}>{action(`加入 ${p.title}（固定此版本）`, () => void run(async () => { await command({ name: 'asset.linkToProject', payload: { assetId: activeAsset.id, projectId: p.id, versionId: v.id } }); await inspect(activeAsset); }))}</View>)}
         {links.filter(l => l.title.includes(projectQuery) && l.pinned_version_id !== v.id).map(l => <View key={l.project_id}>{action(`将 ${l.title} 固定到此版本`, () => void run(async () => { await command({ name: 'asset.pinProjectVersion', payload: { assetId: activeAsset.id, projectId: l.project_id, expectedRevision: l.revision, versionId: v.id } }); await inspect(activeAsset); }))}</View>)}
@@ -220,11 +222,11 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
       {manage ? links.filter(l => l.pinned_version_id).map(l => <View key={l.project_id}>{action(`让 ${l.title} 跟随默认版本`, () => void run(async () => { await command({ name: 'asset.pinProjectVersion', payload: { assetId: activeAsset.id, projectId: l.project_id, expectedRevision: l.revision, versionId: null } }); await inspect(activeAsset); }))}</View>) : null}
     </View> : assetId ? <Text style={styles.body}>{error ? '请返回素材列表选择可用素材。' : '正在读取素材…'}</Text> : mode === 'assets' || (selected && projectView === 'assets') ? <>
       {importOpen && !trash?<View style={styles.card}><Text style={styles.title}>选择导入方式</Text><View style={styles.row}>{action('从相册导入图片',()=>void addImages())}{action('从文件导入',()=>void run(async()=>{const count=await pickCreativeFiles(mode==='projects'?selected:undefined);if(count){revealImports();setImportOpen(false);}}))}</View><Text style={styles.body}>支持视频、音频和文档，单个文件最多 100MB。</Text><TextAssetEditor projectId={mode==='projects'?selected:undefined} onSaved={async()=>{revealImports();await refresh();}}/></View>:null}
-      <TextInput accessibilityLabel="搜索资产" placeholder="搜索素材名称" value={query} onChangeText={setQuery} style={styles.input} />
+      <TextInput accessibilityLabel="搜索资产" placeholder="搜索名称、说明或标签" value={query} onChangeText={setQuery} style={styles.input} />
       {mode==='assets' && !trash?<ListFilters compact label="素材范围" value={inbox?'inbox':'all'} onChange={value=>setInbox(value==='inbox')} options={[{id:'all',label:'全部素材'},{id:'inbox',label:'未加入项目'}]}/>:null}
-      {manage&&mode==='assets'?action(trash?'返回全部资产':'回收站',()=>{setTrash(!trash);setInbox(false);}):null}
+
       {!visibleAssets.length ? <Text style={styles.body}>{query || kind !== 'all' ? '没有符合筛选条件的素材，请调整搜索或素材类型。' : trash ? '回收站为空。' : '还没有素材。导入图片后可加入多个项目，文件只保留一份。'}</Text> : null}
-      <ListFilters compact label="素材类型" value={kind} onChange={setKind} options={[{id:'all',label:'全部'},{id:'image',label:'图片'},{id:'video',label:'视频'},{id:'document',label:'文本与其他'}]} />
+      <ListFilters compact label="素材类型" value={kind} onChange={setKind} options={[{id:'all',label:'全部'},{id:'image',label:'图片'},{id:'video',label:'视频'},{id:'audio',label:'音频'},{id:'document',label:'文本与其他'}]} />
       <View style={styles.row}>{visibleAssets.map(a => <AssetTile key={a.id} asset={a} onPress={() => router.push({pathname:'/creative-asset/[id]',params:{id:a.id,...(selected?{projectId:selected}:{}),...(trash?{trash:'1'}:{})}})} />)}</View>
       {assets.length >= assetLimit && assetLimit < 1000 ? action('加载更多素材', () => setAssetLimit(n => n + 100)) : null}<Text style={styles.body}>已显示 {assets.length} 项{assetLimit >= 1000 && assets.length >= 1000 ? ' · 请通过搜索缩小范围' : ''}</Text>
       {manage ? action('迁入历史作品（可中断）', () => void run(async () => { const result = await migrateCreativeHistory(); setMigrationNotice(`本批迁入或更新 ${result.imported} 项。${result.pending ? '还有记录，点击继续迁入。' : '已追平当前历史记录。'} 待处理变更 ${result.audit.pendingJournal}，未迁入 ${result.audit.unmapped}，待更新映射 ${result.audit.staleMappings}，原件不可用 ${result.audit.unavailableFiles}。${result.audit.missingPins||result.audit.brokenMappings||result.audit.foreignKeyViolations?'检测到一致性异常，请保留备份并停止清理文件。':''}${result.audit.writersReady?'':'旧入口仍处于兼容追平阶段，尚未切换写入源。'}`); })) : null}

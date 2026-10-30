@@ -40,16 +40,16 @@ test('invalid asset route shows recovery instead of unrelated import controls', 
   } finally { act(() => tree?.unmount()); }
 });
 
-test('ordinary asset preview keeps management details hidden and is not presented as trashed', async () => {
+test('ordinary asset preview exposes metadata editing without opening more actions', async () => {
   mockService.asset.mockResolvedValueOnce({id:'a',kind:'image',title:'预览',revision:1});
   mockService.versions.mockResolvedValueOnce([]);
   let tree!: ReturnType<typeof create>;
   try {
     await act(async () => { tree = create(<CreativeWorkspace mode="assets" assetId="a" />); });
     expect(content(tree)).not.toContain('此素材位于回收站');
-    expect(content(tree)).not.toContain('编辑名称与标签');
-    act(() => press(tree,'更多'));
     expect(content(tree)).toContain('编辑名称与标签');
+    act(() => press(tree,'编辑名称与标签'));
+    expect(content(tree)).toContain('资产名称');
   } finally {act(()=>tree?.unmount());}
 });
 
@@ -151,4 +151,29 @@ test('saved project tab restores but cannot override a newer user selection or e
   await act(async()=>tree.update(<CreativeWorkspace mode="projects" projectId="p" initialTab="assets" requestId="new"/>));
   expect(content(tree)).toContain('✓ 素材');
  }finally{act(()=>tree?.unmount());mockService.projects.mockResolvedValue([]);}
+});
+
+
+test('library exposes skills and recycle bin directly, and audio has a filter', async () => {
+  let tree!: ReturnType<typeof create>;
+  try {
+    await act(async()=>{tree=create(<CreativeWorkspace mode="assets"/>);});
+    act(()=>press(tree,'技能管理'));
+    expect(mockPush).toHaveBeenCalledWith('/agent-skills');
+    await act(async()=>press(tree,'回收站'));
+    expect(mockService.assets).toHaveBeenLastCalledWith(expect.objectContaining({trash:true}));
+    const audio=tree.root.findAll(n=>n.props.accessibilityLabel==='音频'&&typeof n.props.onPress==='function')[0];
+    await act(async()=>audio.props.onPress());
+    expect(mockService.assets).toHaveBeenLastCalledWith(expect.objectContaining({kind:'audio'}));
+  } finally {act(()=>tree?.unmount());}
+});
+
+
+test('project list does not fetch unrelated library assets', async () => {
+  mockService.assets.mockClear();
+  let tree!: ReturnType<typeof create>;
+  try {
+    await act(async()=>{tree=create(<CreativeWorkspace mode="projects"/>);});
+    expect(mockService.assets).not.toHaveBeenCalled();
+  } finally {act(()=>tree?.unmount());}
 });
