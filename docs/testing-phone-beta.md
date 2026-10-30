@@ -245,3 +245,15 @@
 - SHA-256：`04AAFBE3E91CAE9C64A9D8A6BB85E90A2D7D3F28A91FB95E0B6016A39EB15F14`。
 - 包名/版本、独立协议/FileProvider、非 debuggable、禁止明文及系统备份、嵌入 Expo 身份、Hermes、双 ARM、86 个原生库、v2 签名、16 KB ZIP 与 arm64 ELF 对齐及词库内容哈希校验通过；签名与 beta.25 一致。
 - 最终日志 `build/phone-beta26-final-build.log`，校验 `build/phone-beta/beta26-verification.json`。未触发收费生成、未安装到 ARM 手机、未发布远端。
+
+## 2026-10-30 · beta.27 主导航与素材库改版
+
+- 版本 `1.5.0-preview.4-beta.27`，versionCode 66；功能提交 `229a21ed`、`708c092c`。
+- 固定四个主入口：创作、助手、项目、素材。主入口切换保留状态，并沿用草稿保存和未保存修改确认；键盘展开隐藏底栏。
+- 素材库改为标题操作、范围、搜索、类型和双列缩略图；导入与管理使用弹出面板。技能在助手首屏，清理从素材管理进入。文档筛选排除音频。
+- 导航关系、截图及测试细节：[本轮记录](reviews/2026-10-30-library-navigation.md)。全量 290 组 / 1803 项通过，既有 1 组 / 4 项跳过，类型检查及版本配置 3 项通过。
+- Android 17 x86_64 验证素材详情返回、音频去重、技能与清理入口、导入/回收站、键盘隐藏底栏、未保存项目切换确认及 1.3 倍字体；测试后恢复字体与原数据库，逐字节核验。
+- 双 ARM APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.27-android.apk`，186,203,857 字节，最低 Android 8.0。
+- SHA-256：`995B44C2BE241253660456B88C993C018937D5875D6F342912C2F62CFA2552CC`。
+- 签名与 beta.26 一致；最终包身份、非 debuggable、独立协议、Hermes、双 ARM、86 个原生库、16 KB ZIP / arm64 ELF 对齐及词库内容哈希均通过。校验：`build/phone-beta/beta27-verification.json`。
+- 本地旧 C++ 缓存缺失预编译头，以独立新缓存目录重新构建全部原生依赖；构建日志 `build/beta27-build.log`。未调用付费生成服务、未安装到 ARM 手机、未推送远端。
