@@ -9,7 +9,8 @@ import { act, create } from 'react-test-renderer';
 import { CreativeWorkspace } from './CreativeWorkspace';
 const mockPush=jest.fn();
 const mockExecute = jest.fn<Promise<any>,any[]>(async () => ({ status: 'completed', receiptId: 'r', value: {projectId:'created'} }));
-const mockService = { projectTab:jest.fn<Promise<any>,[string]>(async()=> 'shots'), latestDeliveries: jest.fn(async () => []), saveProjectTab: jest.fn(async () => undefined), asset: jest.fn<Promise<any>, [string]>(async () => undefined), project: jest.fn(), description: jest.fn(async () => null), versions: jest.fn<Promise<any[]>, [string]>(async () => []), links: jest.fn(async () => []), isTrashed: jest.fn(async () => false), deliveries: jest.fn(async () => []), covers:jest.fn(async()=>[]),projects: jest.fn<Promise<any[]>, any[]>(async () => []), assets: jest.fn(async () => []), execute: mockExecute };
+let mockVersionRows: any[]=[];
+const mockService = { resultHistoryPage:jest.fn(async()=>{mockVersionRows=await mockService.versions('test');return {ids:mockVersionRows.map(v=>v.id),stamp:'test',next:undefined};}), versionsByIds:jest.fn(async(ids:string[])=>mockVersionRows.filter(v=>ids.includes(v.id))), projectTab:jest.fn<Promise<any>,[string]>(async()=> 'shots'), latestDeliveries: jest.fn(async () => []), saveProjectTab: jest.fn(async () => undefined), asset: jest.fn<Promise<any>, [string]>(async () => undefined), project: jest.fn(), description: jest.fn(async () => null), versions: jest.fn<Promise<any[]>, [string]>(async () => []), links: jest.fn(async () => []), isTrashed: jest.fn(async () => false), deliveries: jest.fn(async () => []), covers:jest.fn(async()=>[]),projects: jest.fn<Promise<any[]>, any[]>(async () => []), assets: jest.fn(async () => []), execute: mockExecute };
 jest.mock('./runtime', () => ({ creativeService: () => mockService, importCreativeImage: jest.fn(), creativeFiles: () => ({ verify: jest.fn(async () => true) }) }));
 jest.mock('../native/imagePicker', () => ({ pickImagesFromGallery: jest.fn(async () => []) }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }), useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]) }));
@@ -29,7 +30,7 @@ test('project creation uses the shared command and prevents simultaneous duplica
 });
 
 const press = (tree: ReturnType<typeof create>, label: string) => tree.root.findAll(n => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function')[0].props.onPress();
-const content = (tree: ReturnType<typeof create>) => JSON.stringify(tree.toJSON());
+const content = (tree: ReturnType<typeof create>) => JSON.stringify(tree.toJSON(),(key,value)=>key==='ListHeaderComponent'||key==='ListFooterComponent'?undefined:value);
 
 test('invalid asset route shows recovery instead of unrelated import controls', async () => {
   let tree!: ReturnType<typeof create>;

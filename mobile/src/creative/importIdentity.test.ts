@@ -48,3 +48,15 @@ test('historical duplicate imports collapse before pagination without rewriting 
   expect(db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
  }finally{db.close();}
 });
+
+
+test('asset cursors traverse beyond 1000 records without duplicates after a head insertion',async()=>{
+ const db=createInitializedRealSqliteTestDb(),service=createCreativeService(db as never);
+ try{
+  for(let i=0;i<1011;i++)db.runSync("INSERT INTO creative_assets VALUES(?,'image',?,NULL,0,0,?)",'a'+String(i).padStart(4,'0'),'item '+i,Math.floor(i/3));
+  let rows=await service.assets({limit:40}),all=rows.map(a=>a.id);
+  db.runSync("INSERT INTO creative_assets VALUES('new','image','new',NULL,0,0,9999)");
+  while(rows.length===40){const last=rows[rows.length-1];rows=await service.assets({limit:40,after:{updatedAt:last.updatedAt,id:last.id}});all.push(...rows.map(a=>a.id));}
+  expect(all).toHaveLength(1011);expect(new Set(all).size).toBe(1011);expect(all).not.toContain('new');
+ }finally{db.close();}
+});

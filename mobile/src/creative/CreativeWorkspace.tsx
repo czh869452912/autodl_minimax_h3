@@ -9,7 +9,7 @@ import {PdfVersionPreview} from './PdfVersionPreview';
 import { AudioVersionPreview } from './AudioVersionPreview';
 import { TextVersionEditor } from './TextVersionEditor';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, FlatList, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import { creativeService, importCreativeImage, exportCreativeVersion, creativeFiles, restoreCreativeImage, restoreCreativeImageFromBackup, migrateCreativeHistory } from './runtime';
@@ -40,7 +40,8 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
   const [covers,setCovers]=useState<Record<string,{version_id:string;relative_path:string|null;state:string|null}>>({});
   const [selected, setSelected] = useState<string | undefined>(projectId);
   const [projectView, setProjectView] = useState<'brief' | 'shots' | 'assets' | 'plans' | 'activity'>(initialTab === 'shots' || initialTab === 'plans' || initialTab === 'activity' || initialTab === 'assets' || initialTab === 'brief' ? initialTab : 'shots');
-  const [assetLimit, setAssetLimit] = useState(100);
+  const [assetNext,setAssetNext]=useState<{updatedAt:number;id:string}>();
+  const [assetLoading,setAssetLoading]=useState(false);const assetMoreLock=useRef(false);
   const [importOpen,setImportOpen]=useState(false);
   const [comparing, setComparing] = useState(false),[processing,setProcessing]=useState(false);
   useEffect(() => setComparing(false), [assetId]);
@@ -53,7 +54,7 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
   const [editingBrief, setEditingBrief] = useState(false), [creating, setCreating] = useState(false), [manage, setManage] = useState(false), [metadata, setMetadata] = useState(false), [versionId, setVersionId] = useState<string | undefined>(initialVersionId), [projectActions, setProjectActions] = useState(false), [projectQuery, setProjectQuery] = useState(''), [kind, setKind] = useState('all');
   const [trash,setTrash]=useState(initialTrash),[assetTitle,setAssetTitle]=useState(''),[assetDescription,setAssetDescription]=useState(''),[assetTags,setAssetTags]=useState('');
   const [metadataBaseline, setMetadataBaseline] = useState('');
-  useEffect(() => setAssetLimit(100), [selected, query, inbox, trash, kind]);
+
   const [busy, setBusy] = useState(false);
   const writeLock = useRef(false);
   const readGeneration = useRef(0);
@@ -61,6 +62,10 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
   const [migrationNotice, setMigrationNotice] = useState('');
   const [activeAsset, setActiveAsset] = useState<CreativeAsset>();
   const [versions, setVersions] = useState<AssetVersion[]>([]);
+  const [versionNext,setVersionNext]=useState<{createdAt:number;id:string}>();
+  const [versionsLoading,setVersionsLoading]=useState(false);
+  const versionRead=useRef(0),versionMoreLock=useRef(false);
+  useEffect(()=>{versionRead.current++;},[assetId,initialVersionId]);
   const [deliveries, setDeliveries] = useState<Record<string, { status: string; generation: number } | undefined>>({});
   useFocusEffect(useCallback(() => {
     let cancelled = false, reading = false;
@@ -89,11 +94,19 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
     const projects = await service.projects(archived);
     if (projectId && !projects.some(p => p.id === projectId)) { const p = await service.project(projectId); if (p) projects.push(p); else setError('项目不存在或已移除'); }
     const covers=mode === 'projects' ? await service.covers() : [];
-    const assets = !assetId && (mode === 'assets' || selected && projectView === 'assets') ? await service.assets({ projectId: mode === 'projects' ? selected : undefined, query, inbox: mode === 'assets' && inbox,trash, kind, limit: assetLimit }) : [];
+    const assets = !assetId && (mode === 'assets' || selected && projectView === 'assets') ? await service.assets({ projectId: mode === 'projects' ? selected : undefined, query, inbox: mode === 'assets' && inbox,trash, kind, limit: 41 }) : [];
     if (generation !== readGeneration.current) return;
-    setProjects(projects); setAssets(assets);setCovers(Object.fromEntries(covers.map(c=>[c.project_id,c])));
-  }, [selected, mode, query, archived, inbox,trash, projectId, kind, assetLimit, assetId, projectView]);
+    setProjects(projects); setAssets(assets.slice(0,40));setAssetNext(assets.length>40?{updatedAt:assets[39].updatedAt,id:assets[39].id}:undefined);setCovers(Object.fromEntries(covers.map(c=>[c.project_id,c])));
+  }, [selected, mode, query, archived, inbox,trash, projectId, kind, assetId, projectView]);
   useFocusEffect(useCallback(() => { void refresh().catch(e => setError(String(e.message))); }, [refresh]));
+  const loadMoreAssets=async()=>{
+    if(!assetNext||assetMoreLock.current)return;
+    const generation=readGeneration.current;assetMoreLock.current=true;setAssetLoading(true);
+    try{const rows=await creativeService().assets({projectId:mode==='projects'?selected:undefined,query,inbox:mode==='assets'&&inbox,trash,kind,limit:41,after:assetNext});
+      if(generation!==readGeneration.current)return;
+      const page=rows.slice(0,40);setAssets(old=>[...old,...page.filter(a=>!old.some(o=>o.id===a.id))]);setAssetNext(rows.length>40?{updatedAt:page[39].updatedAt,id:page[39].id}:undefined);
+    }catch{if(generation===readGeneration.current)setError('素材读取失败，请重试');}finally{assetMoreLock.current=false;setAssetLoading(false);}
+  };
   const run = async (work: () => Promise<unknown>) => {
     if (writeLock.current) return;
     writeLock.current = true;
@@ -117,13 +130,29 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
     const service = creativeService();
     const description = await service.description(asset.id);
     // Browsing uses recorded availability; consumption/export still verifies the selected original.
-    const [rows, links, trashed] = await Promise.all([service.versions(asset.id), service.links(asset.id), service.isTrashed(asset.id)]);
+    const request=++versionRead.current;
+    const [page, links, trashed] = await Promise.all([service.resultHistoryPage({assetIds:[asset.id]}), service.links(asset.id), service.isTrashed(asset.id)]);
+    const rows=(await service.versionsByIds([...page.ids,...(initialVersionId?[initialVersionId]:asset.currentVersionId?[asset.currentVersionId]:[])])).filter(v=>v.assetId===asset.id);
+    if(request!==versionRead.current)return;
+    setVersionNext(page.next);
     if (!isActive()) return;
     setAssetTitle(asset.title); setAssetDescription(description?.description ?? '');
     const tags = description ? JSON.parse(description.tags_json).join(', ') : '';
     setAssetTags(tags); setMetadataBaseline(JSON.stringify([asset.title, description?.description ?? '', tags]));
     setActiveAsset(asset); setVersions(rows); setLinks(links); setTrash(trashed);
-  }, []);
+  }, [initialVersionId]);
+  const loadMoreVersions=async()=>{
+    if(!activeAsset||!versionNext||versionMoreLock.current)return;
+    const request=versionRead.current,id=activeAsset.id;
+    versionMoreLock.current=true;setVersionsLoading(true);
+    try{
+      const service=creativeService(),page=await service.resultHistoryPage({assetIds:[id],after:versionNext});
+      const rows=await service.versionsByIds(page.ids);
+      if(request!==versionRead.current)return;
+      setVersions(old=>[...old,...rows.filter(v=>v.assetId===id&&!old.some(o=>o.id===v.id))]);setVersionNext(page.next);
+    }catch{if(request===versionRead.current)setError('历史版本读取失败，请重试');}
+    finally{versionMoreLock.current=false;setVersionsLoading(false);}
+  };
   useEffect(() => { if (current && !editingBrief) { setTitle(current.title); setBrief(current.brief); } }, [current?.id, current?.revision, editingBrief]);
   useEffect(() => { setVersionId(initialVersionId); setProcessing(false); setProjectActions(false); }, [assetId, initialVersionId]);
   useFocusEffect(useCallback(() => {
@@ -140,7 +169,11 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
   const addImages = () => run(async () => { const images=await pickImagesFromGallery(9);for (const image of images) await importCreativeImage(image, mode === 'projects' ? selected : undefined);if(images.length){revealImports();setImportOpen(false);} });
   const action = (label: string, onPress: () => void, secondary = true) => secondary ? <TextAction label={label} onPress={onPress} disabled={busy} /> : <ListAction label={label} onPress={onPress} disabled={busy} />;
   if (projectId && mode === 'projects' && !current) return <View style={styles.content}>{action('返回项目列表', back)}<Text style={styles.body}>{error || '正在读取项目…'}</Text></View>;
-  return <KeyboardSurface style={styles.screen}><ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+  const projectRows=projects.filter(p=>(p.title+' '+p.brief).toLocaleLowerCase().includes(projectQuery.trim().toLocaleLowerCase()));
+  const renderProject=(p:CreativeProject)=><RecordRow key={p.id} title={p.title} detail={p.brief || '分镜、素材与创作记录'} meta={new Date(p.updatedAt).toLocaleDateString('zh-CN')} leading={covers[p.id]?.state==='AVAILABLE'&&covers[p.id]?.relative_path?<Image accessibilityLabel={`${p.title} 封面`} source={{uri:`${FileSystem.documentDirectory}${covers[p.id].relative_path}`}} style={{height:56,width:56,borderRadius:8}} resizeMode="cover"/>:undefined} onPress={()=>void run(()=>openProject(p))}/>;
+  const listMode=!assetId && (!selected || projectView==='assets');
+  const listRows:Array<CreativeProject|CreativeAsset[]>=mode==='projects'&&!selected?projectRows:Array.from({length:Math.ceil(visibleAssets.length/2)},(_,i)=>visibleAssets.slice(i*2,i*2+2));
+  const content=<>
     <View style={styles.row}>{projectId || assetId ? action('返回',back) : null}<Text accessibilityRole="header" style={styles.heading}>{activeAsset?.title ?? current?.title ?? (mode === 'projects' ? '项目' : '素材库')}</Text>{!assetId && !trash && (mode==='assets' || selected && projectView==='assets')?<ListAction label="导入素材" icon="add" disabled={busy} onPress={()=>setImportOpen(!importOpen)}/>:null}{action(manage ? '收起更多' : '更多', () => setManage(!manage))}</View>
     {!projectId && !assetId ? <View style={styles.card}><Text style={styles.title}>{mode === 'projects' ? '组织你的创作' : trash ? '素材回收站' : '管理创作资源'}</Text><Text style={styles.body}>{mode === 'projects' ? '按项目整理简报、镜头、素材和执行计划。' : trash ? '查看已移入的素材，恢复后可以重新使用。' : '图片、视频、音频与文档统一收纳；同一素材可用于多个项目。'}</Text><View style={styles.row}><ListAction secondary label="技能管理" onPress={()=>router.push('/agent-skills')} />{mode === 'assets' ? <ListAction secondary label={trash?'返回素材库':'回收站'} onPress={()=>{setTrash(!trash);setInbox(false);}} /> : <ListAction secondary label="打开素材库" onPress={()=>router.push('/(tabs)/assets')} />}</View><Text style={styles.body}>技能管理：导入、提炼和启用可复用的助手技能。</Text></View> : null}
     {current && !activeAsset ? <View style={styles.card}><Text style={styles.title}>项目管理</Text><Text style={styles.body}>{current.archivedAt ? '已归档 · 保留成果与记录' : '进行中 · 简报、镜头与素材集中管理'}</Text><View style={styles.row}>{!current.archivedAt ? action('编辑项目简报',()=>confirmLeave(()=>{discardBrief();setProjectView('brief');setEditingBrief(true);})) : null}{action(manage?'收起项目管理':'归档与封面管理',()=>setManage(!manage))}{action('技能管理',()=>router.push('/agent-skills'))}</View></View> : null}
@@ -151,7 +184,7 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
     {mode === 'projects' && !activeAsset ? <>
       {!selected ? <View style={styles.row}>{action('新建项目', () => creating ? confirmLeave(discardBrief) : setCreating(true), false)}{action(archived ? '查看进行中项目' : '查看归档项目', () => { setArchived(!archived); setSelected(undefined); })}{selected ? action('全部项目', () => { setSelected(undefined); setTitle(''); setBrief(''); }) : null}</View> : null}
       {!selected?<TextInput accessibilityLabel="搜索项目" placeholder="搜索项目或简报" value={projectQuery} onChangeText={setProjectQuery} style={styles.input}/>:null}
-      {!selected ? projects.filter(p=>(p.title+' '+p.brief).toLocaleLowerCase().includes(projectQuery.trim().toLocaleLowerCase())).map(p => <RecordRow key={p.id} title={p.title} detail={p.brief || '分镜、素材与创作记录'} meta={new Date(p.updatedAt).toLocaleDateString('zh-CN')} leading={covers[p.id]?.state==='AVAILABLE'&&covers[p.id]?.relative_path?<Image accessibilityLabel={`${p.title} 封面`} source={{uri:`${FileSystem.documentDirectory}${covers[p.id].relative_path}`}} style={{height:56,width:56,borderRadius:8}} resizeMode="cover"/>:undefined} onPress={()=>void run(()=>openProject(p))}/>) : null}
+
       {!projects.length ? <Text style={styles.body}>创建项目，将创作简报与素材组织在一起。</Text> : null}
       {current && projectView === 'brief' && !editingBrief ? <ProjectOverview project={current} onShots={() => changeProjectView('shots')} onEdit={() => setEditingBrief(true)} /> : null}
       {(!selected && creating) || (selected && projectView === 'brief' && editingBrief) ? <View style={styles.card}><Text style={styles.title}>{selected ? '项目简报' : '新建项目'}</Text>
@@ -182,7 +215,7 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
         {metadataDirty ? action('取消素材修改', () => confirmLeave(() => void run(() => inspect(activeAsset)))) : null}
         {action('移入回收站',()=>Alert.alert('移入回收站','仍被项目、镜头或草稿引用的资产会阻止此操作。回收站保留文件，可恢复。',[{text:'取消',style:'cancel'},{text:'移入',onPress:()=>void run(async()=>{await command({name:'asset.trash',payload:{id:activeAsset.id,expectedRevision:activeAsset.revision}});back();})}]))}
       </> : null}
-      {versions.length>1?<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>{versions.map(v => <Pressable key={v.id} accessibilityRole="button" accessibilityLabel={`查看版本 ${v.versionNo}`} accessibilityState={{ selected: visibleVersion?.id === v.id }} onPress={() => { setVersionId(v.id); setProjectActions(false); }} style={{ borderWidth: 2, borderColor: visibleVersion?.id === v.id ? COLORS.primary : COLORS.border, borderRadius: 12, padding: 4, gap: 4, minHeight: 48 }}><MediaPreview version={v} kind={activeAsset.kind} label={`版本 ${v.versionNo} 缩略图`} style={{ width: 64, aspectRatio: 1 }} /><Text style={styles.body}>版本 {v.versionNo}</Text></Pressable>)}</ScrollView>:null}
+      {versions.length>1?<FlatList horizontal data={versions} keyExtractor={v=>v.id} initialNumToRender={8} windowSize={5} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }} onEndReached={()=>void loadMoreVersions()} ListFooterComponent={versionNext?action(versionsLoading?'正在加载…':'加载更早版本',()=>void loadMoreVersions()):null} renderItem={({item:v})=> <Pressable key={v.id} accessibilityRole="button" accessibilityLabel={`查看版本 ${v.versionNo}`} accessibilityState={{ selected: visibleVersion?.id === v.id }} onPress={() => { setVersionId(v.id); setProjectActions(false); }} style={{ borderWidth: 2, borderColor: visibleVersion?.id === v.id ? COLORS.primary : COLORS.border, borderRadius: 12, padding: 4, gap: 4, minHeight: 48 }}><MediaPreview version={v} kind={activeAsset.kind} label={`版本 ${v.versionNo} 缩略图`} style={{ width: 64, aspectRatio: 1 }} /><Text style={styles.body}>版本 {v.versionNo}</Text></Pressable>} />:null}
       {missingVersion ? <View><Text accessibilityRole="alert" style={styles.error}>该版本不可用，记录可能已移除。尚未切换到其他版本。</Text>{versions.length ? action('查看其他版本', () => { setVersionId(undefined); setProcessing(false); setProjectActions(false); }) : null}</View> : null}
       {versions.filter(v => v.id === visibleVersion?.id).map(v => <View key={v.id} style={{ gap: 16 }}>
         <Text style={styles.body}>版本 {v.versionNo} · {activeAsset.currentVersionId === v.id ? '素材默认版本' : '历史版本'} · {v.state === 'AVAILABLE' ? '本地可用' : '文件待恢复'}</Text>
@@ -215,7 +248,7 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
         </> : null}
       </View>)}
       {manage && versions.length > 1 ? <SettingRow label="比较版本" value="选择两个画面，查看变化" expanded={comparing} onPress={() => setComparing(!comparing)} /> : null}
-      {comparing ? <VersionComparison key={activeAsset.id} versions={versions} /> : null}
+      {comparing ? <VersionComparison key={activeAsset.id} versions={versions} onLoadMore={versionNext?()=>void loadMoreVersions():undefined} loading={versionsLoading} /> : null}
       {manage ? <Text style={styles.title}>使用位置</Text> : null}
       {manage ? links.map(link => <View key={link.project_id}><Text style={styles.body}>{link.title} · {link.pinned_version_id ? '固定版本' : '跟随默认'}</Text>{manage ? action(`从 ${link.title} 移出`, () => void run(async () => { await command({ name: 'asset.unlinkFromProject', payload: { assetId: activeAsset.id, projectId: link.project_id, expectedRevision: link.revision } }); await inspect(activeAsset); })) : null}</View>) : null}
       {manage && !links.length ? <Text style={styles.body}>未加入项目，保存在收件箱。</Text> : null}
@@ -227,12 +260,13 @@ export function CreativeWorkspace({ mode, projectId, assetId, initialTab, initia
 
       {!visibleAssets.length ? <Text style={styles.body}>{query || kind !== 'all' ? '没有符合筛选条件的素材，请调整搜索或素材类型。' : trash ? '回收站为空。' : '还没有素材。导入图片后可加入多个项目，文件只保留一份。'}</Text> : null}
       <ListFilters compact label="素材类型" value={kind} onChange={setKind} options={[{id:'all',label:'全部'},{id:'image',label:'图片'},{id:'video',label:'视频'},{id:'audio',label:'音频'},{id:'document',label:'文本与其他'}]} />
-      <View style={styles.row}>{visibleAssets.map(a => <AssetTile key={a.id} asset={a} onPress={() => router.push({pathname:'/creative-asset/[id]',params:{id:a.id,...(selected?{projectId:selected}:{}),...(trash?{trash:'1'}:{})}})} />)}</View>
-      {assets.length >= assetLimit && assetLimit < 1000 ? action('加载更多素材', () => setAssetLimit(n => n + 100)) : null}<Text style={styles.body}>已显示 {assets.length} 项{assetLimit >= 1000 && assets.length >= 1000 ? ' · 请通过搜索缩小范围' : ''}</Text>
+
+
       {manage ? action('迁入历史作品（可中断）', () => void run(async () => { const result = await migrateCreativeHistory(); setMigrationNotice(`本批迁入或更新 ${result.imported} 项。${result.pending ? '还有记录，点击继续迁入。' : '已追平当前历史记录。'} 待处理变更 ${result.audit.pendingJournal}，未迁入 ${result.audit.unmapped}，待更新映射 ${result.audit.staleMappings}，原件不可用 ${result.audit.unavailableFiles}。${result.audit.missingPins||result.audit.brokenMappings||result.audit.foreignKeyViolations?'检测到一致性异常，请保留备份并停止清理文件。':''}${result.audit.writersReady?'':'旧入口仍处于兼容追平阶段，尚未切换写入源。'}`); })) : null}
       {migrationNotice ? <Text accessibilityLiveRegion="polite" style={styles.body}>{migrationNotice}</Text> : null}
     </> : null}
-  </ScrollView></KeyboardSurface>;
+  </>;
+  return <KeyboardSurface style={styles.screen}>{listMode?<FlatList data={listRows} keyExtractor={item=>Array.isArray(item)?item[0].id:item.id} initialNumToRender={6} windowSize={7} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} renderScrollComponent={props=><ScrollView {...props}/>} ListHeaderComponent={<View style={{gap:12}}>{content}</View>} ListFooterComponent={mode==='assets'||selected&&projectView==='assets'?<View style={{gap:12}}>{assetNext?action(assetLoading?'正在加载…':'加载更多素材',()=>void loadMoreAssets()):null}<Text style={styles.body}>已显示 {assets.length} 项</Text></View>:null} renderItem={({item})=>Array.isArray(item)?<View style={styles.row}>{item.map(a=><AssetTile key={a.id} asset={a} onPress={()=>router.push({pathname:'/creative-asset/[id]',params:{id:a.id,...(selected?{projectId:selected}:{}),...(trash?{trash:'1'}:{})}})}/>)}{item.length===1?<View style={{flexGrow:1,flexBasis:150,minWidth:140}}/>:null}</View>:renderProject(item)} />:<ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">{content}</ScrollView>}</KeyboardSurface>;
 }
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.background }, content: { padding: 16, gap: 12, paddingBottom: 40 },
