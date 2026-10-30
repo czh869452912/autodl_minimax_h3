@@ -9,15 +9,18 @@ export const safeCleanupPath=(path:string)=>/^cas\/sha256\/[a-f0-9]{2}\/[a-f0-9]
 export async function cleanupCandidates(db:AppDatabase,files:CleanupFiles,now=Date.now()){
  const blobs=await db.getAllAsync<{relative_path:string}>('SELECT relative_path FROM artifact_blobs');
  const protectedPaths=new Set(blobs.map(b=>b.relative_path));
+ const refs=new Set((await db.getAllAsync<{blob_sha256:string}>('SELECT DISTINCT blob_sha256 FROM artifact_blob_refs')).map(r=>r.blob_sha256));
+ const legacy=await db.getAllAsync<{path:string|null}>('SELECT local_uri AS path FROM tasks UNION SELECT local_path FROM media_assets UNION SELECT poster_path FROM media_assets UNION SELECT uri FROM workflow_artifacts');
  const jobs=await db.getAllAsync<{id:string}>('SELECT id FROM workflow_jobs');
  const receipts=new Set(jobs.map(j=>CryptoJS.SHA256(`novelai:${j.id}`).toString()));
  const active=await db.getFirstAsync("SELECT id FROM workflow_operations WHERE state NOT IN ('SUCCEEDED','FAILED','CANCELLED') LIMIT 1");
  return (await files.list()).filter(f=>{
   if(!safeCleanupPath(f.path)||!Number.isFinite(f.modifiedAt)||f.modifiedAt>now-cleanupAge)return false;
+  if(legacy.some(row=>row.path===f.path||row.path?.endsWith('/'+f.path)))return false;
   if(f.path.startsWith('cache/creative-previews/'))return true;
   if(active)return false;
   if(f.path.startsWith('cas/parts/'))return true;
-  if(f.path.startsWith('cas/sha256/'))return !protectedPaths.has(f.path);
+  if(f.path.startsWith('cas/sha256/'))return !protectedPaths.has(f.path)&&!refs.has(f.path.split('/').at(-1)!);
   return !receipts.has(f.path.split('/')[1]);
  });
 }

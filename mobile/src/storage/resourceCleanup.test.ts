@@ -13,6 +13,15 @@ test('cleanup protects registered originals, send markers, recent files and unkn
   files.remove.mockRejectedValueOnce(Error('locked'));
   expect(await runResourceCleanup(db as never,files,now)).toEqual({deleted:3,bytes:30,failed:1});
   expect(safeCleanupPath(`creative-responses/${key}/sent`)).toBe(false);
+  db.runSync("INSERT INTO artifact_blob_refs VALUES(?,'legacy','kept',0)",key);
+  expect((await cleanupCandidates(db as never,files,now)).some(f=>f.path===orphan)).toBe(false);
+  db.runSync('DELETE FROM artifact_blob_refs WHERE blob_sha256=?',key);
+  db.runSync("INSERT INTO workflow_artifacts(id,job_id,kind,uri) VALUES('legacy','old','image',?)",`file:///private/${orphan}`);
+  expect((await cleanupCandidates(db as never,files,now)).some(f=>f.path===orphan)).toBe(false);
+  db.runSync("INSERT INTO workflow_jobs(id,workflow_id,workflow_version,workflow_hash,adapter_id,adapter_version,input_json,status,created_at,updated_at) VALUES('kept','test','1','hash','novelai-image','1','{}','FAILED',0,0)");
+  const receipt=`creative-responses/${CryptoJS.SHA256('novelai:kept')}/response.json`;
+  const receiptFiles={list:async()=>[{path:receipt,size:10,modifiedAt:1}],remove:jest.fn(async()=>{})};
+  expect(await cleanupCandidates(db as never,receiptFiles,now)).toEqual([]);
  }finally{db.close();}
 });
 
