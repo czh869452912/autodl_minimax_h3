@@ -34,22 +34,22 @@ export function AgentWorkspace() {
     } catch (e) { setError(e instanceof Error ? e.message : '项目创建失败'); }
     finally { lock.current = false; setBusy(false); }
   };
-  if(legacy && !projectId)return <View style={s.screen}><View style={{paddingHorizontal:16}}><TextAction label="返回项目选择" onPress={()=>{setLegacy(false);router.setParams({view:undefined});}} /></View><TextAction label="本地技能" onPress={()=>router.push('/agent-skills')} /><AgentScreen /></View>;
+  if(legacy && !projectId)return <View style={s.screen}><View style={{paddingHorizontal:16}}><TextAction label="返回项目选择" onPress={()=>{setLegacy(false);router.setParams({view:undefined});}} /></View><TextAction label="技能管理" onPress={()=>router.push('/agent-skills')} /><AgentScreen /></View>;
   if (projectId) return <View style={s.screen}><View style={{paddingHorizontal:12,flexDirection:'row',gap:12}}><TextAction label="返回项目选择" onPress={()=>router.setParams({projectId:undefined,view:undefined})}/><TextAction label="全部对话记录" onPress={()=>router.setParams({projectId:undefined,view:'all'})}/></View>
-    <TextAction label="本地技能" onPress={()=>router.push('/agent-skills')} /><AgentScreen key={projectId} projectId={projectId} />
+    <TextAction label="技能管理" onPress={()=>router.push('/agent-skills')} /><AgentScreen key={projectId} projectId={projectId} />
   </View>;
   return <View style={s.screen}><ScrollView contentContainerStyle={s.content}>
     <View style={s.row}><Text accessibilityRole="header" style={s.heading}>项目协作</Text><TextAction label="新建项目" onPress={()=>setCreating(true)}/></View>
     <Text style={s.muted}>在对话中规划画面、制作图片与视频，并审阅结果。</Text>
+    <View style={s.row}><ListAction label="全部对话记录" secondary onPress={()=>setLegacy(true)}/><ListAction label="技能管理" secondary onPress={()=>router.push('/agent-skills')}/></View>
     <TextInput accessibilityLabel="搜索项目" placeholder="搜索项目名称或简报" value={query} onChangeText={setQuery} style={s.input}/>
     <Text style={s.title}>继续项目</Text>
     {projects.filter(p=>(p.title+' '+p.brief).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())).map(p=><RecordRow key={p.id} title={p.title} detail={p.brief || '继续对话、草稿与成果'} meta={new Date(p.updatedAt).toLocaleDateString('zh-CN')} onPress={()=>enter(p.id)}/>)}
     {projects.length && !projects.some(p=>(p.title+' '+p.brief).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))?<Text style={s.muted}>没有匹配的项目</Text>:null}
     {loaded && !projects.length ? <Text style={s.muted}>建立第一个项目，让对话、草稿和成果保存在一起。</Text> : null}
     {!loaded && !error ? <Text style={s.muted}>正在读取项目…</Text> : null}
-    <TextAction label="管理项目与分镜" onPress={() => router.push('/(tabs)/projects')} />
-    <TextAction label="全部对话记录" onPress={()=>setLegacy(true)} />
-    <TextAction label="本地技能" onPress={()=>router.push('/agent-skills')} />
+
+
 
     {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
   </ScrollView>{creating ? <ParameterSheet title="新建创作项目" onClose={() => { if (!busy) setCreating(false); }}>

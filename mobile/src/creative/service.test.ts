@@ -145,3 +145,11 @@ test('batch delivery state returns the latest generation for each requested vers
   expect(await f.service.latestDeliveries([])).toEqual([]);
  }finally{f.db.close();}
 });
+
+test('document filter includes prompts but excludes independently filtered audio',async()=>{
+ const f=fixture();try{
+ for(const kind of ['document','prompt','audio','image'])f.db.runSync('INSERT INTO creative_assets VALUES(?,?,?,NULL,0,1,1)',kind,kind,kind);
+ expect((await f.service.assets({kind:'document'})).map(a=>a.kind).sort()).toEqual(['document','prompt']);
+ expect((await f.service.assets({kind:'audio'})).map(a=>a.kind)).toEqual(['audio']);
+ }finally{f.db.close();}
+});

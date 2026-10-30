@@ -28,7 +28,7 @@ const ICON_MAP: Record<IconName, ComponentProps<typeof MaterialCommunityIcons>['
   settings: 'cog-outline',
   add_photo_alternate: 'image-plus',
   alternate_email: 'at',
-  library_music: 'music-note-plus',
+  library_music: 'music-note-outline',
   close: 'close',
   delete: 'delete-outline',
   play_arrow: 'play',

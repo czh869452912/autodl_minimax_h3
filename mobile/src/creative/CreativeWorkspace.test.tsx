@@ -155,12 +155,13 @@ test('saved project tab restores but cannot override a newer user selection or e
 });
 
 
-test('library exposes skills and recycle bin directly, and audio has a filter', async () => {
+test('library separates storage management from content and has recycle bin and audio filters', async () => {
   let tree!: ReturnType<typeof create>;
   try {
     await act(async()=>{tree=create(<CreativeWorkspace mode="assets"/>);});
-    act(()=>press(tree,'技能管理'));
-    expect(mockPush).toHaveBeenCalledWith('/agent-skills');
+    act(()=>press(tree,'素材管理'));
+    act(()=>press(tree,'存储与清理，查看占用，清理缓存与孤儿文件'));
+    expect(mockPush).toHaveBeenCalledWith({pathname:'/settings-panel',params:{section:'storage'}});
     await act(async()=>press(tree,'回收站'));
     expect(mockService.assets).toHaveBeenLastCalledWith(expect.objectContaining({trash:true}));
     const audio=tree.root.findAll(n=>n.props.accessibilityLabel==='音频'&&typeof n.props.onPress==='function')[0];
