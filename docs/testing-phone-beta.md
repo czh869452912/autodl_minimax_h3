@@ -270,3 +270,16 @@
 - SHA-256：`7F3CE6529AC5F193C3CD1DAE223E2B06E37275F4CD7CBFADED145706B26F7F36`。
 - 包身份、非 debuggable、独立协议、双 ARM、Hermes、86 个原生库、16 KB ZIP / arm64 ELF 对齐及词库哈希校验通过；签名与 beta.27 一致，可覆盖升级。
 - 构建：`build/beta28-final-build.log`；校验：`build/phone-beta/beta28-verification.json`。手机最终包未安装到 ARM 设备；未推送远端。
+
+
+## 2026-10-30 · beta.29 紧凑管理工作区
+
+- 版本 `1.5.0-preview.4-beta.29`，versionCode 68。
+- 助手技能在对话内打开，保留输入草稿；技能列表搜索、行内启停和正文展开，按需导入，并保护上下文切换中的未安装草稿。
+- 素材页内检查与编辑，保留原列表；手机横向切换素材、宽屏列表详情分栏，网格列数自适应；名称标签、加入项目和版本历史页内展开。
+- 项目统一紧凑工具栏，去除重复管理卡，进度与草稿整行可进入，镜头参考图与操作更紧凑。
+- 全量290套件1807项通过；新增定向回归、TypeScript通过。Android模拟器验证手机/宽屏、键盘、技能安装启用及未保存修改保护。测试后原数据库逐字节恢复，屏幕尺寸和临时存储设置已还原；未发起付费生成。
+- 实现提交：`07ee68cb`、`e045e28d`、`c0f26705`。详细记录：`docs/reviews/2026-10-30-compact-management-workspaces.md`。
+- APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.29-android.apk`，186,212,593 字节。双ARM、Hermes、独立测试版身份、86个原生库及16KB对齐均通过；证书与beta.28一致，可覆盖升级测试版。
+- SHA-256：`F391ADAE523719230C41EE2394AADE72F68A241E651AB42C0DDBC03436F2EADE`。
+- 核验报告：`build/phone-beta/beta29-verification.json`。ARM包未安装到用户手机。
