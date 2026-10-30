@@ -1,3 +1,5 @@
+import {ListAction} from '../ui/ListPageUI';
+import {AssistantActions} from '../creative/AssistantActions';
 import { createAgentRuntimeAdapter } from './agentRuntimeAdapter';
 import { CopilotChat } from '@copilotkit/react-native';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
@@ -220,13 +222,15 @@ function ReadyAgent({
     };
     try {
       await threadStore.save(snapshot);
-      if (projectId) await bindProjectConversation(getDatabase(), snapshot.threadId, projectId);
+      const scope=projectId&&activeThreadId?await getDatabase().getFirstAsync<{project_id:string|null}>('SELECT project_id FROM creative_agent_scopes WHERE thread_id=?',activeThreadId):null;
+      const target=scope?scope.project_id:projectId;
+      if(target)await bindProjectConversation(getDatabase(),snapshot.threadId,target);
       setThreads((current) => sortSessionSnapshots([snapshot, ...current]));
       setActiveThreadId(snapshot.threadId);
     } catch (reason) {
       onError(reason instanceof Error ? reason.message : '创建会话失败');
     }
-  }, [onError, threadStore, projectId]);
+  }, [onError, threadStore, projectId,activeThreadId]);
   const deleteSession = useCallback(
     async (threadId: string) => {
       onError(undefined);
@@ -277,7 +281,7 @@ function ReadyAgent({
   useEffect(() => promptRuntimeRegistry.subscribeSummary(handleSnapshotChange), [handleSnapshotChange]);
   const searchHistory = useCallback(async (query: string, more = false) => {
     const request = ++historyPage.current;
-    const page = await threadStore.listSummaries({ projectId, query, limit: 50, offset: more ? threads.length : 0 });
+    const page = await threadStore.listSummaries({ query, limit: 50, offset: more ? threads.length : 0 });
     if (request !== historyPage.current) return;
     setHistoryQuery(query); setHasMoreThreads(page.length === 50);
     setThreads(current => more ? [...current, ...page.filter(row => !current.some(old => old.threadId === row.threadId))] : page);
@@ -390,6 +394,7 @@ function AgentSession({
       >
         <AgentActivityProvider threadId={snapshot.threadId}><PromptAssistantUi
           {...uiProps}
+          headerActions={<AssistantActions/>}
           headerContext={<AgentCreativePanel compact threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />}
           renderRunArtifacts={runId=><AgentCreativeCards threadId={snapshot.threadId} running={Boolean(agent.isRunning)} runId={runId}/>}
           onExportPrompt={onExportPrompt}
@@ -441,7 +446,7 @@ function StatusView({
         {message ?? '正在加载 Prompt 助手…'}
       </Text>
       {!loading ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="打开 LLM 设置" onPress={() => router.navigate({ pathname: '/settings-panel', params: { section: 'assistant' } })} style={{ minHeight: 48, padding: 12, justifyContent: 'center' }}><Text style={{ color: COLORS.primaryActive }}>打开设置</Text></Pressable>
+        <ListAction label="打开 LLM 设置" icon="settings" onPress={()=>router.navigate({pathname:'/settings-panel',params:{section:'assistant'}})}/>
       ) : null}
     </View>
   );

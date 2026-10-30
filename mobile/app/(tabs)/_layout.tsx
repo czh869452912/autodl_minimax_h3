@@ -14,9 +14,9 @@ export default function TabsLayout() {
   const auxiliary = !['create', 'agent', 'projects', 'assets'].includes(activeId);
   return (
     <PrimaryNavigationProvider><SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={{ flex: 1, backgroundColor: COLORS.background }}>
-      {activeId!=='create' && activeId!=='settings' && activeId!=='projects' && activeId!=='assets'?<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, minHeight: 48 }}>
+      {activeId!=='agent' && activeId!=='create' && activeId!=='settings' && activeId!=='projects' && activeId!=='assets'?<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, minHeight: 48 }}>
         {auxiliary ? <Pressable accessibilityRole="button" accessibilityLabel="返回工作台" style={{ minHeight: 48, minWidth: 48, justifyContent: 'center' }} onPress={() => router.canGoBack() ? router.back() : router.navigate('/(tabs)/create')}><AppIcon name="arrow_back" size={22} /></Pressable> : null}
-        <Text style={{ flex: 1, color: COLORS.text, fontSize: 15, fontWeight: '700' }}>{activeId === 'agent' ? '助手' : ({assets:'素材',projects:'项目',tasks:'任务',settings:'设置',gallery:'历史作品'} as Record<string,string>)[activeId]}</Text>
+        <Text style={{ flex: 1, color: COLORS.text, fontSize: 15, fontWeight: '700' }}>{({assets:'素材',projects:'项目',tasks:'任务',settings:'设置',gallery:'历史作品'} as Record<string,string>)[activeId]}</Text>
         <TaskInboxButton/>
         <Pressable accessibilityRole="button" accessibilityLabel="打开设置" style={{ minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center' }} onPress={() => router.navigate('/settings-panel')}><AppIcon name="settings" size={22} /></Pressable>
       </View>:null}

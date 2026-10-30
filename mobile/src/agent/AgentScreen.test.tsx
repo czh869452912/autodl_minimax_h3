@@ -40,7 +40,10 @@ jest.mock('expo-router', () => ({
   useFocusEffect: (effect: () => void) => { require('react').useEffect(effect, [effect]); },
 }));
 jest.mock('../settings/storage', () => ({ readSettings: async () => ({ llmApiKey: 'key', llmEndpoint: 'https://example.invalid', llmModel: 'h3', llmTimeoutSeconds: '600', llmMaxRetries: '2' }) }));
-jest.mock('../storage/databaseClient', () => ({ getDatabase: () => ({}) }));
+const mockScopeRead=jest.fn(async()=>({project_id:'project-b'}));
+const mockBind=jest.fn(async(..._args:unknown[])=>undefined);
+jest.mock('../creative/projectAgentScope',()=>({bindProjectConversation:(...args:unknown[])=>mockBind(...args)}));
+jest.mock('../storage/databaseClient', () => ({ getDatabase: () => ({getFirstAsync:mockScopeRead}) }));
 jest.mock('./threadStore', () => ({ createLocalThreadStore: () => mockStore }));
 jest.mock('../handoff/promptDraft', () => ({ createPromptDraftStore: () => ({ save: async () => ({ id: 'saved' }) }) }));
 jest.mock('./modelAdapter', () => ({ getH3AgentConfigError: () => undefined }));
@@ -194,4 +197,19 @@ test('closing an Agent surface flushes but keeps another live session and its su
  expect(promptRuntimeRegistry.ensure(config,thread('b'),mockStore as never)).toBe(other);
  (other.agent as any).emit([{id:'later',role:'assistant',content:'still active'}]);
  await other.flush();expect(mockRows.get('b')?.messages).toEqual([{id:'later',role:'assistant',content:'still active'}]);
+});
+
+test('history icon searches all conversations even when the workspace starts in a project',async()=>{
+ mockRows.set('a',thread('a'));const list=jest.spyOn(mockStore,'listSummaries');
+ try{await act(async()=>{tree=create(<AgentScreen projectId="project-a"/>);});
+ await act(async()=>ui().onSearchHistory('needle'));
+ expect(list).toHaveBeenLastCalledWith({query:'needle',limit:50,offset:0});
+ }finally{list.mockRestore();}
+});
+
+test('new conversation follows the actual project of a thread opened from global history',async()=>{
+ mockRows.set('a',thread('a'));mockBind.mockClear();await act(async()=>{tree=create(<AgentScreen projectId="project-a"/>);});
+ await act(async()=>ui().onNew());
+ expect(mockScopeRead).toHaveBeenCalledWith(expect.stringContaining('creative_agent_scopes'),'a');
+ expect(mockBind).toHaveBeenLastCalledWith(expect.anything(),expect.any(String),'project-b');
 });

@@ -95,6 +95,7 @@ export function PromptAssistantUi({
   transcriptRevision,
   renderRunArtifacts,
   headerContext,
+  headerActions,
   workflowDefinition,
   workflows,
   workflowLoadIssue,
@@ -116,6 +117,7 @@ export function PromptAssistantUi({
   transcriptRevision?: number;
   renderRunArtifacts?: (runId:string)=>React.ReactNode;
   headerContext?: React.ReactNode;
+  headerActions?: React.ReactNode;
   workflowDefinition?: WorkflowDefinition;
   workflows?: WorkflowChoice[];
   workflowLoadIssue?: string;
@@ -158,6 +160,7 @@ export function PromptAssistantUi({
   const [inputSelection, setInputSelection] = useState({ start: initialComposer.text.length, end: initialComposer.text.length });
   const [mentionSheetOpen, setMentionSheetOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+
   const [renameOpen, setRenameOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const submitLock = useRef(false);
@@ -324,20 +327,21 @@ export function PromptAssistantUi({
       style={styles.root}
     >
       <View style={styles.header}>
+        <View style={styles.headerTitleWrap}>
+          {headerContext ?? <Text style={styles.title} numberOfLines={1}>{threads.find(item=>item.threadId===activeThreadId)?sessionTitle(threads.find(item=>item.threadId===activeThreadId)!):'创作助手'}</Text>}
+        </View>
         <Pressable
           accessibilityLabel="打开对话历史"
           onPress={() => { if (!wide) setHistoryOpen(true); }}
           style={styles.headerButton}
         >
           <AppIcon
-            name="list_alt"
+            name="history"
             size={20}
             color={LIGHT_PROMPT_COLORS.muted}
           />
         </Pressable>
-        <View style={styles.headerTitleWrap}>
-          {headerContext ?? <Text style={styles.title} numberOfLines={1}>{threads.find(item=>item.threadId===activeThreadId)?sessionTitle(threads.find(item=>item.threadId===activeThreadId)!):'创作助手'}</Text>}
-        </View>
+
         <Pressable
           accessibilityLabel="新建对话"
           onPress={onNewThread}
@@ -345,6 +349,7 @@ export function PromptAssistantUi({
         >
           <AppIcon name="add" size={22} color={LIGHT_PROMPT_COLORS.ink} />
         </Pressable>
+        {headerActions}
       </View>
       <View style={styles.body}>
         {wide ? <View style={styles.sidebar}>{history}</View> : null}
