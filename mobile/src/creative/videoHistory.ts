@@ -7,12 +7,14 @@ export type VideoHistoryJob={id:string;status:string;created_at:number;started_a
 export type VideoHistoryRound={draft:CreativeDraft;job:VideoHistoryJob;versions:AssetVersion[];ordinal?:number};
 
 /** Jobs and media summaries are batched. Original recipes are loaded by the selected result only. */
-export async function readVideoHistory(db:AppDatabase,source:CreativeDraft){
+export async function readVideoHistory(db:AppDatabase,source:CreativeDraft,options?:{after?:{createdAt:number;id:string};jobId?:string;limit?:number}){
   const session=videoSession(JSON.parse(source.input_json),source.target_asset_id??source.id);
-  const drafts=await db.getAllAsync<CreativeDraft>(`SELECT * FROM creative_generation_drafts
+  const drafts=await db.getAllAsync<CreativeDraft & {ordinal:number;history_created:number}>(`WITH scoped AS (SELECT * FROM creative_generation_drafts
     WHERE provider_id=? AND project_id IS ? AND shot_id IS ? AND state!='DISCARDED' AND job_id IS NOT NULL
     AND ((CASE WHEN json_extract(input_json,'$.schemaVersion')=2 THEN CAST(json_extract(input_json,'$.sessionId') AS TEXT) ELSE COALESCE(target_asset_id,id) END)=?
-      OR (? IS NOT NULL AND target_asset_id=?)) ORDER BY updated_at DESC,id DESC`,source.provider_id,source.project_id,source.shot_id,session,source.target_asset_id,source.target_asset_id);
+      OR (? IS NOT NULL AND target_asset_id=?)) ), numbered AS (SELECT d.*,j.created_at AS history_created,ROW_NUMBER() OVER(ORDER BY j.created_at,j.id) AS ordinal FROM scoped d JOIN workflow_jobs j ON j.id=d.job_id WHERE d.id=(SELECT s.id FROM scoped s WHERE s.job_id=d.job_id ORDER BY s.updated_at DESC,s.id DESC LIMIT 1)) SELECT * FROM numbered WHERE (? IS NULL OR history_created<? OR (history_created=? AND job_id<?)) AND (? IS NULL OR job_id=?) ORDER BY history_created DESC,job_id DESC LIMIT ?`,source.provider_id,source.project_id,source.shot_id,session,source.target_asset_id,source.target_asset_id,options?.after?.createdAt??null,options?.after?.createdAt??null,options?.after?.createdAt??null,options?.after?.id??null,options?.jobId??null,options?.jobId??null,options?Math.min(100,options.limit??40)+1:-1);
+  const hasMore=Boolean(options&&drafts.length>Math.min(100,options.limit??40));if(hasMore)drafts.pop();
+  const last=drafts[drafts.length-1];
   const byJob=new Map<string,CreativeDraft>();
   for(const draft of drafts)if(!byJob.has(draft.job_id!))byJob.set(draft.job_id!,draft);
   const ids=[...byJob.keys()],jobs:VideoHistoryJob[]=[],outputs=new Map<string,AssetVersion[]>();
@@ -40,6 +42,6 @@ export async function readVideoHistory(db:AppDatabase,source:CreativeDraft){
       add(await db.getAllAsync<Output>(`SELECT ${job} AS job_id,${columns} FROM creative_asset_versions v ${files} WHERE v.asset_id IN (${assets.map(()=>'?').join(',')}) AND ${job} IN (${legacy.map(()=>'?').join(',')}) ORDER BY v.created_at DESC,v.id DESC`,...assets,...legacy));
     }
   }
-  const rounds:VideoHistoryRound[]=jobs.map(job=>({job,draft:byJob.get(job.id)!,versions:outputs.get(job.id)??[]})).sort((a,b)=>b.job.created_at-a.job.created_at||b.job.id.localeCompare(a.job.id));
-  return {rounds,stamp:JSON.stringify(rounds.map(r=>[r.draft.id,r.draft.revision,r.job,r.versions]))};
+  const rounds:VideoHistoryRound[]=jobs.map(job=>({job,ordinal:drafts.find(d=>d.job_id===job.id)?.ordinal,draft:byJob.get(job.id)!,versions:outputs.get(job.id)??[]})).sort((a,b)=>b.job.created_at-a.job.created_at||b.job.id.localeCompare(a.job.id));
+  return {rounds,next:hasMore&&last?{createdAt:last.history_created,id:last.job_id!}:undefined,stamp:JSON.stringify(rounds.map(r=>[r.draft.id,r.draft.revision,r.job,r.versions]))};
 }

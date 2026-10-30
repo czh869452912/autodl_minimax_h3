@@ -23,6 +23,12 @@ test('450 rounds use chunked reads and media summaries without transferring full
     expect(result.rounds[0].versions[0].recipe).toEqual({jobId:'j449'});
     expect(read).toHaveBeenCalledTimes(7); // one scoped draft query + 3 chunks × jobs/outputs
     expect(result.rounds.some(row=>row.job.id==='j450')).toBe(false);
+    const first=await readVideoHistory(db as never,source,{});expect(first.rounds).toHaveLength(40);expect(first.rounds[0].ordinal).toBe(450);
+    const ids=first.rounds.map(r=>r.job.id);let cursor=first.next;
+    while(cursor){const page=await readVideoHistory(db as never,source,{after:cursor});ids.push(...page.rounds.map(r=>r.job.id));cursor=page.next;}
+    expect(ids).toHaveLength(450);expect(new Set(ids).size).toBe(450);
+    expect((await readVideoHistory(db as never,source,{jobId:'j0'})).rounds[0].ordinal).toBe(1);
+    expect((await readVideoHistory(db as never,source,{jobId:'j450'})).rounds).toEqual([]);
   }finally{db.close();}
 });
 

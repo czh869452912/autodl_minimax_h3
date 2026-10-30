@@ -25,6 +25,9 @@ export function VideoGenerationHistory({draft,disabled,onLatestStatus,visible=tr
   const {width}=useWindowDimensions();
   const [expanded,setExpanded]=useState(false),[filter,setFilter]=useState('all');
   const [rounds,setRounds]=useState<VideoRound[]>([]),[selected,setSelected]=useState<string>(),[ready,setReady]=useState(false),[error,setError]=useState('');
+  const [nextPage,setNextPage]=useState<{createdAt:number;id:string}>(),[loadingMore,setLoadingMore]=useState(false);
+  const pageCursor=useRef(nextPage);pageCursor.current=nextPage;
+  const loadPage=useRef<()=>void>(()=>{});
   const [,setClock]=useState(0);
   const chosen=useRef<string|undefined>(undefined),statusCallback=useRef(onLatestStatus);statusCallback.current=onLatestStatus;
   const scope=videoSession(JSON.parse(draft.input_json),draft.target_asset_id??draft.id);
@@ -38,19 +41,22 @@ export function VideoGenerationHistory({draft,disabled,onLatestStatus,visible=tr
       try{const value=JSON.parse(raw??'[]');return Array.isArray(value)&&value.every(id=>typeof id==='string')?value as string[]:[];}catch{return [];}
     }).catch(()=>[] as string[]);
     const refresh=async()=>{if(!active||reading||!needsRefresh)return;reading=true;try{
-      const snapshot=await creativeService().videoHistory(draft),next=snapshot.rounds;
+      const snapshot=await creativeService().videoHistory(draft,{}),next=snapshot.rounds;
+      setNextPage(snapshot.next);
+      if(chosen.current&&!next.some(r=>r.job.id===chosen.current)){const exact=await creativeService().videoHistory(draft,{jobId:chosen.current});next.push(...exact.rounds);}
       const order=await orderReady,previousOrder=order.length,ordinals=new Map(order.map((id,index)=>[id,index+1]));
       for(const row of [...next].reverse())if(!ordinals.has(row.job.id)){order.push(row.job.id);ordinals.set(row.job.id,order.length);}
       if(!active)return;
       if(order.length!==previousOrder)void SecureStore.setItemAsync(orderKey,JSON.stringify(order)).catch(()=>undefined);
-      next.forEach(row=>{row.ordinal=ordinals.get(row.job.id);});
+      next.forEach(row=>{row.ordinal=row.ordinal??ordinals.get(row.job.id);});
       needsRefresh=next.some(row=>['READY_TO_SUBMIT','SUBMITTING','QUEUED','RUNNING','UNKNOWN'].includes(row.job.status)||['SUCCEEDED','PARTIAL_SUCCEEDED'].includes(row.job.status)&&(!row.versions.length||row.versions.some(v=>v.state==='PENDING')));
-      if(snapshot.stamp!==stamp){setRounds(next);stamp=snapshot.stamp;}
+      if(snapshot.stamp!==stamp){setRounds(old=>[...next,...old.filter(r=>!next.some(n=>n.job.id===r.job.id))]);stamp=snapshot.stamp;}
       if(needsRefresh)setClock(value=>value+1);
       setError('');const latest=next.find(r=>r.job.id===draft.job_id);if(latest)statusCallback.current(latest.job.status);
     }catch{if(active)setError('生成记录读取失败，正在重试');}finally{reading=false;}};
+    loadPage.current=()=>{if(reading||!active)return;reading=true;setLoadingMore(true);void creativeService().videoHistory(draft,{after:pageCursor.current}).then(page=>{if(active){setRounds(old=>[...old,...page.rounds.filter(r=>!old.some(o=>o.job.id===r.job.id))]);setNextPage(page.next);}}).catch(()=>{if(active)setError('更早记录读取失败，请重试');}).finally(()=>{reading=false;if(active)setLoadingMore(false);});};
     void refresh();const timer=setInterval(()=>void refresh(),2500);return()=>{active=false;clearInterval(timer);};
-  },[draft.job_id,key,visible]));
+  },[draft.job_id,key,visible,ready]));
   const current=rounds.find(r=>r.job.id===selected)??rounds.find(r=>r.versions.some(v=>v.state==='AVAILABLE'))??rounds[0];
   const choose=(id:string)=>{chosen.current=id;setSelected(id);void SecureStore.setItemAsync(key,id).catch(()=>setError('预览位置未保存，当前选择仍可使用'));};
   useEffect(()=>{if(ready&&current&&!chosen.current){chosen.current=current.job.id;setSelected(current.job.id);}},[ready,current?.job.id]);
@@ -63,6 +69,7 @@ export function VideoGenerationHistory({draft,disabled,onLatestStatus,visible=tr
   const records=<View style={width>=840?{width:300,borderLeftWidth:1,borderColor:COLORS.border}:listMode?{flex:1,minHeight:100}:{height:112}}>
     {listMode?<View style={{flexDirection:'row',paddingHorizontal:8}}>{[['all','全部'],['done','完成'],['active','进行中'],['failed','需关注']].map(([value,label])=><Pressable key={value} accessibilityRole="tab" accessibilityState={{selected:filter===value}} onPress={()=>setFilter(value)} style={{padding:10}}><Text style={{fontSize:12,color:filter===value?COLORS.primary:COLORS.textMuted}}>{label}</Text></Pressable>)}</View>:null}
     <FlatList key={listMode?'list':'strip'} horizontal={!listMode} testID="video-rounds" data={listMode?filtered:rounds} keyExtractor={r=>r.job.id} showsHorizontalScrollIndicator={false} initialNumToRender={8} windowSize={5} contentContainerStyle={{padding:8,gap:6}}
+      ListFooterComponent={nextPage?<TextAction label={loadingMore?"正在加载…":"加载更早记录"} disabled={loadingMore} onPress={()=>loadPage.current()}/>:null}
       ListEmptyComponent={()=> <Text style={{padding:12,color:COLORS.textMuted}}>暂无此类记录</Text>}
       renderItem={({item})=>{const ordinal=item.ordinal??rounds.length-rounds.indexOf(item),selected=current?.job.id===item.job.id;return <Pressable accessibilityRole="button" accessibilityLabel={`查看第 ${ordinal} 轮视频`} accessibilityState={{selected}} onPress={()=>choose(item.job.id)} style={{width:listMode?'100%':112,padding:4,gap:6,flexDirection:listMode?'row':'column',alignItems:listMode?'center':undefined,borderWidth:1,borderColor:selected?COLORS.primary:COLORS.border,borderRadius:8,backgroundColor:selected?COLORS.surfaceRaised:COLORS.surface}}>
         <MediaPreview version={item.versions.find(v=>v.state==='AVAILABLE')??item.versions[0]} kind="video" contain label={`第 ${ordinal} 轮封面`} style={{width:listMode?88:102,height:listMode?50:58,aspectRatio:undefined,borderRadius:5}}/>
@@ -71,7 +78,7 @@ export function VideoGenerationHistory({draft,disabled,onLatestStatus,visible=tr
       </Pressable>;}}/>
   </View>;
   return <View style={{flex:1,minHeight:0}}>
-    <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:12}}><Text style={{flex:1,fontSize:12,color:COLORS.textMuted}}>{rounds.length} 轮{pendingCount?` · ${pendingCount} 项进行中`:''}</Text>
+    <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:12}}><Text style={{flex:1,fontSize:12,color:COLORS.textMuted}}>已加载 {rounds.length} 轮{pendingCount?` · ${pendingCount} 项进行中`:''}</Text>
       {selected&&rounds[0]&&current?.job.id!==rounds[0].job.id?<TextAction label="查看最新一轮" onPress={()=>choose(rounds[0].job.id)}/>:null}
       {width<840?<TextAction label={expanded?'收起记录':`全部记录 · ${rounds.length}`} onPress={()=>setExpanded(!expanded)}/>:null}
     </View>
