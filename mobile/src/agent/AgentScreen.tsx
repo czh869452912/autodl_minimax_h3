@@ -441,6 +441,7 @@ function StatusView({
   const router = useRouter();
   return (
     <View style={styles.status}>
+      {!loading?<View style={{position:'absolute',top:4,right:8,flexDirection:'row'}}><AssistantActions/></View>:null}
       {loading ? <ActivityIndicator color={COLORS.primaryActive} /> : null}
       <Text style={styles.statusText}>
         {message ?? '正在加载 Prompt 助手…'}
