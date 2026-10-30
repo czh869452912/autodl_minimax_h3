@@ -1,5 +1,5 @@
 jest.mock('expo-router/react-navigation',()=>({useNavigation:()=>({dispatch:jest.fn()}),usePreventRemove:jest.fn()}));
-import { Switch } from 'react-native';
+import { Alert, TextInput, Switch } from 'react-native';
 import { IconAction } from '../../creative/WorkbenchUI';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
@@ -41,4 +41,22 @@ test('switching off revokes the selected version and blocks duplicate writes whi
  await act(async()=>finish());
  expect(tree.root.findByType(Switch).props.disabled).toBe(false);
  act(()=>tree.unmount());
+});
+
+
+test('context changes share the unsaved import guard',async()=>{
+ let guard:((proceed:()=>void)=>void)|undefined;
+ const proceed=jest.fn(),alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<SkillLibraryScreen registerLeave={value=>{guard=value;}}/>);});
+  act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='添加技能')!.props.onPress());
+  act(()=>tree.root.findAllByType(TextInput).find(n=>n.props.accessibilityLabel==='技能文本')!.props.onChangeText('unfinished skill'));
+  act(()=>guard!(proceed));
+  expect(proceed).not.toHaveBeenCalled();
+  expect(alert).toHaveBeenLastCalledWith('尚有未保存的修改',expect.any(String),expect.any(Array));
+  act(()=>alert.mock.calls.at(-1)![2]!.find(c=>c.text==='放弃修改')!.onPress!());
+  expect(proceed).toHaveBeenCalledTimes(1);
+ }finally{act(()=>tree?.unmount());alert.mockRestore();}
+ expect(guard).toBeUndefined();
 });

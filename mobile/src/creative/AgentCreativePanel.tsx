@@ -13,7 +13,7 @@ import type { CreativeProject } from './types';
 import { TextAction } from './WorkbenchUI';
 import { creativeUI as s } from './creativeUI';
 
-export function AgentCreativePanel({ threadId, running, compact=false }: { threadId: string; running: boolean; compact?:boolean }) {
+export function AgentCreativePanel({ threadId, running, compact=false, beforeNavigate }: { threadId: string; running: boolean; compact?:boolean; beforeNavigate?:(proceed:()=>void)=>void }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false), [projects, setProjects] = useState<CreativeProject[]>([]), [selected, setSelected] = useState<string | null>(null);
   const [notice, setNotice] = useState(''), [query, setQuery] = useState(''), [busy, setBusy] = useState(false);
@@ -32,8 +32,8 @@ export function AgentCreativePanel({ threadId, running, compact=false }: { threa
   const choose = async (id: string | null) => {
     if (running || lock.current) return;
     // Open the target project's own conversation; never retarget this transcript.
-    if (id) router.setParams({projectId:id});
-    setExpanded(false);
+    const proceed=()=>{if(id)router.setParams({projectId:id});setExpanded(false);};
+    if(beforeNavigate)beforeNavigate(proceed);else proceed();
   };
 
   const projectTitle=projects.find(p => p.id === selected)?.title ?? (selected ? '项目不可用' : '选择项目');
@@ -45,7 +45,7 @@ export function AgentCreativePanel({ threadId, running, compact=false }: { threa
       <View style={s.row}><Text style={s.heading}>选择创作项目</Text><ListAction label="关闭" secondary onPress={() => setExpanded(false)} /></View>
       <TextInput accessibilityLabel="搜索创作项目" placeholder="搜索项目" value={query} onChangeText={setQuery} style={s.input} />
       {projects.filter(p => p.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(p => <RecordRow key={p.id} title={p.title} detail={p.brief || '项目会话与创作成果'} selected={p.id===selected} disabled={running || busy} onPress={() => void choose(p.id)} />)}
-      <ListAction label="管理项目" secondary onPress={() => { setExpanded(false); router.navigate('/(tabs)/projects'); }} />
+      <ListAction label="管理项目" secondary onPress={() => {const proceed=()=>{setExpanded(false);router.navigate('/(tabs)/projects');};if(beforeNavigate)beforeNavigate(proceed);else proceed();}} />
 
       {selected ? <ListAction label="撤销当前项目全部生成授权" secondary disabled={busy} onPress={() => {
         if (lock.current) return; lock.current = true; setBusy(true);

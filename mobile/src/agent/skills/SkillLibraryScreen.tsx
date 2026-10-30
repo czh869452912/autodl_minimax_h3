@@ -2,7 +2,7 @@ import { useUnsavedChanges } from '../../creative/useUnsavedChanges';
 import { usePrimaryNavigationGuard } from '../../navigation/PrimaryNavigation';
 import { CompactWorkbench, IconAction } from '../../creative/WorkbenchUI';
 import { COLORS } from '../../ui/theme';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Pressable, Switch, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,7 +17,7 @@ import { useFallbackBack } from '../../navigation/useFallbackBack';
 
 const template = '---\nname: scene-review\ndescription: 检查场景描述中的主体、动作和镜头是否清楚\n---\n\n阅读用户的场景描述。指出主体、动作与镜头中的歧义，再给出可供审阅的改写。保留用户明确给出的约束。';
 
-export function SkillLibraryScreen({ onClose }: { onClose?: () => void } = {}) {
+export function SkillLibraryScreen({ onClose, registerLeave }: { onClose?: () => void; registerLeave?:(guard:((proceed:()=>void)=>void)|undefined)=>void } = {}) {
   const router = useRouter();
   const store = useMemo(() => createSkillStore(getDatabase()), []);
   const [versions, setVersions] = useState<SkillVersion[]>([]);
@@ -28,6 +28,8 @@ export function SkillLibraryScreen({ onClose }: { onClose?: () => void } = {}) {
   const lock = useRef(false);
   const confirmLeave=useUnsavedChanges(Boolean(text.trim() || preview),busy);
   usePrimaryNavigationGuard('agent',confirmLeave,Boolean(onClose));
+  const latestLeave=useRef(confirmLeave);latestLeave.current=confirmLeave;
+  useEffect(()=>{registerLeave?.(proceed=>latestLeave.current(proceed));return()=>registerLeave?.(undefined);},[registerLeave]);
   const back=()=>confirmLeave(()=>onClose?onClose():router.canGoBack()?router.back():router.replace('/(tabs)/agent'));
   useFallbackBack(back);
   const refresh = useCallback(async () => { const [items, history] = await Promise.all([store.list(), store.runs()]); setVersions(items); setRuns(history); }, [store]);

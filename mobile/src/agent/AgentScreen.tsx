@@ -363,6 +363,9 @@ function AgentSession({
 }) {
   const [notice, setNotice] = useState<string | undefined>();
   const [skillsOpen,setSkillsOpen]=useState(false);
+  const skillGuard=useRef<((proceed:()=>void)=>void)|undefined>(undefined);
+  const registerSkillGuard=useCallback((guard:((proceed:()=>void)=>void)|undefined)=>{skillGuard.current=guard;},[]);
+  const leaveSkills=(proceed:()=>void)=>skillGuard.current?skillGuard.current(proceed):proceed();
   const [runIssue, setRunIssue] = useState<RunIssue | null>(null);
   const runtime = useMemo(
     () => promptRuntimeRegistry.ensure(config, snapshot, threadStore),
@@ -396,9 +399,12 @@ function AgentSession({
       >
         <AgentActivityProvider threadId={snapshot.threadId}><PromptAssistantUi
           {...uiProps}
+          onNew={()=>leaveSkills(uiProps.onNew)}
+          onSelect={id=>leaveSkills(()=>uiProps.onSelect(id))}
+          onDelete={id=>leaveSkills(()=>uiProps.onDelete(id))}
           headerActions={<AssistantActions onOpenSkills={()=>setSkillsOpen(true)}/>}
-          toolPanel={skillsOpen?<SkillLibraryScreen onClose={()=>setSkillsOpen(false)}/>:undefined}
-          headerContext={<AgentCreativePanel compact threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />}
+          toolPanel={skillsOpen?<SkillLibraryScreen registerLeave={registerSkillGuard} onClose={()=>setSkillsOpen(false)}/>:undefined}
+          headerContext={<AgentCreativePanel beforeNavigate={leaveSkills} compact threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />}
           renderRunArtifacts={runId=><AgentCreativeCards threadId={snapshot.threadId} running={Boolean(agent.isRunning)} runId={runId}/>}
           onExportPrompt={onExportPrompt}
           onExportHandoff={onExportHandoff}
