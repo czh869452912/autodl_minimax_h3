@@ -219,3 +219,27 @@ test('inline asset inspection keeps list mounted and protects edits when changin
   expect(tree.root.findAllByProps({accessibilityLabel:'关闭素材详情'})).toHaveLength(0);
  }finally{act(()=>tree?.unmount());alert.mockRestore();mockService.assets.mockResolvedValue([]);}
 });
+
+
+test('all generated versions are directly selectable and new results preserve selection and metadata edits',async()=>{
+ const asset={id:'group',kind:'image',title:'Batch',revision:1,currentVersionId:'v3',createdAt:1};
+ const version=(n:number)=>({id:`v${n}`,assetId:'group',versionNo:n,createdAt:n,source:'generated',state:'AVAILABLE',mime:'image/png',relativePath:`${n}.png`,recipe:{}});
+ mockService.asset.mockResolvedValue(asset);
+ mockService.versions.mockResolvedValue([version(3),version(2),version(1)]);
+ const ticks:Array<()=>void>=[];
+ const interval=jest.spyOn(global,'setInterval').mockImplementation(((callback:()=>void)=>{ticks.push(callback);return 1;}) as any);
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<CreativeWorkspace mode="assets" assetId="group"/>);});
+  for(const n of [1,2,3])expect(tree.root.findAll(nod=>nod.props.accessibilityLabel===`查看版本 ${n}`).length).toBeGreaterThan(0);
+  act(()=>press(tree,'查看版本 1'));
+  expect(content(tree)).toContain('版本 1 预览');
+  act(()=>press(tree,'编辑名称与标签'));
+  act(()=>tree.root.findByProps({accessibilityLabel:'资产名称'}).props.onChangeText('Unsaved batch title'));
+  mockService.versions.mockResolvedValue([version(4),version(3),version(2),version(1)]);
+  await act(async()=>{for(const tick of ticks)await tick();});
+  expect(content(tree)).toContain('查看版本 4');
+  expect(content(tree)).toContain('版本 1 预览');
+  expect(tree.root.findByProps({accessibilityLabel:'资产名称'}).props.value).toBe('Unsaved batch title');
+ }finally{act(()=>tree?.unmount());interval.mockRestore();mockService.asset.mockResolvedValue(undefined);mockService.versions.mockResolvedValue([]);}
+});

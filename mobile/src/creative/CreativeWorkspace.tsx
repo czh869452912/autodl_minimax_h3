@@ -56,7 +56,7 @@ function CreativeWorkspaceContent({ mode, projectId, assetId, initialTab, initia
   const [assetNext,setAssetNext]=useState<{updatedAt:number;id:string}>();
   const [assetLoading,setAssetLoading]=useState(false);const assetMoreLock=useRef(false);
   const [previewUri,setPreviewUri]=useState<string|null>(null);
-  const [importOpen,setImportOpen]=useState(false);const [versionsOpen,setVersionsOpen]=useState(false);
+  const [importOpen,setImportOpen]=useState(false);
   const [comparing, setComparing] = useState(false),[processing,setProcessing]=useState(false);
   useEffect(() => setComparing(false), [assetId]);
   const [assets, setAssets] = useState<CreativeAsset[]>([]);
@@ -159,6 +159,30 @@ function CreativeWorkspaceContent({ mode, projectId, assetId, initialTab, initia
     setAssetTags(tags); setMetadataBaseline(JSON.stringify([asset.title, description?.description ?? '', tags]));
     setActiveAsset(asset); setVersions(rows); setLinks(links); setTrash(trashed);
   }, [initialVersionId]);
+  // Poll identities and file availability without replacing unsaved metadata or older pages.
+  useFocusEffect(useCallback(()=>{
+    if(!assetId)return;
+    let cancelled=false,reading=false;
+    const poll=async()=>{
+      if(cancelled||reading)return;
+      reading=true;
+      const request=versionRead.current;
+      try{
+        const service=creativeService(),page=await service.resultHistoryPage({assetIds:[assetId]});
+        const fresh=await service.versionsByIds(page.ids);
+        if(cancelled||request!==versionRead.current)return;
+        setVersions(previous=>{
+          const byId=new Map(previous.map(v=>[v.id,v]));
+          for(const version of fresh)if(version.assetId===assetId)byId.set(version.id,version);
+          const next=[...byId.values()].sort((a,b)=>b.versionNo-a.versionNo);
+          return JSON.stringify(previous)===JSON.stringify(next)?previous:next;
+        });
+      }catch{ /* Initial loading and explicit pagination retain their own error surfaces. */ }
+      finally{reading=false;}
+    };
+    const timer=setInterval(()=>void poll(),2000);
+    return()=>{cancelled=true;clearInterval(timer);};
+  },[assetId]));
   const loadMoreVersions=async()=>{
     if(!activeAsset||!versionNext||versionMoreLock.current)return;
     const request=versionRead.current,id=activeAsset.id;
@@ -235,12 +259,12 @@ function CreativeWorkspaceContent({ mode, projectId, assetId, initialTab, initia
         {action('移入回收站',()=>Alert.alert('移入回收站','仍被项目、镜头或草稿引用的资产会阻止此操作。回收站保留文件，可恢复。',[{text:'取消',style:'cancel'},{text:'移入',onPress:()=>void run(async()=>{await command({name:'asset.trash',payload:{id:activeAsset.id,expectedRevision:activeAsset.revision}});back();})}]))}
       </> : null}
 </WorkbenchSection>:null}      {missingVersion ? <View><Text accessibilityRole="alert" style={styles.error}>该版本不可用，记录可能已移除。尚未切换到其他版本。</Text>{versions.length ? action('查看其他版本', () => { setVersionId(undefined); setProcessing(false); setProjectActions(false); }) : null}</View> : null}
-{!versions.length&&!missingVersion?<AssetFacts asset={activeAsset} description={assetDescription} tags={assetTags} projects={links.map(l=>l.title)}/>:null}{versions.filter(v=>v.id===visibleVersion?.id).map(v=><View key={v.id} style={{gap:14}}>        <Text style={styles.body}>版本 {v.versionNo} · {activeAsset.currentVersionId === v.id ? '素材默认版本' : '历史版本'} · {v.state === 'AVAILABLE' ? '本地可用' : '文件待恢复'}</Text>
+{versions.length>1 || versionNext ? <View style={{gap:8}}><View style={styles.row}><Text style={[styles.title,{flex:1,fontSize:14}]}>版本 · {versions.length}{versionNext?' +':''}</Text><TextAction label={comparing?'收起比较':'比较版本'} onPress={()=>setComparing(!comparing)}/></View><FlatList horizontal data={versions} keyExtractor={v=>v.id} initialNumToRender={8} windowSize={5} showsHorizontalScrollIndicator contentContainerStyle={{ gap: 10 }} onEndReached={()=>void loadMoreVersions()} ListFooterComponent={versionNext?action(versionsLoading?'正在加载…':'加载更早版本',()=>void loadMoreVersions()):null} renderItem={({item:v})=> <Pressable key={v.id} accessibilityRole="button" accessibilityLabel={`查看版本 ${v.versionNo}`} accessibilityState={{ selected: visibleVersion?.id === v.id }} onPress={() => { setVersionId(v.id); setProjectActions(false); setComparing(false); }} style={{ borderWidth: 2, borderColor: visibleVersion?.id === v.id ? COLORS.primary : COLORS.border, borderRadius: 12, padding: 4, gap: 4, minHeight: 48 }}><MediaPreview version={v} kind={activeAsset.kind} label={`版本 ${v.versionNo} 缩略图`} style={{ width: 64, aspectRatio: 1 }} /><Text style={styles.body}>版本 {v.versionNo}</Text></Pressable>} />{comparing?<VersionComparison key={activeAsset.id} versions={versions} onLoadMore={versionNext?()=>void loadMoreVersions():undefined} loading={versionsLoading}/>:null}</View>:null}{!versions.length&&!missingVersion?<AssetFacts asset={activeAsset} description={assetDescription} tags={assetTags} projects={links.map(l=>l.title)}/>:null}{versions.filter(v=>v.id===visibleVersion?.id).map(v=><View key={v.id} style={{gap:14}}>        <Text style={styles.body}>版本 {v.versionNo} · {activeAsset.currentVersionId === v.id ? '素材默认版本' : '历史版本'} · {v.state === 'AVAILABLE' ? '本地可用' : '文件待恢复'}</Text>
         {v.mime?.startsWith('image/') ? <Pressable accessibilityRole="button" accessibilityLabel="全屏查看图片" disabled={v.state!=='AVAILABLE'||!v.relativePath} onPress={()=>setPreviewUri(FileSystem.documentDirectory+v.relativePath!)}><MediaPreview version={v} label={`版本 ${v.versionNo} 预览`} contain style={{ aspectRatio: 4 / 3 }} /><View style={{position:'absolute',right:10,bottom:10,padding:6,borderRadius:8,backgroundColor:COLORS.surface}}><AppIcon name="open_in_full" size={18}/></View></Pressable> : null}
         {v.state === 'AVAILABLE' && v.relativePath && v.mime?.startsWith('video/') ? <View style={{height:260,width:'100%',borderRadius:12,overflow:'hidden'}}><VideoPlayer source={`${FileSystem.documentDirectory}${v.relativePath}`} /></View> : null}
         {v.state==='AVAILABLE'&&v.mime==='application/pdf'?<PdfVersionPreview key={v.id} version={v}/>:null}
         {v.state==='AVAILABLE'&&v.mime?.startsWith('audio/')?<AudioVersionPreview version={v}/>:null}
-        {v.state==='AVAILABLE'&&['text/plain','text/markdown','application/json'].includes(v.mime??'')?<TextVersionPreview version={v}/>:null}<View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{v.state==='AVAILABLE'&&(CREATIVE_FILE_MIMES as readonly string[]).includes(v.mime??'')?<ListAction label="导出" icon="download" secondary onPress={()=>void run(()=>exportCreativeVersion(v.id))}/>:null}{!trash&&v.state==='AVAILABLE'?<ListAction label="加入项目" icon="add" secondary onPress={()=>setProjectActions(!projectActions)}/>:null}{versions.length>1?<ListAction label="版本" icon="list_alt" secondary onPress={()=>setVersionsOpen(!versionsOpen)}/>:null}</View><AssetFacts asset={activeAsset} version={v} description={assetDescription} tags={assetTags} projects={links.map(l=>l.title)}/>        {projectActions ? <WorkbenchSection title="加入项目" onClose={()=>setProjectActions(false)}>{error?<Text accessibilityRole="alert" style={styles.error}>{error}</Text>:null}{!projects.some(p=>!p.archivedAt)?<Text style={styles.body}>还没有进行中的项目。请先到项目页新建或恢复项目，再加入素材。</Text>:null}<TextInput accessibilityLabel="搜索项目" placeholder="搜索项目" value={projectQuery} onChangeText={setProjectQuery} style={styles.input} />
+        {v.state==='AVAILABLE'&&['text/plain','text/markdown','application/json'].includes(v.mime??'')?<TextVersionPreview version={v}/>:null}<View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{v.state==='AVAILABLE'&&(CREATIVE_FILE_MIMES as readonly string[]).includes(v.mime??'')?<ListAction label="导出" icon="download" secondary onPress={()=>void run(()=>exportCreativeVersion(v.id))}/>:null}{!trash&&v.state==='AVAILABLE'?<ListAction label="加入项目" icon="add" secondary onPress={()=>setProjectActions(!projectActions)}/>:null}</View><AssetFacts asset={activeAsset} version={v} description={assetDescription} tags={assetTags} projects={links.map(l=>l.title)}/>        {projectActions ? <WorkbenchSection title="加入项目" onClose={()=>setProjectActions(false)}>{error?<Text accessibilityRole="alert" style={styles.error}>{error}</Text>:null}{!projects.some(p=>!p.archivedAt)?<Text style={styles.body}>还没有进行中的项目。请先到项目页新建或恢复项目，再加入素材。</Text>:null}<TextInput accessibilityLabel="搜索项目" placeholder="搜索项目" value={projectQuery} onChangeText={setProjectQuery} style={styles.input} />
         {projects.filter(p => p.title.includes(projectQuery) && !p.archivedAt && !links.some(l => l.project_id === p.id)).map(p => <View key={p.id}>{action(`加入 ${p.title}（固定此版本）`, () => void run(async () => { await command({ name: 'asset.linkToProject', payload: { assetId: activeAsset.id, projectId: p.id, versionId: v.id } }); await inspect(activeAsset); }))}</View>)}
         {links.filter(l => l.title.includes(projectQuery) && l.pinned_version_id !== v.id).map(l => <View key={l.project_id}>{action(`将 ${l.title} 固定到此版本`, () => void run(async () => { await command({ name: 'asset.pinProjectVersion', payload: { assetId: activeAsset.id, projectId: l.project_id, expectedRevision: l.revision, versionId: v.id } }); await inspect(activeAsset); }))}</View>)}
         {activeAsset.kind==='image'&&v.state==='AVAILABLE'?links.map(l=>{const p=projects.find(p=>p.id===l.project_id);return p&&!p.archivedAt?<View key={`cover-${p.id}`}>{action(`设为 ${p.title} 封面`,()=>void run(async()=>{await creativeFiles().verify(v.id);await command({name:'project.setCover',payload:{id:p.id,expectedRevision:p.revision,versionId:v.id}});} ))}</View>:null;}):null}
@@ -264,10 +288,7 @@ function CreativeWorkspaceContent({ mode, projectId, assetId, initialTab, initia
       {manage ? links.map(link => <View key={link.project_id}><Text style={styles.body}>{link.title} · {link.pinned_version_id ? '固定版本' : '跟随默认'}</Text>{manage ? action(`从 ${link.title} 移出`, () => void run(async () => { await command({ name: 'asset.unlinkFromProject', payload: { assetId: activeAsset.id, projectId: link.project_id, expectedRevision: link.revision } }); await inspect(activeAsset); })) : null}</View>) : null}
       {manage && !links.length ? <Text style={styles.body}>未加入项目，保存在收件箱。</Text> : null}
       {manage ? links.filter(l => l.pinned_version_id).map(l => <View key={l.project_id}>{action(`让 ${l.title} 跟随默认版本`, () => void run(async () => { await command({ name: 'asset.pinProjectVersion', payload: { assetId: activeAsset.id, projectId: l.project_id, expectedRevision: l.revision, versionId: null } }); await inspect(activeAsset); }))}</View>) : null}
-</ParameterSheet>:null}</View>)}{versionsOpen?<WorkbenchSection title="版本历史" onClose={()=>setVersionsOpen(false)}>      {versions.length>1?<><Text style={styles.title}>版本历史</Text><FlatList horizontal data={versions} keyExtractor={v=>v.id} initialNumToRender={8} windowSize={5} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }} onEndReached={()=>void loadMoreVersions()} ListFooterComponent={versionNext?action(versionsLoading?'正在加载…':'加载更早版本',()=>void loadMoreVersions()):null} renderItem={({item:v})=> <Pressable key={v.id} accessibilityRole="button" accessibilityLabel={`查看版本 ${v.versionNo}`} accessibilityState={{ selected: visibleVersion?.id === v.id }} onPress={() => { setVersionId(v.id); setProjectActions(false); }} style={{ borderWidth: 2, borderColor: visibleVersion?.id === v.id ? COLORS.primary : COLORS.border, borderRadius: 12, padding: 4, gap: 4, minHeight: 48 }}><MediaPreview version={v} kind={activeAsset.kind} label={`版本 ${v.versionNo} 缩略图`} style={{ width: 64, aspectRatio: 1 }} /><Text style={styles.body}>版本 {v.versionNo}</Text></Pressable>} /></>:null}
-      {versions.length > 1 ? <SettingRow label="比较版本" value="选择两个画面，查看变化" expanded={comparing} onPress={() => setComparing(!comparing)} /> : null}
-      {comparing ? <VersionComparison key={activeAsset.id} versions={versions} onLoadMore={versionNext?()=>void loadMoreVersions():undefined} loading={versionsLoading} /> : null}
-</WorkbenchSection>:null}    </View> : assetId ? <Text style={styles.body}>{error ? '请返回素材列表选择可用素材。' : '正在读取素材…'}</Text> : mode === 'assets' || (selected && projectView === 'assets') ? <>
+</ParameterSheet>:null}</View>)}    </View> : assetId ? <Text style={styles.body}>{error ? '请返回素材列表选择可用素材。' : '正在读取素材…'}</Text> : mode === 'assets' || (selected && projectView === 'assets') ? <>
       {importOpen?<ParameterSheet title="导入素材" onClose={()=>setImportOpen(false)}><Text style={styles.title}>选择导入方式</Text><View style={styles.row}>{action('从相册导入图片',()=>void addImages())}{action('从文件导入',()=>void run(async()=>{const count=await pickCreativeFiles(mode==='projects'?selected:undefined);if(count){revealImports();setImportOpen(false);}}))}</View><Text style={styles.body}>支持视频、音频和文档，单个文件最多 100MB。</Text><TextAssetEditor projectId={mode==='projects'?selected:undefined} onSaved={async()=>{revealImports();setImportOpen(false);await refresh();}}/></ParameterSheet>:null}
       {!library?<TextInput accessibilityLabel="搜索资产" placeholder="搜索名称、说明或标签" value={query} onChangeText={setQuery} style={styles.input} />:null}
       {!library && mode==='assets' && !trash?<ListFilters compact label="素材范围" value={inbox?'inbox':'all'} onChange={value=>setInbox(value==='inbox')} options={[{id:'all',label:'全部素材'},{id:'inbox',label:'未加入项目'}]}/>:null}
