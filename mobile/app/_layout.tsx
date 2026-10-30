@@ -34,7 +34,8 @@ export default function RootLayout() {
       const request = await readPendingMaintenance();
       if (request) {
         await stopTaskMonitor();
-        if (request.kind === 'creative-backup') await (await import('../src/storage/creativeBackupRuntime')).createCreativeFileBackup(startupDatabase, request.id);
+        if (request.kind === 'resource-cleanup') await (await import('../src/storage/resourceCleanupRuntime')).performResourceCleanup(startupDatabase);
+        else if (request.kind === 'creative-backup') await (await import('../src/storage/creativeBackupRuntime')).createCreativeFileBackup(startupDatabase, request.id);
         else if (request.kind === 'creative-restore') await (await import('../src/storage/creativeBackupRuntime')).restoreCreativeFileBackup(startupDatabase, request.id);
         else if (request.kind === 'restore') restoreFullDatabaseBackup(startupDatabase, request.backup);
         else { createUserDatabaseBackup(startupDatabase); resetAppDatabase(startupDatabase); }

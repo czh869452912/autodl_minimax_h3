@@ -16,7 +16,7 @@ function runtimeFiles(): { root: string; files: BackupFiles } {
         const result: string[] = [];
         for (const name of await FileSystem.readDirectoryAsync(absolute(prefix))) {
           const path = `${prefix}${name}`;
-          if (path === 'creative-backups' || path === 'SQLite') continue;
+          if (path === 'creative-backups' || path === 'SQLite' || path === 'tag-dictionaries') continue;
           const info = await FileSystem.getInfoAsync(absolute(path));
           if (!info.exists) throw new Error('BACKUP_SOURCE_CHANGED');
           if (info.isDirectory) result.push(...await walk(`${path}/`)); else result.push(path);
