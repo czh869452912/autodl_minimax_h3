@@ -16,6 +16,7 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
   const router=useRouter(),lock=useRef(false);
   const [cards,setCards]=useState<Card[]>([]),[shots,setShots]=useState<CreativeShot[]>([]),[shotId,setShotId]=useState(''),[prompt,setPrompt]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const [choices,setChoices]=useState<Array<{id:string;title:string}>>([]),[selected,setSelected]=useState<string[]>([]);
+  const [choiceNext,setChoiceNext]=useState<{createdAt:number;id:string}>();
   const readEpoch=useRef(0);
   const refresh=useCallback(async()=>{
     const epoch=++readEpoch.current;
@@ -67,8 +68,9 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
       <Text style={{color:COLORS.text,fontWeight:'700'}}>新建选图计划</Text>
       {shots.map(s=><View key={s.id}>{action(`${shotId===s.id?'✓ ':''}${s.title}`,()=>{setShotId(s.id);setPrompt(s.description);})}</View>)}
       <TextInput accessibilityLabel="计划视频提示词" placeholder="动作、运镜和节奏" multiline value={prompt} onChangeText={setPrompt} style={{color:COLORS.text,borderWidth:1,borderColor:COLORS.border,padding:12,minHeight:90}}/>
-      {action('读取项目图片候选',()=>void work(async()=>{const items=[];for(const a of await creativeService().assets({projectId})){if(a.kind!=='image')continue;for(const v of await creativeService().versions(a.id))if(v.state==='AVAILABLE')items.push({id:v.id,title:`${a.title} · 版本 ${v.versionNo}`});}setChoices(items);setSelected([]);}))}
+      {action('读取项目图片候选',()=>void work(async()=>{const page=await creativeService().availableVersionPage({kind:'image',projectId});setChoices(page.items.map(item=>({id:item.version.id,title:`${item.title} · 版本 ${item.version.versionNo}`})));setChoiceNext(page.next);setSelected([]);}))}
       {choices.map(c=><View key={c.id}>{action(`${selected.includes(c.id)?'✓ ':''}${c.title}`,()=>setSelected(previous=>previous.includes(c.id)?previous.filter(v=>v!==c.id):previous.length<20?[...previous,c.id]:previous))}</View>)}
+      {choiceNext?action('加载更多图片候选',()=>void work(async()=>{const page=await creativeService().availableVersionPage({kind:'image',projectId,after:choiceNext});setChoices(old=>[...old,...page.items.filter(item=>!old.some(c=>c.id===item.version.id)).map(item=>({id:item.version.id,title:`${item.title} · 版本 ${item.version.versionNo}`}))]);setChoiceNext(page.next);})):null}
       {action('保存计划（不消费）',()=>void work(async()=>{const shot=shots.find(s=>s.id===shotId);if(!shot)throw new Error('请先选择镜头');for(const id of selected)await creativeFiles().verify(id);await creativeService().execute({name:'plan.createSelection',payload:{projectId,shotId,expectedShotRevision:shot.revision,title:`${shot.title} · 选图生成视频`,candidateVersionIds:selected,videoPrompt:prompt}},createId());setSelected([]);setChoices([]);}))}
     </View>:null}
   </View>;

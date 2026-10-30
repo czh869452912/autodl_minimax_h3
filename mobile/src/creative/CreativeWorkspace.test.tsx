@@ -96,7 +96,7 @@ test('archive remains in project detail with a restore action', async () => {
   let tree!: ReturnType<typeof create>;
   try {
     await act(async () => { tree = create(<CreativeWorkspace mode="projects" projectId="p" initialTab="brief" />); });
-    act(() => press(tree, '更多'));
+    act(() => press(tree, '项目设置'));
     await act(async () => press(tree, '归档项目'));
     expect(content(tree)).toContain('恢复项目');
     expect(content(tree)).not.toContain('新建项目');

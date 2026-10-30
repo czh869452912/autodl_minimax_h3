@@ -24,7 +24,7 @@ export function ProjectOverview({ project, onShots, onEdit }: { project: Creativ
   }, [project.id]));
   return <View style={{ gap: 16 }}>
     <Text style={s.body}>{project.brief || '写下目标、风格和交付要求，让每次创作保持一致。'}</Text>
-    {!project.archivedAt ? <ListAction label="编辑项目简报" secondary onPress={onEdit} /> : <Text style={s.muted}>项目已归档，可查看成果。需要继续制作时，请在更多操作中恢复项目。</Text>}
+    {!project.archivedAt ? <ListAction label="编辑项目简报" secondary onPress={onEdit} /> : <Text style={s.muted}>项目已归档，可查看成果。需要继续制作时，请在项目设置中恢复项目。</Text>}
     <View style={s.card}><Text style={s.title}>{project.archivedAt ? '项目成果' : '继续制作'}</Text><Text style={s.body}>{summary}</Text><ListAction label={project.archivedAt ? "查看镜头与成果" : "查看镜头与下一步"} onPress={onShots} /></View>
     {!project.archivedAt ? <ListAction label="让助手协助本项目" secondary onPress={() => router.push({ pathname: '/(tabs)/agent', params: { projectId: project.id } })} /> : null}
     <ProjectPlans projectId={project.id} archived={Boolean(project.archivedAt)} compact />
