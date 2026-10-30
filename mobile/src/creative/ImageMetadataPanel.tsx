@@ -1,3 +1,4 @@
+import {ListAction} from '../ui/ListPageUI';
 import {COLORS} from '../ui/theme';
 import {useEffect,useState} from 'react';
 import {Image,NativeModules,Platform,Pressable,Text,View} from 'react-native';
@@ -82,5 +83,5 @@ function MetadataSheet({version,onClose,onReuse}:{version:AssetVersion;onClose:(
 }
 export function ImageMetadataPanel({version,label="查看图片元数据",onReuse}:{version:AssetVersion;label?:string;onReuse?:(patch:Partial<NovelAiDraftInput>)=>void}){
   const [open,setOpen]=useState(false);
-  return <><TextAction label={label} onPress={()=>setOpen(true)} />{open?<MetadataSheet key={version.id} version={version} onClose={()=>setOpen(false)} onReuse={onReuse} />:null}</>;
+  return <><ListAction label={label} icon="info" secondary onPress={()=>setOpen(true)} />{open?<MetadataSheet key={version.id} version={version} onClose={()=>setOpen(false)} onReuse={onReuse} />:null}</>;
 }

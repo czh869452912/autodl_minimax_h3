@@ -1,5 +1,6 @@
 jest.mock('./ProjectShots', () => ({ ProjectShots: () => null }));
-import { Alert } from 'react-native';
+import { Alert, Image } from 'react-native';
+jest.spyOn(Image,'getSize').mockImplementation((_uri,success)=>{success?.(600,480);return Promise.resolve({width:600,height:480});});
 import { usePreventRemove } from 'expo-router/react-navigation';
 jest.mock('expo-router/react-navigation', () => ({ useNavigation: () => ({ dispatch: jest.fn() }), usePreventRemove: jest.fn() }));
 jest.mock('./ProjectOverview', () => ({ ProjectOverview: () => null }));
@@ -117,7 +118,7 @@ test('unsaved project brief blocks route removal and tab changes until explicitl
     expect(alert).toHaveBeenCalledWith('尚有未保存的修改', expect.any(String), expect.any(Array));
     expect(tree.root.findByProps({ accessibilityLabel: '创作简报' }).props.value).toBe('Unsaved brief');
     act(() => alert.mock.calls[0][2]![1].onPress!());
-    expect(content(tree)).toContain('✓ 镜头');
+    expect(tree.root.findAll(n=>n.props.accessibilityLabel==='镜头'&&n.props.accessibilityState?.checked).length).toBeGreaterThan(0);
     expect(usePreventRemove).toHaveBeenLastCalledWith(false, expect.any(Function));
   } finally { act(() => tree?.unmount()); alert.mockRestore(); mockService.projects.mockResolvedValue([]); }
 });
@@ -148,9 +149,9 @@ test('saved project tab restores but cannot override a newer user selection or e
   await act(async()=>{tree=create(<CreativeWorkspace mode="projects" projectId="p"/>);});
   act(()=>press(tree,'概览'));
   await act(async()=>resolve('assets'));
-  expect(content(tree)).toContain('✓ 概览');
+  expect(tree.root.findAll(n=>n.props.accessibilityLabel==='概览'&&n.props.accessibilityState?.checked).length).toBeGreaterThan(0);
   await act(async()=>tree.update(<CreativeWorkspace mode="projects" projectId="p" initialTab="assets" requestId="new"/>));
-  expect(content(tree)).toContain('✓ 素材');
+  expect(tree.root.findAll(n=>n.props.accessibilityLabel==='素材'&&n.props.accessibilityState?.checked).length).toBeGreaterThan(0);
  }finally{act(()=>tree?.unmount());mockService.projects.mockResolvedValue([]);}
 });
 
@@ -178,4 +179,14 @@ test('project list does not fetch unrelated library assets', async () => {
     await act(async()=>{tree=create(<CreativeWorkspace mode="projects"/>);});
     expect(mockService.assets).not.toHaveBeenCalled();
   } finally {act(()=>tree?.unmount());}
+});
+
+test('details expose facts and keep maintenance in panels',async()=>{
+ mockService.asset.mockResolvedValue({id:'a',kind:'image',title:'A',revision:1,currentVersionId:'v',createdAt:1});
+ mockService.versions.mockResolvedValue([{id:'v',assetId:'a',versionNo:1,source:'import',mime:'image/png',state:'MISSING',recipe:{}}]);
+ let tree!:ReturnType<typeof create>;try{
+ await act(async()=>{tree=create(<CreativeWorkspace mode="assets" assetId="a"/>);});
+ expect(content(tree)).toContain('外部导入');expect(content(tree)).not.toContain('重新定位原图');
+ act(()=>press(tree,'素材操作'));expect(content(tree)).toContain('重新定位原图');
+ }finally{act(()=>tree?.unmount());mockService.asset.mockResolvedValue(undefined);mockService.versions.mockResolvedValue([]);}
 });
