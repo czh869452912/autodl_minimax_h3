@@ -307,7 +307,6 @@ function CreativeWorkspaceContent({ mode, projectId, assetId, initialTab, initia
     <View style={{flex:1,flexDirection:width>=800?'row':'column'}}>
       <View style={{flex:1,display:inspectorId&&width<800?'none':'flex'}}>{browser}</View>
       {inspectorId?<View style={{flex:width>=800?1.3:1,minHeight:0,borderLeftWidth:width>=800?1:0,borderColor:COLORS.border}}>
-        {width<800?<ScrollView horizontal keyboardShouldPersistTaps="handled" style={{flexGrow:0,maxHeight:52}} contentContainerStyle={{padding:6,gap:6}}>{assets.map(a=><Pressable key={a.id} accessibilityRole="button" accessibilityLabel={`切换素材 ${a.title}`} accessibilityState={{selected:inspectorId===a.id}} onPress={()=>leaveInspector(()=>setInspectorId(a.id))} style={{minHeight:36,maxWidth:160,padding:8,borderRadius:8,borderWidth:1,borderColor:inspectorId===a.id?COLORS.primary:COLORS.border,backgroundColor:inspectorId===a.id?COLORS.primarySoft:COLORS.surface}}><Text numberOfLines={1} style={{color:COLORS.text,fontSize:12}}>{a.title}</Text></Pressable>)}</ScrollView>:null}
         <CreativeWorkspace key={inspectorId} mode="assets" assetId={inspectorId} projectId={selected} initialTrash={trash} registerLeave={registerInspector} onClose={()=>{setInspectorId(undefined);void refresh();}}/>
       </View>:null}
     </View>
