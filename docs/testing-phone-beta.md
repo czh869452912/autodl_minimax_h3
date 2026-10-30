@@ -292,3 +292,12 @@
 - TypeScript与3套件17项针对性测试通过。本轮未进行模拟器交互验收。
 - APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.30-android.apk`，186213997字节；双ARM、Hermes、86个原生库16KB对齐及独立测试身份核验通过，证书与beta.29一致。
 - SHA-256：`9FB9A78B0A99639E262C61B8444D56C516300CC0A54CD62437838D642C3560D7`。核验报告：`build/phone-beta/beta30-verification.json`。
+
+
+## 2026-10-30 · beta.31 素材详情导航调整
+
+- 版本 `1.5.0-preview.4-beta.31`，versionCode 70；功能提交 `27400532`。
+- 移除素材详情顶部跨素材组的横向浏览条，保留当前组内版本切换。返回素材列表继续选择其他组，并保留未保存编辑保护。
+- 沿用本次修改的14项回归测试和TypeScript通过结果；本轮未新增模拟器验收。
+- APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.31-android.apk`，186213261字节；独立测试版身份、双ARM、Hermes、86个原生库及16KB对齐均核验通过，证书与beta.30一致。
+- SHA-256：`BFF783675E281AD31885FAA89197BFFA5B647831D95E8C23E0A6D818DFFADB61`；报告：`build/phone-beta/beta31-verification.json`。
