@@ -1,3 +1,4 @@
+import { SkillLibraryScreen } from './skills/SkillLibraryScreen';
 import {ListAction} from '../ui/ListPageUI';
 import {AssistantActions} from '../creative/AssistantActions';
 import { createAgentRuntimeAdapter } from './agentRuntimeAdapter';
@@ -361,6 +362,7 @@ function AgentSession({
   onExportHandoff: (handoff: PromptHandoff) => Promise<void>;
 }) {
   const [notice, setNotice] = useState<string | undefined>();
+  const [skillsOpen,setSkillsOpen]=useState(false);
   const [runIssue, setRunIssue] = useState<RunIssue | null>(null);
   const runtime = useMemo(
     () => promptRuntimeRegistry.ensure(config, snapshot, threadStore),
@@ -394,7 +396,8 @@ function AgentSession({
       >
         <AgentActivityProvider threadId={snapshot.threadId}><PromptAssistantUi
           {...uiProps}
-          headerActions={<AssistantActions/>}
+          headerActions={<AssistantActions onOpenSkills={()=>setSkillsOpen(true)}/>}
+          toolPanel={skillsOpen?<SkillLibraryScreen onClose={()=>setSkillsOpen(false)}/>:undefined}
           headerContext={<AgentCreativePanel compact threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />}
           renderRunArtifacts={runId=><AgentCreativeCards threadId={snapshot.threadId} running={Boolean(agent.isRunning)} runId={runId}/>}
           onExportPrompt={onExportPrompt}

@@ -6,14 +6,15 @@ import { AppIcon, type IconName } from '../ui/icons';
 import { WorkbenchMotion } from './WorkbenchMotion';
 import { COLORS } from '../ui/theme';
 
-const DensityContext = createContext(false);
+import { WorkspaceDensity as DensityContext, useCompactWorkbench } from '../ui/WorkspaceDensity';
+export { useCompactWorkbench } from '../ui/WorkspaceDensity';
 export const WorkbenchNavigationContext=createContext<{register:(guard:()=>Promise<boolean>)=>()=>void}|null>(null);
 export function useWorkbenchLeave(guard:()=>Promise<boolean>){
   const context=useContext(WorkbenchNavigationContext),latest=useRef(guard);latest.current=guard;
   useEffect(()=>context?.register(()=>latest.current()),[context]);
 }
 export function CompactWorkbench({children}:{children:ReactNode}) { return <DensityContext.Provider value><WorkbenchMotion>{children}</WorkbenchMotion></DensityContext.Provider>; }
-export const useCompactWorkbench = () => useContext(DensityContext);
+
 
 /** A bounded, in-place tool region: the owner keeps the canvas visible beside it. */
 export function InlineWorkbenchPanel({title,onClose,children,header}:{title:string;onClose:()=>void;children:ReactNode;header?:ReactNode}) {
@@ -89,3 +90,11 @@ export const w = StyleSheet.create({
   sheetHeader: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomColor: COLORS.border, borderBottomWidth: StyleSheet.hairlineWidth },
   pressed: { opacity: 0.65 }, disabled: { opacity: 0.45 },
 });
+
+/** An expanded section inside the current workspace, without a modal or route. */
+export function WorkbenchSection({title,onClose,children}:{title:string;onClose:()=>void;children:ReactNode}) {
+  return <View style={{borderWidth:1,borderColor:COLORS.border,borderRadius:10,padding:10,gap:8,backgroundColor:COLORS.surface}}>
+    <View style={{flexDirection:'row',alignItems:'center'}}><Text accessibilityRole="header" style={{flex:1,fontSize:14,fontWeight:'600',color:COLORS.text}}>{title}</Text><IconAction label={`关闭${title}`} icon="close" onPress={onClose}/></View>
+    {children}
+  </View>;
+}

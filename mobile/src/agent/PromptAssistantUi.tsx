@@ -96,6 +96,7 @@ export function PromptAssistantUi({
   renderRunArtifacts,
   headerContext,
   headerActions,
+  toolPanel,
   workflowDefinition,
   workflows,
   workflowLoadIssue,
@@ -118,6 +119,7 @@ export function PromptAssistantUi({
   renderRunArtifacts?: (runId:string)=>React.ReactNode;
   headerContext?: React.ReactNode;
   headerActions?: React.ReactNode;
+  toolPanel?: React.ReactNode;
   workflowDefinition?: WorkflowDefinition;
   workflows?: WorkflowChoice[];
   workflowLoadIssue?: string;
@@ -322,7 +324,7 @@ export function PromptAssistantUi({
     <KeyboardSurface
       // Use the actual container/keyboard intersection. Window-height deltas
       // cannot account for a custom tab bar disappearing or modal windows.
-      enabled={isVisible && (wide || !historyOpen) && !renameOpen && !briefOpen && !versionsOpen && !mentionSheetOpen}
+      enabled={isVisible && ((wide && !toolPanel) || !historyOpen) && !renameOpen && !briefOpen && !versionsOpen && !mentionSheetOpen}
       // Keep resting space outside the padding controlled by keyboard avoidance.
       style={styles.root}
     >
@@ -332,7 +334,7 @@ export function PromptAssistantUi({
         </View>
         <Pressable
           accessibilityLabel="打开对话历史"
-          onPress={() => { if (!wide) setHistoryOpen(true); }}
+          onPress={() => { if (!wide || toolPanel) setHistoryOpen(true); }}
           style={styles.headerButton}
         >
           <AppIcon
@@ -351,8 +353,8 @@ export function PromptAssistantUi({
         </Pressable>
         {headerActions}
       </View>
-      <View style={styles.body}>
-        {wide ? <View style={styles.sidebar}>{history}</View> : null}
+      <View style={[styles.body,Boolean(toolPanel) && !wide && {flexDirection:"column"}]}>
+        {wide && !toolPanel ? <View style={styles.sidebar}>{history}</View> : null}
         <View style={styles.conversation}>
           {notice && (persistentNotice || notice !== dismissedNotice) && notice !== runIssue?.message ? (
             <View style={styles.notice}>
@@ -409,8 +411,9 @@ export function PromptAssistantUi({
             />
           </View>
         </View>
+        {toolPanel?<View style={{flex:1,minHeight:0,borderTopWidth:1,borderLeftWidth:wide?1:0,borderColor:COLORS.border}}>{toolPanel}</View>:null}
       </View>
-      {!wide ? (
+      {!wide || toolPanel ? (
         <DraggableBottomSheet
           visible={historyOpen}
           title="对话历史"
@@ -736,65 +739,15 @@ function EmptyTimeline({
   onSelectSuggestion: (suggestion: string) => void;
   viewportHeight: number;
 }) {
-  const { width, height, fontScale } = useWindowDimensions();
-  const compact = isCompactPromptLayout(width, fontScale) || (viewportHeight || height) < 500;
-  const cardWidth = Math.min(300, Math.max(160, (width - 32) * 0.76));
-  return (
-    <View style={[styles.empty, compact && { paddingTop: 4, paddingBottom: 4 }]}>
-      <View style={styles.emptyHeading}>
-        <View style={styles.emptyMark}>
-          <AppIcon name="auto_awesome" size={23} color="#FFFFFF" />
-        </View>
-        <Text style={[styles.emptyTitle, compact && { fontSize: 20, lineHeight: 28 }]}>叮～今日灵感掉落</Text>
-      </View>
-      <Text style={styles.emptySubtitle}>
-        从一个灵感开始，让画面慢慢成形。
-      </Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" snapToInterval={cardWidth + 14} decelerationRate="fast" contentContainerStyle={[styles.inspirationRail, compact && { paddingTop: 14 }]}>
-        {EMPTY_SUGGESTIONS.slice(0, Math.ceil(EMPTY_SUGGESTIONS.length / 2)).map((suggestion, index) => (
-          <Pressable
-            key={suggestion}
-            accessibilityRole="button"
-            accessibilityLabel={`使用建议 ${suggestion}`}
-            accessibilityHint="填入输入框，可修改后发送"
-            onPress={() => onSelectSuggestion(suggestion)}
-            style={({ pressed }) => [styles.inspirationCard, { width: cardWidth, backgroundColor: index === 0 ? COLORS.primary : COLORS.warning }, compact && { padding: 14, borderRadius: 20 }, pressed && styles.inspirationPressed]}
-          >
-            <View style={styles.inspirationCategory}>
-              <AppIcon name={index === 0 ? 'auto_awesome' : 'movie_filter'} size={18} color="#F3F2EB" />
-              <Text style={styles.inspirationCategoryText}>{index === 0 ? '镜头灵感' : '风格实验室'}</Text>
-            </View>
-            {!compact && <View testID="inspiration-artwork" style={styles.inspirationArtwork} accessible={false} importantForAccessibility="no-hide-descendants">
-              <View style={[styles.artOrb, { backgroundColor: index === 0 ? '#B6C9B3' : '#E5CDB0' }]} />
-              <View style={[styles.artFrame, { transform: [{ rotate: index === 0 ? '-12deg' : '12deg' }] }]}>
-                <AppIcon name={index === 0 ? 'movie_filter' : 'auto_awesome'} size={42} color="#FFFFFF" />
-              </View>
-              <Text style={styles.artCaption}>{index === 0 ? 'MOTION / 01' : 'STUDIO / 02'}</Text>
-            </View>}
-            <Text style={[styles.inspirationTitle, compact && { fontSize: 18, lineHeight: 26, minHeight: 0, marginTop: 16 }]}>{suggestion}</Text>
-            <View style={[styles.inspirationCta, compact && { marginTop: 14 }]}>
-              <Text style={styles.inspirationCtaText}>试试这个灵感</Text>
-              <Text style={styles.inspirationCtaText}>↗</Text>
-            </View>
-          </Pressable>
-        ))}
-      </ScrollView>
-      <View style={styles.suggestions}>
-        {EMPTY_SUGGESTIONS.slice(Math.ceil(EMPTY_SUGGESTIONS.length / 2)).map((suggestion) => (
-          <Pressable
-            key={suggestion}
-            accessibilityRole="button"
-            accessibilityLabel={`使用建议 ${suggestion}`}
-            onPress={() => onSelectSuggestion(suggestion)}
-            style={({ pressed }) => [styles.suggestion, pressed && styles.composerActionPressed]}
-          >
-            <Text style={styles.suggestionArrow}>↘</Text>
-            <Text style={styles.suggestionText}>{suggestion}</Text>
-          </Pressable>
-        ))}
-      </View>
-    </View>
-  );
+  return <View style={{padding:16,gap:10}}>
+    <Text accessibilityRole="header" style={{fontSize:18,fontWeight:'600',color:COLORS.text}}>今天想创作什么？</Text>
+    <Text style={{fontSize:13,color:COLORS.textMuted}}>选择建议填入输入框，修改后发送。</Text>
+    <View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{EMPTY_SUGGESTIONS.map(suggestion =>
+      <Pressable key={suggestion} accessibilityRole="button" accessibilityLabel={`使用建议 ${suggestion}`} accessibilityHint="填入输入框，可修改后发送" onPress={()=>onSelectSuggestion(suggestion)}
+        style={({pressed})=>({flexGrow:1,flexBasis:150,padding:12,minHeight:44,borderWidth:1,borderColor:COLORS.border,borderRadius:10,backgroundColor:COLORS.surface,opacity:pressed?0.7:1})}>
+        <Text style={{fontSize:13,lineHeight:20,color:COLORS.text}}>{suggestion}</Text>
+      </Pressable>)}</View>
+  </View>;
 }
 
 function RunningIndicator({ compact = false }: { compact?: boolean }) {

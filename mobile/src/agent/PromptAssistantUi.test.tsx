@@ -169,11 +169,7 @@ describe('Prompt assistant UI primitives', () => {
       act(() => tree.root.findByProps({ accessibilityLabel: '更多创作操作' }).props.onPress());
       expect(renderedText(tree)).toContain('补充创作信息');
       expect(renderedText(tree)).toContain('打开 Prompt 版本');
-      expect(tree.root.findAllByType(View).filter(node => node.props.testID === 'inspiration-artwork')).toHaveLength(compact ? 0 : 2);
-      if (width === 240) {
-        const rail = tree.root.findAllByType(ScrollView).find(node => node.props.snapToInterval);
-        expect(rail?.props.snapToInterval).toBe(174);
-      }
+      expect(tree.root.findAllByType(View).filter(node => node.props.testID === 'inspiration-artwork')).toHaveLength(0);
       if (!compact) {
         act(() => tree.root.findByType(FlatList).props.onLayout({ nativeEvent: { layout: { width, height: 400 } } }));
         expect(tree.root.findAllByProps({ testID: 'inspiration-artwork' })).toHaveLength(0);
@@ -956,7 +952,7 @@ describe('Prompt assistant UI primitives', () => {
     act(() => list.props.onLayout({ nativeEvent: { layout: { width: 350, height: 420 } } }));
     act(() => { list.props.onScrollBeginDrag(); list.props.onScroll({ nativeEvent: { contentSize: { height: 1200 }, layoutMeasurement: { height: 400 }, contentOffset: { y: 100 } } }); });
     expect(tree.root.findAllByProps({ accessibilityLabel: '回到最新消息' })).toHaveLength(0);
-    expect(renderedText(tree)).toContain('试试这个灵感');
+    expect(renderedText(tree)).toContain('选择建议填入输入框，修改后发送。');
     act(() => tree.unmount());
   });
 
@@ -1197,6 +1193,18 @@ describe('Prompt assistant UI primitives', () => {
       .toBe('一镜到底的城市夜跑');
     expect(mockChatContext.submitMessage).not.toHaveBeenCalled();
     act(() => tree.unmount());
+  });
+
+  it('keeps the composer draft while an inline tool panel opens and closes',()=>{
+    let tree!:ReturnType<typeof create>;
+    act(()=>{tree=create(<PromptAssistantUi {...basePromptProps}/>);});
+    act(()=>tree.root.findByProps({accessibilityLabel:'创作想法'}).props.onChangeText('keep this draft'));
+    act(()=>tree.update(<PromptAssistantUi {...basePromptProps} toolPanel={<Text>Skill tools</Text>}/>));
+    expect(tree.root.findByProps({accessibilityLabel:'创作想法'}).props.value).toBe('keep this draft');
+    act(()=>tree.update(<PromptAssistantUi {...basePromptProps}/>));
+    expect(tree.root.findByProps({accessibilityLabel:'创作想法'}).props.value).toBe('keep this draft');
+    expect(mockChatContext.submitMessage).not.toHaveBeenCalled();
+    act(()=>tree.unmount());
   });
 
   it('focuses the composer when applying a suggestion', () => {

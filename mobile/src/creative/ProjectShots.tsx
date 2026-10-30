@@ -1,3 +1,4 @@
+import { IconAction } from './WorkbenchUI';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { creativeError } from './creativeError';
 import type { CreativeDraft } from './drafts';
@@ -61,8 +62,7 @@ export function ProjectShots({ projectId, archived = false, initialShotId, reque
     }} /> : null}
     {focused?<View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center'}}><Text style={{color:COLORS.textMuted}}>{shots.some(s=>s.id===focused)?'当前创作镜头':'原镜头已不可用'}</Text><ListAction label="全部镜头" secondary onPress={()=>setFocused(undefined)}/></View>:null}
     {shots.filter(shot=>!focused||!shots.some(s=>s.id===focused)||shot.id===focused).map(shot => {const index=shots.indexOf(shot);return <View key={shot.id} style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 12, gap: 8 }}>
-      <Text style={{ color: COLORS.text, fontWeight: '700' }}>{index + 1}. {shot.title} · {labels[shot.editorial_status]}</Text><Text style={{ color: COLORS.textMuted }}>{shot.description || '尚未填写镜头描述'}</Text>
-      {shot.selected_image ? <VersionThumbnail versionId={shot.selected_image} /> : null}
+      <View style={{flexDirection:"row",alignItems:"center",gap:6}}><Text style={{flex:1,color:COLORS.text,fontWeight:"700"}}>{index + 1}. {shot.title} · {labels[shot.editorial_status]}</Text><IconAction label={expanded===shot.id?"收起镜头操作":"更多镜头操作"} icon="more_horiz" onPress={()=>setExpanded(expanded===shot.id?undefined:shot.id)}/></View><View style={{flexDirection:'row',gap:10,alignItems:'center'}}>{shot.selected_image?<VersionThumbnail versionId={shot.selected_image} compact/>:null}<Text numberOfLines={3} style={{flex:1,color:COLORS.textMuted,fontSize:13,lineHeight:19}}>{shot.description || '尚未填写镜头描述'}</Text></View>
       <Text style={{ color: COLORS.textMuted }}>图片：{shot.selected_image ? '已固定版本' : '未选定'} · 视频：{shot.selected_video ? '已固定版本' : '未选定'}</Text>
       <ListAction label={shot.selected_video ? '审阅视频成果' : continuing(shot) ? continuing(shot)!.state === 'EDITING' ? '继续已有草稿' : '查看生成进度与候选' : shot.selected_image ? '制作视频' : '选择参考图'} disabled={busy || dirty || (archived && !shot.selected_video)} onPress={() => {
         if (shot.selected_video) { void work(async () => { router.push({pathname:'/creative-shot/[id]',params:{id:shot.id,projectId}}); }, true); return; }
@@ -72,7 +72,6 @@ export function ProjectShots({ projectId, archived = false, initialShotId, reque
       }} />
       {shot.selected_video && continuing(shot)?<ListAction label="生成记录与候选" secondary disabled={busy||dirty} onPress={()=>openDraft(continuing(shot)!)}/>:null}
       {!shot.selected_image && !continuing(shot) ? action('制作新的参考图', () => void work(async () => { const r=await command({name:'draft.createImage',payload:{projectId,shotId:shot.id}});if(r.status==='completed')router.push({pathname:'/image-draft/[id]',params:{id:r.value.draftId}}); })) : null}
-      {action(expanded===shot.id?'收起镜头操作':'更多镜头操作', () => setExpanded(expanded===shot.id?undefined:shot.id))}
       {expanded===shot.id ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {action('编辑镜头', () => switchEditor(() => { setError(''); setAdding(true); setEditing(shot); setTitle(shot.title); setDescription(shot.description); }))}
         {action('选定图片', () => void choose(shot, 'selected_image'))}{action('选定视频', () => void choose(shot, 'selected_video'))}

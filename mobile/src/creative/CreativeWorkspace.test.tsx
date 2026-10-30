@@ -190,3 +190,32 @@ test('details expose facts and keep maintenance in panels',async()=>{
  act(()=>press(tree,'素材操作'));expect(content(tree)).toContain('重新定位原图');
  }finally{act(()=>tree?.unmount());mockService.asset.mockResolvedValue(undefined);mockService.versions.mockResolvedValue([]);}
 });
+
+
+test('inline asset inspection keeps list mounted and protects edits when changing selection',async()=>{
+ const rows=[{id:'inline-a',kind:'image',title:'Inline A',revision:1,currentVersionId:'va',createdAt:1},{id:'inline-b',kind:'image',title:'Inline B',revision:1,currentVersionId:'vb',createdAt:1}];
+ mockService.assets.mockResolvedValue(rows as never);
+ mockService.asset.mockImplementation(async id=>rows.find(a=>a.id===id));
+ mockService.versions.mockResolvedValue([]);
+ mockService.isTrashed.mockResolvedValue(false);
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<CreativeWorkspace mode="assets"/>);});
+  mockPush.mockClear();
+  await act(async()=>press(tree,'打开资产 Inline A'));
+  expect(mockPush).not.toHaveBeenCalled();
+  expect(tree.root.findAll(n=>n.props.accessibilityLabel==='打开资产 Inline A').length).toBeGreaterThan(0);
+  act(()=>press(tree,'编辑名称与标签'));
+  act(()=>tree.root.findByProps({accessibilityLabel:'资产名称'}).props.onChangeText('Unsaved'));
+  act(()=>press(tree,'切换素材 Inline B'));
+  expect(alert).toHaveBeenLastCalledWith('尚有未保存的修改',expect.any(String),expect.any(Array));
+  expect(tree.root.findByProps({accessibilityLabel:'资产名称'}).props.value).toBe('Unsaved');
+  const choices=alert.mock.calls.at(-1)![2]!;
+  await act(async()=>choices.find(c=>c.text==='放弃修改')!.onPress!());
+  expect(content(tree)).toContain('Inline B');
+  expect(tree.root.findAllByProps({accessibilityLabel:'资产名称'})).toHaveLength(0);
+  await act(async()=>press(tree,'关闭素材详情'));
+  expect(tree.root.findAllByProps({accessibilityLabel:'关闭素材详情'})).toHaveLength(0);
+ }finally{act(()=>tree?.unmount());alert.mockRestore();mockService.assets.mockResolvedValue([]);}
+});

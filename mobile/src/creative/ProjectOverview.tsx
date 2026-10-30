@@ -1,5 +1,7 @@
+import { IconAction } from './WorkbenchUI';
+import { COLORS } from '../ui/theme';
 import { useCallback, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { creativeService } from './runtime';
 import type { CreativeProject } from './types';
@@ -22,13 +24,19 @@ export function ProjectOverview({ project, onShots, onEdit }: { project: Creativ
     }).catch(() => { if (active) setSummary('进展读取失败，请重新进入项目'); });
     return () => { active = false; };
   }, [project.id]));
-  return <View style={{ gap: 16 }}>
-    <Text style={s.body}>{project.brief || '写下目标、风格和交付要求，让每次创作保持一致。'}</Text>
-    {!project.archivedAt ? <ListAction label="编辑项目简报" secondary onPress={onEdit} /> : <Text style={s.muted}>项目已归档，可查看成果。需要继续制作时，请在项目设置中恢复项目。</Text>}
-    <View style={s.card}><Text style={s.title}>{project.archivedAt ? '项目成果' : '继续制作'}</Text><Text style={s.body}>{summary}</Text><ListAction label={project.archivedAt ? "查看镜头与成果" : "查看镜头与下一步"} onPress={onShots} /></View>
-    {!project.archivedAt ? <ListAction label="让助手协助本项目" secondary onPress={() => router.push({ pathname: '/(tabs)/agent', params: { projectId: project.id } })} /> : null}
-    <ProjectPlans projectId={project.id} archived={Boolean(project.archivedAt)} compact />
-    {drafts.length ? <Text style={s.title}>最近创作</Text> : null}
-    {drafts.map(d => <View style={s.card} key={d.id}><Text style={s.muted}>{d.provider_id === 'novelai' ? '图片' : '视频'} · {d.state === 'EDITING' ? '编辑中' : '已提交'}</Text><Text style={s.body} numberOfLines={2}>{JSON.parse(d.input_json).prompt || '未命名草稿'}</Text><ListAction label={d.state === 'EDITING' ? '继续编辑' : '查看进度与成果'} secondary onPress={() => router.push({ pathname: d.provider_id === 'novelai' ? '/image-draft/[id]' : '/creative-draft/[id]', params: { id: d.id } })} /></View>)}
+  return <View style={{gap:10}}>
+    <View style={s.card}>
+      <View style={{flexDirection:'row',alignItems:'center'}}><Text style={[s.title,{flex:1}]}>项目简报</Text>{!project.archivedAt?<IconAction label="编辑项目简报" icon="edit" onPress={onEdit}/>:null}</View>
+      <Text style={s.body}>{project.brief || '尚未填写目标、风格和交付要求。'}</Text>
+    </View>
+    <Pressable accessibilityRole="button" accessibilityLabel={project.archivedAt?'查看镜头与成果':'查看镜头与下一步'} onPress={onShots} style={[s.card,{borderColor:COLORS.primary}]}>
+      <Text style={s.title}>{project.archivedAt?'项目成果':'镜头进度'} →</Text><Text style={s.body}>{summary}</Text>
+    </Pressable>
+    {!project.archivedAt?<View style={{flexDirection:'row'}}><ListAction label="在助手中继续" secondary icon="auto_awesome" onPress={()=>router.push({pathname:'/(tabs)/agent',params:{projectId:project.id}})}/></View>:null}
+    <ProjectPlans projectId={project.id} archived={Boolean(project.archivedAt)} compact/>
+    {drafts.length?<Text style={s.title}>最近创作</Text>:null}
+    {drafts.map(d=><Pressable accessibilityRole="button" accessibilityLabel={d.state==='EDITING'?'继续编辑':'查看进度与成果'} key={d.id} style={s.card} onPress={()=>router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}})}>
+      <Text style={s.muted}>{d.provider_id==='novelai'?'图片':'视频'} · {d.state==='EDITING'?'编辑中':'已提交'} →</Text><Text style={s.body} numberOfLines={2}>{JSON.parse(d.input_json).prompt||'未命名草稿'}</Text>
+    </Pressable>)}
   </View>;
 }

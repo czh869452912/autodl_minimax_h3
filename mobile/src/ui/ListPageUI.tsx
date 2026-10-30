@@ -1,14 +1,17 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCompactWorkbench } from './WorkspaceDensity';
+import { useWindowDimensions, ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppIcon, type IconName } from './icons';
 import { COLORS } from './theme';
 
 export function ListAction({ label, onPress, icon, secondary = false, disabled = false }: {
   label: string; onPress: () => void; icon?: IconName; secondary?: boolean; disabled?: boolean;
 }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
-    style={({ pressed }) => [listUI.action, secondary && listUI.secondaryAction, pressed && listUI.pressed, disabled && listUI.disabled]}>
+  const compact = useCompactWorkbench();
+  const { fontScale } = useWindowDimensions();
+  return <Pressable hitSlop={compact ? 4 : undefined} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+    style={({ pressed }) => [listUI.action, compact && {minHeight:fontScale > 1.2 ? 44 : 36,paddingHorizontal:10,paddingVertical:6,borderRadius:8}, secondary && listUI.secondaryAction, pressed && listUI.pressed, disabled && listUI.disabled]}>
     {icon ? <AppIcon name={icon} size={19} color={secondary ? COLORS.primaryActive : COLORS.onPrimary} /> : null}
-    <Text style={[listUI.actionText, secondary && listUI.secondaryText]}>{label}</Text>
+    <Text style={[listUI.actionText, compact && {fontSize:13}, secondary && listUI.secondaryText]}>{label}</Text>
   </Pressable>;
 }
 
