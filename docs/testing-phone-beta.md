@@ -301,3 +301,12 @@
 - 沿用本次修改的14项回归测试和TypeScript通过结果；本轮未新增模拟器验收。
 - APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.31-android.apk`，186213261字节；独立测试版身份、双ARM、Hermes、86个原生库及16KB对齐均核验通过，证书与beta.30一致。
 - SHA-256：`BFF783675E281AD31885FAA89197BFFA5B647831D95E8C23E0A6D818DFFADB61`；报告：`build/phone-beta/beta31-verification.json`。
+
+
+## 2026-10-31 · beta.32 视频生成记录自适应预览
+
+- 版本 `1.5.0-preview.4-beta.32`，versionCode 71；功能提交 `2c89e58e`。
+- 视频记录采用有界画布适配剩余高度，主导航保持可见；编辑/保存/更多合并工具栏，移除结果态底部重复操作。空间不足时收起轮次条，使用记录面板选片。保留原生全屏播放器及播放位置。
+- 3套件38项针对性回归及TypeScript通过。Android模拟器本地视频验证正常/小屏、记录面板及全屏往返，未触发网络生成；原数据与屏幕设置恢复。详情见 `docs/reviews/2026-10-31-video-preview-fit.md`。
+- APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.32-android.apk`，186214261字节。独立测试身份、双ARM、Hermes、86个原生库及16KB对齐通过，签名与beta.31一致，可覆盖升级。
+- SHA-256：`85BAB14CB5A2F08DBABC4C7E9A0C6DA3973059A91D3D9074F5181C54735AC0A2`。报告：`build/phone-beta/beta32-verification.json`。
