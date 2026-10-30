@@ -234,3 +234,14 @@
 - SHA-256：`B926F0BC0692AE65BE42210CEF36FBDB51ED7B00CB3B623283D091EEF310DB6E`。
 - 最终包名/版本、独立协议/FileProvider、非 debuggable、禁止明文及系统备份、嵌入 Expo 身份、Hermes、双 ARM、86 个原生库、v2 签名、16 KB ZIP 和 arm64 ELF 对齐、新词库内容哈希校验通过。签名与 beta.24 一致，可覆盖升级测试版。
 - 构建与校验：`build/phone-beta25-build.log`、`build/phone-beta/beta25-verification.json`。未运行收费生成，ARM 手机及不同输入法组合尚未实机验收；未推送或发布远端。
+
+## 2026-10-30 · beta.26 历史分页、资源清理与管理界面
+
+- 版本 `1.5.0-preview.4-beta.26`，versionCode 65；功能提交 `a09c7a2e`、`9720c916`、`d230f060`、`4958be68`、`cd29740d`，包含此前入口调整 `e1ffced7`。
+- 素材列表、详情版本、视频历史和计划候选分页；管理列表虚拟化，保留旧默认/指定版本与轮次恢复。
+- 项目和素材页直接进入技能、存储清理、回收站；整理项目页签、封面说明、版本比较与使用位置。清理先扫描、确认、退出，启动阶段重新验证后执行，保留原件/回收站/任务回执和发送标记。
+- 全量 289 组 / 1802 项通过，既有 1 组 / 4 项跳过；最终保护测试及 TypeScript 通过。Android 17 模拟器验证 40 项跨页、85 个版本中的旧默认定位、清理重启、大字体入口；数据库逐字节恢复。详见 [本轮交付记录](reviews/2026-10-30-management-completion.md)。
+- 双 ARM APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.26-android.apk`，186,200,549 字节，最低 Android 8.0。
+- SHA-256：`04AAFBE3E91CAE9C64A9D8A6BB85E90A2D7D3F28A91FB95E0B6016A39EB15F14`。
+- 包名/版本、独立协议/FileProvider、非 debuggable、禁止明文及系统备份、嵌入 Expo 身份、Hermes、双 ARM、86 个原生库、v2 签名、16 KB ZIP 与 arm64 ELF 对齐及词库内容哈希校验通过；签名与 beta.25 一致。
+- 最终日志 `build/phone-beta26-final-build.log`，校验 `build/phone-beta/beta26-verification.json`。未触发收费生成、未安装到 ARM 手机、未发布远端。
