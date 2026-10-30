@@ -283,3 +283,12 @@
 - APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.29-android.apk`，186,212,593 字节。双ARM、Hermes、独立测试版身份、86个原生库及16KB对齐均通过；证书与beta.28一致，可覆盖升级测试版。
 - SHA-256：`F391ADAE523719230C41EE2394AADE72F68A241E651AB42C0DDBC03436F2EADE`。
 - 核验报告：`build/phone-beta/beta29-verification.json`。ARM包未安装到用户手机。
+
+
+## 2026-10-30 · beta.30 素材分组版本修复
+
+- 版本 `1.5.0-preview.4-beta.30`，versionCode 69；实现提交 `7cb114ac`。
+- 素材详情预览上方直接展示版本缩略图；自动合并新增生成版本，保留已选旧版本和未保存元数据。保留历史分页和版本比较。
+- TypeScript与3套件17项针对性测试通过。本轮未进行模拟器交互验收。
+- APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.30-android.apk`，186213997字节；双ARM、Hermes、86个原生库16KB对齐及独立测试身份核验通过，证书与beta.29一致。
+- SHA-256：`9FB9A78B0A99639E262C61B8444D56C516300CC0A54CD62437838D642C3560D7`。核验报告：`build/phone-beta/beta30-verification.json`。
