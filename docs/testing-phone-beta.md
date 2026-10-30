@@ -257,3 +257,16 @@
 - SHA-256：`995B44C2BE241253660456B88C993C018937D5875D6F342912C2F62CFA2552CC`。
 - 签名与 beta.26 一致；最终包身份、非 debuggable、独立协议、Hermes、双 ARM、86 个原生库、16 KB ZIP / arm64 ELF 对齐及词库内容哈希均通过。校验：`build/phone-beta/beta27-verification.json`。
 - 本地旧 C++ 缓存缺失预编译头，以独立新缓存目录重新构建全部原生依赖；构建日志 `build/beta27-build.log`。未调用付费生成服务、未安装到 ARM 手机、未推送远端。
+
+## 2026-10-30 · beta.28 对话入口与素材详情
+
+- 版本 `1.5.0-preview.4-beta.28`，versionCode 67；功能提交 `5fa0a97f`、`fba91ab5`、`caa7e216`。
+- 创作页移除重复标题；助手直接进入对话，项目切换仅在对话页头；历史、任务、新会话、更多集中为图标，技能和模型设置放入更多菜单，无项目时前往项目页。
+- 历史图标保留全部对话检索；从其他项目的历史对话新建会话时沿用实际项目，不修改原会话归属。
+- 项目素材页精简为工具栏、页签、搜索、分类和网格。详情展示预览、格式、文件状态、大小/尺寸、来源、日期、标签、描述和项目归属；编辑、版本、项目关联与低频操作分面板；图片可全屏缩放。
+- 研究依据、截图和取舍：[本轮记录](reviews/2026-10-30-chat-asset-ux.md)。全量回归 290 组 / 1802 项通过，既有 1 组 / 4 项跳过；随后新增回归与最终相关 23 项通过，TypeScript 和 Android 配置检查通过。
+- Android 17 模拟器验证助手直接进入、历史/技能入口、项目素材与详情、真实文件信息、加入项目、全屏查看、未保存关闭与放弃恢复。原数据库逐字节恢复；无模型调用、未改助手凭据。
+- 双 ARM APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.28-android.apk`，186,207,629 字节；最低 Android 8.0。
+- SHA-256：`7F3CE6529AC5F193C3CD1DAE223E2B06E37275F4CD7CBFADED145706B26F7F36`。
+- 包身份、非 debuggable、独立协议、双 ARM、Hermes、86 个原生库、16 KB ZIP / arm64 ELF 对齐及词库哈希校验通过；签名与 beta.27 一致，可覆盖升级。
+- 构建：`build/beta28-final-build.log`；校验：`build/phone-beta/beta28-verification.json`。手机最终包未安装到 ARM 设备；未推送远端。
