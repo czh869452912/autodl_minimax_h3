@@ -1,3 +1,4 @@
+import {v35SemanticResources} from './v35SemanticResources';
 import {v34PlanControls} from './v34PlanControls';
 import {v33ProjectSkills} from './v33ProjectSkills';
 import {v32AuthorizationRequests} from './v32AuthorizationRequests';
@@ -39,6 +40,7 @@ export type AppDatabaseMigrationOptions = {
 };
 
 const steps = new Map<number, MigrationStep>([
+  [v35SemanticResources.fromVersion,v35SemanticResources],
   [v34PlanControls.fromVersion,v34PlanControls],
   [v33ProjectSkills.fromVersion,v33ProjectSkills],
   [v32AuthorizationRequests.fromVersion,v32AuthorizationRequests],

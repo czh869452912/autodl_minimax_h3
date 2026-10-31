@@ -1,3 +1,4 @@
+import {semanticSchemas,applySemanticCommand} from './semanticResources';
 import {readUsageGraph} from './usageGraph';
 import { importedOriginals } from './importIdentity';
 import {enqueueVersionExport} from './enqueueVersionExport';
@@ -25,6 +26,7 @@ const id = z.string().min(1).max(200);
 const title = z.string().trim().min(1).max(200);
 const revision = z.number().int().nonnegative();
 const schemas = {
+  ...semanticSchemas,
   ...reviewSchemas,
   ...authoredTextSchemas,
   ...planSchemas,
@@ -211,7 +213,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
           case 'asset.unlinkFromProject':
             if(await tx.getFirstAsync('SELECT c.project_id FROM creative_project_covers c JOIN creative_asset_versions v ON v.id=c.version_id WHERE c.project_id=? AND v.asset_id=?',p.projectId,p.assetId))throw new Error('请先更换或移除项目封面');
             changed(await tx.runAsync('DELETE FROM creative_project_assets WHERE project_id=? AND asset_id=? AND revision=?', p.projectId, p.assetId, p.expectedRevision)); value = { assetId: p.assetId, projectId: p.projectId }; break;
-          default: value = command.name in planSchemas ? await applyPlanCommand(tx,command.name,p,now,deps.id,key) : command.name in lifecycleSchemas ? await applyAssetLifecycle(tx,command.name,p,now) : command.name in draftSchemas ? await applyDraftCommand(tx, command.name, p, now, deps.id) : await applyStoryCommand(tx, command.name, p, now, deps.id);
+          default: value = command.name in semanticSchemas ? await applySemanticCommand(tx,command.name,p,now,deps.id) : command.name in planSchemas ? await applyPlanCommand(tx,command.name,p,now,deps.id,key) : command.name in lifecycleSchemas ? await applyAssetLifecycle(tx,command.name,p,now) : command.name in draftSchemas ? await applyDraftCommand(tx, command.name, p, now, deps.id) : await applyStoryCommand(tx, command.name, p, now, deps.id);
         }
         const receiptId = deps.id(), originId = deps.id();
         const epoch = await tx.getFirstAsync<{ epoch: string }>('SELECT epoch FROM creative_execution_state WHERE id=1');

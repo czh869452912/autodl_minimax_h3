@@ -1,3 +1,4 @@
+import {semanticSchemas,readShotSemantics,readSemanticResources} from './semanticResources';
 import {readRunFocus} from './runFocus';
 import {preparedCreativeSubmission} from './preparedSubmission';
 import {readDraftReadiness} from './draftReadiness';
@@ -33,6 +34,8 @@ async function originFor(config: any): Promise<CreativeAgentOrigin> {
 }
 const failure = (e: unknown) => JSON.stringify({ status: 'error', message: e instanceof Error ? e.message.slice(0,300) : 'COMMAND_FAILED' });
 const commandSchemas = {
+  'semantic.create':semanticSchemas['semantic.create'],
+  'semantic.revise':semanticSchemas['semantic.revise'],
   'project.create': z.object({ title: z.string().min(1).max(200), brief: z.string().max(20000).optional() }).strict(),
   'project.update': z.object({ id, expectedRevision:z.number().int().nonnegative(),title:z.string().min(1).max(200),brief:z.string().max(20000) }).strict(),
   ...draftSchemas, ...storySchemas,
@@ -79,9 +82,21 @@ export function createCreativeAgentTools() {
         await assertCreativeAgentScope(tx,origin);
         const shot=origin.projectId?await tx.getFirstAsync('SELECT * FROM creative_shots WHERE id=? AND project_id=? AND deleted_at IS NULL',shotId,origin.projectId):null;
         if(!shot)throw new Error('AGENT_SHOT_SCOPE_MISMATCH');
-        return JSON.stringify({shot,bindings:await tx.getAllAsync('SELECT slot,ordinal,version_id FROM creative_shot_assets WHERE shot_id=? ORDER BY slot,ordinal',shotId)});
+        return JSON.stringify({shot,semantics:await readShotSemantics(tx,shotId,origin.projectId!),bindings:await tx.getAllAsync('SELECT slot,ordinal,version_id FROM creative_shot_assets WHERE shot_id=? ORDER BY slot,ordinal',shotId)});
       });
     }catch(e){return failure(e);}},{name:'shot_get',description:'Read full details and exact adopted version bindings for one shot in the selected project. Use current revision for changes.',schema:z.object({shotId:id}).strict()}),
+    tool(async ({afterId},config:any)=>{try{const origin=await originFor(config);return await withWriteTransaction(getDatabase(),async tx=>{await assertCreativeAgentScope(tx,origin);if(!origin.projectId)throw new Error('AGENT_PROJECT_SELECTION_REQUIRED');return JSON.stringify(await readSemanticResources(tx,origin.projectId,afterId));});}catch(e){return failure(e);}},{name:'semantic_list',description:'List versioned character, scene, style and voice identities in the selected project. Creating/revising produces unadopted candidates; only the user adopts or binds versions.',schema:z.object({afterId:id.optional()}).strict()}),
+    tool(async ({entityId,versionId},config:any)=>{try{
+      const origin=await originFor(config);
+      return await withWriteTransaction(getDatabase(),async tx=>{
+        await assertCreativeAgentScope(tx,origin);
+        const entity=origin.projectId?await tx.getFirstAsync<{id:string;current_version_id:string|null}>('SELECT * FROM creative_semantic_entities WHERE id=? AND project_id=?',entityId,origin.projectId):null;
+        if(!entity)throw new Error('AGENT_PROJECT_SCOPE_MISMATCH');
+        const version=versionId?await tx.getFirstAsync('SELECT * FROM creative_semantic_versions WHERE id=? AND entity_id=?',versionId,entityId):null;
+        if(versionId&&!version)throw new Error('SEMANTIC_VERSION_MISMATCH');
+        return JSON.stringify({entity,version,versions:await tx.getAllAsync('SELECT id,version_no FROM creative_semantic_versions WHERE entity_id=? ORDER BY version_no DESC LIMIT 20',entityId),references:versionId?await tx.getAllAsync('SELECT asset_version_id,purpose FROM creative_semantic_references WHERE semantic_version_id=?',versionId):[]});
+      });
+    }catch(e){return failure(e);}},{name:'semantic_get',description:'Read a project semantic identity and optionally one exact version with its immutable asset references. Omitted versionId returns only the latest 20 version IDs, not automatic adoption.',schema:z.object({entityId:id,versionId:id.optional()}).strict()}),
     tool(async ({query,after},config:any) => {
       try {
         const origin=await originFor(config); if (!origin.projectId) throw new Error('AGENT_PROJECT_SELECTION_REQUIRED');

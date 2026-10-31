@@ -19,7 +19,11 @@ export async function guardCreativeAgentCommand(tx: AppDatabase, origin: Creativ
     if (typeof versionId !== 'string') return;
     if (!await tx.getFirstAsync('SELECT v.id FROM creative_asset_versions v JOIN creative_project_assets p ON p.asset_id=v.asset_id WHERE v.id=? AND p.project_id=?', versionId, origin.projectId)) throw new Error('AGENT_ASSET_SCOPE_MISMATCH');
   };
-  if (command.name.startsWith('project.')) requireProject(p.id);
+  if(command.name==='semantic.create'||command.name==='semantic.revise'){
+    if(command.name==='semantic.create')requireProject(p.projectId);
+    else {const entity=await tx.getFirstAsync<{project_id:string}>('SELECT project_id FROM creative_semantic_entities WHERE id=?',p.entityId as string);requireProject(entity?.project_id);}
+    for(const ref of (p.references??[]) as {versionId:string}[])await version(ref.versionId);
+  } else if (command.name.startsWith('project.')) requireProject(p.id);
   else if(command.name==='plan.createSelection'){
     requireProject(p.projectId);
     if(!await tx.getFirstAsync('SELECT id FROM creative_shots WHERE id=? AND project_id=?',p.shotId as string,origin.projectId))throw new Error('AGENT_SHOT_SCOPE_MISMATCH');
