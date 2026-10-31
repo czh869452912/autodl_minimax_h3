@@ -4,6 +4,7 @@ import { applyDraftCommand, videoDraftInput } from './drafts';
 import { applyStoryCommand } from './story';
 const id=z.string().min(1).max(200), revision=z.number().int().nonnegative();
 export const planSchemas={
+  'plan.retryFailed':z.object({id,expectedRevision:revision,expectedShotRevision:revision}).strict(),
   'plan.setPaused':z.object({id,expectedRevision:revision,paused:z.boolean()}).strict(),
   'plan.createSelection':z.object({projectId:id,shotId:id,expectedShotRevision:revision,title:z.string().trim().min(1).max(200),candidateVersionIds:z.array(id).min(1).max(20),videoPrompt:z.string().trim().min(1).max(10000),authorizationId:id.optional()}).strict(),
   'plan.resolveSelection':z.object({decisionId:id,versionId:id,expectedRevision:revision}).strict(),
@@ -75,7 +76,24 @@ export async function applyPlanCommand(tx:AppDatabase,name:string,p:any,now:numb
   }
   const plan=await activePlan(tx,p.id);
   if(plan.revision!==p.expectedRevision)throw new Error('PLAN_REVISION_CONFLICT');
-  if(name==='plan.setPaused'){
+  if(name==='plan.retryFailed'){
+    const step=await tx.getFirstAsync<CreativePlanStep>("SELECT * FROM creative_plan_steps WHERE plan_id=? AND kind='video' AND state='FAILED'",plan.id);
+    if(!step?.job_id||!step.draft_id)throw new Error('PLAN_FAILED_STEP_REQUIRED');
+    const job=await tx.getFirstAsync<{status:string}>('SELECT status FROM workflow_jobs WHERE id=?',step.job_id);
+    if(!job||!['FAILED','CANCELLED'].includes(job.status))throw new Error('PLAN_ORIGINAL_RESULT_UNRESOLVED');
+    if(!await tx.getFirstAsync('SELECT id FROM creative_shots WHERE id=? AND project_id=? AND revision=? AND deleted_at IS NULL',plan.shot_id,plan.project_id,p.expectedShotRevision))throw new Error('SHOT_REVISION_CONFLICT');
+    const binding=JSON.parse(step.input_binding_json);
+    await candidate(tx,binding.versionId,plan.project_id);
+    const oldDraft=await tx.getFirstAsync<{input_json:string}>('SELECT input_json FROM creative_generation_drafts WHERE id=?',step.draft_id);
+    if(!oldDraft)throw new Error('DRAFT_NOT_FOUND');
+    await tx.runAsync('INSERT INTO creative_plan_attempts VALUES(?,?,?,?,?,?)',makeId(),step.id,step.job_id,step.draft_id,JSON.stringify(step),now);
+    const draft=await applyDraftCommand(tx,'draft.createVideo',{projectId:plan.project_id,shotId:plan.shot_id,versionId:binding.versionId,prompt:binding.prompt},now,makeId);
+    await applyDraftCommand(tx,'draft.updateVideo',{id:draft.draftId,expectedRevision:0,input:JSON.parse(oldDraft.input_json)},now,makeId);
+    await tx.runAsync("UPDATE creative_plan_steps SET state='BLOCKED',revision=revision+1,draft_id=?,job_id=NULL,result_binding_json='{}',error_json=? WHERE id=?",draft.draftId,JSON.stringify({message:'重做需要重新授权一次生成，原任务与费用记录保留。'}),step.id);
+    await tx.runAsync('UPDATE creative_plans SET authorization_id=NULL,revision=revision+1,updated_at=? WHERE id=?',now,plan.id);
+    await tx.runAsync('UPDATE creative_selection_outbox SET consumed_at=NULL WHERE step_id=?',step.id);
+    return {planId:plan.id,draftId:draft.draftId,stepId:step.id};
+  }else if(name==='plan.setPaused'){
     await tx.runAsync('INSERT INTO creative_plan_controls VALUES(?,?,?) ON CONFLICT(plan_id) DO UPDATE SET paused=excluded.paused,updated_at=excluded.updated_at',plan.id,p.paused?1:0,now);
     await tx.runAsync('UPDATE creative_plans SET revision=revision+1,updated_at=? WHERE id=?',now,plan.id);
     await tx.runAsync("UPDATE creative_decision_requests SET plan_revision=plan_revision+1 WHERE plan_id=? AND state='WAITING'",plan.id);

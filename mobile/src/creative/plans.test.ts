@@ -8,6 +8,38 @@ import {createCreativeAccounts} from './accounts';
 import {createCreativeBudget} from './budget';
 import { H3_CREATIVE_WORKFLOW_ID as H3_WORKFLOW_ID } from './videoWorkflow';
 import {submitCreativeVideo} from './videoSubmission';
+test('retry preserves failed evidence and requires fresh authorization',async()=>{
+ const f=await runnable();try{
+  await runCreativePlans(f.db as never,f.prepare,200);
+  const reservations=f.db.getAllSync('SELECT * FROM creative_budget_reservations');
+  f.db.runSync("UPDATE workflow_jobs SET status='FAILED'");
+  await reconcileCreativePlans(f.db as never,300);
+  const command:CreativeCommand={name:'plan.retryFailed',payload:{id:f.plan.planId,expectedRevision:0,expectedShotRevision:1}};
+  const result=await f.execute(command,'retry');
+  expect(await f.execute(command,'retry')).toEqual(result);
+  expect(result.draftId).not.toBe(f.result.draftId);
+  expect(f.db.getAllSync('SELECT * FROM creative_plan_attempts')).toHaveLength(1);
+  expect(f.db.getFirstSync('SELECT authorization_id,revision FROM creative_plans')).toEqual({authorization_id:null,revision:1});
+  expect(f.db.getFirstSync("SELECT state,job_id FROM creative_plan_steps WHERE kind='video'")).toEqual({state:'BLOCKED',job_id:null});
+  await runCreativePlans(f.db as never,f.prepare,400);
+  expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toHaveLength(1);
+  expect(f.db.getAllSync('SELECT * FROM creative_budget_reservations')).toEqual(reservations);
+  expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
+ }finally{f.db.close();}
+});
+test.each(['unknown','revision','rollback'] as const)('retry rejects %s atomically',async(mode)=>{
+ const f=await runnable();try{
+  await runCreativePlans(f.db as never,f.prepare,200);
+  f.db.runSync("UPDATE workflow_jobs SET status='FAILED'");
+  await reconcileCreativePlans(f.db as never,300);
+  if(mode==='unknown')f.db.runSync("UPDATE workflow_jobs SET status='UNKNOWN'");
+  if(mode==='rollback')f.db.execSync("CREATE TRIGGER reject_retry BEFORE UPDATE ON creative_selection_outbox BEGIN SELECT RAISE(ABORT,'injected'); END");
+  await expect(f.execute({name:'plan.retryFailed',payload:{id:f.plan.planId,expectedRevision:0,expectedShotRevision:mode==='revision'?0:1}})).rejects.toThrow(mode==='unknown'?'PLAN_ORIGINAL_RESULT_UNRESOLVED':mode==='revision'?'SHOT_REVISION_CONFLICT':'injected');
+  expect(f.db.getAllSync('SELECT * FROM creative_plan_attempts')).toEqual([]);
+  expect(f.db.getAllSync('SELECT * FROM creative_generation_drafts')).toHaveLength(1);
+  expect(f.db.getFirstSync("SELECT state,draft_id FROM creative_plan_steps WHERE kind='video'")).toEqual({state:'FAILED',draft_id:f.result.draftId});
+ }finally{f.db.close();}
+});
 async function fixture(){
   const db=createInitializedRealSqliteTestDb();let next=0;
   const service=createCreativeService(db as never,{id:()=>`p-${++next}`,now:()=>100});

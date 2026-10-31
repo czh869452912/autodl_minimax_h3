@@ -66,6 +66,7 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
           await creativeService().execute({name:'plan.resolveSelection',payload:{decisionId:card.decision.id,versionId:c.version_id,expectedRevision:card.decision.revision}},`selection:${card.decision.id}:${c.version_id}`);
         })}]))}
       </View>):null}
+      {card.plan.state==='ACTIVE'&&card.step.state==='FAILED'?action('重做失败镜头',()=>Alert.alert('准备重做此镜头','保留原任务和费用记录，创建新的草稿；不会自动生成，随后需重新授权。',[{text:'取消',style:'cancel'},{text:'准备重做',onPress:()=>void work(async()=>{const shot=shots.find(s=>s.id===card.plan.shot_id);if(!shot)throw new Error('镜头不可用');await creativeService().execute({name:'plan.retryFailed',payload:{id:card.plan.id,expectedRevision:card.plan.revision,expectedShotRevision:shot.revision}},createId());})}])):null}
       {card.plan.state==='ACTIVE'?action(card.paused?'继续后续计划':'暂停后续计划',()=>void work(()=>creativeService().execute({name:'plan.setPaused',payload:{id:card.plan.id,expectedRevision:card.plan.revision,paused:!card.paused}},createId()))):null}
       {card.paused?<Text style={{color:COLORS.textMuted}}>后续提交已暂停；已发送的生成仍由任务中心核查和归档。</Text>:null}
       {card.plan.state==='ACTIVE'&&card.step.state==='BLOCKED'&&!card.step.job_id?action('授权并继续生成',()=>authorize(card)):null}
