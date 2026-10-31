@@ -110,3 +110,10 @@
 
 - 新增组件回归，确认项目开关调用项目选择、恢复全局调用移除覆盖，不调用全局 enable/revoke。
 - SkillLibraryScreen 四项通过；未修改产品实现。
+
+## Android 构建与有限设备验证
+
+- 使用仓库 JDK 21 构建 x86_64 beta 成功；JBR 25 不兼容、两个旧 CMake 缓存缺头文件的问题通过切换 JDK 和保留重命名缓存解决，未改动依赖源码。
+- 安装到 emulator-5554（Android 17），beta.38/code77；旧 beta 项目/镜头可读，“交给助手”可达，项目技能页空态显示正常，已保存 UI 树与截图。
+- beta 未配置完整 LLM，因此焦点面板运行态未验证；未调用真实模型/生成、未验证后台故障矩阵、TalkBack/大字体和完整生产交付。
+- APK SHA-256 与验证边界见 ../verification/2026-10-31-workbench-slices.json；设备证据见 ../evidence/2026-10-31-workbench-slices/。

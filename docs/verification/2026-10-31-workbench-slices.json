@@ -13,6 +13,33 @@
   },
   "typecheck": "passed",
   "realProviderCalls": false,
-  "android": "build pending",
-  "scope": "Slices 1–10 and migration diagnostic assertion fix. Does not certify the entire workbench roadmap."
+  "android": {
+    "build": "passed",
+    "package": "com.example.autodlh3.beta",
+    "versionCode": 77,
+    "versionName": "1.5.0-preview.4-beta.38",
+    "abi": "x86_64",
+    "device": "emulator-5554",
+    "android": "17",
+    "apkSha256": "F33BFF1FBF841E9A38BCAF4D4DF22F96C3162CA1F436BD4B1825747A3A791D47",
+    "verified": [
+      "update installation",
+      "existing project and shot readable",
+      "shot assistant entry reachable",
+      "project skill entry and empty-state rendering"
+    ],
+    "notVerified": [
+      "focus panel: beta LLM configuration missing",
+      "paid generation",
+      "TalkBack",
+      "large fonts",
+      "background recovery",
+      "project skill toggles with installed packages"
+    ]
+  },
+  "scope": "Slices 1–10 and migration diagnostic assertion fix. Does not certify the entire workbench roadmap.",
+  "additionalTests": {
+    "suite": "SkillLibraryScreen",
+    "passed": 4
+  }
 }
