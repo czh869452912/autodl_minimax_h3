@@ -1,0 +1,9 @@
+{
+  "codeCommit": "fb1729a8",
+  "slices": {"R1":"aa13c647","R4":"71ff8b4e","R3":"81ad0531","R2":"d28767bb","R6":"2c647a0b","R5":"2ea9fce4"},
+  "tests": {"suitesPassed":304,"suitesSkipped":1,"passed":1879,"skipped":4,"failed":0,"typecheck":"passed"},
+  "android": {"architecture":"x86_64","package":"com.example.autodlh3.beta","build":"passed","updateInstall":"passed","coldStart":"passed","existingAdoptionAndBinding":"readable","unsavedTextAfterUnbindRebind":"preserved","adoptionDeviceTest":"not exercised: current version button disabled; component test covers this","apkSha256":"59BAD16AFCD18F749304F706E79C70C1B964E740BB90C344A5E9398F9F279785"},
+  "paidGeneration":false,
+  "externalWorker":false,
+  "deferred":["D1 batch management","D2 semantic request mapping and outbound consent","D3 ToolPolicy and complete run contract"]
+}
