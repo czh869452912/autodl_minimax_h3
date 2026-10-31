@@ -1,3 +1,4 @@
+import {v37DraftSemantics} from './v37DraftSemantics';
 import {v36PlanAttempts} from './v36PlanAttempts';
 import {v35SemanticResources} from './v35SemanticResources';
 import {v34PlanControls} from './v34PlanControls';
@@ -41,6 +42,7 @@ export type AppDatabaseMigrationOptions = {
 };
 
 const steps = new Map<number, MigrationStep>([
+  [v37DraftSemantics.fromVersion,v37DraftSemantics],
   [v36PlanAttempts.fromVersion,v36PlanAttempts],
   [v35SemanticResources.fromVersion,v35SemanticResources],
   [v34PlanControls.fromVersion,v34PlanControls],

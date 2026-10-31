@@ -1,6 +1,7 @@
 import {createInitializedRealSqliteTestDb} from '../test/realSqlite';
 import {createCreativeService} from './service';
 import {readShotSemantics} from './semanticResources';
+import {readDraftSemantics} from './draftSemantics';
 import type {CreativeCommand} from './types';
 test('semantic revisions preserve adopted shot references and expose upstream changes without copying blobs',async()=>{
  const db=createInitializedRealSqliteTestDb();try{
@@ -13,10 +14,17 @@ test('semantic revisions preserve adopted shot references and expose upstream ch
   expect(db.getFirstSync('SELECT current_version_id FROM creative_semantic_entities')).toEqual({current_version_id:null});
   await execute({name:'semantic.adopt',payload:{entityId:first.entityId,expectedRevision:0,versionId:first.versionId}});
   await execute({name:'semantic.bindShot',payload:{entityId:first.entityId,versionId:first.versionId,shotId,expectedShotRevision:0}});
+  const draft=await execute({name:'draft.createVideo',payload:{projectId,shotId,prompt:'scene'}});
   const second=await execute({name:'semantic.revise',payload:{entityId:first.entityId,expectedRevision:1,content:'Red coat',references:[]}});
   expect((await readShotSemantics(db as never,shotId,projectId))[0]).toMatchObject({version_id:first.versionId,content:'Blue coat',stale:0});
   await execute({name:'semantic.adopt',payload:{entityId:first.entityId,expectedRevision:2,versionId:second.versionId}});
   expect((await readShotSemantics(db as never,shotId,projectId))[0]).toMatchObject({version_id:first.versionId,content:'Blue coat',stale:1});
+  await execute({name:'semantic.bindShot',payload:{entityId:first.entityId,versionId:second.versionId,shotId,expectedShotRevision:1}});
+  expect((await readDraftSemantics(db as never,draft.draftId))?.items).toEqual([expect.objectContaining({version_id:first.versionId,content:'Blue coat'})]);
+  const nextDraft=await execute({name:'draft.createImage',payload:{projectId,shotId}});
+  expect((await readDraftSemantics(db as never,nextDraft.draftId))?.items[0].version_id).toBe(second.versionId);
+  expect(()=>db.runSync("UPDATE creative_draft_semantics SET snapshot_json='{}'")).toThrow('IMMUTABLE');
+  expect(await readDraftSemantics(db as never,'historical-missing')).toBeNull();
   expect(await readShotSemantics(db as never,shotId,'other')).toEqual([]);
   expect(()=>db.runSync('UPDATE creative_semantic_versions SET content=?','changed')).toThrow('IMMUTABLE');
   expect(db.getAllSync('SELECT * FROM artifact_blobs')).toEqual([]);

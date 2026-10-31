@@ -48,6 +48,18 @@ async function fixture() {
   return { db, service, draft, accounts, identity, input, submit, claim };
 }
 
+test('job provenance and copied draft retain captured semantic context',async()=>{
+ const f=await fixture();try{
+  const task=await f.submit();
+  const context=f.db.getFirstSync<{input_snapshot_json:string}>('SELECT input_snapshot_json FROM creative_job_contexts WHERE job_id=?',task.id)!;
+  expect(JSON.parse(context.input_snapshot_json)._semanticContext).toEqual({schemaVersion:1,items:[]});
+  const result=await f.service.execute({name:'draft.copySubmitted',payload:{id:f.draft.id}},'copy');
+  if(result.status!=='completed')throw new Error('Expected draft');
+  const source=f.db.getFirstSync('SELECT snapshot_json FROM creative_draft_semantics WHERE draft_id=?',f.draft.id);
+  expect(f.db.getFirstSync('SELECT snapshot_json FROM creative_draft_semantics WHERE draft_id=?',result.value.draftId)).toEqual(source);
+ }finally{f.db.close();}
+});
+
 test('mixed image/audio inputs are pinned into the task and rejected atomically if their bytes change',async()=>{
   const f=await fixture();
   try{

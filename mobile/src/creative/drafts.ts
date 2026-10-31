@@ -1,3 +1,4 @@
+import {captureDraftSemantics} from './draftSemantics';
 import { z } from 'zod';
 import type { AppDatabase } from '../storage/appDatabase';
 import { H3_CREATIVE_WORKFLOW_ID as H3_WORKFLOW_ID,creativeVideoWorkflowId } from './videoWorkflow';
@@ -42,6 +43,7 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     const draftId=makeId();
     await tx.runAsync("INSERT INTO creative_generation_drafts SELECT ?,project_id,shot_id,target_asset_id,provider_id,workflow_id,input_json,0,'EDITING',NULL,?,? FROM creative_generation_drafts WHERE id=?",draftId,now,now,p.id);
     await tx.runAsync('INSERT INTO creative_draft_inputs SELECT ?,slot,ordinal,version_id FROM creative_draft_inputs WHERE draft_id=?',draftId,p.id);
+    await captureDraftSemantics(tx,draftId,source.id);
     return {draftId,provider:source.provider_id,supersedesJobId:source.job_id};
   }
   if(name==='draft.switchVideoWorkflow'){
@@ -56,6 +58,7 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     const draftId=makeId();
     await tx.runAsync("INSERT INTO creative_generation_drafts VALUES(?,?,?,?,'autodl',?,?,0,'EDITING',NULL,?,?)",draftId,source.project_id,source.shot_id,source.target_asset_id,p.input.workflow.id,JSON.stringify(p.input),now,now);
     await inputs(draftId,p.imageVersionIds);await inputs(draftId,p.audioVersionIds,'audio');
+    await captureDraftSemantics(tx,draftId);
     return {draftId};
   }
   if(name==='draft.createUpscale'){
@@ -71,6 +74,7 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     const draftId=makeId(),input=novelAiUpscaleInput.parse({operation:'upscale',sourceVersionId:p.versionId});
     await tx.runAsync("INSERT INTO creative_generation_drafts VALUES(?,?,?,?,'novelai','novelai-image-basic',?,0,'EDITING',NULL,?,?)",draftId,projectId,p.shotId??null,version.asset_id,JSON.stringify(input),now,now);
     await inputs(draftId,[p.versionId]);
+    await captureDraftSemantics(tx,draftId);
     return {draftId};
   }
   if (name === 'draft.createImage') {
@@ -97,6 +101,7 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
       await tx.runAsync('DELETE FROM creative_draft_inputs WHERE draft_id=?', draftId);
       await inputs(draftId, sourceIds);
     }
+    await captureDraftSemantics(tx,draftId);
     return { draftId };
   }
   if (name === 'draft.createVideo') {
@@ -113,6 +118,7 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     if (p.imageVersionIds) await inputs(draftId, p.imageVersionIds);
     else if (selectedVersion) await inputs(draftId, [selectedVersion]);
     if (p.audioVersionIds) await inputs(draftId, p.audioVersionIds, 'audio');
+    await captureDraftSemantics(tx,draftId);
     return { draftId };
   }
   const draft = await readCreativeDraft(tx, p.id);

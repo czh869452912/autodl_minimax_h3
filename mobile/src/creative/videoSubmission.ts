@@ -1,3 +1,4 @@
+import {readDraftSemantics} from './draftSemantics';
 import {cachedVideoQuote} from './autodlPricing';
 import {H3_CREATIVE_WORKFLOW_ID} from './videoWorkflow';
 import { creativeVideoWorkflowId } from './videoWorkflow';
@@ -70,7 +71,7 @@ export async function submitCreativeVideo(db: AppDatabase, input: {
     } else await tx.runAsync('INSERT INTO creative_assets VALUES(?,?,?,NULL,0,?,?)', assetId, image ? 'image' : 'video', image ? 'NovelAI 图片' : JSON.parse(draft.input_json).workflow?.title??'视频', now, now);
     if (draft.project_id) await tx.runAsync('INSERT OR IGNORE INTO creative_project_assets VALUES(?,?,NULL,0)', draft.project_id, assetId);
     const priceEstimate=!image&&input.prepared.workflowId===H3_CREATIVE_WORKFLOW_ID?cachedVideoQuote(String(input.prepared.inputSnapshot.resolution??''),input.prepared.inputSnapshot.duration):undefined;
-    const displaySnapshot={...input.prepared.inputSnapshot,...(priceEstimate?{_costEstimate:priceEstimate}:{})};
+    const displaySnapshot={...input.prepared.inputSnapshot,_semanticContext:await readDraftSemantics(tx,draft.id),...(priceEstimate?{_costEstimate:priceEstimate}:{})};
     await tx.runAsync('INSERT INTO creative_job_contexts VALUES(?,?,?,?,?,?,?,?,?,?,?)', job.id, draft.id, draft.revision, draft.project_id, draft.shot_id, assetId, JSON.stringify(displaySnapshot), requestHash, reservation.id, reservation.execution_epoch, now);
     for (const ref of refs) await tx.runAsync('INSERT INTO creative_job_inputs VALUES(?,?,?,?)', job.id, image ? 'base' : ref.slot==='audio'?'audio':'image', ref.ordinal, ref.version_id);
     await tx.runAsync("UPDATE creative_generation_drafts SET state='SUBMITTED',revision=revision+1,job_id=?,target_asset_id=?,updated_at=? WHERE id=?", job.id, assetId, now, draft.id);

@@ -1,3 +1,4 @@
+import {readDraftSemantics} from './draftSemantics';
 import {semanticSchemas,readShotSemantics,readSemanticResources} from './semanticResources';
 import {readRunFocus} from './runFocus';
 import {preparedCreativeSubmission} from './preparedSubmission';
@@ -125,7 +126,7 @@ export function createCreativeAgentTools() {
         const origin=await originFor(config);
         return await withWriteTransaction(getDatabase(),async tx=>{await assertCreativeAgentScope(tx,origin);const service=createCreativeService(tx),draft=await service.draft(draftId);
           if (!origin.projectId || draft?.project_id!==origin.projectId) throw new Error('AGENT_PROJECT_SCOPE_MISMATCH');
-          return JSON.stringify({draft,inputs:await service.draftInputs(draftId),readiness:await readDraftReadiness(tx,draftId,origin.projectId),cost:{status:'unknown',requiresAuthorization:true}});});
+          return JSON.stringify({draft,semanticContext:await readDraftSemantics(tx,draftId),inputs:await service.draftInputs(draftId),readiness:await readDraftReadiness(tx,draftId,origin.projectId),cost:{status:'unknown',requiresAuthorization:true}});});
       } catch(e) { return failure(e); }
     }, {name:'draft_get',description:'Read draft and revision in selected project, including immutable input version references and cost uncertainty.',schema:z.object({draftId:id}).strict()}),
     tool(async ({draftId,authorizationId},config:any)=>{
