@@ -46,6 +46,10 @@ class MediaModule(private val context: ReactApplicationContext) : ReactContextBa
   fun inspectLocalMedia(source: String, hash: String, kind: String, promise: Promise) {
     executors.executeMedia { try { promise.resolve(MediaInspection(context).inspect(source,hash,kind)) } catch(e: Exception) { promise.reject("MEDIA_INSPECTION_FAILED",e.message,e) } }
   }
+  @ReactMethod
+  fun packageTimeline(request: String, promise: Promise) {
+    executors.executeMedia { try { promise.resolve(TimelinePackage(context).create(request)) } catch(e: Exception) { promise.reject("TIMELINE_PACKAGE_FAILED",e.message,e) } }
+  }
   private val timelineRenderer = TimelineRenderer(context)
   @ReactMethod
   fun renderTimeline(request: String, promise: Promise) {

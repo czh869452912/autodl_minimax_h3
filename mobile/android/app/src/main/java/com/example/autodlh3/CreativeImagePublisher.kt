@@ -14,7 +14,7 @@ class CreativeImagePublisher(
       "image/png" -> "png"; "image/jpeg" -> "jpg"; "image/webp" -> "webp"
       "video/mp4" -> "mp4"; "video/webm" -> "webm"
       "audio/mpeg" -> "mp3"; "audio/mp4" -> "m4a"; "audio/wav" -> "wav"; "audio/ogg" -> "ogg"
-      "text/plain" -> "txt"; "text/markdown" -> "md"; "application/json" -> "json"; "application/pdf" -> "pdf"
+      "text/plain" -> "txt"; "text/markdown" -> "md"; "application/json" -> "json"; "application/pdf" -> "pdf"; "application/zip" -> "zip"
       else -> throw IllegalArgumentException("Unsupported creative file type")
     }
     return "creative-$key.$extension"

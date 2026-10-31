@@ -1,3 +1,4 @@
+import {createTimelinePackage} from './timelinePackage';
 import {executorWakePort} from '../tasks/executorEvents';
 import {useLiveRefresh} from './useLiveRefresh';
 import {useEffect,useRef,useState} from 'react';
@@ -19,7 +20,7 @@ export function TimelineScreen(){
  const [spec,setSpec]=useState<TimelineSpec>(empty),[title,setTitle]=useState('项目成片'),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [picker,setPicker]=useState<'video'|'audio'>(),[rows,setRows]=useState<TimelineRow[]>([]),[next,setNext]=useState<{createdAt:number;id:string}>();
  const [renders,setRenders]=useState<Array<{id:string;timeline_id:string;state:string;error:string|null;output_version_id:string|null}>>([]);
- useLiveRefresh(async current=>{const rows=await getDatabase().getAllAsync<{id:string;timeline_id:string;state:string;error:string|null;output_version_id:string|null}>("SELECT r.* FROM creative_timeline_renders r JOIN creative_timelines t ON t.id=r.timeline_id WHERE t.project_id=? ORDER BY r.created_at DESC LIMIT 100",projectId);if(current())setRenders(rows);},2000,projectId);
+ useLiveRefresh(async current=>{if(!rows.length){if(current())setRenders([]);return;}const ids=rows.map(row=>row.id);const results=await getDatabase().getAllAsync<{id:string;timeline_id:string;state:string;error:string|null;output_version_id:string|null}>(`SELECT r.* FROM creative_timeline_renders r WHERE r.timeline_id IN (${ids.map(()=>'?').join(',')}) AND r.id=(SELECT latest.id FROM creative_timeline_renders latest WHERE latest.timeline_id=r.timeline_id ORDER BY latest.created_at DESC,latest.id DESC LIMIT 1) ORDER BY r.created_at DESC`,...ids);if(current())setRenders(results);},2000,projectId+':'+rows.map(row=>row.id).join(','));
  const lock=useRef(false);const leave=useUnsavedChanges(dirty,busy);
  const refresh=async(after?:{createdAt:number;id:string})=>{const page=await readTimelinePage(getDatabase(),projectId,after);setRows(page.items);setNext(page.next);};
  useEffect(()=>{void refresh().catch(e=>setError(e.message));},[projectId]);
@@ -51,6 +52,7 @@ export function TimelineScreen(){
    <ListAction label="在本机合成" disabled={busy||renders.some(r=>r.timeline_id===row.id&&['QUEUED','RENDERING','SUCCEEDED'].includes(r.state))} onPress={()=>void work(async()=>{await creativeService().execute({name:'timeline.render',payload:{id:row.id}},createId());executorWakePort.signal('command');})}/>
    {renders.filter(r=>r.timeline_id===row.id).map(render=><View key={render.id}><Text style={s.body}>{({QUEUED:'等待本地合成',RENDERING:'正在合成',SUCCEEDED:'成片已加入项目素材',FAILED:'合成失败',CANCELLED:'已取消',QUARANTINED:'恢复后已隔离'} as Record<string,string>)[render.state]}{render.error?' · '+render.error:''}</Text>{['QUEUED','RENDERING'].includes(render.state)?<ListAction label="取消合成" secondary disabled={busy} onPress={()=>void work(async()=>{await creativeService().execute({name:'timeline.cancelRender',payload:{id:render.id}},createId());})}/>:null}{render.output_version_id?<ListAction label="导出成片" disabled={busy} onPress={()=>void work(async()=>{await creativeService().execute({name:'asset.export',payload:{versionId:render.output_version_id!}},createId());executorWakePort.signal('command');})}/>:null}</View>)}
    <ListAction label="载入副本继续编辑" secondary disabled={busy} onPress={()=>leave(()=>{setSpec(timelineSpec.parse(JSON.parse(row.spec_json)));setTitle(row.title);setDirty(false);})}/>
+   <ListAction label="打包工程与原件（最多 90MB）" secondary disabled={busy} onPress={()=>void work(async()=>{const result=await createTimelinePackage(row.id,projectId);if(result.status!=='completed')throw Error('工程包尚未保存');setError('工程包已加入项目素材，可从素材详情保存到下载目录。包含清单与原件，不含账号密钥；导入不会自动执行。');})}/>
    <ListAction label="生成工程清单文档" secondary disabled={busy} onPress={()=>void work(async()=>{const manifest=await timelineManifest(getDatabase(),row.id,projectId);await saveCreativeText({title:row.title+' · 工程清单',kind:'document',content:JSON.stringify(manifest,null,2),projectId});setError('工程清单已保存到项目素材，可从素材详情导出；清单不包含媒体文件。');})}/>
    <ListAction label="移除工程" secondary disabled={busy} onPress={()=>Alert.alert('移除工程','保留输入视频、音轨及已经导出的清单。',[{text:'取消',style:'cancel'},{text:'移除',style:'destructive',onPress:()=>void work(async()=>{await creativeService().execute({name:'timeline.discard',payload:{id:row.id}},createId());await refresh();})}])}/>
   </View>)}

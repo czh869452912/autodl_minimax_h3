@@ -54,6 +54,19 @@ class TimelineRendererInstrumentedTest {
    for(i in 0 until inspection.getJSONArray("frames").length())File(java.net.URI(inspection.getJSONArray("frames").getJSONObject(i).getString("uri"))).delete()
   } finally { decoded.delete();source.delete() }
  }
+ @Test fun projectPackageContainsOnlyManifestAndVerifiedMedia() {
+  val source=fixture();var output:File?=null
+  try {
+   val hash=MediaIntegrity(context).sha256(source.toURI().toString())
+   val manifest=JSONObject().put("format","autodl-timeline").put("version",1).put("title","test")
+   val files=JSONArray().put(JSONObject().put("sha256",hash).put("uri",android.net.Uri.fromFile(source).toString()))
+   output=File(java.net.URI(TimelinePackage(context).create(JSONObject().put("manifest",manifest).put("files",files).toString())))
+   java.util.zip.ZipFile(output).use { zip ->
+    assertEquals(2,zip.size());assertNotNull(zip.getEntry("manifest.json"))
+    val bytes=zip.getInputStream(zip.getEntry("media/"+hash)).readBytes();assertArrayEquals(source.readBytes(),bytes)
+   }
+  } finally { output?.delete();source.delete() }
+ }
  @Test fun wrongHashAndOutOfBoundsTrimFailWithoutOutput() {
   val source=fixture()
   try {

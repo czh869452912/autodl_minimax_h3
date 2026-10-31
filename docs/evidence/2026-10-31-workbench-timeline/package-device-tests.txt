@@ -1,0 +1,8 @@
+
+com.example.autodlh3.TimelineRendererInstrumentedTest:....
+
+Time: 1.67
+
+OK (4 tests)
+
+
