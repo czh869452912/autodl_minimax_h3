@@ -44,7 +44,7 @@ export async function applySemanticCommand(tx:AppDatabase,name:string,p:any,now:
    if(changed.changes!==1)throw new Error('SHOT_REVISION_CONFLICT');
    await tx.runAsync('INSERT INTO creative_shot_semantics VALUES(?,?,?) ON CONFLICT(shot_id,entity_id) DO UPDATE SET version_id=excluded.version_id',p.shotId,p.entityId,p.versionId);
   }
-  return {entityId:p.entityId,versionId:p.versionId,projectId};
+  return {entityId:p.entityId,versionId:p.versionId,projectId,...(name==='semantic.bindShot'?{shotId:p.shotId,...(p.replaceEntityId?{replacedEntityId:p.replaceEntityId}:{})}:{})};
  }
  for(const ref of p.references){
   if(!await tx.getFirstAsync(`SELECT v.id FROM creative_asset_versions v JOIN creative_project_assets a ON a.asset_id=v.asset_id AND a.project_id=?
