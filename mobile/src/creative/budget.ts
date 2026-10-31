@@ -20,7 +20,7 @@ export async function readCreativeAuthorizationSummaries(db:AppDatabase,projectI
     JOIN creative_credential_generations g ON g.id=a.credential_generation_id AND g.account_binding_id=a.account_binding_id AND g.status='active'
     JOIN creative_default_accounts d ON d.provider_id=a.provider_id AND d.credential_generation_id=g.id
     JOIN creative_projects p ON p.id=a.project_id AND p.archived_at IS NULL
-    WHERE a.project_id=? AND a.revoked_at IS NULL AND a.expires_at>?
+    WHERE NOT EXISTS(SELECT 1 FROM creative_authorization_requests b WHERE b.authorization_id=a.id) AND a.project_id=? AND a.revoked_at IS NULL AND a.expires_at>?
     ORDER BY a.expires_at,a.id LIMIT 21`,projectId,now);
   return {items:rows.slice(0,20).map(a=>({id:a.id,provider_id:a.provider_id,request_limit:a.request_limit,
     expires_at:a.expires_at,allow_unknown_cost:a.allow_unknown_cost,operations:JSON.parse(a.allowed_operations_json),
@@ -49,6 +49,8 @@ export async function reserveCreativeBudget(tx: AppDatabase, input: ReserveInput
     return existing;
   }
   const auth = await authorization(tx, input.authorizationId, now);
+  const binding=await tx.getFirstAsync<{command_id:string;request_hash:string}>('SELECT command_id,request_hash FROM creative_authorization_requests WHERE authorization_id=?',auth.id);
+  if(binding&&(binding.command_id!==input.commandId||binding.request_hash!==input.requestHash))throw new Error('AUTHORIZATION_REQUEST_MISMATCH');
   if (auth.provider_id !== input.provider || auth.project_id !== (input.projectId ?? null) || !JSON.parse(auth.allowed_operations_json).includes(input.operation)) throw new Error('AUTHORIZATION_SCOPE_MISMATCH');
   if (input.estimate.unit !== auth.unit || input.estimate.requestHash !== input.requestHash || input.estimate.validUntil <= now || !Number.isSafeInteger(input.estimate.validUntil)) throw new Error('ESTIMATE_INVALID');
   if (input.estimate.maximum != null) money.parse(input.estimate.maximum);
@@ -88,12 +90,13 @@ export function createCreativeBudget(db: AppDatabase, now = Date.now) {
         JOIN creative_default_accounts d ON d.provider_id=a.provider_id AND d.credential_generation_id=a.credential_generation_id
         JOIN creative_credential_generations g ON g.id=d.credential_generation_id AND g.status='active'
         JOIN creative_projects p ON p.id=a.project_id AND p.archived_at IS NULL
-        WHERE a.project_id=? AND a.provider_id=? AND a.revoked_at IS NULL AND a.expires_at>? AND a.allow_unknown_cost=1 AND a.amount_limit IS NULL`, projectId, provider, now());
+        WHERE NOT EXISTS(SELECT 1 FROM creative_authorization_requests b WHERE b.authorization_id=a.id) AND a.project_id=? AND a.provider_id=? AND a.revoked_at IS NULL AND a.expires_at>? AND a.allow_unknown_cost=1 AND a.amount_limit IS NULL`, projectId, provider, now());
       return rows.filter(r => JSON.parse(r.allowed_operations_json).includes(provider === 'novelai' ? 'image.generate' : 'video.generate'))
         .reduce((sum, r) => sum + Math.max(0, Math.min(r.request_limit-r.used, r.max_unknown_requests-r.unknown_used)), 0);
     },
     async list() { return db.getAllAsync<Authorization>('SELECT * FROM creative_authorizations ORDER BY created_at DESC'); },
-    async grant(input: { provider: CreativeProvider; generationId: string; projectId?: string; operations: string[]; requestLimit: number; amountLimit: number | null; allowUnknownCost: boolean; maxUnknownRequests: number; expiresAt: number }) {
+    async grant(input: { provider: CreativeProvider; generationId: string; projectId?: string; operations: string[]; requestLimit: number; amountLimit: number | null; allowUnknownCost: boolean; maxUnknownRequests: number; expiresAt: number; requestBinding?:{commandId:string;requestHash:string} }) {
+      if(input.requestBinding){z.string().min(1).max(200).parse(input.requestBinding.commandId);z.string().regex(/^[a-f0-9]{64}$/).parse(input.requestBinding.requestHash);}
       count.parse(input.requestLimit); money.nullable().parse(input.amountLimit); z.number().int().min(0).max(input.requestLimit).parse(input.maxUnknownRequests);
       z.array(z.enum(['image.generate','video.generate','image.encodeReference'])).min(1).parse(input.operations);
       if (!Number.isSafeInteger(input.expiresAt) || input.expiresAt <= now()) throw new Error('AUTHORIZATION_EXPIRY_INVALID');
@@ -106,6 +109,7 @@ export function createCreativeBudget(db: AppDatabase, now = Date.now) {
         if (!epoch) throw new Error('EXECUTION_EPOCH_MISSING');
         const id = createId();
         await tx.runAsync('INSERT INTO creative_authorizations VALUES(?,0,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)', id, input.projectId ?? null, input.provider, current.account_binding_id, current.credential_generation_id, epoch.epoch, JSON.stringify([...new Set(input.operations)]), input.requestLimit, input.amountLimit, units[input.provider], input.allowUnknownCost ? 1 : 0, input.maxUnknownRequests, input.expiresAt, now());
+        if(input.requestBinding)await tx.runAsync('INSERT INTO creative_authorization_requests VALUES(?,?,?)',id,input.requestBinding.commandId,input.requestBinding.requestHash);
         return id;
       });
     },

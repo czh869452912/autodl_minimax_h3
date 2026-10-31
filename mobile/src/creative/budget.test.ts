@@ -172,3 +172,18 @@ test('authorization summaries count held unknown requests and exclude revoked or
   expect((await read()).items).toEqual([]);
  }finally{f.close();}
 });
+
+test('request-bound authorization cannot fund a different command or changed prepared request',async()=>{
+ const f=await fixture({amountLimit:null,unknown:true});try{
+  f.db.runSync("INSERT INTO creative_projects VALUES('bound','Project','',0,NULL,1,1)");
+  const id=await f.budget.grant({...f.grantInput,projectId:'bound',requestBinding:{commandId:f.input.commandId,requestHash:f.input.requestHash}});
+  const input={...f.input,authorizationId:id,projectId:'bound',estimate:{...f.input.estimate,maximum:null}};
+  expect(await f.budget.availableUnknownRequests('bound','novelai')).toBe(0);
+  expect((await readCreativeAuthorizationSummaries(f.db as never,'bound',1000)).items).toEqual([]);
+  await expect(f.budget.reserve({...input,commandId:'different'})).rejects.toThrow('AUTHORIZATION_REQUEST_MISMATCH');
+  await expect(f.budget.reserve({...input,requestHash:'b'.repeat(64),estimate:{...input.estimate,requestHash:'b'.repeat(64)}})).rejects.toThrow('AUTHORIZATION_REQUEST_MISMATCH');
+  const reservation=await f.budget.reserve(input);
+  expect((await f.budget.reserve(input)).id).toBe(reservation.id);
+  expect(()=>f.db.runSync('UPDATE creative_authorization_requests SET command_id=? WHERE authorization_id=?','changed',id)).toThrow('AUTHORIZATION_REQUEST_IMMUTABLE');
+ }finally{f.close();}
+});

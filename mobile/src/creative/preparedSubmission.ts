@@ -1,3 +1,4 @@
+import {creativeRequestHash} from './videoSubmission';
 import type {submitCreativeVideo} from './videoSubmission';
 type Submission = Parameters<typeof submitCreativeVideo>[1];
 export type PreparedCreativeSubmission = Omit<Submission, 'authorizationId' | 'origin' | 'planStepId'>;
@@ -18,4 +19,8 @@ export function preparedCreativeSubmission(preview: Preview): PreparedCreativeSu
     versionIds: preview.versionIds,
     ...(preview.sourceManifest ? {sourceManifest: preview.sourceManifest} : {}),
   };
+}
+
+export function creativeSubmissionBinding(preview:Preview){
+ return {commandId:`creative-${preview.prepared.adapterId==='novelai-image'?'image':'video'}:${preview.draft.id}:${preview.draft.revision}`,requestHash:creativeRequestHash(preview.prepared)};
 }
