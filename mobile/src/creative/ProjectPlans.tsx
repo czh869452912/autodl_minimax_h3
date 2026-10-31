@@ -1,3 +1,4 @@
+import {readPlanPage,readPlanBatchPage,type PlanCursor,type PlanFilter,type PlanBatchSummary} from './planReads';
 import {prepareCreativeVideo} from './videoRuntime';
 import {authorizePlanRequest} from './planAuthorization';
 import {preparedCreativeSubmission} from './preparedSubmission';
@@ -23,19 +24,25 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
   const [choicesLoaded,setChoicesLoaded]=useState(false);
   const [choices,setChoices]=useState<Array<{id:string;title:string}>>([]),[selected,setSelected]=useState<string[]>([]);
   const [choiceNext,setChoiceNext]=useState<{createdAt:number;id:string}>();
+  const [batchSelection,setBatchSelection]=useState<string[]|null>(null),[batchId,setBatchId]=useState<string>();
+  const [filter,setFilter]=useState<PlanFilter>('all'),[pageHistory,setPageHistory]=useState<Array<PlanCursor|undefined>>([]),[pageNext,setPageNext]=useState<PlanCursor>();
+  const [batches,setBatches]=useState<PlanBatchSummary[]>([]),[batchCursor,setBatchCursor]=useState<PlanCursor>(),[batchNext,setBatchNext]=useState<PlanCursor>();
+  const pageCursor=pageHistory[pageHistory.length-1];
   const readEpoch=useRef(0);
   const refresh=useCallback(async(current:()=>boolean=()=>true)=>{
     const epoch=++readEpoch.current;
-    const db=getDatabase(),plans=await db.getAllAsync<CreativePlan>('SELECT * FROM creative_plans WHERE project_id=? AND (? IS NULL OR id=?) ORDER BY updated_at DESC LIMIT 30',projectId,initialPlanId??null,initialPlanId??null);
+    const db=getDatabase();
+    const [page,batchPage]=await Promise.all([readPlanPage(db,projectId,{planId:initialPlanId,batchId,filter,after:pageCursor}),readPlanBatchPage(db,projectId,batchCursor)]);
+    const plans=page.items;
     const rows:Card[]=[];
     for(const plan of plans){
       const decision=await db.getFirstAsync<CreativeDecision>('SELECT * FROM creative_decision_requests WHERE plan_id=?',plan.id);
       const step=await db.getFirstAsync<CreativePlanStep>("SELECT * FROM creative_plan_steps WHERE plan_id=? AND kind='video'",plan.id);
       if(decision&&step)rows.push({paused:!!await db.getFirstAsync('SELECT plan_id FROM creative_plan_controls WHERE plan_id=? AND paused=1',plan.id),plan,decision,step,candidates:await db.getAllAsync("SELECT c.version_id,a.title,b.relative_path FROM creative_decision_candidates c JOIN creative_asset_versions v ON v.id=c.version_id JOIN creative_assets a ON a.id=v.asset_id LEFT JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE c.decision_id=?",decision.id)});
     }
-    const shots=await creativeService().shots(projectId);if(epoch===readEpoch.current&&current()){setCards(rows);setShots(shots);}
-  },[projectId,initialPlanId]);
-  useLiveRefresh(async current=>{try{await refresh(current);}catch{if(current())setError('计划读取失败');}},2000,`${projectId}:${initialPlanId??''}`);
+    const shots=await creativeService().shots(projectId);if(epoch===readEpoch.current&&current()){setCards(rows);setShots(shots);setPageNext(page.next);setBatches(batchPage.items);setBatchNext(batchPage.next);}
+  },[projectId,initialPlanId,batchId,filter,pageCursor,batchCursor]);
+  useLiveRefresh(async current=>{try{await refresh(current);}catch{if(current())setError('计划读取失败');}},2000,`${projectId}:${initialPlanId??''}:${batchId??''}:${filter}:${pageCursor?.id??''}:${batchCursor?.id??''}`);
   const work=async(fn:()=>Promise<unknown>)=>{if(lock.current||archived)return;lock.current=true;setBusy(true);setError('');try{await fn();executorWakePort.signal('command');await refresh();}catch(e){setError(e instanceof Error?e.message:'操作失败');}finally{lock.current=false;setBusy(false);}};
   const action=(label:string,fn:()=>void)=><ListAction label={label} secondary disabled={busy||archived} onPress={fn}/>;
   const authorize=(card:Card)=>void work(async()=>{
@@ -55,11 +62,20 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
   return <View style={{gap:12}}>
     <Text style={{color:COLORS.text,fontSize:20,fontWeight:'700'}}>{compact?'需要你处理':'选图与视频计划'}</Text>
     {!compact ? <Text style={{color:COLORS.textMuted}}>计划会保留候选、选定版本与生成状态。视频结果归档为候选，不会覆盖镜头已选成果。</Text> : null}
-    {!compact&&!archived? action('为多个镜头准备计划',()=>{
-      const ready=shots.filter(s=>s.selected_image&&s.description.trim()).slice(0,20);
-      if(!ready.length){setError('请先为镜头选定图片并填写动作描述。');return;}
-      Alert.alert('准备多镜头计划',`为以下 ${ready.length} 个镜头各建立选图计划（每批最多 20 个）：\n${ready.map(s=>s.title).join('\n')}\n需逐镜头确认图片与单次授权，不会直接生成。`,[{text:'取消',style:'cancel'},{text:'建立计划',onPress:()=>void work(()=>creativeService().execute({name:'plan.createBatch',payload:{projectId,title:'多镜头制作',shots:ready.map(s=>({shotId:s.id,expectedShotRevision:s.revision,title:s.title,candidateVersionIds:[s.selected_image!],videoPrompt:s.description}))}},createId()))}]);
-    }):null}
+    {!compact&&!initialPlanId?<View style={{gap:8}}>
+      <Text style={{color:COLORS.text,fontWeight:'700'}}>制作批次</Text>
+      {action('全部计划',()=>{setBatchId(undefined);setPageHistory([]);})}
+      {batches.map(batch=><View key={batch.id}>{action((batchId===batch.id?'✓ ':'')+batch.title,()=>{setBatchId(batch.id);setPageHistory([]);})}<Text style={{color:COLORS.textMuted}}>{batch.total} 个镜头 · {batch.completed} 已完成 · {batch.active} 未完成 · {batch.failed} 失败 · {batch.blocked} 待处理</Text></View>)}
+      {batchNext?action('更早的批次',()=>setBatchCursor(batchNext)):null}
+      {batchCursor?action('最新批次',()=>setBatchCursor(undefined)):null}
+      <View style={{flexDirection:'row',gap:8}}>{(['all','unfinished','failed'] as const).map(value=><View key={value}>{action(({all:'全部',unfinished:'仅未完成',failed:'仅失败'})[value]+(filter===value?' ✓':''),()=>{setFilter(value);setPageHistory([]);})}</View>)}</View>
+    </View>:null}
+    {!compact&&!archived? action('为多个镜头准备计划',()=>setBatchSelection([])):null}
+    {batchSelection?<View style={{gap:8}}><Text style={{color:COLORS.text}}>选择镜头 · {batchSelection.length}/20，仅建立计划，不会生成</Text>
+      {shots.filter(s=>s.selected_image&&s.description.trim()).map(shot=><View key={shot.id}>{action((batchSelection.includes(shot.id)?'✓ ':'')+shot.title,()=>setBatchSelection(ids=>ids?.includes(shot.id)?ids.filter(id=>id!==shot.id):(ids?.length??0)<20?[...(ids??[]),shot.id]:ids))}</View>)}
+      {!shots.some(s=>s.selected_image&&s.description.trim())?<Text style={{color:COLORS.textMuted}}>请先为镜头选定图片并填写动作描述。</Text>:null}
+      {batchSelection.length?action('确认所选镜头并建立批次',()=>{const ready=shots.filter(s=>batchSelection.includes(s.id));Alert.alert('准备多镜头计划',ready.map(s=>s.title).join('、')+'。逐镜头审阅并授权后才会生成。',[{text:'取消',style:'cancel'},{text:'建立计划',onPress:()=>void work(async()=>{await creativeService().execute({name:'plan.createBatch',payload:{projectId,title:'多镜头制作',shots:ready.map(s=>({shotId:s.id,expectedShotRevision:s.revision,title:s.title,candidateVersionIds:[s.selected_image!],videoPrompt:s.description}))}},createId());setBatchSelection(null);setBatchId(undefined);setPageHistory([]);setBatchCursor(undefined);})}]);}):null}
+      {action('取消选择镜头',()=>setBatchSelection(null))}</View>:null}
     {error?<Text accessibilityRole="alert" style={{color:COLORS.danger}}>{error}</Text>:null}
     {compact&&!cards.some(c=>c.plan.state==='ACTIVE')?<Text style={{color:COLORS.textMuted}}>暂无等待处理的选图计划。</Text>:null}
     {initialPlanId&&!cards.length?<Text style={{color:COLORS.textMuted}}>指定计划已不可用或不属于此项目。</Text>:null}
@@ -83,6 +99,8 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
       {card.plan.state==='ACTIVE'&&card.step.state!=='DISPATCHED'?action('取消计划',()=>void work(()=>creativeService().execute({name:'plan.cancel',payload:{id:card.plan.id,expectedRevision:card.plan.revision}},createId()))):null}
       {card.plan.state==='QUARANTINED'?<Text style={{color:COLORS.textMuted}}>请先核对旧任务结果。确需再次生成时新建计划并重新授权，可能重复消费。</Text>:null}
     </View>)}
+    {!compact&&pageNext?action('更早的计划',()=>setPageHistory(old=>[...old,pageNext])):null}
+    {!compact&&pageHistory.length?action('上一页计划',()=>setPageHistory(old=>old.slice(0,-1))):null}
     {!archived&&!compact&&!shots.length?<View style={{gap:8}}><Text style={{color:COLORS.text}}>先添加镜头，再选择参考图片并编排视频。</Text><ListAction label="去添加镜头" onPress={()=>router.replace({pathname:'/creative-project/[id]',params:{id:projectId,tab:'shots',requestId:createId()}})}/></View>:null}
     {!archived&&!compact&&shots.length>0?<View style={{gap:8}}>
       <Text style={{color:COLORS.text,fontWeight:'700'}}>新建选图计划</Text>

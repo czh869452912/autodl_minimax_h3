@@ -29,7 +29,7 @@ test('plan focus queries project and plan identity before pagination',async()=>{
  let tree!:ReturnType<typeof create>;
  try{
   await act(async()=>{tree=create(<ProjectPlans projectId="p" initialPlanId="old-plan"/>);});
-  expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('OR id=?'),'p','old-plan','old-plan');
+  expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('OR p.id=?'),'p','old-plan','old-plan',null,null,'all','all','all',null,null,null,null);
   expect(JSON.stringify(tree.toJSON())).toContain('指定计划已不可用');
  }finally{act(()=>tree?.unmount());}
 });
