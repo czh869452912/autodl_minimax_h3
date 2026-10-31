@@ -7,6 +7,12 @@ export async function assertCreativeAgentScope(tx: AppDatabase, origin: Creative
   if (!run || !['queued','running'].includes(JSON.parse(run.payload_json).status)) throw new Error('AGENT_RUN_NOT_ACTIVE');
   const scope = await tx.getFirstAsync<{ project_id: string | null; revision: number }>('SELECT project_id,revision FROM creative_agent_scopes WHERE thread_id=?', origin.threadId);
   if (!scope || scope.project_id !== origin.projectId || scope.revision !== origin.scopeRevision) throw new Error('AGENT_SCOPE_CHANGED');
+  const spec=await tx.getFirstAsync<{project_id:string|null;scope_revision:number;execution_epoch:string}>('SELECT * FROM creative_run_specs WHERE thread_id=? AND run_id=?',origin.threadId,origin.runId);
+  if(spec){
+    const epoch=await tx.getFirstAsync<{epoch:string}>('SELECT epoch FROM creative_execution_state WHERE id=1');
+    if(spec.project_id!==scope.project_id||spec.scope_revision!==scope.revision)throw new Error('AGENT_RUN_SCOPE_CHANGED');
+    if(spec.execution_epoch!==epoch?.epoch)throw new Error('AGENT_RUN_RESTORED');
+  }
   return scope;
 }
 export async function guardCreativeAgentCommand(tx: AppDatabase, origin: CreativeAgentOrigin, command: CreativeCommand) {

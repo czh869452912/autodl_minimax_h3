@@ -75,6 +75,12 @@ it('pins trusted shot focus at acceptance and reports later changes without movi
   const command={id:'focus-submit',runId:'focus-run',draftRevision:0,focusShotId:shot.value.shotId,message:{id:'user',role:'user' as const,content:'prepare this shot'}};
   await store.accept(snapshot,command);
   expect(await readRunFocus(db as never,'focus','focus-run','p')).toMatchObject({shotId:shot.value.shotId,revision:0,stale:false});
+  expect(db.getFirstSync('SELECT project_id,scope_revision,policy_version FROM creative_run_specs')).toEqual({project_id:'p',scope_revision:0,policy_version:'user-adoption-v1'});
+  const {assertCreativeAgentScope}=require('../creative/agentScope') as typeof import('../creative/agentScope');
+  db.runSync('UPDATE creative_agent_scopes SET revision=1');
+  await expect(assertCreativeAgentScope(db as never,{threadId:'focus',runId:'focus-run',toolCallId:'call',projectId:'p',scopeRevision:1})).rejects.toThrow('AGENT_RUN_SCOPE_CHANGED');
+  db.runSync('UPDATE creative_agent_scopes SET revision=0');
+  expect(()=>db.runSync('UPDATE creative_run_specs SET scope_revision=1')).toThrow('IMMUTABLE');
   db.runSync('UPDATE creative_shots SET revision=revision+1 WHERE id=?',shot.value.shotId);
   expect(await readRunFocus(db as never,'focus','focus-run','p')).toMatchObject({revision:0,stale:true});
   await store.accept(snapshot,command);

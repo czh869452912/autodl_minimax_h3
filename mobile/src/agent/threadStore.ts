@@ -167,6 +167,10 @@ export function createLocalThreadStore(db: AppDatabase, attachments = createAtta
           : command.focusShotId?await captureRunFocus(tx,snapshot.threadId,command.focusShotId):undefined;
         const run = { ...(creativeFocus?{creativeFocus}:{}), id: command.runId, submissionId: command.id, userMessageId: command.message.id, status: 'queued', baseWorkspaceRevision, startedAt: Date.now(), messageIds: [], tools: [], ...(command.retryOf ? { retryOf: command.retryOf } : {}) };
         await writeSnapshot(tx, { ...stored.value, messages: command.retryOf ? stored.value.messages : [...stored.value.messages, acceptedMessage], state: { ...state, h3Runs: [...readPromptRuns(state), run], ...(composer?.revision === command.draftRevision && !command.retryOf ? { h3Composer: { text: '', attachments: [], revision: command.draftRevision + 1 } } : {}) }, updatedAt: Date.now() });
+        const acceptedScope=await tx.getFirstAsync<{project_id:string|null;revision:number}>('SELECT project_id,revision FROM creative_agent_scopes WHERE thread_id=?',snapshot.threadId);
+        const execution=await tx.getFirstAsync<{epoch:string}>('SELECT epoch FROM creative_execution_state WHERE id=1');
+        if(!execution)throw new Error('EXECUTION_EPOCH_MISSING');
+        await tx.runAsync('INSERT INTO creative_run_specs VALUES(?,?,?,?,?,?)',snapshot.threadId,command.runId,acceptedScope?.project_id??null,acceptedScope?.revision??0,execution.epoch,'user-adoption-v1');
         await tx.runAsync('INSERT INTO agent_submissions VALUES(?,?,?,?,?)', command.id, snapshot.threadId, command.message.id, command.runId, command.draftRevision);
         return { submissionId: command.id, userMessageId: command.message.id, runId: command.runId };
       }); } finally { await stored.releaseStaging().catch(() => undefined); await message?.releaseStaging().catch(() => undefined); }
