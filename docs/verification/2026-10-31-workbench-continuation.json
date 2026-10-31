@@ -1,0 +1,20 @@
+{
+  "baseline": "b2b8b8b6",
+  "schemaVersion": 40,
+  "scope": "Workbench continuation slices 11–20; roadmap remains incomplete",
+  "testSuites": {"passed": 302, "skipped": 1, "failed": 0},
+  "tests": {"passed": 1869, "skipped": 4, "failed": 0},
+  "typecheck": "passed",
+  "realGenerationCalls": false,
+  "android": {
+    "build": "passed",
+    "package": "com.example.autodlh3.beta",
+    "versionName": "1.5.0-preview.4-beta.38",
+    "device": "emulator-5554",
+    "abi": "x86_64",
+    "apkSha256": "F937AB844F9182A3A4E252906008A575CADD51C450D5B0CD2514363DA30EA6E5",
+    "verified": ["update install", "cold launch", "existing adopted semantic and shot binding survive schema upgrade"],
+    "earlierBuildVerified": ["create waiting semantic version", "explicit adoption", "bind shot", "force-stop and reopen preserves binding"],
+    "notVerified": ["paid generation", "multi-shot batch UI end-to-end", "background lifecycle matrix", "TalkBack", "large fonts", "audio/subtitle/composition"]
+  }
+}
