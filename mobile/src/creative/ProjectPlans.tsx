@@ -1,3 +1,5 @@
+import {confirmOutboundScopes} from './outboundConsentUI';
+import {creativeRequestHash} from './videoSubmission';
 import {readPlanPage,readPlanBatchPage,type PlanCursor,type PlanFilter,type PlanBatchSummary} from './planReads';
 import {prepareCreativeVideo} from './videoRuntime';
 import {authorizePlanBatch,authorizePlanRequest,type PlanApproval} from './planAuthorization';
@@ -55,6 +57,7 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
     Alert.alert('授权此计划继续生成',`${planVideoSummary(card.step.input_binding_json)}。固定输入版本 ${JSON.parse(card.step.input_binding_json).versionId ?? '尚未选定'}，使用计划提示词，本次种子 ${String(binding.seed??"由工作流固定")}，最多生成 1 次视频，15 分钟有效。${estimate}无金额上限。网络结果不明不会自动重发。`,[
       {text:'取消',style:'cancel'},{text:'接受未知费用，仅授权一次',onPress:()=>void work(async()=>{
         if(preview.db!==getDatabase())throw new Error('数据库已恢复，请重新准备');
+        await confirmOutboundScopes(preview.db,[{projectId,provider:'autodl',generationId:preview.account.credential_generation_id,requestHash:creativeRequestHash(preview.prepared),versions:preview.versionIds}]);
         await authorizePlanRequest(preview.db,{planId:card.plan.id,planRevision:card.plan.revision,stepId:card.step.id,stepRevision:card.step.revision,projectId,generationId:preview.account.credential_generation_id,submission:preparedCreativeSubmission(preview)});
       })}]);
   });
@@ -70,7 +73,7 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
       approvals.push({planId:card.plan.id,planRevision:card.plan.revision,stepId:card.step.id,stepRevision:card.step.revision,projectId,generationId:preview.account.credential_generation_id,submission:preparedCreativeSubmission(preview)});
     }
     const details=approvals.map((a,i)=>candidates[i].plan.title+' · '+planVideoSummary(candidates[i].step.input_binding_json)+' · 输入 '+a.submission.versionIds.join(',')+' · 种子 '+String(a.submission.prepared.inputSnapshot.seed)).join('\n');
-    Alert.alert('确认本批次具体请求',details+'\n共 '+approvals.length+' 次视频，每个请求仅 1 次，15 分钟有效。费用未知，无金额上限。暂停或未选图镜头不在范围内；结果不明不自动重发。',[{text:'取消',style:'cancel'},{text:'授权这些请求',onPress:()=>void work(async()=>{if(db!==getDatabase())throw new Error('数据库已恢复，请重新准备');await authorizePlanBatch(db,batchId,projectId,approvals);})}]);
+    Alert.alert('确认本批次具体请求',details+'\n共 '+approvals.length+' 次视频，每个请求仅 1 次，15 分钟有效。费用未知，无金额上限。暂停或未选图镜头不在范围内；结果不明不自动重发。',[{text:'取消',style:'cancel'},{text:'授权这些请求',onPress:()=>void work(async()=>{if(db!==getDatabase())throw new Error('数据库已恢复，请重新准备');await confirmOutboundScopes(db,approvals.map(a=>({projectId,provider:'autodl',generationId:a.generationId,requestHash:creativeRequestHash(a.submission.prepared),versions:a.submission.versionIds})));await authorizePlanBatch(db,batchId,projectId,approvals);})}]);
   });
   if (compact && !error && !cards.some(c => c.plan.state === 'ACTIVE' && (c.decision.state === 'WAITING' || c.step.state === 'BLOCKED'))) return null;
   return <View style={{gap:12}}>

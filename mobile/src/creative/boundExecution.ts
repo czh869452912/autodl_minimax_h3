@@ -29,7 +29,7 @@ export function bindCreativeAdapter(db: AppDatabase, adapter: ProviderAdapter, b
       if (await tx.getFirstAsync('SELECT entity_id FROM creative_restore_quarantine WHERE entity_id=?', binding.job_id)) throw new Error('CREATIVE_RESTORE_QUARANTINED');
       await dispatchCreativeBudget(tx, binding.id, { ...identity, requestHash: binding.context_hash }, now());
     });
-    }catch(error){if(error instanceof ProviderPreflightError)throw error;throw new ProviderPreflightError('CREATIVE_DISPATCH_NOT_SENT',error instanceof Error?error.message:'本地准备未完成，请检查账号、素材和授权后重新生成。');}
+    }catch(error){if(error instanceof Error&&error.message.startsWith('OUTBOUND_'))throw new ProviderPreflightError(error.message,'素材外发许可缺失、变化或已撤销，本次未发送。请从原输入重新准备并确认外发许可。');if(error instanceof ProviderPreflightError)throw error;throw new ProviderPreflightError('CREATIVE_DISPATCH_NOT_SENT',error instanceof Error?error.message:'本地准备未完成，请检查账号、素材和授权后重新生成。');}
     return adapter.submit(outgoing, target);
   } };
 }

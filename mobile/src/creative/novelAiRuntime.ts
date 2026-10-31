@@ -1,3 +1,5 @@
+import {confirmOutboundScopes} from './outboundConsentUI';
+import {creativeRequestHash} from './videoSubmission';
 import {preparedCreativeSubmission,creativeSubmissionBinding} from './preparedSubmission';
 import { NativeModules } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -67,6 +69,7 @@ async function prepareCreativeUpscale(db:AppDatabase,draft:NonNullable<Awaited<R
 export async function confirmCreativeImage(preview: Awaited<ReturnType<typeof prepareCreativeImage>>) {
   if (preview.db !== getDatabase()) throw new Error('数据库已恢复或切换，请重新准备生成');
   await preflightImage(preview.db,preview.account.credential_generation_id,preview.prepared);
+  await confirmOutboundScopes(preview.db,[{projectId:preview.draft.project_id,provider:'novelai',generationId:preview.account.credential_generation_id,requestHash:creativeRequestHash(preview.prepared),versions:preview.versionIds}]);
   const authorizationId = await creativeBudget().grant({ provider: 'novelai', generationId: preview.account.credential_generation_id, projectId: preview.draft.project_id ?? undefined,
     operations: ['image.generate'], requestLimit: 1, amountLimit: null, allowUnknownCost: true, maxUnknownRequests: 1, requestBinding:creativeSubmissionBinding(preview), expiresAt: Date.now() + 15 * 60_000 });
   return submitCreativeVideo(preview.db, { ...preparedCreativeSubmission(preview), authorizationId });

@@ -1,3 +1,4 @@
+import {grantOutboundConsent} from './outboundConsent';
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { createCreativeService } from './service';
 import { createCreativeAccounts } from './accounts';
@@ -26,6 +27,12 @@ test.each(['novelai','autodl'] as const)('%s review preserves the unknown job an
     const original=await submit(draft,authorizationId);
     await expect(acknowledgeUnknownTask(db as never,original.id,3)).rejects.toThrow('状态已变化');
     const reservation=db.getFirstSync<{id:string}>('SELECT id FROM creative_budget_reservations')!;
+    await expect(withWriteTransaction(db as never,tx=>dispatchCreativeBudget(tx,reservation.id,{accountId:identity.accountId,generationId:identity.generationId,requestHash:creativeRequestHash(prepared)},3))).rejects.toThrow('OUTBOUND_CONSENT_REQUIRED');
+    const permit=await grantOutboundConsent(db as never,{projectId:null,provider,generationId:identity.generationId,requestHash:creativeRequestHash(prepared),versions:[]},2);
+    db.runSync('UPDATE creative_outbound_consents SET revoked_at=3 WHERE id=?',permit);
+    await expect(withWriteTransaction(db as never,tx=>dispatchCreativeBudget(tx,reservation.id,{accountId:identity.accountId,generationId:identity.generationId,requestHash:creativeRequestHash(prepared)},3))).rejects.toThrow('OUTBOUND_CONSENT_REQUIRED');
+    expect(db.getFirstSync('SELECT state FROM creative_budget_reservations')).toEqual({state:'RESERVED'});
+    await grantOutboundConsent(db as never,{projectId:null,provider,generationId:identity.generationId,requestHash:creativeRequestHash(prepared),versions:[]},2);
     await withWriteTransaction(db as never,tx=>dispatchCreativeBudget(tx,reservation.id,{accountId:identity.accountId,generationId:identity.generationId,requestHash:creativeRequestHash(prepared)},3));
     await budget.transition(reservation.id,{key:'unknown',to:'UNKNOWN_HELD',evidence:'提交响应未确认'});
     db.runSync("UPDATE workflow_jobs SET status='UNKNOWN' WHERE id=?",original.id);

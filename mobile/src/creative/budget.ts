@@ -1,3 +1,4 @@
+import {assertJobOutboundConsent} from './outboundConsent';
 import { z } from 'zod';
 import { createId } from '../ids';
 import type { AppDatabase } from '../storage/appDatabase';
@@ -75,6 +76,7 @@ export async function dispatchCreativeBudget(tx: AppDatabase, id: string, exactI
   if (r.request_hash !== exactIdentity.requestHash || r.estimate_valid_until <= now) throw new Error('ESTIMATE_INVALID');
   const auth = await authorization(tx, r.authorization_id, now);
   if (auth.revision !== r.authorization_revision || exactIdentity.accountId !== r.account_binding_id || exactIdentity.generationId !== r.credential_generation_id || auth.execution_epoch !== r.execution_epoch) throw new Error('RESERVATION_BINDING_MISMATCH');
+  if(r.job_id)await assertJobOutboundConsent(tx,r.job_id,{projectId:r.project_id,provider:auth.provider_id,generationId:exactIdentity.generationId,requestHash:exactIdentity.requestHash},now);
   await tx.runAsync("UPDATE creative_budget_reservations SET state='DISPATCHED',updated_at=? WHERE id=?", now, id);
   await tx.runAsync("INSERT INTO creative_budget_events VALUES(?,?,?,'RESERVED','DISPATCHED','dispatch',?)", createId(), id, `dispatch:${id}`, now);
   return r;

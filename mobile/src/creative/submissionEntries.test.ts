@@ -1,3 +1,4 @@
+jest.mock('./outboundConsentUI',()=>({confirmOutboundScopes:jest.fn(async()=>{})}));
 import {createInitializedRealSqliteTestDb} from '../test/realSqlite';
 import {createCreativeService} from './service';
 import {createCreativeAgentTools} from './agentTools';
