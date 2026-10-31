@@ -1,3 +1,4 @@
+import {changePlanDependency} from './planDependencies';
 import { z } from 'zod';
 import {shotDependencySignature} from './shotDependencies';
 import type { AppDatabase } from '../storage/appDatabase';
@@ -5,6 +6,7 @@ import { applyDraftCommand, videoDraftInput } from './drafts';
 import { applyStoryCommand } from './story';
 const id=z.string().min(1).max(200), revision=z.number().int().nonnegative();
 export const planSchemas={
+  'plan.setDependency':z.object({id,expectedRevision:revision,upstreamPlanId:id,enabled:z.boolean()}).strict(),
   'plan.reprepare':z.object({id,expectedRevision:revision,expectedShotRevision:revision,prompt:z.string().trim().min(1).max(10000)}).strict(),
   'plan.createBatch':z.object({projectId:id,title:z.string().trim().min(1).max(200),shots:z.array(z.object({shotId:id,expectedShotRevision:revision,title:z.string().trim().min(1).max(200),candidateVersionIds:z.array(id).min(1).max(20),videoPrompt:z.string().trim().min(1).max(10000)}).strict()).min(1).max(20)}).strict(),
   'plan.retryFailed':z.object({id,expectedRevision:revision,expectedShotRevision:revision}).strict(),
@@ -89,6 +91,7 @@ export async function applyPlanCommand(tx:AppDatabase,name:string,p:any,now:numb
   }
   const plan=await activePlan(tx,p.id);
   if(plan.revision!==p.expectedRevision)throw new Error('PLAN_REVISION_CONFLICT');
+  if(name==='plan.setDependency')return changePlanDependency(tx,plan,p.upstreamPlanId,p.enabled,now);
   if(name==='plan.reprepare'){
     const step=await tx.getFirstAsync<CreativePlanStep>("SELECT * FROM creative_plan_steps WHERE plan_id=? AND kind='video' AND state='BLOCKED' AND job_id IS NULL",plan.id);
     const shot=await tx.getFirstAsync<{version_id:string}>('SELECT a.version_id FROM creative_shots s JOIN creative_shot_assets a ON a.shot_id=s.id AND a.slot=\'selected_image\' WHERE s.id=? AND s.project_id=? AND s.revision=? AND s.deleted_at IS NULL',plan.shot_id,plan.project_id,p.expectedShotRevision);

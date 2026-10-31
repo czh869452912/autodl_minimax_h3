@@ -1,3 +1,4 @@
+import {invalidPrerequisiteSql} from './planDependencies';
 import type {AppDatabase} from '../storage/appDatabase';
 import {shotDependencySignature} from './shotDependencies';
 import type {CreativePlan,CreativePlanStep} from './plans';
@@ -11,7 +12,7 @@ export async function checkPlanSubmission(tx:AppDatabase,draftId:string,stepId:s
   if(!inserted){if(step.job_id!==jobId)throw new Error('PLAN_JOB_CONFLICT');return;}
   if(await tx.getFirstAsync('SELECT plan_id FROM creative_plan_controls WHERE plan_id=? AND paused=1',plan.id))throw new Error('PLAN_PAUSED');
   if(step.state!=='READY'||step.job_id||!await tx.getFirstAsync('SELECT event_id FROM creative_selection_outbox WHERE step_id=? AND execution_epoch=? AND consumed_at IS NULL',step.id,epoch.epoch))throw new Error('PLAN_STEP_NOT_READY');
-  if(await tx.getFirstAsync("SELECT d.step_id FROM creative_plan_dependencies d JOIN creative_plan_steps s ON s.id=d.depends_on_step_id WHERE d.step_id=? AND s.state!='SUCCEEDED'",step.id))throw new Error('PLAN_DEPENDENCY_NOT_COMPLETE');
+  if(await tx.getFirstAsync(invalidPrerequisiteSql,step.id))throw new Error('PLAN_DEPENDENCY_NOT_COMPLETE');
   const input=JSON.parse(step.input_binding_json);
   const shot=await tx.getFirstAsync<{revision:number;version_id:string|null}>(`SELECT s.revision,a.version_id FROM creative_shots s
     LEFT JOIN creative_shot_assets a ON a.shot_id=s.id AND a.slot='selected_image'

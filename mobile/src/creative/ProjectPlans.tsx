@@ -1,3 +1,4 @@
+import {readPlanDependencies} from './planDependencies';
 import {confirmOutboundScopes} from './outboundConsentUI';
 import {creativeRequestHash} from './videoSubmission';
 import {readPlanPage,readPlanBatchPage,type PlanCursor,type PlanFilter,type PlanBatchSummary} from './planReads';
@@ -19,7 +20,7 @@ import {ListAction} from '../ui/ListPageUI';
 import {COLORS} from '../ui/theme';
 import {planVideoSummary,type CreativePlan,type CreativeDecision,type CreativePlanStep} from './plans';
 import type {CreativeShot} from './story';
-type Card={paused:boolean;plan:CreativePlan;decision:CreativeDecision;step:CreativePlanStep;candidates:Array<{version_id:string;title:string;relative_path:string|null}>};
+type Card={dependencies:Awaited<ReturnType<typeof readPlanDependencies>>;paused:boolean;plan:CreativePlan;decision:CreativeDecision;step:CreativePlanStep;candidates:Array<{version_id:string;title:string;relative_path:string|null}>};
 export function ProjectPlans({projectId,archived=false,compact=false,initialPlanId}:{projectId:string;initialPlanId?:string;archived?:boolean;compact?:boolean}){
   const router=useRouter(),lock=useRef(false);
   const [cards,setCards]=useState<Card[]>([]),[shots,setShots]=useState<CreativeShot[]>([]),[shotId,setShotId]=useState(''),[prompt,setPrompt]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -29,6 +30,7 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
   const [batchSelection,setBatchSelection]=useState<string[]|null>(null),[batchId,setBatchId]=useState<string>();
   const [filter,setFilter]=useState<PlanFilter>('all'),[pageHistory,setPageHistory]=useState<Array<PlanCursor|undefined>>([]),[pageNext,setPageNext]=useState<PlanCursor>();
   const [batches,setBatches]=useState<PlanBatchSummary[]>([]),[batchCursor,setBatchCursor]=useState<PlanCursor>(),[batchNext,setBatchNext]=useState<PlanCursor>();
+  const [dependencyTarget,setDependencyTarget]=useState<string>();
   const pageCursor=pageHistory[pageHistory.length-1];
   const readEpoch=useRef(0);
   const refresh=useCallback(async(current:()=>boolean=()=>true)=>{
@@ -40,7 +42,7 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
     for(const plan of plans){
       const decision=await db.getFirstAsync<CreativeDecision>('SELECT * FROM creative_decision_requests WHERE plan_id=?',plan.id);
       const step=await db.getFirstAsync<CreativePlanStep>("SELECT * FROM creative_plan_steps WHERE plan_id=? AND kind='video'",plan.id);
-      if(decision&&step)rows.push({paused:!!await db.getFirstAsync('SELECT plan_id FROM creative_plan_controls WHERE plan_id=? AND paused=1',plan.id),plan,decision,step,candidates:await db.getAllAsync("SELECT c.version_id,a.title,b.relative_path FROM creative_decision_candidates c JOIN creative_asset_versions v ON v.id=c.version_id JOIN creative_assets a ON a.id=v.asset_id LEFT JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE c.decision_id=?",decision.id)});
+      if(decision&&step)rows.push({dependencies:await readPlanDependencies(db,step.id),paused:!!await db.getFirstAsync('SELECT plan_id FROM creative_plan_controls WHERE plan_id=? AND paused=1',plan.id),plan,decision,step,candidates:await db.getAllAsync("SELECT c.version_id,a.title,b.relative_path FROM creative_decision_candidates c JOIN creative_asset_versions v ON v.id=c.version_id JOIN creative_assets a ON a.id=v.asset_id LEFT JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE c.decision_id=?",decision.id)});
     }
     const shots=await creativeService().shots(projectId);if(epoch===readEpoch.current&&current()){setCards(rows);setShots(shots);setPageNext(page.next);setBatches(batchPage.items);setBatchNext(batchPage.next);}
   },[projectId,initialPlanId,batchId,filter,pageCursor,batchCursor]);
@@ -101,6 +103,9 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
       <Text style={{color:COLORS.text,fontWeight:'700'}}>{initialPlanId?'当前计划 · ':''}{card.plan.title}</Text>
       <Text style={{color:COLORS.textMuted}}>{({ACTIVE:'进行中',COMPLETED:'已归档视频候选',CANCELLED:'已取消',QUARANTINED:'备份恢复后已隔离，不会自动生成'} as Record<string,string>)[card.plan.state]} · {({PENDING:'等待选图',READY:'等待提交',BLOCKED:'待处理',DISPATCHED:'已提交任务',SUCCEEDED:'完成',FAILED:'任务未完成',CANCELLED:'已取消'} as Record<string,string>)[card.step.state]}</Text>
       <Text style={{color:COLORS.textMuted}}>{planVideoSummary(card.step.input_binding_json)}{'\n'}视频提示词：{JSON.parse(card.step.input_binding_json).prompt}</Text>
+      {card.dependencies?.map(dep=><View key={dep.id}><Text style={{color:COLORS.textMuted}}>前置完成：{dep.title} · {dep.plan_state} / {dep.state}</Text>{!card.step.job_id&&card.plan.state==='ACTIVE'?action('移除前置 '+dep.title,()=>void work(()=>creativeService().execute({name:'plan.setDependency',payload:{id:card.plan.id,expectedRevision:card.plan.revision,upstreamPlanId:dep.id,enabled:false}},createId()))):null}</View>)}
+      {!compact&&!card.step.job_id&&card.plan.state==='ACTIVE'?action(dependencyTarget===card.plan.id?'收起前置选择':'设置前置计划',()=>setDependencyTarget(dependencyTarget===card.plan.id?undefined:card.plan.id)):null}
+      {dependencyTarget===card.plan.id?<View style={{gap:8}}><Text style={{color:COLORS.textMuted}}>选择本页计划作为完成前提，不会自动采用其输出；更早计划可通过历史分页查看。</Text>{cards.filter(c=>c.plan.id!==card.plan.id&&['ACTIVE','COMPLETED'].includes(c.plan.state)&&!card.dependencies.some(d=>d.id===c.plan.id)).map(c=><View key={c.plan.id}>{action('等待 '+c.plan.title,()=>void work(async()=>{await creativeService().execute({name:'plan.setDependency',payload:{id:card.plan.id,expectedRevision:card.plan.revision,upstreamPlanId:c.plan.id,enabled:true}},createId());setDependencyTarget(undefined);}))}</View>)}</View>:null}
       {card.step.error_json?<Text style={{color:COLORS.textMuted}}>{JSON.parse(card.step.error_json).message}</Text>:null}
       {card.plan.state==='ACTIVE'&&card.decision.state==='WAITING'?card.candidates.map(c=><View key={c.version_id} style={{gap:6}}>
         {c.relative_path?<Image accessibilityLabel={c.title} source={{uri:`${FileSystem.documentDirectory}${c.relative_path}`}} style={{height:160,width:'100%'}} resizeMode="contain"/>:null}

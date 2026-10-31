@@ -333,3 +333,32 @@ test.each(['revision','selection'] as const)('upstream %s change during preparat
   expect(f.db.getFirstSync("SELECT state FROM creative_plan_steps WHERE kind='video'")).toEqual({state:'BLOCKED'});
  }finally{f.db.close();}
 });
+
+test('cross-shot completion dependencies reject cycles, preserve decisions and clear request approval',async()=>{
+ const f=await runnable();try{
+  const {shotId}=await f.execute({name:'shot.create',payload:{projectId:f.projectId,title:'next'}});
+  const b=await f.execute({name:'plan.createSelection',payload:{projectId:f.projectId,shotId,expectedShotRevision:0,title:'next',candidateVersionIds:[f.versionId],videoPrompt:'next'}});
+  await f.execute({name:'plan.setDependency',payload:{id:f.plan.planId,expectedRevision:0,upstreamPlanId:b.planId,enabled:true}});
+  expect(f.db.getFirstSync('SELECT authorization_id FROM creative_plans WHERE id=?',f.plan.planId)).toEqual({authorization_id:null});
+  await expect(f.execute({name:'plan.setDependency',payload:{id:b.planId,expectedRevision:0,upstreamPlanId:f.plan.planId,enabled:true}})).rejects.toThrow('DEPENDENCY_CYCLE');
+  await f.execute({name:'plan.resolveSelection',payload:{decisionId:b.decisionId,versionId:f.versionId,expectedRevision:0}});
+  await runCreativePlans(f.db as never,f.prepare,200);
+  expect(f.prepare).not.toHaveBeenCalled();
+  await f.execute({name:'plan.cancel',payload:{id:b.planId,expectedRevision:0}});
+  await f.execute({name:'plan.setDependency',payload:{id:f.plan.planId,expectedRevision:1,upstreamPlanId:b.planId,enabled:false}});
+  expect(f.db.getAllSync('SELECT * FROM creative_plan_dependencies')).toHaveLength(2);
+ }finally{f.db.close();}
+});
+test('dependency edits are revision checked, project scoped and impossible after submission',async()=>{
+ const f=await runnable();try{
+  const {projectId}=await f.execute({name:'project.create',payload:{title:'other'}});
+  const {shotId}=await f.execute({name:'shot.create',payload:{projectId,title:'other'}});
+  f.db.runSync('INSERT INTO creative_project_assets VALUES(?,?,?,0)',projectId,f.assetId,f.versionId);
+  const b=await f.execute({name:'plan.createSelection',payload:{projectId,shotId,expectedShotRevision:0,title:'other',candidateVersionIds:[f.versionId],videoPrompt:'other'}});
+  await expect(f.execute({name:'plan.setDependency',payload:{id:f.plan.planId,expectedRevision:0,upstreamPlanId:b.planId,enabled:true}})).rejects.toThrow('DEPENDENCY_SCOPE_INVALID');
+  await expect(f.execute({name:'plan.setDependency',payload:{id:f.plan.planId,expectedRevision:99,upstreamPlanId:b.planId,enabled:true}})).rejects.toThrow('REVISION_CONFLICT');
+  f.db.runSync('UPDATE creative_plans SET project_id=? WHERE id=?',f.projectId,b.planId);
+  await runCreativePlans(f.db as never,f.prepare,200);
+  await expect(f.execute({name:'plan.setDependency',payload:{id:f.plan.planId,expectedRevision:0,upstreamPlanId:b.planId,enabled:true}})).rejects.toThrow('DEPENDENCY_ALREADY_EXECUTED');
+ }finally{f.db.close();}
+});
