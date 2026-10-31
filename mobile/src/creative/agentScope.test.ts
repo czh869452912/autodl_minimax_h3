@@ -72,3 +72,28 @@ test('text reads enforce scope before and after I/O and return bounded reference
     expect(read).not.toHaveBeenCalled();
   }finally{f.db.close();}
 });
+
+test('asset tools page versions and deny cross-project references',async()=>{
+ const f=await fixture();try{
+  const hash='c'.repeat(64);f.db.runSync('INSERT INTO artifact_blobs VALUES(?,20,?,?,1,1)',hash,'text/plain','cas/page');
+  let assetId='';
+  for(let i=0;i<26;i++){
+   const r=await f.service.execute({name:'asset.authorText',payload:{title:'paged',kind:'document',blobSha256:hash,projectId:f.projectId,...(assetId?{assetId,expectedRevision:i-1}:{})}},'page-'+i);
+   if(r.status!=='completed')throw new Error('expected');assetId=r.value.assetId;
+  }
+  const invoke=async(name:string,args:Record<string,unknown>)=>{
+   const t=createCreativeAgentTools().find(t=>t.name===name)!;
+   const r=await (t as import('@langchain/core/tools').StructuredToolInterface).invoke({type:'tool_call',id:'read',name,args},{configurable:{thread_id:'thread',creative_run_id:'run'}});
+   return JSON.parse(String((r as {content:unknown}).content));
+  };
+  const search=await invoke('asset_search',{query:'paged'});
+  expect(search.items).toHaveLength(1);expect(search.items[0].versions).toHaveLength(5);
+  const page=await invoke('asset_versions',{assetId,beforeVersion:search.items[0].nextVersion});
+  expect(page.items).toHaveLength(20);
+  const last=await invoke('asset_versions',{assetId,beforeVersion:page.nextVersion});
+  expect(last.items).toHaveLength(1);expect(last.nextVersion).toBeNull();
+  expect(new Set([...search.items[0].versions,...page.items,...last.items].map(v=>v.id)).size).toBe(26);
+  f.db.runSync('DELETE FROM creative_project_assets WHERE asset_id=?',assetId);
+  expect(await invoke('asset_versions',{assetId})).toMatchObject({status:'error',message:'AGENT_PROJECT_SCOPE_MISMATCH'});
+ }finally{f.db.close();}
+});

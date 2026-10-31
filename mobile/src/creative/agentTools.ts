@@ -68,14 +68,29 @@ export function createCreativeAgentTools() {
         });
       } catch(e) { return failure(e); }
     }, { name:'creative_context',description:'Get the user-selected creative project and available structured authorizations. Contains no credentials.',schema:z.object({}).strict() }),
-    tool(async ({query},config:any) => {
+    tool(async ({query,after},config:any) => {
       try {
         const origin=await originFor(config); if (!origin.projectId) throw new Error('AGENT_PROJECT_SELECTION_REQUIRED');
         return await withWriteTransaction(getDatabase(),async tx => { await assertCreativeAgentScope(tx,origin); const service=createCreativeService(tx);
-          const assets=await service.assets({projectId:origin.projectId!,query});
-          return JSON.stringify(await Promise.all(assets.slice(0,30).map(async a => ({...a,versions:(await service.versions(a.id)).map(v=>({id:v.id,versionNo:v.versionNo,state:v.state,source:v.source}))})))); });
+          const assets=await service.assets({projectId:origin.projectId!,query,after,limit:31});
+          const page=assets.slice(0,30),last=page[page.length-1];
+          return JSON.stringify({items:await Promise.all(page.map(async a => {
+            const versions=await service.versions(a.id,{limit:6});
+            return {...a,versions:versions.slice(0,5).map(v=>({id:v.id,versionNo:v.versionNo,state:v.state,source:v.source})),nextVersion:versions.length>5?versions[4].versionNo:null};
+          })),nextCursor:assets.length>30&&last?{updatedAt:last.updatedAt,id:last.id}:null}); });
       } catch(e) { return failure(e); }
-    }, {name:'asset_search',description:'Search assets only in the selected project. Returns stable asset/version IDs; no image bytes.',schema:z.object({query:z.string().max(200).default('')}).strict()}),
+    }, {name:'asset_search',description:'Search assets only in the selected project. Returns stable asset/version IDs; no image bytes.',schema:z.object({query:z.string().max(200).default(''),after:z.object({updatedAt:z.number().int().nonnegative(),id}).strict().optional()}).strict()}),
+    tool(async ({assetId,beforeVersion},config:any)=>{try{
+      const origin=await originFor(config);
+      return await withWriteTransaction(getDatabase(),async tx=>{
+        await assertCreativeAgentScope(tx,origin);
+        if(!origin.projectId || !await tx.getFirstAsync('SELECT asset_id FROM creative_project_assets WHERE project_id=? AND asset_id=?',origin.projectId,assetId))throw new Error('AGENT_PROJECT_SCOPE_MISMATCH');
+        const service=createCreativeService(tx);
+        if(await service.isTrashed(assetId))throw new Error('ASSET_TRASHED');
+        const rows=await service.versions(assetId,{limit:21,beforeVersion});
+        return JSON.stringify({items:rows.slice(0,20).map(v=>({id:v.id,versionNo:v.versionNo,state:v.state,source:v.source})),nextVersion:rows.length>20?rows[19].versionNo:null});
+      });
+    }catch(e){return failure(e);}},{name:'asset_versions',description:'Read a bounded page of exact asset version IDs in the selected project. Use nextVersion as beforeVersion to continue. Never automatically adopt the latest version.',schema:z.object({assetId:id,beforeVersion:z.number().int().positive().optional()}).strict()}),
     tool(async ({draftId},config:any) => {
       try {
         const origin=await originFor(config);

@@ -13,3 +13,10 @@
 验证：7 个测试文件全部通过，60 项通过、1 项既有跳过；覆盖 submissionEntries、novelAiRuntime、videoRuntime、videoSubmission、agentScope、plans、budget。没有调用真实模型或付费生成，没有 Android 设备验收。
 
 下一切片：定义焦点上下文与 ReadyState，在现有镜头/决策/计划上打通指定对象的授权续跑。保留 Android 内编排边界，禁止桌面及远端 Worker。
+
+## 第二切片：资源按需读取
+
+- H04 部分完成：asset_search 使用数据库游标分页，每页最多 30 个资产、每资产 5 个版本摘要；新增 asset_versions 按版本号继续读取，每页最多 20 个版本。
+- 所有读取沿用真实会话项目范围，并拒绝跨项目和回收站对象。原有 UI 全量 versions 调用保持兼容。
+- 验证：agentScope 六项通过，包括 26 版本无重复无遗漏读取及跨项目拒绝；TypeScript 检查通过。
+- 未完成：镜头上下文分页、全文索引、对象焦点与 ReadyState。
