@@ -1,3 +1,4 @@
+import {preparedCreativeSubmission} from './preparedSubmission';
 import { NativeModules } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import CryptoJS from 'crypto-js';
@@ -68,5 +69,5 @@ export async function confirmCreativeImage(preview: Awaited<ReturnType<typeof pr
   await preflightImage(preview.db,preview.account.credential_generation_id,preview.prepared);
   const authorizationId = await creativeBudget().grant({ provider: 'novelai', generationId: preview.account.credential_generation_id, projectId: preview.draft.project_id ?? undefined,
     operations: ['image.generate'], requestLimit: 1, amountLimit: null, allowUnknownCost: true, maxUnknownRequests: 1, expiresAt: Date.now() + 15 * 60_000 });
-  return submitCreativeVideo(preview.db, { draftId: preview.draft.id, expectedRevision: preview.draft.revision, draftInputJson: preview.draft.input_json, authorizationId, prepared: preview.prepared, images: [], versionIds: preview.versionIds, sourceManifest: preview.sourceManifest });
+  return submitCreativeVideo(preview.db, { ...preparedCreativeSubmission(preview), authorizationId });
 }

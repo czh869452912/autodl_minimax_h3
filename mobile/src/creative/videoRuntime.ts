@@ -1,3 +1,4 @@
+import {preparedCreativeSubmission} from './preparedSubmission';
 import {createApplicationProviderRegistry} from '../providers/applicationRegistry';
 import { creativeVideoWorkflowId } from './videoWorkflow';
 import { getDatabase } from '../storage/databaseClient';
@@ -54,6 +55,5 @@ export async function confirmCreativeVideo(preview: Awaited<ReturnType<typeof pr
   const authorizationId = await creativeBudget().grant({ provider: 'autodl', generationId: preview.account.credential_generation_id,
     projectId: preview.draft.project_id ?? undefined, operations: ['video.generate'], requestLimit: 1,
     amountLimit: null, allowUnknownCost: true, maxUnknownRequests: 1, expiresAt: Date.now() + 15 * 60_000 });
-  return submitCreativeVideo(preview.db, { draftId: preview.draft.id, expectedRevision: preview.draft.revision, draftInputJson: preview.draft.input_json,
-    authorizationId, prepared: preview.prepared, images: preview.images,audios:preview.audios, versionIds: preview.versionIds });
+  return submitCreativeVideo(preview.db, { ...preparedCreativeSubmission(preview), authorizationId });
 }

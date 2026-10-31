@@ -1,3 +1,4 @@
+import {preparedCreativeSubmission} from './preparedSubmission';
 import {readScopedCreativeText} from './agentTextRead';
 import {readCreativeText} from './textContent';
 import { tool } from '@langchain/core/tools';
@@ -91,7 +92,7 @@ export function createCreativeAgentTools() {
         const draft=await createCreativeService(db).draft(draftId);
         if (!origin.projectId || draft?.project_id!==origin.projectId) throw new Error('AGENT_PROJECT_SCOPE_MISMATCH');
         const preview=draft.provider_id==='novelai' ? await prepareCreativeImage(draftId) : await prepareCreativeVideo(draftId);
-        const task=await submitCreativeVideo(db,{draftId,expectedRevision:preview.draft.revision,draftInputJson:preview.draft.input_json,authorizationId,prepared:preview.prepared,images:'images' in preview ? preview.images : [],versionIds:preview.versionIds,...('sourceManifest' in preview ? {sourceManifest:preview.sourceManifest} : {}),origin});
+        const task=await submitCreativeVideo(db,{...preparedCreativeSubmission(preview),authorizationId,origin});
         return JSON.stringify({status:'accepted',execution:{kind:'generation',jobId:task.id},message:'Queued, not yet generated. Query status; never resubmit an unknown result.'});
       }catch(e){return failure(e);}
     },{name:'generation_submit',description:'Queue exactly one saved draft using a user-created structured authorization ID. Never creates authorization. On unknown outcome query the original job; do not retry generation.',schema:z.object({draftId:id,authorizationId:id}).strict()}),
