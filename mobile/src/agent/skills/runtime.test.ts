@@ -79,3 +79,16 @@ test('a reviewed extracted version is usable in two project conversations withou
     expect(db.getAllSync('SELECT * FROM creative_budget_reservations')).toEqual([]);
   } finally { db.close(); }
 });
+
+test('host tool policy covers framework tools and denies implicit delegation at execution',async()=>{
+ const {creativeToolPolicy,toolPolicyMiddleware}=require('../toolPolicy');
+ const policy=creativeToolPolicy();const middleware=toolPolicyMiddleware(policy.entries);
+ const handler=jest.fn(async()=>({}));
+ await expect(middleware.wrapToolCall({toolCall:{name:'task'}},handler)).rejects.toThrow('TOOL_POLICY_DENIED');
+ await expect(middleware.wrapToolCall({toolCall:{name:'execute'}},handler)).rejects.toThrow('TOOL_POLICY_DENIED');
+ expect(handler).not.toHaveBeenCalled();
+ await middleware.wrapModelCall({tools:[{name:'task'},{name:'read_file'},{name:'generation_submit'}]},handler);
+ expect(handler).toHaveBeenCalledWith({tools:[{name:'read_file'},{name:'generation_submit'}]});
+ expect(policy.entries.find((e:any)=>e.name==='generation_submit').requires).toBe('structured-authorization');
+ expect(policy.entries.find((e:any)=>e.name==='shot_update').effect).toBe('proposal');
+});

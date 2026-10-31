@@ -1,6 +1,6 @@
 import CryptoJS from 'crypto-js';
 import {pinRunRuntime,assertRunAuthority} from '../runSpecification';
-import {createCreativeAgentTools} from '../../creative/agentTools';
+import {creativeToolPolicy} from '../toolPolicy';
 import type { FileData } from 'deepagents/browser';
 import { getOfficialH3SkillFiles } from '../skillBundle';
 import { createH3Agent } from '../h3Agent';
@@ -29,7 +29,7 @@ export function createSkillRunPreparer(db: AppDatabase, config: H3AgentConfig, c
       if (signal.aborted) throw new Error('运行已停止');
       const files = skillFiles(versions);
       const version = CryptoJS.SHA256(JSON.stringify({ ...getOfficialH3SkillFiles(), ...files })).toString();
-      await pinRunRuntime(db,input.threadId,input.runId,config,version,createCreativeAgentTools().map(t=>t.name));
+      await pinRunRuntime(db,input.threadId,input.runId,config,version,creativeToolPolicy().entries.map(t=>JSON.stringify(t)));
       return {
         graph: createGraph(config, { skillFiles: files, assertSkills: async () => { await assertRunAuthority(db,input.threadId,input.runId);await store.resolve(snapshot); } }) as never,
         workspace: {

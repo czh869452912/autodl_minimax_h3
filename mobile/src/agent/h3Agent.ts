@@ -6,7 +6,7 @@ import { officialH3SkillRoot } from './skillBundle';
 import { createOpenAICompatibleModel, type ModelFactory, validateH3AgentConfig } from './modelAdapter';
 import { createH3WorkspaceBackend, createH3WorkspaceMiddleware, getH3ContextBudget } from './agentWorkspace';
 import { isDeepSeekV4 } from '../config/llmReasoning';
-import { createCreativeAgentTools } from '../creative/agentTools';
+import {creativeToolPolicy,toolPolicyMiddleware} from './toolPolicy';
 
 const H3_SYSTEM_POLICY = [
   'You are a local creative assistant for projects, assets, NovelAI images and MiniMax H3 videos.',
@@ -40,13 +40,15 @@ export function normalizeCumulativeText(previous: string, next: string): { previ
 export function createH3Agent(config: H3AgentConfig, dependencies: Omit<H3AgentDependencies, 'agentFactory'> = {}): DeepAgent {
   validateH3AgentConfig(config);
   const backend = createH3WorkspaceBackend(dependencies.skillFiles);
+  const policy=creativeToolPolicy();
   return createDeepAgent({
     model: (dependencies.modelFactory ?? createOpenAICompatibleModel)(config),
     skills: [officialH3SkillRoot],
     systemPrompt: H3_SYSTEM_POLICY,
     backend,
-    tools: createCreativeAgentTools(),
+    tools: policy.tools,
     middleware: [
+      toolPolicyMiddleware(policy.entries),
       ...createH3WorkspaceMiddleware(backend, getH3ContextBudget(config), { includeReasoning: isDeepSeekV4(config.model) && config.reasoningEffort !== 'none' }),
       ...(dependencies.assertSkills ? [createMiddleware({
         name: 'LocalSkillAuthority',
