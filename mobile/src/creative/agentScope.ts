@@ -12,6 +12,7 @@ export async function assertCreativeAgentScope(tx: AppDatabase, origin: Creative
 export async function guardCreativeAgentCommand(tx: AppDatabase, origin: CreativeAgentOrigin, command: CreativeCommand) {
   await assertCreativeAgentScope(tx, origin);
   const p = command.payload as Record<string, unknown>;
+  if(['shot.selectOutput','asset.pinProjectVersion'].includes(command.name)||(command.name==='shot.update'&&p.status==='approved'))throw new Error('AGENT_ADOPTION_REQUIRES_USER');
   if (command.name === 'project.create') return;
   if (!origin.projectId) throw new Error('AGENT_PROJECT_SELECTION_REQUIRED');
   const requireProject = (projectId: unknown) => { if (projectId !== origin.projectId) throw new Error('AGENT_PROJECT_SCOPE_MISMATCH'); };

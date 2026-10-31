@@ -25,6 +25,22 @@ test('agent project scope and revisions are enforced inside the command transact
     expect(f.db.getAllSync('SELECT * FROM creative_generation_drafts')).toHaveLength(1);
   }finally{f.db.close();}
 });
+
+test('Agent cannot adopt outputs or approve its own shot through hidden command paths',async()=>{
+ const f=await fixture();try{
+  const result=await f.service.execute({name:'shot.create',payload:{projectId:f.projectId,title:'review me'}},'shot',f.origin);
+  if(result.status!=='completed')throw new Error('expected');
+  const id=result.value.shotId;
+  await expect(f.service.execute({name:'shot.update',payload:{id,expectedRevision:0,title:'review me',description:'',status:'approved'}},'approve',f.origin)).rejects.toThrow('AGENT_ADOPTION_REQUIRES_USER');
+  await expect(f.service.execute({name:'shot.selectOutput',payload:{id,expectedRevision:0,slot:'selected_video',versionId:null}},'select',f.origin)).rejects.toThrow('AGENT_ADOPTION_REQUIRES_USER');
+  await expect(f.service.execute({name:'asset.pinProjectVersion',payload:{projectId:f.projectId,assetId:'any',expectedRevision:0,versionId:null}},'pin',f.origin)).rejects.toThrow('AGENT_ADOPTION_REQUIRES_USER');
+  const names=createCreativeAgentTools().map(t=>t.name);
+  expect(names).not.toContain('shot_selectOutput');expect(names).not.toContain('asset_pinProjectVersion');
+  expect(f.db.getFirstSync('SELECT editorial_status,revision FROM creative_shots WHERE id=?',id)).toEqual({editorial_status:'planned',revision:0});
+  await f.service.execute({name:'shot.update',payload:{id,expectedRevision:0,title:'review me',description:'',status:'approved'}},'user-approve');
+  expect(f.db.getFirstSync('SELECT editorial_status FROM creative_shots WHERE id=?',id)).toEqual({editorial_status:'approved'});
+ }finally{f.db.close();}
+});
 test('independent origin retains composite run identity after chat deletion and rejects late tools',async()=>{
   const f=await fixture();try{
     await f.service.execute({name:'draft.createImage',payload:{projectId:f.projectId}},'origin-test',f.origin);

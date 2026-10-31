@@ -39,7 +39,11 @@ const commandSchemas = {
   'semantic.revise':semanticSchemas['semantic.revise'],
   'project.create': z.object({ title: z.string().min(1).max(200), brief: z.string().max(20000).optional() }).strict(),
   'project.update': z.object({ id, expectedRevision:z.number().int().nonnegative(),title:z.string().min(1).max(200),brief:z.string().max(20000) }).strict(),
-  ...draftSchemas, ...storySchemas,
+  ...draftSchemas,
+  'shot.create':storySchemas['shot.create'],
+  'shot.update':storySchemas['shot.update'].extend({status:z.enum(['planned','working','review'])}),
+  'shot.delete':storySchemas['shot.delete'],
+  'shot.reorder':storySchemas['shot.reorder'],
   'plan.createSelection':planSchemas['plan.createSelection'],
   'plan.cancel':planSchemas['plan.cancel'],
 };
