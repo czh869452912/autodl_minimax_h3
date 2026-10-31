@@ -1,3 +1,6 @@
+import {expandPromptChunks} from './promptChunks';
+import {ChunkPromptInput} from './ChunkPromptInput';
+import {PromptChunkLibrary} from './PromptChunkLibrary';
 import {TagCompletionToggle} from './TagCompletionProvider';
 import {WeightedPromptInput} from './WeightedPromptInput';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -20,9 +23,10 @@ export function NovelAiPromptEditor({ input, update, editable, tab, setTab, onCl
   const promptArea=['prompt','negative','characters'].includes(tab);
   const tabs=<SegmentedChoices variant="tabs" singleRow label="画面编辑分页" options={[{id:'prompt',label:'提示词'},{id:'references',label:'参考图'},{id:'chunks',label:'片段'}]} value={promptArea?'prompt':tab} onChange={setTab} />;
   const medium = isNovelAiMedium(input), maxCharacters=input.model.startsWith('nai-diffusion-5') ? 32 : 6;
-  const field = (label: string, value: string, onChangeText: (value: string) => void, disabled=false) => <WeightedPromptInput model={input.model} autoFocus={focusPrompt&&label==='图片提示词'} accessibilityLabel={label} placeholder={label} placeholderTextColor={COLORS.textMuted} value={value} editable={editable && !disabled} multiline onChangeText={onChangeText} style={[s.input,{minHeight:150,fontSize:13,lineHeight:20,textAlignVertical:'top',borderColor:COLORS.border,backgroundColor:COLORS.background,borderRadius:12,padding:12}]} />;
+  const field = (label: string, value: string, onChangeText: (value: string) => void, disabled=false) => <ChunkPromptInput chunks={input.chunks} onChunks={chunks=>update({chunks})} model={input.model} autoFocus={focusPrompt&&label==='图片提示词'} accessibilityLabel={label} placeholder={label} placeholderTextColor={COLORS.textMuted} value={value} editable={editable && !disabled} multiline onChangeText={onChangeText} style={[s.input,{minHeight:150,fontSize:13,lineHeight:20,textAlignVertical:'top',borderColor:COLORS.border,backgroundColor:COLORS.background,borderRadius:12,padding:12}]} />;
+  let previewError='';
   let preview: {input:string;parameters:{negative_prompt:string}} | undefined;
-  try { preview=JSON.parse(prepareNovelAiRequest({...input,action:'generate',enhance:false,enhancement:null},()=>0).requestJson); } catch { /* Incomplete input remains editable. */ }
+  try { preview=JSON.parse(prepareNovelAiRequest({...input,action:'generate',enhance:false,enhancement:null},()=>0).requestJson); } catch(e) { previewError=(e as Error).message; }
   const content=<>
     {!inline?tabs:null}
     {promptArea?<View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:8}}><View style={{flexShrink:1,minWidth:160}}><SegmentedChoices singleRow label="提示词类型" options={[{id:'prompt',label:'正向'},{id:'negative',label:'UC · 负面'}]} value={tab==='negative'?'negative':'prompt'} onChange={setTab} /></View><TagCompletionToggle/></View>:null}
@@ -58,13 +62,10 @@ export function NovelAiPromptEditor({ input, update, editable, tab, setTab, onCl
 
     </> : null}
     {tab === 'references' ? references : null}
-    {tab === 'chunks' ? <><SectionHeading title="提示词片段" /><Text style={s.muted}>将常用风格、构图存为片段，点选插入描述。</Text>{input.chunks.map((chunk,index)=><View key={index} style={s.card}>
-      <TextInput accessibilityLabel={`片段 ${index+1} 名称`} value={chunk.name} editable={editable} onChangeText={name=>update({chunks:input.chunks.map((c,i)=>i === index ? {...c,name} : c)})} style={s.input} />
-      {field(`片段 ${index+1} 内容`,chunk.text,text=>update({chunks:input.chunks.map((c,i)=>i === index ? {...c,text} : c)}))}
-      <View style={s.row}><TextAction label={`插入${chunk.name}`} disabled={!editable || !chunk.text.trim()} onPress={()=>{update({prompt:[input.prompt,chunk.text].filter(Boolean).join(', ')}); setTab('prompt');}} /><TextAction label={`移除片段 ${index+1}`} disabled={!editable} onPress={()=>update({chunks:input.chunks.filter((_,i)=>i !== index)})} /></View>
-    </View>)}<TextAction label="新建片段" disabled={!editable || input.chunks.length>=50} onPress={()=>update({chunks:[...input.chunks,{name:`片段 ${input.chunks.length+1}`,text:''}]})} /></> : null}
+    {tab === 'chunks' ? <PromptChunkLibrary input={input} update={update} editable={editable} setTab={setTab}/>:null}
+    {promptArea && (tab==='negative'?input.negative:input.prompt).includes('!macro:')?<><Text style={s.muted}>片段引用会在生成时展开。输入 @ 可查找本机片段。</Text><TextAction label="展开为普通文本" disabled={!editable} onPress={()=>{try{const key=tab==='negative'?'negative':'prompt';update({[key]:expandPromptChunks(input[key],input.chunks)});}catch{setExpanded(true);}}}/></>:null}
     {promptArea?<TextAction label={expanded ? '收起最终提示词' : '查看最终提示词'} onPress={()=>setExpanded(!expanded)} />:null}
-    {promptArea && expanded ? <View style={s.card}><Text style={s.title}>实际发送的描述</Text><Text selectable style={s.body}>{preview?.input || '填写描述后预览'}</Text><Text style={s.title}>实际发送的负面词</Text><Text selectable style={s.muted}>{preview?.parameters.negative_prompt || '无'}</Text></View> : null}
+    {promptArea && expanded ? <View style={s.card}><Text style={s.title}>实际发送的描述</Text><Text selectable style={s.body}>{preview?.input || previewError || '填写描述后预览'}</Text><Text style={s.title}>实际发送的负面词</Text><Text selectable style={s.muted}>{preview?.parameters.negative_prompt || '无'}</Text></View> : null}
   </>;
   return inline?<InlineWorkbenchPanel title="画面编辑" header={<View style={{flexDirection:'row',alignItems:'center'}}><View style={{flex:1}}>{tabs}</View></View>} onClose={onClose}>{content}</InlineWorkbenchPanel>:<ParameterSheet fullScreen title="画面编辑" description={description} onClose={onClose}>{content}</ParameterSheet>;
 }

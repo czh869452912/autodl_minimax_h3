@@ -350,3 +350,11 @@
 - 4套/18项相关测试及类型检查通过。模拟器验证顶栏一致、设置展开、本地测试视频首帧；临时记录已撤回，原数据库逐字节恢复。
 - 双ARM APK：build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.37-android.apk。签名与Beta36一致，包身份、Hermes与16KB对齐核验通过。用户真机未安装。
 - [详细验收记录](reviews/2026-10-31-ui-polish.md)。
+
+## 2026-10-31 Beta 38
+
+- versionCode77，增加可持久化提示词片段库、@检索、实际请求宏展开与引用校验；修复Rescale数字框/滑条重叠和对齐。
+- 6套件31项测试、类型检查、350.8dp模拟器验收通过。未触发付费生成；本机库不与NovelAI云端同步。
+- ARM双ABI APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.38-android.apk`。
+- SHA256：`C749BAE4D58582ABE8D5F9058A1EB8FEFB6CAE63C46ED877CF6D91720E4A1AEC`。
+- 详细报告：[片段与Rescale验收](reviews/2026-10-31-prompt-chunks.md)。

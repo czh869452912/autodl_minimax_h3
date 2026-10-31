@@ -1,0 +1,12 @@
+PASS src/creative/ChunkPromptInput.test.tsx
+PASS src/creative/NovelAiEditorLayout.test.tsx
+PASS src/creative/PromptChunkLibrary.test.tsx
+PASS src/creative/NovelAiNumberField.test.tsx
+PASS src/creative/novelAiProtocol.test.ts
+PASS src/creative/promptChunks.test.ts
+
+Test Suites: 6 passed, 6 total
+Tests:       31 passed, 31 total
+Snapshots:   0 total
+Time:        5.877 s, estimated 17 s
+Ran all test suites matching /src\\creative\\ChunkPromptInput.test.tsx|src\\creative\\PromptChunkLibrary.test.tsx|src\\creative\\promptChunks.test.ts|src\\creative\\NovelAiEditorLayout.test.tsx|src\\creative\\NovelAiNumberField.test.tsx|src\\creative\\novelAiProtocol.test.ts/i.

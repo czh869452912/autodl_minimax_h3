@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { NovelAiNumberField } from './NovelAiNumberField';
 import { COLORS } from '../ui/theme';
@@ -10,8 +10,8 @@ export function NovelAiRangeField({ label, value, min, max, editable, onChange, 
   const clamp = (n: number) => Number((Math.round(Math.min(max, Math.max(min, n))/step)*step).toFixed(4));
   const position = Math.min(1, Math.max(0, ((dragValue??value) - min) / (max - min)));
   const fromTouch = (event: GestureResponderEvent) => { if (editable && width > 0) onChange(clamp(min + (event.nativeEvent.pageX - start.current) / width * (max - min))); };
-  return <View style={{ flex:horizontal?undefined:1, minWidth: 120, gap: 8,flexDirection:horizontal?'row':'column',alignItems:horizontal?'center':undefined }}>
-    <View style={horizontal?{width:84}:undefined}><NovelAiNumberField containerStyle={{flexGrow:0,flexBasis:'auto'}} label={horizontal?label:`${label}（${min}–${max}）`} value={dragValue??value} editable={editable} onChange={n => { if (n !== null) onChange(clamp(n)); }} /></View>
+  return <View style={{flex:horizontal?undefined:1,minWidth:0,gap:4}}>{horizontal?<Text style={{fontSize:12,lineHeight:17,color:COLORS.textMuted}}>{label}</Text>:null}<View style={{minWidth:0,gap:16,flexDirection:horizontal?'row':'column',alignItems:horizontal?'center':undefined}}>
+    <View style={horizontal?{width:84}:undefined}><NovelAiNumberField hideLabel={horizontal} containerStyle={{flexGrow:0,flexBasis:'auto'}} label={horizontal?label:`${label}（${min}–${max}）`} value={dragValue??value} editable={editable} onChange={n => { if (n !== null) onChange(clamp(n)); }} /></View>
     <View accessibilityRole="adjustable" accessibilityLabel={`${label} 滑块`} accessibilityState={{ disabled: !editable }}
       accessibilityValue={{ min, max, now: dragValue??value }} accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       onAccessibilityAction={event => { if (editable) onChange(clamp(value + (event.nativeEvent.actionName === 'increment' ? step : -step))); }}
@@ -20,11 +20,11 @@ export function NovelAiRangeField({ label, value, min, max, editable, onChange, 
       onResponderGrant={event => { start.current = event.nativeEvent.pageX - event.nativeEvent.locationX; touch.current={x:event.nativeEvent.pageX,y:event.nativeEvent.pageY};vertical.current=false;pending.current=undefined; }}
       onResponderMove={event=>{const dx=Math.abs(event.nativeEvent.pageX-touch.current.x),dy=Math.abs(event.nativeEvent.pageY-touch.current.y);if(dy>8&&dy>dx){vertical.current=true;setDragValue(undefined);}if(!vertical.current&&dx>5&&width>0){pending.current=clamp(min+(event.nativeEvent.pageX-start.current)/width*(max-min));setDragValue(pending.current);}}}
       onResponderRelease={event=>{setDragValue(undefined);if(!vertical.current){if(pending.current!==undefined)onChange(pending.current);else fromTouch(event);}}}
-      onResponderTerminate={()=>setDragValue(undefined)} onResponderTerminationRequest={()=>true} style={{ flex:horizontal?1:undefined,height: 44, justifyContent: 'center', opacity: editable ? 1 : 0.45 }}>
+      onResponderTerminate={()=>setDragValue(undefined)} onResponderTerminationRequest={()=>true} style={{ flex:horizontal?1:undefined,minWidth:0,height: 34,marginHorizontal:11, justifyContent: 'center', opacity: editable ? 1 : 0.45 }}>
       <View pointerEvents="none" style={{ height: 6, backgroundColor: COLORS.border, borderRadius: 3 }}>
         <View style={{ height: 6, borderRadius: 3, backgroundColor: COLORS.primary, width: `${position * 100}%` }} />
         <View style={{ position: 'absolute', top: -8, left: `${position * 100}%`, marginLeft: -10, width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: COLORS.primary, backgroundColor: COLORS.surface }} />
       </View>
     </View>
-  </View>;
+  </View></View>;
 }

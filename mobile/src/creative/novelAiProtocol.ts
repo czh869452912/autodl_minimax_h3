@@ -1,3 +1,4 @@
+import {expandPromptChunks} from './promptChunks';
 import { z } from 'zod';
 import CryptoJS from 'crypto-js';
 import { Buffer } from 'buffer';
@@ -62,7 +63,8 @@ export const novelAiSourceIds = (input: NovelAiDraftInput) => input.action === '
 
 export function prepareNovelAiRequest(value: unknown, random = Math.random, media?: { image: string; mask?: string }) {
   const draft = novelAiDraftInput.parse(value), v5 = draft.model.startsWith('nai-diffusion-5'), medium = isNovelAiMedium(draft);
-  const characters = draft.characters.filter(c => c.enabled && c.prompt.trim());
+  const resolve=(text:string)=>expandPromptChunks(text,draft.chunks);
+  const characters = draft.characters.filter(c => c.enabled && c.prompt.trim()).map(c=>({...c,prompt:resolve(c.prompt),negative:resolve(c.negative)}));
   if (!draft.prompt.trim() && !characters.length) throw new Error('请输入图片或角色提示词');
   if (draft.action !== 'generate' && (!draft.sourceVersionId || !media?.image)) throw new Error('请先选择底图');
   if (draft.action === 'infill' && (!media?.mask || (!draft.maskVersionId && !draft.maskStrokes.length))) throw new Error('请绘制或选择重绘蒙版');
@@ -70,7 +72,7 @@ export function prepareNovelAiRequest(value: unknown, random = Math.random, medi
   if(draft.enhance && (draft.action!=='img2img' || !v5 || draft.samples!==1))throw new Error('最大画质增强需要 V5、图生图和单张输出');
   const seed = draft.seed ?? Math.floor(random() * 4294967296);
   const snapshot = { ...draft, seed, ...(draft.action !== 'generate' ? { extraNoiseSeed: draft.extraNoiseSeed ?? seed - 1 } : {}) };
-  let prompt = draft.prompt;
+  let prompt = resolve(draft.prompt);
   if (draft.mode !== 'anime' && !/^(fur|background) dataset/.test(prompt)) prompt = `${draft.mode === 'furry' ? 'fur' : 'background'} dataset, ${prompt}`;
   const pieces = [draft.transparent && !/(?:^|,\s*)transparent background(?:,|$)/i.test(prompt) ? 'transparent background' : '', qualitySuffix(draft.model, draft.qualityPreset)].filter(Boolean);
   const mixes=splitPromptMix(prompt), base=mixes[0], textBlock = base.search(/(?:^|[\s,.:\[\]{}、。])text:(?!:)/i);
@@ -82,7 +84,7 @@ export function prepareNovelAiRequest(value: unknown, random = Math.random, medi
   }
   if (v5 && draft.autoText) prompt = addAutoText(prompt, characters, draft.useCoordinates);
   const ucPreset = medium ? 'heavy' : draft.negativePreset;
-  let negative = [negativePrefix(draft.model, ucPreset), medium ? '' : draft.negative].filter(Boolean).join(', ');
+  let negative = [negativePrefix(draft.model, ucPreset), medium ? '' : resolve(draft.negative)].filter(Boolean).join(', ');
   if (ucPreset !== 'none' && draft.model.endsWith('-full') && !prompt.toLowerCase().includes('nsfw')) negative = `nsfw, ${negative}`;
   const captions = (isNegative: boolean) => ({ caption: { base_caption: isNegative ? negative : prompt,
     char_captions: characters.map(c => ({ char_caption: isNegative ? medium ? '' : c.negative : c.prompt, centers: [{ x: c.x, y: c.y }] })) },

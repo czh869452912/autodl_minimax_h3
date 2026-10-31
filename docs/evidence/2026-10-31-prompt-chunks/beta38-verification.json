@@ -1,0 +1,18 @@
+{
+  "apk": "AutoDL-H3-1.5.0-preview.4-beta.38-android.apk",
+  "versionCode": 77,
+  "versionName": "1.5.0-preview.4-beta.38",
+  "bytes": 186257889,
+  "sha256": "C749BAE4D58582ABE8D5F9058A1EB8FEFB6CAE63C46ED877CF6D91720E4A1AEC",
+  "abis": [
+    "arm64-v8a",
+    "armeabi-v7a"
+  ],
+  "signatureMatchesBeta37": true,
+  "zipAlignment16KB": true,
+  "arm64ElfAlignment16KB": true,
+  "nativeLibraries": 86,
+  "hermes": true,
+  "embeddedExpoIdentity": true,
+  "tagDictionaryV2": true
+}
