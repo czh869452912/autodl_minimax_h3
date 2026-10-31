@@ -1,3 +1,4 @@
+import {captureRunFocus} from '../creative/runFocus';
 import type { Message, State } from '@ag-ui/client';
 import type { AppDatabase } from '../storage/appDatabase';
 import { assertAppDatabaseWritableAsync } from '../storage/database';
@@ -161,7 +162,10 @@ export function createLocalThreadStore(db: AppDatabase, attachments = createAtta
         const state = stored.value.state as Record<string, any>;
         const composer = state.h3Composer;
         const baseWorkspaceRevision = command.retryOf ? readPromptRuns(state).find(run => run.id === command.retryOf)?.baseWorkspaceRevision ?? 0 : Number(state.h3Workspace?.revision) || 0;
-        const run = { id: command.runId, submissionId: command.id, userMessageId: command.message.id, status: 'queued', baseWorkspaceRevision, startedAt: Date.now(), messageIds: [], tools: [], ...(command.retryOf ? { retryOf: command.retryOf } : {}) };
+        const creativeFocus=command.retryOf
+          ? (readPromptRuns(state).find(run=>run.id===command.retryOf) as {creativeFocus?:unknown}|undefined)?.creativeFocus
+          : command.focusShotId?await captureRunFocus(tx,snapshot.threadId,command.focusShotId):undefined;
+        const run = { ...(creativeFocus?{creativeFocus}:{}), id: command.runId, submissionId: command.id, userMessageId: command.message.id, status: 'queued', baseWorkspaceRevision, startedAt: Date.now(), messageIds: [], tools: [], ...(command.retryOf ? { retryOf: command.retryOf } : {}) };
         await writeSnapshot(tx, { ...stored.value, messages: command.retryOf ? stored.value.messages : [...stored.value.messages, acceptedMessage], state: { ...state, h3Runs: [...readPromptRuns(state), run], ...(composer?.revision === command.draftRevision && !command.retryOf ? { h3Composer: { text: '', attachments: [], revision: command.draftRevision + 1 } } : {}) }, updatedAt: Date.now() });
         await tx.runAsync('INSERT INTO agent_submissions VALUES(?,?,?,?,?)', command.id, snapshot.threadId, command.message.id, command.runId, command.draftRevision);
         return { submissionId: command.id, userMessageId: command.message.id, runId: command.runId };

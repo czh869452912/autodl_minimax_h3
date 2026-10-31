@@ -60,3 +60,26 @@ it('accepts user and queued run atomically, replays a command without duplicatin
     expect((await store.load('t'))?.messages).toHaveLength(1);
   } finally { db.close(); }
 });
+
+it('pins trusted shot focus at acceptance and reports later changes without moving the run',async()=>{
+ const db=createInitializedRealSqliteTestDb();try{
+  const store=createLocalThreadStore(db as never);
+  const snapshot={threadId:'focus',messages:[],state:{},createdAt:1,updatedAt:1};await store.save(snapshot);
+  db.runSync("INSERT INTO creative_projects VALUES('p','Project','',0,NULL,1,1)");
+  db.runSync("INSERT INTO creative_agent_scopes VALUES('focus','p',0,1)");
+  const {createCreativeService}=require('../creative/service') as typeof import('../creative/service');
+  const {readRunFocus}=require('../creative/runFocus') as typeof import('../creative/runFocus');
+  const service=createCreativeService(db as never);
+  const shot=await service.execute({name:'shot.create',payload:{projectId:'p',title:'Target'}},'shot');
+  if(shot.status!=='completed')throw new Error('shot');
+  const command={id:'focus-submit',runId:'focus-run',draftRevision:0,focusShotId:shot.value.shotId,message:{id:'user',role:'user' as const,content:'prepare this shot'}};
+  await store.accept(snapshot,command);
+  expect(await readRunFocus(db as never,'focus','focus-run','p')).toMatchObject({shotId:shot.value.shotId,revision:0,stale:false});
+  db.runSync('UPDATE creative_shots SET revision=revision+1 WHERE id=?',shot.value.shotId);
+  expect(await readRunFocus(db as never,'focus','focus-run','p')).toMatchObject({revision:0,stale:true});
+  await store.accept(snapshot,command);
+  expect(db.getAllSync('SELECT * FROM agent_submissions')).toHaveLength(1);
+  await expect(store.accept(snapshot,{...command,id:'bad',runId:'bad',message:{...command.message,id:'bad'},focusShotId:'outside'})).rejects.toThrow('SCOPE_MISMATCH');
+  expect(db.getAllSync('SELECT * FROM agent_submissions')).toHaveLength(1);
+ }finally{db.close();}
+});

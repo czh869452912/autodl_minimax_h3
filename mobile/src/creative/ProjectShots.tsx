@@ -73,6 +73,7 @@ export function ProjectShots({ projectId, archived = false, initialShotId, reque
         if(videoDraft){openDraft(videoDraft);return;}
         void work(async () => { const r=await command({name:'draft.createVideo',payload:{shotId:shot.id,projectId}});if(r.status==='completed')router.push({pathname:'/creative-draft/[id]',params:{id:r.value.draftId}}); });
       }} />
+      <ListAction label="交给助手" secondary disabled={busy || dirty || archived} onPress={()=>router.push({pathname:'/(tabs)/agent',params:{projectId,shotId:shot.id,shotTitle:shot.title}})}/>
       {shot.selected_image ? <ListAction label="更换参考图" secondary disabled={busy || dirty || archived} onPress={() => choose(shot, 'selected_image')} /> : null}
       {!shot.selected_image ? <ListAction label="制作新的参考图" secondary disabled={busy || dirty || archived} onPress={() => void work(async () => { const r=await command({name:'draft.createImage',payload:{projectId,shotId:shot.id}});if(r.status==='completed')router.push({pathname:'/image-draft/[id]',params:{id:r.value.draftId}}); })} /> : null}
       {shotDrafts.length>1?<ListAction secondary label={draftsOpen===shot.id?'收起草稿':`${shotDrafts.length} 份草稿与生成记录`} onPress={()=>setDraftsOpen(draftsOpen===shot.id?undefined:shot.id)}/>:null}

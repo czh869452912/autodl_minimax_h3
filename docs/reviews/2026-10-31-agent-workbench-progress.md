@@ -41,3 +41,11 @@
 - 非 RELEASED 预留继续占用次数；摘要不替代 dispatch 原子校验，不承诺金额上限。
 - Agent 指导同步说明分页、完整镜头读取与诊断边界。
 - 验证：budget 十项与 agentScope 七项通过；TypeScript 检查通过。覆盖未知费用占用、释放、过期和撤销。
+
+## 第六切片：镜头焦点与运行快照
+
+- 镜头页新增“交给助手”，携带项目与镜头 ID；助手显示可移除的镜头上下文。
+- 用户消息接受事务从数据库校验会话范围，固定镜头 revision、标题与已采用版本绑定，保存在现有 run payload；无新事实表。
+- creative_context 返回该运行固定焦点及 stale 状态；页面焦点变化不重写旧 run。重试沿用原 run 的焦点。
+- 验证：ProjectShots、submissionCommands、threadStore、agentScope 共 22 项通过；TypeScript 检查通过。覆盖入口参数、重复接受、跨项目拒绝、镜头修改后过期。
+- 限制：本切片只有组件与 SQLite 验证，尚无新构建 Android 截图/TalkBack 验收；焦点暂限镜头，未覆盖角色/场景实体。

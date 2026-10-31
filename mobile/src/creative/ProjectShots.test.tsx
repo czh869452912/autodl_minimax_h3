@@ -39,3 +39,12 @@ test('adopted video keeps generation candidates reachable without creating anoth
     expect(JSON.stringify(tree.toJSON())).not.toContain('当前创作镜头');
   }finally{act(()=>tree?.unmount());}
 });
+
+test('handing a shot to the assistant carries its project and object identity without creating work',async()=>{
+ let tree!:ReturnType<typeof create>;try{
+  await act(async()=>{tree=create(<ProjectShots projectId="p"/>);});
+  act(()=>press(tree,'交给助手'));
+  expect(mockPush).toHaveBeenCalledWith({pathname:'/(tabs)/agent',params:{projectId:'p',shotId:'s',shotTitle:mockShot.title}});
+  expect(mockExecute).not.toHaveBeenCalled();
+ }finally{act(()=>tree.unmount());}
+});

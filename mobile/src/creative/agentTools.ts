@@ -1,3 +1,4 @@
+import {readRunFocus} from './runFocus';
 import {preparedCreativeSubmission} from './preparedSubmission';
 import {readDraftReadiness} from './draftReadiness';
 import {readCreativeAuthorizationSummaries} from './budget';
@@ -64,7 +65,7 @@ export function createCreativeAgentTools() {
           const service = createCreativeService(tx);
           const shots=origin.projectId?await service.shots(origin.projectId,{limit:31,after}):[];
           const last=shots[29];
-          return JSON.stringify({ nextShotCursor:shots.length>30?{sortKey:last.sort_key,id:last.id}:null, projectId:origin.projectId, project:origin.projectId ? await service.project(origin.projectId) : null,
+          return JSON.stringify({ focus:await readRunFocus(tx,origin.threadId,origin.runId,origin.projectId), nextShotCursor:shots.length>30?{sortKey:last.sort_key,id:last.id}:null, projectId:origin.projectId, project:origin.projectId ? await service.project(origin.projectId) : null,
             shots: shots.slice(0,30).map(s=>({...s,description:s.description.slice(0,500),descriptionTruncated:s.description.length>500})),
             plans: origin.projectId ? await tx.getAllAsync('SELECT id,title,state,revision FROM creative_plans WHERE project_id=? ORDER BY updated_at DESC LIMIT 20',origin.projectId) : [],
             authorizations: origin.projectId ? await readCreativeAuthorizationSummaries(tx,origin.projectId) : {items:[],hasMore:false},

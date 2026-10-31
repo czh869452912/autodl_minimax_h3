@@ -37,8 +37,9 @@ import { AgentCreativePanel } from '../creative/AgentCreativePanel';
 import { bindProjectConversation } from '../creative/projectAgentScope';
 
 type AgentConfig = H3AgentConfig;
+type ShotFocus = {shotId:string;title:string};
 
-export default function AgentScreen({ projectId }: {projectId?:string} = {}) {
+export default function AgentScreen({ projectId, focus }: {projectId?:string;focus?:ShotFocus} = {}) {
   const [persistenceIssue, setPersistenceIssue] = useState<string>();
   useEffect(() => {
     let mounted = true;
@@ -99,6 +100,7 @@ export default function AgentScreen({ projectId }: {projectId?:string} = {}) {
       key={`${config.endpoint}\u0000${config.model}\u0000${config.apiKey}\u0000${config.timeoutMs}\u0000${config.maxRetries}`}
       config={config}
       projectId={projectId}
+      focus={focus}
       persistenceIssue={persistenceIssue}
     />
   );
@@ -108,10 +110,12 @@ function ReadyAgent({
   config,
   persistenceIssue,
   projectId,
+  focus,
 }: {
   config: AgentConfig;
   persistenceIssue?: string;
   projectId?:string;
+  focus?:ShotFocus;
 }) {
   const [operationIssue, onError] = useState<string>();
   const router = useRouter();
@@ -298,6 +302,7 @@ function ReadyAgent({
       key={activeSnapshot.threadId}
       config={config}
       snapshot={activeSnapshot}
+      focus={focus}
       workflowDefinition={workflow?.definition}
       workflows={workflows}
       workflowLoadIssue={workflowLoadIssue}
@@ -339,10 +344,12 @@ function AgentSession({
   onExportHandoff,
   operationIssue,
   persistenceIssue,
+  focus,
   ...uiProps
 }: {
   config: AgentConfig;
   snapshot: LocalThreadSnapshot;
+  focus?:ShotFocus;
   workflowDefinition?: WorkflowDefinition;
   workflows?: WorkflowChoice[];
   workflowLoadIssue?: string;
@@ -363,6 +370,8 @@ function AgentSession({
 }) {
   const [notice, setNotice] = useState<string | undefined>();
   const [skillsOpen,setSkillsOpen]=useState(false);
+  const [focusDismissed,setFocusDismissed]=useState(false);
+  useEffect(()=>setFocusDismissed(false),[focus?.shotId]);
   const skillGuard=useRef<((proceed:()=>void)=>void)|undefined>(undefined);
   const registerSkillGuard=useCallback((guard:((proceed:()=>void)=>void)|undefined)=>{skillGuard.current=guard;},[]);
   const leaveSkills=(proceed:()=>void)=>skillGuard.current?skillGuard.current(proceed):proceed();
@@ -404,7 +413,7 @@ function AgentSession({
           onDelete={id=>leaveSkills(()=>uiProps.onDelete(id))}
           headerActions={<AssistantActions onOpenSkills={()=>setSkillsOpen(true)}/>}
           toolPanel={skillsOpen?<SkillLibraryScreen registerLeave={registerSkillGuard} onClose={()=>setSkillsOpen(false)}/>:undefined}
-          headerContext={<AgentCreativePanel beforeNavigate={leaveSkills} compact threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />}
+          headerContext={<View><AgentCreativePanel beforeNavigate={leaveSkills} compact threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />{focus&&!focusDismissed?<View style={{paddingHorizontal:16,paddingBottom:8}}><Text style={{color:COLORS.text}}>当前镜头：{focus.title}</Text><Text style={{color:COLORS.textMuted}}>发送时核对并固定镜头版本</Text><Pressable accessibilityRole="button" accessibilityLabel="移除镜头上下文" onPress={()=>setFocusDismissed(true)} style={{minHeight:48,justifyContent:'center'}}><Text style={{color:COLORS.primaryActive}}>移除镜头上下文</Text></Pressable></View>:null}</View>}
           renderRunArtifacts={runId=><AgentCreativeCards threadId={snapshot.threadId} running={Boolean(agent.isRunning)} runId={runId}/>}
           onExportPrompt={onExportPrompt}
           onExportHandoff={onExportHandoff}
@@ -419,7 +428,7 @@ function AgentSession({
           onCancel={adapter.cancel}
           onAccept={async input => {
             const runId = createAgentId();
-            const handle = await adapter.start({ id: input.id, runId, draftRevision: input.draftRevision, message: { id: `user-${input.id}`, role: 'user', content: input.text, attachments: input.attachments } as never });
+            const handle = await adapter.start({ id: input.id, runId, focusShotId:focusDismissed?undefined:focus?.shotId, draftRevision: input.draftRevision, message: { id: `user-${input.id}`, role: 'user', content: input.text, attachments: input.attachments } as never });
             void handle.completion.catch(reason => setRunIssue({ kind: 'error', runId, message: reason instanceof Error ? reason.message : '运行失败' }));
           }}
           onRetry={async (runId) => {
