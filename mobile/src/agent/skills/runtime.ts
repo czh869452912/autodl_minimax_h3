@@ -1,3 +1,5 @@
+import {runUsageMiddleware} from '../runUsage';
+import {getH3ContextBudget} from '../agentTypes';
 import CryptoJS from 'crypto-js';
 import {pinRunRuntime,assertRunAuthority} from '../runSpecification';
 import {creativeToolPolicy} from '../toolPolicy';
@@ -31,7 +33,7 @@ export function createSkillRunPreparer(db: AppDatabase, config: H3AgentConfig, c
       const version = CryptoJS.SHA256(JSON.stringify({ ...getOfficialH3SkillFiles(), ...files })).toString();
       await pinRunRuntime(db,input.threadId,input.runId,config,version,creativeToolPolicy().entries.map(t=>JSON.stringify(t)));
       return {
-        graph: createGraph(config, { skillFiles: files, assertSkills: async () => { await assertRunAuthority(db,input.threadId,input.runId);await store.resolve(snapshot); } }) as never,
+        graph: createGraph(config, { runMiddleware:[runUsageMiddleware(db,input.threadId,input.runId,getH3ContextBudget(config).outputTokens)], skillFiles: files, assertSkills: async () => { await assertRunAuthority(db,input.threadId,input.runId);await store.resolve(snapshot); } }) as never,
         workspace: {
           prepareWorkspaceRun: (saved: unknown, messages: readonly unknown[], budget?: workspace.H3ContextBudget) => workspace.prepareWorkspaceRun(saved, messages, budget, version),
           captureWorkspaceState: (state: unknown, revision: number, budget?: workspace.H3ContextBudget) => workspace.captureWorkspaceState(state, revision, budget, version),

@@ -95,9 +95,9 @@ export function createSkillStore(db: AppDatabase) {
       }
       return versions;
     },
-    async runs(): Promise<Array<{ threadId: string; runId: string; snapshot: SkillSnapshot }>> {
+    async runs(): Promise<Array<{ threadId: string; runId: string; snapshot: SkillSnapshot; usage?:{model_calls:number;tool_calls:number;estimated_tokens:number;reported_tokens:number} }>> {
       const rows = await db.getAllAsync<{ thread_id: string; run_id: string; snapshot_json: string }>('SELECT * FROM agent_skill_runs ORDER BY created_at DESC LIMIT 20');
-      return rows.map(row => ({ threadId: row.thread_id, runId: row.run_id, snapshot: JSON.parse(row.snapshot_json) }));
+      return Promise.all(rows.map(async row => ({ threadId: row.thread_id, runId: row.run_id, snapshot: JSON.parse(row.snapshot_json),usage:await db.getFirstAsync<{model_calls:number;tool_calls:number;estimated_tokens:number;reported_tokens:number}>('SELECT model_calls,tool_calls,estimated_tokens,reported_tokens FROM creative_run_usage WHERE thread_id=? AND run_id=?',row.thread_id,row.run_id)??undefined })));
     },
   };
 }

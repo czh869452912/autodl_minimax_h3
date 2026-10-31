@@ -99,7 +99,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId }
         </View>
         {expanded===version.id ? <><Text style={s.muted}>{Object.keys(version.files).join(' · ')}</Text><Text selectable style={s.body}>{version.files['SKILL.md']}</Text></> : null}
       </View>)}
-      {historyOpen ? <View style={s.card}><Text style={s.title}>最近运行的技能快照</Text>{!runs.length?<Text style={s.muted}>还没有运行记录</Text>:runs.map(item=><Text key={`${item.threadId}:${item.runId}`} selectable style={s.muted}>{item.runId.slice(0,12)} · {item.snapshot.versions.length?item.snapshot.versions.map(ref=>`${versions.find(v=>v.id===ref.id)?.name??'缺失技能'}@${ref.id.slice(0,8)}`).join('、'):'仅内置技能'}</Text>)}</View>:null}
+      {historyOpen ? <View style={s.card}><Text style={s.title}>最近运行的技能快照</Text>{!runs.length?<Text style={s.muted}>还没有运行记录</Text>:runs.map(item=><Text key={`${item.threadId}:${item.runId}`} selectable style={s.muted}>{item.runId.slice(0,12)} · {item.snapshot.versions.length?item.snapshot.versions.map(ref=>`${versions.find(v=>v.id===ref.id)?.name??'缺失技能'}@${ref.id.slice(0,8)}`).join('、'):'仅内置技能'}{item.usage?` · 模型 ${item.usage.model_calls}/32 · 工具 ${item.usage.tool_calls}/100 · 估算预留 ${item.usage.estimated_tokens} tokens · 已报告 ${item.usage.reported_tokens} tokens`:''}</Text>)}</View>:null}
     </ScrollView>
   </KeyboardAvoidingView>;
   return <CompactWorkbench>{onClose ? body : <SafeAreaView style={s.screen}>{body}</SafeAreaView>}</CompactWorkbench>;

@@ -1,5 +1,5 @@
 import { createDeepAgent, type DeepAgent, type FileData } from 'deepagents/browser';
-import { createMiddleware } from 'langchain';
+import { createMiddleware, type AgentMiddleware } from 'langchain';
 import { adaptDeepAgentStream } from './deepAgentStream';
 import type { H3AgentConfig, H3AgentEvent, H3AgentInput } from './agentTypes';
 import { officialH3SkillRoot } from './skillBundle';
@@ -29,6 +29,7 @@ export type H3AgentDependencies = {
   agentFactory?: () => AsyncIterable<H3AgentEvent> | Promise<AsyncIterable<H3AgentEvent>>;
   skillFiles?: Record<string, FileData>;
   assertSkills?: () => Promise<void>;
+  runMiddleware?: AgentMiddleware[];
 };
 
 export function normalizeCumulativeText(previous: string, next: string): { previous: string; delta: string } {
@@ -49,6 +50,7 @@ export function createH3Agent(config: H3AgentConfig, dependencies: Omit<H3AgentD
     tools: policy.tools,
     middleware: [
       toolPolicyMiddleware(policy.entries),
+      ...(dependencies.runMiddleware??[]),
       ...createH3WorkspaceMiddleware(backend, getH3ContextBudget(config), { includeReasoning: isDeepSeekV4(config.model) && config.reasoningEffort !== 'none' }),
       ...(dependencies.assertSkills ? [createMiddleware({
         name: 'LocalSkillAuthority',

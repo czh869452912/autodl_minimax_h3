@@ -1,3 +1,4 @@
+import {v41RunUsage} from './v41RunUsage';
 import {v40RunRuntime} from './v40RunRuntime';
 import {v39RunSpecs} from './v39RunSpecs';
 import {v38PlanBatches} from './v38PlanBatches';
@@ -45,6 +46,7 @@ export type AppDatabaseMigrationOptions = {
 };
 
 const steps = new Map<number, MigrationStep>([
+  [v41RunUsage.fromVersion,v41RunUsage],
   [v40RunRuntime.fromVersion,v40RunRuntime],
   [v39RunSpecs.fromVersion,v39RunSpecs],
   [v38PlanBatches.fromVersion,v38PlanBatches],
