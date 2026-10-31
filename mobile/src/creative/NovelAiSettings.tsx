@@ -11,7 +11,7 @@ import { enhanceScales, enhancementPatch } from './novelAiEnhancement';
 
 export function NovelAiToggle({ label, value, onChange, disabled }: { label: string; value: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
   const compact=useCompactWorkbench();
-  return <View style={s.row}><Text style={[s.body,{flex:1},compact && {fontSize:13,lineHeight:18}]}>{label}</Text><Switch accessibilityLabel={label} value={value} onValueChange={onChange} disabled={disabled} /></View>;
+  return <View style={{flexDirection:'row',alignItems:'center',gap:12,minHeight:36}}><Text style={[s.body,{flex:1},compact && {fontSize:12,lineHeight:18}]}>{label}</Text><Switch trackColor={{true:COLORS.primary,false:COLORS.border}} accessibilityLabel={label} value={value} onValueChange={onChange} disabled={disabled} /></View>;
 }
 
 export function NovelAiSettings({ input, update, editable, onClose, inline=false }: { input: NovelAiDraftInput; update: (patch: Partial<NovelAiDraftInput>) => void; editable: boolean; onClose: () => void; inline?:boolean }) {
@@ -43,14 +43,14 @@ export function NovelAiSettings({ input, update, editable, onClose, inline=false
     <View style={s.row}><Text style={s.muted}>采样器</Text><TextAction label={samplerNames[NOVELAI_SAMPLERS.indexOf(medium?'k_euler_ancestral':input.sampler)]} icon="expand_more" disabled={!editable || medium} onPress={()=>setSamplerOpen(!samplerOpen)} /></View>
     {samplerOpen && !medium?<View accessibilityRole="radiogroup" accessibilityLabel="图片采样器" style={{gap:2}}>{NOVELAI_SAMPLERS.map((sampler,index)=><Pressable key={sampler} accessibilityRole="radio" accessibilityLabel={samplerNames[index]} accessibilityState={{checked:input.sampler===sampler,disabled:!editable}} disabled={!editable} onPress={()=>{update({sampler});setSamplerOpen(false);}} style={{minHeight:36,padding:8,borderRadius:6,backgroundColor:input.sampler===sampler?COLORS.primarySoft:COLORS.surface}}><Text style={{color:input.sampler===sampler?COLORS.primary:COLORS.text,fontSize:14}}>{samplerNames[index]}</Text></Pressable>)}</View>:null}
     <TextAction label={advanced?'收起高级设置':'高级设置'} icon={advanced?'expand_less':'expand_more'} onPress={()=>setAdvanced(!advanced)}/>
-    {advanced?<>
+    {advanced?<View style={{gap:8,padding:10,borderRadius:10,backgroundColor:COLORS.background}}>
     {range('Rescale','rescale',0,1,0.01,medium?0:undefined)}
-    {!v5 ? <SegmentedChoices label="图片噪声设置" options={(['karras','exponential','polyexponential'] as const).map(id=>({id,label:id}))} value={input.noiseSchedule} disabled={!editable} onChange={noiseSchedule=>update({noiseSchedule})} /> : <Text style={s.muted}>V5 使用 Karras 噪声计划。</Text>}
+    {!v5 ? <SegmentedChoices label="图片噪声设置" options={(['karras','exponential','polyexponential'] as const).map(id=>({id,label:id}))} value={input.noiseSchedule} disabled={!editable} onChange={noiseSchedule=>update({noiseSchedule})} /> : <View style={s.row}><Text style={{fontSize:12,color:COLORS.textMuted}}>噪声计划</Text><Text style={{fontSize:12,color:COLORS.text}}>Karras · V5 固定</Text></View>}
 
-    {v5 ? <><NovelAiToggle label="保留透明边缘颜色（Straight Alpha）" value={input.straightAlpha} onChange={straightAlpha=>update({straightAlpha})} disabled={!editable} /><NovelAiToggle label="自动整理引号中的画面文字" value={input.autoText} onChange={autoText=>update({autoText})} disabled={!editable} /></> : null}
+    {v5 ? <><NovelAiToggle label="保留透明边缘颜色" value={input.straightAlpha} onChange={straightAlpha=>update({straightAlpha})} disabled={!editable} /><NovelAiToggle label="自动整理画面文字" value={input.autoText} onChange={autoText=>update({autoText})} disabled={!editable} /></> : null}
     {input.action !== 'generate' ? <><NovelAiNumberField label="额外噪声 Seed" placeholder="默认主种子减一" value={input.extraNoiseSeed} editable={editable} onChange={extraNoiseSeed=>update({extraNoiseSeed})} /></> : null}
     {input.action === 'infill' ? <><SectionHeading title="局部重绘" />{field('未遮罩区域变化强度（0–1）','inpaintStrength')}<NovelAiToggle label="合成回原图" value={input.addOriginalImage} onChange={addOriginalImage=>update({addOriginalImage})} disabled={!editable} /></> : null}
-    </>:null}
+    </View>:null}
   </>;
   return inline?<View style={{flex:1,minHeight:0,backgroundColor:COLORS.surface}}><View style={[s.row,{paddingHorizontal:8,borderBottomWidth:0.5,borderBottomColor:COLORS.border}]}><Text style={{fontSize:13,fontWeight:'600',color:COLORS.text}}>生成设置</Text><IconAction label="关闭生成设置" icon="close" onPress={onClose} /></View><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{paddingHorizontal:10,paddingVertical:4,gap:4}}>{content}</ScrollView></View>:<ParameterSheet fullScreen title="生成设置" onClose={onClose}>{content}</ParameterSheet>;
 }
