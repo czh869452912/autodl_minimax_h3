@@ -1,20 +1,19 @@
 # 工作台改进台账
 
-## 当前总览（切片 1–20）
+## 当前总览（切片 1–40，2026-11-01）
 
-以下为当前状态；后文各切片中的“未完成”是当时记录，若有冲突以本表和后续验证记录为准。原路线图仍未全部完成。
+路线图 A–F 的本期实现已完成。下表区分交付与验证边界；后文“未完成”保留为切片当时记录，不代表最终状态。真实付费调用与所有 OEM 的后台运行不属于已验证结论。
 
-| 工作包 | 已实现 | 仍需完成 |
+| 工作包 | 最终交付 | 验证边界 |
 | --- | --- | --- |
-| A 提交契约 | 图音统一装配、请求绑定授权、确认后直接入队 | 供应商真实调用验收（需实际授权）；未知费用仍是次数控制 |
-| B 资源/能力 | 版本化角色/场景/风格/声音、固定引用、镜头依赖、草稿/Job provenance、分页/就绪诊断 | 全文/语义索引、完整能力目录与资源探测 |
-| C 外发/授权 | 精确请求、凭据代次、预算预留、未知占用 | 独立素材外发许可与端口/模型能力协商 |
-| D 应用内计划 | 持久决策/outbox、暂停、失败尝试保留/重做、上游镜头提交栅栏、20 镜头独立批次 | 跨镜头 typed DAG、更多节点种类、完整失效传播和生命周期矩阵 |
-| E Skill/角色 | 项目组合、版本/撤销快照、只读结构质检、禁止 Agent 采用、RunSpec 范围和运行配置 | Skill 能力 metadata/单次选择、受约束独立角色成本汇总、感知质检 |
-| F Android 交付 | 既有单素材归档/导出 | 本地多镜头时间线、音轨/字幕、合成与工程包、中断/空间回收验收 |
+| A 提交契约 | 图音统一装配、精确请求绑定授权、确认后直接入队、批次原子授权 | 离线入口与真实 SQLite 验证；未调用付费供应商，未知费用仍是次数控制 |
+| B 资源/能力 | 版本化设定、固定依赖/provenance、分页、能力目录、就绪诊断、全文检索、本地探测 | 关键词检索；无向量召回，不承诺任意适配器热插拔 |
+| C 外发/授权 | 多模型连接、图片能力声明、独立素材外发许可、撤销、精确请求/凭据代次与预算预留 | 能力声明不等于远端服务实测；次数/token 不是金额硬上限 |
+| D 应用内计划 | 持久决策/outbox、暂停/重做、20 镜头批次、跨镜头依赖、typed 本地检查、失效传播 | 限定节点，非通用 DAG；强停时暂停，恢复不保证 OEM 持续后台 |
+| E Skill/角色 | 项目组合、单次选择、版本/撤销快照、能力 metadata、只读独立审阅、累计模型预算、静帧感知检查 | 感知请求需单独确认；未实调，静帧不能证明音频和运动质量 |
+| F Android 交付 | 不可变时间线、裁剪/音轨/字幕、本地拼接、候选归档、导出、清单及含原件 ZIP | 有界规格；设备合成/探测/打包已测，无任意外部工程自动恢复执行 |
 
-运行、编排和数据全部保留在 APK 内；没有引入外部 Worker。
-
+运行、编排和数据全部保留在 APK 内，没有引入外部 Worker。最终结构和迁移见 [架构说明](../architecture/agent-video-workbench.md)，测试与设备覆盖见 [最终验收](../verification/2026-11-01-workbench-completion.md)。
 
 ## 第一切片：统一提交装配
 
@@ -425,3 +424,34 @@
 - 工程清单仍可单独导出；ZIP 不包含账户、密钥或执行许可。本期提供清单与原件打包，不提供任意外部 ZIP 自动恢复/执行。
 - 历史工程按当前分页的时间线分别查询最新合成，避免全局记录上限隐藏旧工程结果。
 - Android Debug 构建通过；设备原生 4 项全部通过，覆盖视频/音轨/字幕合成、错误输入拒绝、媒体探测、ZIP 清单和原件内容一致性。全仓联合验收及生命周期结果在下一切片记录。
+
+## 后续实施切片 40：联合验收与路线图收口
+
+- 修正能力目录的 adapter semver 范围匹配、模型图片能力在网络层的最后校验、历史外发许可稳定分页、合成 attempt 取消隔离。新增纯文本连接零发送拒绝测试，以及合成过期租约重建后仅保留一个候选的真实 SQLite 测试。
+- 48 版迁移测试不再错误假定所有迁移均为纯追加；保留备份/事务/外键保护和有数据迁移校验。
+- 全仓 313 文件、1915 项通过，4 项既有跳过；TypeScript、36 文件 Skill bundle、2 个 workflow release 校验通过。5 个恢复场景在 10 个独立进程全部通过。Android 原生设备 4 项通过。
+- Beta 39（code 78）构建/更新安装成功；最终 APK 的离线项目/时间线入口、前后台保持、强停重开与既有采用设定保留已检查，飞机模式已恢复。未实测整机重启、运行中合成强杀、所有 OEM 后台或真实付费生成。
+- A–F 本期功能实施完毕；架构/迁移说明与最终验收记录已归档并回链。可选向量检索、通用 DAG、任意 Provider 热插拔和全维度感知质量不纳入已完成声明。
+
+### 本轮提交索引
+
+- 切片 21：`46422a4c` feat: manage selected production batches and page historical plans
+- 切片 22：`6967daf4` feat: authorize exact batch requests atomically with independent reservations
+- 切片 23：`cb583b11` feat: expose installed production capabilities and configuration diagnostics
+- 切片 24：`b39e2c0f` feat: enforce a shared policy for creative and framework tools
+- 切片 25：`36c45360` feat: persist run call budgets and expose usage history
+- 切片 26：`f3bbd70c` feat: add an independent read-only reviewer within parent run limits
+- 切片 27：`bf84498e` feat: validate skill capability requirements before starting models
+- 切片 28：`27ad71cb` feat: pin one-run skill selections when accepting user messages
+- 切片 29：`28277d9f` feat: explicitly compile selected semantics and references into video drafts
+- 切片 30：`7fb5a4c6` feat: require revocable exact-request media outbound consent before dispatch
+- 切片 31：`f055d9f3` feat: add revision-checked cross-shot completion dependencies
+- 切片 32：`ee712318` feat: save immutable local video timelines and project manifests
+- 切片 33：`85e2066a` fix: meter summaries and retries at the model transport boundary
+- 切片 34：`4e80b594` feat: render video timelines locally through the durable Android executor
+- 切片 35：`9f5cb27e` feat: add scoped rebuildable full-text project search
+- 切片 36：`26404c34` feat: select explicit model connections and validate skill input capabilities
+- 切片 37：`51711a2f` feat: inspect local media and approve bounded perceptual reviews
+- 切片 38：`d32e5398` feat: add durable typed local checks before video submission
+- 切片 39：`f9f9d5f9` feat(workbench): package immutable timelines with verified source media
+- 切片 40：包含本条索引的最终联合验收提交。

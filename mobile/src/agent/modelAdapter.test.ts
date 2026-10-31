@@ -76,3 +76,16 @@ test('network hooks cover every SDK request/retry and deny transport before disp
   expect(transport).toHaveBeenCalledTimes(3);
  }finally{globalThis.fetch=original;}
 });
+
+test.each(['image_url','input_image'])('text-only connection rejects %s before transport or budget consumption',async(type)=>{
+ const original=globalThis.fetch,transport=jest.fn(async()=>new Response('{}',{status:200}));globalThis.fetch=transport;
+ try{
+  const beforeRequest=jest.fn(async()=>{});
+  createOpenAICompatibleModel({apiKey:'test',endpoint:'https://example.test/v1',model:'text',timeoutMs:1000,maxRetries:0,supportsImages:false},{beforeRequest});
+  const fetcher=(jest.mocked(ChatOpenAI).mock.calls.at(-1)![0] as any).configuration.fetch;
+  await expect(fetcher('https://example.test/v1/chat/completions',{method:'POST',body:JSON.stringify({messages:[{role:'user',content:[{type,image_url:{url:'data:image/jpeg;base64,test'}}]}]})})).rejects.toThrow('MODEL_IMAGE_CAPABILITY_REQUIRED');
+  expect(transport).not.toHaveBeenCalled();expect(beforeRequest).not.toHaveBeenCalled();
+  await fetcher('https://example.test/v1/chat/completions',{method:'POST',body:JSON.stringify({messages:[{role:'user',content:'text only'}]})});
+  expect(transport).toHaveBeenCalledTimes(1);expect(beforeRequest).toHaveBeenCalledTimes(1);
+ }finally{globalThis.fetch=original;}
+});

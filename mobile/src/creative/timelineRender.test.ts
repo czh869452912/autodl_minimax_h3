@@ -54,3 +54,16 @@ test('in-flight render prevents timeline removal and transaction failure leaves 
   expect(f.db.getFirstSync('SELECT state FROM creative_timeline_renders')).toEqual({state:'FAILED'});
  }finally{f.db.close();}
 });
+
+test('process reconstruction reclaims expired local render and retains exactly one candidate',async()=>{
+ const f=await fixture();try{
+  f.db.runSync("UPDATE creative_timeline_renders SET state='RENDERING'");
+  f.db.runSync('UPDATE workflow_operations SET lease_expires_at=101');
+  const reopened=createOperationRepository(f.db as never);await reopened.recoverExpired(200,10);
+  const op=(await reopened.claimById(f.op.id,'restarted',200,10000))!;
+  await executeTimelineRender(f.db as never,op,'restarted',{...f.deps,now:()=>200});
+  await executeTimelineRender(f.db as never,f.op,'worker',f.deps);
+  expect(f.deps.render).toHaveBeenCalledTimes(1);
+  expect(f.db.getAllSync("SELECT * FROM creative_asset_versions WHERE source='generated'")).toHaveLength(1);
+ }finally{f.db.close();}
+});

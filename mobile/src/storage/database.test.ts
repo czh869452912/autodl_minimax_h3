@@ -124,7 +124,7 @@ test('reads recovery state asynchronously without swallowing database failures',
   }
 });
 
-test('migrates the previous schema additively inside a transaction', () => {
+test('migrates the previous schema with backup inside a transaction', () => {
   const calls: string[] = [];
   const backup = jest.fn();
   const db = {
@@ -137,7 +137,9 @@ test('migrates the previous schema additively inside a transaction', () => {
   ensureAppDatabase(db as never, { backup });
   expect(backup).toHaveBeenCalledTimes(1);
   expect(db.withTransactionSync).toHaveBeenCalledTimes(1);
-  expect(calls.some((sql) => sql.includes('DROP TABLE'))).toBe(false);
+  // v48 rebuilds CHECK constraints while preserving the populated plan tables.
+  // Data preservation is exercised against real SQLite in plans tests.
+  expect(calls.some((sql) => /foreign_keys\s*=\s*OFF/i.test(sql))).toBe(false);
   expect(calls).toContain(`PRAGMA user_version = ${APP_SCHEMA_VERSION}`);
 });
 

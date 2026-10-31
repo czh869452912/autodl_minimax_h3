@@ -29,10 +29,14 @@ export function createOpenAICompatibleModel(config: H3AgentConfig, hooks?:{befor
   const sdkReasoning = /^(?:o\d|gpt-5(?!-chat))/.test(config.model.trim());
   const effort = config.reasoningEffort;
   const transport=createStreamingFetch({timeoutMs:config.timeoutMs});
-  const meteredFetch:typeof fetch=hooks?async(input,init)=>{
+  const meteredFetch:typeof fetch=hooks||config.supportsImages===false?async(input,init)=>{
     // SDK retries and framework summaries all cross this transport boundary.
     if(typeof init?.body!=='string')throw new Error('RUN_MODEL_REQUEST_UNMETERED');
-    await hooks.beforeRequest(init.body);
+    if(config.supportsImages===false){
+      const hasImage=(value:unknown):boolean=>Array.isArray(value)?value.some(hasImage):value!==null&&typeof value==='object'?(['image_url','input_image'].includes(String((value as {type?:unknown}).type))||Object.values(value).some(hasImage)):false;
+      if(hasImage(JSON.parse(init.body)))throw new Error('MODEL_IMAGE_CAPABILITY_REQUIRED');
+    }
+    await hooks?.beforeRequest(init.body);
     return transport(input,init);
   }:transport;
   const fields: ChatOpenAIFields = {

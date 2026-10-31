@@ -1,3 +1,4 @@
+import {satisfiesVersion} from '../workflows/registry/semver';
 import type {AppDatabase} from '../storage/appDatabase';
 import {createWorkflowRegistry} from '../workflows/registry/repository';
 import {strictActiveRecord} from '../workflows/registry/activeRecord';
@@ -23,7 +24,7 @@ export async function readCapabilityCatalog(db:AppDatabase,afterId='',limit=20){
     let provider='unavailable';
     try{const registration=providers.registration(definition.platform.adapter);provider=registration.provider;
      if(!registration.manifest.operations.includes(definition.platform.operation))reasons.push('OPERATION_UNSUPPORTED');
-     if(definition.compatibility?.requiredAdapterVersion&&definition.compatibility.requiredAdapterVersion!==registration.manifest.adapterVersion)reasons.push('ADAPTER_VERSION_MISMATCH');
+     if(definition.compatibility?.requiredAdapterVersion&&!satisfiesVersion(registration.manifest.adapterVersion,definition.compatibility.requiredAdapterVersion))reasons.push('ADAPTER_VERSION_MISMATCH');
     }catch{reasons.push('ADAPTER_UNAVAILABLE');}
     entry={id,title:definition.metadata.title,version:record.version,provider,adapter:definition.platform.adapter,operation:definition.platform.operation,outputs:definition.outputs.artifacts.map(a=>a.kind),inputs:definition.inputs,models:[],reasons,configuration:'workflow',executionAllowed:false};
    }catch{entry={id,title:id,version:'unknown',provider:'unavailable',adapter:'unavailable',operation:'unavailable',outputs:[],inputs:{},models:[],reasons:['WORKFLOW_INVALID'],configuration:'workflow',executionAllowed:false};}
