@@ -6,6 +6,7 @@ import { applyDraftCommand, videoDraftInput } from './drafts';
 import { applyStoryCommand } from './story';
 const id=z.string().min(1).max(200), revision=z.number().int().nonnegative();
 export const planSchemas={
+  'plan.addLocalCheck':z.object({id,expectedRevision:revision}).strict(),
   'plan.setDependency':z.object({id,expectedRevision:revision,upstreamPlanId:id,enabled:z.boolean()}).strict(),
   'plan.reprepare':z.object({id,expectedRevision:revision,expectedShotRevision:revision,prompt:z.string().trim().min(1).max(10000)}).strict(),
   'plan.createBatch':z.object({projectId:id,title:z.string().trim().min(1).max(200),shots:z.array(z.object({shotId:id,expectedShotRevision:revision,title:z.string().trim().min(1).max(200),candidateVersionIds:z.array(id).min(1).max(20),videoPrompt:z.string().trim().min(1).max(10000)}).strict()).min(1).max(20)}).strict(),
@@ -91,6 +92,23 @@ export async function applyPlanCommand(tx:AppDatabase,name:string,p:any,now:numb
   }
   const plan=await activePlan(tx,p.id);
   if(plan.revision!==p.expectedRevision)throw new Error('PLAN_REVISION_CONFLICT');
+  if(name==='plan.addLocalCheck'){
+    const video=await tx.getFirstAsync<CreativePlanStep>("SELECT * FROM creative_plan_steps WHERE plan_id=? AND kind='video'",plan.id);
+    if(!video||video.job_id||!['PENDING','READY','BLOCKED'].includes(video.state))throw Error('PLAN_CHECK_ALREADY_EXECUTED');
+    if(await tx.getFirstAsync("SELECT id FROM creative_plan_steps WHERE plan_id=? AND kind='local_check'",plan.id))throw Error('PLAN_CHECK_ALREADY_EXISTS');
+    const selection=await tx.getFirstAsync<{id:string}>("SELECT id FROM creative_plan_steps WHERE plan_id=? AND kind='selection'",plan.id);if(!selection)throw Error('PLAN_SELECTION_MISSING');
+    const stepId=makeId();
+    await tx.runAsync("INSERT INTO creative_plan_steps VALUES(?,?,'local_check',0,'PENDING',NULL,NULL,'{}','{}',NULL)",stepId,plan.id);
+    await tx.runAsync('INSERT INTO creative_plan_dependencies VALUES(?,?)',stepId,selection.id);
+    await tx.runAsync('INSERT INTO creative_plan_dependencies VALUES(?,?)',video.id,stepId);
+    const input=JSON.parse(video.input_binding_json);delete input.approvedSubmission;
+    if(plan.authorization_id)await tx.runAsync('UPDATE creative_authorizations SET revoked_at=COALESCE(revoked_at,?),revision=revision+1 WHERE id=? AND EXISTS(SELECT 1 FROM creative_authorization_requests r WHERE r.authorization_id=creative_authorizations.id)',now,plan.authorization_id);
+    await tx.runAsync("UPDATE creative_plan_steps SET input_binding_json=?,state=CASE WHEN state='READY' THEN 'BLOCKED' ELSE state END,revision=revision+1 WHERE id=?",JSON.stringify(input),video.id);
+    await tx.runAsync('UPDATE creative_plans SET authorization_id=NULL,revision=revision+1,updated_at=? WHERE id=?',now,plan.id);
+    await tx.runAsync("UPDATE creative_decision_requests SET plan_revision=plan_revision+1 WHERE plan_id=? AND state='WAITING'",plan.id);
+    await tx.runAsync('UPDATE executor_wake_state SET generation=generation+1,requested_at=? WHERE singleton=1',now);
+    return {planId:plan.id,stepId};
+  }
   if(name==='plan.setDependency')return changePlanDependency(tx,plan,p.upstreamPlanId,p.enabled,now);
   if(name==='plan.reprepare'){
     const step=await tx.getFirstAsync<CreativePlanStep>("SELECT * FROM creative_plan_steps WHERE plan_id=? AND kind='video' AND state='BLOCKED' AND job_id IS NULL",plan.id);
@@ -101,6 +119,7 @@ export async function applyPlanCommand(tx:AppDatabase,name:string,p:any,now:numb
     const draft=await applyDraftCommand(tx,'draft.createVideo',{projectId:plan.project_id,shotId:plan.shot_id,versionId:shot.version_id,prompt:p.prompt},now,makeId);
     await applyDraftCommand(tx,'draft.updateVideo',{id:draft.draftId,expectedRevision:0,input:videoInput},now,makeId);
     const binding={prompt:p.prompt,videoInput,versionId:shot.version_id,shotRevision:p.expectedShotRevision,dependencySignature:await shotDependencySignature(tx,plan.shot_id,plan.project_id)};
+    await tx.runAsync("UPDATE creative_plan_steps SET state='PENDING',revision=revision+1,result_binding_json='{}',error_json=NULL WHERE plan_id=? AND kind='local_check'",plan.id);
     // The replaced draft remains historical evidence, never an alternate way to spend its old confirmation.
     if(plan.authorization_id)await tx.runAsync('UPDATE creative_authorizations SET revoked_at=COALESCE(revoked_at,?),revision=revision+1 WHERE id=? AND EXISTS(SELECT 1 FROM creative_authorization_requests r WHERE r.authorization_id=creative_authorizations.id)',now,plan.authorization_id);
     await tx.runAsync('UPDATE creative_plan_steps SET draft_id=?,input_binding_json=?,revision=revision+1,error_json=? WHERE id=?',draft.draftId,JSON.stringify(binding),JSON.stringify({message:'已按确认的镜头输入重新准备，请重新授权。'}),step.id);

@@ -1,3 +1,4 @@
+import {v48PlanChecks} from './v48PlanChecks';
 import {v47Inspection} from './v47Inspection';
 import {v46Search} from './v46Search';
 import {v45Render} from './v45Render';
@@ -52,6 +53,7 @@ export type AppDatabaseMigrationOptions = {
 };
 
 const steps = new Map<number, MigrationStep>([
+  [v48PlanChecks.fromVersion,v48PlanChecks],
   [v47Inspection.fromVersion,v47Inspection],
   [v46Search.fromVersion,v46Search],
   [v45Render.fromVersion,v45Render],

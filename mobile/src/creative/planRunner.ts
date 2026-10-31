@@ -1,3 +1,4 @@
+import {runLocalPlanChecks} from './planChecks';
 import {invalidPrerequisiteSql} from './planDependencies';
 import type {AppDatabase} from '../storage/appDatabase';
 import {withWriteTransaction} from '../storage/sqliteBusy';
@@ -5,6 +6,7 @@ import {submitCreativeVideo} from './videoSubmission';
 import type {CreativePlanStep} from './plans';
 type Submission=Parameters<typeof submitCreativeVideo>[1];
 export async function runCreativePlans(db:AppDatabase,prepare:(draftId:string)=>Promise<Omit<Submission,'authorizationId'|'planStepId'>>,now=Date.now()){
+  await runLocalPlanChecks(db);
   const steps=await db.getAllAsync<CreativePlanStep & {authorization_id:string|null}>(`SELECT s.*,p.authorization_id FROM creative_plan_steps s JOIN creative_plans p ON p.id=s.plan_id JOIN creative_execution_state e ON e.epoch=p.execution_epoch
     WHERE p.state='ACTIVE' AND NOT EXISTS(SELECT 1 FROM creative_plan_controls c WHERE c.plan_id=p.id AND c.paused=1) AND s.kind='video' AND s.state='READY' AND s.job_id IS NULL
     AND NOT EXISTS(SELECT 1 FROM creative_plan_dependencies d JOIN creative_plan_steps prerequisite ON prerequisite.id=d.depends_on_step_id WHERE d.step_id=s.id AND prerequisite.state!='SUCCEEDED')

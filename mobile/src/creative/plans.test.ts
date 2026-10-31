@@ -1,3 +1,5 @@
+import {runLocalPlanChecks} from './planChecks';
+import {v48PlanChecks} from '../storage/migrations/v48PlanChecks';
 import {planVideoInput,planVideoSummary} from './plans';
 import {createInitializedRealSqliteTestDb} from '../test/realSqlite';
 import {createCreativeService} from './service';
@@ -360,5 +362,33 @@ test('dependency edits are revision checked, project scoped and impossible after
   f.db.runSync('UPDATE creative_plans SET project_id=? WHERE id=?',f.projectId,b.planId);
   await runCreativePlans(f.db as never,f.prepare,200);
   await expect(f.execute({name:'plan.setDependency',payload:{id:f.plan.planId,expectedRevision:0,upstreamPlanId:b.planId,enabled:true}})).rejects.toThrow('DEPENDENCY_ALREADY_EXECUTED');
+ }finally{f.db.close();}
+});
+
+test('typed local check waits for selection and detects unavailable inputs without creating jobs',async()=>{
+ const f=await fixture();try{
+  await f.execute({name:'plan.addLocalCheck',payload:{id:f.plan.planId,expectedRevision:0}});
+  expect(await runLocalPlanChecks(f.db as never)).toBe(0);
+  await f.execute(f.selection);
+  f.db.runSync("UPDATE creative_version_files SET state='MISSING' WHERE version_id='v2'");
+  expect(await runLocalPlanChecks(f.db as never)).toBe(1);
+  expect(f.db.getFirstSync("SELECT state FROM creative_plan_steps WHERE kind='local_check'")).toEqual({state:'BLOCKED'});
+  expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toEqual([]);
+  f.db.runSync("UPDATE creative_version_files SET state='AVAILABLE' WHERE version_id='v2'");
+  f.db.runSync("UPDATE creative_plan_steps SET state='PENDING' WHERE kind='local_check'");
+  await runLocalPlanChecks(f.db as never);
+  expect(f.db.getFirstSync("SELECT state FROM creative_plan_steps WHERE kind='local_check'")).toEqual({state:'SUCCEEDED'});
+ }finally{f.db.close();}
+});
+test('plan node schema migration retains populated selection, dependencies and outbox atomically',async()=>{
+ const f=await runnable();try{
+  const before=f.db.getAllSync('SELECT * FROM creative_plan_steps ORDER BY id'),decisions=f.db.getAllSync('SELECT * FROM creative_decision_requests');
+  f.db.execSync('BEGIN');
+  v48PlanChecks.apply({db:f.db as never,exec:sql=>f.db.execSync(sql),hasColumn:()=>false});
+  f.db.execSync('COMMIT');
+  expect(f.db.getAllSync('SELECT * FROM creative_plan_steps ORDER BY id')).toEqual(before);
+  expect(f.db.getAllSync('SELECT * FROM creative_decision_requests')).toEqual(decisions);
+  expect(f.db.getAllSync('SELECT * FROM creative_selection_outbox')).toHaveLength(1);
+  expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
  }finally{f.db.close();}
 });
