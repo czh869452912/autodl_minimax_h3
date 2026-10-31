@@ -8,6 +8,8 @@ import {NativeModules,StyleSheet} from 'react-native';
 import {ImagePreview} from '../ui/ImagePreview';
 import { createEnhanceInput } from './novelAiEnhancement';
 const mockDeliveries=jest.fn(async()=>[] as Array<{status:string;generation:number}>);
+let mockKeyboardVisible=false;
+jest.mock('../ui/useKeyboardVisible',()=>({useKeyboardVisible:()=>mockKeyboardVisible}));
 const mockDismissTo=jest.fn();
 const mockPush = jest.fn(), mockReplace = jest.fn(), mockExecute = jest.fn();
 const mockReadStatus=jest.fn(async()=>({status:mockStatus}));
@@ -26,6 +28,7 @@ jest.mock('../media/VideoPlayer', () => ({ VideoPlayer: () => null }));
 const draft: CreativeDraft = { id: 'draft', project_id: 'project', shot_id: 'shot', target_asset_id: 'asset', provider_id: 'novelai', workflow_id: 'image', input_json: '{}', revision: 1, state: 'SUBMITTED', job_id: 'job' };
 const findButton = (tree: ReturnType<typeof create>, label: string) => tree.root.findAll(n => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function')[0];
 beforeEach(() => {
+  mockKeyboardVisible=false;
   jest.clearAllMocks();mockDeliveries.mockReset().mockResolvedValue([]); mockReadStatus.mockReset().mockImplementation(async()=>({status:mockStatus}));mockStatus = 'SUCCEEDED';
   mockVersions = [2, 1].map(n => ({ id: `version-${n}`, assetId: 'asset', versionNo: n, source: 'generated', state: 'AVAILABLE', relativePath: `${n}.png`, mime: 'image/png', recipe: { jobId: 'job',input:defaultNovelAiDraft } }));
   mockExecute.mockResolvedValue({ status: 'completed', value: { draftId: 'next' } });
@@ -75,9 +78,9 @@ test('holding the floating compare control reveals the original without opening 
     act(()=>control().props.onPressOut());
     expect(overlay().props.style.opacity).toBe(0);
     act(()=>control().props.onPressIn());
-    await act(async()=>findButton(tree,'上一张结果').props.onPress());
+    await act(async()=>tree.update(<CreativeResults draft={draft} canvas initialVersionId="version-1"/>));
     expect(tree.root.findAllByProps({testID:'result-original-overlay'})).toHaveLength(0);
-    await act(async()=>findButton(tree,'下一张结果').props.onPress());
+    await act(async()=>tree.update(<CreativeResults draft={draft} canvas initialVersionId="version-2"/>));
     expect(overlay().props.style.opacity).toBe(0);
   }finally{act(()=>tree?.unmount());}
 });
@@ -331,4 +334,25 @@ test('image canvas keeps history hidden until its explicit history control opens
   await act(async()=>tree.update(<CreativeResults draft={draft} canvas historyVisible/>));
   expect(tree.root.findAllByType(require('./ImageHistorySheet').ImageHistorySheet).length).toBeGreaterThan(0);
  }finally{act(()=>tree?.unmount());}
+});
+
+test('history search keeps its query and selection while the keyboard takes the preview space',async()=>{
+  const selected=jest.fn();let tree!:ReturnType<typeof create>;
+  const render=()=> <CreativeResults draft={draft} canvas historyVisible onCurrentVersion={selected}/>;
+  try{
+    await act(async()=>{tree=create(render());});
+    const search=()=>tree.root.findAll(n=>n.props.accessibilityLabel==='搜索生成历史'&&typeof n.props.onChangeText==='function')[0];
+    act(()=>search().props.onChangeText('12345'));
+    const version=selected.mock.calls.at(-1)?.[0]?.id;
+    mockKeyboardVisible=true;
+    await act(async()=>tree.update(render()));
+    expect(search().props.value).toBe('12345');
+    expect(StyleSheet.flatten(tree.root.findByProps({testID:'history-preview-region'}).props.style).display).toBe('none');
+    expect(findButton(tree,'关闭生成历史')).toBeDefined();
+    expect(selected.mock.calls.at(-1)?.[0]?.id).toBe(version);
+    mockKeyboardVisible=false;
+    await act(async()=>tree.update(render()));
+    expect(search().props.value).toBe('12345');
+    expect(StyleSheet.flatten(tree.root.findByProps({testID:'history-preview-region'}).props.style).display).toBe('flex');
+  }finally{act(()=>tree?.unmount());}
 });

@@ -329,3 +329,11 @@
 - 签名与beta33一致，双ARM、Hermes、86个原生库、ZIP/ELF 16KB对齐及内嵌Expo身份检查通过。
 - SHA-256：`E46ACE6B8C1AC0EA9E79EB26E2EDCD9A3E6620890D7243A24B158E797E51EEB2`。
 - 详细处理和剩余项：[密度调整与复审处理](reviews/2026-10-31-density-refinement.md)。R09可执行预算仍开放；官网实时对照工具故障，未声称完成；手机ARM包未安装到用户手机。
+
+## 2026-10-31 · beta.35 历史搜索键盘修复
+
+- 版本 `1.5.0-preview.4-beta.35`，versionCode74；双ARM APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.35-android.apk`，186,245,037字节。
+- 历史搜索使用键盘上方实时可用区域，不再被提示词抽屉遮挡；键盘收起保留查询。包含移除已载入数量/左右箭头、Seed行紧凑排版。
+- 44项相关测试和类型检查通过；在约350.8×804.9dp模拟器复现旧问题并验证修复。参见[验收记录](reviews/2026-10-31-history-keyboard.md)。
+- 签名与beta34相同，双ARM、Hermes、86个原生库及16KB对齐检查通过。未安装至用户手机。
+- SHA-256：`31A63C78C5404E0811EB216B1196E454F30539DACA682750211F35D96E47E390`。

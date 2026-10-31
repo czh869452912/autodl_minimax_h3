@@ -1,3 +1,4 @@
+import {useKeyboardVisible} from '../ui/useKeyboardVisible';
 import {returnToProject} from '../navigation/creativeNavigation';
 import { useResultHistory } from './useResultHistory';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -52,6 +53,8 @@ export function CreativeResults({ draft, host='workbench', onlyJob=false, taskDe
   const [heldOriginal,setHeldOriginal]=useState<string>();
   const [processing,setProcessing]=useState(false),[more,setMore]=useState(false),[localHistory,setLocalHistory]=useState(false);
   const history=historyVisible??localHistory;
+  const keyboardVisible=useKeyboardVisible();
+  const historySearch=canvas && history && keyboardVisible && !layout.sideBySide;
   const previewHeight=history && !layout.sideBySide?bounds.height-layout.panelHeight:bounds.height;
   const minimalChrome=canvas && previewHeight<220;
   const setHistory=onHistoryVisibilityChange??setLocalHistory;
@@ -212,12 +215,9 @@ export function CreativeResults({ draft, host='workbench', onlyJob=false, taskDe
     </View></View>:null}
     {current.state==='AVAILABLE' && current.relativePath?image?<View testID="result-image-stage" style={{flex:1,minHeight:0,marginVertical:6,borderRadius:12,overflow:'hidden',backgroundColor:COLORS.surfaceRaised}}><ZoomableImage uri={`${FileSystem.documentDirectory}${current.relativePath}`} identity={current.id} label={`当前图片，版本 ${current.versionNo}`} onOpen={()=>setFullScreen(true)} originalUri={original?`${FileSystem.documentDirectory}${original.relativePath}`:undefined} showOriginal={showingOriginal}/>{original?<View testID="result-compare-overlay" style={{position:'absolute',right:10,bottom:10}}><HoldToCompare active={showingOriginal} onChange={held=>setHeldOriginal(held?current.id:undefined)} /></View>:null}</View>:<View testID="result-video-stage" style={{flex:1,minHeight:0,overflow:'hidden',borderRadius:8}}><VideoPlayer source={`${FileSystem.documentDirectory}${current.relativePath}`} /></View>:<Text style={s.muted}>原文件尚不可用，请在素材详情中恢复。</Text>}
     {!image && versions.length>1?<TextAction label={`版本历史 · ${versions.length}`} onPress={()=>setHistory(true)}/>:null}
-    {image && !minimalChrome?<View style={{flexDirection:'row',alignItems:'center',gap:8,flexWrap:'wrap',paddingVertical:4}}>
-      <Text selectable style={{fontSize:12,color:COLORS.textMuted,flex:1}}>Seed {currentInfo?.seed??'未记录'}</Text>
-      {onReuse && currentInfo?.seed!==undefined?<TextAction label="复用 Seed" disabled={busy || disabled} onPress={()=>onReuse({seed:currentInfo.seed})} />:null}
-      <Text style={{fontSize:12,color:COLORS.textMuted}}>{available.length?`已载入 ${available.length}${paged.next?'+':''} 张`:''}</Text>
-      <IconAction label="上一张结果" icon="arrow_back" disabled={!older} onPress={()=>older&&selectNeighbor(older)} />
-      <IconAction label="下一张结果" icon="chevron_right" disabled={!newer} onPress={()=>newer&&selectNeighbor(newer)} />
+    {image && !minimalChrome?<View style={{flexDirection:'row',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+      <Text selectable style={{fontSize:11,lineHeight:16,color:COLORS.textMuted}}>Seed {currentInfo?.seed??'未记录'}</Text>
+      {onReuse && currentInfo?.seed!==undefined?<Pressable accessibilityRole="button" accessibilityLabel="复用 Seed" accessibilityState={{disabled:busy || disabled}} disabled={busy || disabled} onPress={()=>onReuse({seed:currentInfo.seed})} style={({pressed})=>({minHeight:28,paddingHorizontal:6,paddingVertical:4,justifyContent:'center',borderRadius:6,backgroundColor:pressed?COLORS.primarySoft:'transparent',opacity:busy || disabled?0.4:1})}><Text style={{fontSize:11,lineHeight:16,color:COLORS.primaryActive}}>复用 Seed</Text></Pressable>:null}
     </View>:null}
 
     </>:<View style={{flex:1,alignItems:'center',justifyContent:'center',gap:6}}><Text style={{fontSize:15,color:COLORS.textMuted}}>{draft.job_id?(status==='UNKNOWN'?'结果待核查':status==='FAILED'?'本次生成未完成':status==='CANCELLED'?'本次生成已取消':'正在等待结果'):'写下描述，开始创作'}</Text>{!image&&onEditVideo?<TextAction label="调整后再生成" onPress={onEditVideo}/>:null}</View>}
@@ -227,7 +227,7 @@ export function CreativeResults({ draft, host='workbench', onlyJob=false, taskDe
   if(!previewVisible)return null;
   return <View style={dock || canvas?{flex:1}:{gap:12}}>
     {canvas && (saveRequested&&deliveryNotice||notice)?<View style={{position:'absolute',bottom:8,left:12,right:12,zIndex:10,padding:8,borderRadius:10,backgroundColor:COLORS.surfaceRaised}}>{saveStatus}<TextAction label="关闭保存提示" onPress={()=>{setSaveRequested(false);setNotice('');}}/></View>:null}
-    {canvas?<View onLayout={event=>setBounds(event.nativeEvent.layout)} style={{flex:1,minHeight:0,flexDirection:layout.sideBySide?'row':'column'}}>{canvasContent}<WorkbenchRegion visible={history && draft.provider_id==='novelai'} size={layout.sideBySide?layout.panelWidth:layout.panelHeight} horizontal={layout.sideBySide} testID="inline-image-history" style={{borderRadius:14,borderWidth:0.5,borderColor:COLORS.border,backgroundColor:COLORS.surface}}><ImageHistorySheet source={history?historyScope:undefined} inline rail={layout.sideBySide} versions={versions} selectedId={current?.id} locked={historyLocked} onLock={toggleHistoryLock} onSelect={version=>{setSelectedVersion(version);setSelected(version.id);}} onExport={exportHistory} onClose={()=>setHistory(false)} /></WorkbenchRegion></View>:dock?<ScrollView contentContainerStyle={{padding:16,gap:12}}>{content}</ScrollView>:content}
+    {canvas?<View onLayout={event=>setBounds(event.nativeEvent.layout)} style={{flex:1,minHeight:0,flexDirection:layout.sideBySide?'row':'column'}}><View testID="history-preview-region" style={{flex:1,minHeight:0,display:historySearch?'none':'flex'}}>{canvasContent}</View><WorkbenchRegion visible={history && draft.provider_id==='novelai'} size={layout.sideBySide?layout.panelWidth:historySearch?bounds.height:layout.panelHeight} horizontal={layout.sideBySide} testID="inline-image-history" style={{borderRadius:14,borderWidth:0.5,borderColor:COLORS.border,backgroundColor:COLORS.surface}}><ImageHistorySheet source={history?historyScope:undefined} inline rail={layout.sideBySide} versions={versions} selectedId={current?.id} locked={historyLocked} onLock={toggleHistoryLock} onSelect={version=>{setSelectedVersion(version);setSelected(version.id);}} onExport={exportHistory} onClose={()=>setHistory(false)} /></WorkbenchRegion></View>:dock?<ScrollView contentContainerStyle={{padding:16,gap:12}}>{content}</ScrollView>:content}
     {!canvas?actions:null}
     {processing && current?<ImageProcessingSheet version={current} projectId={draft.project_id??undefined} shotId={draft.shot_id??undefined} replace={host==='workbench'} onClose={()=>setProcessing(false)} />:null}
     {more?<ParameterSheet title="成果操作" onClose={()=>setMore(false)}>

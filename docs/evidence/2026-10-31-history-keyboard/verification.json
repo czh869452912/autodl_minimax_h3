@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-31",
+  "debugSha256": "401F2D601F909E112960E0AE6A1A447B9C6A67D34482C6A5FCB281BAC9F9B47E",
+  "debugInstalled": true,
+  "typecheck": "passed",
+  "relatedTestsPassed": 44,
+  "screenPixels": "1140x2616",
+  "densityDpi": 520,
+  "searchInput": "12345",
+  "searchBoundsWithKeyboard": "[28,586][1114,697]",
+  "searchPersistsAfterKeyboardDismiss": true,
+  "switchToEditorClosesHistory": true,
+  "restoredScreenPixels": "1080x2400",
+  "restoredDensityDpi": 420,
+  "paidRequests": 0,
+  "deviceSample": "empty history; actual matching version selection covered by component tests"
+}

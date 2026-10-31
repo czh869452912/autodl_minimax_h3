@@ -302,17 +302,22 @@ test('reference modes retain incomplete editing but refuse to prepare a request 
   }finally{act(()=>tree?.unmount());}
 });
 
-test('opening the editor overlays an open history without resizing the preview or hiding its selection',async()=>{
+test('history uses the resized viewport without an editor overlay and switching back preserves the draft',async()=>{
  let tree!:ReturnType<typeof create>;
  try{await act(async()=>{tree=create(<ImageDraftScreen id="d"/>);});
   act(()=>button(tree,'生成历史').props.onPress());
   const results=()=>tree.root.findByType(require('./CreativeResults').CreativeResults);
   expect(results().props.historyVisible).toBe(true);
   const stage=()=>StyleSheet.flatten(tree.root.findByProps({testID:'image-workbench-canvas'}).props.style);
-  const before=stage();act(()=>button(tree,'展开画面编辑').props.onPress());
-  expect(results().props.historyVisible).toBe(true);expect(stage()).toEqual(before);
+  expect(stage().flex).toBe(1);expect(stage().height).toBeUndefined();
+  expect(tree.root.findAllByProps({testID:'image-workbench-tools'})).toHaveLength(0);
+  act(()=>tree.root.findByProps({testID:'image-workbench-canvas'}).parent!.props.onLayout({nativeEvent:{layout:{width:351,height:220,x:0,y:0}}}));
+  expect(stage().height).toBeUndefined();
+  act(()=>button(tree,'展开画面编辑').props.onPress());
+  expect(results().props.historyVisible).toBe(false);
   expect(StyleSheet.flatten(tree.root.findAllByProps({testID:'image-workbench-tools'})[0].props.style).position).toBe('absolute');
-  act(()=>button(tree,'关闭画面编辑').props.onPress());expect(stage()).toEqual(before);
+  act(()=>button(tree,'关闭画面编辑').props.onPress());
+  expect(mockExecute).not.toHaveBeenCalled();
  }finally{act(()=>tree?.unmount());}
 });
 
