@@ -13,7 +13,7 @@ import { MediaPreview } from './MediaPreview';
 import { TextAction } from './WorkbenchUI';
 import { COLORS } from '../ui/theme';
 
-export function CreativeAssetPicker({ kind, projectId, purpose, target, onCreateReference, onChoose, onClose }: { kind: 'image' | 'video'|'audio'; projectId?: string;purpose?:'reference'|'source'|'mask'|'adopt'|'cover';target?:string; onCreateReference?:()=>Promise<void>; onChoose: (version: AssetVersion) => Promise<void>; onClose: () => void }) {
+export function CreativeAssetPicker({ kind, projectId, purpose, target, restrictToProject, onCreateReference, onChoose, onClose }: { kind: 'image' | 'video'|'audio'; projectId?: string;restrictToProject?:boolean;purpose?:'reference'|'source'|'mask'|'adopt'|'cover';target?:string; onCreateReference?:()=>Promise<void>; onChoose: (version: AssetVersion) => Promise<void>; onClose: () => void }) {
   const focused=useIsFocused();
   const [items, setItems] = useState<Array<{ title: string; version: AssetVersion }>>([]);
   const [imported,setImported]=useState<{title:string;version:AssetVersion}>();
@@ -78,7 +78,7 @@ export function CreativeAssetPicker({ kind, projectId, purpose, target, onCreate
     <View style={s.row}><Text style={s.title}>{purpose==='cover'?'选择项目封面':kind === 'image' ? '选择图片' : kind==='audio'?'选择音频':'选择视频'}</Text><TextAction label="取消" disabled={busy} onPress={onClose} /></View>
     {intent?<Text style={s.muted}>{intent}{target?' · '+target:''}</Text>:null}
     <TextInput accessibilityLabel="搜索素材" placeholder="搜索素材名称" value={query} editable={!busy} onChangeText={setQuery} style={s.input} />
-    {projectId ? <TextAction label={all ? '仅看本项目' : '从全部素材选择'} disabled={busy} onPress={() => setAll(!all)} /> : null}
+    {projectId && !restrictToProject ? <TextAction label={all ? '仅看本项目' : '从全部素材选择'} disabled={busy} onPress={() => setAll(!all)} /> : null}
     {kind==='image'&&visibleItems.length>0?<TextAction label={adding?'收起新增素材':'新增素材'} disabled={busy} onPress={()=>setAdding(!adding)}/>:null}
     {(adding||(!search&&!visibleItems.length&&!waiting&&!error))&&onCreateReference ? <TextAction label="制作参考图" disabled={busy || waiting} onPress={()=>{if(lock.current)return;lock.current=true;setBusy(true);setError('');void onCreateReference().catch(e=>setError(e instanceof Error?e.message:'无法创建草稿')).finally(()=>{lock.current=false;setBusy(false);});}}/> : null}
     {kind === 'image' && (adding||(!search&&!visibleItems.length&&!waiting&&!error)) ? <TextAction label="从设备导入图片" disabled={busy || waiting} onPress={() => void importImage()} /> : null}
