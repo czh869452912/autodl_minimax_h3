@@ -20,3 +20,10 @@
 - 所有读取沿用真实会话项目范围，并拒绝跨项目和回收站对象。原有 UI 全量 versions 调用保持兼容。
 - 验证：agentScope 六项通过，包括 26 版本无重复无遗漏读取及跨项目拒绝；TypeScript 检查通过。
 - 未完成：镜头上下文分页、全文索引、对象焦点与 ReadyState。
+
+## 第三切片：无消费的草稿就绪诊断
+
+- 新增 readDraftReadiness，接入 Agent draft_get：返回项目/草稿状态、原件可用性、账号绑定、工作流版本等结构化原因和下一动作。
+- 本地检查通过只表示 needs_preparation；明确 executionAllowed=false，仍需实际参数、原件、凭据和提交授权检查。没有读取密钥或发送探测请求。
+- H05 部分完成；不是任意 Provider 接入，不等于完整预检或外发授权。
+- 验证：draftReadiness 与 agentScope 共七项通过；TypeScript 检查通过。测试确认诊断不创建 Job、授权或预算预留。
