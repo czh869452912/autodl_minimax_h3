@@ -1,6 +1,6 @@
 import {readPlanPage,readPlanBatchPage,type PlanCursor,type PlanFilter,type PlanBatchSummary} from './planReads';
 import {prepareCreativeVideo} from './videoRuntime';
-import {authorizePlanRequest} from './planAuthorization';
+import {authorizePlanBatch,authorizePlanRequest,type PlanApproval} from './planAuthorization';
 import {preparedCreativeSubmission} from './preparedSubmission';
 import {fetchVideoPrice,quoteVideo,quoteLabel} from './autodlPricing';
 import {useLiveRefresh} from './useLiveRefresh';
@@ -58,6 +58,20 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
         await authorizePlanRequest(preview.db,{planId:card.plan.id,planRevision:card.plan.revision,stepId:card.step.id,stepRevision:card.step.revision,projectId,generationId:preview.account.credential_generation_id,submission:preparedCreativeSubmission(preview)});
       })}]);
   });
+  const authorizeBatch=()=>void work(async()=>{
+    if(!batchId)throw new Error('请先选择批次');
+    const candidates=cards.filter(c=>c.plan.state==='ACTIVE'&&c.step.state==='BLOCKED'&&!c.step.job_id&&!c.paused);
+    if(!candidates.length)throw new Error('没有已选图且等待授权的镜头');
+    const db=getDatabase(),approvals:PlanApproval[]=[];
+    for(const card of candidates){
+      if(!card.step.draft_id)throw new Error('计划草稿不可用');
+      const preview=await prepareCreativeVideo(card.step.draft_id);
+      if(preview.db!==db)throw new Error('数据库已切换');
+      approvals.push({planId:card.plan.id,planRevision:card.plan.revision,stepId:card.step.id,stepRevision:card.step.revision,projectId,generationId:preview.account.credential_generation_id,submission:preparedCreativeSubmission(preview)});
+    }
+    const details=approvals.map((a,i)=>candidates[i].plan.title+' · '+planVideoSummary(candidates[i].step.input_binding_json)+' · 输入 '+a.submission.versionIds.join(',')+' · 种子 '+String(a.submission.prepared.inputSnapshot.seed)).join('\n');
+    Alert.alert('确认本批次具体请求',details+'\n共 '+approvals.length+' 次视频，每个请求仅 1 次，15 分钟有效。费用未知，无金额上限。暂停或未选图镜头不在范围内；结果不明不自动重发。',[{text:'取消',style:'cancel'},{text:'授权这些请求',onPress:()=>void work(async()=>{if(db!==getDatabase())throw new Error('数据库已恢复，请重新准备');await authorizePlanBatch(db,batchId,projectId,approvals);})}]);
+  });
   if (compact && !error && !cards.some(c => c.plan.state === 'ACTIVE' && (c.decision.state === 'WAITING' || c.step.state === 'BLOCKED'))) return null;
   return <View style={{gap:12}}>
     <Text style={{color:COLORS.text,fontSize:20,fontWeight:'700'}}>{compact?'需要你处理':'选图与视频计划'}</Text>
@@ -66,6 +80,7 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
       <Text style={{color:COLORS.text,fontWeight:'700'}}>制作批次</Text>
       {action('全部计划',()=>{setBatchId(undefined);setPageHistory([]);})}
       {batches.map(batch=><View key={batch.id}>{action((batchId===batch.id?'✓ ':'')+batch.title,()=>{setBatchId(batch.id);setPageHistory([]);})}<Text style={{color:COLORS.textMuted}}>{batch.total} 个镜头 · {batch.completed} 已完成 · {batch.active} 未完成 · {batch.failed} 失败 · {batch.blocked} 待处理</Text></View>)}
+      {batchId&&!archived?action('准备并授权此批次待处理请求',authorizeBatch):null}
       {batchNext?action('更早的批次',()=>setBatchCursor(batchNext)):null}
       {batchCursor?action('最新批次',()=>setBatchCursor(undefined)):null}
       <View style={{flexDirection:'row',gap:8}}>{(['all','unfinished','failed'] as const).map(value=><View key={value}>{action(({all:'全部',unfinished:'仅未完成',failed:'仅失败'})[value]+(filter===value?' ✓':''),()=>{setFilter(value);setPageHistory([]);})}</View>)}</View>

@@ -3,7 +3,7 @@ import {createCreativeService} from './service';
 import type {CreativeCommand} from './types';
 import {readSemanticDetail} from './semanticReads';
 import {createCreativeAccounts} from './accounts';
-import {authorizePlanRequest} from './planAuthorization';
+import {authorizePlanBatch} from './planAuthorization';
 import {runCreativePlans,reconcileCreativePlans} from './planRunner';
 import {H3_CREATIVE_WORKFLOW_ID} from './videoWorkflow';
 import {readDraftSemantics} from './draftSemantics';
@@ -37,9 +37,15 @@ test('two-shot production preserves reviewed semantics, isolated grants, reorder
    const step=db.getFirstSync<{id:string;revision:number;draft_id:string}>("SELECT * FROM creative_plan_steps WHERE plan_id=? AND kind='video'",member.plan_id)!;
    const draft=(await service.draft(step.draft_id))!;
    const submission={draftId:draft.id,expectedRevision:draft.revision,draftInputJson:draft.input_json,prepared:{workflowId:H3_CREATIVE_WORKFLOW_ID,workflowVersion:'1',workflowContentHash:'hash',adapterId:'autodl',adapterVersion:'1',inputSnapshot:{prompt:'orbit',seed:17},requestInput:{prompt:'orbit',seed:17},target:{operation:'generate'}},images:[{uri:'asset://'+sha256,sha256,mime:'image/png',size:10,name:versionId}],versionIds:[versionId]};
-   const authorizationId=await authorizePlanRequest(db as never,{planId:member.plan_id,planRevision:0,stepId:step.id,stepRevision:step.revision,projectId,generationId:identity.generationId,submission},200);
-   prepared.push({step,submission,authorizationId});
+   prepared.push({step,submission,approval:{planId:member.plan_id,planRevision:0,stepId:step.id,stepRevision:step.revision,projectId,generationId:identity.generationId,submission},authorizationId:''});
   }
+  const approvals=prepared.map(p=>p.approval);
+  const batchId=db.getFirstSync<{id:string}>('SELECT id FROM creative_plan_batches')!.id;
+  await expect(authorizePlanBatch(db as never,batchId,projectId,[approvals[0],{...approvals[1],stepRevision:999}],200)).rejects.toThrow('PLAN_CONFIRMATION_CHANGED');
+  expect(db.getAllSync('SELECT * FROM creative_authorizations')).toHaveLength(0);
+  await expect(authorizePlanBatch(db as never,batchId,'other',approvals,200)).rejects.toThrow('SCOPE_MISMATCH');
+  const grants=await authorizePlanBatch(db as never,batchId,projectId,approvals,200);
+  prepared.forEach((p,i)=>p.authorizationId=grants[i]);
   const snapshot=await readDraftSemantics(db as never,prepared[0].step.draft_id);
   await execute({name:'shot.reorder',payload:{projectId,shots:[{id:shots[1],expectedRevision:4},{id:shots[0],expectedRevision:2}]}});
   // A real dependency changes only on the second shot after confirmation.

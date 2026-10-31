@@ -80,6 +80,26 @@ export async function dispatchCreativeBudget(tx: AppDatabase, id: string, exactI
   return r;
 }
 
+export type GrantInput={ provider: CreativeProvider; generationId: string; projectId?: string; operations: string[]; requestLimit: number; amountLimit: number | null; allowUnknownCost: boolean; maxUnknownRequests: number; expiresAt: number; requestBinding?:{commandId:string;requestHash:string} };
+export async function grantCreativeBudget(tx:AppDatabase,input:GrantInput,now=Date.now,accept?:(tx:AppDatabase,id:string)=>Promise<void>){
+      if(input.requestBinding){z.string().min(1).max(200).parse(input.requestBinding.commandId);z.string().regex(/^[a-f0-9]{64}$/).parse(input.requestBinding.requestHash);}
+      count.parse(input.requestLimit); money.nullable().parse(input.amountLimit); z.number().int().min(0).max(input.requestLimit).parse(input.maxUnknownRequests);
+      z.array(z.enum(['image.generate','video.generate','image.encodeReference'])).min(1).parse(input.operations);
+      if (!Number.isSafeInteger(input.expiresAt) || input.expiresAt <= now()) throw new Error('AUTHORIZATION_EXPIRY_INVALID');
+      if (input.allowUnknownCost && input.amountLimit !== null) throw new Error('UNKNOWN_COST_WITH_HARD_CAP');
+
+        const current = await tx.getFirstAsync<{ account_binding_id: string; credential_generation_id: string }>("SELECT d.* FROM creative_default_accounts d JOIN creative_credential_generations g ON g.id=d.credential_generation_id AND g.status='active' WHERE d.provider_id=? AND g.id=?", input.provider, input.generationId);
+        if (!current) throw new Error('CREDENTIAL_GENERATION_INACTIVE');
+        if (input.projectId && !await tx.getFirstAsync('SELECT id FROM creative_projects WHERE id=? AND archived_at IS NULL', input.projectId)) throw new Error('PROJECT_NOT_AVAILABLE');
+        const epoch = await tx.getFirstAsync<{ epoch: string }>('SELECT epoch FROM creative_execution_state WHERE id=1');
+        if (!epoch) throw new Error('EXECUTION_EPOCH_MISSING');
+        const id = createId();
+        await tx.runAsync('INSERT INTO creative_authorizations VALUES(?,0,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)', id, input.projectId ?? null, input.provider, current.account_binding_id, current.credential_generation_id, epoch.epoch, JSON.stringify([...new Set(input.operations)]), input.requestLimit, input.amountLimit, units[input.provider], input.allowUnknownCost ? 1 : 0, input.maxUnknownRequests, input.expiresAt, now());
+        if(input.requestBinding)await tx.runAsync('INSERT INTO creative_authorization_requests VALUES(?,?,?)',id,input.requestBinding.commandId,input.requestBinding.requestHash);
+        if(accept)await accept(tx,id);
+        return id;
+}
+
 export function createCreativeBudget(db: AppDatabase, now = Date.now) {
   return {
     async availableUnknownRequests(projectId: string, provider: CreativeProvider) {
@@ -95,25 +115,7 @@ export function createCreativeBudget(db: AppDatabase, now = Date.now) {
         .reduce((sum, r) => sum + Math.max(0, Math.min(r.request_limit-r.used, r.max_unknown_requests-r.unknown_used)), 0);
     },
     async list() { return db.getAllAsync<Authorization>('SELECT * FROM creative_authorizations ORDER BY created_at DESC'); },
-    async grant(input: { provider: CreativeProvider; generationId: string; projectId?: string; operations: string[]; requestLimit: number; amountLimit: number | null; allowUnknownCost: boolean; maxUnknownRequests: number; expiresAt: number; requestBinding?:{commandId:string;requestHash:string} }, accept?: (tx:AppDatabase,authorizationId:string)=>Promise<void>) {
-      if(input.requestBinding){z.string().min(1).max(200).parse(input.requestBinding.commandId);z.string().regex(/^[a-f0-9]{64}$/).parse(input.requestBinding.requestHash);}
-      count.parse(input.requestLimit); money.nullable().parse(input.amountLimit); z.number().int().min(0).max(input.requestLimit).parse(input.maxUnknownRequests);
-      z.array(z.enum(['image.generate','video.generate','image.encodeReference'])).min(1).parse(input.operations);
-      if (!Number.isSafeInteger(input.expiresAt) || input.expiresAt <= now()) throw new Error('AUTHORIZATION_EXPIRY_INVALID');
-      if (input.allowUnknownCost && input.amountLimit !== null) throw new Error('UNKNOWN_COST_WITH_HARD_CAP');
-      return withWriteTransaction(db, async tx => {
-        const current = await tx.getFirstAsync<{ account_binding_id: string; credential_generation_id: string }>("SELECT d.* FROM creative_default_accounts d JOIN creative_credential_generations g ON g.id=d.credential_generation_id AND g.status='active' WHERE d.provider_id=? AND g.id=?", input.provider, input.generationId);
-        if (!current) throw new Error('CREDENTIAL_GENERATION_INACTIVE');
-        if (input.projectId && !await tx.getFirstAsync('SELECT id FROM creative_projects WHERE id=? AND archived_at IS NULL', input.projectId)) throw new Error('PROJECT_NOT_AVAILABLE');
-        const epoch = await tx.getFirstAsync<{ epoch: string }>('SELECT epoch FROM creative_execution_state WHERE id=1');
-        if (!epoch) throw new Error('EXECUTION_EPOCH_MISSING');
-        const id = createId();
-        await tx.runAsync('INSERT INTO creative_authorizations VALUES(?,0,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)', id, input.projectId ?? null, input.provider, current.account_binding_id, current.credential_generation_id, epoch.epoch, JSON.stringify([...new Set(input.operations)]), input.requestLimit, input.amountLimit, units[input.provider], input.allowUnknownCost ? 1 : 0, input.maxUnknownRequests, input.expiresAt, now());
-        if(input.requestBinding)await tx.runAsync('INSERT INTO creative_authorization_requests VALUES(?,?,?)',id,input.requestBinding.commandId,input.requestBinding.requestHash);
-        if(accept)await accept(tx,id);
-        return id;
-      });
-    },
+    async grant(input:GrantInput,accept?:(tx:AppDatabase,id:string)=>Promise<void>){return withWriteTransaction(db,tx=>grantCreativeBudget(tx,input,now,accept));},
     async revoke(id: string) { await withWriteTransaction(db, async tx => { await tx.runAsync('UPDATE creative_authorizations SET revoked_at=COALESCE(revoked_at,?),revision=revision+1 WHERE id=? AND revoked_at IS NULL', now(), id); }); },
     reserve: (input: ReserveInput) => withWriteTransaction(db, tx => reserveCreativeBudget(tx, input, now())),
     dispatch: (id: string, identity: { accountId: string; generationId: string; requestHash: string }) => withWriteTransaction(db, tx => dispatchCreativeBudget(tx, id, identity, now())),
