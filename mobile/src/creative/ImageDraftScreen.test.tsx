@@ -1,3 +1,4 @@
+jest.mock('./accountRuntime',()=>({creativeAccounts:()=>({list:async()=>[{provider_id:'novelai'}]})}));
 jest.mock('@copilotkit/react-native/components',()=>({CopilotMarkdown:({content}:{content:string})=>require('react').createElement(require('react-native').Text,null,content)}));
 jest.mock('../storage/databaseClient',()=>({getDatabase:()=>({})}));
 jest.mock('./taskRecovery',()=>({unknownTaskReviewed:async()=>mockReviewed}));
@@ -232,7 +233,7 @@ test('an unknown submission stays on the canvas and blocks another generation', 
 
 test('a reviewed unknown image unlocks only a new explicit attempt and keeps its original result visible',async()=>{
   mockReviewed=true;
-  mockDraft={...mockDraft,state:'SUBMITTED',job_id:'unknown-job',target_asset_id:'asset'};
+  mockDraft={...mockDraft,state:'SUBMITTED',job_id:'unknown-job',target_asset_id:'asset',input_json:JSON.stringify({...defaultNovelAiDraft,prompt:'A landscape'})};
   let tree!:ReturnType<typeof create>;
   try{
     await act(async()=>{tree=create(<ImageDraftScreen id="d"/>);});
@@ -249,6 +250,7 @@ test('a reviewed unknown image unlocks only a new explicit attempt and keeps its
 });
 
 test('compact settings retain batch size and Medium and one click submits the batch once',async()=>{
+  mockDraft.input_json=JSON.stringify({...defaultNovelAiDraft,prompt:'A landscape'});
   let tree!:ReturnType<typeof create>;
   try{
     await act(async()=>{tree=create(<ImageDraftScreen id="d" />);});

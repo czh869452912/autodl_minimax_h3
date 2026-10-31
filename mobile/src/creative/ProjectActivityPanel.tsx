@@ -1,3 +1,5 @@
+import {useLiveRefresh} from './useLiveRefresh';
+import {activityLabel,activityState} from './activityPresentation';
 import {useEffect,useRef,useState} from 'react';
 import {Text,View} from 'react-native';
 import {useRouter} from 'expo-router';
@@ -9,11 +11,10 @@ import {COLORS} from '../ui/theme';
 import {createId} from '../ids';
 import type {ChangeProposal} from './changeReview';
 export function ProjectActivity({projectId,initialProposalId}:{projectId:string;initialProposalId?:string}){
-  const router=useRouter(),[rows,setRows]=useState<Entry[]>([]),[error,setError]=useState('');
+  const router=useRouter(),[rows,setRows]=useState<Entry[]>([]),[diagnostic,setDiagnostic]=useState<string>(),[error,setError]=useState('');
   const [proposals,setProposals]=useState<ChangeProposal[]>([]),[busy,setBusy]=useState(false),lock=useRef(false);
-  useEffect(()=>{let live=true;const load=async()=>{const p=await getDatabase().getAllAsync<ChangeProposal>("SELECT * FROM creative_change_proposals WHERE project_id=? AND ((? IS NULL AND state='WAITING') OR id=?) ORDER BY created_at DESC LIMIT 30",projectId,initialProposalId??null,initialProposalId??null);if(live)setProposals(p);};void load().catch(()=>setError('建议读取失败'));const timer=setInterval(()=>void load().catch(()=>undefined),2000);return()=>{live=false;clearInterval(timer);};},[projectId,initialProposalId]);
   const resolve=async(id:string,accept:boolean)=>{if(lock.current)return;lock.current=true;setBusy(true);setError('');try{await creativeService().execute({name:'change.resolve',payload:{id,accept}},createId());setProposals(p=>initialProposalId?p.map(v=>v.id===id?{...v,state:accept?'APPLIED':'REJECTED'}:v):p.filter(v=>v.id!==id));}catch(e){setError(e instanceof Error?e.message:'处理失败');}finally{lock.current=false;setBusy(false);}};
-  useEffect(()=>{let live=true;const refresh=async()=>{try{const rows=await readProjectActivity(getDatabase(),projectId);if(live)setRows(rows);}catch{if(live)setError('活动读取失败');}};void refresh();const timer=setInterval(()=>void refresh(),3000);return()=>{live=false;clearInterval(timer);};},[projectId]);
+  useLiveRefresh(async current=>{try{const [rows,p]=await Promise.all([readProjectActivity(getDatabase(),projectId),getDatabase().getAllAsync<ChangeProposal>("SELECT * FROM creative_change_proposals WHERE project_id=? AND ((? IS NULL AND state='WAITING') OR id=?) ORDER BY created_at DESC LIMIT 30",projectId,initialProposalId??null,initialProposalId??null)]);if(current()){setRows(rows);setProposals(p);}}catch{if(current())setError('活动读取失败');}},3000,`${projectId}:${initialProposalId??''}`);
   return <View style={{gap:12}}><Text style={{color:COLORS.text,fontSize:20,fontWeight:'700'}}>项目活动</Text>
     {error?<Text style={{color:COLORS.danger}}>{error}</Text>:null}
     {initialProposalId&&!proposals.length?<Text style={{color:COLORS.textMuted}}>指定建议已不可用或不属于此项目。</Text>:null}
@@ -28,7 +29,9 @@ export function ProjectActivity({projectId,initialProposalId}:{projectId:string;
     </View>)}
     {!rows.length?<Text style={{color:COLORS.textMuted}}>尚无活动。</Text>:null}
     {rows.map(r=><View key={`${r.kind}:${r.id}`} style={{padding:12,borderWidth:1,borderColor:COLORS.border,borderRadius:10,gap:6}}>
-      <Text style={{color:COLORS.text}}>{r.label} · {r.state}</Text><Text style={{color:COLORS.textMuted}}>{new Date(r.createdAt).toLocaleString()} · {r.origin==='agent'?'Agent':r.origin==='user'?'手动操作':r.origin==='executor'?'执行器':'计划'}</Text>
+      <Text style={{color:COLORS.text}}>{r.kind==='command'?activityLabel(r.label):r.label} · {activityState(r.state)}</Text><Text style={{color:COLORS.textMuted}}>{new Date(r.createdAt).toLocaleString()} · {r.origin==='agent'?'Agent':r.origin==='user'?'手动操作':r.origin==='executor'?'执行器':'计划'}</Text>
+      <ListAction label={diagnostic===r.id?'收起诊断详情':'诊断详情'} secondary onPress={()=>setDiagnostic(diagnostic===r.id?undefined:r.id)}/>
+      {diagnostic===r.id?<Text selectable style={{color:COLORS.textMuted}}>{r.label} · {r.state} · {r.id}</Text>:null}
       {r.jobId?<ListAction label="查看任务" secondary onPress={()=>router.push({pathname:'/creative-task/[id]',params:{id:r.jobId!}})}/>:r.draftId?<ListAction label="查看草稿" secondary onPress={()=>void creativeService().draft(r.draftId!).then(d=>{if(d)router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}});}).catch(()=>setError('草稿读取失败'))}/>:null}
     </View>)}
   </View>;

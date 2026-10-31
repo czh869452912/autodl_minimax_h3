@@ -1,0 +1,146 @@
+[
+  {
+    "text": "",
+    "content-desc": "关闭素材管理",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[0,0][1080,2400]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "素材管理",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,1561][928,1631]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "完成",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[953,1549][1038,1644]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "完成",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[963,1573][1027,1618]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "存储与清理，查看占用，清理缓存与孤儿文件",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1687][1049,1835]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "存储与清理",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[32,1703][967,1761]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "查看占用，清理缓存与孤儿文件",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[32,1766][967,1819]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰅂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[993,1731][1049,1789]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "历史作品，查看旧版作品并迁入素材库",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1862][1049,2010]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "历史作品",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[32,1878][967,1936]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "查看旧版作品并迁入素材库",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[32,1941][967,1994]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰅂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[993,1906][1049,1964]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "创作草稿，继续尚未完成的创作",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,2037][1049,2185]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "创作草稿",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[32,2053][967,2111]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "继续尚未完成的创作",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[32,2116][967,2169]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰅂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[993,2081][1049,2139]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "迁入历史作品（可中断）",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,2212][1049,2306]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "迁入历史作品（可中断）",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[348,2233][733,2285]",
+    "class": "android.widget.TextView"
+  }
+]

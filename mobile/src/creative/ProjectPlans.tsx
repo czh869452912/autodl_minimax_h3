@@ -1,3 +1,5 @@
+import {fetchVideoPrice,quoteVideo,quoteLabel} from './autodlPricing';
+import {useLiveRefresh} from './useLiveRefresh';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {Alert,Image,Text,TextInput,View} from 'react-native';
 import {useRouter} from 'expo-router';
@@ -15,10 +17,11 @@ type Card={plan:CreativePlan;decision:CreativeDecision;step:CreativePlanStep;can
 export function ProjectPlans({projectId,archived=false,compact=false,initialPlanId}:{projectId:string;initialPlanId?:string;archived?:boolean;compact?:boolean}){
   const router=useRouter(),lock=useRef(false);
   const [cards,setCards]=useState<Card[]>([]),[shots,setShots]=useState<CreativeShot[]>([]),[shotId,setShotId]=useState(''),[prompt,setPrompt]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const [choicesLoaded,setChoicesLoaded]=useState(false);
   const [choices,setChoices]=useState<Array<{id:string;title:string}>>([]),[selected,setSelected]=useState<string[]>([]);
   const [choiceNext,setChoiceNext]=useState<{createdAt:number;id:string}>();
   const readEpoch=useRef(0);
-  const refresh=useCallback(async()=>{
+  const refresh=useCallback(async(current:()=>boolean=()=>true)=>{
     const epoch=++readEpoch.current;
     const db=getDatabase(),plans=await db.getAllAsync<CreativePlan>('SELECT * FROM creative_plans WHERE project_id=? AND (? IS NULL OR id=?) ORDER BY updated_at DESC LIMIT 30',projectId,initialPlanId??null,initialPlanId??null);
     const rows:Card[]=[];
@@ -27,15 +30,19 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
       const step=await db.getFirstAsync<CreativePlanStep>("SELECT * FROM creative_plan_steps WHERE plan_id=? AND kind='video'",plan.id);
       if(decision&&step)rows.push({plan,decision,step,candidates:await db.getAllAsync("SELECT c.version_id,a.title,b.relative_path FROM creative_decision_candidates c JOIN creative_asset_versions v ON v.id=c.version_id JOIN creative_assets a ON a.id=v.asset_id LEFT JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE c.decision_id=?",decision.id)});
     }
-    const shots=await creativeService().shots(projectId);if(epoch===readEpoch.current){setCards(rows);setShots(shots);}
+    const shots=await creativeService().shots(projectId);if(epoch===readEpoch.current&&current()){setCards(rows);setShots(shots);}
   },[projectId,initialPlanId]);
-  useEffect(()=>{let live=true;const poll=()=>{if(live)void refresh().catch(()=>{if(live)setError('计划读取失败');});};poll();const timer=setInterval(poll,2000);return()=>{live=false;readEpoch.current++;clearInterval(timer);};},[refresh]);
+  useLiveRefresh(async current=>{try{await refresh(current);}catch{if(current())setError('计划读取失败');}},2000,`${projectId}:${initialPlanId??''}`);
   const work=async(fn:()=>Promise<unknown>)=>{if(lock.current||archived)return;lock.current=true;setBusy(true);setError('');try{await fn();executorWakePort.signal('command');await refresh();}catch(e){setError(e instanceof Error?e.message:'操作失败');}finally{lock.current=false;setBusy(false);}};
   const action=(label:string,fn:()=>void)=><ListAction label={label} secondary disabled={busy||archived} onPress={fn}/>;
   const authorize=(card:Card)=>void work(async()=>{
     const account=(await creativeAccounts().list()).find(a=>a.provider_id==='autodl');if(!account)throw new Error('请先在创作账号面板连接 AutoDL');
-    Alert.alert('授权此计划继续生成',`${planVideoSummary(card.step.input_binding_json)}。固定使用已选图片与计划提示词，最多生成 1 次视频，15 分钟有效。费用未知，无金额上限。网络结果不明不会自动重发。`,[
-      {text:'取消',style:'cancel'},{text:'授权并继续',onPress:()=>void work(async()=>{
+    const binding=JSON.parse(card.step.input_binding_json);
+    const price=await fetchVideoPrice().catch(()=>undefined);
+    const quote=quoteVideo(price,binding.resolution,binding.duration);
+    const estimate=quote?`${quoteLabel(quote)} CNY，查询于 ${new Date(quote.checkedAt).toLocaleTimeString()}。此参考价不是可执行的费用上限；当前服务按未知费用单次授权。`:'无法获取有效估价，费用未知。';
+    Alert.alert('授权此计划继续生成',`${planVideoSummary(card.step.input_binding_json)}。固定输入版本 ${card.decision.selected_version_id ?? '尚未选定'}，使用计划提示词，最多生成 1 次视频，15 分钟有效。${estimate}无金额上限。网络结果不明不会自动重发。`,[
+      {text:'取消',style:'cancel'},{text:'接受未知费用，仅授权一次',onPress:()=>void work(async()=>{
         const authorizationId=await creativeBudget().grant({provider:'autodl',generationId:account.credential_generation_id,projectId,operations:['video.generate'],requestLimit:1,amountLimit:null,allowUnknownCost:true,maxUnknownRequests:1,expiresAt:Date.now()+15*60000});
         await creativeService().execute({name:'plan.resume',payload:{id:card.plan.id,expectedRevision:card.plan.revision,authorizationId}},createId());
       })}]);
@@ -64,14 +71,17 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
       {card.plan.state==='ACTIVE'&&card.step.state!=='DISPATCHED'?action('取消计划',()=>void work(()=>creativeService().execute({name:'plan.cancel',payload:{id:card.plan.id,expectedRevision:card.plan.revision}},createId()))):null}
       {card.plan.state==='QUARANTINED'?<Text style={{color:COLORS.textMuted}}>请先核对旧任务结果。确需再次生成时新建计划并重新授权，可能重复消费。</Text>:null}
     </View>)}
-    {!archived&&!compact?<View style={{gap:8}}>
+    {!archived&&!compact&&!shots.length?<View style={{gap:8}}><Text style={{color:COLORS.text}}>先添加镜头，再选择参考图片并编排视频。</Text><ListAction label="去添加镜头" onPress={()=>router.replace({pathname:'/creative-project/[id]',params:{id:projectId,tab:'shots',requestId:createId()}})}/></View>:null}
+    {!archived&&!compact&&shots.length>0?<View style={{gap:8}}>
       <Text style={{color:COLORS.text,fontWeight:'700'}}>新建选图计划</Text>
-      {shots.map(s=><View key={s.id}>{action(`${shotId===s.id?'✓ ':''}${s.title}`,()=>{setShotId(s.id);setPrompt(s.description);})}</View>)}
-      <TextInput accessibilityLabel="计划视频提示词" placeholder="动作、运镜和节奏" multiline value={prompt} onChangeText={setPrompt} style={{color:COLORS.text,borderWidth:1,borderColor:COLORS.border,padding:12,minHeight:90}}/>
-      {action('读取项目图片候选',()=>void work(async()=>{const page=await creativeService().availableVersionPage({kind:'image',projectId});setChoices(page.items.map(item=>({id:item.version.id,title:`${item.title} · 版本 ${item.version.versionNo}`})));setChoiceNext(page.next);setSelected([]);}))}
+      {shots.map(s=><View key={s.id}>{action(`${shotId===s.id?'✓ ':''}${s.title}`,()=>{setShotId(s.id);setPrompt(s.description);setChoices([]);setSelected([]);setChoiceNext(undefined);setChoicesLoaded(false);})}</View>)}
+      {selected.length>0?<TextInput accessibilityLabel="计划视频提示词" placeholder="动作、运镜和节奏" multiline value={prompt} onChangeText={setPrompt} style={{color:COLORS.text,borderWidth:1,borderColor:COLORS.border,padding:12,minHeight:90}}/>:null}
+      {shotId?action('读取项目图片候选',()=>void work(async()=>{const page=await creativeService().availableVersionPage({kind:'image',projectId});setChoices(page.items.map(item=>({id:item.version.id,title:`${item.title} · 版本 ${item.version.versionNo}`})));setChoiceNext(page.next);setSelected([]);setChoicesLoaded(true); })):null}
+      {!shotId?<Text style={{color:COLORS.textMuted}}>先选择要制作的镜头。</Text>:null}
+      {shotId&&choicesLoaded&&!choices.length?<View style={{gap:8}}><Text style={{color:COLORS.textMuted}}>项目还没有可用图片。先为这个镜头导入图片或制作参考图，再回来编排视频。</Text><ListAction label="为此镜头准备参考图" onPress={()=>router.replace({pathname:'/creative-project/[id]',params:{id:projectId,tab:'shots',shotId,requestId:createId()}})}/></View>:null}
       {choices.map(c=><View key={c.id}>{action(`${selected.includes(c.id)?'✓ ':''}${c.title}`,()=>setSelected(previous=>previous.includes(c.id)?previous.filter(v=>v!==c.id):previous.length<20?[...previous,c.id]:previous))}</View>)}
       {choiceNext?action('加载更多图片候选',()=>void work(async()=>{const page=await creativeService().availableVersionPage({kind:'image',projectId,after:choiceNext});setChoices(old=>[...old,...page.items.filter(item=>!old.some(c=>c.id===item.version.id)).map(item=>({id:item.version.id,title:`${item.title} · 版本 ${item.version.versionNo}`}))]);setChoiceNext(page.next);})):null}
-      {action('保存计划（不消费）',()=>void work(async()=>{const shot=shots.find(s=>s.id===shotId);if(!shot)throw new Error('请先选择镜头');for(const id of selected)await creativeFiles().verify(id);await creativeService().execute({name:'plan.createSelection',payload:{projectId,shotId,expectedShotRevision:shot.revision,title:`${shot.title} · 选图生成视频`,candidateVersionIds:selected,videoPrompt:prompt}},createId());setSelected([]);setChoices([]);}))}
+      {selected.length>0?action('保存计划（不消费）',()=>void work(async()=>{const shot=shots.find(s=>s.id===shotId);if(!shot)throw new Error('请先选择镜头');for(const id of selected)await creativeFiles().verify(id);await creativeService().execute({name:'plan.createSelection',payload:{projectId,shotId,expectedShotRevision:shot.revision,title:`${shot.title} · 选图生成视频`,candidateVersionIds:selected,videoPrompt:prompt}},createId());setSelected([]);setChoices([]);setChoicesLoaded(false); })):null}
     </View>:null}
   </View>;
 }

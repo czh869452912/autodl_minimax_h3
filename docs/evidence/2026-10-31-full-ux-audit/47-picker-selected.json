@@ -1,0 +1,178 @@
+[
+  {
+    "text": "",
+    "content-desc": "Drag handle",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[498,659][582,670]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "Photos",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[242,728][571,854]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "Collections",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[592,728][922,854]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "More",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[975,760][1038,823]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "Media grid",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[0,917][1080,2400]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "AutoDL H3 will only have access to the photos you select",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[210,959][996,1055]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "Dismiss",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[855,1092][985,1145]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "Photo taken on Oct 27, 2026 11:54 AM",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[0,1271][358,1629]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "Photo taken on Oct 27, 2026 11:02 AM",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[361,1271][719,1629]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "Photo taken on Oct 26, 2026 2:59 PM",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[722,1271][1080,1629]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "Photo taken on Oct 26, 2026 2:56 PM",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[0,1632][358,1990]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "Photo taken on Oct 26, 2026 1:21 PM",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[361,1632][719,1990]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "Photo taken on Oct 26, 2026 1:12 PM",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[722,1632][1080,1990]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "Photo taken on Oct 26, 2026 1:12 PM",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[0,1993][358,2351]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "Photo taken on Oct 26, 2026 12:44 PM",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[361,1993][719,2351]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "Selected Photo taken on Oct 26, 2026 12:43 PM",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[722,1993][1080,2351]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "1",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[757,2007][777,2070]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "October",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,2396][170,2400]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "Deselect all",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[100,2170][163,2233]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "1",
+    "content-desc": "1 photos or videos selected",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[205,2165][240,2238]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "Preview",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[622,2175][750,2228]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "Done",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[866,2175][949,2228]",
+    "class": "android.widget.TextView"
+  }
+]

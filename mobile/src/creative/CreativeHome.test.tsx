@@ -9,7 +9,7 @@ const mockStore:Record<string,string>={};
 const mockNavigate=jest.fn(),mockPush=jest.fn(),mockWrite=jest.fn(async(_value:unknown)=>undefined);
 const mockExecute=jest.fn(async(command:any)=>{const row={id:`new-${mockRows.length}`,provider_id:command.name==='draft.createImage'?'novelai':'autodl',state:'EDITING',revision:0,input_json:JSON.stringify(command.payload.input??{prompt:command.payload.prompt})};mockRows.unshift(row);return {status:'completed',value:{draftId:row.id}};});
 jest.mock('./creativeIdea',()=>({readCreativeIdea:async()=>({mode:'image',image:'Portrait',video:'Pan'}),writeCreativeIdea:(value:unknown)=>mockWrite(value)}));
-jest.mock('./runtime',()=>({creativeService:()=>({drafts:async()=>mockRows,creationRecords:async()=>require('./workbenchSessions').groupWorkbenchDrafts(mockRows,'image'),draft:async(id:string)=>mockRows.find(d=>d.id===id),versions:async()=>[],execute:mockExecute})}));
+jest.mock('./runtime',()=>({creativeService:()=>({drafts:async()=>mockRows,creationRecordPage:async()=>({items:require('./workbenchSessions').groupWorkbenchDrafts(mockRows,'image'),reset:false}),creationRecords:async()=>require('./workbenchSessions').groupWorkbenchDrafts(mockRows,'image'),draft:async(id:string)=>mockRows.find(d=>d.id===id),versions:async()=>[],execute:mockExecute})}));
 jest.mock('expo-secure-store',()=>({getItemAsync:async(key:string)=>mockStore[key]??null,setItemAsync:async(key:string,value:string)=>{mockStore[key]=value;}}));
 jest.mock('./ImageDraftScreen',()=>({ImageDraftScreen:(props:any)=>{require('./WorkbenchUI').useWorkbenchLeave(async()=>mockCanLeave);return require('react').createElement(require('react-native').Text,{testID:'image-workbench'},props.id);}}));
 jest.mock('./VideoDraftScreen',()=>({VideoDraftScreen:(props:any)=>require('react').createElement(require('react-native').Text,{testID:'video-workbench'},props.id)}));
@@ -123,4 +123,20 @@ test('a consumed request can be explicitly opened again without creating another
   await act(async()=>tree.update(<CreativeHome openRequest={request}/>));
   expect(tree.root.findByProps({testID:'video-workbench'}).props.children).toBe('b');expect(mockExecute).not.toHaveBeenCalled();
  }finally{act(()=>tree?.unmount());}
+});
+
+test('a discarded record reports inside the sheet and preserves the current canvas',async()=>{
+ jest.useFakeTimers();
+ mockRows=[{id:'a',provider_id:'novelai',state:'EDITING',input_json:'{"prompt":"Original"}'},{id:'b',provider_id:'novelai',state:'EDITING',input_json:'{"prompt":"Other"}'}];
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<CreativeHome/>);});
+  await act(async()=>button(tree,'创作记录').props.onPress());
+  await act(async()=>jest.advanceTimersByTime(250));
+  mockRows=mockRows.filter(row=>row.id!=='b');
+  await act(async()=>button(tree,'Other').props.onPress());
+  expect(tree.root.findByProps({testID:'image-workbench'}).props.children).toBe('a');
+  const sheet=tree.root.findByType(require('./WorkbenchUI').ParameterSheet);
+  expect(sheet.findAll(node=>node.props.accessibilityRole==='alert'&&node.props.children==='这份创作已不可用，请重新打开记录').length).toBeGreaterThan(0);
+ }finally{act(()=>tree?.unmount());jest.useRealTimers();}
 });

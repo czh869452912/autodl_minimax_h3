@@ -1,0 +1,202 @@
+[
+  {
+    "text": "",
+    "content-desc": "返回",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,95][121,184]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰁍",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[54,116][99,162]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "KeyboardQA",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[137,107][944,172]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "项目设置",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[960,95][1050,184]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰢻",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[982,116][1027,162]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "历史作品",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,210][229,305]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "历史作品",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[60,231][200,283]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "创作草稿",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[251,210][449,305]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "创作草稿",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[279,231][419,283]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "概览",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,331][159,426]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "概览",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[60,352][130,404]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "镜头",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[176,331][304,426]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "镜头",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[204,352][274,404]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "素材",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[319,331][446,426]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "素材",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[347,352][417,404]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "计划",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[463,331][591,426]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "计划",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[491,352][561,404]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "活动",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[606,331][733,426]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "活动",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[634,352][704,404]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "归档项目",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,452][1049,546]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "归档项目",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[470,473][610,525]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "设置封面：打开项目素材，选择图片版本，在“加入项目或更新采用版本”中设为封面。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[31,572][1048,688]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "项目活动",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[32,715][1049,793]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "project.create · 已保存",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[66,859][1016,913]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "10/25/2026, 9:02:13 AM · 手动操作",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[66,928][1016,982]",
+    "class": "android.widget.TextView"
+  }
+]

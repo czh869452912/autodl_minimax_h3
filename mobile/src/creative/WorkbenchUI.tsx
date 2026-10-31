@@ -27,14 +27,14 @@ export function InlineWorkbenchPanel({title,onClose,children,header}:{title:stri
 
 export function TextAction({ label, onPress, disabled = false, icon }: { label: string; onPress: () => void; disabled?: boolean; icon?: IconName }) {
   const compact=useCompactWorkbench();
-  return <Pressable hitSlop={compact?4:undefined} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [w.textAction, compact && {minHeight:36,paddingVertical:4}, pressed && w.pressed, disabled && w.disabled]}>
+  return <Pressable hitSlop={compact?4:undefined} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [w.textAction, compact && {minHeight:48,paddingVertical:4}, pressed && w.pressed, disabled && w.disabled]}>
     {icon ? <AppIcon name={icon} size={compact?16:18} color={COLORS.primaryActive} /> : null}<Text style={[w.actionText,compact && {fontSize:12,lineHeight:17}]}>{label}</Text>
   </Pressable>;
 }
 
 export function SettingRow({ label, value, onPress, expanded, disabled = false, icon }: { label: string; value?: string; onPress: () => void; expanded?: boolean; disabled?: boolean; icon?: IconName }) {
   const compact=useCompactWorkbench();
-  return <Pressable accessibilityRole="button" accessibilityLabel={value ? `${label}，${value}` : label} accessibilityState={{ disabled, ...(expanded === undefined ? {} : { expanded }) }} disabled={disabled} onPress={onPress} style={({ pressed }) => [w.setting,compact && {paddingVertical:6,minHeight:44}, pressed && w.pressed, disabled && w.disabled]}>
+  return <Pressable accessibilityRole="button" accessibilityLabel={value ? `${label}，${value}` : label} accessibilityState={{ disabled, ...(expanded === undefined ? {} : { expanded }) }} disabled={disabled} onPress={onPress} style={({ pressed }) => [w.setting,compact && {paddingVertical:6,minHeight:48}, pressed && w.pressed, disabled && w.disabled]}>
     {icon ? <AppIcon name={icon} size={21} /> : null}
     <View style={{ flex: 1, gap: 2 }}><Text style={w.settingLabel}>{label}</Text>{value ? <Text style={w.caption}>{value}</Text> : null}</View>
     <AppIcon name={expanded === undefined ? 'chevron_right' : expanded ? 'expand_less' : 'expand_more'} size={21} />
@@ -43,19 +43,19 @@ export function SettingRow({ label, value, onPress, expanded, disabled = false, 
 
 export function SegmentedChoices<T extends string>({ label, options, value, onChange, disabled = false, singleRow = false, variant='segments' }: { variant?:'segments'|'tabs';label: string; options: ReadonlyArray<{ id: T; label: string; icon?: IconName }>; value: T; onChange: (id: T) => void; disabled?: boolean; singleRow?: boolean }) {
   const compact=useCompactWorkbench();
-  return <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[w.segments,compact && {padding:2,gap:2,borderRadius:10},singleRow && {flexWrap:'nowrap'},variant==='tabs' && {backgroundColor:'transparent',padding:0,gap:12}]}>{options.map(option => <Pressable key={option.id} hitSlop={compact?4:undefined} accessibilityRole="radio" accessibilityLabel={option.label} accessibilityState={{ checked: value === option.id, disabled }} disabled={disabled} onPress={() => onChange(option.id)} style={({ pressed }) => [w.segment,compact && {minHeight:32,padding:5,borderRadius:8,flexBasis:60},singleRow && {flexBasis:0,paddingHorizontal:4}, value === option.id && w.segmentSelected,variant==='tabs' && {borderRadius:0,backgroundColor:'transparent',elevation:0,shadowOpacity:0,borderBottomWidth:2,borderBottomColor:value===option.id?COLORS.primary:'transparent'}, pressed && w.pressed, disabled && w.disabled]}>
+  return <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[w.segments,compact && {padding:2,gap:2,borderRadius:10},singleRow && {flexWrap:'nowrap'},variant==='tabs' && {backgroundColor:'transparent',padding:0,gap:12}]}>{options.map(option => <Pressable key={option.id} hitSlop={compact?4:undefined} accessibilityRole="radio" accessibilityLabel={option.label} accessibilityState={{ checked: value === option.id, disabled }} disabled={disabled} onPress={() => onChange(option.id)} style={({ pressed }) => [w.segment,compact && {minHeight:48,padding:5,borderRadius:8,flexBasis:60},singleRow && {flexBasis:0,paddingHorizontal:4}, value === option.id && w.segmentSelected,variant==='tabs' && {borderRadius:0,backgroundColor:'transparent',elevation:0,shadowOpacity:0,borderBottomWidth:2,borderBottomColor:value===option.id?COLORS.primary:'transparent'}, pressed && w.pressed, disabled && w.disabled]}>
     {option.icon ? <AppIcon name={option.icon} size={compact?16:19} color={value === option.id ? COLORS.primaryActive : COLORS.textMuted} /> : null}<Text numberOfLines={singleRow?1:undefined} adjustsFontSizeToFit={singleRow} minimumFontScale={0.85} style={[w.segmentText,compact && {fontSize:12}, value === option.id && w.segmentTextSelected]}>{option.label}</Text>
   </Pressable>)}</View>;
 }
 
-export function ParameterSheet({ title, description, onClose, children, fullScreen = false }: { title: string; description?: string; onClose: () => void; children: ReactNode; fullScreen?:boolean }) {
+export function ParameterSheet({ title, description, onClose, children, fullScreen = false, scrollable = true }: { title: string; description?: string; onClose: () => void; children: ReactNode; fullScreen?:boolean; scrollable?:boolean }) {
   const compact=useCompactWorkbench();
   return <Modal transparent={!fullScreen} visible animationType="slide" onRequestClose={onClose}>
     <KeyboardSurface style={fullScreen ? {flex:1,backgroundColor:COLORS.surface} : w.modal}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`关闭${title}`} onPress={onClose} style={StyleSheet.absoluteFill} />
+      {!fullScreen?<Pressable accessibilityLabel={`关闭${title}`} accessible={false} importantForAccessibility="no" onPress={onClose} style={StyleSheet.absoluteFill} />:null}
       <SafeAreaView edges={fullScreen ? ['top','bottom','left','right'] : ['bottom', 'left', 'right']} style={fullScreen ? {flex:1,backgroundColor:COLORS.surface} : w.sheet}>
         <View style={w.sheetHeader}><View style={{ flex: 1 }}><Text accessibilityRole="header" style={w.sectionTitle}>{title}</Text>{description ? <Text style={w.caption}>{description}</Text> : null}</View><TextAction label="完成" onPress={onClose} /></View>
-        <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="none" contentContainerStyle={{ padding: compact?12:20, gap: compact?10:16 }}>{children}</ScrollView>
+        <>{scrollable?<ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="none" contentContainerStyle={{ padding: compact?12:20, gap: compact?10:16 }}>{children}</ScrollView>:<View style={{flex:1,minHeight:0}}>{children}</View>}</>
       </SafeAreaView>
     </KeyboardSurface>
   </Modal>;
@@ -68,7 +68,7 @@ export function SectionHeading({ title, detail }: { title: string; detail?: stri
 
 export function IconAction({label,icon,onPress,disabled=false,selected=false}:{label:string;icon:IconName;onPress:()=>void;disabled?:boolean;selected?:boolean}) {
   const compact=useCompactWorkbench(),{fontScale}=useWindowDimensions();
-  const size=compact && fontScale<=1.2?34:44;
+  const size=48;
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled,selected}} disabled={disabled} onPress={onPress} hitSlop={5} style={({pressed})=>({width:size,minHeight:size,alignItems:'center',justifyContent:'center',borderRadius:10,backgroundColor:selected?COLORS.primarySoft:pressed?COLORS.surfaceRaised:'transparent',opacity:disabled?0.4:1,transform:[{scale:pressed?0.94:1}]})}><AppIcon name={icon} size={compact?17:19} color={selected?COLORS.primary:COLORS.textMuted} /></Pressable>;
 }
 

@@ -22,11 +22,13 @@ export function SkillLibraryScreen({ onClose, registerLeave }: { onClose?: () =>
   const store = useMemo(() => createSkillStore(getDatabase()), []);
   const [versions, setVersions] = useState<SkillVersion[]>([]);
   const [runs, setRuns] = useState<Awaited<ReturnType<typeof store.runs>>>([]);
+  const [advanced,setAdvanced]=useState(false);
+  const [purpose,setPurpose]=useState(''),[scope,setScope]=useState('');
   const [text, setText] = useState(''), [preview, setPreview] = useState<SkillPackage>();
   const [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
   const [importOpen,setImportOpen]=useState(false),[historyOpen,setHistoryOpen]=useState(false),[expanded,setExpanded]=useState<string>(),[query,setQuery]=useState('');
   const lock = useRef(false);
-  const confirmLeave=useUnsavedChanges(Boolean(text.trim() || preview),busy);
+  const confirmLeave=useUnsavedChanges(Boolean(text.trim() || purpose.trim() || scope.trim() || preview),busy);
   usePrimaryNavigationGuard('agent',confirmLeave,Boolean(onClose));
   const latestLeave=useRef(confirmLeave);latestLeave.current=confirmLeave;
   useEffect(()=>{registerLeave?.(proceed=>latestLeave.current(proceed));return()=>registerLeave?.(undefined);},[registerLeave]);
@@ -53,27 +55,33 @@ export function SkillLibraryScreen({ onClose, registerLeave }: { onClose?: () =>
     <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,gap:6,borderBottomWidth:1,borderColor:COLORS.border}}>
       <IconAction label={onClose ? '关闭技能' : '返回'} icon={onClose ? 'close' : 'arrow_back'} onPress={back}/>
       <Text accessibilityRole="header" style={{flex:1,fontSize:16,fontWeight:'600',color:COLORS.text}}>技能 · {versions.filter(v=>v.enabled).length} 已启用</Text>
-      <IconAction label="添加技能" icon="add" onPress={()=>setImportOpen(!importOpen)}/>
+      <IconAction label="添加技能" icon="add" onPress={()=>{if(onClose){onClose();router.push('/agent-skills');}else setImportOpen(!importOpen);}}/>
       <IconAction label="技能运行记录" icon="history" onPress={()=>setHistoryOpen(!historyOpen)}/>
     </View>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:12,gap:10}}>
       {notice ? <Text accessibilityRole="alert" style={s.body}>{notice}</Text> : null}
-      {importOpen ? <View style={[s.card,{gap:8}]}>
+      {importOpen && !onClose ? <View style={[s.card,{gap:8}]}>
         <View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>
           <ListAction label="导入 SKILL.md 或 ZIP" disabled={busy} onPress={()=>void run(pick)}/>
           <ListAction label="从对话提炼技能" secondary disabled={busy} onPress={()=>router.push('/agent-skill-extract')}/>
         </View>
-        <TextInput accessibilityLabel="技能文本" placeholder="也可粘贴 SKILL.md 正文" value={text} onChangeText={setText} editable={!busy} multiline maxLength={SKILL_BYTES} style={[s.input,{minHeight:100,textAlignVertical:'top'}]}/>
+        <Text style={s.body}>先说明技能帮助完成什么，以及适用的场景。安装后仍需单独启用。</Text>
+        <Text style={s.body}>用途与适用范围</Text>
+        <TextInput accessibilityLabel="技能用途" placeholder="这项技能帮助完成什么" value={purpose} onChangeText={setPurpose} editable={!busy} style={s.input}/>
+        <TextInput accessibilityLabel="技能适用范围" placeholder="什么场景使用，有哪些约束" value={scope} onChangeText={setScope} editable={!busy} multiline style={s.input}/>
+        <ListAction label="生成可编辑的技能草稿" secondary disabled={busy || !purpose.trim()} onPress={()=>{setText('---\nname: my-creative-skill\ndescription: '+JSON.stringify(purpose.trim())+'\n---\n\n'+purpose.trim()+'\n\n适用范围与约束：'+scope.trim());setAdvanced(true);}}/>
+        <ListAction label={advanced?'收起高级格式':'高级：编辑 SKILL.md 格式'} secondary onPress={()=>setAdvanced(!advanced)}/>
+        {advanced?<TextInput accessibilityLabel="技能文本" placeholder="也可粘贴 SKILL.md 正文" value={text} onChangeText={setText} editable={!busy} multiline maxLength={SKILL_BYTES} style={[s.input,{minHeight:100,textAlignVertical:'top'}]}/>:null}
         <View style={{flexDirection:'row',gap:6,flexWrap:'wrap'}}>
           <ListAction label="检查粘贴的技能" disabled={busy || !text.trim()} onPress={()=>void run(async()=>{setPreview(validateSkillPackage({'SKILL.md':text}));})}/>
-          <ListAction label="填入技能示例" secondary disabled={busy} onPress={()=>setText(template)}/>
+          <ListAction label="填入技能示例" secondary disabled={busy} onPress={()=>{setText(template);setAdvanced(true);}}/>
         </View>
       </View> : null}
       {preview ? <View style={s.card}>
         <Text style={s.title}>{preview.name} · 待安装</Text><Text style={s.body}>{preview.description}</Text>
         <Text selectable style={s.muted}>{preview.files['SKILL.md'].slice(0,4000)}</Text>
         <View style={{flexDirection:'row',gap:6}}>
-          <ListAction label="安装此版本" disabled={busy} onPress={()=>void run(async()=>{await store.install(preview);setPreview(undefined);setImportOpen(false);setText('');setNotice('已安装，打开开关后在新对话运行中生效。');})}/>
+          <ListAction label="安装此版本" disabled={busy} onPress={()=>void run(async()=>{await store.install(preview);setPreview(undefined);setImportOpen(false);setText('');setPurpose('');setScope('');setNotice('已安装，打开开关后在新对话运行中生效。');})}/>
           <ListAction label="关闭预览" secondary disabled={busy} onPress={()=>setPreview(undefined)}/>
         </View>
       </View> : null}

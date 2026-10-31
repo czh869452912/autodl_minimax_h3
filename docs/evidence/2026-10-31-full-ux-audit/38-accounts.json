@@ -1,0 +1,122 @@
+[
+  {
+    "text": "",
+    "content-desc": "返回设置分类",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[21,63][110,152]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰁍",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[43,84][88,130]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "创作账号",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[110,76][278,138]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "所有工作台共用以下连接；AutoDL 工作流使用同一份凭据。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,196][1038,244]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "NovelAI · 尚未连接",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,317][346,371]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "连接 NovelAI",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[774,297][1038,392]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰷖",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[784,322][826,366]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "连接 NovelAI",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[842,321][1027,366]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "AutoDL · 尚未连接",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,487][339,541]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "连接 AutoDL",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[781,467][1038,561]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰷖",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[791,492][833,536]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "连接 AutoDL",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[849,491][1027,536]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "余额查询 · 未配置",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,611][804,659]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "配置余额查询",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[825,588][1038,683]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "配置余额查询",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[835,612][1027,657]",
+    "class": "android.widget.TextView"
+  }
+]

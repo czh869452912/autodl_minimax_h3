@@ -1,0 +1,202 @@
+[
+  {
+    "text": "",
+    "content-desc": "返回",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,95][121,184]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰁍",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[54,116][99,162]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "KeyboardQA",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[137,107][944,172]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "项目设置",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[960,95][1050,184]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰢻",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[982,116][1027,162]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "概览",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,210][159,305]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "概览",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[60,231][130,283]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "镜头",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[176,210][304,305]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "镜头",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[204,231][274,283]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "素材",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[319,210][446,305]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "素材",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[347,231][417,283]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "计划",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[463,210][591,305]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "计划",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[491,231][561,283]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "活动",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[606,210][733,305]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "活动",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[634,231][704,283]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "项目简报",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[66,378][927,440]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "编辑项目简报",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[926,365][1015,454]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰲶",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[948,386][993,432]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "尚未填写目标、风格和交付要求。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[66,480][1016,538]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "查看镜头与下一步",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,599][1049,813]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "镜头进度 →",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[66,633][1016,695]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "还没有镜头，从第一个画面开始。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[66,721][1016,779]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "在助手中继续",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,840][370,934]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󱰫",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[60,861][110,913]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "在助手中继续",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[131,861][341,913]",
+    "class": "android.widget.TextView"
+  }
+]

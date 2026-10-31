@@ -1,0 +1,74 @@
+[
+  {
+    "text": "",
+    "content-desc": "返回设置分类",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[21,63][110,152]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰁍",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[43,84][88,130]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "工作流",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[110,76][236,138]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "工作流",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[73,227][1006,286]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "仅点击时从官方仓库同步。已安装版本可离线使用，现有任务保持原版本。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[73,312][1006,418]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "MiniMax H3 Image/Audio to Video",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,471][1007,518]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "v1.0.1 · 内置/本地",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,528][1007,581]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "同步工作流",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[74,637][1007,754]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "同步工作流",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[448,668][633,722]",
+    "class": "android.widget.TextView"
+  }
+]

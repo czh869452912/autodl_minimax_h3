@@ -11,11 +11,13 @@ export const storySchemas = {
   'asset.pinProjectVersion': z.object({ assetId: id, projectId: id, expectedRevision: revision, versionId: id.nullable() }).strict(),
 };
 export type StoryCommand = { [K in keyof typeof storySchemas]: { name: K; payload: z.input<typeof storySchemas[K]> } }[keyof typeof storySchemas];
-export type CreativeShot = { id: string; project_id: string; title: string; description: string; sort_key: number; editorial_status: 'planned' | 'working' | 'review' | 'approved'; revision: number; selected_image: string | null; selected_video: string | null };
+export type CreativeShot = { id: string; project_id: string; title: string; description: string; sort_key: number; editorial_status: 'planned' | 'working' | 'review' | 'approved'; revision: number; selected_image: string | null; selected_video: string | null; image_state?: string | null; image_asset_id?: string | null };
 export function listCreativeShots(db: AppDatabase, projectId: string) {
   return db.getAllAsync<CreativeShot>(`SELECT s.*,
     (SELECT version_id FROM creative_shot_assets WHERE shot_id=s.id AND slot='selected_image') AS selected_image,
-    (SELECT version_id FROM creative_shot_assets WHERE shot_id=s.id AND slot='selected_video') AS selected_video
+    (SELECT version_id FROM creative_shot_assets WHERE shot_id=s.id AND slot='selected_video') AS selected_video,
+    (SELECT f.state FROM creative_shot_assets a LEFT JOIN creative_version_files f ON f.version_id=a.version_id AND f.role='original' WHERE a.shot_id=s.id AND a.slot='selected_image') AS image_state,
+    (SELECT v.asset_id FROM creative_shot_assets a JOIN creative_asset_versions v ON v.id=a.version_id WHERE a.shot_id=s.id AND a.slot='selected_image') AS image_asset_id
     FROM creative_shots s WHERE project_id=? AND deleted_at IS NULL ORDER BY sort_key,id`, projectId);
 }
 export async function applyStoryCommand(tx: AppDatabase, name: string, p: any, now: number, makeId: () => string): Promise<Record<string, string>> {

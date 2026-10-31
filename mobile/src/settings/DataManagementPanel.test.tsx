@@ -16,6 +16,9 @@ test('scheduling failure unlocks actions; stop failure retains the scheduled ope
   let tree!: ReturnType<typeof create>;
   try {
     act(() => { tree = create(<DataManagementPanel />); });
+    expect(tree.root.findAllByProps({accessibilityLabel:'清除应用数据'})).toHaveLength(0);
+    act(()=>tree.root.findByProps({accessibilityLabel:'危险区'}).props.onPress());
+    act(()=>tree.root.findByProps({accessibilityLabel:'高级：数据库备份（不含媒体）'}).props.onPress());
     const request = () => tree.root.findByProps({ accessibilityLabel: '清除应用数据' }).props.onPress();
     act(request);
     await act(async () => alert.mock.calls.at(-1)![2]![1].onPress!());

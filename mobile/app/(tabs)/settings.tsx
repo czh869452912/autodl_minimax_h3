@@ -22,7 +22,7 @@ import { DisplayDiagnostics } from '../../src/settings/DisplayDiagnostics';
 type Settings = Awaited<ReturnType<typeof readSettings>>;
 export default function SettingsScreen({standalone=false}:{standalone?:boolean}={}) {
   const router=useRouter();
-  const { section, requestId } = useLocalSearchParams<{ section?: string;requestId?:string }>();
+  const { section, requestId, surface, draftId } = useLocalSearchParams<{ section?: string;requestId?:string;surface?:string;draftId?:string }>();
   const navigation=useNavigation();
   const normalizeSection=(value?:string)=>value==='legacy'?'accounts':value;
   const [directEntry,setDirectEntry]=useState(standalone&&!!section);
@@ -62,7 +62,7 @@ export default function SettingsScreen({standalone=false}:{standalone?:boolean}=
   };
   const back=()=>{
     if(activeSection&&!(directEntry)){setActiveSection(undefined);return;}
-    void leave(()=>router.canGoBack()?router.back():router.navigate('/(tabs)/create'));
+    void leave(()=>{if(router.canGoBack()){router.back();return;}if(draftId&&(surface==='image-draft'||surface==='video-draft')){router.replace({pathname:surface==='image-draft'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:draftId}});return;}router.navigate('/(tabs)/create');});
   };
   usePreventRemove(dirty||saving,({data})=>{void leave(()=>navigation.dispatch(data.action));});
   useFocusEffect(useCallback(()=>{const sub=BackHandler.addEventListener('hardwareBackPress',()=>{back();return true;});return()=>sub.remove();},[activeSection,directEntry,dirty,values,saving]));

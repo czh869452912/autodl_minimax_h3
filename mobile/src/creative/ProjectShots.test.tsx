@@ -8,11 +8,11 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }), useFocu
 jest.mock('./runtime', () => ({ creativeService: () => ({ shots: async () => [mockShot], drafts: async () => mockDrafts, execute: mockExecute, versionAsset: async () => ({ asset_id: 'asset' }) }) }));
 jest.mock('./VersionThumbnail', () => ({ VersionThumbnail: () => null }));
 jest.mock('./CreativeAssetPicker', () => ({ CreativeAssetPicker: () => null }));
-beforeEach(() => { jest.clearAllMocks(); mockShot = { id: 's', title: 'Shot', description: '', revision: 1, editorial_status: 'planned', selected_image: 'image' }; mockDrafts = [{ id: 'existing', shot_id: 's', provider_id: 'autodl', state: 'EDITING' }]; });
+beforeEach(() => { jest.clearAllMocks(); mockShot = { id: 's', title: 'Shot', description: '', revision: 1, editorial_status: 'planned', selected_image: 'image',image_state:'AVAILABLE' }; mockDrafts = [{ id: 'existing', shot_id: 's', provider_id: 'autodl', state: 'EDITING' }]; });
 const press = (tree: ReturnType<typeof create>, label: string) => tree.root.findAll(n => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function')[0].props.onPress();
 test('continues an existing shot draft instead of creating another', async () => {
  let tree!: ReturnType<typeof create>;
- try { await act(async () => { tree = create(<ProjectShots projectId="p" />); }); act(() => press(tree,'继续已有草稿')); expect(mockPush).toHaveBeenCalledWith({ pathname: '/creative-draft/[id]', params: { id: 'existing' } }); expect(mockExecute).not.toHaveBeenCalled(); }
+ try { await act(async () => { tree = create(<ProjectShots projectId="p" />); }); act(() => press(tree,'继续视频草稿 · 1')); expect(mockPush).toHaveBeenCalledWith({ pathname: '/creative-draft/[id]', params: { id: 'existing' } }); expect(mockExecute).not.toHaveBeenCalled(); }
  finally { act(() => tree.unmount()); }
 });
 test('reports unsaved shot fields to the parent navigation guard', async () => {
@@ -31,7 +31,7 @@ test('adopted video keeps generation candidates reachable without creating anoth
   mockShot.selected_video='video';mockDrafts[0].state='SUBMITTED';let tree!:ReturnType<typeof create>;
   try{
     await act(async()=>{tree=create(<ProjectShots projectId="p" initialShotId="s"/>);});
-    act(()=>press(tree,'生成记录与候选'));
+    act(()=>press(tree,'查看视频进度与候选 · 1'));
     expect(mockPush).toHaveBeenCalledWith({pathname:'/creative-draft/[id]',params:{id:'existing'}});
     expect(mockExecute).not.toHaveBeenCalled();
     expect(JSON.stringify(tree.toJSON())).toContain('当前创作镜头');

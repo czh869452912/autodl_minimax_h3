@@ -1,0 +1,74 @@
+[
+  {
+    "text": "",
+    "content-desc": "关闭镜头编辑",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[53,116][1028,211]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "关闭镜头编辑",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[435,137][645,189]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "添加镜头",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[52,252][1027,306]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "镜头名称",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[52,348][1027,402]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "镜头名称",
+    "content-desc": "镜头名称",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[52,444][1027,567]",
+    "class": "android.widget.EditText"
+  },
+  {
+    "text": "动作与运镜",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[52,608][1027,662]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "动作、运镜、节奏与声音",
+    "content-desc": "镜头描述",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[52,704][1027,941]",
+    "class": "android.widget.EditText"
+  },
+  {
+    "text": "",
+    "content-desc": "创建镜头",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[53,983][1028,1078]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "创建镜头",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[470,1004][610,1056]",
+    "class": "android.widget.TextView"
+  }
+]

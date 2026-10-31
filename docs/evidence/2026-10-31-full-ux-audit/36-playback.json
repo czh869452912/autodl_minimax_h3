@@ -1,0 +1,138 @@
+[
+  {
+    "text": "",
+    "content-desc": "返回设置分类",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[21,63][110,152]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰁍",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[43,84][88,130]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "视频播放",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[110,76][278,138]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "视频解码",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[73,227][1006,289]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "默认使用自动模式；遇到黑屏或播放异常时可尝试其他模式。保存后对应用内播放生效。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[73,315][1006,411]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "视频解码：自动",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[74,438][212,558]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "自动",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[108,472][178,524]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "视频解码：硬解码",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[233,438][406,558]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "硬解码",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[267,472][372,524]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "视频解码：软解码",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[428,438][601,558]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "软解码",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[462,472][567,524]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "优先使用硬件解码，必要时使用软件解码。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[73,584][1006,632]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "此选项不会修改视频原件，也不会影响系统相册中的视频。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[73,658][1006,706]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "设置已保存",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,2137][1038,2185]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "保存设置",
+    "clickable": "true",
+    "enabled": "false",
+    "bounds": "[42,2206][1038,2316]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰠘",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[429,2234][482,2288]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "保存设置",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[503,2234][651,2288]",
+    "class": "android.widget.TextView"
+  }
+]

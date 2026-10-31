@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-31",
+  "timezone": "Asia/Shanghai",
+  "baseline": "5185fe2099834d4848befd70ce20dc5bb0babfcb",
+  "device": "emulator-5554",
+  "package": "com.example.autodlh3",
+  "versionName": "1.5.0-preview.4",
+  "versionCode": 70,
+  "apkSha256": "75175292d9b0b7149f43aadeb130fece6c34c4df72020bdf8e7b56fdb9aa028c",
+  "counts": {
+    "captures": 66,
+    "byStatus": {
+      "accepted": 57,
+      "duplicate": 4,
+      "excluded": 2,
+      "system-input": 2,
+      "visual-only": 1
+    },
+    "uiNodeInstances": 664,
+    "sourceInteractionDeclarations": 762,
+    "navigationCalls": 112,
+    "routeFiles": 22,
+    "transitionTraces": 59
+  }
+}

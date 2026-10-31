@@ -1,0 +1,186 @@
+[
+  {
+    "text": "",
+    "content-desc": "关闭素材操作",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[0,0][1080,2400]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "素材操作",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,1038][928,1108]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "完成",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[953,1026][1038,1121]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "完成",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[963,1050][1027,1095]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "信息",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1164][1049,1258]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰋽",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[470,1185][520,1237]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "信息",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[541,1185][611,1237]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "增强 / 放大",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1284][1049,1379]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "增强 / 放大",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[455,1305][626,1357]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "保存到系统相册",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1405][1049,1500]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "保存到系统相册",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[418,1426][663,1478]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "设为默认版本",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1526][1049,1620]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "设为默认版本",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[435,1547][645,1599]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "未找到可确认的 NovelAI 参数；不能完整恢复提示词。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[31,1646][1048,1704]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "从此版本创建视频草稿",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1731][1049,1825]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "从此版本创建视频草稿",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[365,1752][715,1804]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "使用位置",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[31,1851][1048,1921]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "移出项目不会删除原件；固定版本不会随默认版本改变。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[31,1947][1048,2005]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "UX-AUDIT-1031 · 固定版本",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[32,2032][1049,2090]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "从 UX-AUDIT-1031 移出",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,2090][1049,2185]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "从 UX-AUDIT-1031 移出",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[355,2111][725,2163]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "让 UX-AUDIT-1031 跟随默认版本",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,2211][1049,2306]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "让 UX-AUDIT-1031 跟随默认版本",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[285,2232][795,2284]",
+    "class": "android.widget.TextView"
+  }
+]

@@ -51,7 +51,7 @@ test('context changes share the unsaved import guard',async()=>{
  try{
   await act(async()=>{tree=create(<SkillLibraryScreen registerLeave={value=>{guard=value;}}/>);});
   act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='添加技能')!.props.onPress());
-  act(()=>tree.root.findAllByType(TextInput).find(n=>n.props.accessibilityLabel==='技能文本')!.props.onChangeText('unfinished skill'));
+  act(()=>tree.root.findAllByType(TextInput).find(n=>n.props.accessibilityLabel==='技能用途')!.props.onChangeText('unfinished skill'));
   act(()=>guard!(proceed));
   expect(proceed).not.toHaveBeenCalled();
   expect(alert).toHaveBeenLastCalledWith('尚有未保存的修改',expect.any(String),expect.any(Array));

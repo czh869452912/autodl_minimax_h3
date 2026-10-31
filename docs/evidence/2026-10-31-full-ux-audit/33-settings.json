@@ -1,0 +1,242 @@
+[
+  {
+    "text": "",
+    "content-desc": "返回来源",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[21,63][110,152]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰁍",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[43,84][88,130]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "设置",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[110,76][194,138]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "连接与能力",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,227][1038,275]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "创作账号，NovelAI · AutoDL",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[74,307][1007,455]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "创作账号",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,323][926,381]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "NovelAI · AutoDL",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,386][926,439]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰅂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[951,351][1007,409]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "助手模型，提示词与创作辅助",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[74,456][1007,605]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "助手模型",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,472][926,530]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "提示词与创作辅助",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,535][926,588]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰅂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[951,500][1007,558]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "工作流，已安装能力与同步",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[74,605][1007,754]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "工作流",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,621][926,679]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "已安装能力与同步",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,684][926,737]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰅂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[951,649][1007,707]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "使用偏好",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,816][1038,864]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "存储与导出，保存、备份与恢复",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[74,896][1007,1045]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "存储与导出",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,912][926,970]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "保存、备份与恢复",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,975][926,1028]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰅂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[951,940][1007,998]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "视频播放，解码模式",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[74,1045][1007,1194]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "视频播放",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,1061][926,1119]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "解码模式",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,1124][926,1177]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰅂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[951,1089][1007,1147]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "显示与诊断，布局与运行信息",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[74,1194][1007,1343]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "显示与诊断",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,1210][926,1268]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "布局与运行信息",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,1273][926,1326]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰅂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[951,1238][1007,1296]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "密钥加密保存在本机，账号连接与工作流配置分开管理。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,1373][1038,1421]",
+    "class": "android.widget.TextView"
+  }
+]

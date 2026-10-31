@@ -1,0 +1,298 @@
+[
+  {
+    "text": "",
+    "content-desc": "返回",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,95][121,184]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰁍",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[54,116][99,162]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "UX-AUDIT-1031",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[137,107][944,172]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "项目设置",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[960,95][1050,184]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰢻",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[982,116][1027,162]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "概览",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,210][159,305]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "概览",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[60,231][130,283]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "镜头",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[176,210][304,305]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "镜头",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[204,231][274,283]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "素材",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[319,210][446,305]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "素材",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[347,231][417,283]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "计划",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[463,210][591,305]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "计划",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[491,231][561,283]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "活动",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[606,210][733,305]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "活动",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[634,231][704,283]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "镜头清单",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[32,331][1049,409]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "1. AUDIT-Shot-01 · 计划中",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[66,492][911,546]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "收起镜头操作",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[926,475][1015,565]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰇘",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[948,496][993,542]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "尚未填写镜头描述",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[66,585][1016,635]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "图片：未选定 · 视频：未选定",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[66,656][1016,710]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "选择参考图",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[66,731][1014,825]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "选择参考图",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[452,752][627,804]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "制作新的参考图",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[66,847][1014,942]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "制作新的参考图",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[417,868][662,920]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "编辑镜头",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[66,962][263,1056]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "编辑镜头",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[94,983][234,1035]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "选定图片",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[285,962][483,1056]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "选定图片",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[313,983][453,1035]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "选定视频",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[504,962][702,1056]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "选定视频",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[532,983][672,1035]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "另建视频草稿",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[722,962][990,1056]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "另建视频草稿",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[750,983][960,1035]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "移除镜头",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[66,1078][263,1173]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "移除镜头",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[94,1099][234,1151]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "添加镜头",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1238][1049,1333]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "添加镜头",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[470,1259][610,1311]",
+    "class": "android.widget.TextView"
+  }
+]

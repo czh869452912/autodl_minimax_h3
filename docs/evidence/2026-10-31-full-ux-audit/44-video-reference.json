@@ -1,0 +1,42 @@
+[
+  {
+    "text": "添加参考图",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[133,1029][947,1107]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "选择来源",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[70,1128][1010,1190]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "从设备导入",
+    "content-desc": "",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[102,1265][349,1407]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "从素材库选择",
+    "content-desc": "",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[526,1265][810,1407]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "取消",
+    "content-desc": "",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[810,1265][978,1407]",
+    "class": "android.widget.Button"
+  }
+]

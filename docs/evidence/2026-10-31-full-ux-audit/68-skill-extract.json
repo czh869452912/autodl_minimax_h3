@@ -1,0 +1,154 @@
+[
+  {
+    "text": "",
+    "content-desc": "返回",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[42,105][1038,231]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "返回",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[503,141][577,195]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "从对话提炼技能",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,267][1038,352]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "选择已保存的用户或助手文本，检查脱敏证据后发送到当前助手模型。仅提炼文本方法，不运行工具。草稿发布与启用分别确认；跨项目使用前仍需验证适用性。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,389][1038,557]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "1. 选择证据",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,594][1038,656]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "选择对话：未命名对话",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[42,693][1038,819]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "选择对话：未命名对话",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[355,729][725,783]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "更多对话",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[42,856][1038,982]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "更多对话",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[466,892][614,946]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "整理已选证据（0 段）",
+    "clickable": "true",
+    "enabled": "false",
+    "bounds": "[42,1019][1038,1145]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "整理已选证据（0 段）",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[358,1055][722,1109]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "2. 检查发送内容",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,1181][1038,1243]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "常见密钥、链接、邮箱、手机号和路径已预先遮蔽；仍需自行移除私人信息、人物/项目名称和一次性授权。这里只发送下方目标和证据。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,1280][1038,1448]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "希望复用的方法及适用范围",
+    "content-desc": "提炼目标",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[42,1484][1038,1601]",
+    "class": "android.widget.EditText"
+  },
+  {
+    "text": "",
+    "content-desc": "待发送的证据",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[42,1637][1038,2057]",
+    "class": "android.widget.EditText"
+  },
+  {
+    "text": "",
+    "content-desc": "重新脱敏并检查",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[42,2094][1038,2220]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "重新脱敏并检查",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[410,2130][669,2184]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "确认发送证据并生成草稿",
+    "clickable": "true",
+    "enabled": "false",
+    "bounds": "[42,2257][1038,2337]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "确认发送证据并生成草稿",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[336,2293][743,2337]",
+    "class": "android.widget.TextView"
+  }
+]

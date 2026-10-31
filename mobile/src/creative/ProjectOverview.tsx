@@ -1,3 +1,4 @@
+import { draftPresentation } from './workPresentation';
 import { IconAction } from './WorkbenchUI';
 import { COLORS } from '../ui/theme';
 import { useCallback, useState } from 'react';
@@ -36,7 +37,7 @@ export function ProjectOverview({ project, onShots, onEdit }: { project: Creativ
     <ProjectPlans projectId={project.id} archived={Boolean(project.archivedAt)} compact/>
     {drafts.length?<Text style={s.title}>最近创作</Text>:null}
     {drafts.map(d=><Pressable accessibilityRole="button" accessibilityLabel={d.state==='EDITING'?'继续编辑':'查看进度与成果'} key={d.id} style={s.card} onPress={()=>router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}})}>
-      <Text style={s.muted}>{d.provider_id==='novelai'?'图片':'视频'} · {d.state==='EDITING'?'编辑中':'已提交'} →</Text><Text style={s.body} numberOfLines={2}>{JSON.parse(d.input_json).prompt||'未命名草稿'}</Text>
+      <Text style={s.muted}>{d.provider_id==='novelai'?'图片':'视频'} · {d.state==='EDITING'?'编辑中':'已提交'} →</Text><Text style={s.body} numberOfLines={2}>{draftPresentation(d).title}</Text><Text style={s.muted}>{draftPresentation(d).updated}</Text>
     </Pressable>)}
   </View>;
 }

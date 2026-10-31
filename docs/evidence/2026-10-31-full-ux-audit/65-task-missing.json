@@ -1,0 +1,50 @@
+[
+  {
+    "text": "",
+    "content-desc": "返回",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[21,63][110,152]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰁍",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[43,84][88,130]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "任务与结果",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[110,76][320,138]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "打开任务中心处理下载或异常",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[42,194][1038,289]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "打开任务中心处理下载或异常",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[332,218][748,263]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "未找到此任务，原记录可能已移除",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,325][1038,381]",
+    "class": "android.view.View"
+  }
+]

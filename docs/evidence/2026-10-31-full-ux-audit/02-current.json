@@ -1,0 +1,26 @@
+[
+  {
+    "text": "System UI isn't responding",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[133,1000][947,1071]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "Close app",
+    "content-desc": "",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[70,1110][1010,1236]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "Wait",
+    "content-desc": "",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[70,1236][1010,1362]",
+    "class": "android.widget.Button"
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "check": "documentation integrity, not product tests",
+  "passed": true,
+  "captures": 66,
+  "uiNodeInstances": 664,
+  "findings": 14,
+  "checkedLocalMarkdownLinks": 216,
+  "assertions": [
+    "PNG dimensions and decoding",
+    "original file SHA256",
+    "source file/line presence",
+    "unique node IDs",
+    "14 finding IDs",
+    "local artifact links",
+    "25 stale XML rejected"
+  ],
+  "productTestsRun": false,
+  "productImplementationChanged": false,
+  "browserArtifactChecks": [
+    "JavaScript compiles",
+    "66 cards render with DOM stub",
+    "F01 search",
+    "visual-only filter"
+  ],
+  "browserArtifactLimits": "No full browser visual or native interaction verification; this checks generated offline artifact only."
+}

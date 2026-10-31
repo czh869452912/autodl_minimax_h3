@@ -1,3 +1,4 @@
+import { shotStage } from './workPresentation';
 import { IconAction } from './WorkbenchUI';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { creativeError } from './creativeError';
@@ -36,7 +37,6 @@ export function ProjectShots({ projectId, archived = false, initialShotId, reque
   };
   const closeEditor = () => { setError(''); setAdding(false); setEditing(undefined); setTitle(''); setDescription(''); };
   const refresh = async () => { const [shots, drafts] = await Promise.all([creativeService().shots(projectId), creativeService().drafts(projectId)]); setShots(shots); setDrafts(drafts); };
-  const continuing = (shot: CreativeShot) => drafts.find(d => d.shot_id === shot.id && d.provider_id === (shot.selected_image ? 'autodl' : 'novelai') && ['EDITING','SUBMITTED'].includes(d.state));
   const openDraft = (d: CreativeDraft) => router.push({ pathname: d.provider_id === 'novelai' ? '/image-draft/[id]' : '/creative-draft/[id]', params: { id: d.id } });
   useFocusEffect(useCallback(() => { void refresh().catch(() => setError('镜头读取失败')); }, [projectId]));
   const work = async (callback: () => Promise<unknown>, readOnly = false) => {
@@ -56,7 +56,7 @@ export function ProjectShots({ projectId, archived = false, initialShotId, reque
     <Text accessibilityRole="header" style={{ color: COLORS.text, fontSize: 20, fontWeight: '700' }}>镜头清单</Text>
     {dirty ? <Text style={{ color: COLORS.textMuted }}>镜头修改尚未保存，请保存或取消编辑后继续制作。</Text> : null}
     {error ? <Text accessibilityRole="alert" style={{ color: COLORS.danger }}>{error}</Text> : null}
-    {choosing ? <CreativeAssetPicker purpose="adopt" target={choosing.shot.title} kind={choosing.slot === 'selected_image' ? 'image' : 'video'} projectId={projectId} onClose={() => setChoosing(undefined)} onChoose={async v => {
+    {choosing ? <CreativeAssetPicker purpose="adopt" target={choosing.shot.title} kind={choosing.slot === 'selected_image' ? 'image' : 'video'} projectId={projectId} onCreateReference={choosing.slot==='selected_image'?async()=>{const result=await command({name:'draft.createImage',payload:{projectId,shotId:choosing.shot.id}});if(result.status==='completed')router.push({pathname:'/image-draft/[id]',params:{id:result.value.draftId}});}:undefined} onClose={() => setChoosing(undefined)} onChoose={async v => {
       await command({ name: 'shot.selectOutput', payload: { id: choosing.shot.id, expectedRevision: choosing.shot.revision, slot: choosing.slot, versionId: v.id } });
       await refresh();
     }} /> : null}
@@ -64,14 +64,18 @@ export function ProjectShots({ projectId, archived = false, initialShotId, reque
     {shots.filter(shot=>!focused||!shots.some(s=>s.id===focused)||shot.id===focused).map(shot => {const index=shots.indexOf(shot);return <View key={shot.id} style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 12, gap: 8 }}>
       <View style={{flexDirection:"row",alignItems:"center",gap:6}}><Text style={{flex:1,color:COLORS.text,fontWeight:"700"}}>{index + 1}. {shot.title} · {labels[shot.editorial_status]}</Text><IconAction label={expanded===shot.id?"收起镜头操作":"更多镜头操作"} icon="more_horiz" onPress={()=>setExpanded(expanded===shot.id?undefined:shot.id)}/></View><View style={{flexDirection:'row',gap:10,alignItems:'center'}}>{shot.selected_image?<VersionThumbnail versionId={shot.selected_image} compact/>:null}<Text numberOfLines={3} style={{flex:1,color:COLORS.textMuted,fontSize:13,lineHeight:19}}>{shot.description || '尚未填写镜头描述'}</Text></View>
       <Text style={{ color: COLORS.textMuted }}>图片：{shot.selected_image ? '已固定版本' : '未选定'} · 视频：{shot.selected_video ? '已固定版本' : '未选定'}</Text>
-      <ListAction label={shot.selected_video ? '审阅视频成果' : continuing(shot) ? continuing(shot)!.state === 'EDITING' ? '继续已有草稿' : '查看生成进度与候选' : shot.selected_image ? '制作视频' : '选择参考图'} disabled={busy || dirty || (archived && !shot.selected_video)} onPress={() => {
+      <ListAction label={shotStage(shot).label} disabled={busy || dirty || (archived && !shot.selected_video)} onPress={() => {
         if (shot.selected_video) { void work(async () => { router.push({pathname:'/creative-shot/[id]',params:{id:shot.id,projectId}}); }, true); return; }
-        const existing = continuing(shot); if (existing) { openDraft(existing); return; }
+        if (shotStage(shot).kind === 'restore') { if(shot.image_asset_id)router.push({pathname:'/creative-asset/[id]',params:{id:shot.image_asset_id,versionId:shot.selected_image!}});else setError('原版本引用不可用，请从项目素材核查'); return; }
         if (!shot.selected_image) { choose(shot,'selected_image'); return; }
         void work(async () => { const r=await command({name:'draft.createVideo',payload:{shotId:shot.id,projectId}});if(r.status==='completed')router.push({pathname:'/creative-draft/[id]',params:{id:r.value.draftId}}); });
       }} />
-      {shot.selected_video && continuing(shot)?<ListAction label="生成记录与候选" secondary disabled={busy||dirty} onPress={()=>openDraft(continuing(shot)!)}/>:null}
-      {!shot.selected_image && !continuing(shot) ? action('制作新的参考图', () => void work(async () => { const r=await command({name:'draft.createImage',payload:{projectId,shotId:shot.id}});if(r.status==='completed')router.push({pathname:'/image-draft/[id]',params:{id:r.value.draftId}}); })) : null}
+      {shot.selected_image ? <ListAction label="更换参考图" secondary disabled={busy || dirty || archived} onPress={() => choose(shot, 'selected_image')} /> : null}
+      {!shot.selected_image ? <ListAction label="制作新的参考图" secondary disabled={busy || dirty || archived} onPress={() => void work(async () => { const r=await command({name:'draft.createImage',payload:{projectId,shotId:shot.id}});if(r.status==='completed')router.push({pathname:'/image-draft/[id]',params:{id:r.value.draftId}}); })} /> : null}
+      {drafts.filter(d => d.shot_id === shot.id && ['EDITING', 'SUBMITTED'].includes(d.state)).sort((a,b) => (b.updated_at ?? 0) - (a.updated_at ?? 0) || a.id.localeCompare(b.id)).map((draft, index) => <View key={draft.id} style={{ gap: 4, borderTopWidth: 1, borderColor: COLORS.border, paddingTop: 8 }}>
+        <ListAction secondary label={`${draft.state === 'EDITING' ? '继续' : '查看'}${draft.provider_id === 'novelai' ? '图片' : '视频'}${draft.state === 'EDITING' ? '草稿' : '进度与候选'} · ${index + 1}`} disabled={busy || dirty || (archived && draft.state === 'EDITING')} onPress={() => openDraft(draft)} />
+        <Text style={{ color: COLORS.textMuted, fontSize: 12 }}>{draft.updated_at ? `更新于 ${new Date(draft.updated_at).toLocaleString()}` : '更新时间未知'}</Text>
+      </View>)}
       {expanded===shot.id ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {action('编辑镜头', () => switchEditor(() => { setError(''); setAdding(true); setEditing(shot); setTitle(shot.title); setDescription(shot.description); }))}
         {action('选定图片', () => void choose(shot, 'selected_image'))}{action('选定视频', () => void choose(shot, 'selected_video'))}

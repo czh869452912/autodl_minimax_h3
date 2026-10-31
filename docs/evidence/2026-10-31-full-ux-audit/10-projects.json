@@ -1,0 +1,210 @@
+[
+  {
+    "text": "项目",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[32,103][796,181]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "历史与迁入",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[816,95][1049,189]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "历史与迁入",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[844,116][1019,168]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "新建项目",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,221][229,315]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "新建项目",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[60,242][200,294]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "查看归档项目",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[251,221][519,315]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "查看归档项目",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[279,242][489,294]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "搜索项目或简报",
+    "content-desc": "搜索项目",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,347][1049,473]",
+    "class": "android.widget.EditText"
+  },
+  {
+    "text": "",
+    "content-desc": "KeyboardQA",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,499][1049,712]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "KeyboardQA",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[43,525][960,578]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "分镜、素材与创作记录",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[43,588][960,636]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰅂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[990,580][1038,630]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "10/25/2026",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[43,647][960,686]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "主导航",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[0,2177][1080,2337]",
+    "class": "android.view.ViewGroup"
+  },
+  {
+    "text": "",
+    "content-desc": "创作",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[0,2195][270,2327]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "󱕂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[106,2205][164,2265]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "创作",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[106,2273][164,2316]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "助手",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[270,2195][540,2327]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "󱙺",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[376,2205][434,2265]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "助手",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[376,2273][434,2316]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "项目",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[540,2195][810,2327]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "󰷐",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[646,2205][704,2265]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "项目",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[646,2273][704,2316]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "素材",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[810,2195][1080,2327]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "󱇙",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[916,2205][974,2265]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "素材",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[916,2273][974,2316]",
+    "class": "android.widget.TextView"
+  }
+]

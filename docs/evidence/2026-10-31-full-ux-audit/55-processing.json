@@ -1,0 +1,114 @@
+[
+  {
+    "text": "",
+    "content-desc": "关闭增强 / 放大",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[0,0][1080,2400]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "增强 / 放大",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,1734][928,1804]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "当前版本 1 · 先调整，确认后生成",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,1804][928,1857]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "完成",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[953,1748][1038,1843]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "完成",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[963,1772][1027,1817]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "细节增强 · Enhance，调整倍率与变化强度，重新绘制细节",
+    "clickable": "true",
+    "enabled": "false",
+    "bounds": "[32,1901][1049,2050]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "细节增强 · Enhance",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[32,1917][967,1975]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "调整倍率与变化强度，重新绘制细节",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[32,1980][967,2033]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰅂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[993,1945][1049,2003]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "缺少完整生成参数，细节增强不可用；仍可清晰放大。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[31,2075][1048,2131]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "清晰放大 · 2×，宽高各放大 2 倍，尽量保留原画面",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,2158][1049,2307]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "清晰放大 · 2×",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[32,2174][967,2232]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "宽高各放大 2 倍，尽量保留原画面",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[32,2237][967,2290]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰅂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[993,2202][1049,2260]",
+    "class": "android.widget.TextView"
+  }
+]

@@ -1,3 +1,5 @@
+import type {UsageEdge} from './usageGraph';
+import { CreativeAssetPicker } from './CreativeAssetPicker';
 import {ImagePreview} from '../ui/ImagePreview';
 import {AssetFacts} from './AssetFacts';
 import {AppIcon} from '../ui/icons';
@@ -57,7 +59,9 @@ function CreativeWorkspaceContent({ mode, projectId, assetId, initialTab, initia
   const [assetLoading,setAssetLoading]=useState(false);const assetMoreLock=useRef(false);
   const [previewUri,setPreviewUri]=useState<string|null>(null);
   const [importOpen,setImportOpen]=useState(false);
-  const [comparing, setComparing] = useState(false),[processing,setProcessing]=useState(false);
+  const [comparing, setComparing] = useState(false);
+  const [surface,setSurface]=useState<{kind:"menu"|"projects"|"processing";assetId?:string;versionId?:string}>();
+  const [coverPicker,setCoverPicker]=useState(false);
   useEffect(() => setComparing(false), [assetId]);
   const [assets, setAssets] = useState<CreativeAsset[]>([]);
   const [title, setTitle] = useState('');
@@ -65,7 +69,14 @@ function CreativeWorkspaceContent({ mode, projectId, assetId, initialTab, initia
   const [query, setQuery] = useState('');
   const [archived, setArchived] = useState(false);
   const [inbox, setInbox] = useState(false);
-  const [editingBrief, setEditingBrief] = useState(false), [creating, setCreating] = useState(false), [manage, setManage] = useState(false), [metadata, setMetadata] = useState(false), [versionId, setVersionId] = useState<string | undefined>(initialVersionId), [projectActions, setProjectActions] = useState(false), [projectQuery, setProjectQuery] = useState(''), [kind, setKind] = useState('all');
+  const [editingBrief, setEditingBrief] = useState(false), [creating, setCreating] = useState(false), [projectManage, setProjectManage] = useState(false), [metadata, setMetadata] = useState(false), [versionId, setVersionId] = useState<string | undefined>(initialVersionId), [projectQuery, setProjectQuery] = useState(''), [kind, setKind] = useState('all');
+  const manage = assetId ? surface?.kind === 'menu' : projectManage;
+  const projectActions = surface?.kind === 'projects';
+  const processing = surface?.kind === 'processing';
+  const openSurface = (kind: 'menu'|'projects'|'processing', open:boolean) => setSurface(previous => open ? {kind,assetId,versionId:versionId??activeAsset?.currentVersionId} : previous?.kind === kind ? undefined : previous);
+  const setManage = (open:boolean) => assetId ? openSurface('menu',open) : setProjectManage(open);
+  const setProjectActions = (open:boolean) => openSurface('projects',open);
+  const setProcessing = (open:boolean) => openSurface('processing',open);
   const [trash,setTrash]=useState(initialTrash),[assetTitle,setAssetTitle]=useState(''),[assetDescription,setAssetDescription]=useState(''),[assetTags,setAssetTags]=useState('');
   const [metadataBaseline, setMetadataBaseline] = useState('');
 
@@ -95,6 +106,8 @@ function CreativeWorkspaceContent({ mode, projectId, assetId, initialTab, initia
     const timer = setInterval(() => { void poll().catch(() => undefined); }, 2000);
     return () => { cancelled = true; clearInterval(timer); };
   }, [activeAsset, versions]));
+  const [usage,setUsage]=useState<UsageEdge[]>([]);
+  useEffect(()=>{let live=true;setUsage([]);if(activeAsset)void creativeService().usage(activeAsset.id).then(rows=>{if(live)setUsage(rows);}).catch(()=>{if(live)setError('使用位置读取失败');});return()=>{live=false;};},[activeAsset]);
   const [links, setLinks] = useState<Array<{ project_id: string; title: string; pinned_version_id: string | null; revision: number }>>([]);
   const current = projects.find(p => p.id === selected);
   const briefDirty = creating ? Boolean(title || brief) : editingBrief && Boolean(current) && (title !== current?.title || brief !== current?.brief);
@@ -104,7 +117,7 @@ function CreativeWorkspaceContent({ mode, projectId, assetId, initialTab, initia
   usePrimaryNavigationGuard(mode,proceed=>leaveInspector(()=>confirmLeave(proceed)),!projectId&&!assetId);
   const latestLeave=useRef(confirmLeave);latestLeave.current=confirmLeave;
   useEffect(()=>{registerLeave?.(proceed=>latestLeave.current(proceed));return()=>registerLeave?.(undefined);},[registerLeave]);
-  useFocusEffect(useCallback(()=>{if(!onClose)return;const listener=BackHandler.addEventListener('hardwareBackPress',()=>{latestLeave.current(onClose);return true;});return()=>listener.remove();},[onClose]));
+  useFocusEffect(useCallback(()=>{const listener=BackHandler.addEventListener('hardwareBackPress',()=>{if(surface){setSurface(undefined);return true;}if(!onClose)return false;latestLeave.current(onClose);return true;});return()=>listener.remove();},[onClose,surface]));
   const discardBrief = () => { setEditingBrief(false); setCreating(false); setTitle(current?.title ?? ''); setBrief(current?.brief ?? ''); };
   const refresh = useCallback(async () => {
     const generation = ++readGeneration.current;
@@ -206,7 +219,7 @@ function CreativeWorkspaceContent({ mode, projectId, assetId, initialTab, initia
   const visibleVersion = versionId ? versions.find(v => v.id === versionId) : versions.find(v => v.id === activeAsset?.currentVersionId) ?? versions[0];
   const missingVersion = Boolean(versionId && !visibleVersion);
   const visibleAssets = assets.filter(a => kind === 'all' || (kind === 'document' ? ['document','prompt'].includes(a.kind) : a.kind === kind));
-  const back = () => onClose ? confirmLeave(onClose) : router.canGoBack() ? router.back() : router.replace(mode === 'projects' ? '/(tabs)/projects' : '/(tabs)/assets');
+  const back = () => {if(surface){setSurface(undefined);return;}confirmLeave(()=>onClose?onClose():router.canGoBack()?router.back():router.replace(mode==='projects'?'/(tabs)/projects':'/(tabs)/assets'));};
   const revealImports=()=>{setQuery('');setKind('all');setInbox(false);setTrash(false);};
   const addImages = () => run(async () => { const images=await pickImagesFromGallery(9);for (const image of images) await importCreativeImage(image, mode === 'projects' ? selected : undefined);if(images.length){revealImports();setImportOpen(false);} });
   const action = (label: string, onPress: () => void, secondary = true) => <ListAction label={label} onPress={onPress} disabled={busy} secondary={secondary}/>;
@@ -221,7 +234,7 @@ function CreativeWorkspaceContent({ mode, projectId, assetId, initialTab, initia
     <ImagePreview uri={previewUri} onClose={()=>setPreviewUri(null)} title={activeAsset?.title}/>
     {activeAsset?<View style={{flexDirection:'row',alignItems:'center',gap:8}}><IconAction label={onClose?"关闭素材详情":"返回"} icon={onClose?"close":"arrow_back"} onPress={back}/><Text numberOfLines={1} style={{flex:1,fontSize:18,fontWeight:'600',color:COLORS.text}}>{activeAsset.title}</Text>{!trash?<IconAction label="编辑名称与标签" icon="edit" onPress={()=>setMetadata(true)}/>:null}<IconAction label="素材操作" icon="more_horiz" disabled={!visibleVersion} onPress={()=>setManage(true)}/></View>:current?<View style={{flexDirection:'row',alignItems:'center',gap:6}}><IconAction label="返回" icon="arrow_back" onPress={back}/><Text numberOfLines={1} style={{flex:1,fontSize:18,fontWeight:'600',color:COLORS.text}}>{current.title}</Text>{!current.archivedAt&&projectView==='assets'?<><IconAction label="导入素材" icon="add" onPress={()=>setImportOpen(true)}/><IconAction label="制作图片" icon="auto_awesome" onPress={()=>void run(async()=>{const result=await command({name:'draft.createImage',payload:{projectId:current.id}});if(result.status==='completed')router.push({pathname:'/image-draft/[id]',params:{id:result.value.draftId}});})}/></>:null}<IconAction label="项目设置" icon="settings" onPress={()=>setManage(!manage)}/></View>:library?<LibraryToolbar query={query} onQuery={setQuery} kind={kind} onKind={setKind} scope={trash?'trash':inbox?'inbox':'all'} onScope={value=>{setTrash(value==='trash');setInbox(value==='inbox');}} onImport={()=>setImportOpen(true)} onManage={()=>setManage(true)} busy={busy}/>:<View style={styles.row}>{projectId || assetId ? action('返回',back) : null}<Text accessibilityRole="header" style={styles.heading}>{mode === 'projects' ? '项目' : '素材库'}</Text>{!assetId && !trash && (mode==='assets' || selected && projectView==='assets')?<ListAction label="导入素材" icon="add" disabled={busy} onPress={()=>setImportOpen(!importOpen)}/>:null}{action(manage ? '收起管理' : activeAsset ? '版本与使用位置' : current ? '项目设置' : '历史与迁入', () => setManage(!manage))}</View>}
 
-    {manage && !activeAsset && !library ? <View style={styles.row}>{action('历史作品', () => router.push('/(tabs)/gallery'))}{action('创作草稿', () => router.push('/creative-drafts'))}</View> : null}
+
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     {mode==='projects'&&selected&&!activeAsset?<ListFilters compact label="项目页面" value={projectView} onChange={value=>changeProjectView(value as typeof projectView)} options={[{id:'brief',label:'概览'},{id:'shots',label:'镜头'},{id:'assets',label:'素材'},{id:'plans',label:'计划'},{id:'activity',label:'活动'}]}/>:null}
     {mode === 'projects' && !activeAsset ? <>
@@ -240,14 +253,18 @@ function CreativeWorkspaceContent({ mode, projectId, assetId, initialTab, initia
         }), false)}
         {action('取消编辑', () => confirmLeave(discardBrief))}
       </View> : null}
+      {current && manage && !coverPicker ? <ParameterSheet title="项目设置" onClose={()=>setManage(false)}><Text style={styles.body}>{current.title} · 封面与归档</Text>
       {current && manage ? action(current.archivedAt ? '恢复项目' : '归档项目', () => void run(async () => { await command({ name: 'project.archive', payload: { id: current.id, archived: !current.archivedAt, expectedRevision: current.revision } }); setEditingBrief(false); })) : null}
-      {manage&&current&&!covers[current.id]?<Text style={styles.body}>设置封面：打开项目素材，选择图片版本，在“加入项目或更新采用版本”中设为封面。</Text>:null}
-      {manage&&current&&covers[current.id]?action('移除项目封面',()=>void run(()=>command({name:'project.setCover',payload:{id:current.id,expectedRevision:current.revision,versionId:null}}))):null}
+      {manage&&current&&!current.archivedAt?action(covers[current.id]?'更换项目封面':'选择项目封面',()=>setCoverPicker(true)):null}
+      {current&&covers[current.id]?action('移除项目封面',()=>void run(()=>command({name:'project.setCover',payload:{id:current.id,expectedRevision:current.revision,versionId:null}}))):null}
+      </ParameterSheet>:null}
+      {coverPicker&&current?<CreativeAssetPicker kind="image" projectId={current.id} target={current.title} onClose={()=>setCoverPicker(false)} onChoose={async version=>{await command({name:'project.setCover',payload:{id:current.id,expectedRevision:current.revision,versionId:version.id}});await refresh();}}/>:null}
+
     </> : null}
     {mode === 'projects' && selected && projectView === 'shots' && !activeAsset ? <ProjectShots key={selected} initialShotId={initialShotId} requestId={requestId} onEditorState={setShotEditor} projectId={selected} archived={Boolean(current?.archivedAt)} /> : null}
-    
+
     {mode === 'projects' && selected && projectView === 'plans' && !activeAsset ? <ProjectPlans key={selected} projectId={selected} initialPlanId={initialPlanId} archived={Boolean(current?.archivedAt)} /> : null}
-    
+
     {mode === 'projects' && selected && projectView === 'activity' && !activeAsset ? <ProjectActivity key={selected} projectId={selected} initialProposalId={initialProposalId} /> : null}
     {activeAsset ? <View style={{gap:14}}>{trash?action('从回收站恢复',()=>void run(async()=>{await command({name:'asset.restore',payload:{id:activeAsset.id,expectedRevision:activeAsset.revision}});back();}),false):null}
 {metadata?<WorkbenchSection title="编辑素材" onClose={()=>confirmLeave(()=>void run(async()=>{await inspect(activeAsset);setMetadata(false);}))}>{error?<Text accessibilityRole="alert" style={styles.error}>{error}</Text>:null}      {trash ? action('从回收站恢复',()=>void run(async()=>{await command({name:'asset.restore',payload:{id:activeAsset.id,expectedRevision:activeAsset.revision}});back();})) : metadata ? <>
@@ -264,15 +281,15 @@ function CreativeWorkspaceContent({ mode, projectId, assetId, initialTab, initia
         {v.state === 'AVAILABLE' && v.relativePath && v.mime?.startsWith('video/') ? <View style={{height:260,width:'100%',borderRadius:12,overflow:'hidden'}}><VideoPlayer source={`${FileSystem.documentDirectory}${v.relativePath}`} /></View> : null}
         {v.state==='AVAILABLE'&&v.mime==='application/pdf'?<PdfVersionPreview key={v.id} version={v}/>:null}
         {v.state==='AVAILABLE'&&v.mime?.startsWith('audio/')?<AudioVersionPreview version={v}/>:null}
-        {v.state==='AVAILABLE'&&['text/plain','text/markdown','application/json'].includes(v.mime??'')?<TextVersionPreview version={v}/>:null}<View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{v.state==='AVAILABLE'&&(CREATIVE_FILE_MIMES as readonly string[]).includes(v.mime??'')?<ListAction label="导出" icon="download" secondary onPress={()=>void run(()=>exportCreativeVersion(v.id))}/>:null}{!trash&&v.state==='AVAILABLE'?<ListAction label="加入项目" icon="add" secondary onPress={()=>setProjectActions(!projectActions)}/>:null}</View><AssetFacts asset={activeAsset} version={v} description={assetDescription} tags={assetTags} projects={links.map(l=>l.title)}/>        {projectActions ? <WorkbenchSection title="加入项目" onClose={()=>setProjectActions(false)}>{error?<Text accessibilityRole="alert" style={styles.error}>{error}</Text>:null}{!projects.some(p=>!p.archivedAt)?<Text style={styles.body}>还没有进行中的项目。请先到项目页新建或恢复项目，再加入素材。</Text>:null}<TextInput accessibilityLabel="搜索项目" placeholder="搜索项目" value={projectQuery} onChangeText={setProjectQuery} style={styles.input} />
+        {v.state==='AVAILABLE'&&['text/plain','text/markdown','application/json'].includes(v.mime??'')?<TextVersionPreview version={v}/>:null}<View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{v.state==='AVAILABLE'&&(CREATIVE_FILE_MIMES as readonly string[]).includes(v.mime??'')?<ListAction label="保存到手机" icon="download" secondary onPress={()=>void run(()=>exportCreativeVersion(v.id))}/>:null}{!trash&&v.state==='AVAILABLE'?<ListAction label="加入项目" icon="add" secondary onPress={()=>setProjectActions(!projectActions)}/>:null}</View><AssetFacts asset={activeAsset} version={v} description={assetDescription} tags={assetTags} projects={links.map(l=>l.title)}/>        {projectActions ? <WorkbenchSection title="加入项目" onClose={()=>setProjectActions(false)}>{error?<Text accessibilityRole="alert" style={styles.error}>{error}</Text>:null}{!projects.some(p=>!p.archivedAt)?<Text style={styles.body}>还没有进行中的项目。请先到项目页新建或恢复项目，再加入素材。</Text>:null}<TextInput accessibilityLabel="搜索项目" placeholder="搜索项目" value={projectQuery} onChangeText={setProjectQuery} style={styles.input} />
         {projects.filter(p => p.title.includes(projectQuery) && !p.archivedAt && !links.some(l => l.project_id === p.id)).map(p => <View key={p.id}>{action(`加入 ${p.title}（固定此版本）`, () => void run(async () => { await command({ name: 'asset.linkToProject', payload: { assetId: activeAsset.id, projectId: p.id, versionId: v.id } }); await inspect(activeAsset); }))}</View>)}
         {links.filter(l => l.title.includes(projectQuery) && l.pinned_version_id !== v.id).map(l => <View key={l.project_id}>{action(`将 ${l.title} 固定到此版本`, () => void run(async () => { await command({ name: 'asset.pinProjectVersion', payload: { assetId: activeAsset.id, projectId: l.project_id, expectedRevision: l.revision, versionId: v.id } }); await inspect(activeAsset); }))}</View>)}
         {activeAsset.kind==='image'&&v.state==='AVAILABLE'?links.map(l=>{const p=projects.find(p=>p.id===l.project_id);return p&&!p.archivedAt?<View key={`cover-${p.id}`}>{action(`设为 ${p.title} 封面`,()=>void run(async()=>{await creativeFiles().verify(v.id);await command({name:'project.setCover',payload:{id:p.id,expectedRevision:p.revision,versionId:v.id}});} ))}</View>:null;}):null}
-        </WorkbenchSection> : null}{manage?<ParameterSheet title="素材操作" onClose={()=>setManage(false)}>{error?<Text accessibilityRole="alert" style={styles.error}>{error}</Text>:null}        {activeAsset.kind==='image'?<ImageMetadataPanel key={v.id} version={v} label="信息" />:null}
+        </WorkbenchSection> : null}{processing&&surface?.versionId===v.id?<ImageProcessingSheet version={v} projectId={selected} onClose={()=>setProcessing(false)} />:null}{manage?<ParameterSheet title="素材操作" onClose={()=>setManage(false)}>{error?<Text accessibilityRole="alert" style={styles.error}>{error}</Text>:null}        {activeAsset.kind==='image'?<ImageMetadataPanel key={v.id} version={v} label="信息" />:null}
         {!trash && activeAsset.kind==='image' && v.state==='AVAILABLE'?action('增强 / 放大',()=>setProcessing(true)):null}
-        {processing?<ImageProcessingSheet version={v} projectId={selected} onClose={()=>setProcessing(false)} />:null}
+
         {!trash&&v.state==='AVAILABLE'&&['text/plain','text/markdown'].includes(v.mime??'')?<TextVersionEditor key={`${v.id}:${activeAsset.revision}`} asset={activeAsset} version={v} onSaved={async()=>{const updated=await creativeService().asset(activeAsset.id);if(updated)await inspect(updated);}}/>:null}
-        {v.state === 'AVAILABLE' && (CREATIVE_FILE_MIMES as readonly string[]).includes(v.mime ?? '') ? action(creativeExportTarget(v.mime??'')==='system-gallery'?'保存到系统相册':'保存到下载文件夹', () => void run(() => exportCreativeVersion(v.id))) : null}
+        {v.state === 'AVAILABLE' && (CREATIVE_FILE_MIMES as readonly string[]).includes(v.mime ?? '') ? action('保存到手机', () => void run(() => exportCreativeVersion(v.id))) : null}
         {v.state !== 'AVAILABLE' && activeAsset.kind === 'image' ? <><Text style={styles.body}>版本记录仍保留。请重新选择原始图片；内容不同会拒绝替换。</Text>{action('重新定位原图', () => void run(async () => { const [image] = await pickImagesFromGallery(1); if (image) { await restoreCreativeImage(v.id, image); await inspect(activeAsset); } }))}</> : null}
         {v.state !== 'AVAILABLE' && activeAsset.kind === 'image' ? action('从文件备份找回', () => void run(async () => { await restoreCreativeImageFromBackup(v.id); await inspect(activeAsset); })) : null}
         {deliveries[v.id] ? <Text style={styles.body}>{({ QUEUED: '等待保存', PUBLISHING: '正在保存', EXPORTED: '文件已保存', FAILED: '保存失败，请检查源文件', DELIVERY_UNKNOWN: '保存结果不确定，请先检查相册或下载文件夹', QUARANTINED: '恢复的保存操作已隔离，未重新执行' } as Record<string, string>)[deliveries[v.id]!.status]}</Text> : null}
@@ -284,7 +301,7 @@ function CreativeWorkspaceContent({ mode, projectId, assetId, initialTab, initia
         {v.state !== 'AVAILABLE' && activeAsset.kind !== 'image' ? <><Text style={styles.body}>原件尚不可用。版本与来源保留，只接受与已记录哈希相同的文件。</Text>{action('重新定位原文件',()=>void run(async()=>{await locateCreativeFile(v.id);await inspect(activeAsset);}))}{action('从备份恢复原文件',()=>void run(async()=>{await restoreCreativeFileFromBackup(v.id);await inspect(activeAsset);}))}</> : null}
         {!trash && manage && v.state === 'AVAILABLE' && activeAsset.kind === 'image' ? action('从此版本创建视频草稿', () => void run(async () => { const result = await command({ name: 'draft.createVideo', payload: { versionId: v.id, ...(selected ? { projectId: selected } : {}) } }); if (result.status === 'completed') router.push({ pathname: '/creative-draft/[id]', params: { id: result.value.draftId } }); })) : null}
 
-      {manage ? <><Text style={styles.title}>使用位置</Text><Text style={styles.body}>移出项目不会删除原件；固定版本不会随默认版本改变。</Text></> : null}
+      {manage ? <><Text style={styles.title}>使用位置</Text><Text style={styles.body}>移出项目不会删除原件；固定版本不会随默认版本改变。</Text>{usage.slice(0,100).map((edge,index)=><Text key={index} style={styles.body}>{edge.kind} · {edge.object_id.slice(-8)} · {edge.version_id?'固定版本 '+edge.version_id.slice(-8):'跟随默认版本'}</Text>)}{usage.length>100?<Text style={styles.body}>使用位置超过 100 项；删除检查仍覆盖全部引用。</Text>:null}</> : null}
       {manage ? links.map(link => <View key={link.project_id}><Text style={styles.body}>{link.title} · {link.pinned_version_id ? '固定版本' : '跟随默认'}</Text>{manage ? action(`从 ${link.title} 移出`, () => void run(async () => { await command({ name: 'asset.unlinkFromProject', payload: { assetId: activeAsset.id, projectId: link.project_id, expectedRevision: link.revision } }); await inspect(activeAsset); })) : null}</View>) : null}
       {manage && !links.length ? <Text style={styles.body}>未加入项目，保存在收件箱。</Text> : null}
       {manage ? links.filter(l => l.pinned_version_id).map(l => <View key={l.project_id}>{action(`让 ${l.title} 跟随默认版本`, () => void run(async () => { await command({ name: 'asset.pinProjectVersion', payload: { assetId: activeAsset.id, projectId: l.project_id, expectedRevision: l.revision, versionId: null } }); await inspect(activeAsset); }))}</View>) : null}

@@ -1,3 +1,6 @@
+import {generationReadiness} from './generationReadiness';
+import {creativeAccounts} from './accountRuntime';
+import {createId} from '../ids';
 import {useKeyboardVisible} from '../ui/useKeyboardVisible';
 import {estimateAnlas,anlasEstimateLabel} from './anlasEstimate';
 import type {NovelAiUsage} from './novelAiUsage';
@@ -44,6 +47,8 @@ const normalInput=(input:NovelAiDraftInput):NovelAiDraftInput=>input.enhancement
 export function ImageDraftScreen({id,embedded=false}:{id:string;embedded?:boolean}) { return <TagCompletionProvider><CompactWorkbench><ImageCanvas initialId={id} embedded={embedded} /></CompactWorkbench></TagCompletionProvider>; }
 
 function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
+  const [connected,setConnected]=useState<boolean>();
+  useFocusEffect(useCallback(()=>{let active=true;void creativeAccounts().list().then(rows=>{if(active)setConnected(rows.some(row=>row.provider_id==='novelai'));}).catch(()=>{if(active)setConnected(false);});return()=>{active=false;};},[]));
   const [pricingUsage,setPricingUsage]=useState<NovelAiUsage>();
   const [pricingClock,setPricingClock]=useState(Date.now());
   useEffect(()=>{const timer=setInterval(()=>setPricingClock(Date.now()),15000);return()=>clearInterval(timer);},[]);
@@ -68,6 +73,7 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
   const lock=useRef(false),latest=useRef(input);latest.current=input;
   const dirty=Boolean(input && baseline && JSON.stringify(input)!==baseline);
   const pending=useWorkbenchJobPending((resultDraft??draft)?.job_id,jobStatus);
+  const ready=generationReadiness({provider:'NovelAI',busy,pending,unknown:jobStatus==='UNKNOWN',connected,missingPrompt:processing!=='upscale'&&!input?.prompt.trim(),usagePending:!pricingUsage});
   const editable=Boolean(draft && !busy);
   const exitTool=useCallback(()=>{
     Keyboard.dismiss();setProcessing(undefined);setProcessingSource(undefined);setEnhanceInput(undefined);setUndoInput(undefined);
@@ -143,7 +149,7 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
     catch(e){setError(creativeError(e,'无法打开图片工具'));}finally{lock.current=false;setBusy(false);}
   },[]);
   const submit=async()=>{
-    if(lock.current || !draft || !latest.current || pending || conflict)return;
+    if(lock.current || !draft || !latest.current || !ready.canSubmit || conflict)return;
     Keyboard.dismiss();
     lock.current=true;setBusy(true);setError('');
     let requestId:string|undefined;
@@ -205,7 +211,7 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
     </>:<Text style={s.muted}>从文字开始创作。V5 的底图支持图生图与局部重绘；Vibe 和 Precise Reference 不适用于 V5。</Text>}
   </View>:null;
   return <SafeAreaView edges={embedded?[]:['top','bottom','left','right']} style={s.screen}><KeyboardSurface style={{flex:1}}>
-    {!embedded?<View style={c.header}><IconAction label="返回" icon="arrow_back" disabled={busy || saving} onPress={()=>{if(!closePanel())router.canGoBack()?router.back():router.replace('/(tabs)/create');}} /><Text style={c.headerTitle}>图片创作</Text><Text numberOfLines={1} style={c.caption}>{activeInput?novelAiModelName(activeInput.model):'读取中…'}</Text><IconAction label="创作账号" icon="key" onPress={()=>router.push({pathname:'/settings-panel',params:{section:'accounts'}})} /></View>:null}
+    {!embedded?<View style={c.header}><IconAction label="返回" icon="arrow_back" disabled={busy || saving} onPress={()=>{if(!closePanel())router.canGoBack()?router.back():router.replace('/(tabs)/create');}} /><Text style={c.headerTitle}>图片创作</Text><Text numberOfLines={1} style={c.caption}>{activeInput?novelAiModelName(activeInput.model):'读取中…'}</Text><IconAction label="创作账号" icon="key" onPress={()=>router.push({pathname:'/settings-panel',params:{section:'accounts',requestId:createId(),surface:'image-draft',draftId:id}})} /></View>:null}
     {conflict?<View style={c.notice}><Text style={s.error}>草稿已在其他入口更新，本页输入已保留。</Text><TextAction label="载入最新草稿" disabled={busy || saving} onPress={()=>Alert.alert('载入最新草稿','这会放弃本页尚未保存的修改。',[{text:'保留本页',style:'cancel'},{text:'载入最新',onPress:()=>void reload().catch(e=>setError(creativeError(e)))}])} /></View>:null}
     {error?<View style={c.notice}><Text accessibilityRole="alert" style={s.error}>{error}</Text>{dirty?<TextAction label="重试保存草稿" disabled={busy || saving} onPress={()=>void save()} />:null}</View>:null}
     <WorkbenchScope draft={draft} />
@@ -222,7 +228,9 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
     </View>
     {input?<View style={[assist?{display:'none'}:undefined,c.composer,{width:'100%',maxWidth:760,alignSelf:'center'}]}>
 
-      <View style={c.generateRow}>{undoInput?<IconAction label="撤销修改" icon="undo" disabled={busy||saving||pending} onPress={()=>{if(processing==='enhance')setEnhanceInput(undoInput);else setInput(undoInput);setUndoInput(undefined);setError('');}}/>:null}<IconAction label="生成设置" icon="tune" disabled={processing==='upscale'} selected={settings} onPress={()=>{setAssist(false);setEditor(undefined);setSettings(!settings);}} /><IconAction label="展开画面编辑" icon="edit" selected={Boolean(editor)} onPress={()=>editor?setEditor(undefined):openEditor('prompt')} /><Pressable accessibilityRole="button" accessibilityLabel={processing==='enhance'?'增强图片':processing==='upscale'?'放大图片':`生成 ${input.samples} 张图片`} disabled={busy || saving || pending || conflict} onPress={()=>void submit()} style={({pressed})=>[c.generate,(busy || saving || pending || conflict) && {opacity:0.5},pressed && {opacity:0.9,transform:[{scale:0.985}]}]}><Text style={c.generateText}>{busy?'处理中…':jobStatus==='UNKNOWN' && pending?'请核查原任务':pending?'生成中…':processing==='enhance'?'Enhance':processing==='upscale'?'放大 2×':`生成 ${input.samples} 张图片`}</Text></Pressable><IconAction label="生成历史" icon="list_alt" selected={historyOpen} onPress={()=>{setAssist(false);setSettings(false);setEditor(undefined);setHistoryOpen(!historyOpen);}} /></View>
+      <Text accessibilityLiveRegion="polite" style={c.cost}>{ready.label}</Text>
+      {ready.kind==='connection'?<TextAction label="连接 NovelAI" onPress={()=>router.push({pathname:'/settings-panel',params:{section:'accounts',requestId:createId(),surface:'image-draft',draftId:id}})}/>:null}
+      <View style={c.generateRow}>{undoInput?<IconAction label="撤销修改" icon="undo" disabled={busy||saving||pending} onPress={()=>{if(processing==='enhance')setEnhanceInput(undoInput);else setInput(undoInput);setUndoInput(undefined);setError('');}}/>:null}<IconAction label="生成设置" icon="tune" disabled={processing==='upscale'} selected={settings} onPress={()=>{setAssist(false);setEditor(undefined);setSettings(!settings);}} /><IconAction label="展开画面编辑" icon="edit" selected={Boolean(editor)} onPress={()=>editor?setEditor(undefined):openEditor('prompt')} /><Pressable accessibilityRole="button" accessibilityLabel={processing==='enhance'?'增强图片':processing==='upscale'?'放大图片':`生成 ${input.samples} 张图片`} disabled={!ready.canSubmit || saving || conflict} onPress={()=>void submit()} style={({pressed})=>[c.generate,(busy || saving || pending || conflict) && {opacity:0.5},pressed && {opacity:0.9,transform:[{scale:0.985}]}]}><Text style={c.generateText}>{busy?'处理中…':jobStatus==='UNKNOWN' && pending?'请核查原任务':pending?'生成中…':processing==='enhance'?'Enhance':processing==='upscale'?'放大 2×':`生成 ${input.samples} 张图片`}</Text></Pressable><IconAction label="生成历史" icon="list_alt" selected={historyOpen} onPress={()=>{setAssist(false);setSettings(false);setEditor(undefined);setHistoryOpen(!historyOpen);}} /></View>
       <Text accessibilityLiveRegion="polite" style={c.cost}>{saving?'正在保存输入…':dirty?'输入待保存':pending?'生成中可继续编辑下一张，完成后再提交':`${input.width} × ${input.height} · ${input.steps} 步 · ${input.seed===null?'随机 Seed':`Seed ${input.seed}`} · ${anlasEstimateLabel(estimateAnlas(activeInput??input,pricingUsage,Math.max(pricingClock,Date.now()),processing))}`}</Text>
     </View>:null}
     {importing&&input?<NovelAiImageImport image={importing} input={input} onClose={()=>setImporting(undefined)} onApply={patch=>{setUndoInput(input);update(patch);openEditor('prompt');}} onUseImage={async()=>{const result=await importCreativeImage(importing,draft?.project_id??undefined);if(result.status!=='completed')throw new Error('图片导入未完成');choose(result.value.versionId,'source');openEditor('references');}}/>:null}

@@ -1,0 +1,282 @@
+[
+  {
+    "text": "",
+    "content-desc": "返回来源",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[21,63][110,152]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰁍",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[43,84][88,130]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "存储与导出",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[110,76][320,138]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "全部设置",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[42,196][1038,290]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "全部设置",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[476,220][604,265]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰿏",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,358][127,412]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "存储与导出",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[148,354][358,416]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "自动保存到系统相册",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,442][854,496]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "视频下载完成后保存到系统相册 / Movies / AutoDL-H3",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,506][854,554]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "自动保存到系统相册",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[885,462][1007,533]",
+    "class": "android.widget.Switch"
+  },
+  {
+    "text": "图片生成后自动保存",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,581][854,635]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "生成、增强与放大完成后保存到系统相册，应用内仍保留原件。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,645][854,741]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "图片生成后自动保存",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[885,625][1007,696]",
+    "class": "android.widget.Switch"
+  },
+  {
+    "text": "保存位置：系统相册 / Movies / AutoDL-H3",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[73,767][1006,815]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "保留应用内副本",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,842][854,896]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "关闭后仅在相册保存成功时删除应用内视频",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,906][854,954]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "保留应用内副本",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[885,862][1007,933]",
+    "class": "android.widget.Switch"
+  },
+  {
+    "text": "数据管理",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[86,1061][994,1123]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "数据库备份保存记录；含文件备份同时保存创作原件。连接密钥不包含在备份中。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[86,1123][994,1231]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "扫描可清理空间",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[87,1232][993,1358]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "扫描可清理空间",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[87,1268][993,1322]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "立即备份数据库",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[87,1358][993,1484]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "立即备份数据库",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[87,1394][993,1448]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "查看可恢复备份",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[87,1484][993,1610]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "查看可恢复备份",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[87,1520][993,1574]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "备份数据库与创作文件",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[87,1610][993,1736]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "备份数据库与创作文件",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[87,1646][993,1700]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "查看含文件的备份",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[87,1736][993,1862]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "查看含文件的备份",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[87,1772][993,1826]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "清除应用数据",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[87,1862][993,1988]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "清除应用数据",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[87,1898][993,1952]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "设置已保存",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,2137][1038,2185]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "保存设置",
+    "clickable": "true",
+    "enabled": "false",
+    "bounds": "[42,2206][1038,2316]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰠘",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[429,2234][482,2288]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "保存设置",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[503,2234][651,2288]",
+    "class": "android.widget.TextView"
+  }
+]

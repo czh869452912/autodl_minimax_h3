@@ -1,0 +1,82 @@
+[
+  {
+    "text": "",
+    "content-desc": "关闭最近任务",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[0,0][1080,2400]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "最近任务",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[152,206][932,265]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "最近 6 次创作",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[152,270][932,313]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "收起最近任务",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[931,215][1020,304]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰅖",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[953,236][998,282]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰷐",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[549,399][623,475]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "暂无任务",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[516,490][656,542]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "生成后的进度和结果会显示在这里",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[346,558][826,606]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "全部任务",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[147,670][1026,764]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "全部任务",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[522,694][650,739]",
+    "class": "android.widget.TextView"
+  }
+]

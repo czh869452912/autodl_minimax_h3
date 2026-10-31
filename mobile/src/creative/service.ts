@@ -1,8 +1,9 @@
+import {readUsageGraph} from './usageGraph';
 import { importedOriginals } from './importIdentity';
 import {enqueueVersionExport} from './enqueueVersionExport';
 import {readResultHistoryPage} from './resultHistory';
 import {readVideoHistory} from './videoHistory';
-import {readCreationRecords} from './creationRecords';
+import {readCreationRecords,readCreationRecordPage,type CreationQuery} from './creationRecords';
 import CryptoJS from 'crypto-js';
 import { recoverNovelAiMetadata } from './novelAiMetadata';
 import { storySchemas, applyStoryCommand, listCreativeShots } from './story';
@@ -62,7 +63,8 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
     videoHistory: (draft: Parameters<typeof readVideoHistory>[1],options?:Parameters<typeof readVideoHistory>[2]) => readVideoHistory(db,draft,options),
     shots: (projectId: string) => listCreativeShots(db, projectId),
     draft: (id: string) => readCreativeDraft(db, id),
-    creationRecords: () => readCreationRecords(db),
+    creationRecordPage: (options?:CreationQuery) => readCreationRecordPage(db,options),
+    creationRecords: (options?:CreationQuery) => readCreationRecords(db,options),
     draftInputs: (id: string) => readDraftInputs(db, id),
     drafts: (projectId?: string) => db.getAllAsync<import('./drafts').CreativeDraft>("SELECT d.*,EXISTS(SELECT 1 FROM creative_draft_inputs i WHERE i.draft_id=d.id) AS has_inputs FROM creative_generation_drafts d WHERE (? IS NULL OR project_id=?) AND state!='DISCARDED' ORDER BY updated_at DESC,id DESC LIMIT 100", projectId ?? null, projectId ?? null),
     async projects(archived = false): Promise<CreativeProject[]> { return (await db.getAllAsync<Row>('SELECT * FROM creative_projects WHERE (archived_at IS NOT NULL)=? ORDER BY updated_at DESC,id DESC', archived ? 1 : 0)).map(project); },
@@ -70,6 +72,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
     async isTrashed(id: string) { return Boolean(await db.getFirstAsync('SELECT asset_id FROM creative_asset_trash WHERE asset_id=?', id)); },
     async asset(id: string) { const row = await db.getFirstAsync<Row>('SELECT * FROM creative_assets WHERE id=?', id); return row ? asset(row) : undefined; },
     versionAsset: (id: string) => db.getFirstAsync<{ asset_id: string }>('SELECT asset_id FROM creative_asset_versions WHERE id=?', id),
+    async usage(assetId:string){return readUsageGraph(db,assetId);},
     async covers(){return db.getAllAsync<{project_id:string;version_id:string;relative_path:string|null;state:string|null}>("SELECT c.*,b.relative_path,f.state FROM creative_project_covers c LEFT JOIN creative_version_files f ON f.version_id=c.version_id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256");},
     async projectTab(id:string){return (await db.getFirstAsync<{tab:'brief'|'shots'|'assets'|'plans'|'activity'}>('SELECT tab FROM creative_project_views WHERE project_id=?',id))?.tab??'shots';},
     async saveProjectTab(projectId:string,tab:'brief'|'shots'|'assets'|'plans'|'activity'){await withWriteTransaction(db,tx=>tx.runAsync('INSERT INTO creative_project_views VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET tab=excluded.tab',projectId,tab).then(()=>undefined));},
@@ -153,8 +156,9 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
           case 'shot.update':value=origin?await proposeCreativeChange(tx,'shot.update',p,now,deps.id):await applyStoryCommand(tx,'shot.update',p,now,deps.id);break;
           case 'project.setCover':{
             await requireProject(tx,p.id);
-            if(p.versionId&&!await tx.getFirstAsync("SELECT v.id FROM creative_asset_versions v JOIN creative_assets a ON a.id=v.asset_id AND a.kind='image' JOIN creative_project_assets l ON l.asset_id=a.id AND l.project_id=? JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' AND f.state='AVAILABLE' WHERE v.id=? AND NOT EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=a.id)",p.id,p.versionId))throw new Error('COVER_VERSION_UNAVAILABLE');
+            if(p.versionId&&!await tx.getFirstAsync("SELECT v.id FROM creative_asset_versions v JOIN creative_assets a ON a.id=v.asset_id AND a.kind='image' JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' AND f.state='AVAILABLE' WHERE v.id=? AND NOT EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=a.id)",p.versionId))throw new Error('COVER_VERSION_UNAVAILABLE');
             changed(await tx.runAsync('UPDATE creative_projects SET revision=revision+1,updated_at=? WHERE id=? AND revision=?',now,p.id,p.expectedRevision));
+            if(p.versionId)await tx.runAsync('INSERT OR IGNORE INTO creative_project_assets SELECT ?,asset_id,?,0 FROM creative_asset_versions WHERE id=?',p.id,p.versionId,p.versionId);
             if(p.versionId)await tx.runAsync('INSERT INTO creative_project_covers VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET version_id=excluded.version_id',p.id,p.versionId);
             else await tx.runAsync('DELETE FROM creative_project_covers WHERE project_id=?',p.id);
             value={projectId:p.id};break;

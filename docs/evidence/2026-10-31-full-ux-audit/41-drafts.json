@@ -1,0 +1,90 @@
+[
+  {
+    "text": "",
+    "content-desc": "返回",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[42,105][1038,231]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "返回",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[503,141][577,195]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "打开创作工作台",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[42,263][1038,389]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "打开创作工作台",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[410,299][669,353]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "创作草稿",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,420][1038,505]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "图片 · 编辑中 · 新草稿",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[42,537][1038,663]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "图片 · 编辑中 · 新草稿",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[362,573][718,627]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "图片 · 编辑中 · 新草稿",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[42,694][1038,820]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "图片 · 编辑中 · 新草稿",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[362,730][718,784]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "视频 · 编辑中 · keyboard",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[42,852][1038,978]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "视频 · 编辑中 · keyboard",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[341,888][739,942]",
+    "class": "android.widget.TextView"
+  }
+]

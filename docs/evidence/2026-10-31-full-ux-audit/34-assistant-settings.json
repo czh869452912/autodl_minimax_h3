@@ -1,0 +1,170 @@
+[
+  {
+    "text": "",
+    "content-desc": "返回设置分类",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[21,63][110,152]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰁍",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[43,84][88,130]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "助手模型",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[110,76][278,138]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󱙺",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,232][127,286]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "创作助手模型",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[148,228][400,290]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "用于讨论创意、编写提示词、组织镜头并协助制作。生成费用另按创作账号授权；不使用助手时可跳过。填写支持 OpenAI 兼容接口的服务地址、模型和密钥。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[73,315][1006,459]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "LLM API 地址",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,486][1007,538]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "https://keyboard-qa.invalid/v1",
+    "content-desc": "LLM API 地址",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[74,548][1007,652]",
+    "class": "android.widget.EditText"
+  },
+  {
+    "text": "LLM 模型",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,678][1007,730]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "gpt-4o-mini",
+    "content-desc": "LLM 模型",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[74,740][1007,844]",
+    "class": "android.widget.EditText"
+  },
+  {
+    "text": "LLM API Key",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,871][1007,918]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "••••••••••••••••••••••",
+    "content-desc": "LLM API Key",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[74,928][1007,1033]",
+    "class": "android.widget.EditText"
+  },
+  {
+    "text": "",
+    "content-desc": "显示LLM API Key",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[74,1043][1007,1158]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "显示内容",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,1074][1007,1126]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "切换 LLM 高级设置",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[74,1184][1007,1300]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "高级设置",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,1226][222,1280]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰅀",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[954,1226][1007,1280]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "设置已保存",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,2137][1038,2185]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "保存设置",
+    "clickable": "true",
+    "enabled": "false",
+    "bounds": "[42,2206][1038,2316]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰠘",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[429,2234][482,2288]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "保存设置",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[503,2234][651,2288]",
+    "class": "android.widget.TextView"
+  }
+]

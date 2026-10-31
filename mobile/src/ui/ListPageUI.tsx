@@ -9,7 +9,7 @@ export function ListAction({ label, onPress, icon, secondary = false, disabled =
   const compact = useCompactWorkbench();
   const { fontScale } = useWindowDimensions();
   return <Pressable hitSlop={compact ? 4 : undefined} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
-    style={({ pressed }) => [listUI.action, compact && {minHeight:fontScale > 1.2 ? 44 : 36,paddingHorizontal:10,paddingVertical:6,borderRadius:8}, secondary && listUI.secondaryAction, pressed && listUI.pressed, disabled && listUI.disabled]}>
+    style={({ pressed }) => [listUI.action, compact && {minHeight:48,paddingHorizontal:10,paddingVertical:6,borderRadius:8}, secondary && listUI.secondaryAction, pressed && listUI.pressed, disabled && listUI.disabled]}>
     {icon ? <AppIcon name={icon} size={19} color={secondary ? COLORS.primaryActive : COLORS.onPrimary} /> : null}
     <Text style={[listUI.actionText, compact && {fontSize:13}, secondary && listUI.secondaryText]}>{label}</Text>
   </Pressable>;
@@ -21,7 +21,7 @@ export function ListFilters<T extends string>({ label, options, value, onChange,
   return <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[listUI.filters,compact && {marginVertical:0,gap:6}]}>
     {options.map(option => <Pressable key={option.id} accessibilityRole="radio" accessibilityLabel={option.label}
       accessibilityState={{ checked: value === option.id }} onPress={() => onChange(option.id)}
-      style={({ pressed }) => [listUI.filter,compact && {minHeight:36,paddingVertical:7,paddingHorizontal:10,borderRadius:8,flexGrow:0}, value === option.id && listUI.filterActive, pressed && listUI.pressed]}>
+      style={({ pressed }) => [listUI.filter,compact && {minHeight:48,paddingVertical:7,paddingHorizontal:10,borderRadius:8,flexGrow:0}, value === option.id && listUI.filterActive, pressed && listUI.pressed]}>
       <Text style={[listUI.filterText, value === option.id && listUI.filterTextActive]}>{option.label}</Text>
     </Pressable>)}
   </View>;

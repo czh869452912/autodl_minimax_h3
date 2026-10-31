@@ -1,0 +1,562 @@
+[
+  {
+    "file": "mobile/app/(tabs)/gallery.tsx",
+    "line": 102,
+    "call": "router.push({ pathname: '/video/[id]', params: { id: asset.id } })"
+  },
+  {
+    "file": "mobile/app/(tabs)/gallery.tsx",
+    "line": 119,
+    "call": "router.navigate({pathname:'/(tabs)/create',params:{mode:'video',requestId:String(Date.now())}})"
+  },
+  {
+    "file": "mobile/app/(tabs)/gallery.tsx",
+    "line": 120,
+    "call": "router.navigate({pathname:'/(tabs)/create',params:{mode:'video',requestId:String(Date.now())}})"
+  },
+  {
+    "file": "mobile/app/(tabs)/settings.tsx",
+    "line": 65,
+    "call": "router.back()"
+  },
+  {
+    "file": "mobile/app/(tabs)/settings.tsx",
+    "line": 65,
+    "call": "router.navigate('/(tabs)/create')"
+  },
+  {
+    "file": "mobile/app/(tabs)/tasks.tsx",
+    "line": 53,
+    "call": "getDatabase().getFirstAsync('SELECT job_id FROM creative_job_contexts WHERE job_id=?',id).then(bound=>router.push({pathname:bound?'/creative-task/[id]':'/video/[id]',params:{id}})).catch(()=>Alert.alert('读取失败','请重新打开任务'))"
+  },
+  {
+    "file": "mobile/app/(tabs)/tasks.tsx",
+    "line": 53,
+    "call": "router.push({pathname:bound?'/creative-task/[id]':'/video/[id]',params:{id}})"
+  },
+  {
+    "file": "mobile/app/(tabs)/tasks.tsx",
+    "line": 54,
+    "call": "getDatabase().getFirstAsync('SELECT job_id FROM creative_job_contexts WHERE job_id=?',id).then(bound=>{\n    if(bound){router.push({pathname:'/creative-task/[id]',params:{id}});return;}\n    Alert.alert('创建新的尝试？','请先核查 AutoDL 任务记录。新任务可能重复消耗额度；参考素材必须仍然可用。',[{text:'取消',style:'cancel'},{text:'已核查，创建新任务',onPress:()=>{void getTaskServices().taskCommandService.replaceUnknownAfterConfirmation(id).catch(error=>Alert.alert('无法创建新尝试',String(error)));}}]);\n  }).catch(()=>Alert.alert('读取失败','请重新打开任务'))"
+  },
+  {
+    "file": "mobile/app/(tabs)/tasks.tsx",
+    "line": 55,
+    "call": "router.push({pathname:'/creative-task/[id]',params:{id}})"
+  },
+  {
+    "file": "mobile/app/(tabs)/tasks.tsx",
+    "line": 58,
+    "call": "router.push({pathname:'/settings-panel',params:{section:'accounts'}})"
+  },
+  {
+    "file": "mobile/app/(tabs)/tasks.tsx",
+    "line": 58,
+    "call": "router.push({pathname:'/creative-task/[id]',params:{id}})"
+  },
+  {
+    "file": "mobile/app/(tabs)/tasks.tsx",
+    "line": 98,
+    "call": "router.push('/(tabs)/create')"
+  },
+  {
+    "file": "mobile/app/(tabs)/_layout.tsx",
+    "line": 18,
+    "call": "router.back()"
+  },
+  {
+    "file": "mobile/app/(tabs)/_layout.tsx",
+    "line": 18,
+    "call": "router.navigate('/(tabs)/create')"
+  },
+  {
+    "file": "mobile/app/(tabs)/_layout.tsx",
+    "line": 21,
+    "call": "router.navigate('/settings-panel')"
+  },
+  {
+    "file": "mobile/app/creative-drafts.tsx",
+    "line": 13,
+    "call": "router.back()"
+  },
+  {
+    "file": "mobile/app/creative-drafts.tsx",
+    "line": 13,
+    "call": "router.replace('/(tabs)/create')"
+  },
+  {
+    "file": "mobile/app/creative-drafts.tsx",
+    "line": 14,
+    "call": "router.navigate('/(tabs)/create')"
+  },
+  {
+    "file": "mobile/app/creative-drafts.tsx",
+    "line": 17,
+    "call": "router.push({ pathname: d.provider_id === 'novelai' ? '/image-draft/[id]' : '/creative-draft/[id]', params: { id: d.id } })"
+  },
+  {
+    "file": "mobile/app/creative-task/[id].tsx",
+    "line": 22,
+    "call": "router.replace('/(tabs)/tasks')"
+  },
+  {
+    "file": "mobile/app/creative-task/[id].tsx",
+    "line": 42,
+    "call": "router.back()"
+  },
+  {
+    "file": "mobile/app/creative-task/[id].tsx",
+    "line": 42,
+    "call": "router.replace('/(tabs)/tasks')"
+  },
+  {
+    "file": "mobile/app/creative-task/[id].tsx",
+    "line": 58,
+    "call": "router.push({pathname:'/settings-panel',params:{section:'accounts'}})"
+  },
+  {
+    "file": "mobile/app/creative-task/[id].tsx",
+    "line": 61,
+    "call": "router.push({pathname:draft.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:draft.id}})"
+  },
+  {
+    "file": "mobile/app/creative-task/[id].tsx",
+    "line": 62,
+    "call": "router.push('/(tabs)/tasks')"
+  },
+  {
+    "file": "mobile/app/video/[id].tsx",
+    "line": 24,
+    "call": "router.back()"
+  },
+  {
+    "file": "mobile/app/video/[id].tsx",
+    "line": 24,
+    "call": "router.replace('/(tabs)/gallery')"
+  },
+  {
+    "file": "mobile/app/video/[id].tsx",
+    "line": 68,
+    "call": "router.back()"
+  },
+  {
+    "file": "mobile/app/video/[id].tsx",
+    "line": 110,
+    "call": "router.back()"
+  },
+  {
+    "file": "mobile/src/agent/AgentScreen.tsx",
+    "line": 319,
+    "call": "router.navigate({\r\n          pathname: '/(tabs)/create',\r\n          params: { draftId: draft.id },\r\n        })"
+  },
+  {
+    "file": "mobile/src/agent/AgentScreen.tsx",
+    "line": 328,
+    "call": "router.navigate({ pathname: '/(tabs)/create', params: { draftId: draft.id } })"
+  },
+  {
+    "file": "mobile/src/agent/AgentScreen.tsx",
+    "line": 459,
+    "call": "router.navigate({pathname:'/settings-panel',params:{section:'assistant'}})"
+  },
+  {
+    "file": "mobile/src/agent/skills/SkillExtractionScreen.tsx",
+    "line": 45,
+    "call": "router.back()"
+  },
+  {
+    "file": "mobile/src/agent/skills/SkillExtractionScreen.tsx",
+    "line": 45,
+    "call": "router.replace('/agent-skills')"
+  },
+  {
+    "file": "mobile/src/agent/skills/SkillExtractionScreen.tsx",
+    "line": 111,
+    "call": "router.push('/agent-skills')"
+  },
+  {
+    "file": "mobile/src/agent/skills/SkillLibraryScreen.tsx",
+    "line": 33,
+    "call": "router.back()"
+  },
+  {
+    "file": "mobile/src/agent/skills/SkillLibraryScreen.tsx",
+    "line": 33,
+    "call": "router.replace('/(tabs)/agent')"
+  },
+  {
+    "file": "mobile/src/agent/skills/SkillLibraryScreen.tsx",
+    "line": 64,
+    "call": "router.push('/agent-skill-extract')"
+  },
+  {
+    "file": "mobile/src/create/CreateForm.tsx",
+    "line": 374,
+    "call": "router.navigate('/(tabs)/tasks')"
+  },
+  {
+    "file": "mobile/src/create/CreateForm.tsx",
+    "line": 395,
+    "call": "router.navigate({pathname:'/settings-panel',params:{section:'workflows'}})"
+  },
+  {
+    "file": "mobile/src/create/CreateForm.tsx",
+    "line": 402,
+    "call": "router.navigate({pathname:'/settings-panel',params:{section:'accounts'}})"
+  },
+  {
+    "file": "mobile/src/creative/AgentCreativeCards.tsx",
+    "line": 86,
+    "call": "router.push({pathname:'/creative-output/[id]',params:{id:output.id,assetId:output.assetId,jobId:card.jobId??card.draft!.job_id??'',draftId:card.draft!.id}})"
+  },
+  {
+    "file": "mobile/src/creative/AgentCreativeCards.tsx",
+    "line": 88,
+    "call": "router.push({pathname:card.draft!.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:card.draft!.id}})"
+  },
+  {
+    "file": "mobile/src/creative/AgentCreativeCards.tsx",
+    "line": 89,
+    "call": "router.push({pathname:'/creative-task/[id]',params:{id:card.jobId!}})"
+  },
+  {
+    "file": "mobile/src/creative/AgentCreativeCards.tsx",
+    "line": 91,
+    "call": "router.push({pathname:'/creative-project/[id]',params:{id:card.projectId!,tab:card.kind==='proposal'?'activity':'plans',...(card.kind==='proposal'?{proposalId:card.id}:{planId:card.id}),requestId:String(Date.now())}})"
+  },
+  {
+    "file": "mobile/src/creative/AgentCreativePanel.tsx",
+    "line": 48,
+    "call": "router.navigate('/(tabs)/projects')"
+  },
+  {
+    "file": "mobile/src/creative/AgentWorkspace.tsx",
+    "line": 18,
+    "call": "router.navigate('/(tabs)/projects')"
+  },
+  {
+    "file": "mobile/src/creative/AssistantActions.tsx",
+    "line": 8,
+    "call": "router.push('/agent-skills')"
+  },
+  {
+    "file": "mobile/src/creative/AssistantActions.tsx",
+    "line": 8,
+    "call": "router.push({pathname:'/settings-panel',params:{section:'assistant'}})"
+  },
+  {
+    "file": "mobile/src/creative/CopySubmittedDraft.tsx",
+    "line": 10,
+    "call": "creativeService().execute({name:'draft.copySubmitted',payload:{id}},createId()).then(r=>{if(r.status==='completed')router.push({pathname:r.value.provider==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:r.value.draftId}});}).catch(e=>setError(e.message)).finally(()=>{lock.current=false;setBusy(false);})"
+  },
+  {
+    "file": "mobile/src/creative/CopySubmittedDraft.tsx",
+    "line": 10,
+    "call": "creativeService().execute({name:'draft.copySubmitted',payload:{id}},createId()).then(r=>{if(r.status==='completed')router.push({pathname:r.value.provider==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:r.value.draftId}});}).catch(e=>setError(e.message))"
+  },
+  {
+    "file": "mobile/src/creative/CopySubmittedDraft.tsx",
+    "line": 10,
+    "call": "router.push({pathname:r.value.provider==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:r.value.draftId}})"
+  },
+  {
+    "file": "mobile/src/creative/CreativeHome.tsx",
+    "line": 91,
+    "call": "router.push('/settings-panel')"
+  },
+  {
+    "file": "mobile/src/creative/CreativeHome.tsx",
+    "line": 103,
+    "call": "router.push('/(tabs)/projects')"
+  },
+  {
+    "file": "mobile/src/creative/CreativeHome.tsx",
+    "line": 104,
+    "call": "router.push('/(tabs)/assets')"
+  },
+  {
+    "file": "mobile/src/creative/CreativeHome.tsx",
+    "line": 105,
+    "call": "router.push({pathname:\"/settings-panel\",params:{section:\"workflows\"}})"
+  },
+  {
+    "file": "mobile/src/creative/CreativeOutputPreview.tsx",
+    "line": 18,
+    "call": "router.replace('/(tabs)/tasks')"
+  },
+  {
+    "file": "mobile/src/creative/CreativeOutputPreview.tsx",
+    "line": 40,
+    "call": "router.back()"
+  },
+  {
+    "file": "mobile/src/creative/CreativeOutputPreview.tsx",
+    "line": 40,
+    "call": "router.replace('/(tabs)/tasks')"
+  },
+  {
+    "file": "mobile/src/creative/CreativeOutputPreview.tsx",
+    "line": 49,
+    "call": "router.push({ pathname: '/creative-asset/[id]', params: { id: version.assetId, versionId: version.id } })"
+  },
+  {
+    "file": "mobile/src/creative/CreativeOutputPreview.tsx",
+    "line": 50,
+    "call": "router.push({ pathname: current.draft!.provider_id === 'novelai' ? '/image-draft/[id]' : '/creative-draft/[id]', params: { id: current.draft!.id } })"
+  },
+  {
+    "file": "mobile/src/creative/CreativeResults.tsx",
+    "line": 122,
+    "call": "router.push(target)"
+  },
+  {
+    "file": "mobile/src/creative/CreativeResults.tsx",
+    "line": 122,
+    "call": "router.replace(target)"
+  },
+  {
+    "file": "mobile/src/creative/CreativeResults.tsx",
+    "line": 188,
+    "call": "router.push({pathname:'/creative-task/[id]',params:{id:draft.job_id!,returnToWorkbench:'1'}})"
+  },
+  {
+    "file": "mobile/src/creative/CreativeResults.tsx",
+    "line": 236,
+    "call": "router.push({pathname:'/creative-task/[id]',params:{id:draft.job_id!,returnToWorkbench:'1'}})"
+  },
+  {
+    "file": "mobile/src/creative/CreativeResults.tsx",
+    "line": 240,
+    "call": "router.push({pathname:'/creative-asset/[id]',params:{id:current.assetId,versionId:current.id,...(draft.project_id?{projectId:draft.project_id}:{})}})"
+  },
+  {
+    "file": "mobile/src/creative/CreativeWorkspace.tsx",
+    "line": 135,
+    "call": "router.push({pathname:'/creative-project/[id]',params:{id:p.id}})"
+  },
+  {
+    "file": "mobile/src/creative/CreativeWorkspace.tsx",
+    "line": 209,
+    "call": "router.back()"
+  },
+  {
+    "file": "mobile/src/creative/CreativeWorkspace.tsx",
+    "line": 209,
+    "call": "router.replace(mode === 'projects' ? '/(tabs)/projects' : '/(tabs)/assets')"
+  },
+  {
+    "file": "mobile/src/creative/CreativeWorkspace.tsx",
+    "line": 222,
+    "call": "router.push({pathname:'/image-draft/[id]',params:{id:result.value.draftId}})"
+  },
+  {
+    "file": "mobile/src/creative/CreativeWorkspace.tsx",
+    "line": 224,
+    "call": "router.push('/(tabs)/gallery')"
+  },
+  {
+    "file": "mobile/src/creative/CreativeWorkspace.tsx",
+    "line": 224,
+    "call": "router.push('/creative-drafts')"
+  },
+  {
+    "file": "mobile/src/creative/CreativeWorkspace.tsx",
+    "line": 238,
+    "call": "router.push({pathname:'/creative-project/[id]',params:{id:result.value.projectId}})"
+  },
+  {
+    "file": "mobile/src/creative/CreativeWorkspace.tsx",
+    "line": 283,
+    "call": "router.push({pathname:'/image-draft/[id]',params:{id:result.value.draftId}})"
+  },
+  {
+    "file": "mobile/src/creative/CreativeWorkspace.tsx",
+    "line": 285,
+    "call": "router.push({ pathname: '/creative-draft/[id]', params: { id: result.value.draftId } })"
+  },
+  {
+    "file": "mobile/src/creative/CreativeWorkspace.tsx",
+    "line": 303,
+    "call": "router.push({pathname:'/settings-panel',params:{section:'storage'}})"
+  },
+  {
+    "file": "mobile/src/creative/CreativeWorkspace.tsx",
+    "line": 303,
+    "call": "router.push('/(tabs)/gallery')"
+  },
+  {
+    "file": "mobile/src/creative/CreativeWorkspace.tsx",
+    "line": 303,
+    "call": "router.push('/creative-drafts')"
+  },
+  {
+    "file": "mobile/src/creative/DraftHeading.tsx",
+    "line": 20,
+    "call": "router.back()"
+  },
+  {
+    "file": "mobile/src/creative/DraftHeading.tsx",
+    "line": 20,
+    "call": "router.replace('/(tabs)/create')"
+  },
+  {
+    "file": "mobile/src/creative/ImageDraftScreen.tsx",
+    "line": 208,
+    "call": "router.back()"
+  },
+  {
+    "file": "mobile/src/creative/ImageDraftScreen.tsx",
+    "line": 208,
+    "call": "router.replace('/(tabs)/create')"
+  },
+  {
+    "file": "mobile/src/creative/ImageDraftScreen.tsx",
+    "line": 208,
+    "call": "router.push({pathname:'/settings-panel',params:{section:'accounts'}})"
+  },
+  {
+    "file": "mobile/src/creative/ImageProcessingSheet.tsx",
+    "line": 21,
+    "call": "router.replace(target)"
+  },
+  {
+    "file": "mobile/src/creative/ImageProcessingSheet.tsx",
+    "line": 21,
+    "call": "router.push(target)"
+  },
+  {
+    "file": "mobile/src/creative/NovelAiUsageBar.tsx",
+    "line": 42,
+    "call": "router.push({ pathname: '/settings-panel', params: { section: 'accounts' } })"
+  },
+  {
+    "file": "mobile/src/creative/ProjectActivityPanel.tsx",
+    "line": 32,
+    "call": "router.push({pathname:'/creative-task/[id]',params:{id:r.jobId!}})"
+  },
+  {
+    "file": "mobile/src/creative/ProjectActivityPanel.tsx",
+    "line": 32,
+    "call": "creativeService().draft(r.draftId!).then(d=>{if(d)router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}});}).catch(()=>setError('草稿读取失败'))"
+  },
+  {
+    "file": "mobile/src/creative/ProjectActivityPanel.tsx",
+    "line": 32,
+    "call": "router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}})"
+  },
+  {
+    "file": "mobile/src/creative/ProjectOverview.tsx",
+    "line": 35,
+    "call": "router.push({pathname:'/(tabs)/agent',params:{projectId:project.id}})"
+  },
+  {
+    "file": "mobile/src/creative/ProjectOverview.tsx",
+    "line": 38,
+    "call": "router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}})"
+  },
+  {
+    "file": "mobile/src/creative/ProjectPlans.tsx",
+    "line": 63,
+    "call": "router.push({pathname:'/creative-task/[id]',params:{id:card.step.job_id!,projectId,planId:card.plan.id,stepId:card.step.id}})"
+  },
+  {
+    "file": "mobile/src/creative/ProjectShots.tsx",
+    "line": 40,
+    "call": "router.push({ pathname: d.provider_id === 'novelai' ? '/image-draft/[id]' : '/creative-draft/[id]', params: { id: d.id } })"
+  },
+  {
+    "file": "mobile/src/creative/ProjectShots.tsx",
+    "line": 68,
+    "call": "router.push({pathname:'/creative-shot/[id]',params:{id:shot.id,projectId}})"
+  },
+  {
+    "file": "mobile/src/creative/ProjectShots.tsx",
+    "line": 71,
+    "call": "router.push({pathname:'/creative-draft/[id]',params:{id:r.value.draftId}})"
+  },
+  {
+    "file": "mobile/src/creative/ProjectShots.tsx",
+    "line": 74,
+    "call": "router.push({pathname:'/image-draft/[id]',params:{id:r.value.draftId}})"
+  },
+  {
+    "file": "mobile/src/creative/ProjectShots.tsx",
+    "line": 78,
+    "call": "router.push({ pathname: '/creative-draft/[id]', params: { id: result.value.draftId } })"
+  },
+  {
+    "file": "mobile/src/creative/PromptAssistSheet.tsx",
+    "line": 93,
+    "call": "router.push({pathname:'/settings-panel',params:{section:'assistant',requestId:createId(),surface:sessionId}})"
+  },
+  {
+    "file": "mobile/src/creative/ShotOutputReview.tsx",
+    "line": 36,
+    "call": "router.back()"
+  },
+  {
+    "file": "mobile/src/creative/ShotOutputReview.tsx",
+    "line": 55,
+    "call": "router.push({pathname:'/creative-asset/[id]',params:{id:version.assetId,versionId:version.id,projectId}})"
+  },
+  {
+    "file": "mobile/src/creative/ShotOutputReview.tsx",
+    "line": 56,
+    "call": "router.push({pathname:'/creative-draft/[id]',params:{id:review.drafts[0].id}})"
+  },
+  {
+    "file": "mobile/src/creative/UpscaleDraftScreen.tsx",
+    "line": 38,
+    "call": "router.push({pathname:'/settings-panel',params:{section:'accounts'}})"
+  },
+  {
+    "file": "mobile/src/creative/UpscaleDraftScreen.tsx",
+    "line": 38,
+    "call": "router.push('/(tabs)/assets')"
+  },
+  {
+    "file": "mobile/src/creative/VideoDraftScreen.tsx",
+    "line": 204,
+    "call": "router.push({pathname:'/settings-panel',params:{section:'accounts'}})"
+  },
+  {
+    "file": "mobile/src/creative/VideoDraftScreen.tsx",
+    "line": 213,
+    "call": "router.back()"
+  },
+  {
+    "file": "mobile/src/creative/VideoDraftScreen.tsx",
+    "line": 213,
+    "call": "router.replace('/(tabs)/create')"
+  },
+  {
+    "file": "mobile/src/creative/VideoDraftScreen.tsx",
+    "line": 224,
+    "call": "router.push({pathname:'/creative-task/[id]',params:{id:resultDraft.job_id!,returnToWorkbench:'1'}})"
+  },
+  {
+    "file": "mobile/src/creative/VideoDraftScreen.tsx",
+    "line": 237,
+    "call": "router.push({pathname:'/settings-panel',params:{section:'workflows',requestId:createId(),surface:'video-workflow'}})"
+  },
+  {
+    "file": "mobile/src/navigation/creativeNavigation.ts",
+    "line": 10,
+    "call": "router.dismissTo('/(tabs)/projects')"
+  },
+  {
+    "file": "mobile/src/navigation/creativeNavigation.ts",
+    "line": 11,
+    "call": "router.dismissTo({pathname:'/creative-project/[id]',params:{id:project.id,tab:target.planId?'plans':target.proposalId?'activity':'shots',shotId:target.shotId,planId:target.planId,proposalId:target.proposalId,requestId:String(Date.now())}})"
+  },
+  {
+    "file": "mobile/src/tasks/TaskInboxButton.tsx",
+    "line": 35,
+    "call": "router.push({pathname:row.creative?'/creative-task/[id]':'/video/[id]',params:{id:row.id}})"
+  },
+  {
+    "file": "mobile/src/tasks/TaskInboxButton.tsx",
+    "line": 36,
+    "call": "router.navigate('/(tabs)/tasks')"
+  }
+]

@@ -1,0 +1,154 @@
+[
+  {
+    "text": "",
+    "content-desc": "关闭素材操作",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[0,0][1080,2400]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "素材操作",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,1254][928,1324]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "",
+    "content-desc": "完成",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[953,1242][1038,1336]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "完成",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[963,1266][1027,1311]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "信息",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1380][1049,1475]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰋽",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[470,1401][520,1453]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "信息",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[541,1401][611,1453]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "增强 / 放大",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1500][1049,1594]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "增强 / 放大",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[455,1521][626,1573]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "保存到系统相册",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1621][1049,1715]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "保存到系统相册",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[418,1642][663,1694]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "设为默认版本",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1742][1049,1837]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "设为默认版本",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[435,1763][645,1815]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "未找到可确认的 NovelAI 参数；不能完整恢复提示词。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[31,1862][1048,1920]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "从此版本创建视频草稿",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1947][1049,2042]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "从此版本创建视频草稿",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[365,1968][715,2020]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "使用位置",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[31,2067][1048,2137]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "移出项目不会删除原件；固定版本不会随默认版本改变。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[31,2163][1048,2221]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "未加入项目，保存在收件箱。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[31,2248][1048,2306]",
+    "class": "android.widget.TextView"
+  }
+]

@@ -7,7 +7,7 @@ import { AppIcon } from '../ui/icons';
 import { COLORS } from '../ui/theme';
 import type { AssetVersion, CreativeAsset } from './types';
 
-export function MediaPreview({ version, kind = 'image', label, style, contain = false }: { version?: AssetVersion; kind?: CreativeAsset['kind']; label: string; style?: StyleProp<ViewStyle>; contain?: boolean }) {
+export function MediaPreview({ version, kind = 'image', label, style, contain = false, compact = false }: { version?: AssetVersion; kind?: CreativeAsset['kind']; label: string; style?: StyleProp<ViewStyle>; contain?: boolean; compact?:boolean }) {
   const uri = version?.state === 'AVAILABLE' && version.relativePath ? `${FileSystem.documentDirectory}${version.relativePath}` : undefined;
   const image = version?.mime?.startsWith('image/');
   const video = version?.mime?.startsWith('video/') || kind === 'video';
@@ -27,9 +27,9 @@ export function MediaPreview({ version, kind = 'image', label, style, contain = 
   return <View style={[styles.frame, style]}>
     {source && failed !== source ? <Image accessibilityLabel={label} source={{ uri: source }} resizeMethod="resize" onError={() => {setFailed(source);previewQueue.invalidate(previewKey);if(retry===0){setPoster(undefined);setRetry(1);}}} style={StyleSheet.absoluteFill} resizeMode={contain ? 'contain' : 'cover'} /> : <View accessibilityLabel={label} style={styles.placeholder}>
       <AppIcon name={video ? 'movie_filter' : kind === 'audio' ? 'library_music' : kind === 'document' || kind === 'prompt' ? 'list_alt' : 'add_photo_alternate'} size={28} color={COLORS.textMuted} />
-      <Text style={styles.placeholderText}>{version?.state === 'MISSING' ? '原文件待恢复' : video ? '视频预览' : kind === 'audio' ? '音频' : kind === 'document' || kind === 'prompt' ? '文档' : '画面待创作'}</Text>
+      {!compact?<Text style={styles.placeholderText}>{version?.state === 'MISSING' ? '原文件待恢复' : video ? '视频预览' : kind === 'audio' ? '音频' : kind === 'document' || kind === 'prompt' ? '文档' : '画面待创作'}</Text>:null}
     </View>}
-    {video ? <View style={styles.play}><AppIcon name="play_arrow" size={17} color={COLORS.onPrimary} /></View> : null}
+    {video && source && failed !== source ? <View style={styles.play}><AppIcon name="play_arrow" size={17} color={COLORS.onPrimary} /></View> : null}
   </View>;
 }
 

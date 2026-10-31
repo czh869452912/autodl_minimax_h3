@@ -1,0 +1,881 @@
+# 当前源码控件与导航索引
+
+基线 5185fe2099834d4848befd70ce20dc5bb0babfcb。AST 静态清单；不是逐项实机通过证明。动态列表每个 JSX 模板计一项；回调工厂、原生控件和非 JSX 动作另需人工审阅。完整处理器见 JSON。
+
+- **C0001** mobile/app/(tabs)/gallery.tsx:105 · ListAction · "管理作品" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0002** mobile/app/(tabs)/gallery.tsx:107 · ListAction · "取消选择" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0003** mobile/app/(tabs)/gallery.tsx:108 · ListAction · "选择已加载作品" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0004** mobile/app/(tabs)/gallery.tsx:108 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0005** mobile/app/(tabs)/gallery.tsx:110 · TextInput · "搜索作品" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0006** mobile/app/(tabs)/gallery.tsx:110 · Pressable · "清除作品搜索" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0007** mobile/app/(tabs)/gallery.tsx:111 · ListFilters · "作品状态" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0008** mobile/app/(tabs)/gallery.tsx:112 · ListAction · "重试读取作品列表" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0009** mobile/app/(tabs)/gallery.tsx:114 · ListAction · {pageError} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0010** mobile/app/(tabs)/gallery.tsx:115 · GalleryCard · (动态/子文本) · onLongPress/onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0011** mobile/app/(tabs)/settings.tsx:84 · TextAction · "返回来源" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0012** mobile/app/(tabs)/settings.tsx:84 · Pressable · "重试读取设置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0013** mobile/app/(tabs)/settings.tsx:85 · IconAction · {activeSection&&!(directEntry)?"返回设置分类":"返回来源"} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0014** mobile/app/(tabs)/settings.tsx:86 · Pressable · "丢弃无法读取的草稿" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0015** mobile/app/(tabs)/settings.tsx:87 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0016** mobile/app/(tabs)/settings.tsx:87 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0017** mobile/app/(tabs)/settings.tsx:91 · TextAction · "全部设置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0018** mobile/app/(tabs)/settings.tsx:94 · SettingRow · {label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0019** mobile/app/(tabs)/settings.tsx:96 · SettingRow · {label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0020** mobile/app/(tabs)/settings.tsx:105 · Field · "LLM API 地址" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0021** mobile/app/(tabs)/settings.tsx:105 · Field · "LLM 模型" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0022** mobile/app/(tabs)/settings.tsx:105 · Field · "LLM API Key" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0023** mobile/app/(tabs)/settings.tsx:105 · Pressable · "切换 LLM 高级设置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0024** mobile/app/(tabs)/settings.tsx:107 · Field · "最大输出（tokens）" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0025** mobile/app/(tabs)/settings.tsx:109 · Field · "模型上下文上限（tokens）" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0026** mobile/app/(tabs)/settings.tsx:115 · Pressable · {`思考强度：${option.label}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0027** mobile/app/(tabs)/settings.tsx:119 · Field · "请求超时（秒）" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0028** mobile/app/(tabs)/settings.tsx:120 · Field · "最大重试次数" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0029** mobile/app/(tabs)/settings.tsx:122 · Pressable · "恢复 LLM 高级设置默认值" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0030** mobile/app/(tabs)/settings.tsx:125 · Switch · "自动保存到系统相册" · onValueChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0031** mobile/app/(tabs)/settings.tsx:125 · Switch · "图片生成后自动保存" · onValueChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0032** mobile/app/(tabs)/settings.tsx:125 · Switch · "保留应用内副本" · onValueChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0033** mobile/app/(tabs)/settings.tsx:127 · Pressable · {`视频解码：${option.label}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0034** mobile/app/(tabs)/settings.tsx:135 · Pressable · "保存设置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0035** mobile/app/(tabs)/settings.tsx:142 · Pressable · {`${visible ? '隐藏' : '显示'}${label}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0036** mobile/app/(tabs)/tasks.tsx:50 · factory:action · item · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0037** mobile/app/(tabs)/tasks.tsx:51 · factory:action · item · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0038** mobile/app/(tabs)/tasks.tsx:77 · Pressable · {monitoring ? '停止持续监控' : '开启持续监控'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0039** mobile/app/(tabs)/tasks.tsx:78 · Pressable · "刷新任务" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0040** mobile/app/(tabs)/tasks.tsx:87 · ListAction · "重试后台同步注册" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0041** mobile/app/(tabs)/tasks.tsx:89 · ListFilters · "任务筛选" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0042** mobile/app/(tabs)/tasks.tsx:93 · ListAction · "加载更多失败，点击重试" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0043** mobile/app/(tabs)/_layout.tsx:18 · Pressable · "返回工作台" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0044** mobile/app/(tabs)/_layout.tsx:21 · Pressable · "打开设置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0045** mobile/app/creative-drafts.tsx:13 · ListAction · "返回" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0046** mobile/app/creative-drafts.tsx:14 · ListAction · "打开创作工作台" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0047** mobile/app/creative-drafts.tsx:17 · ListAction · {`${JSON.parse(d.input_json).operation==='upscale'?'图片超分':d.provider_id === 'novelai' ? '图片' : '视频'} · ${d.state === 'SUBMITTED' ? '已提交' : '编辑中'} · ${JSON.parse(d.input_json).prompt?.slice(0, 45) || (JSON.parse(d.input_json).operation==='upscale'?'2× 清晰放大':'新草稿')}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0048** mobile/app/creative-task/[id].tsx:42 · IconAction · "返回" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0049** mobile/app/creative-task/[id].tsx:52 · ListAction · {`打开 ${provider.name} 核查`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0050** mobile/app/creative-task/[id].tsx:53 · ListAction · "已核查，解除本次等待" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0051** mobile/app/creative-task/[id].tsx:57 · ListAction · "同步任务状态" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0052** mobile/app/creative-task/[id].tsx:58 · ListAction · "管理创作账号" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0053** mobile/app/creative-task/[id].tsx:60 · ListAction · "返回来源计划" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0054** mobile/app/creative-task/[id].tsx:61 · ListAction · "打开这次创作与完整历史" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0055** mobile/app/creative-task/[id].tsx:62 · ListAction · "打开任务中心处理下载或异常" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0056** mobile/app/video/[id].tsx:67 · Pressable · "重试读取作品" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0057** mobile/app/video/[id].tsx:67 · Pressable · "返回上一页" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0058** mobile/app/video/[id].tsx:68 · Pressable · "返回上一页" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0059** mobile/app/video/[id].tsx:110 · Pressable · "返回上一页" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0060** mobile/app/video/[id].tsx:111 · Pressable · "重试读取作品" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0061** mobile/app/video/[id].tsx:117 · Pressable · {downloadFailed ? '重试下载视频' : '下载视频'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0062** mobile/app/video/[id].tsx:122 · Pressable · "复制诊断详情" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0063** mobile/app/video/[id].tsx:125 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0064** mobile/app/video/[id].tsx:125 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0065** mobile/app/video/[id].tsx:127 · Pressable · {task.exportState === 'EXPORT_FAILED' ? '重试保存到系统相册' : '保存到系统相册'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0066** mobile/app/video/[id].tsx:128 · Pressable · "复制 Prompt" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0067** mobile/app/_layout.tsx:93 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0068** mobile/app/_layout.tsx:93 · Pressable · "丢弃损坏的维护请求" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0069** mobile/app/_layout.tsx:93 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0070** mobile/src/agent/AgentScreen.tsx:292 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0071** mobile/src/agent/AgentScreen.tsx:293 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0072** mobile/src/agent/AgentScreen.tsx:297 · AgentSession · (动态/子文本) · onSelect · **源码可定位，实测状态见报告与 UI 清单**
+- **C0073** mobile/src/agent/AgentScreen.tsx:400 · PromptAssistantUi · (动态/子文本) · onSelect · **源码可定位，实测状态见报告与 UI 清单**
+- **C0074** mobile/src/agent/AgentScreen.tsx:406 · SkillLibraryScreen · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0075** mobile/src/agent/AgentScreen.tsx:459 · ListAction · "打开 LLM 设置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0076** mobile/src/agent/HistoryList.tsx:73 · TextInput · "搜索对话" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0077** mobile/src/agent/HistoryList.tsx:80 · Pressable · "清除搜索" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0078** mobile/src/agent/HistoryList.tsx:82 · Pressable · "历史中新建对话" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0079** mobile/src/agent/HistoryList.tsx:90 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0080** mobile/src/agent/HistoryList.tsx:96 · Pressable · "重试读取更多对话" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0081** mobile/src/agent/HistoryList.tsx:101 · RecordRow · {sessionDisplayTitle(thread, threads)} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0082** mobile/src/agent/HistoryList.tsx:102 · Pressable · {`管理会话 ${sessionTitle(thread)}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0083** mobile/src/agent/HistoryList.tsx:123 · TextInput · "输入会话名称" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0084** mobile/src/agent/HistoryList.tsx:132 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0085** mobile/src/agent/HistoryList.tsx:138 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0086** mobile/src/agent/PromptAssistantUi.tsx:305 · HistoryList · (动态/子文本) · onSelect · **源码可定位，实测状态见报告与 UI 清单**
+- **C0087** mobile/src/agent/PromptAssistantUi.tsx:335 · Pressable · "打开对话历史" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0088** mobile/src/agent/PromptAssistantUi.tsx:347 · Pressable · "新建对话" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0089** mobile/src/agent/PromptAssistantUi.tsx:362 · Pressable · "关闭提示" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0090** mobile/src/agent/PromptAssistantUi.tsx:365 · ConversationTimeline · (动态/子文本) · onSelectSuggestion · **源码可定位，实测状态见报告与 UI 清单**
+- **C0091** mobile/src/agent/PromptAssistantUi.tsx:386 · Composer · (动态/子文本) · onChangeText/onSubmit/onSelectionChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0092** mobile/src/agent/PromptAssistantUi.tsx:417 · DraggableBottomSheet · "对话历史" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0093** mobile/src/agent/PromptAssistantUi.tsx:425 · ImageMentionSheet · (动态/子文本) · onClose/onSelect · **源码可定位，实测状态见报告与 UI 清单**
+- **C0094** mobile/src/agent/PromptAssistantUi.tsx:435 · DraggableBottomSheet · "Prompt 版本" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0095** mobile/src/agent/PromptAssistantUi.tsx:436 · Pressable · "重新加载工作流" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0096** mobile/src/agent/PromptAssistantUi.tsx:437 · PromptVersionPanel · (动态/子文本) · onSelect · **源码可定位，实测状态见报告与 UI 清单**
+- **C0097** mobile/src/agent/PromptAssistantUi.tsx:442 · DraggableBottomSheet · "补充创作信息" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0098** mobile/src/agent/PromptAssistantUi.tsx:443 · Pressable · "加入创作草稿" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0099** mobile/src/agent/PromptAssistantUi.tsx:456 · TextInput · {label} · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0100** mobile/src/agent/PromptAssistantUi.tsx:537 · Pressable · "加载更早消息" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0101** mobile/src/agent/PromptAssistantUi.tsx:565 · EmptyTimeline · (动态/子文本) · onSelectSuggestion · **源码可定位，实测状态见报告与 UI 清单**
+- **C0102** mobile/src/agent/PromptAssistantUi.tsx:590 · Pressable · "回到最新消息" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0103** mobile/src/agent/PromptAssistantUi.tsx:604 · ReferenceImagePreview · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0104** mobile/src/agent/PromptAssistantUi.tsx:622 · Pressable · {`查看参考图片 ${attachment.displayName ?? `图片${index + 1}`}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0105** mobile/src/agent/PromptAssistantUi.tsx:706 · Pressable · "关闭运行提示" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0106** mobile/src/agent/PromptAssistantUi.tsx:708 · Pressable · {issue.kind === 'submit' ? '重新发送草稿' : '重试上一轮'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0107** mobile/src/agent/PromptAssistantUi.tsx:746 · Pressable · {`使用建议 ${suggestion}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0108** mobile/src/agent/PromptAssistantUi.tsx:787 · Pressable · {`复制回答 ${text.slice(0, 20)}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0109** mobile/src/agent/PromptAssistantUi.tsx:832 · Pressable · {expanded ? '收起卡片 Prompt' : '展开卡片 Prompt'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0110** mobile/src/agent/PromptAssistantUi.tsx:834 · Pressable · "复制 Prompt" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0111** mobile/src/agent/PromptAssistantUi.tsx:848 · Pressable · "导出 Prompt 到生成" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0112** mobile/src/agent/PromptAssistantUi.tsx:878 · DraggableBottomSheet · "引用图片附件" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0113** mobile/src/agent/PromptAssistantUi.tsx:885 · Pressable · {`引用图片附件 ${attachment.displayName || '图片'}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0114** mobile/src/agent/PromptAssistantUi.tsx:910 · Pressable · "上传图片附件" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0115** mobile/src/agent/PromptAssistantUi.tsx:944 · Pressable · {`查看附件 ${attachment.displayName || '图片'}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0116** mobile/src/agent/PromptAssistantUi.tsx:966 · Pressable · {`移除附件 ${attachment.displayName || '图片'}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0117** mobile/src/agent/PromptAssistantUi.tsx:979 · ReferenceImagePreview · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0118** mobile/src/agent/PromptAssistantUi.tsx:985 · ImagePreview · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0119** mobile/src/agent/PromptAssistantUi.tsx:1045 · Pressable · "收起编辑" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0120** mobile/src/agent/PromptAssistantUi.tsx:1049 · Pressable · "完成编辑" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0121** mobile/src/agent/PromptAssistantUi.tsx:1054 · TextInput · "全屏编辑创作想法" · onChangeText/onSelectionChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0122** mobile/src/agent/PromptAssistantUi.tsx:1070 · Pressable · "添加图片附件" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0123** mobile/src/agent/PromptAssistantUi.tsx:1072 · ConversationInput · "创作想法" · onChangeText/onSelectionChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0124** mobile/src/agent/PromptAssistantUi.tsx:1074 · Pressable · "更多创作操作" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0125** mobile/src/agent/PromptAssistantUi.tsx:1078 · DraggableBottomSheet · "创作操作" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0126** mobile/src/agent/PromptAssistantUi.tsx:1085 · Pressable · {item.label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0127** mobile/src/agent/PromptAssistantUi.tsx:1121 · Text · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0128** mobile/src/agent/PromptVersionPanel.tsx:36 · Pressable · {label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0129** mobile/src/agent/PromptVersionPanel.tsx:140 · Action · "加载更早版本" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0130** mobile/src/agent/PromptVersionPanel.tsx:141 · Pressable · {`选择版本 ${visibleStart + index + 1}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0131** mobile/src/agent/PromptVersionPanel.tsx:146 · Action · {expanded ? '收起 Prompt' : '展开 Prompt'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0132** mobile/src/agent/PromptVersionPanel.tsx:146 · Action · {compare ? '关闭版本比较' : '比较上一版本'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0133** mobile/src/agent/PromptVersionPanel.tsx:150 · Action · "复制版本 Prompt" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0134** mobile/src/agent/PromptVersionPanel.tsx:150 · Action · "复制为最新版本" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0135** mobile/src/agent/PromptVersionPanel.tsx:157 · Action · "从版本列表移除" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0136** mobile/src/agent/PromptVersionPanel.tsx:158 · Action · "预览并带入创建页" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0137** mobile/src/agent/PromptVersionPanel.tsx:167 · WorkflowSelector · (动态/子文本) · onSelect · **源码可定位，实测状态见报告与 UI 清单**
+- **C0138** mobile/src/agent/PromptVersionPanel.tsx:173 · Pressable · {`绑定图片 ${image.displayName}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0139** mobile/src/agent/PromptVersionPanel.tsx:178 · WorkflowParameterFields · (动态/子文本) · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0140** mobile/src/agent/PromptVersionPanel.tsx:186 · Action · "取消" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0141** mobile/src/agent/PromptVersionPanel.tsx:186 · Action · "带入创建页" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0142** mobile/src/agent/skills/SkillExtractionScreen.tsx:77 · ListAction · "返回" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0143** mobile/src/agent/skills/SkillExtractionScreen.tsx:82 · ListAction · {`选择对话：${session.customTitle || session.summary?.title || '未命名对话'}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0144** mobile/src/agent/skills/SkillExtractionScreen.tsx:83 · ListAction · "较新的对话" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0145** mobile/src/agent/skills/SkillExtractionScreen.tsx:84 · ListAction · "更多对话" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0146** mobile/src/agent/skills/SkillExtractionScreen.tsx:87 · ListAction · {`${chosen ? '取消选择' : '选择'}证据 ${message.id.slice(-8)}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0147** mobile/src/agent/skills/SkillExtractionScreen.tsx:92 · ListAction · "更早消息" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0148** mobile/src/agent/skills/SkillExtractionScreen.tsx:93 · ListAction · {`整理已选证据（${Object.keys(selected).length} 段）`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0149** mobile/src/agent/skills/SkillExtractionScreen.tsx:100 · TextInput · "提炼目标" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0150** mobile/src/agent/skills/SkillExtractionScreen.tsx:101 · TextInput · "待发送的证据" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0151** mobile/src/agent/skills/SkillExtractionScreen.tsx:102 · ListAction · "重新脱敏并检查" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0152** mobile/src/agent/skills/SkillExtractionScreen.tsx:103 · ListAction · "确认发送证据并生成草稿" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0153** mobile/src/agent/skills/SkillExtractionScreen.tsx:104 · ListAction · "取消提炼" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0154** mobile/src/agent/skills/SkillExtractionScreen.tsx:106 · TextInput · "技能草稿正文" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0155** mobile/src/agent/skills/SkillExtractionScreen.tsx:107 · ListAction · "保存草稿" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0156** mobile/src/agent/skills/SkillExtractionScreen.tsx:108 · ListAction · "检查待发布版本" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0157** mobile/src/agent/skills/SkillExtractionScreen.tsx:109 · ListAction · "确认审阅并发布此版本" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0158** mobile/src/agent/skills/SkillExtractionScreen.tsx:111 · ListAction · "打开技能库并选择启用" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0159** mobile/src/agent/skills/SkillExtractionScreen.tsx:113 · ListAction · "新建提炼草稿" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0160** mobile/src/agent/skills/SkillExtractionScreen.tsx:114 · ListAction · {`${item.publishedVersion ? '查看已发布' : '继续审阅'}：${item.goal}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0161** mobile/src/agent/skills/SkillExtractionScreen.tsx:115 · ListAction · "删除此提炼草稿" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0162** mobile/src/agent/skills/SkillLibraryScreen.tsx:54 · IconAction · {onClose ? '关闭技能' : '返回'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0163** mobile/src/agent/skills/SkillLibraryScreen.tsx:56 · IconAction · "添加技能" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0164** mobile/src/agent/skills/SkillLibraryScreen.tsx:57 · IconAction · "技能运行记录" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0165** mobile/src/agent/skills/SkillLibraryScreen.tsx:63 · ListAction · "导入 SKILL.md 或 ZIP" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0166** mobile/src/agent/skills/SkillLibraryScreen.tsx:64 · ListAction · "从对话提炼技能" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0167** mobile/src/agent/skills/SkillLibraryScreen.tsx:66 · TextInput · "技能文本" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0168** mobile/src/agent/skills/SkillLibraryScreen.tsx:68 · ListAction · "检查粘贴的技能" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0169** mobile/src/agent/skills/SkillLibraryScreen.tsx:69 · ListAction · "填入技能示例" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0170** mobile/src/agent/skills/SkillLibraryScreen.tsx:76 · ListAction · "安装此版本" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0171** mobile/src/agent/skills/SkillLibraryScreen.tsx:77 · ListAction · "关闭预览" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0172** mobile/src/agent/skills/SkillLibraryScreen.tsx:80 · TextInput · "搜索技能" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0173** mobile/src/agent/skills/SkillLibraryScreen.tsx:85 · Pressable · {`查看 ${version.name} ${version.id.slice(0,8)}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0174** mobile/src/agent/skills/SkillLibraryScreen.tsx:89 · Switch · {`启用 ${version.name} ${version.id.slice(0,8)}`} · onValueChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0175** mobile/src/conversation/ActivityGroup.tsx:21 · Pressable · {`查看运行 ${run.id}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0176** mobile/src/conversation/ActivityGroup.tsx:33 · Pressable · {`重试运行 ${run.id}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0177** mobile/src/conversation/ActivityGroup.tsx:83 · Pressable · {`${title}${target ? `，${target}` : ''}${status ? `，${status}` : ''}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0178** mobile/src/conversation/ActivityGroup.tsx:117 · Pressable · "上一段" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0179** mobile/src/conversation/ActivityGroup.tsx:119 · Pressable · "下一段" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0180** mobile/src/conversation/ConversationInput.tsx:16 · Pressable · {running?'停止本轮':busy?'发送中':'发送消息'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0181** mobile/src/create/AttachmentPreview.tsx:12 · Pressable · {status.playing ? '暂停音频' : '播放音频'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0182** mobile/src/create/AttachmentPreview.tsx:12 · Pressable · "删除音频" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0183** mobile/src/create/AttachmentPreview.tsx:18 · Pressable · {`预览参考图 ${index + 1}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0184** mobile/src/create/AttachmentPreview.tsx:18 · Pressable · {`删除参考图 ${index + 1}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0185** mobile/src/create/AttachmentPreview.tsx:18 · ImagePreview · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0186** mobile/src/create/CreateForm.tsx:394 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0187** mobile/src/create/CreateForm.tsx:395 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0188** mobile/src/create/CreateForm.tsx:400 · Pressable · "重试加载工作流" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0189** mobile/src/create/CreateForm.tsx:402 · Pressable · "前往设置配置生成" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0190** mobile/src/create/CreateForm.tsx:403 · WorkflowSelector · (动态/子文本) · onSelect · **源码可定位，实测状态见报告与 UI 清单**
+- **C0191** mobile/src/create/CreateForm.tsx:409 · Pressable · "重新应用交接草稿" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0192** mobile/src/create/CreateForm.tsx:414 · Pressable · "丢弃交接草稿" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0193** mobile/src/create/CreateForm.tsx:419 · WorkflowForm · (动态/子文本) · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0194** mobile/src/create/CreateForm.tsx:450 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0195** mobile/src/create/CreateForm.tsx:462 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0196** mobile/src/create/CreateForm.tsx:499 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0197** mobile/src/create/CreateForm.tsx:509 · Pressable · "提交 AutoDL 任务生成" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0198** mobile/src/creative/AgentCreativeCards.tsx:73 · Pressable · {`${runId?'本轮成果':'本会话创作'}，${summary}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0199** mobile/src/creative/AgentCreativeCards.tsx:77 · ParameterSheet · {runId?'本轮的创作':'本会话的创作'} · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0200** mobile/src/creative/AgentCreativeCards.tsx:84 · Pressable · {`查看生成成果 ${output.versionNo}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0201** mobile/src/creative/AgentCreativeCards.tsx:88 · ListAction · {card.draft.state==='EDITING'?'编辑这份草稿':'查看成果与进度'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0202** mobile/src/creative/AgentCreativeCards.tsx:89 · ListAction · "查看生成任务详情" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0203** mobile/src/creative/AgentCreativeCards.tsx:90 · ListAction · {allowance[card.draft.provider_id]?`本项目可用授权 ${allowance[card.draft.provider_id]} 次`:'授权本项目 1 次生成'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0204** mobile/src/creative/AgentCreativeCards.tsx:91 · ListAction · "查看并处理" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0205** mobile/src/creative/AgentCreativeCards.tsx:96 · ImagePreview · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0206** mobile/src/creative/AgentCreativePanel.tsx:41 · Pressable · "切换创作项目" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0207** mobile/src/creative/AgentCreativePanel.tsx:41 · TextAction · "项目" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0208** mobile/src/creative/AgentCreativePanel.tsx:45 · ListAction · "关闭" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0209** mobile/src/creative/AgentCreativePanel.tsx:46 · TextInput · "搜索创作项目" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0210** mobile/src/creative/AgentCreativePanel.tsx:47 · RecordRow · {p.title} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0211** mobile/src/creative/AgentCreativePanel.tsx:48 · ListAction · "管理项目" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0212** mobile/src/creative/AgentCreativePanel.tsx:50 · ListAction · "撤销当前项目全部生成授权" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0213** mobile/src/creative/AgentWorkspace.tsx:16 · ListAction · "重试" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0214** mobile/src/creative/AgentWorkspace.tsx:18 · ListAction · "前往项目" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0215** mobile/src/creative/AssetTile.tsx:12 · Pressable · {`打开资产 ${asset.title}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0216** mobile/src/creative/AssistantActions.tsx:8 · IconAction · "助手菜单" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0217** mobile/src/creative/AssistantActions.tsx:8 · ParameterSheet · "助手菜单" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0218** mobile/src/creative/AssistantActions.tsx:8 · SettingRow · "技能管理" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0219** mobile/src/creative/AssistantActions.tsx:8 · SettingRow · "助手设置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0220** mobile/src/creative/AudioVersionPreview.tsx:17 · ListAction · {status.playing?'暂停试听':'播放音频'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0221** mobile/src/creative/AutodlWalletPanel.tsx:29 · TextAction · {summary?(expanded?'收起余额':'余额详情'):(expanded?'收起余额配置':configured?'管理余额查询':'配置余额查询')} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0222** mobile/src/creative/AutodlWalletPanel.tsx:32 · TextAction · "刷新余额" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0223** mobile/src/creative/AutodlWalletPanel.tsx:36 · TextInput · "AutoDL 余额查询开发者 Token" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0224** mobile/src/creative/AutodlWalletPanel.tsx:37 · Switch · "确认余额与生成凭据属于同一账号" · onValueChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0225** mobile/src/creative/AutodlWalletPanel.tsx:38 · TextAction · "验证并保存余额查询" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0226** mobile/src/creative/AutodlWalletPanel.tsx:39 · TextAction · "获取开发者 Token" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0227** mobile/src/creative/AutodlWalletPanel.tsx:40 · TextAction · "移除余额查询凭据" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0228** mobile/src/creative/CopySubmittedDraft.tsx:10 · TextAction · "复制为新草稿（不立即生成）" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0229** mobile/src/creative/CreativeAccountPanel.tsx:30 · TextAction · {connected ? '管理账号' : `连接 ${name}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0230** mobile/src/creative/CreativeAccountPanel.tsx:36 · ListAction · "收起账号设置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0231** mobile/src/creative/CreativeAccountPanel.tsx:39 · TextInput · {`${name} 令牌`} · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0232** mobile/src/creative/CreativeAccountPanel.tsx:40 · ListAction · {provider === 'autodl' ? '绑定 AutoDL 凭据' : connected ? '验证并更换令牌' : '验证并连接 NovelAI'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0233** mobile/src/creative/CreativeAccountPanel.tsx:41 · ListAction · {`断开 ${name} 并撤销授权`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0234** mobile/src/creative/CreativeAccountPanel.tsx:46 · ListAction · "打开 AutoDL Token 获取页面" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0235** mobile/src/creative/CreativeAssetPicker.tsx:54 · TextAction · "取消" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0236** mobile/src/creative/CreativeAssetPicker.tsx:56 · TextInput · "搜索素材" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0237** mobile/src/creative/CreativeAssetPicker.tsx:57 · TextAction · {all ? '仅看本项目' : '从全部素材选择'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0238** mobile/src/creative/CreativeAssetPicker.tsx:59 · TextAction · "重新读取素材" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0239** mobile/src/creative/CreativeAssetPicker.tsx:62 · Pressable · {`选择 ${title} · 版本 ${version.versionNo}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0240** mobile/src/creative/CreativeAssetPicker.tsx:67 · TextAction · "加载更多素材" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0241** mobile/src/creative/CreativeAssetPicker.tsx:68 · ListAction · {busy ? '正在添加…' : intent || (kind === 'image' ? '使用所选图片' : kind==='audio'?'使用所选音频':'使用所选视频')} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0242** mobile/src/creative/CreativeHome.tsx:29 · RecordRow · {name} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0243** mobile/src/creative/CreativeHome.tsx:91 · SegmentedChoices · "创作类型" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0244** mobile/src/creative/CreativeHome.tsx:91 · IconAction · "新建创作" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0245** mobile/src/creative/CreativeHome.tsx:91 · IconAction · "创作记录" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0246** mobile/src/creative/CreativeHome.tsx:91 · IconAction · "打开设置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0247** mobile/src/creative/CreativeHome.tsx:93 · TextAction · "重试打开创作" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0248** mobile/src/creative/CreativeHome.tsx:93 · TextAction · "保留原画布" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0249** mobile/src/creative/CreativeHome.tsx:94 · TextAction · "重试恢复工作区" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0250** mobile/src/creative/CreativeHome.tsx:96 · ParameterSheet · "创作记录" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0251** mobile/src/creative/CreativeHome.tsx:97 · TextInput · "搜索创作记录" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0252** mobile/src/creative/CreativeHome.tsx:98 · ListFilters · "创作记录类型" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0253** mobile/src/creative/CreativeHome.tsx:99 · RecentCreation · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0254** mobile/src/creative/CreativeHome.tsx:101 · TextAction · {`加载更多 · 还有 ${groups.length-recordLimit} 组`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0255** mobile/src/creative/CreativeHome.tsx:103 · TextAction · "项目" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0256** mobile/src/creative/CreativeHome.tsx:104 · TextAction · "素材库" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0257** mobile/src/creative/CreativeHome.tsx:105 · TextAction · "管理工作流" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0258** mobile/src/creative/CreativeOutputPreview.tsx:40 · IconAction · "返回" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0259** mobile/src/creative/CreativeOutputPreview.tsx:49 · TextAction · "查看素材与版本" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0260** mobile/src/creative/CreativeOutputPreview.tsx:50 · TextAction · "继续创作" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0261** mobile/src/creative/CreativeResults.tsx:176 · TextAction · "重试存入相册" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0262** mobile/src/creative/CreativeResults.tsx:184 · Pressable · {`查看版本 ${v.versionNo}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0263** mobile/src/creative/CreativeResults.tsx:188 · TextAction · {status==='UNKNOWN'?'核查原任务':'查看本次任务'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0264** mobile/src/creative/CreativeResults.tsx:191 · IconAction · {videoSaved?'已保存到系统相册':videoSaving?'正在保存到系统相册':delivery?.status==='FAILED'?'重试保存到系统相册':'保存视频到系统相册'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0265** mobile/src/creative/CreativeResults.tsx:191 · TextAction · "用于此镜头" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0266** mobile/src/creative/CreativeResults.tsx:192 · IconAction · "保存图片到系统相册" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0267** mobile/src/creative/CreativeResults.tsx:193 · IconAction · "更多成果操作" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0268** mobile/src/creative/CreativeResults.tsx:195 · Pressable · "全屏查看图片" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0269** mobile/src/creative/CreativeResults.tsx:197 · TextAction · {`版本历史 · ${versions.length}${paged.next?'+':''}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0270** mobile/src/creative/CreativeResults.tsx:198 · TextAction · "任务与草稿操作" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0271** mobile/src/creative/CreativeResults.tsx:200 · TextAction · "返回此镜头" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0272** mobile/src/creative/CreativeResults.tsx:207 · TextAction · "调整后再生成" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0273** mobile/src/creative/CreativeResults.tsx:207 · IconAction · {videoSaved?'已保存到系统相册':videoSaving?'正在保存到系统相册':'保存视频到系统相册'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0274** mobile/src/creative/CreativeResults.tsx:207 · IconAction · {delivery?.status==='EXPORTED'?'已保存到系统相册':'保存图片到系统相册'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0275** mobile/src/creative/CreativeResults.tsx:208 · IconAction · "增强图片" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0276** mobile/src/creative/CreativeResults.tsx:209 · IconAction · "清晰放大 2×" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0277** mobile/src/creative/CreativeResults.tsx:210 · IconAction · "用于此镜头" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0278** mobile/src/creative/CreativeResults.tsx:211 · IconAction · "更多成果操作" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0279** mobile/src/creative/CreativeResults.tsx:213 · HoldToCompare · (动态/子文本) · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0280** mobile/src/creative/CreativeResults.tsx:214 · TextAction · {`版本历史 · ${versions.length}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0281** mobile/src/creative/CreativeResults.tsx:217 · TextAction · "复用 Seed" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0282** mobile/src/creative/CreativeResults.tsx:219 · IconAction · "上一张结果" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0283** mobile/src/creative/CreativeResults.tsx:220 · IconAction · "下一张结果" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0284** mobile/src/creative/CreativeResults.tsx:222 · Pressable · {`预览历史版本 ${v.versionNo}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0285** mobile/src/creative/CreativeResults.tsx:224 · TextAction · "调整后再生成" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0286** mobile/src/creative/CreativeResults.tsx:230 · TextAction · "关闭保存提示" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0287** mobile/src/creative/CreativeResults.tsx:231 · ImageHistorySheet · (动态/子文本) · onSelect/onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0288** mobile/src/creative/CreativeResults.tsx:233 · ImageProcessingSheet · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0289** mobile/src/creative/CreativeResults.tsx:234 · ParameterSheet · "成果操作" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0290** mobile/src/creative/CreativeResults.tsx:236 · TextAction · {videoSaved?'已保存到系统相册':videoSaving?'正在保存到系统相册':'保存视频到系统相册'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0291** mobile/src/creative/CreativeResults.tsx:236 · TextAction · "用于此镜头" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0292** mobile/src/creative/CreativeResults.tsx:236 · TextAction · "查看本轮任务" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0293** mobile/src/creative/CreativeResults.tsx:237 · TextAction · "比较版本与参数" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0294** mobile/src/creative/CreativeResults.tsx:238 · TextAction · {`版本历史 · ${versions.length}${paged.next?'+':''}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0295** mobile/src/creative/CreativeResults.tsx:239 · TextAction · "以此图生成" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0296** mobile/src/creative/CreativeResults.tsx:239 · TextAction · "局部重绘" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0297** mobile/src/creative/CreativeResults.tsx:239 · TextAction · "制作视频" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0298** mobile/src/creative/CreativeResults.tsx:240 · TextAction · "查看素材与版本" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0299** mobile/src/creative/CreativeResults.tsx:241 · TextAction · {current?.recipe.jobId&&current.recipe.jobId!==draft.job_id?'此版本生成参数':'本次生成参数'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0300** mobile/src/creative/CreativeResults.tsx:244 · DraftParametersSheet · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0301** mobile/src/creative/CreativeResults.tsx:245 · ImageHistorySheet · (动态/子文本) · onSelect/onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0302** mobile/src/creative/CreativeResults.tsx:245 · ParameterSheet · "版本历史" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0303** mobile/src/creative/CreativeResults.tsx:245 · TextAction · "加载更早结果" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0304** mobile/src/creative/CreativeResults.tsx:246 · ParameterSheet · "版本对照" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0305** mobile/src/creative/CreativeResults.tsx:247 · ImagePreview · {`版本 ${current.versionNo}`} · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0306** mobile/src/creative/CreativeWorkspace.tsx:212 · ListAction · {label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0307** mobile/src/creative/CreativeWorkspace.tsx:213 · factory:action · '返回项目列表' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0308** mobile/src/creative/CreativeWorkspace.tsx:215 · RecordRow · {p.title} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0309** mobile/src/creative/CreativeWorkspace.tsx:221 · ImagePreview · {activeAsset?.title} · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0310** mobile/src/creative/CreativeWorkspace.tsx:222 · IconAction · {onClose?"关闭素材详情":"返回"} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0311** mobile/src/creative/CreativeWorkspace.tsx:222 · IconAction · "编辑名称与标签" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0312** mobile/src/creative/CreativeWorkspace.tsx:222 · IconAction · "素材操作" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0313** mobile/src/creative/CreativeWorkspace.tsx:222 · IconAction · "返回" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0314** mobile/src/creative/CreativeWorkspace.tsx:222 · IconAction · "导入素材" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0315** mobile/src/creative/CreativeWorkspace.tsx:222 · IconAction · "制作图片" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0316** mobile/src/creative/CreativeWorkspace.tsx:222 · IconAction · "项目设置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0317** mobile/src/creative/CreativeWorkspace.tsx:222 · factory:action · '返回' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0318** mobile/src/creative/CreativeWorkspace.tsx:222 · ListAction · "导入素材" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0319** mobile/src/creative/CreativeWorkspace.tsx:222 · factory:action · manage ? '收起管理' : activeAsset ? '版本与使用位置' : current ? '项目设置' : '历史与迁入' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0320** mobile/src/creative/CreativeWorkspace.tsx:224 · factory:action · '历史作品' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0321** mobile/src/creative/CreativeWorkspace.tsx:224 · factory:action · '创作草稿' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0322** mobile/src/creative/CreativeWorkspace.tsx:226 · ListFilters · "项目页面" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0323** mobile/src/creative/CreativeWorkspace.tsx:228 · factory:action · '新建项目' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0324** mobile/src/creative/CreativeWorkspace.tsx:228 · factory:action · archived ? '查看进行中项目' : '查看归档项目' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0325** mobile/src/creative/CreativeWorkspace.tsx:228 · factory:action · '全部项目' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0326** mobile/src/creative/CreativeWorkspace.tsx:229 · TextInput · "搜索项目" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0327** mobile/src/creative/CreativeWorkspace.tsx:234 · TextInput · "项目名称" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0328** mobile/src/creative/CreativeWorkspace.tsx:235 · TextInput · "创作简报" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0329** mobile/src/creative/CreativeWorkspace.tsx:236 · factory:action · selected ? '保存简报' : '创建项目' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0330** mobile/src/creative/CreativeWorkspace.tsx:241 · factory:action · '取消编辑' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0331** mobile/src/creative/CreativeWorkspace.tsx:243 · factory:action · current.archivedAt ? '恢复项目' : '归档项目' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0332** mobile/src/creative/CreativeWorkspace.tsx:245 · factory:action · '移除项目封面' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0333** mobile/src/creative/CreativeWorkspace.tsx:252 · factory:action · '从回收站恢复' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0334** mobile/src/creative/CreativeWorkspace.tsx:253 · WorkbenchSection · "编辑素材" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0335** mobile/src/creative/CreativeWorkspace.tsx:253 · factory:action · '从回收站恢复' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0336** mobile/src/creative/CreativeWorkspace.tsx:254 · TextInput · "资产名称" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0337** mobile/src/creative/CreativeWorkspace.tsx:255 · TextInput · "资产说明" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0338** mobile/src/creative/CreativeWorkspace.tsx:256 · TextInput · "资产标签" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0339** mobile/src/creative/CreativeWorkspace.tsx:257 · factory:action · '保存说明与标签' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0340** mobile/src/creative/CreativeWorkspace.tsx:258 · factory:action · '取消素材修改' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0341** mobile/src/creative/CreativeWorkspace.tsx:259 · factory:action · '移入回收站' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0342** mobile/src/creative/CreativeWorkspace.tsx:261 · factory:action · '查看其他版本' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0343** mobile/src/creative/CreativeWorkspace.tsx:262 · TextAction · {comparing?'收起比较':'比较版本'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0344** mobile/src/creative/CreativeWorkspace.tsx:262 · factory:action · versionsLoading?'正在加载…':'加载更早版本' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0345** mobile/src/creative/CreativeWorkspace.tsx:262 · Pressable · {`查看版本 ${v.versionNo}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0346** mobile/src/creative/CreativeWorkspace.tsx:263 · Pressable · "全屏查看图片" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0347** mobile/src/creative/CreativeWorkspace.tsx:267 · ListAction · "导出" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0348** mobile/src/creative/CreativeWorkspace.tsx:267 · ListAction · "加入项目" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0349** mobile/src/creative/CreativeWorkspace.tsx:267 · WorkbenchSection · "加入项目" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0350** mobile/src/creative/CreativeWorkspace.tsx:267 · TextInput · "搜索项目" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0351** mobile/src/creative/CreativeWorkspace.tsx:268 · factory:action · `加入 ${p.title}（固定此版本）` · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0352** mobile/src/creative/CreativeWorkspace.tsx:269 · factory:action · `将 ${l.title} 固定到此版本` · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0353** mobile/src/creative/CreativeWorkspace.tsx:270 · factory:action · `设为 ${p.title} 封面` · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0354** mobile/src/creative/CreativeWorkspace.tsx:271 · ParameterSheet · "素材操作" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0355** mobile/src/creative/CreativeWorkspace.tsx:272 · factory:action · '增强 / 放大' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0356** mobile/src/creative/CreativeWorkspace.tsx:273 · ImageProcessingSheet · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0357** mobile/src/creative/CreativeWorkspace.tsx:275 · factory:action · creativeExportTarget(v.mime??'')==='system-gallery'?'保存到系统相册':'保存到下载文件夹' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0358** mobile/src/creative/CreativeWorkspace.tsx:276 · factory:action · '重新定位原图' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0359** mobile/src/creative/CreativeWorkspace.tsx:277 · factory:action · '从文件备份找回' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0360** mobile/src/creative/CreativeWorkspace.tsx:279 · factory:action · '另存一份' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0361** mobile/src/creative/CreativeWorkspace.tsx:280 · factory:action · '设为默认版本' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0362** mobile/src/creative/CreativeWorkspace.tsx:283 · factory:action · '恢复参数并继续出图' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0363** mobile/src/creative/CreativeWorkspace.tsx:284 · factory:action · '重新定位原文件' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0364** mobile/src/creative/CreativeWorkspace.tsx:284 · factory:action · '从备份恢复原文件' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0365** mobile/src/creative/CreativeWorkspace.tsx:285 · factory:action · '从此版本创建视频草稿' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0366** mobile/src/creative/CreativeWorkspace.tsx:288 · factory:action · `从 ${link.title} 移出` · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0367** mobile/src/creative/CreativeWorkspace.tsx:290 · factory:action · `让 ${l.title} 跟随默认版本` · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0368** mobile/src/creative/CreativeWorkspace.tsx:292 · ParameterSheet · "导入素材" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0369** mobile/src/creative/CreativeWorkspace.tsx:292 · factory:action · '从相册导入图片' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0370** mobile/src/creative/CreativeWorkspace.tsx:292 · factory:action · '从文件导入' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0371** mobile/src/creative/CreativeWorkspace.tsx:293 · TextInput · "搜索资产" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0372** mobile/src/creative/CreativeWorkspace.tsx:294 · ListFilters · "素材范围" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0373** mobile/src/creative/CreativeWorkspace.tsx:297 · ListFilters · "素材类型" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0374** mobile/src/creative/CreativeWorkspace.tsx:300 · factory:action · '迁入历史作品（可中断）' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0375** mobile/src/creative/CreativeWorkspace.tsx:303 · ParameterSheet · "素材管理" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0376** mobile/src/creative/CreativeWorkspace.tsx:303 · SettingRow · "存储与清理" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0377** mobile/src/creative/CreativeWorkspace.tsx:303 · SettingRow · "历史作品" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0378** mobile/src/creative/CreativeWorkspace.tsx:303 · SettingRow · "创作草稿" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0379** mobile/src/creative/CreativeWorkspace.tsx:303 · factory:action · '迁入历史作品（可中断）' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0380** mobile/src/creative/CreativeWorkspace.tsx:305 · factory:action · assetLoading?'正在加载…':'加载更多素材' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0381** mobile/src/creative/CreativeWorkspace.tsx:305 · AssetTile · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0382** mobile/src/creative/CreativeWorkspace.tsx:310 · CreativeWorkspace · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0383** mobile/src/creative/DraftHeading.tsx:20 · TextAction · "返回" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0384** mobile/src/creative/DraftParametersSheet.tsx:32 · ParameterSheet · "本次生成参数" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0385** mobile/src/creative/DraftParametersSheet.tsx:42 · TextAction · {raw ? '收起完整参数' : '查看完整参数'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0386** mobile/src/creative/ImageDraftScreen.tsx:193 · TextAction · "导入图片或生成信息" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0387** mobile/src/creative/ImageDraftScreen.tsx:195 · SegmentedChoices · "生成方式" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0388** mobile/src/creative/ImageDraftScreen.tsx:199 · TextAction · "从素材选择底图" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0389** mobile/src/creative/ImageDraftScreen.tsx:202 · TextAction · "改为绘制蒙版" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0390** mobile/src/creative/ImageDraftScreen.tsx:202 · NovelAiMaskEditor · (动态/子文本) · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0391** mobile/src/creative/ImageDraftScreen.tsx:203 · TextAction · "从素材选择蒙版" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0392** mobile/src/creative/ImageDraftScreen.tsx:203 · TextAction · "导入黑白蒙版" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0393** mobile/src/creative/ImageDraftScreen.tsx:208 · IconAction · "返回" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0394** mobile/src/creative/ImageDraftScreen.tsx:208 · IconAction · "创作账号" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0395** mobile/src/creative/ImageDraftScreen.tsx:209 · TextAction · "载入最新草稿" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0396** mobile/src/creative/ImageDraftScreen.tsx:210 · TextAction · "重试保存草稿" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0397** mobile/src/creative/ImageDraftScreen.tsx:215 · TextInput · "图片提示词" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0398** mobile/src/creative/ImageDraftScreen.tsx:215 · IconAction · "提示词助手" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0399** mobile/src/creative/ImageDraftScreen.tsx:216 · PromptAssistSheet · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0400** mobile/src/creative/ImageDraftScreen.tsx:216 · NovelAiSettings · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0401** mobile/src/creative/ImageDraftScreen.tsx:216 · NovelAiPromptEditor · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0402** mobile/src/creative/ImageDraftScreen.tsx:220 · NovelAiEnhancePanel · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0403** mobile/src/creative/ImageDraftScreen.tsx:220 · IconAction · "关闭放大" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0404** mobile/src/creative/ImageDraftScreen.tsx:225 · IconAction · "撤销修改" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0405** mobile/src/creative/ImageDraftScreen.tsx:225 · IconAction · "生成设置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0406** mobile/src/creative/ImageDraftScreen.tsx:225 · IconAction · "展开画面编辑" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0407** mobile/src/creative/ImageDraftScreen.tsx:225 · Pressable · {processing==='enhance'?'增强图片':processing==='upscale'?'放大图片':`生成 ${input.samples} 张图片`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0408** mobile/src/creative/ImageDraftScreen.tsx:225 · IconAction · "生成历史" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0409** mobile/src/creative/ImageDraftScreen.tsx:228 · NovelAiImageImport · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0410** mobile/src/creative/ImageDraftScreen.tsx:229 · CreativeAssetPicker · (动态/子文本) · onClose/onChoose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0411** mobile/src/creative/ImageEditorDrawer.tsx:26 · Pressable · "拖动编辑抽屉" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0412** mobile/src/creative/ImageHistorySheet.tsx:50 · IconAction · {locked ? '已锁定历史滚动 · 点击恢复自动滚动' : '自动滚动到最新结果 · 点击锁定历史滚动'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0413** mobile/src/creative/ImageHistorySheet.tsx:51 · TextAction · {selecting ? '退出多选' : '批量保存'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0414** mobile/src/creative/ImageHistorySheet.tsx:52 · IconAction · "关闭生成历史" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0415** mobile/src/creative/ImageHistorySheet.tsx:55 · TextInput · "搜索生成历史" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0416** mobile/src/creative/ImageHistorySheet.tsx:56 · TextAction · {locked ? '已锁定历史滚动 · 点击恢复自动滚动' : '自动滚动到最新结果 · 点击锁定历史滚动'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0417** mobile/src/creative/ImageHistorySheet.tsx:57 · TextAction · {selecting ? '退出多选' : '批量保存'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0418** mobile/src/creative/ImageHistorySheet.tsx:57 · TextAction · {source?"选择已加载结果":"选择筛选结果"} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0419** mobile/src/creative/ImageHistorySheet.tsx:57 · TextAction · {exporting ? '加入保存队列中…' : `保存所选 ${picks.length} 张`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0420** mobile/src/creative/ImageHistorySheet.tsx:58 · TextAction · "历史读取失败 · 重试" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0421** mobile/src/creative/ImageHistorySheet.tsx:61 · TextAction · {paged.loading?"正在加载…":"加载更早结果"} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0422** mobile/src/creative/ImageHistorySheet.tsx:63 · Pressable · {`${selecting?'选择':'查看'}版本 ${item.versionNo}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0423** mobile/src/creative/ImageMetadataPanel.tsx:52 · Pressable · {`复制${copyLabel}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0424** mobile/src/creative/ImageMetadataPanel.tsx:54 · ParameterSheet · "图片信息 · Inspect" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0425** mobile/src/creative/ImageMetadataPanel.tsx:69 · SegmentedChoices · "元数据展示方式" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0426** mobile/src/creative/ImageMetadataPanel.tsx:71 · TextAction · {`复制${label}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0427** mobile/src/creative/ImageMetadataPanel.tsx:75 · TextAction · "复制原始参数" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0428** mobile/src/creative/ImageMetadataPanel.tsx:76 · TextAction · {expandedRaw?'收起长参数':'展开完整参数'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0429** mobile/src/creative/ImageMetadataPanel.tsx:78 · TextAction · "仅复用提示词" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0430** mobile/src/creative/ImageMetadataPanel.tsx:78 · TextAction · "仅复用 Seed" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0431** mobile/src/creative/ImageMetadataPanel.tsx:78 · TextAction · "复用完整配置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0432** mobile/src/creative/ImageMetadataPanel.tsx:80 · TextAction · {rawOpen?'收起原始元数据':'查看原始元数据与配方'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0433** mobile/src/creative/ImageMetadataPanel.tsx:81 · TextAction · "复制完整元数据与配方" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0434** mobile/src/creative/ImageMetadataPanel.tsx:86 · ListAction · {label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0435** mobile/src/creative/ImageMetadataPanel.tsx:86 · MetadataSheet · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0436** mobile/src/creative/ImageProcessingSheet.tsx:25 · ParameterSheet · "增强 / 放大" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0437** mobile/src/creative/ImageProcessingSheet.tsx:26 · SettingRow · "细节增强 · Enhance" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0438** mobile/src/creative/ImageProcessingSheet.tsx:28 · SettingRow · "清晰放大 · 2×" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0439** mobile/src/creative/LibraryToolbar.tsx:8 · Pressable · "导入素材" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0440** mobile/src/creative/LibraryToolbar.tsx:9 · Pressable · "素材管理" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0441** mobile/src/creative/LibraryToolbar.tsx:11 · Pressable · {item.label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0442** mobile/src/creative/LibraryToolbar.tsx:12 · TextInput · "搜索资产" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0443** mobile/src/creative/LibraryToolbar.tsx:12 · Pressable · "清除素材搜索" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0444** mobile/src/creative/LibraryToolbar.tsx:13 · Pressable · {item.label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0445** mobile/src/creative/NovelAiEnhancePanel.tsx:16 · IconAction · "关闭增强" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0446** mobile/src/creative/NovelAiEnhancePanel.tsx:18 · SegmentedChoices · "Enhance 放大比例" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0447** mobile/src/creative/NovelAiEnhancePanel.tsx:23 · NovelAiRangeField · "Strength" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0448** mobile/src/creative/NovelAiEnhancePanel.tsx:24 · NovelAiRangeField · "Noise" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0449** mobile/src/creative/NovelAiEnhancePanel.tsx:26 · SegmentedChoices · "Enhance 变化幅度" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0450** mobile/src/creative/NovelAiEnhancePanel.tsx:30 · TextAction · {advanced ? '收起高级设置' : '高级设置'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0451** mobile/src/creative/NovelAiImageImport.tsx:18 · ParameterSheet · "使用导入图片" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0452** mobile/src/creative/NovelAiImageImport.tsx:20 · TextAction · {busy?'正在导入…':'用作图生图底图'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0453** mobile/src/creative/NovelAiImageImport.tsx:23 · NovelAiToggle · {label} · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0454** mobile/src/creative/NovelAiImageImport.tsx:25 · TextAction · "导入所选元数据" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0455** mobile/src/creative/NovelAiMaskEditor.tsx:33 · SegmentedChoices · "蒙版画笔大小" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0456** mobile/src/creative/NovelAiMaskEditor.tsx:34 · TextAction · "撤销一笔" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0457** mobile/src/creative/NovelAiMaskEditor.tsx:34 · TextAction · "清空蒙版" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0458** mobile/src/creative/NovelAiNumberField.tsx:12 · TextInput · {label} · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0459** mobile/src/creative/NovelAiPromptEditor.tsx:21 · SegmentedChoices · "画面编辑分页" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0460** mobile/src/creative/NovelAiPromptEditor.tsx:23 · WeightedPromptInput · {label} · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0461** mobile/src/creative/NovelAiPromptEditor.tsx:28 · SegmentedChoices · "提示词类型" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0462** mobile/src/creative/NovelAiPromptEditor.tsx:30 · factory:field · '图片提示词' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0463** mobile/src/creative/NovelAiPromptEditor.tsx:31 · TextAction · {`质量：${presetNames[input.qualityPreset]} · ${promptOptions?'收起选项':'选项'}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0464** mobile/src/creative/NovelAiPromptEditor.tsx:31 · TextAction · "帮我写" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0465** mobile/src/creative/NovelAiPromptEditor.tsx:33 · SegmentedChoices · "质量预设" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0466** mobile/src/creative/NovelAiPromptEditor.tsx:37 · NovelAiToggle · "透明背景" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0467** mobile/src/creative/NovelAiPromptEditor.tsx:39 · SegmentedChoices · "负面预设" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0468** mobile/src/creative/NovelAiPromptEditor.tsx:39 · factory:field · '图片负面提示词' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0469** mobile/src/creative/NovelAiPromptEditor.tsx:40 · TextAction · {`角色提示词 · ${input.characters.length} ${charactersOpen?'▴':'▾'}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0470** mobile/src/creative/NovelAiPromptEditor.tsx:40 · IconAction · {`添加角色（最多 ${maxCharacters} 个）`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0471** mobile/src/creative/NovelAiPromptEditor.tsx:43 · SegmentedChoices · "角色位置" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0472** mobile/src/creative/NovelAiPromptEditor.tsx:47 · TextAction · {`角色 ${index+1}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0473** mobile/src/creative/NovelAiPromptEditor.tsx:47 · IconAction · {`${character.enabled?'停用':'启用'}角色 ${index+1}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0474** mobile/src/creative/NovelAiPromptEditor.tsx:47 · IconAction · {`上移角色 ${index+1}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0475** mobile/src/creative/NovelAiPromptEditor.tsx:47 · IconAction · {`移除角色 ${index+1}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0476** mobile/src/creative/NovelAiPromptEditor.tsx:48 · SegmentedChoices · {`角色 ${index+1} 提示词类型`} · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0477** mobile/src/creative/NovelAiPromptEditor.tsx:49 · factory:field · `角色 ${index+1} 负面` · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0478** mobile/src/creative/NovelAiPromptEditor.tsx:49 · factory:field · `角色 ${index+1} 提示词` · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0479** mobile/src/creative/NovelAiPromptEditor.tsx:50 · Pressable · {`角色 ${index+1} 位置画布`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0480** mobile/src/creative/NovelAiPromptEditor.tsx:54 · NovelAiNumberField · {`角色 ${index+1} ${axis}（0到1）`} · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0481** mobile/src/creative/NovelAiPromptEditor.tsx:62 · TextInput · {`片段 ${index+1} 名称`} · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0482** mobile/src/creative/NovelAiPromptEditor.tsx:63 · factory:field · `片段 ${index+1} 内容` · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0483** mobile/src/creative/NovelAiPromptEditor.tsx:64 · TextAction · {`插入${chunk.name}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0484** mobile/src/creative/NovelAiPromptEditor.tsx:64 · TextAction · {`移除片段 ${index+1}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0485** mobile/src/creative/NovelAiPromptEditor.tsx:65 · TextAction · "新建片段" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0486** mobile/src/creative/NovelAiPromptEditor.tsx:66 · TextAction · {expanded ? '收起最终提示词' : '查看最终提示词'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0487** mobile/src/creative/NovelAiPromptEditor.tsx:69 · InlineWorkbenchPanel · "画面编辑" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0488** mobile/src/creative/NovelAiPromptEditor.tsx:69 · ParameterSheet · "画面编辑" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0489** mobile/src/creative/NovelAiRangeField.tsx:14 · NovelAiNumberField · {horizontal?label:`${label}（${min}–${max}）`} · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0490** mobile/src/creative/NovelAiSettings.tsx:14 · Switch · {label} · onValueChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0491** mobile/src/creative/NovelAiSettings.tsx:22 · NovelAiRangeField · {label} · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0492** mobile/src/creative/NovelAiSettings.tsx:24 · NovelAiNumberField · {label} · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0493** mobile/src/creative/NovelAiSettings.tsx:26 · TextAction · {novelAiModelName(input.model)} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0494** mobile/src/creative/NovelAiSettings.tsx:27 · SegmentedChoices · "图片模型" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0495** mobile/src/creative/NovelAiSettings.tsx:28 · TextAction · {{anime:'Anime',furry:'Furry',background:'背景'}[input.mode]} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0496** mobile/src/creative/NovelAiSettings.tsx:29 · SegmentedChoices · "画风模式" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0497** mobile/src/creative/NovelAiSettings.tsx:30 · SegmentedChoices · "V5 Full Effort" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0498** mobile/src/creative/NovelAiSettings.tsx:33 · TextAction · {sizeGroup==='normal'?'标准':sizeGroup==='large'?'大尺寸':'自定义'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0499** mobile/src/creative/NovelAiSettings.tsx:33 · SegmentedChoices · "图片比例" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0500** mobile/src/creative/NovelAiSettings.tsx:34 · SegmentedChoices · "尺寸预设" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0501** mobile/src/creative/NovelAiSettings.tsx:35 · factory:field · '宽度（64 的倍数）' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0502** mobile/src/creative/NovelAiSettings.tsx:35 · IconAction · "交换宽高" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0503** mobile/src/creative/NovelAiSettings.tsx:35 · factory:field · '高度（64 的倍数）' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0504** mobile/src/creative/NovelAiSettings.tsx:37 · SegmentedChoices · "生成张数" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0505** mobile/src/creative/NovelAiSettings.tsx:38 · factory:field · '变化强度（0–1）' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0506** mobile/src/creative/NovelAiSettings.tsx:38 · factory:field · '额外噪声（0–1）' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0507** mobile/src/creative/NovelAiSettings.tsx:39 · TextAction · "切回普通图生图" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0508** mobile/src/creative/NovelAiSettings.tsx:43 · NovelAiNumberField · "图片 Seed" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0509** mobile/src/creative/NovelAiSettings.tsx:43 · IconAction · "恢复随机种子" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0510** mobile/src/creative/NovelAiSettings.tsx:44 · TextAction · {samplerNames[NOVELAI_SAMPLERS.indexOf(medium?'k_euler_ancestral':input.sampler)]} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0511** mobile/src/creative/NovelAiSettings.tsx:45 · Pressable · {samplerNames[index]} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0512** mobile/src/creative/NovelAiSettings.tsx:46 · TextAction · {advanced?'收起高级设置':'高级设置'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0513** mobile/src/creative/NovelAiSettings.tsx:49 · SegmentedChoices · "图片噪声设置" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0514** mobile/src/creative/NovelAiSettings.tsx:51 · NovelAiToggle · "保留透明边缘颜色（Straight Alpha）" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0515** mobile/src/creative/NovelAiSettings.tsx:51 · NovelAiToggle · "自动整理引号中的画面文字" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0516** mobile/src/creative/NovelAiSettings.tsx:52 · NovelAiNumberField · "额外噪声 Seed" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0517** mobile/src/creative/NovelAiSettings.tsx:53 · factory:field · '未遮罩区域变化强度（0–1）' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0518** mobile/src/creative/NovelAiSettings.tsx:53 · NovelAiToggle · "合成回原图" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0519** mobile/src/creative/NovelAiSettings.tsx:56 · IconAction · "关闭生成设置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0520** mobile/src/creative/NovelAiSettings.tsx:56 · ParameterSheet · "生成设置" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0521** mobile/src/creative/NovelAiTags.tsx:24 · TextInput · "标签关键词" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0522** mobile/src/creative/NovelAiTags.tsx:25 · TextAction · {busy?'正在查找标签…':'查找官方标签'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0523** mobile/src/creative/NovelAiTags.tsx:26 · TextAction · {`添加标签 ${tag}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0524** mobile/src/creative/NovelAiUsageBar.tsx:46 · Pressable · {summary} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0525** mobile/src/creative/NovelAiUsageBar.tsx:46 · IconAction · "刷新 NovelAI 用量" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0526** mobile/src/creative/NovelAiUsageBar.tsx:52 · TextAction · {summary} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0527** mobile/src/creative/NovelAiUsageBar.tsx:54 · IconAction · "刷新 NovelAI 用量" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0528** mobile/src/creative/NovelAiUsageBar.tsx:56 · ParameterSheet · "NovelAI 用量" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0529** mobile/src/creative/NovelAiUsageBar.tsx:67 · TextAction · {loading ? '正在刷新…' : '刷新用量'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0530** mobile/src/creative/NovelAiUsageBar.tsx:68 · TextAction · "管理 NovelAI 账号" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0531** mobile/src/creative/PdfVersionPreview.tsx:19 · ListAction · {open?'收起 PDF':'预览 PDF'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0532** mobile/src/creative/PdfVersionPreview.tsx:23 · ListAction · "上一页" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0533** mobile/src/creative/PdfVersionPreview.tsx:23 · ListAction · "下一页" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0534** mobile/src/creative/ProjectActivityPanel.tsx:26 · ListAction · "采用这项修改" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0535** mobile/src/creative/ProjectActivityPanel.tsx:26 · ListAction · "拒绝建议" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0536** mobile/src/creative/ProjectActivityPanel.tsx:32 · ListAction · "查看任务" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0537** mobile/src/creative/ProjectActivityPanel.tsx:32 · ListAction · "查看草稿" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0538** mobile/src/creative/ProjectOverview.tsx:29 · IconAction · "编辑项目简报" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0539** mobile/src/creative/ProjectOverview.tsx:32 · Pressable · {project.archivedAt?'查看镜头与成果':'查看镜头与下一步'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0540** mobile/src/creative/ProjectOverview.tsx:35 · ListAction · "在助手中继续" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0541** mobile/src/creative/ProjectOverview.tsx:38 · Pressable · {d.state==='EDITING'?'继续编辑':'查看进度与成果'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0542** mobile/src/creative/ProjectPlans.tsx:34 · ListAction · {label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0543** mobile/src/creative/ProjectPlans.tsx:57 · factory:action · `选定 ${c.title} 并继续` · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0544** mobile/src/creative/ProjectPlans.tsx:62 · factory:action · '授权并继续生成' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0545** mobile/src/creative/ProjectPlans.tsx:63 · ListAction · "查看生成任务" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0546** mobile/src/creative/ProjectPlans.tsx:64 · factory:action · '取消计划' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0547** mobile/src/creative/ProjectPlans.tsx:69 · factory:action · `${shotId===s.id?'✓ ':''}${s.title}` · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0548** mobile/src/creative/ProjectPlans.tsx:70 · TextInput · "计划视频提示词" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0549** mobile/src/creative/ProjectPlans.tsx:71 · factory:action · '读取项目图片候选' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0550** mobile/src/creative/ProjectPlans.tsx:72 · factory:action · `${selected.includes(c.id)?'✓ ':''}${c.title}` · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0551** mobile/src/creative/ProjectPlans.tsx:73 · factory:action · '加载更多图片候选' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0552** mobile/src/creative/ProjectPlans.tsx:74 · factory:action · '保存计划（不消费）' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0553** mobile/src/creative/ProjectShots.tsx:48 · ListAction · {label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0554** mobile/src/creative/ProjectShots.tsx:59 · CreativeAssetPicker · (动态/子文本) · onClose/onChoose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0555** mobile/src/creative/ProjectShots.tsx:63 · ListAction · "全部镜头" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0556** mobile/src/creative/ProjectShots.tsx:65 · IconAction · {expanded===shot.id?"收起镜头操作":"更多镜头操作"} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0557** mobile/src/creative/ProjectShots.tsx:67 · ListAction · {shot.selected_video ? '审阅视频成果' : continuing(shot) ? continuing(shot)!.state === 'EDITING' ? '继续已有草稿' : '查看生成进度与候选' : shot.selected_image ? '制作视频' : '选择参考图'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0558** mobile/src/creative/ProjectShots.tsx:73 · ListAction · "生成记录与候选" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0559** mobile/src/creative/ProjectShots.tsx:74 · factory:action · '制作新的参考图' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0560** mobile/src/creative/ProjectShots.tsx:76 · factory:action · '编辑镜头' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0561** mobile/src/creative/ProjectShots.tsx:77 · factory:action · '选定图片' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0562** mobile/src/creative/ProjectShots.tsx:77 · factory:action · '选定视频' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0563** mobile/src/creative/ProjectShots.tsx:78 · factory:action · '另建视频草稿' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0564** mobile/src/creative/ProjectShots.tsx:79 · factory:action · '上移' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0565** mobile/src/creative/ProjectShots.tsx:79 · factory:action · '下移' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0566** mobile/src/creative/ProjectShots.tsx:80 · factory:action · '移除镜头' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0567** mobile/src/creative/ProjectShots.tsx:84 · factory:action · adding ? '取消编辑镜头' : '添加镜头' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0568** mobile/src/creative/ProjectShots.tsx:85 · ListAction · "关闭镜头编辑" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0569** mobile/src/creative/ProjectShots.tsx:89 · TextInput · "镜头名称" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0570** mobile/src/creative/ProjectShots.tsx:91 · TextInput · "镜头描述" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0571** mobile/src/creative/ProjectShots.tsx:92 · factory:action · editing ? '保存镜头' : '创建镜头' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0572** mobile/src/creative/ProjectShots.tsx:96 · factory:action · `${editing.editorial_status === status ? '✓ ' : ''}${label}` · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0573** mobile/src/creative/PromptAssistSheet.tsx:23 · TextAction · {editing?`完成编辑${label}`:`编辑${label}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0574** mobile/src/creative/PromptAssistSheet.tsx:24 · TextAction · {`采用${label}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0575** mobile/src/creative/PromptAssistSheet.tsx:25 · TextInput · {`建议${label}`} · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0576** mobile/src/creative/PromptAssistSheet.tsx:27 · TextAction · {expanded?`收起${label}`:`展开完整${label}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0577** mobile/src/creative/PromptAssistSheet.tsx:82 · SuggestionField · {label} · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0578** mobile/src/creative/PromptAssistSheet.tsx:84 · factory:field · '描述' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0579** mobile/src/creative/PromptAssistSheet.tsx:85 · factory:field · '负面词' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0580** mobile/src/creative/PromptAssistSheet.tsx:86 · factory:field · `角色 ${character.index+1}${key==='prompt'?'描述':'负面'}` · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0581** mobile/src/creative/PromptAssistSheet.tsx:87 · SuggestionField · {`新增角色 ${index+1}${key==='prompt'?'描述':'负面'}`} · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0582** mobile/src/creative/PromptAssistSheet.tsx:88 · TextAction · "采用全部修改" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0583** mobile/src/creative/PromptAssistSheet.tsx:93 · IconAction · "助手模型设置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0584** mobile/src/creative/PromptAssistSheet.tsx:93 · IconAction · "关闭提示词协作" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0585** mobile/src/creative/PromptAssistSheet.tsx:97 · TextAction · {value} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0586** mobile/src/creative/PromptAssistSheet.tsx:103 · TextAction · "查看修改建议" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0587** mobile/src/creative/PromptAssistSheet.tsx:111 · TextAction · "撤销上次采用" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0588** mobile/src/creative/PromptAssistSheet.tsx:113 · TextAction · "重试保存讨论" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0589** mobile/src/creative/PromptAssistSheet.tsx:116 · TextAction · {busy?'查看最新进展 ↓':'回到最新消息 ↓'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0590** mobile/src/creative/PromptAssistSheet.tsx:117 · ConversationInput · "提示词修改方向" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0591** mobile/src/creative/PromptAssistSheet.tsx:144 · IconAction · {list?'返回当前讨论':'讨论历史'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0592** mobile/src/creative/PromptAssistSheet.tsx:145 · IconAction · "新建讨论" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0593** mobile/src/creative/PromptAssistSheet.tsx:148 · TextInput · "搜索讨论" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0594** mobile/src/creative/PromptAssistSheet.tsx:150 · RecordRow · {item.title} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0595** mobile/src/creative/PromptAssistSheet.tsx:151 · IconAction · {`管理讨论：${item.title}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0596** mobile/src/creative/PromptAssistSheet.tsx:152 · TextInput · "讨论名称" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0597** mobile/src/creative/PromptAssistSheet.tsx:152 · TextAction · "保存名称" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0598** mobile/src/creative/PromptAssistSheet.tsx:152 · TextAction · "取消重命名" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0599** mobile/src/creative/PromptAssistSheet.tsx:154 · TextAction · "关闭提示词协作" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0600** mobile/src/creative/ResultActionBar.tsx:9 · TextAction · "调整画面" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0601** mobile/src/creative/ResultActionBar.tsx:10 · TextAction · "增强 / 放大" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0602** mobile/src/creative/ResultActionBar.tsx:12 · ListAction · {primaryLabel} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0603** mobile/src/creative/ShotOutputReview.tsx:49 · IconAction · "返回" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0604** mobile/src/creative/ShotOutputReview.tsx:54 · TextAction · {(v.id===review.shot.selected_video?'已采用 · ':'候选 · ')+(index+1)+' · v'+v.versionNo} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0605** mobile/src/creative/ShotOutputReview.tsx:55 · TextAction · "采用此版本" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0606** mobile/src/creative/ShotOutputReview.tsx:55 · TextAction · "查看素材与版本" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0607** mobile/src/creative/ShotOutputReview.tsx:56 · TextAction · "打开视频工作台与生成历史" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0608** mobile/src/creative/ShotOutputReview.tsx:60 · TextAction · "返回此镜头" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0609** mobile/src/creative/TagCompletionProvider.tsx:36 · Pressable · "切换在线标签建议" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0610** mobile/src/creative/TagCompletionProvider.tsx:36 · Pressable · "本次关闭标签补全" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0611** mobile/src/creative/TagCompletionProvider.tsx:37 · Pressable · {`补全标签 ${item.name}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0612** mobile/src/creative/TagCompletionProvider.tsx:43 · Pressable · "标签补全" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0613** mobile/src/creative/TextAssetEditor.tsx:9 · ListAction · {open?'收起文本素材':'新建 Prompt 或设定文档'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0614** mobile/src/creative/TextAssetEditor.tsx:11 · ListAction · {kind==='prompt'?'类型：Prompt（切换为设定文档）':'类型：设定文档（切换为 Prompt）'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0615** mobile/src/creative/TextAssetEditor.tsx:12 · TextInput · "文本资产名称" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0616** mobile/src/creative/TextAssetEditor.tsx:13 · TextInput · "文本资产内容" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0617** mobile/src/creative/TextAssetEditor.tsx:14 · ListAction · "保存文本资产" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0618** mobile/src/creative/TextVersionEditor.tsx:13 · ListAction · "基于此版本编辑文本" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0619** mobile/src/creative/TextVersionEditor.tsx:15 · TextInput · "文本新版本内容" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0620** mobile/src/creative/TextVersionEditor.tsx:16 · ListAction · "保存为新版本" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0621** mobile/src/creative/TextVersionEditor.tsx:20 · ListAction · "放弃本次编辑" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0622** mobile/src/creative/UpscaleDraftScreen.tsx:37 · ListAction · {busy?'处理中…':'超分此图片'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0623** mobile/src/creative/UpscaleDraftScreen.tsx:38 · TextAction · "创作账号" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0624** mobile/src/creative/UpscaleDraftScreen.tsx:38 · TextAction · "返回内容管理" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0625** mobile/src/creative/VersionComparison.tsx:29 · TextAction · "加载更早版本" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0626** mobile/src/creative/VersionComparison.tsx:29 · Pressable · {`比较版本 ${v.versionNo}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0627** mobile/src/creative/VersionComparison.tsx:34 · SegmentedChoices · "切换比较画面" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0628** mobile/src/creative/VersionComparison.tsx:38 · SettingRow · "参数差异" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0629** mobile/src/creative/VersionComparison.tsx:42 · SettingRow · "技术详情" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0630** mobile/src/creative/VideoCostHint.tsx:15 · Pressable · "视频预估费用说明" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0631** mobile/src/creative/VideoDraftScreen.tsx:213 · IconAction · "返回" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0632** mobile/src/creative/VideoDraftScreen.tsx:213 · IconAction · "创作账号" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0633** mobile/src/creative/VideoDraftScreen.tsx:215 · Pressable · {tab==='create'?(pending?'准备下一次':'创作'):'生成记录'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0634** mobile/src/creative/VideoDraftScreen.tsx:216 · TextAction · "载入最新草稿" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0635** mobile/src/creative/VideoDraftScreen.tsx:217 · TextAction · {dirty?'重试保存输入':'重新读取工作区'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0636** mobile/src/creative/VideoDraftScreen.tsx:219 · TextAction · {definition?`${h3?'MiniMax H3':definition.metadata.title} · ${entries.filter(item=>!item.reason).length>1?'切换':'详情'}`:'选择视频工作流'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0637** mobile/src/creative/VideoDraftScreen.tsx:221 · TextAction · "对齐当前工作流版本" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0638** mobile/src/creative/VideoDraftScreen.tsx:222 · TextAction · "连接 AutoDL 创作账号" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0639** mobile/src/creative/VideoDraftScreen.tsx:223 · TextAction · "撤销工作流切换" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0640** mobile/src/creative/VideoDraftScreen.tsx:224 · TextAction · "核查与继续创作" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0641** mobile/src/creative/VideoDraftScreen.tsx:227 · TextAction · "帮我写提示词" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0642** mobile/src/creative/VideoDraftScreen.tsx:227 · TextInput · "视频镜头提示词" · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0643** mobile/src/creative/VideoDraftScreen.tsx:228 · SegmentedChoices · "视频方向" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0644** mobile/src/creative/VideoDraftScreen.tsx:228 · SegmentedChoices · "视频清晰度" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0645** mobile/src/creative/VideoDraftScreen.tsx:228 · Pressable · "选择视频时长" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0646** mobile/src/creative/VideoDraftScreen.tsx:228 · TextAction · "更多设置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0647** mobile/src/creative/VideoDraftScreen.tsx:228 · WorkflowForm · (动态/子文本) · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0648** mobile/src/creative/VideoDraftScreen.tsx:228 · TextAction · "更多设置" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0649** mobile/src/creative/VideoDraftScreen.tsx:229 · TextAction · "撤销提示词修改" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0650** mobile/src/creative/VideoDraftScreen.tsx:232 · PromptAssistSheet · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0651** mobile/src/creative/VideoDraftScreen.tsx:234 · Pressable · {pending?'准备下一次':'调整后再生成'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0652** mobile/src/creative/VideoDraftScreen.tsx:234 · Pressable · "生成视频" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0653** mobile/src/creative/VideoDraftScreen.tsx:237 · ParameterSheet · "视频工作流" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0654** mobile/src/creative/VideoDraftScreen.tsx:237 · RecordRow · {item.definition.metadata.title} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0655** mobile/src/creative/VideoDraftScreen.tsx:237 · IconAction · {`工作流详情：${item.definition.metadata.title}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0656** mobile/src/creative/VideoDraftScreen.tsx:237 · TextAction · "管理与同步工作流" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0657** mobile/src/creative/VideoDraftScreen.tsx:238 · ParameterSheet · {sheet==='orientation'?'画面方向':'清晰度'} · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0658** mobile/src/creative/VideoDraftScreen.tsx:238 · SegmentedChoices · {sheet==='orientation'?'视频方向':'视频清晰度'} · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0659** mobile/src/creative/VideoDraftScreen.tsx:239 · ParameterSheet · "视频时长" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0660** mobile/src/creative/VideoDraftScreen.tsx:239 · SegmentedChoices · "常用视频时长" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0661** mobile/src/creative/VideoDraftScreen.tsx:239 · NovelAiNumberField · "视频时长" · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0662** mobile/src/creative/VideoDraftScreen.tsx:240 · ParameterSheet · "更多视频设置" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0663** mobile/src/creative/VideoDraftScreen.tsx:240 · WorkflowForm · (动态/子文本) · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0664** mobile/src/creative/VideoDraftScreen.tsx:242 · CreativeAssetPicker · (动态/子文本) · onClose/onChoose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0665** mobile/src/creative/VideoDraftScreen.tsx:243 · ImagePreview · (动态/子文本) · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0666** mobile/src/creative/VideoGenerationHistory.tsx:72 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0667** mobile/src/creative/VideoGenerationHistory.tsx:74 · TextAction · {loadingMore?"正在加载…":"加载更早记录"} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0668** mobile/src/creative/VideoGenerationHistory.tsx:76 · Pressable · {`查看第 ${ordinal} 轮视频`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0669** mobile/src/creative/VideoGenerationHistory.tsx:84 · TextAction · "查看最新一轮" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0670** mobile/src/creative/VideoGenerationHistory.tsx:85 · TextAction · {expanded?'收起记录':`全部记录 · ${rounds.length}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0671** mobile/src/creative/VideoGenerationHistory.tsx:95 · ParameterSheet · "生成记录" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0672** mobile/src/creative/VideoReferenceCards.tsx:18 · Pressable · {`预览参考图 ${index+1}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0673** mobile/src/creative/VideoReferenceCards.tsx:22 · TextAction · {listening===row.version_id?'收起试听':`试听音频 ${index+1}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0674** mobile/src/creative/VideoReferenceCards.tsx:23 · IconAction · {`管理${label} ${index+1}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0675** mobile/src/creative/VideoReferenceCards.tsx:25 · TextAction · "向前移动" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0676** mobile/src/creative/VideoReferenceCards.tsx:25 · TextAction · "向后移动" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0677** mobile/src/creative/VideoReferenceCards.tsx:25 · TextAction · "移除引用" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0678** mobile/src/creative/VideoReferenceCards.tsx:29 · TextAction · {`添加${label}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0679** mobile/src/creative/WeightedPromptInput.tsx:53 · TextInput · (动态/子文本) · onChangeText/onSelectionChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0680** mobile/src/creative/WorkbenchScope.tsx:18 · Pressable · {`返回所属项目：${label}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0681** mobile/src/creative/WorkbenchUI.tsx:23 · IconAction · {`关闭${title}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0682** mobile/src/creative/WorkbenchUI.tsx:30 · Pressable · {label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0683** mobile/src/creative/WorkbenchUI.tsx:37 · Pressable · {value ? `${label}，${value}` : label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0684** mobile/src/creative/WorkbenchUI.tsx:46 · Pressable · {option.label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0685** mobile/src/creative/WorkbenchUI.tsx:55 · Pressable · {`关闭${title}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0686** mobile/src/creative/WorkbenchUI.tsx:57 · TextAction · "完成" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0687** mobile/src/creative/WorkbenchUI.tsx:72 · Pressable · {label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0688** mobile/src/creative/WorkbenchUI.tsx:97 · IconAction · {`关闭${title}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0689** mobile/src/media/GalleryCard.tsx:12 · Pressable · {`打开视频 ${asset.title}`} · onPress/onLongPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0690** mobile/src/media/VideoPlayer.tsx:145 · Pressable · "重新下载视频" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0691** mobile/src/media/VideoPlayer.tsx:146 · Pressable · "重试播放" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0692** mobile/src/media/VideoPlayer.tsx:147 · Pressable · "使用外部播放器打开" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0693** mobile/src/navigation/PrimaryNavigation.tsx:25 · Pressable · {item.label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0694** mobile/src/settings/DataManagementPanel.tsx:23 · Pressable · {label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0695** mobile/src/settings/DataManagementPanel.tsx:25 · factory:action · '扫描可清理空间' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0696** mobile/src/settings/DataManagementPanel.tsx:26 · factory:action · '清理并重新启动' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0697** mobile/src/settings/DataManagementPanel.tsx:27 · factory:action · '立即备份数据库' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0698** mobile/src/settings/DataManagementPanel.tsx:28 · factory:action · '查看可恢复备份' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0699** mobile/src/settings/DataManagementPanel.tsx:29 · factory:action · name · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0700** mobile/src/settings/DataManagementPanel.tsx:30 · factory:action · '备份数据库与创作文件' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0701** mobile/src/settings/DataManagementPanel.tsx:31 · factory:action · '查看含文件的备份' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0702** mobile/src/settings/DataManagementPanel.tsx:32 · factory:action · `${new Date(item.createdAt).toLocaleString()} · ${item.fileCount} 个文件` · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0703** mobile/src/settings/DataManagementPanel.tsx:33 · factory:action · '清除应用数据' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0704** mobile/src/settings/DataManagementPanel.tsx:34 · Pressable · "重试退出完成数据维护" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0705** mobile/src/settings/DisplayDiagnostics.tsx:12 · Switch · "显示诊断信息" · onValueChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0706** mobile/src/settings/WorkflowSyncPanel.tsx:32 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0707** mobile/src/storage/DatabaseRecoveryScreen.tsx:58 · Pressable · "复制诊断" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0708** mobile/src/storage/DatabaseRecoveryScreen.tsx:61 · Pressable · "分享诊断" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0709** mobile/src/storage/DatabaseRecoveryScreen.tsx:66 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0710** mobile/src/storage/DatabaseRecoveryScreen.tsx:68 · Pressable · "恢复选中的完整备份" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0711** mobile/src/storage/DatabaseRecoveryScreen.tsx:78 · Pressable · "清除应用数据" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0712** mobile/src/storage/DatabaseRecoveryScreen.tsx:83 · Pressable · "退出应用" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0713** mobile/src/tasks/DownloadNetworkHelp.tsx:13 · ListAction · "下载网络排查" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0714** mobile/src/tasks/DownloadNetworkHelp.tsx:23 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0715** mobile/src/tasks/DownloadNetworkHelp.tsx:24 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0716** mobile/src/tasks/DownloadNetworkHelp.tsx:26 · ListAction · "关闭排查说明" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0717** mobile/src/tasks/TaskCardRow.tsx:29 · Pressable · {terminalSuccess?'查看创作结果':'查看任务详情'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0718** mobile/src/tasks/TaskCardRow.tsx:31 · Pressable · {expanded?'收起任务操作':'展开任务操作'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0719** mobile/src/tasks/TaskCardRow.tsx:32 · Pressable · "处理失败任务" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0720** mobile/src/tasks/TaskCardRow.tsx:36 · Pressable · "查看创作结果" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0721** mobile/src/tasks/TaskCardRow.tsx:36 · Pressable · {item.downloadState === 'DOWNLOAD_FAILED' ? '重试下载' : '下载视频'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0722** mobile/src/tasks/TaskCardRow.tsx:36 · Pressable · {exportActionLabel} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0723** mobile/src/tasks/TaskCardRow.tsx:36 · Pressable · "取消本地排队" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0724** mobile/src/tasks/TaskCardRow.tsx:38 · Pressable · {archived ? '恢复任务' : '归档任务'} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0725** mobile/src/tasks/TaskCardRow.tsx:39 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0726** mobile/src/tasks/TaskCardRow.tsx:39 · Pressable · "查看任务详情" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0727** mobile/src/tasks/TaskCardRow.tsx:39 · Pressable · "移除任务记录" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0728** mobile/src/tasks/TaskInboxButton.tsx:28 · Pressable · {`打开任务中心${count?`，${count} 个任务进行中`:''}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0729** mobile/src/tasks/TaskInboxButton.tsx:30 · Pressable · "关闭最近任务" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0730** mobile/src/tasks/TaskInboxButton.tsx:30 · IconAction · "收起最近任务" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0731** mobile/src/tasks/TaskInboxButton.tsx:35 · Pressable · {`查看任务 ${row.id}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0732** mobile/src/tasks/TaskInboxButton.tsx:36 · TextAction · "全部任务" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0733** mobile/src/tasks/TaskRecoveryNotice.tsx:21 · Pressable · {label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0734** mobile/src/tasks/TaskRecoveryNotice.tsx:25 · factory:action · '核查原任务' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0735** mobile/src/tasks/TaskRecoveryNotice.tsx:26 · factory:action · '管理创作账号' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0736** mobile/src/tasks/TaskRecoveryNotice.tsx:27 · factory:action · '刷新同步' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0737** mobile/src/tasks/TaskRecoveryNotice.tsx:28 · factory:action · '核查与继续创作' · callback · **源码可定位，实测状态见报告与 UI 清单**
+- **C0738** mobile/src/ui/DraggableSheet.tsx:129 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0739** mobile/src/ui/DraggableSheet.tsx:137 · Pressable · {`关闭${title}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0740** mobile/src/ui/HoldToCompare.tsx:10 · Pressable · "按住查看原图" · onPressIn/onPressOut · **源码可定位，实测状态见报告与 UI 清单**
+- **C0741** mobile/src/ui/ImageOverlayAction.tsx:7 · Pressable · {label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0742** mobile/src/ui/ImagePreview.tsx:75 · ImageOverlayAction · "还原图片缩放" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0743** mobile/src/ui/ImagePreview.tsx:76 · ImageOverlayAction · "关闭图片预览" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0744** mobile/src/ui/ImagePreview.tsx:94 · HoldToCompare · (动态/子文本) · onChange · **源码可定位，实测状态见报告与 UI 清单**
+- **C0745** mobile/src/ui/ListPageUI.tsx:11 · Pressable · {label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0746** mobile/src/ui/ListPageUI.tsx:22 · Pressable · {option.label} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0747** mobile/src/ui/RecordRow.tsx:12 · Pressable · {title} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0748** mobile/src/ui/WorkbenchModeSwitcher.tsx:22 · Pressable · {`工作模式：${mode==='create'?'手工':'Agent'}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0749** mobile/src/ui/WorkbenchModeSwitcher.tsx:26 · Pressable · "关闭模式选择" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0750** mobile/src/ui/WorkbenchModeSwitcher.tsx:28 · Pressable · {`${item.title}工作模式`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0751** mobile/src/ui/ZoomableImage.tsx:16 · ImageOverlayAction · "还原预览缩放" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0752** mobile/src/ui/ZoomableImage.tsx:17 · ImageOverlayAction · "全屏查看图片" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0753** mobile/src/workflows/renderer/renderers.tsx:68 · Pressable · {`减少${ctx.label}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0754** mobile/src/workflows/renderer/renderers.tsx:70 · Pressable · {`增加${ctx.label}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0755** mobile/src/workflows/renderer/renderers.tsx:83 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0756** mobile/src/workflows/renderer/renderers.tsx:93 · Pressable · (动态/子文本) · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0757** mobile/src/workflows/renderer/WorkflowParameterFields.tsx:17 · TextInput · {String(schema.title ?? labels[target])} · onChangeText · **源码可定位，实测状态见报告与 UI 清单**
+- **C0758** mobile/src/workflows/renderer/WorkflowParameterFields.tsx:24 · Pressable · {String(value)} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0759** mobile/src/workflows/renderer/WorkflowParameterFields.tsx:29 · Pressable · "使用随机种子" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0760** mobile/src/workflows/renderer/WorkflowSelector.tsx:19 · Pressable · "选择生成工作流" · onPress · **源码可定位，实测状态见报告与 UI 清单**
+- **C0761** mobile/src/workflows/renderer/WorkflowSelector.tsx:27 · DraggableBottomSheet · "选择生成工作流" · onClose · **源码可定位，实测状态见报告与 UI 清单**
+- **C0762** mobile/src/workflows/renderer/WorkflowSelector.tsx:31 · Pressable · {`选择工作流 ${definition.metadata.title}`} · onPress · **源码可定位，实测状态见报告与 UI 清单**
+
+## 导航调用
+
+- mobile/app/(tabs)/gallery.tsx:102: `router.push({ pathname: '/video/[id]', params: { id: asset.id } })`
+- mobile/app/(tabs)/gallery.tsx:119: `router.navigate({pathname:'/(tabs)/create',params:{mode:'video',requestId:String(Date.now())}})`
+- mobile/app/(tabs)/gallery.tsx:120: `router.navigate({pathname:'/(tabs)/create',params:{mode:'video',requestId:String(Date.now())}})`
+- mobile/app/(tabs)/settings.tsx:65: `router.back()`
+- mobile/app/(tabs)/settings.tsx:65: `router.navigate('/(tabs)/create')`
+- mobile/app/(tabs)/tasks.tsx:53: `getDatabase().getFirstAsync('SELECT job_id FROM creative_job_contexts WHERE job_id=?',id).then(bound=>router.push({pathname:bound?'/creative-task/[id]':'/video/[id]',params:{id}})).catch(()=>Alert.alert('读取失败','请重新打开任务'))`
+- mobile/app/(tabs)/tasks.tsx:53: `router.push({pathname:bound?'/creative-task/[id]':'/video/[id]',params:{id}})`
+- mobile/app/(tabs)/tasks.tsx:54: `getDatabase().getFirstAsync('SELECT job_id FROM creative_job_contexts WHERE job_id=?',id).then(bound=>{     if(bound){router.push({pathname:'/creative-task/[id]',params:{id}});return;}     Alert.alert('创建新的尝试？','请先核查 AutoDL 任务记录。新任务可能重复消耗额度；参考素材必须仍然可用。',[{text:'取消',style:'cancel'},{text:'已核查，创建新任务',onPress:()=>{void getTaskServices().taskCommandService.replaceUnknownAfterConfirmation(id).catch(error=>Alert.alert('无法创建新尝试',String(error)));}}]);   }).catch(()=>Alert.alert('读取失败','请重新打开任务'))`
+- mobile/app/(tabs)/tasks.tsx:55: `router.push({pathname:'/creative-task/[id]',params:{id}})`
+- mobile/app/(tabs)/tasks.tsx:58: `router.push({pathname:'/settings-panel',params:{section:'accounts'}})`
+- mobile/app/(tabs)/tasks.tsx:58: `router.push({pathname:'/creative-task/[id]',params:{id}})`
+- mobile/app/(tabs)/tasks.tsx:98: `router.push('/(tabs)/create')`
+- mobile/app/(tabs)/_layout.tsx:18: `router.back()`
+- mobile/app/(tabs)/_layout.tsx:18: `router.navigate('/(tabs)/create')`
+- mobile/app/(tabs)/_layout.tsx:21: `router.navigate('/settings-panel')`
+- mobile/app/creative-drafts.tsx:13: `router.back()`
+- mobile/app/creative-drafts.tsx:13: `router.replace('/(tabs)/create')`
+- mobile/app/creative-drafts.tsx:14: `router.navigate('/(tabs)/create')`
+- mobile/app/creative-drafts.tsx:17: `router.push({ pathname: d.provider_id === 'novelai' ? '/image-draft/[id]' : '/creative-draft/[id]', params: { id: d.id } })`
+- mobile/app/creative-task/[id].tsx:22: `router.replace('/(tabs)/tasks')`
+- mobile/app/creative-task/[id].tsx:42: `router.back()`
+- mobile/app/creative-task/[id].tsx:42: `router.replace('/(tabs)/tasks')`
+- mobile/app/creative-task/[id].tsx:58: `router.push({pathname:'/settings-panel',params:{section:'accounts'}})`
+- mobile/app/creative-task/[id].tsx:61: `router.push({pathname:draft.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:draft.id}})`
+- mobile/app/creative-task/[id].tsx:62: `router.push('/(tabs)/tasks')`
+- mobile/app/video/[id].tsx:24: `router.back()`
+- mobile/app/video/[id].tsx:24: `router.replace('/(tabs)/gallery')`
+- mobile/app/video/[id].tsx:68: `router.back()`
+- mobile/app/video/[id].tsx:110: `router.back()`
+- mobile/src/agent/AgentScreen.tsx:319: `router.navigate({           pathname: '/(tabs)/create',           params: { draftId: draft.id },         })`
+- mobile/src/agent/AgentScreen.tsx:328: `router.navigate({ pathname: '/(tabs)/create', params: { draftId: draft.id } })`
+- mobile/src/agent/AgentScreen.tsx:459: `router.navigate({pathname:'/settings-panel',params:{section:'assistant'}})`
+- mobile/src/agent/skills/SkillExtractionScreen.tsx:45: `router.back()`
+- mobile/src/agent/skills/SkillExtractionScreen.tsx:45: `router.replace('/agent-skills')`
+- mobile/src/agent/skills/SkillExtractionScreen.tsx:111: `router.push('/agent-skills')`
+- mobile/src/agent/skills/SkillLibraryScreen.tsx:33: `router.back()`
+- mobile/src/agent/skills/SkillLibraryScreen.tsx:33: `router.replace('/(tabs)/agent')`
+- mobile/src/agent/skills/SkillLibraryScreen.tsx:64: `router.push('/agent-skill-extract')`
+- mobile/src/create/CreateForm.tsx:374: `router.navigate('/(tabs)/tasks')`
+- mobile/src/create/CreateForm.tsx:395: `router.navigate({pathname:'/settings-panel',params:{section:'workflows'}})`
+- mobile/src/create/CreateForm.tsx:402: `router.navigate({pathname:'/settings-panel',params:{section:'accounts'}})`
+- mobile/src/creative/AgentCreativeCards.tsx:86: `router.push({pathname:'/creative-output/[id]',params:{id:output.id,assetId:output.assetId,jobId:card.jobId??card.draft!.job_id??'',draftId:card.draft!.id}})`
+- mobile/src/creative/AgentCreativeCards.tsx:88: `router.push({pathname:card.draft!.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:card.draft!.id}})`
+- mobile/src/creative/AgentCreativeCards.tsx:89: `router.push({pathname:'/creative-task/[id]',params:{id:card.jobId!}})`
+- mobile/src/creative/AgentCreativeCards.tsx:91: `router.push({pathname:'/creative-project/[id]',params:{id:card.projectId!,tab:card.kind==='proposal'?'activity':'plans',...(card.kind==='proposal'?{proposalId:card.id}:{planId:card.id}),requestId:String(Date.now())}})`
+- mobile/src/creative/AgentCreativePanel.tsx:48: `router.navigate('/(tabs)/projects')`
+- mobile/src/creative/AgentWorkspace.tsx:18: `router.navigate('/(tabs)/projects')`
+- mobile/src/creative/AssistantActions.tsx:8: `router.push('/agent-skills')`
+- mobile/src/creative/AssistantActions.tsx:8: `router.push({pathname:'/settings-panel',params:{section:'assistant'}})`
+- mobile/src/creative/CopySubmittedDraft.tsx:10: `creativeService().execute({name:'draft.copySubmitted',payload:{id}},createId()).then(r=>{if(r.status==='completed')router.push({pathname:r.value.provider==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:r.value.draftId}});}).catch(e=>setError(e.message)).finally(()=>{lock.current=false;setBusy(false);})`
+- mobile/src/creative/CopySubmittedDraft.tsx:10: `creativeService().execute({name:'draft.copySubmitted',payload:{id}},createId()).then(r=>{if(r.status==='completed')router.push({pathname:r.value.provider==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:r.value.draftId}});}).catch(e=>setError(e.message))`
+- mobile/src/creative/CopySubmittedDraft.tsx:10: `router.push({pathname:r.value.provider==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:r.value.draftId}})`
+- mobile/src/creative/CreativeHome.tsx:91: `router.push('/settings-panel')`
+- mobile/src/creative/CreativeHome.tsx:103: `router.push('/(tabs)/projects')`
+- mobile/src/creative/CreativeHome.tsx:104: `router.push('/(tabs)/assets')`
+- mobile/src/creative/CreativeHome.tsx:105: `router.push({pathname:"/settings-panel",params:{section:"workflows"}})`
+- mobile/src/creative/CreativeOutputPreview.tsx:18: `router.replace('/(tabs)/tasks')`
+- mobile/src/creative/CreativeOutputPreview.tsx:40: `router.back()`
+- mobile/src/creative/CreativeOutputPreview.tsx:40: `router.replace('/(tabs)/tasks')`
+- mobile/src/creative/CreativeOutputPreview.tsx:49: `router.push({ pathname: '/creative-asset/[id]', params: { id: version.assetId, versionId: version.id } })`
+- mobile/src/creative/CreativeOutputPreview.tsx:50: `router.push({ pathname: current.draft!.provider_id === 'novelai' ? '/image-draft/[id]' : '/creative-draft/[id]', params: { id: current.draft!.id } })`
+- mobile/src/creative/CreativeResults.tsx:122: `router.push(target)`
+- mobile/src/creative/CreativeResults.tsx:122: `router.replace(target)`
+- mobile/src/creative/CreativeResults.tsx:188: `router.push({pathname:'/creative-task/[id]',params:{id:draft.job_id!,returnToWorkbench:'1'}})`
+- mobile/src/creative/CreativeResults.tsx:236: `router.push({pathname:'/creative-task/[id]',params:{id:draft.job_id!,returnToWorkbench:'1'}})`
+- mobile/src/creative/CreativeResults.tsx:240: `router.push({pathname:'/creative-asset/[id]',params:{id:current.assetId,versionId:current.id,...(draft.project_id?{projectId:draft.project_id}:{})}})`
+- mobile/src/creative/CreativeWorkspace.tsx:135: `router.push({pathname:'/creative-project/[id]',params:{id:p.id}})`
+- mobile/src/creative/CreativeWorkspace.tsx:209: `router.back()`
+- mobile/src/creative/CreativeWorkspace.tsx:209: `router.replace(mode === 'projects' ? '/(tabs)/projects' : '/(tabs)/assets')`
+- mobile/src/creative/CreativeWorkspace.tsx:222: `router.push({pathname:'/image-draft/[id]',params:{id:result.value.draftId}})`
+- mobile/src/creative/CreativeWorkspace.tsx:224: `router.push('/(tabs)/gallery')`
+- mobile/src/creative/CreativeWorkspace.tsx:224: `router.push('/creative-drafts')`
+- mobile/src/creative/CreativeWorkspace.tsx:238: `router.push({pathname:'/creative-project/[id]',params:{id:result.value.projectId}})`
+- mobile/src/creative/CreativeWorkspace.tsx:283: `router.push({pathname:'/image-draft/[id]',params:{id:result.value.draftId}})`
+- mobile/src/creative/CreativeWorkspace.tsx:285: `router.push({ pathname: '/creative-draft/[id]', params: { id: result.value.draftId } })`
+- mobile/src/creative/CreativeWorkspace.tsx:303: `router.push({pathname:'/settings-panel',params:{section:'storage'}})`
+- mobile/src/creative/CreativeWorkspace.tsx:303: `router.push('/(tabs)/gallery')`
+- mobile/src/creative/CreativeWorkspace.tsx:303: `router.push('/creative-drafts')`
+- mobile/src/creative/DraftHeading.tsx:20: `router.back()`
+- mobile/src/creative/DraftHeading.tsx:20: `router.replace('/(tabs)/create')`
+- mobile/src/creative/ImageDraftScreen.tsx:208: `router.back()`
+- mobile/src/creative/ImageDraftScreen.tsx:208: `router.replace('/(tabs)/create')`
+- mobile/src/creative/ImageDraftScreen.tsx:208: `router.push({pathname:'/settings-panel',params:{section:'accounts'}})`
+- mobile/src/creative/ImageProcessingSheet.tsx:21: `router.replace(target)`
+- mobile/src/creative/ImageProcessingSheet.tsx:21: `router.push(target)`
+- mobile/src/creative/NovelAiUsageBar.tsx:42: `router.push({ pathname: '/settings-panel', params: { section: 'accounts' } })`
+- mobile/src/creative/ProjectActivityPanel.tsx:32: `router.push({pathname:'/creative-task/[id]',params:{id:r.jobId!}})`
+- mobile/src/creative/ProjectActivityPanel.tsx:32: `creativeService().draft(r.draftId!).then(d=>{if(d)router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}});}).catch(()=>setError('草稿读取失败'))`
+- mobile/src/creative/ProjectActivityPanel.tsx:32: `router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}})`
+- mobile/src/creative/ProjectOverview.tsx:35: `router.push({pathname:'/(tabs)/agent',params:{projectId:project.id}})`
+- mobile/src/creative/ProjectOverview.tsx:38: `router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}})`
+- mobile/src/creative/ProjectPlans.tsx:63: `router.push({pathname:'/creative-task/[id]',params:{id:card.step.job_id!,projectId,planId:card.plan.id,stepId:card.step.id}})`
+- mobile/src/creative/ProjectShots.tsx:40: `router.push({ pathname: d.provider_id === 'novelai' ? '/image-draft/[id]' : '/creative-draft/[id]', params: { id: d.id } })`
+- mobile/src/creative/ProjectShots.tsx:68: `router.push({pathname:'/creative-shot/[id]',params:{id:shot.id,projectId}})`
+- mobile/src/creative/ProjectShots.tsx:71: `router.push({pathname:'/creative-draft/[id]',params:{id:r.value.draftId}})`
+- mobile/src/creative/ProjectShots.tsx:74: `router.push({pathname:'/image-draft/[id]',params:{id:r.value.draftId}})`
+- mobile/src/creative/ProjectShots.tsx:78: `router.push({ pathname: '/creative-draft/[id]', params: { id: result.value.draftId } })`
+- mobile/src/creative/PromptAssistSheet.tsx:93: `router.push({pathname:'/settings-panel',params:{section:'assistant',requestId:createId(),surface:sessionId}})`
+- mobile/src/creative/ShotOutputReview.tsx:36: `router.back()`
+- mobile/src/creative/ShotOutputReview.tsx:55: `router.push({pathname:'/creative-asset/[id]',params:{id:version.assetId,versionId:version.id,projectId}})`
+- mobile/src/creative/ShotOutputReview.tsx:56: `router.push({pathname:'/creative-draft/[id]',params:{id:review.drafts[0].id}})`
+- mobile/src/creative/UpscaleDraftScreen.tsx:38: `router.push({pathname:'/settings-panel',params:{section:'accounts'}})`
+- mobile/src/creative/UpscaleDraftScreen.tsx:38: `router.push('/(tabs)/assets')`
+- mobile/src/creative/VideoDraftScreen.tsx:204: `router.push({pathname:'/settings-panel',params:{section:'accounts'}})`
+- mobile/src/creative/VideoDraftScreen.tsx:213: `router.back()`
+- mobile/src/creative/VideoDraftScreen.tsx:213: `router.replace('/(tabs)/create')`
+- mobile/src/creative/VideoDraftScreen.tsx:224: `router.push({pathname:'/creative-task/[id]',params:{id:resultDraft.job_id!,returnToWorkbench:'1'}})`
+- mobile/src/creative/VideoDraftScreen.tsx:237: `router.push({pathname:'/settings-panel',params:{section:'workflows',requestId:createId(),surface:'video-workflow'}})`
+- mobile/src/navigation/creativeNavigation.ts:10: `router.dismissTo('/(tabs)/projects')`
+- mobile/src/navigation/creativeNavigation.ts:11: `router.dismissTo({pathname:'/creative-project/[id]',params:{id:project.id,tab:target.planId?'plans':target.proposalId?'activity':'shots',shotId:target.shotId,planId:target.planId,proposalId:target.proposalId,requestId:String(Date.now())}})`
+- mobile/src/tasks/TaskInboxButton.tsx:35: `router.push({pathname:row.creative?'/creative-task/[id]':'/video/[id]',params:{id:row.id}})`
+- mobile/src/tasks/TaskInboxButton.tsx:36: `router.navigate('/(tabs)/tasks')`

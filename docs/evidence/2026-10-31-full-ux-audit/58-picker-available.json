@@ -1,0 +1,122 @@
+[
+  {
+    "text": "选择图片",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[53,100][221,162]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "取消",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[943,84][1028,178]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "取消",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[953,108][1017,153]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "采用为镜头成果 · AUDIT-Shot-01",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[52,210][1027,266]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "搜索素材名称",
+    "content-desc": "搜索素材",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[52,297][1027,413]",
+    "class": "android.widget.EditText"
+  },
+  {
+    "text": "",
+    "content-desc": "从全部素材选择",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[53,445][1028,540]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "从全部素材选择",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[428,469][652,514]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "点选画面后确认 · 1 个可用版本",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[52,570][1027,626]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "选择 86.png · 版本 1",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[53,680][541,1313]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "",
+    "content-desc": "86.png",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,701][520,1146]",
+    "class": "android.widget.ImageView"
+  },
+  {
+    "text": "86.png",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,1162][520,1220]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "版本 1",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[74,1236][520,1292]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "尚未选择素材",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[52,2134][1027,2190]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "采用为镜头成果",
+    "clickable": "true",
+    "enabled": "false",
+    "bounds": "[53,2212][1028,2306]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "采用为镜头成果",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[418,2233][663,2285]",
+    "class": "android.widget.TextView"
+  }
+]

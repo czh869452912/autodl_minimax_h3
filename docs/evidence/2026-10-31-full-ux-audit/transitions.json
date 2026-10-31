@@ -1,0 +1,474 @@
+[
+  {
+    "id": "T001",
+    "source": "03",
+    "action": "图片",
+    "target": "04",
+    "kind": "模式切换",
+    "result": "已到图片工作台"
+  },
+  {
+    "id": "T002",
+    "source": "04",
+    "action": "生成设置",
+    "target": "05",
+    "kind": "局部表面",
+    "result": "已打开参数抽屉"
+  },
+  {
+    "id": "T003",
+    "source": "05",
+    "action": "关闭；via 底栏助手",
+    "target": "06",
+    "kind": "组合跳转",
+    "result": "已到助手；保留图片输入"
+  },
+  {
+    "id": "T004",
+    "source": "06",
+    "action": "助手菜单",
+    "target": "07",
+    "kind": "局部菜单",
+    "result": "已打开菜单"
+  },
+  {
+    "id": "T005",
+    "source": "07",
+    "action": "技能管理",
+    "target": "08",
+    "kind": "局部表面",
+    "result": "内嵌技能面板"
+  },
+  {
+    "id": "T006",
+    "source": "08",
+    "action": "添加技能",
+    "target": "09",
+    "kind": "展开",
+    "result": "导入选项可见，未安装"
+  },
+  {
+    "id": "T007",
+    "source": "09",
+    "action": "关闭技能；via 项目",
+    "target": "10",
+    "kind": "组合跳转",
+    "result": "已到项目列表"
+  },
+  {
+    "id": "T008",
+    "source": "10",
+    "action": "KeyboardQA",
+    "target": "11",
+    "kind": "项目卡",
+    "result": "已到项目镜头页"
+  },
+  {
+    "id": "T009",
+    "source": "11",
+    "action": "概览",
+    "target": "12",
+    "kind": "页签",
+    "result": "概览可达"
+  },
+  {
+    "id": "T010",
+    "source": "12",
+    "action": "计划",
+    "target": "13",
+    "kind": "页签",
+    "result": "计划空态可达"
+  },
+  {
+    "id": "T011",
+    "source": "13",
+    "action": "活动",
+    "target": "14",
+    "kind": "页签",
+    "result": "活动可达"
+  },
+  {
+    "id": "T012",
+    "source": "14",
+    "action": "项目设置",
+    "target": "15",
+    "kind": "内联展开",
+    "result": "项目设置内容展开"
+  },
+  {
+    "id": "T013",
+    "source": "15",
+    "action": "返回；via 新建项目",
+    "target": "16",
+    "kind": "组合跳转",
+    "result": "新建表单可见"
+  },
+  {
+    "id": "T014",
+    "source": "16",
+    "action": "填写UX-AUDIT-1031并创建",
+    "target": "17",
+    "kind": "本地写入",
+    "result": "创建完成"
+  },
+  {
+    "id": "T015",
+    "source": "17",
+    "action": "添加镜头",
+    "target": "18",
+    "kind": "编辑表面",
+    "result": "镜头编辑可达"
+  },
+  {
+    "id": "T016",
+    "source": "18",
+    "action": "填写AUDIT-Shot-01并保存",
+    "target": "19",
+    "kind": "本地写入",
+    "result": "镜头创建完成"
+  },
+  {
+    "id": "T017",
+    "source": "19",
+    "action": "更多操作",
+    "target": "20",
+    "kind": "局部菜单",
+    "result": "镜头动作展开"
+  },
+  {
+    "id": "T018",
+    "source": "20",
+    "action": "选定图片",
+    "target": "21",
+    "kind": "选择任务",
+    "result": "空版本选择器"
+  },
+  {
+    "id": "T019",
+    "source": "21",
+    "action": "取消；via 制作新的参考图",
+    "target": "22",
+    "kind": "组合跳转",
+    "result": "项目图片草稿可达，未生成"
+  },
+  {
+    "id": "T020",
+    "source": "22",
+    "action": "返回；via 素材",
+    "target": "23",
+    "kind": "组合跳转",
+    "result": "素材空库；镜头草稿已保留"
+  },
+  {
+    "id": "T021",
+    "source": "23",
+    "action": "导入（首次目标匹配失败后重新定位）",
+    "target": "25",
+    "kind": "局部表面",
+    "result": "导入截图可见，树无效；未从此面板导入"
+  },
+  {
+    "id": "T022",
+    "source": "23",
+    "action": "via 关闭导入、素材管理",
+    "target": "28",
+    "kind": "组合跳转",
+    "result": "管理菜单可达"
+  },
+  {
+    "id": "T023",
+    "source": "28",
+    "action": "存储与清理",
+    "target": "29",
+    "kind": "直达设置",
+    "result": "存储分区可达；返回来源另已观察"
+  },
+  {
+    "id": "T024",
+    "source": "29",
+    "action": "返回来源；via 创作、任务入口",
+    "target": "30",
+    "kind": "组合跳转",
+    "result": "最近任务浮层可达"
+  },
+  {
+    "id": "T025",
+    "source": "30",
+    "action": "全部任务",
+    "target": "32",
+    "kind": "队列",
+    "result": "任务页可达"
+  },
+  {
+    "id": "T026",
+    "source": "32",
+    "action": "via 设置入口",
+    "target": "33",
+    "kind": "组合跳转",
+    "result": "设置分类可达"
+  },
+  {
+    "id": "T027",
+    "source": "33",
+    "action": "助手模型",
+    "target": "34",
+    "kind": "设置分区",
+    "result": "模型字段可见；未保存"
+  },
+  {
+    "id": "T028",
+    "source": "34",
+    "action": "返回分类；via 工作流",
+    "target": "35",
+    "kind": "组合跳转",
+    "result": "工作流设置可达；未同步"
+  },
+  {
+    "id": "T029",
+    "source": "35",
+    "action": "返回分类；via 视频播放",
+    "target": "36",
+    "kind": "组合跳转",
+    "result": "播放设置可达；未改解码"
+  },
+  {
+    "id": "T030",
+    "source": "36",
+    "action": "返回分类；via 显示与诊断",
+    "target": "37",
+    "kind": "组合跳转",
+    "result": "显示设置可达；未改开关"
+  },
+  {
+    "id": "T031",
+    "source": "37",
+    "action": "via 创作账号",
+    "target": "38",
+    "kind": "组合跳转",
+    "result": "创作账号面板可达；未连接"
+  },
+  {
+    "id": "T032",
+    "source": "38",
+    "action": "via 素材、管理、创作草稿",
+    "target": "41",
+    "kind": "组合跳转",
+    "result": "草稿列表可达"
+  },
+  {
+    "id": "T033",
+    "source": "41",
+    "action": "返回；via 历史作品",
+    "target": "42",
+    "kind": "组合跳转",
+    "result": "旧作品空态可达"
+  },
+  {
+    "id": "T034",
+    "source": "42",
+    "action": "via 创作、创作记录",
+    "target": "43",
+    "kind": "组合跳转",
+    "result": "创作记录可达"
+  },
+  {
+    "id": "T035",
+    "source": "43",
+    "action": "关闭；via 视频、添加参考图",
+    "target": "44",
+    "kind": "组合跳转",
+    "result": "来源弹窗可见"
+  },
+  {
+    "id": "T036",
+    "source": "44",
+    "action": "从设备选择",
+    "target": "45",
+    "kind": "系统输入",
+    "result": "系统相册可达"
+  },
+  {
+    "id": "T037",
+    "source": "45",
+    "action": "via 重新观察、选择已有图",
+    "target": "47",
+    "kind": "系统输入",
+    "result": "一项已选；具体格子由新树bounds定位"
+  },
+  {
+    "id": "T038",
+    "source": "47",
+    "action": "Done",
+    "target": "48",
+    "kind": "系统返回",
+    "result": "回原视频草稿，参考图1/9"
+  },
+  {
+    "id": "T039",
+    "source": "48",
+    "action": "素材",
+    "target": "49",
+    "kind": "主导航",
+    "result": "导入项自动归档可见"
+  },
+  {
+    "id": "T040",
+    "source": "49",
+    "action": "86.png素材卡",
+    "target": "50",
+    "kind": "对象检查器",
+    "result": "具体版本v1详情"
+  },
+  {
+    "id": "T041",
+    "source": "50",
+    "action": "素材操作",
+    "target": "52",
+    "kind": "局部菜单",
+    "result": "操作菜单可见；未执行导出"
+  },
+  {
+    "id": "T042",
+    "source": "52",
+    "action": "关闭；via 加入项目",
+    "target": "53",
+    "kind": "组合跳转",
+    "result": "加入项目区域展开"
+  },
+  {
+    "id": "T043",
+    "source": "53",
+    "action": "加入UX-AUDIT-1031",
+    "target": "54",
+    "kind": "本地写入",
+    "result": "项目引用建立；非镜头采用"
+  },
+  {
+    "id": "T044",
+    "source": "54",
+    "action": "via 素材操作、增强/放大",
+    "target": "55",
+    "kind": "组合跳转",
+    "result": "处理表面可达但菜单仍保留，F03"
+  },
+  {
+    "id": "T045",
+    "source": "55",
+    "action": "Android系统返回",
+    "target": "56",
+    "kind": "返回",
+    "result": "回下层素材操作菜单，F03"
+  },
+  {
+    "id": "T046",
+    "source": "56",
+    "action": "via 关闭、项目、UX-AUDIT-1031、镜头",
+    "target": "57",
+    "kind": "组合跳转",
+    "result": "主动作继续已有草稿，F01"
+  },
+  {
+    "id": "T047",
+    "source": "57",
+    "action": "更多；via 选定图片",
+    "target": "58",
+    "kind": "组合跳转",
+    "result": "非空版本选择器"
+  },
+  {
+    "id": "T048",
+    "source": "58",
+    "action": "86.png v1",
+    "target": "59",
+    "kind": "选择",
+    "result": "版本选中，尚未采用"
+  },
+  {
+    "id": "T049",
+    "source": "59",
+    "action": "确认采用",
+    "target": "60",
+    "kind": "本地写入",
+    "result": "镜头固定图片版本，成功"
+  },
+  {
+    "id": "T050",
+    "source": "60",
+    "action": "更多；via 另建视频草稿",
+    "target": "61",
+    "kind": "组合跳转",
+    "result": "项目视频草稿，已带图"
+  },
+  {
+    "id": "T051",
+    "source": "61",
+    "action": "帮我写提示词",
+    "target": "62",
+    "kind": "局部工具",
+    "result": "提示词助手可见，未发送"
+  },
+  {
+    "id": "T052",
+    "source": "62",
+    "action": "via 关闭、返回项目、返回列表、创作、参考图菜单",
+    "target": "63",
+    "kind": "组合跳转",
+    "result": "回原独立keyboard视频草稿，准备移除新增引用"
+  },
+  {
+    "id": "T053",
+    "source": "63",
+    "action": "移除引用",
+    "target": "64",
+    "kind": "本地写入",
+    "result": "参考图0/9；未删素材原件"
+  },
+  {
+    "id": "T054",
+    "source": "64",
+    "action": "deep link creative-task/audit-missing",
+    "target": "65",
+    "kind": "缺失态",
+    "result": "未找到任务，可靠说明"
+  },
+  {
+    "id": "T055",
+    "source": "65",
+    "action": "deep link creative-output（首次缺参数）",
+    "target": "66",
+    "kind": "不完整链接",
+    "result": "明确链接不完整"
+  },
+  {
+    "id": "T056",
+    "source": "66",
+    "action": "deep link video/audit-missing",
+    "target": "67",
+    "kind": "缺失态",
+    "result": "旧作品不存在"
+  },
+  {
+    "id": "T057",
+    "source": "67",
+    "action": "deep link agent-skill-extract",
+    "target": "68",
+    "kind": "独立路由",
+    "result": "提炼初态；无模型请求"
+  },
+  {
+    "id": "T058",
+    "source": "68",
+    "action": "deep link creative-output（asset/job/draft完整）",
+    "target": "69",
+    "kind": "缺失态",
+    "result": "指定版本不可用，未替换"
+  },
+  {
+    "id": "T059",
+    "source": "69",
+    "action": "deep link agent-skills",
+    "target": "70",
+    "kind": "独立路由",
+    "result": "全屏技能空态"
+  }
+]

@@ -1,0 +1,266 @@
+[
+  {
+    "text": "",
+    "content-desc": "关闭创作记录",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[0,0][1080,2400]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "创作记录",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,1300][927,1370]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "恢复输入与生成历史",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,1370][927,1423]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "完成",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[953,1314][1038,1408]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "完成",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[963,1338][1027,1383]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "搜索提示词、创作内容",
+    "content-desc": "搜索创作记录",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[31,1466][1048,1582]",
+    "class": "android.widget.EditText"
+  },
+  {
+    "text": "",
+    "content-desc": "全部",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1608][159,1703]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "全部",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[60,1629][130,1681]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "图片",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[176,1608][304,1703]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "图片",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[204,1629][274,1681]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "视频",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[319,1608][446,1703]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "视频",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[347,1629][417,1681]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "未命名创作",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1729][1049,1942]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "󰡼",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[79,1781][153,1829]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "画面待创作",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[64,1850][169,1891]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "未命名创作",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[221,1755][959,1808]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "图片 · 草稿 · 可继续编辑",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[221,1818][959,1866]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰅂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[990,1810][1038,1860]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "10/31, 1:55 AM",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[221,1877][959,1916]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "keyboard",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,1970][1049,2183]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "󰿏",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[79,2022][153,2070]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "视频预览",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[64,2091][169,2132]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰐊",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[111,2052][156,2098]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "keyboard",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[221,1996][959,2049]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "视频 · 草稿 · 可继续编辑",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[221,2059][959,2107]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰅂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[990,2051][1038,2101]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "10/25, 9:08 AM",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[221,2118][959,2157]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "项目",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[32,2211][117,2306]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "项目",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,2235][106,2280]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "素材库",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[149,2211][266,2306]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "素材库",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[159,2235][255,2280]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "管理工作流",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[297,2211][478,2306]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "管理工作流",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[307,2235][467,2280]",
+    "class": "android.widget.TextView"
+  }
+]

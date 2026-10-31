@@ -1,0 +1,58 @@
+[
+  {
+    "text": "",
+    "content-desc": "返回设置分类",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[21,63][110,152]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰁍",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[43,84][88,130]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "显示与诊断",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[110,76][320,138]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "诊断",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[86,240][994,302]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "显示诊断信息",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[87,360][841,414]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "显示诊断信息",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[871,351][993,422]",
+    "class": "android.widget.Switch"
+  },
+  {
+    "text": "手动开启后查看当前屏幕信息，便于排查显示与布局问题。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[86,470][994,572]",
+    "class": "android.widget.TextView"
+  }
+]

@@ -1,14 +1,16 @@
+import {AppState} from 'react-native';
+beforeEach(()=>{Object.defineProperty(AppState,'currentState',{value:'active',configurable:true});});
 import React from 'react';
 import {act,create} from 'react-test-renderer';
 import {ProjectActivity} from './ProjectActivityPanel';
 import {ProjectPlans} from './ProjectPlans';
 const mockQuery=jest.fn(),mockFirst=jest.fn();
-jest.mock('expo-router',()=>({useRouter:()=>({push:jest.fn()})}));
+jest.mock('expo-router',()=>({useFocusEffect:(fn:()=>void)=>require('react').useEffect(fn,[fn]),useRouter:()=>({push:jest.fn()})}));
 jest.mock('../storage/databaseClient',()=>({getDatabase:()=>({getAllAsync:mockQuery,getFirstAsync:mockFirst})}));
 jest.mock('./projectActivity',()=>({readProjectActivity:async()=>[]}));
 jest.mock('./runtime',()=>({creativeService:()=>({shots:async()=>[]})}));
 jest.mock('./accountRuntime',()=>({creativeAccounts:()=>({}),creativeBudget:()=>({})}));
-jest.mock('../tasks/executorEvents',()=>({executorWakePort:{signal:jest.fn()}}));
+jest.mock('../tasks/executorEvents',()=>({executorEvents:{subscribe:()=>()=>{}},executorWakePort:{signal:jest.fn()}}));
 beforeEach(()=>{jest.clearAllMocks();mockQuery.mockResolvedValue([]);mockFirst.mockResolvedValue(null);});
 test('proposal focus reads the exact ID beyond the waiting page and ignores a delayed prior target',async()=>{
  let release!:(rows:any[])=>void;mockQuery.mockImplementationOnce(()=>new Promise(r=>{release=r;}));

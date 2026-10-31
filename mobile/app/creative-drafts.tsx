@@ -1,3 +1,4 @@
+import { draftPresentation } from '../src/creative/workPresentation';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useState } from 'react';
 import { ScrollView, Text } from 'react-native';
@@ -14,7 +15,7 @@ export default function CreativeDraftList() {
     <ListAction label="打开创作工作台" secondary onPress={()=>router.navigate('/(tabs)/create')}/>
     <Text style={{ color: COLORS.text, fontSize: 22, fontWeight: '700' }}>创作草稿</Text>
     {error ? <Text>{error}</Text> : null}
-    {drafts.map(d => <ListAction key={d.id} label={`${JSON.parse(d.input_json).operation==='upscale'?'图片超分':d.provider_id === 'novelai' ? '图片' : '视频'} · ${d.state === 'SUBMITTED' ? '已提交' : '编辑中'} · ${JSON.parse(d.input_json).prompt?.slice(0, 45) || (JSON.parse(d.input_json).operation==='upscale'?'2× 清晰放大':'新草稿')}`} onPress={() => router.push({ pathname: d.provider_id === 'novelai' ? '/image-draft/[id]' : '/creative-draft/[id]', params: { id: d.id } })} />)}
+    {drafts.map(d => <ListAction key={d.id} label={`${draftPresentation(d).title} · ${draftPresentation(d).state} · ${draftPresentation(d).updated}`} onPress={() => router.push({ pathname: d.provider_id === 'novelai' ? '/image-draft/[id]' : '/creative-draft/[id]', params: { id: d.id } })} />)}
     {!drafts.length ? <Text>从创作首页开始一张图片或一个视频，草稿会自动保留。</Text> : null}
   </ScrollView></SafeAreaView>;
 }

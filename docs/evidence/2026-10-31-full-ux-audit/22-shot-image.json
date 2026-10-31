@@ -1,0 +1,210 @@
+[
+  {
+    "text": "",
+    "content-desc": "返回",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[16,63][105,152]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰁍",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[38,84][83,130]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "图片创作",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[120,78][846,137]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "V5 Full",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[861,83][959,131]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "创作账号",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[975,63][1064,152]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰷖",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[997,84][1042,130]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "返回所属项目：UX-AUDIT-1031 / AUDIT-Shot-01",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[0,153][1080,223]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "UX-AUDIT-1031 / AUDIT-Shot-01",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[31,166][1048,209]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "连接 NovelAI 以查看用量",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[26,228][991,306]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "连接 NovelAI 以查看用量 ▾",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[26,245][991,288]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "刷新 NovelAI 用量",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[991,223][1080,313]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰑐",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[1013,244][1058,290]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "写下描述，开始创作",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[360,1108][720,1167]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "拖动编辑抽屉, 已收起",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[1,1964][1079,2027]",
+    "class": "android.widget.SeekBar"
+  },
+  {
+    "text": "描述画面…",
+    "content-desc": "图片提示词",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[54,2041][959,2146]",
+    "class": "android.widget.EditText"
+  },
+  {
+    "text": "",
+    "content-desc": "提示词助手",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[958,2049][1047,2138]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󱙺",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[980,2070][1025,2116]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "生成设置",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[26,2185][116,2274]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󱕂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[48,2206][93,2252]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "展开画面编辑",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[131,2185][221,2274]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰲶",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[153,2206][198,2252]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "生成 1 张图片",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[236,2185][949,2274]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "生成 1 张图片",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[479,2202][704,2256]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "生成历史",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[964,2185][1053,2274]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰷐",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[986,2206][1031,2252]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "832 × 1216 · 23 步 · 随机 Seed · 用量状态待刷新",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[26,2284][1054,2321]",
+    "class": "android.widget.TextView"
+  }
+]

@@ -1,0 +1,338 @@
+[
+  {
+    "text": "",
+    "content-desc": "返回工作台",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[42,63][168,189]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰁍",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,96][168,156]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "任务",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[189,96][776,155]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "打开任务中心",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[797,74][891,179]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰷐",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[815,96][873,156]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "打开设置",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[912,63][1038,189]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰢻",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[946,96][1004,156]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "任务队列",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,242][210,304]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "开启持续监控",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[583,221][832,326]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰂜",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[611,246][664,300]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "持续监控",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[675,249][803,297]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "刷新任务",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[853,221][1038,326]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰑐",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[881,246][934,300]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "刷新",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[945,249][1009,297]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "列表更新于 02:00",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[42,339][1038,387]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "全部",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[42,429][258,555]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "全部",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[114,466][184,518]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "进行中",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[279,429][530,555]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "进行中",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[351,466][456,518]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "失败",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[551,429][766,555]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "失败",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[623,466][693,518]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "已归档",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[787,429][1038,555]",
+    "class": "android.widget.RadioButton"
+  },
+  {
+    "text": "已归档",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[859,466][964,518]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "󰷐",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[500,774][579,855]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "暂无任务",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[444,940][636,1010]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "从一个灵感开始，生成后可在这里查看进度、下载和保存成果。",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[108,1042][972,1154]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "开始创作",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[375,1207][705,1333]",
+    "class": "android.widget.Button"
+  },
+  {
+    "text": "󰿏",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[430,1244][480,1296]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "开始创作",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[501,1243][649,1297]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "主导航",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[0,2177][1080,2337]",
+    "class": "android.view.ViewGroup"
+  },
+  {
+    "text": "",
+    "content-desc": "创作",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[0,2195][270,2327]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "󱕂",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[106,2205][164,2265]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "创作",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[106,2273][164,2316]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "助手",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[270,2195][540,2327]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "󱙺",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[376,2205][434,2265]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "助手",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[376,2273][434,2316]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "项目",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[540,2195][810,2327]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "󰷐",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[646,2205][704,2265]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "项目",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[646,2273][704,2316]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "",
+    "content-desc": "素材",
+    "clickable": "true",
+    "enabled": "true",
+    "bounds": "[810,2195][1080,2327]",
+    "class": "android.view.View"
+  },
+  {
+    "text": "󱇙",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[916,2205][974,2265]",
+    "class": "android.widget.TextView"
+  },
+  {
+    "text": "素材",
+    "content-desc": "",
+    "clickable": "false",
+    "enabled": "true",
+    "bounds": "[916,2273][974,2316]",
+    "class": "android.widget.TextView"
+  }
+]
