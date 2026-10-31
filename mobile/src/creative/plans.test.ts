@@ -10,6 +10,33 @@ import { H3_CREATIVE_WORKFLOW_ID as H3_WORKFLOW_ID } from './videoWorkflow';
 import {submitCreativeVideo} from './videoSubmission';
 import {authorizePlanRequest} from './planAuthorization';
 import {readCreativeAuthorizationSummaries} from './budget';
+test('pure reorder and display title changes keep production authorization valid',async()=>{
+ const f=await runnable();try{
+  await runCreativePlans(f.db as never,async()=>{
+   await f.execute({name:'shot.reorder',payload:{projectId:f.projectId,shots:[{id:f.shotId,expectedRevision:1}]}});
+   await f.execute({name:'shot.update',payload:{id:f.shotId,expectedRevision:2,title:'New display title',description:'',status:'working'}});
+   return f.input;
+  },200);
+  expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toHaveLength(1);
+  expect(f.db.getAllSync('SELECT * FROM creative_budget_reservations')).toHaveLength(1);
+ }finally{f.db.close();}
+});
+test('real input changes reprepare only after explicit revision-checked confirmation',async()=>{
+ const f=await runnable();try{
+  await f.execute({name:'shot.selectOutput',payload:{id:f.shotId,expectedRevision:1,slot:'selected_image',versionId:f.versionId}});
+  await runCreativePlans(f.db as never,f.prepare,200);
+  expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toEqual([]);
+  await expect(f.execute({name:'plan.reprepare',payload:{id:f.plan.planId,expectedRevision:0,expectedShotRevision:1,prompt:'new scene'}})).rejects.toThrow('CONFLICT');
+  const result=await f.execute({name:'plan.reprepare',payload:{id:f.plan.planId,expectedRevision:0,expectedShotRevision:2,prompt:'new scene'}});
+  expect(result.previousDraftId).toBe(f.result.draftId);
+  expect((await f.service.draft(result.draftId))?.input_json).toContain('new scene');
+  expect((await f.service.draftInputs(result.draftId))[0].version_id).toBe(f.versionId);
+  expect(f.db.getFirstSync('SELECT authorization_id FROM creative_plans')).toEqual({authorization_id:null});
+  expect(f.db.getFirstSync("SELECT state FROM creative_plan_steps WHERE kind='video'")).toEqual({state:'BLOCKED'});
+  await runCreativePlans(f.db as never,f.prepare,300);
+  expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toEqual([]);
+ }finally{f.db.close();}
+});
 test('plan confirmation binds the exact request, resumes atomically and never re-prepares seed',async()=>{
  const f=await runnable();try{
   f.db.runSync("UPDATE creative_plan_steps SET state='BLOCKED' WHERE kind='video'");
@@ -298,7 +325,7 @@ test.each(['revision','selection'] as const)('upstream %s change during preparat
  const f=await runnable();try{
   await runCreativePlans(f.db as never,async()=>{
    if(change==='selection')await f.execute({name:'shot.selectOutput',payload:{id:f.shotId,expectedRevision:1,slot:'selected_image',versionId:f.versionId}});
-   else f.db.runSync('UPDATE creative_shots SET revision=revision+1 WHERE id=?',f.shotId);
+   else f.db.runSync("UPDATE creative_shots SET description='changed input',revision=revision+1 WHERE id=?",f.shotId);
    return f.input;
   },200);
   expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toEqual([]);

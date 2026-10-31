@@ -1,4 +1,5 @@
 import type {AppDatabase} from '../storage/appDatabase';
+import {shotDependencySignature} from './shotDependencies';
 import type {CreativePlan,CreativePlanStep} from './plans';
 export async function checkPlanSubmission(tx:AppDatabase,draftId:string,stepId:string|undefined,authorizationId:string,jobId:string,inserted:boolean){
   const step=await tx.getFirstAsync<CreativePlanStep>('SELECT * FROM creative_plan_steps WHERE draft_id=?',draftId);
@@ -15,7 +16,8 @@ export async function checkPlanSubmission(tx:AppDatabase,draftId:string,stepId:s
   const shot=await tx.getFirstAsync<{revision:number;version_id:string|null}>(`SELECT s.revision,a.version_id FROM creative_shots s
     LEFT JOIN creative_shot_assets a ON a.shot_id=s.id AND a.slot='selected_image'
     WHERE s.id=? AND s.project_id=? AND s.deleted_at IS NULL`,plan.shot_id,plan.project_id);
-  if(!shot||shot.version_id!==input.versionId||(typeof input.shotRevision==='number'&&shot.revision!==input.shotRevision))throw new Error('镜头已变更，请取消旧计划并重新确认输入；未提交新的生成任务。');
+  const changed=input.dependencySignature?input.dependencySignature!==await shotDependencySignature(tx,plan.shot_id,plan.project_id):typeof input.shotRevision==='number'&&shot?.revision!==input.shotRevision;
+  if(!shot||shot.version_id!==input.versionId||changed)throw new Error('镜头输入已变更，请重新准备并确认；未提交新的生成任务。');
   if(!await tx.getFirstAsync('SELECT version_id FROM creative_draft_inputs WHERE draft_id=? AND ordinal=0 AND version_id=?',draftId,input.versionId))throw new Error('PLAN_INPUT_CHANGED');
   // A deleted originating chat closes unsent automation, but never removes audit.
   const source=await tx.getFirstAsync<{thread_id:string}>(`SELECT o.thread_id FROM creative_command_receipts r JOIN creative_execution_origins o ON o.id=r.execution_origin_id
