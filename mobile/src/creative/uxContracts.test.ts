@@ -33,3 +33,19 @@ test('readiness never offers resubmission of unknown tasks or disconnected servi
  expect(generationReadiness({...base,missingPrompt:true})).toMatchObject({kind:'description',canSubmit:false});
  expect(generationReadiness({...base,provider:'AutoDL'}).kind).toBe('ready');
 });
+
+test('usage pages describe named exact sources and cover more than one hundred references',async()=>{
+ const {readUsageGraph}=require('./usageGraph');const db=createInitializedRealSqliteTestDb();try{
+ db.runSync("INSERT INTO creative_assets VALUES('asset','image','Image',NULL,0,1,1)");
+ db.runSync("INSERT INTO creative_asset_versions VALUES('v','asset',1,'import','{}',1)");
+ for(let i=0;i<105;i++){
+ const id='p'+String(i).padStart(3,'0');
+ db.runSync('INSERT INTO creative_projects VALUES(?,?,?,0,NULL,1,1)',id,'Project '+i,'');
+ db.runSync('INSERT INTO creative_project_assets VALUES(?,?,?,?)',id,'asset','v',0);
+ }
+ const first=await readUsageGraph(db as never,'asset'),next=await readUsageGraph(db as never,'asset',100);
+ expect(first).toHaveLength(101);expect(next).toHaveLength(5);
+ expect(first[0]).toMatchObject({title:'Project 0',project_id:'p000',version_no:1,available:1});
+ expect(new Set([...first.slice(0,100),...next].map((e:any)=>e.object_id)).size).toBe(105);
+ }finally{db.close();}
+});

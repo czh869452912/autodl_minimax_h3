@@ -320,3 +320,12 @@
 - 未将完整TalkBack、真实收费生成或可执行金额上限标为通过。手机双ARM包的运行仍需手机验证；模拟器验收使用同源x86_64 debug包。
 - APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.33-android.apk`，186237589字节；独立测试身份、双ARM、Hermes、86个原生库及16KB对齐校验通过，签名与beta.32一致，可覆盖升级测试版。
 - SHA-256：`7B8C70BCBC8FD6ED673F74005583373479250AA7D19D5777045A6B3EA2595618`；报告：`build/phone-beta/beta33-verification.json`。双ARM构建成功并通过发布变体Lint检查。
+
+## 2026-10-31 · beta.34 手机工作台密度与复审调整
+
+- 版本 `1.5.0-preview.4-beta.34`，versionCode73；双 ARM APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.34-android.apk`，186,243,613字节。
+- 图片工作台紧凑排版，历史改为按需打开，移除重复就绪说明，修复Steps/Guidance拖动数字联动；同步改善封面选择、素材使用位置、镜头草稿折叠及添加技能直达。
+- 全量292套件/1831项通过；原有1套件/4项跳过；最终分页竞态调整后17项针对回归及类型检查通过。模拟器近似350.8×804.9dp及1.3倍字体留证，最后恢复显示参数。
+- 签名与beta33一致，双ARM、Hermes、86个原生库、ZIP/ELF 16KB对齐及内嵌Expo身份检查通过。
+- SHA-256：`E46ACE6B8C1AC0EA9E79EB26E2EDCD9A3E6620890D7243A24B158E797E51EEB2`。
+- 详细处理和剩余项：[密度调整与复审处理](reviews/2026-10-31-density-refinement.md)。R09可执行预算仍开放；官网实时对照工具故障，未声称完成；手机ARM包未安装到用户手机。

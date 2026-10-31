@@ -17,7 +17,7 @@ import { useFallbackBack } from '../../navigation/useFallbackBack';
 
 const template = '---\nname: scene-review\ndescription: 检查场景描述中的主体、动作和镜头是否清楚\n---\n\n阅读用户的场景描述。指出主体、动作与镜头中的歧义，再给出可供审阅的改写。保留用户明确给出的约束。';
 
-export function SkillLibraryScreen({ onClose, registerLeave }: { onClose?: () => void; registerLeave?:(guard:((proceed:()=>void)=>void)|undefined)=>void } = {}) {
+export function SkillLibraryScreen({ onClose, registerLeave, intent }: { intent?:string; onClose?: () => void; registerLeave?:(guard:((proceed:()=>void)=>void)|undefined)=>void } = {}) {
   const router = useRouter();
   const store = useMemo(() => createSkillStore(getDatabase()), []);
   const [versions, setVersions] = useState<SkillVersion[]>([]);
@@ -26,7 +26,7 @@ export function SkillLibraryScreen({ onClose, registerLeave }: { onClose?: () =>
   const [purpose,setPurpose]=useState(''),[scope,setScope]=useState('');
   const [text, setText] = useState(''), [preview, setPreview] = useState<SkillPackage>();
   const [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
-  const [importOpen,setImportOpen]=useState(false),[historyOpen,setHistoryOpen]=useState(false),[expanded,setExpanded]=useState<string>(),[query,setQuery]=useState('');
+  const [importOpen,setImportOpen]=useState(intent==='add'),[historyOpen,setHistoryOpen]=useState(false),[expanded,setExpanded]=useState<string>(),[query,setQuery]=useState('');
   const lock = useRef(false);
   const confirmLeave=useUnsavedChanges(Boolean(text.trim() || purpose.trim() || scope.trim() || preview),busy);
   usePrimaryNavigationGuard('agent',confirmLeave,Boolean(onClose));
@@ -55,7 +55,7 @@ export function SkillLibraryScreen({ onClose, registerLeave }: { onClose?: () =>
     <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,gap:6,borderBottomWidth:1,borderColor:COLORS.border}}>
       <IconAction label={onClose ? '关闭技能' : '返回'} icon={onClose ? 'close' : 'arrow_back'} onPress={back}/>
       <Text accessibilityRole="header" style={{flex:1,fontSize:16,fontWeight:'600',color:COLORS.text}}>技能 · {versions.filter(v=>v.enabled).length} 已启用</Text>
-      <IconAction label="添加技能" icon="add" onPress={()=>{if(onClose){onClose();router.push('/agent-skills');}else setImportOpen(!importOpen);}}/>
+      <IconAction label="添加技能" icon="add" onPress={()=>{if(onClose){onClose();router.push({pathname:'/agent-skills',params:{intent:'add'}});}else setImportOpen(!importOpen);}}/>
       <IconAction label="技能运行记录" icon="history" onPress={()=>setHistoryOpen(!historyOpen)}/>
     </View>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:12,gap:10}}>

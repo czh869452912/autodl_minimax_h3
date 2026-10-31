@@ -32,3 +32,16 @@ test('scrolling vertically across a slider does not change a generation paramete
  act(()=>slider.props.onResponderGrant(event(100,100)));act(()=>slider.props.onResponderMove(event(150,100)));act(()=>slider.props.onResponderRelease(event(150,100)));expect(change).toHaveBeenLastCalledWith(38);
  }finally{act(()=>tree?.unmount());}
 });
+
+test.each([{label:'步数',value:23,min:1,max:50,step:1,expected:'38'},{label:'引导强度',value:5,min:0,max:10,step:0.1,expected:'7.5'}])('dragging $label synchronizes number and accessibility before committing once',props=>{
+ const {NovelAiRangeField}=require('./NovelAiRangeField');let tree:any;const change=jest.fn();
+ try{act(()=>{tree=create(<NovelAiRangeField {...props} horizontal editable onChange={change}/>);});
+ const slider=()=>tree.root.findAll((n:any)=>n.props.accessibilityLabel===props.label+' 滑块'&&n.props.onResponderGrant)[0];
+ const event=(x:number)=>({nativeEvent:{pageX:x,pageY:100,locationX:x}});
+ act(()=>slider().props.onLayout({nativeEvent:{layout:{width:200}}}));
+ act(()=>slider().props.onResponderGrant(event(100)));act(()=>slider().props.onResponderMove(event(150)));
+ expect(tree.root.findAllByType(TextInput).find((n:any)=>n.props.accessibilityLabel===props.label).props.value).toBe(props.expected);
+ expect(slider().props.accessibilityValue.now).toBe(Number(props.expected));expect(change).not.toHaveBeenCalled();
+ act(()=>slider().props.onResponderRelease(event(150)));expect(change).toHaveBeenCalledTimes(1);expect(change).toHaveBeenCalledWith(Number(props.expected));
+ }finally{act(()=>tree?.unmount());}
+});

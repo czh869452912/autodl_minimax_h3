@@ -1,3 +1,4 @@
+import {useDenseToolControls} from '../ui/WorkspaceDensity';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -8,7 +9,7 @@ import { COLORS } from '../ui/theme';
 import { creativeUI as s } from './creativeUI';
 
 export function NovelAiUsageBar({ refreshKey, inline=false,onUsage }: { refreshKey: string;inline?:boolean;onUsage?:(usage:NovelAiUsage|undefined)=>void }) {
-  const router = useRouter();
+  const router = useRouter(),dense=useDenseToolControls();
   const [usage, setUsage] = useState<NovelAiUsage>();
   const [loading, setLoading] = useState(false), [error, setError] = useState('');
   const [connected, setConnected] = useState<boolean>(), [open, setOpen] = useState(false), [retry, setRetry] = useState(0);
@@ -43,7 +44,7 @@ export function NovelAiUsageBar({ refreshKey, inline=false,onUsage }: { refreshK
   const recovery=usage?.limit ? usage.limit.percent>=100?'额度已满，恢复暂停':usage.limit.nextPercentSeconds===null?'恢复时间未提供':usage.limit.nextPercentSeconds===0?'额度恢复当前暂停':`查询时约 ${Math.ceil(usage.limit.nextPercentSeconds/60)} 分钟恢复下一百分点`:'恢复时间未提供';
   const summary = connected === false ? '连接 NovelAI 以查看用量' : usage ? `${usage.anlas === null ? 'Anlas 未提供' : `${usage.anlas.toLocaleString()} Anlas`} · ${usage.limit ? `Limit 剩余 ${usage.limit.percent}%${usage.limit.unavailable ? ' · 暂不可用' : ''}` : 'Limit 未提供'}` : loading ? '正在获取 NovelAI 用量…' : '用量暂不可用';
   if(inline)return <View style={{backgroundColor:COLORS.surface,borderBottomWidth:0.5,borderBottomColor:COLORS.border}}>
-    <View style={{flexDirection:'row',alignItems:'center',paddingLeft:10}}><Pressable accessibilityRole="button" accessibilityLabel={summary} accessibilityState={{expanded:open}} onPress={()=>connected===false?accountSettings():setOpen(!open)} style={{flex:1,minHeight:48,justifyContent:'center'}}><Text numberOfLines={1} style={{fontSize:11,color:COLORS.textMuted}}>{summary}{error?' · 待刷新':''} {open?'▴':'▾'}</Text></Pressable><IconAction label="刷新 NovelAI 用量" icon="refresh" disabled={loading} onPress={()=>setRetry(value=>value+1)}/></View>
+    <View style={{flexDirection:'row',alignItems:'center',paddingLeft:10}}><Pressable accessibilityRole="button" accessibilityLabel={summary} accessibilityState={{expanded:open}} onPress={()=>connected===false?accountSettings():setOpen(!open)} style={{flex:1,minHeight:dense?36:48,justifyContent:'center'}}><Text numberOfLines={1} style={{fontSize:11,color:COLORS.textMuted}}>{summary}{error?' · 待刷新':''} {open?'▴':'▾'}</Text></Pressable><IconAction label="刷新 NovelAI 用量" icon="refresh" disabled={loading} onPress={()=>setRetry(value=>value+1)}/></View>
     {usage?.limit?<View accessibilityRole="progressbar" accessibilityLabel="订阅生成剩余额度" accessibilityValue={{min:0,max:100,now:Math.min(100,usage.limit.percent),text:`${usage.limit.percent}%`}} style={{height:2,backgroundColor:COLORS.border}}><View style={{height:2,width:`${Math.min(100,usage.limit.percent)}%`,backgroundColor:COLORS.primary}} /></View>:null}
     {open?<View style={{paddingHorizontal:10,paddingBottom:6,gap:3}}>{usage?<><Text style={{fontSize:11,color:COLORS.textMuted}}>订阅 Anlas {usage.fixedAnlas??'未知'} · 购买 Anlas {usage.purchasedAnlas??'未知'} · {usage.active?'订阅有效':'订阅未激活'}</Text><Text style={{fontSize:11,color:COLORS.textMuted}}>额外 Limit {usage.limit?.purchasedPercent??'未知'}% · {recovery}</Text></>:null}{error?<Text accessibilityRole="alert" style={s.error}>{error}</Text>:null}<Text style={{fontSize:10,color:COLORS.textMuted}}>余额和 Limit 不代表单次费用。{usage?`更新于 ${new Date(usage.fetchedAt).toLocaleTimeString()}`:''}</Text></View>:null}
   </View>;

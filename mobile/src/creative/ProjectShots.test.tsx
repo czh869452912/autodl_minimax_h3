@@ -12,7 +12,7 @@ beforeEach(() => { jest.clearAllMocks(); mockShot = { id: 's', title: 'Shot', de
 const press = (tree: ReturnType<typeof create>, label: string) => tree.root.findAll(n => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function')[0].props.onPress();
 test('continues an existing shot draft instead of creating another', async () => {
  let tree!: ReturnType<typeof create>;
- try { await act(async () => { tree = create(<ProjectShots projectId="p" />); }); act(() => press(tree,'继续视频草稿 · 1')); expect(mockPush).toHaveBeenCalledWith({ pathname: '/creative-draft/[id]', params: { id: 'existing' } }); expect(mockExecute).not.toHaveBeenCalled(); }
+ try { await act(async () => { tree = create(<ProjectShots projectId="p" />); }); act(() => press(tree,'继续制作视频')); expect(mockPush).toHaveBeenCalledWith({ pathname: '/creative-draft/[id]', params: { id: 'existing' } }); expect(mockExecute).not.toHaveBeenCalled(); }
  finally { act(() => tree.unmount()); }
 });
 test('reports unsaved shot fields to the parent navigation guard', async () => {
@@ -31,7 +31,7 @@ test('adopted video keeps generation candidates reachable without creating anoth
   mockShot.selected_video='video';mockDrafts[0].state='SUBMITTED';let tree!:ReturnType<typeof create>;
   try{
     await act(async()=>{tree=create(<ProjectShots projectId="p" initialShotId="s"/>);});
-    act(()=>press(tree,'查看视频进度与候选 · 1'));
+    act(()=>press(tree,'查看视频草稿 · existing'));
     expect(mockPush).toHaveBeenCalledWith({pathname:'/creative-draft/[id]',params:{id:'existing'}});
     expect(mockExecute).not.toHaveBeenCalled();
     expect(JSON.stringify(tree.toJSON())).toContain('当前创作镜头');

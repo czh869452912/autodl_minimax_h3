@@ -221,7 +221,7 @@ function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){
       <View style={s.row}><Text style={v.caption}>工作流</Text><View style={{flexShrink:1}}><TextAction label={definition?`${h3?'MiniMax H3':definition.metadata.title} · ${entries.filter(item=>!item.reason).length>1?'切换':'详情'}`:'选择视频工作流'} disabled={busy||saving} onPress={()=>openSheet('workflow')}/></View></View>
       <AutodlWalletPanel summary/>
       {stale?<View style={{gap:4}}><Text style={s.error}>工作流版本已变化，原输入已保留。对齐后可继续生成。</Text><TextAction label="对齐当前工作流版本" disabled={busy||saving} onPress={()=>{const current=entries.find(item=>item.record.workflowId===draft?.workflow_id);if(current)void switchWorkflow(current);}}/></View>:null}
-      <Text accessibilityLiveRegion="polite" style={s.muted}>{ready.label}</Text>
+
       {!accountReady?<TextAction label="连接 AutoDL 创作账号" onPress={()=>openSheet('account')}/>:null}
       {notice?<View><Text accessibilityLiveRegion="polite" style={v.caption}>{notice}</Text>{undoDraft?<TextAction label="撤销工作流切换" disabled={busy||saving} onPress={()=>{const rowId=undoDraft;void creativeService().draft(rowId).then(row=>{const target=entries.find(item=>item.record.workflowId===row?.workflow_id);if(target)void switchWorkflow(target,rowId);});}}/>:null}</View>:null}
       {status==='UNKNOWN'&&pending&&resultDraft?.job_id?<TextAction label="核查与继续创作" onPress={()=>router.push({pathname:'/creative-task/[id]',params:{id:resultDraft.job_id!,returnToWorkbench:'1'}})}/>:null}
@@ -247,7 +247,7 @@ function VideoCanvas({initialId,embedded}:{initialId:string;embedded:boolean}){
   </KeyboardSurface></SafeAreaView>;
 }
 const v=StyleSheet.create({
-  header:{flexDirection:'row',alignItems:'center',paddingHorizontal:6,borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:COLORS.border},content:{padding:16,gap:18,paddingBottom:24,maxWidth:760,width:'100%',alignSelf:'center'},
+  header:{flexDirection:'row',alignItems:'center',paddingHorizontal:6,borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:COLORS.border},content:{padding:12,gap:10,paddingBottom:24,maxWidth:760,width:'100%',alignSelf:'center'},
   label:{fontSize:14,fontWeight:'600',color:COLORS.text},caption:{fontSize:12,lineHeight:18,color:COLORS.textMuted},notice:{paddingHorizontal:12,paddingVertical:6,gap:4},prompt:{minHeight:132,textAlignVertical:'top',fontSize:15,lineHeight:23,padding:12},
   quick:{flexDirection:'row',flexWrap:'wrap',gap:8,alignItems:'center'},chip:{paddingHorizontal:12,minHeight:40,justifyContent:'center',borderWidth:1,borderColor:COLORS.border,borderRadius:6,backgroundColor:COLORS.surface},chipText:{fontSize:13,color:COLORS.text},
   thumb:{width:64,height:64,borderRadius:6,backgroundColor:COLORS.surfaceRaised,alignItems:'center',justifyContent:'center'},add:{width:48,height:64,borderRadius:6,borderWidth:1,borderStyle:'dashed',borderColor:COLORS.controlBorder,alignItems:'center',justifyContent:'center'},

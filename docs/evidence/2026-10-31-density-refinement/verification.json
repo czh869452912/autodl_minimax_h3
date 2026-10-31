@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-31",
+  "debugSha256": "0F82959399AC01DC5B97038A84EEE1A62011138115D9C9C818D20B169E2C13E6",
+  "debugInstalled": true,
+  "testSuitesPassed": 292,
+  "testsPassed": 1831,
+  "testSuitesSkipped": 1,
+  "testsSkipped": 4,
+  "finalUsageRegressionPassed": 17,
+  "typecheck": "passed",
+  "screenPixels": "1140x2616",
+  "densityDpi": 520,
+  "fontScales": [
+    1.0,
+    1.3
+  ],
+  "restoredScreenPixels": "1080x2400",
+  "restoredDensityDpi": 420,
+  "restoredFontScale": 1.0,
+  "installationThresholdRestored": true,
+  "stepsRestored": 23,
+  "guidanceRestored": 7,
+  "paidRequests": 0,
+  "browserComparison": "blocked: kernel assets initialization failed",
+  "notes": [
+    "Final x86_64 debug installed; ARM beta34 verified, not installed on user phone.",
+    "Settings-font130.png is collapsed after configuration restart; settings-font130-open.png is the actual open panel.",
+    "Final whole-suite run preceded usage pagination race guard; 17 focused tests and typecheck passed after guard.",
+    "No full standalone Android lint claim; third-party lint tasks retain existing skips."
+  ]
+}

@@ -72,7 +72,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
     async isTrashed(id: string) { return Boolean(await db.getFirstAsync('SELECT asset_id FROM creative_asset_trash WHERE asset_id=?', id)); },
     async asset(id: string) { const row = await db.getFirstAsync<Row>('SELECT * FROM creative_assets WHERE id=?', id); return row ? asset(row) : undefined; },
     versionAsset: (id: string) => db.getFirstAsync<{ asset_id: string }>('SELECT asset_id FROM creative_asset_versions WHERE id=?', id),
-    async usage(assetId:string){return readUsageGraph(db,assetId);},
+    async usage(assetId:string,offset=0){return readUsageGraph(db,assetId,offset);},
     async covers(){return db.getAllAsync<{project_id:string;version_id:string;relative_path:string|null;state:string|null}>("SELECT c.*,b.relative_path,f.state FROM creative_project_covers c LEFT JOIN creative_version_files f ON f.version_id=c.version_id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256");},
     async projectTab(id:string){return (await db.getFirstAsync<{tab:'brief'|'shots'|'assets'|'plans'|'activity'}>('SELECT tab FROM creative_project_views WHERE project_id=?',id))?.tab??'shots';},
     async saveProjectTab(projectId:string,tab:'brief'|'shots'|'assets'|'plans'|'activity'){await withWriteTransaction(db,tx=>tx.runAsync('INSERT INTO creative_project_views VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET tab=excluded.tab',projectId,tab).then(()=>undefined));},

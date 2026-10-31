@@ -1,0 +1,177 @@
+[
+  {
+    "name": "beta34-verification.json",
+    "bytes": 495,
+    "sha256": "F083F2C17B33A9ECA29CC63B1F8EE75CA7CBF4EFF8BD54FD57BA6F49702A8FBC"
+  },
+  {
+    "name": "density-before.png",
+    "bytes": 143419,
+    "sha256": "5ABD59D73522DF3B5A96F7179512C638DA08E09CF66DCAFD52CA7E2C45D6C1E4"
+  },
+  {
+    "name": "density-before.xml",
+    "bytes": 29531,
+    "sha256": "1A101B1F6C35BFCAFFBCEE8BDAD97D31B22D25782890344D5DB973A4202E1AE3"
+  },
+  {
+    "name": "final-installed.png",
+    "bytes": 124141,
+    "sha256": "59C9CA3C0C433DD034CCFCEF3F6DC2D65A506F4A68FB2982E336BEB3511169CC"
+  },
+  {
+    "name": "final-installed.xml",
+    "bytes": 28415,
+    "sha256": "50DD026BE12C754E1B8C53FC1DD99B4481EB88CEF809961B291CF2D1BAAD91D1"
+  },
+  {
+    "name": "final-normal.png",
+    "bytes": 124994,
+    "sha256": "8F94E8D01260E42853B2D8C8142DB3B7359C216B25BDC5299B293B8A03963569"
+  },
+  {
+    "name": "final-normal.xml",
+    "bytes": 28415,
+    "sha256": "50DD026BE12C754E1B8C53FC1DD99B4481EB88CEF809961B291CF2D1BAAD91D1"
+  },
+  {
+    "name": "final-settings-normal.png",
+    "bytes": 213198,
+    "sha256": "BC0966BB95A728BFA31C9D02D0E5A8670952351AF4B8A0A1C33E6DA7F135DCD4"
+  },
+  {
+    "name": "final-settings-normal.xml",
+    "bytes": 50732,
+    "sha256": "20E4873FC15CC7ECD424CF5F94BDDD54DED4947A9A9D9687CA77B68C6C550D2A"
+  },
+  {
+    "name": "final-settings.png",
+    "bytes": 212212,
+    "sha256": "2BD463CF34D059684B786FF2D98D7B7D574E4E7A92D954578829BDCD90971B0F"
+  },
+  {
+    "name": "final-settings.xml",
+    "bytes": 50732,
+    "sha256": "20E4873FC15CC7ECD424CF5F94BDDD54DED4947A9A9D9687CA77B68C6C550D2A"
+  },
+  {
+    "name": "final-start.png",
+    "bytes": 124804,
+    "sha256": "5DB80F76EB00039DF33D54DC7AB7D58C022A61C5DDD63350092A5371C0B40563"
+  },
+  {
+    "name": "final-start.xml",
+    "bytes": 28415,
+    "sha256": "50DD026BE12C754E1B8C53FC1DD99B4481EB88CEF809961B291CF2D1BAAD91D1"
+  },
+  {
+    "name": "guidance-dragged.png",
+    "bytes": 214885,
+    "sha256": "F56B627794A805085F4FF52AE23A5517B84536C57F936F90C1F87C1829F040C5"
+  },
+  {
+    "name": "guidance-dragged.xml",
+    "bytes": 50734,
+    "sha256": "71A3683D481E5E82E6B35C638DF7D0CB9298D29B1519BB33D90CADDDA1D8CC4B"
+  },
+  {
+    "name": "history-open.png",
+    "bytes": 171877,
+    "sha256": "9C5CFA17F316789621DF7BE2E09ACA75CF08061093206B37E25A0EBA6CE637E9"
+  },
+  {
+    "name": "history-open.xml",
+    "bytes": 33303,
+    "sha256": "F85AF8C995D3F1DDF85F0929B56699C15EDB6803D5FA1C8C7B0119BC248582EC"
+  },
+  {
+    "name": "image-after.png",
+    "bytes": 124042,
+    "sha256": "39CB5903C94D0641EBCBA77D72B845E58C09E04CAA142A2EA16BD4C733CAB92A"
+  },
+  {
+    "name": "image-after.xml",
+    "bytes": 28415,
+    "sha256": "50DD026BE12C754E1B8C53FC1DD99B4481EB88CEF809961B291CF2D1BAAD91D1"
+  },
+  {
+    "name": "runtime-errors.log",
+    "bytes": 0,
+    "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+  },
+  {
+    "name": "settings-after.png",
+    "bytes": 212099,
+    "sha256": "0A123A57B708783F9896E5E81A7E2EACA3D127A793488E9436E0D92FA2B74AF8"
+  },
+  {
+    "name": "settings-after.xml",
+    "bytes": 50732,
+    "sha256": "20E4873FC15CC7ECD424CF5F94BDDD54DED4947A9A9D9687CA77B68C6C550D2A"
+  },
+  {
+    "name": "settings-density-before.png",
+    "bytes": 163477,
+    "sha256": "89325CD4916ACFB9799DAB7AFF9DFCB596DCC551C649F05BC135746F126E9438"
+  },
+  {
+    "name": "settings-density-before.xml",
+    "bytes": 43880,
+    "sha256": "743691E68FDB27E069B3217BAAD8F925861208E4B629B75D6C9FF4FF817E91D6"
+  },
+  {
+    "name": "settings-font130-open.png",
+    "bytes": 244143,
+    "sha256": "D83C8D9A361530E78E89FD82C6320A742DBF3BC0E7F3A34D7D737F87C3CA40DC"
+  },
+  {
+    "name": "settings-font130-open.xml",
+    "bytes": 50735,
+    "sha256": "895FEF1FC2B0C074FB3D117CC9042BF1C83DA491BE70B0E200ABB4AD4F48A506"
+  },
+  {
+    "name": "settings-font130.png",
+    "bytes": 144593,
+    "sha256": "B7B3B8AD32E230A1418E8D5A64ED252206BA1C02252F83A5418ECB8A91A16630"
+  },
+  {
+    "name": "settings-font130.xml",
+    "bytes": 28414,
+    "sha256": "172F313CA443506DA128E8BCC2D6DC6EC66F0FD54F9A031F13C71D5F19F815E0"
+  },
+  {
+    "name": "settings-restored.png",
+    "bytes": 212882,
+    "sha256": "2D504346F4416719DBA29D092D5E80D7550EE476FA5D45C250E1A32FFC8A8CE7"
+  },
+  {
+    "name": "settings-restored.xml",
+    "bytes": 50730,
+    "sha256": "578F500819155E3F69D6ADC98707E28023BA29F860CA866D27D32D0248510053"
+  },
+  {
+    "name": "steps-dragged.png",
+    "bytes": 213778,
+    "sha256": "6747AD1F716A602C92B99A3E23FBCB5A6E58A21D051467A42D83CBC208218AFB"
+  },
+  {
+    "name": "steps-dragged.xml",
+    "bytes": 50732,
+    "sha256": "57DD07AC5518D19B809D3ED35F365CBF4A622DE8FEC0BDA317428D109582796D"
+  },
+  {
+    "name": "steps-restored.png",
+    "bytes": 214084,
+    "sha256": "BF2929A6E257596D451C713C325900185409C42EA2F33A5325050978EE91F0F7"
+  },
+  {
+    "name": "steps-restored.xml",
+    "bytes": 50732,
+    "sha256": "E8C064A060387BB2C776710AC435ABC106C905EA9D1337957D0D8323A4C1CB6B"
+  },
+  {
+    "name": "verification.json",
+    "bytes": 1132,
+    "sha256": "A71012D45B690CE14108544D3A13BB841D77006D95E6319B3B99E126CE74E2F6"
+  }
+]

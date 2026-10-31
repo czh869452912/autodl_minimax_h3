@@ -1,3 +1,4 @@
+import {IconAction} from './WorkbenchUI';
 import {useLiveRefresh} from './useLiveRefresh';
 import {activityLabel,activityState} from './activityPresentation';
 import {useEffect,useRef,useState} from 'react';
@@ -19,7 +20,7 @@ export function ProjectActivity({projectId,initialProposalId}:{projectId:string;
     {error?<Text style={{color:COLORS.danger}}>{error}</Text>:null}
     {initialProposalId&&!proposals.length?<Text style={{color:COLORS.textMuted}}>指定建议已不可用或不属于此项目。</Text>:null}
     {proposals.map(p=><View key={p.id} style={{padding:12,borderWidth:1,borderColor:COLORS.border,borderRadius:10,gap:8}}>
-      <Text style={{color:COLORS.text,fontWeight:'700'}}>{initialProposalId?'当前建议 · ':''}Agent 修改建议 · {p.state==='WAITING'?'待审阅':p.state}</Text>
+      <Text style={{color:COLORS.text,fontWeight:'700'}}>{initialProposalId?'当前建议 · ':''}Agent 修改建议 · {({WAITING:'待审阅',APPLIED:'已采用',REJECTED:'已拒绝',CONFLICT:'内容冲突',EXPIRED:'已过期',QUARANTINED:'恢复后已隔离'} as Record<string,string>)[p.state]??'待核查'}</Text>
       {Object.entries(JSON.parse(p.before_json) as Record<string,string>).map(([field,before])=><View key={field} style={{gap:4}}>
         <Text style={{color:COLORS.textMuted}}>{({title:'名称',brief:'简报',description:'镜头描述',status:'状态'} as Record<string,string>)[field]??field} · 原内容</Text><Text selectable style={{color:COLORS.text}}>{before||'（空）'}</Text>
         <Text style={{color:COLORS.textMuted}}>建议改为</Text><Text selectable style={{color:COLORS.text}}>{JSON.parse(p.payload_json)[field]||'（空）'}</Text>
@@ -29,8 +30,8 @@ export function ProjectActivity({projectId,initialProposalId}:{projectId:string;
     </View>)}
     {!rows.length?<Text style={{color:COLORS.textMuted}}>尚无活动。</Text>:null}
     {rows.map(r=><View key={`${r.kind}:${r.id}`} style={{padding:12,borderWidth:1,borderColor:COLORS.border,borderRadius:10,gap:6}}>
-      <Text style={{color:COLORS.text}}>{r.kind==='command'?activityLabel(r.label):r.label} · {activityState(r.state)}</Text><Text style={{color:COLORS.textMuted}}>{new Date(r.createdAt).toLocaleString()} · {r.origin==='agent'?'Agent':r.origin==='user'?'手动操作':r.origin==='executor'?'执行器':'计划'}</Text>
-      <ListAction label={diagnostic===r.id?'收起诊断详情':'诊断详情'} secondary onPress={()=>setDiagnostic(diagnostic===r.id?undefined:r.id)}/>
+      <Text style={{color:COLORS.text,paddingRight:40}}>{r.kind==='command'?activityLabel(r.label):r.label} · {activityState(r.state)}</Text><Text style={{color:COLORS.textMuted}}>{new Date(r.createdAt).toLocaleString()} · {r.origin==='agent'?'Agent':r.origin==='user'?'手动操作':r.origin==='executor'?'执行器':'计划'}</Text>
+      <View style={{position:'absolute',right:4,top:2}}><IconAction label={diagnostic===r.id?'收起诊断详情':'诊断详情'} icon="more_horiz" onPress={()=>setDiagnostic(diagnostic===r.id?undefined:r.id)}/></View>
       {diagnostic===r.id?<Text selectable style={{color:COLORS.textMuted}}>{r.label} · {r.state} · {r.id}</Text>:null}
       {r.jobId?<ListAction label="查看任务" secondary onPress={()=>router.push({pathname:'/creative-task/[id]',params:{id:r.jobId!}})}/>:r.draftId?<ListAction label="查看草稿" secondary onPress={()=>void creativeService().draft(r.draftId!).then(d=>{if(d)router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}});}).catch(()=>setError('草稿读取失败'))}/>:null}
     </View>)}

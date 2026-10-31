@@ -321,3 +321,14 @@ test('video canvas fits remaining height and exposes video actions without the s
   act(()=>findButton(tree,'调整后再生成').props.onPress());expect(edit).toHaveBeenCalledTimes(1);
  }finally{act(()=>tree?.unmount());}
 });
+
+test('image canvas keeps history hidden until its explicit history control opens it',async()=>{
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<CreativeResults draft={draft} canvas historyVisible={false}/>);});
+  expect(findButton(tree,'预览历史版本 1')).toBeUndefined();
+  expect(tree.root.findAll(n=>n.props.accessibilityLabel==='生成历史搜索')).toHaveLength(0);
+  await act(async()=>tree.update(<CreativeResults draft={draft} canvas historyVisible/>));
+  expect(tree.root.findAllByType(require('./ImageHistorySheet').ImageHistorySheet).length).toBeGreaterThan(0);
+ }finally{act(()=>tree?.unmount());}
+});

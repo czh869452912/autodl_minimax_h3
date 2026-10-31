@@ -69,3 +69,12 @@ test('import locates exact deduplicated version but still waits for explicit ado
  await act(async()=>button(tree,'使用所选图片').props.onPress());expect(choose).toHaveBeenCalledWith(mockVersion);
  }finally{act(()=>tree?.unmount());}
 });
+
+test('cover selection names its target and does not write on cancellation',async()=>{
+ const choose=jest.fn(),close=jest.fn();let tree!:ReturnType<typeof create>;
+ try{await act(async()=>{tree=create(<CreativeAssetPicker kind="image" purpose="cover" target="My project" projectId="p" onChoose={choose} onClose={close}/>);});
+ expect(tree.root.findAll(n=>n.props.children==='选择项目封面').length).toBeGreaterThan(0);expect(tree.root.findAll(n=>Array.isArray(n.props.children)&&n.props.children.includes(' · My project')).length).toBeGreaterThan(0);
+ expect(button(tree,'设为项目封面').props.accessibilityState.disabled).toBe(true);
+ act(()=>button(tree,'取消').props.onPress());expect(close).toHaveBeenCalled();expect(choose).not.toHaveBeenCalled();
+ }finally{act(()=>tree?.unmount());}
+});

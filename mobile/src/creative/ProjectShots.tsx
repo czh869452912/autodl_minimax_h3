@@ -1,3 +1,4 @@
+import {RecordRow} from '../ui/RecordRow';
 import { shotStage } from './workPresentation';
 import { IconAction } from './WorkbenchUI';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,6 +19,7 @@ import type { CreativeCommand } from './types';
 
 export function ProjectShots({ projectId, archived = false, initialShotId, requestId, onEditorState }: { projectId: string; archived?: boolean; initialShotId?:string;requestId?:string; onEditorState?: (state: { dirty: boolean; busy: boolean }) => void }) {
   const router = useRouter();
+  const [draftsOpen,setDraftsOpen]=useState<string>();
   const [focused,setFocused]=useState(initialShotId);
   useEffect(()=>setFocused(initialShotId),[initialShotId,requestId]);
   const [drafts, setDrafts] = useState<CreativeDraft[]>([]);
@@ -61,21 +63,20 @@ export function ProjectShots({ projectId, archived = false, initialShotId, reque
       await refresh();
     }} /> : null}
     {focused?<View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center'}}><Text style={{color:COLORS.textMuted}}>{shots.some(s=>s.id===focused)?'当前创作镜头':'原镜头已不可用'}</Text><ListAction label="全部镜头" secondary onPress={()=>setFocused(undefined)}/></View>:null}
-    {shots.filter(shot=>!focused||!shots.some(s=>s.id===focused)||shot.id===focused).map(shot => {const index=shots.indexOf(shot);return <View key={shot.id} style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 12, gap: 8 }}>
+    {shots.filter(shot=>!focused||!shots.some(s=>s.id===focused)||shot.id===focused).map(shot => {const index=shots.indexOf(shot);const shotDrafts=drafts.filter(d=>d.shot_id===shot.id&&['EDITING','SUBMITTED'].includes(d.state)).sort((a,b)=>(b.updated_at??0)-(a.updated_at??0)||a.id.localeCompare(b.id));const videoDraft=shotDrafts.find(d=>d.provider_id!=='novelai'&&d.state==='EDITING');return <View key={shot.id} style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 12, gap: 8 }}>
       <View style={{flexDirection:"row",alignItems:"center",gap:6}}><Text style={{flex:1,color:COLORS.text,fontWeight:"700"}}>{index + 1}. {shot.title} · {labels[shot.editorial_status]}</Text><IconAction label={expanded===shot.id?"收起镜头操作":"更多镜头操作"} icon="more_horiz" onPress={()=>setExpanded(expanded===shot.id?undefined:shot.id)}/></View><View style={{flexDirection:'row',gap:10,alignItems:'center'}}>{shot.selected_image?<VersionThumbnail versionId={shot.selected_image} compact/>:null}<Text numberOfLines={3} style={{flex:1,color:COLORS.textMuted,fontSize:13,lineHeight:19}}>{shot.description || '尚未填写镜头描述'}</Text></View>
       <Text style={{ color: COLORS.textMuted }}>图片：{shot.selected_image ? '已固定版本' : '未选定'} · 视频：{shot.selected_video ? '已固定版本' : '未选定'}</Text>
-      <ListAction label={shotStage(shot).label} disabled={busy || dirty || (archived && !shot.selected_video)} onPress={() => {
+      <ListAction label={shotStage(shot).kind==='video'&&videoDraft?'继续制作视频':shotStage(shot).label} disabled={busy || dirty || (archived && !shot.selected_video)} onPress={() => {
         if (shot.selected_video) { void work(async () => { router.push({pathname:'/creative-shot/[id]',params:{id:shot.id,projectId}}); }, true); return; }
         if (shotStage(shot).kind === 'restore') { if(shot.image_asset_id)router.push({pathname:'/creative-asset/[id]',params:{id:shot.image_asset_id,versionId:shot.selected_image!}});else setError('原版本引用不可用，请从项目素材核查'); return; }
         if (!shot.selected_image) { choose(shot,'selected_image'); return; }
+        if(videoDraft){openDraft(videoDraft);return;}
         void work(async () => { const r=await command({name:'draft.createVideo',payload:{shotId:shot.id,projectId}});if(r.status==='completed')router.push({pathname:'/creative-draft/[id]',params:{id:r.value.draftId}}); });
       }} />
       {shot.selected_image ? <ListAction label="更换参考图" secondary disabled={busy || dirty || archived} onPress={() => choose(shot, 'selected_image')} /> : null}
       {!shot.selected_image ? <ListAction label="制作新的参考图" secondary disabled={busy || dirty || archived} onPress={() => void work(async () => { const r=await command({name:'draft.createImage',payload:{projectId,shotId:shot.id}});if(r.status==='completed')router.push({pathname:'/image-draft/[id]',params:{id:r.value.draftId}}); })} /> : null}
-      {drafts.filter(d => d.shot_id === shot.id && ['EDITING', 'SUBMITTED'].includes(d.state)).sort((a,b) => (b.updated_at ?? 0) - (a.updated_at ?? 0) || a.id.localeCompare(b.id)).map((draft, index) => <View key={draft.id} style={{ gap: 4, borderTopWidth: 1, borderColor: COLORS.border, paddingTop: 8 }}>
-        <ListAction secondary label={`${draft.state === 'EDITING' ? '继续' : '查看'}${draft.provider_id === 'novelai' ? '图片' : '视频'}${draft.state === 'EDITING' ? '草稿' : '进度与候选'} · ${index + 1}`} disabled={busy || dirty || (archived && draft.state === 'EDITING')} onPress={() => openDraft(draft)} />
-        <Text style={{ color: COLORS.textMuted, fontSize: 12 }}>{draft.updated_at ? `更新于 ${new Date(draft.updated_at).toLocaleString()}` : '更新时间未知'}</Text>
-      </View>)}
+      {shotDrafts.length>1?<ListAction secondary label={draftsOpen===shot.id?'收起草稿':`${shotDrafts.length} 份草稿与生成记录`} onPress={()=>setDraftsOpen(draftsOpen===shot.id?undefined:shot.id)}/>:null}
+      {(draftsOpen===shot.id?shotDrafts:shotDrafts.slice(0,1)).map(draft=><RecordRow key={draft.id} title={`${draft.state==='EDITING'?'继续':'查看'}${draft.provider_id==='novelai'?'图片':'视频'}草稿 · ${draft.id.slice(-8)}`} detail={draft.state==='SUBMITTED'?'查看进度与候选':'编辑中'} meta={draft.updated_at?new Date(draft.updated_at).toLocaleString():undefined} disabled={busy||dirty||(archived&&draft.state==='EDITING')} onPress={()=>openDraft(draft)}/>)}
       {expanded===shot.id ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {action('编辑镜头', () => switchEditor(() => { setError(''); setAdding(true); setEditing(shot); setTitle(shot.title); setDescription(shot.description); }))}
         {action('选定图片', () => void choose(shot, 'selected_image'))}{action('选定视频', () => void choose(shot, 'selected_video'))}

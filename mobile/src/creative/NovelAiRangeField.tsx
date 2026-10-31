@@ -10,10 +10,10 @@ export function NovelAiRangeField({ label, value, min, max, editable, onChange, 
   const clamp = (n: number) => Number((Math.round(Math.min(max, Math.max(min, n))/step)*step).toFixed(4));
   const position = Math.min(1, Math.max(0, ((dragValue??value) - min) / (max - min)));
   const fromTouch = (event: GestureResponderEvent) => { if (editable && width > 0) onChange(clamp(min + (event.nativeEvent.pageX - start.current) / width * (max - min))); };
-  return <View style={{ flex:horizontal?undefined:1, minWidth: 120, gap: 12,flexDirection:horizontal?'row':'column',alignItems:horizontal?'center':undefined }}>
-    <View style={horizontal?{width:76}:undefined}><NovelAiNumberField containerStyle={{flexGrow:0,flexBasis:'auto'}} label={horizontal?label:`${label}（${min}–${max}）`} value={value} editable={editable} onChange={n => { if (n !== null) onChange(clamp(n)); }} /></View>
+  return <View style={{ flex:horizontal?undefined:1, minWidth: 120, gap: 8,flexDirection:horizontal?'row':'column',alignItems:horizontal?'center':undefined }}>
+    <View style={horizontal?{width:84}:undefined}><NovelAiNumberField containerStyle={{flexGrow:0,flexBasis:'auto'}} label={horizontal?label:`${label}（${min}–${max}）`} value={dragValue??value} editable={editable} onChange={n => { if (n !== null) onChange(clamp(n)); }} /></View>
     <View accessibilityRole="adjustable" accessibilityLabel={`${label} 滑块`} accessibilityState={{ disabled: !editable }}
-      accessibilityValue={{ min, max, now: value }} accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+      accessibilityValue={{ min, max, now: dragValue??value }} accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       onAccessibilityAction={event => { if (editable) onChange(clamp(value + (event.nativeEvent.actionName === 'increment' ? step : -step))); }}
       onLayout={event => setWidth(event.nativeEvent.layout.width)}
       onStartShouldSetResponder={() => editable} onMoveShouldSetResponder={() => editable}

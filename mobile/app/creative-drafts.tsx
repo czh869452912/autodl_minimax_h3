@@ -1,3 +1,4 @@
+import {RecordRow} from '../src/ui/RecordRow';
 import { draftPresentation } from '../src/creative/workPresentation';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useState } from 'react';
@@ -15,7 +16,7 @@ export default function CreativeDraftList() {
     <ListAction label="打开创作工作台" secondary onPress={()=>router.navigate('/(tabs)/create')}/>
     <Text style={{ color: COLORS.text, fontSize: 22, fontWeight: '700' }}>创作草稿</Text>
     {error ? <Text>{error}</Text> : null}
-    {drafts.map(d => <ListAction key={d.id} label={`${draftPresentation(d).title} · ${draftPresentation(d).state} · ${draftPresentation(d).updated}`} onPress={() => router.push({ pathname: d.provider_id === 'novelai' ? '/image-draft/[id]' : '/creative-draft/[id]', params: { id: d.id } })} />)}
+    {drafts.map(d => <RecordRow key={d.id} title={draftPresentation(d).title} detail={[d.project_title,d.shot_title,draftPresentation(d).state].filter(Boolean).join(' · ')} meta={draftPresentation(d).updated} onPress={() => router.push({ pathname: d.provider_id === 'novelai' ? '/image-draft/[id]' : '/creative-draft/[id]', params: { id: d.id } })} />)}
     {!drafts.length ? <Text>从创作首页开始一张图片或一个视频，草稿会自动保留。</Text> : null}
   </ScrollView></SafeAreaView>;
 }
