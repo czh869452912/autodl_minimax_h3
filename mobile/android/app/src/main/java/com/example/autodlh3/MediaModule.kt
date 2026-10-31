@@ -42,6 +42,13 @@ internal class MediaWorkExecutors(
 }
 
 class MediaModule(private val context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
+  private val timelineRenderer = TimelineRenderer(context)
+  @ReactMethod
+  fun renderTimeline(request: String, promise: Promise) {
+    executors.executeMedia { try { promise.resolve(timelineRenderer.render(request)) } catch(e: Exception) { promise.reject("TIMELINE_RENDER_FAILED",e.message,e) } }
+  }
+  @ReactMethod
+  fun cancelTimeline(id: String, promise: Promise) { executors.executeCancellation { promise.resolve(timelineRenderer.cancel(id)) } }
   private val previewCache = PreviewDiskCache(File(context.cacheDir, "creative-previews"))
 
   @ReactMethod

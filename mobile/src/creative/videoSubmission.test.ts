@@ -1,3 +1,5 @@
+import {grantOutboundConsent} from './outboundConsent';
+import {creativeRequestHash} from './videoSubmission';
 import * as videoPricing from './autodlPricing';
 import {resolveJobCredential} from '../tasks/credentialBinding';
 import {acknowledgeUnknownTask,unknownTaskReviewed} from './taskRecovery';
@@ -34,6 +36,7 @@ async function fixture() {
   const budget = createCreativeBudget(db as never, () => 100);
   const authorizationId = await budget.grant({ provider: 'autodl', generationId: identity.generationId, operations: ['video.generate'], requestLimit: 1, amountLimit: null, allowUnknownCost: true, maxUnknownRequests: 1, expiresAt: 10000 });
   const prepared = { workflowId: H3_WORKFLOW_ID, workflowVersion: '1', workflowContentHash: 'hash', adapterId: 'a', adapterVersion: '1', inputSnapshot: { prompt: 'A cinematic scene', seed: 1 }, requestInput: { prompt: 'A cinematic scene', seed: 1 }, target: { operation: 'generate' } };
+  await grantOutboundConsent(db as never,{projectId:null,provider:'autodl',generationId:identity.generationId,requestHash:creativeRequestHash(prepared),versions:[]},100);
   const input = { draftId: draft.id, expectedRevision: 0, draftInputJson: draft.input_json, authorizationId, prepared, images: [], versionIds: [] };
   const submit = () => submitCreativeVideo(db as never, input, 100);
   const claim = async () => {

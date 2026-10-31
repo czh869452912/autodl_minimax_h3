@@ -17,6 +17,7 @@ export function quarantineRestoredExecution(db: AppDatabase, epoch: string): voi
     db.runSync("UPDATE tasks SET status='UNKNOWN',sync_error=? WHERE status IN ('QUEUED','RUNNING','UNKNOWN')", reason);
     db.runSync("UPDATE tasks SET export_state='NOT_REQUESTED',download_error=? WHERE export_state IN ('QUEUED','EXPORTING') OR download_state='DOWNLOADING'", reason);
     db.runSync("UPDATE creative_deliveries SET status='QUARANTINED',error_code=? WHERE status IN ('QUEUED','PUBLISHING')", reason);
+    db.runSync("UPDATE creative_timeline_renders SET state='QUARANTINED',error=? WHERE state IN ('QUEUED','RENDERING')",reason);
     db.runSync('UPDATE creative_authorizations SET revoked_at=COALESCE(revoked_at,?),revision=revision+1', Date.now());
     db.runSync("UPDATE creative_credential_generations SET status='retired' WHERE status='active'");
     db.runSync('DELETE FROM creative_default_accounts');

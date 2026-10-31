@@ -22,6 +22,7 @@ jest.mock('../storage/databaseClient',()=>({getDatabase:()=>mockDb}));
 jest.mock('./accountRuntime',()=>({creativeAccounts:()=>mockAccounts,creativeBudget:()=>mockCreateCreativeBudget(mockDb as never)}));
 jest.mock('../workflows/registry/builtin',()=>({createAppWorkflowCatalog:()=>({bootstrap:async()=>undefined,getActive:async()=>mockRecord})}));
 jest.mock('../media/inputReader',()=>({createInputReader:()=>async()=> 'YQ=='}));
+jest.mock('./outboundConsentUI',()=>({confirmOutboundScopes:async(db:any,scopes:any[])=>{const {grantOutboundConsent}=jest.requireActual('./outboundConsent');for(const scope of scopes)await grantOutboundConsent(db,scope);}}));
 jest.mock('./runtime',()=>({creativeFiles:()=>({verify:async()=>({state:'AVAILABLE'})})}));
 
 test('editor workflow bindings survive queue, actual HTTP serialization, account switch, status polling and result archive',async()=>{

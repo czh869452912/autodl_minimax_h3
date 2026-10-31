@@ -1,3 +1,4 @@
+import {renderTimelineOperation} from '../creative/timelineRenderRuntime';
 import {creativeAccounts,defaultAutodlCredential} from '../creative/accountRuntime';
 import {novelAiResponseStore} from '../creative/novelAiResponseStore';
 import {createApplicationProviderRegistry} from '../providers/applicationRegistry';
@@ -67,6 +68,7 @@ function createApplicationExecutor(database: AppDatabase) {
     },
     async handle(operation: WorkflowOperation, owner: string) {
       if (operation.kind === 'EXPORT') {
+        if(operation.payload.kind==='creative_timeline'){await renderTimelineOperation(database,operation,owner);return;}
         if (operation.payload.kind === 'creative_version') {
           await executeCreativeExport(database, operation, owner, {
             now: Date.now,

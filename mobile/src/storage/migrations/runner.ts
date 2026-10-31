@@ -1,3 +1,4 @@
+import {v45Render} from './v45Render';
 import {v44Timeline} from './v44Timeline';
 import {v43Outbound} from './v43Outbound';
 import {v42NextSkills} from './v42NextSkills';
@@ -49,6 +50,7 @@ export type AppDatabaseMigrationOptions = {
 };
 
 const steps = new Map<number, MigrationStep>([
+  [v45Render.fromVersion,v45Render],
   [v44Timeline.fromVersion,v44Timeline],
   [v43Outbound.fromVersion,v43Outbound],
   [v42NextSkills.fromVersion,v42NextSkills],

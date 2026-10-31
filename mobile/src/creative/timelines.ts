@@ -1,3 +1,4 @@
+import {applyRenderCommand} from './timelineRender';
 import {z} from 'zod';
 import type {AppDatabase} from '../storage/appDatabase';
 const id=z.string().min(1).max(200);
@@ -7,12 +8,16 @@ export const timelineSpec=z.object({schemaVersion:z.literal(1),orientation:z.enu
 }).strict().refine(s=>s.clips.reduce((n,c)=>n+c.durationMs,0)<=120000,'时间线总时长最多 120 秒');
 export type TimelineSpec=z.infer<typeof timelineSpec>;
 export const timelineSchemas={
+ 'timeline.render':z.object({id}).strict(),
+ 'timeline.cancelRender':z.object({id}).strict(),
  'timeline.create':z.object({projectId:id,title:z.string().trim().min(1).max(200),spec:timelineSpec}).strict(),
  'timeline.discard':z.object({id}).strict(),
 };
 export type TimelineCommand={[K in keyof typeof timelineSchemas]:{name:K;payload:z.input<typeof timelineSchemas[K]>}}[keyof typeof timelineSchemas];
 export async function applyTimelineCommand(tx:AppDatabase,name:string,p:any,now:number,makeId:()=>string){
+ if(name==='timeline.render'||name==='timeline.cancelRender')return applyRenderCommand(tx,name,p.id,now,makeId);
  if(name==='timeline.discard'){
+  if(await tx.getFirstAsync("SELECT id FROM creative_timeline_renders WHERE timeline_id=? AND state IN ('QUEUED','RENDERING')",p.id))throw new Error('TIMELINE_RENDER_ACTIVE');
   const result=await tx.runAsync('UPDATE creative_timelines SET discarded_at=? WHERE id=? AND discarded_at IS NULL',now,p.id);
   if(result.changes!==1)throw new Error('TIMELINE_NOT_AVAILABLE');
   await tx.runAsync("DELETE FROM artifact_blob_refs WHERE owner_type='creative_timeline' AND owner_id=?",p.id);

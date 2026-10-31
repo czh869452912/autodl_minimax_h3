@@ -1,3 +1,5 @@
+import {grantOutboundConsent} from './outboundConsent';
+import {creativeRequestHash} from './videoSubmission';
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { createCreativeService } from './service';
 import { createCreativeAccounts } from './accounts';
@@ -40,6 +42,7 @@ async function fixture(upscale=false) {
   const auth = await createCreativeBudget(db as never, () => 100).grant({ provider: 'novelai', generationId: identity.generationId, operations: ['image.generate'], requestLimit: 1, amountLimit: null, allowUnknownCost: true, maxUnknownRequests: 1, expiresAt: 10000 });
   const request = upscale?prepareNovelAiUpscale(JSON.parse(draft.input_json),{image:fs.readFileSync(path.join(__dirname,'__fixtures__/novelai-enhanced-size.png')).toString('base64'),width:1467,height:2144}):prepareNovelAiRequest(input);
   const prepared = { workflowId: draft.workflow_id, workflowVersion:'1', workflowContentHash: 'h', adapterId: 'novelai-image', adapterVersion:'1', inputSnapshot: request.snapshot, requestInput: 'requestInput' in request?request.requestInput:JSON.parse(request.requestJson), target: { operation: 'image.generate' } };
+  await grantOutboundConsent(db as never,{projectId:null,provider:'novelai',generationId:identity.generationId,requestHash:creativeRequestHash(prepared),versions:upscale?[sourceVersionId]:[]},100);
   const task = await submitCreativeVideo(db as never, { draftId: draft.id, expectedRevision: 0, draftInputJson: draft.input_json, authorizationId: auth, prepared, images: [], versionIds: upscale?[sourceVersionId]:[] }, 100);
   const jobs = createJobStateRepository(db as never), operations = createOperationRepository(db as never);
   const store: NovelAiResponseStore = { generate: jest.fn(async () => 'file:///response'), upscale:jest.fn(async()=> 'file:///response'),lookup: jest.fn(async () => 'file:///response'), importResponse: jest.fn(async () => [{ hash, seed: upscale?0:77, index: 0,...(upscale?{width:2934,height:4288}:{}) }]) };

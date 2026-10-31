@@ -92,7 +92,7 @@ export function CreativeAssetPicker({ kind, projectId, purpose, target, restrict
       </Pressable>}
       ListEmptyComponent={!waiting && !error ? <View style={{ gap: 12, paddingVertical: 24 }}>
         <Text accessibilityRole="header" style={s.title}>{search ? '没有匹配的素材' : !all && projectId ? '本项目暂无可用版本' : '素材库暂无可用版本'}</Text>
-        <Text style={s.muted}>{search ? '清除搜索，查看当前范围内的素材。' : !all && projectId ? '从全部素材中选择具体版本，确认后才会用于当前目标。' : '取消选择，导入素材或制作候选后再回来选择。'}</Text>
+        <Text style={s.muted}>{search ? '清除搜索，查看当前范围内的素材。' : !all && projectId ? restrictToProject ? '请先将素材加入本项目，再回来选择。' : '从全部素材中选择具体版本，确认后才会用于当前目标。' : '取消选择，导入素材或制作候选后再回来选择。'}</Text>
         {search ? <ListAction label="清除搜索" secondary disabled={busy} onPress={() => setQuery('')} /> : null}
       </View> : null}
       ListFooterComponent={next ? <TextAction label="加载更多素材" disabled={busy || waiting} onPress={() => setCursor(next)} /> : null} />

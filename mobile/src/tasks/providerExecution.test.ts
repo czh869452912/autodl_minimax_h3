@@ -1,3 +1,5 @@
+import {grantOutboundConsent} from '../creative/outboundConsent';
+import {creativeRequestHash} from '../creative/videoSubmission';
 import { createInitializedRealSqliteTestDb } from '../test/realSqlite';
 import { createCreativeService } from '../creative/service';
 import { createCreativeAccounts } from '../creative/accounts';
@@ -47,6 +49,7 @@ async function creativeVideo(f: ReturnType<typeof fixture>) {
   if (draft.status !== 'completed') throw new Error('expected draft');
   const saved = (await service.draft(draft.value.draftId))!;
   const input = { prompt: 'pan', resolution: '768p竖', duration: 5 };
+  await grantOutboundConsent(f.db as never,{projectId:null,provider:'autodl',generationId:identity.generationId,requestHash:creativeRequestHash({ ...prepared, workflowId: H3_CREATIVE_WORKFLOW_ID, adapterId: 'autodl-comfyui', inputSnapshot: input, requestInput: input, target: { operation: 'workflow.submit' } }),versions:[]},1);
   const task = await submitCreativeVideo(f.db as never, { draftId: saved.id, expectedRevision: saved.revision, draftInputJson: saved.input_json, authorizationId, prepared: { ...prepared, workflowId: H3_CREATIVE_WORKFLOW_ID, adapterId: 'autodl-comfyui', inputSnapshot: input, requestInput: input, target: { operation: 'workflow.submit' } }, images: [], versionIds: [] }, 1);
   return { accounts, task };
 }
