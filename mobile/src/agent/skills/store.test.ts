@@ -36,3 +36,23 @@ test('failed installation publishes nothing and a failed binding leaves the old 
     expect((await store.list()).filter(v => v.enabled).map(v => v.id)).toEqual([a]);
   } finally { db.close(); }
 });
+
+test('project overrides pin versions, exclude global skills and preserve existing run snapshots',async()=>{
+ const db=createInitializedRealSqliteTestDb(),store=createSkillStore(db as never);try{
+  for(const p of ['p','q'])db.runSync('INSERT INTO creative_projects VALUES(?,?,?,0,NULL,1,1)',p,p,'');
+  db.runSync("INSERT INTO creative_agent_scopes VALUES('p-thread','p',0,1)");
+  db.runSync("INSERT INTO creative_agent_scopes VALUES('q-thread','q',0,1)");
+  const a=await store.install(pkg('A')),b=await store.install(pkg('B'));await store.enable(a);
+  await store.setProjectVersion('p','scene-review',b);
+  const pinned=await store.capture('p-thread','first');
+  expect(pinned.versions[0].id).toBe(b);expect((await store.capture('q-thread','first')).versions[0].id).toBe(a);
+  await store.setProjectVersion('p','scene-review',null);
+  expect((await store.capture('p-thread','second')).versions).toEqual([]);
+  expect((await store.resolve(pinned))[0].id).toBe(b);
+  await store.setProjectVersion('p','scene-review',undefined);
+  expect((await store.capture('p-thread','third')).versions[0].id).toBe(a);
+  await store.setProjectVersion('p','scene-review',b);await store.revoke(b);
+  expect((await store.capture('p-thread','fourth')).versions).toEqual([]);
+  await expect(store.resolve(pinned)).rejects.toThrow('停用');
+ }finally{db.close();}
+});

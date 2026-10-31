@@ -1,3 +1,4 @@
+import {v33ProjectSkills} from './v33ProjectSkills';
 import {v32AuthorizationRequests} from './v32AuthorizationRequests';
 import { v31SkillDrafts } from './v31SkillDrafts';
 import { v30TaskRemoval } from './v30TaskRemoval';
@@ -37,6 +38,7 @@ export type AppDatabaseMigrationOptions = {
 };
 
 const steps = new Map<number, MigrationStep>([
+  [v33ProjectSkills.fromVersion,v33ProjectSkills],
   [v32AuthorizationRequests.fromVersion,v32AuthorizationRequests],
   [v5Registry.fromVersion, v5Registry],
   [v6DurableExecutor.fromVersion, v6DurableExecutor],

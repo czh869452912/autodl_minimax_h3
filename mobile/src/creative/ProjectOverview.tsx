@@ -33,6 +33,7 @@ export function ProjectOverview({ project, onShots, onEdit }: { project: Creativ
     <Pressable accessibilityRole="button" accessibilityLabel={project.archivedAt?'查看镜头与成果':'查看镜头与下一步'} onPress={onShots} style={[s.card,{borderColor:COLORS.primary}]}>
       <Text style={s.title}>{project.archivedAt?'项目成果':'镜头进度'} →</Text><Text style={s.body}>{summary}</Text>
     </Pressable>
+    {!project.archivedAt?<ListAction label="项目技能" secondary onPress={()=>router.push({pathname:'/agent-skills',params:{projectId:project.id}})}/>:null}
     {!project.archivedAt?<View style={{flexDirection:'row'}}><ListAction label="在助手中继续" secondary icon="auto_awesome" onPress={()=>router.push({pathname:'/(tabs)/agent',params:{projectId:project.id}})}/></View>:null}
     <ProjectPlans projectId={project.id} archived={Boolean(project.archivedAt)} compact/>
     {drafts.length?<Text style={s.title}>最近创作</Text>:null}

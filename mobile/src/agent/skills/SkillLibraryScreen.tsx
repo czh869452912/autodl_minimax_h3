@@ -17,7 +17,7 @@ import { useFallbackBack } from '../../navigation/useFallbackBack';
 
 const template = '---\nname: scene-review\ndescription: 检查场景描述中的主体、动作和镜头是否清楚\n---\n\n阅读用户的场景描述。指出主体、动作与镜头中的歧义，再给出可供审阅的改写。保留用户明确给出的约束。';
 
-export function SkillLibraryScreen({ onClose, registerLeave, intent }: { intent?:string; onClose?: () => void; registerLeave?:(guard:((proceed:()=>void)=>void)|undefined)=>void } = {}) {
+export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId }: { projectId?:string; intent?:string; onClose?: () => void; registerLeave?:(guard:((proceed:()=>void)=>void)|undefined)=>void } = {}) {
   const router = useRouter();
   const store = useMemo(() => createSkillStore(getDatabase()), []);
   const [versions, setVersions] = useState<SkillVersion[]>([]);
@@ -34,7 +34,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent }: { intent?
   useEffect(()=>{registerLeave?.(proceed=>latestLeave.current(proceed));return()=>registerLeave?.(undefined);},[registerLeave]);
   const back=()=>confirmLeave(()=>onClose?onClose():router.canGoBack()?router.back():router.replace('/(tabs)/agent'));
   useFallbackBack(back);
-  const refresh = useCallback(async () => { const [items, history] = await Promise.all([store.list(), store.runs()]); setVersions(items); setRuns(history); }, [store]);
+  const refresh = useCallback(async () => { const [items, history] = await Promise.all([projectId?store.projectList(projectId):store.list(), store.runs()]); setVersions(items); setRuns(history); }, [store,projectId]);
   useFocusEffect(useCallback(() => { void refresh().catch(error => setNotice(String(error.message))); }, [refresh]));
   const run = async (work: () => Promise<void>) => {
     if (lock.current) return;
@@ -54,7 +54,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent }: { intent?
   const body = <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,gap:6,borderBottomWidth:1,borderColor:COLORS.border}}>
       <IconAction label={onClose ? '关闭技能' : '返回'} icon={onClose ? 'close' : 'arrow_back'} onPress={back}/>
-      <Text accessibilityRole="header" style={{flex:1,fontSize:16,fontWeight:'600',color:COLORS.text}}>技能 · {versions.filter(v=>v.enabled).length} 已启用</Text>
+      <Text accessibilityRole="header" style={{flex:1,fontSize:16,fontWeight:'600',color:COLORS.text}}>{projectId?'项目技能':'技能'} · {versions.filter(v=>v.enabled).length} 已启用</Text>
       <IconAction label="添加技能" icon="add" onPress={()=>{if(onClose){onClose();router.push({pathname:'/agent-skills',params:{intent:'add'}});}else setImportOpen(!importOpen);}}/>
       <IconAction label="技能运行记录" icon="history" onPress={()=>setHistoryOpen(!historyOpen)}/>
     </View>
@@ -86,7 +86,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent }: { intent?
         </View>
       </View> : null}
       <TextInput accessibilityLabel="搜索技能" placeholder="搜索名称或用途" value={query} onChangeText={setQuery} style={s.input}/>
-      <Text style={{fontSize:12,color:COLORS.textMuted}}>启用后用于新运行。同名技能只启用一个版本；停用会停止使用该版本的运行。</Text>
+      <Text style={{fontSize:12,color:COLORS.textMuted}}>{projectId?'项目选择只影响新运行。同名技能固定一个版本；关闭表示此项目不使用该技能。紧急撤销请到全局技能管理。':'启用后用于新运行。同名技能只启用一个版本；停用会停止使用该版本的运行。'}</Text>
       {!versions.length ? <Text style={s.muted}>还没有本地技能，点击右上角 + 导入。内置技能随应用提供。</Text> : null}
       {versions.filter(v=>`${v.name} ${v.description}`.toLowerCase().includes(query.trim().toLowerCase())).map(version=><View key={version.id} style={[s.card,{padding:10,gap:8}]}>
         <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
@@ -94,7 +94,8 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent }: { intent?
             <Text style={s.title}>{version.name}</Text><Text numberOfLines={expanded===version.id?undefined:2} style={{fontSize:13,lineHeight:18,color:COLORS.textMuted}}>{version.description}</Text>
             <Text style={{fontSize:11,color:COLORS.textMuted}}>{version.id.slice(0,8)} · {expanded===version.id?'收起正文':'查看正文'}</Text>
           </Pressable>
-          <Switch accessibilityLabel={`启用 ${version.name} ${version.id.slice(0,8)}`} disabled={busy} value={version.enabled} onValueChange={enabled=>void run(async()=>{if(enabled) await store.enable(version.id);else await store.revoke(version.id);setNotice(enabled?'已启用，将用于新运行。':'已停用，相关运行已请求停止。');})}/>
+          {projectId&&version.projectOverride?<ListAction label="恢复全局选择" secondary disabled={busy} onPress={()=>void run(()=>store.setProjectVersion(projectId,version.name,undefined))}/>:null}
+          <Switch accessibilityLabel={`启用 ${version.name} ${version.id.slice(0,8)}`} disabled={busy} value={version.enabled} onValueChange={enabled=>void run(async()=>{if(projectId){await store.setProjectVersion(projectId,version.name,enabled?version.id:null);setNotice('已更新项目技能，仅影响新运行；已有运行保持版本快照。');}else{if(enabled) await store.enable(version.id);else await store.revoke(version.id);setNotice(enabled?'已启用，将用于新运行。':'已停用，相关运行已请求停止。');}})}/>
         </View>
         {expanded===version.id ? <><Text style={s.muted}>{Object.keys(version.files).join(' · ')}</Text><Text selectable style={s.body}>{version.files['SKILL.md']}</Text></> : null}
       </View>)}
