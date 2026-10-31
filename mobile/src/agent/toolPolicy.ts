@@ -2,7 +2,7 @@ import {createMiddleware} from 'langchain';
 import {createCreativeAgentTools} from '../creative/agentTools';
 
 export type ToolPolicyEntry={name:string;version:1;effect:'read'|'workspace'|'proposal'|'write'|'consume'|'delegate';output:'structured-receipt'|'text';requires:'scope'|'workspace'|'structured-authorization'};
-const reads=new Set(['creative_context','capability_list','asset_search','asset_versions','asset_read_text','shot_get','shot_quality_check','semantic_list','semantic_get','draft_get','generation_status']);
+const reads=new Set(['creative_context','project_search','capability_list','asset_search','asset_versions','asset_read_text','shot_get','shot_quality_check','semantic_list','semantic_get','draft_get','generation_status']);
 const filesystem=['ls','read_file','glob','grep','write_file','edit_file','write_todos'];
 export function creativeToolPolicy(role:'assistant'|'review'='assistant'){
  const tools=createCreativeAgentTools();

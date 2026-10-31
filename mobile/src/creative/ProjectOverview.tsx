@@ -39,6 +39,7 @@ export function ProjectOverview({ project, onShots, onEdit }: { project: Creativ
     <ListAction label="制作能力与配置" secondary onPress={()=>router.push('/creative-capabilities')}/>
     <ListAction label="素材外发许可" secondary onPress={()=>router.push({pathname:'/outbound-consents',params:{projectId:project.id}})}/>
     <ListAction label="成片时间线与工程" secondary onPress={()=>router.push({pathname:'/project-timeline',params:{projectId:project.id}})}/>
+    <ListAction label="项目全文检索" secondary onPress={()=>router.push({pathname:'/project-search',params:{projectId:project.id}})}/>
     <ProjectPlans projectId={project.id} archived={Boolean(project.archivedAt)} compact/>
     {drafts.length?<Text style={s.title}>最近创作</Text>:null}
     {drafts.map(d=><Pressable accessibilityRole="button" accessibilityLabel={d.state==='EDITING'?'继续编辑':'查看进度与成果'} key={d.id} style={s.card} onPress={()=>router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}})}>
