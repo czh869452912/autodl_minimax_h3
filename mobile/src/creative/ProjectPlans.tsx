@@ -51,6 +51,11 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
   return <View style={{gap:12}}>
     <Text style={{color:COLORS.text,fontSize:20,fontWeight:'700'}}>{compact?'需要你处理':'选图与视频计划'}</Text>
     {!compact ? <Text style={{color:COLORS.textMuted}}>计划会保留候选、选定版本与生成状态。视频结果归档为候选，不会覆盖镜头已选成果。</Text> : null}
+    {!compact&&!archived? action('为多个镜头准备计划',()=>{
+      const ready=shots.filter(s=>s.selected_image&&s.description.trim()).slice(0,20);
+      if(!ready.length){setError('请先为镜头选定图片并填写动作描述。');return;}
+      Alert.alert('准备多镜头计划',`为以下 ${ready.length} 个镜头各建立选图计划（每批最多 20 个）：\n${ready.map(s=>s.title).join('\n')}\n需逐镜头确认图片与单次授权，不会直接生成。`,[{text:'取消',style:'cancel'},{text:'建立计划',onPress:()=>void work(()=>creativeService().execute({name:'plan.createBatch',payload:{projectId,title:'多镜头制作',shots:ready.map(s=>({shotId:s.id,expectedShotRevision:s.revision,title:s.title,candidateVersionIds:[s.selected_image!],videoPrompt:s.description}))}},createId()))}]);
+    }):null}
     {error?<Text accessibilityRole="alert" style={{color:COLORS.danger}}>{error}</Text>:null}
     {compact&&!cards.some(c=>c.plan.state==='ACTIVE')?<Text style={{color:COLORS.textMuted}}>暂无等待处理的选图计划。</Text>:null}
     {initialPlanId&&!cards.length?<Text style={{color:COLORS.textMuted}}>指定计划已不可用或不属于此项目。</Text>:null}

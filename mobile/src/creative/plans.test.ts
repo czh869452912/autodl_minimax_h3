@@ -8,6 +8,21 @@ import {createCreativeAccounts} from './accounts';
 import {createCreativeBudget} from './budget';
 import { H3_CREATIVE_WORKFLOW_ID as H3_WORKFLOW_ID } from './videoWorkflow';
 import {submitCreativeVideo} from './videoSubmission';
+test('multi-shot batch is atomic, replayable and creates only waiting decisions',async()=>{
+ const f=await fixture();try{
+  const {shotId:second}=await f.execute({name:'shot.create',payload:{projectId:f.projectId,title:'second'}});
+  const shot={shotId:f.shotId,expectedShotRevision:0,title:'first',candidateVersionIds:[f.versionId],videoPrompt:'orbit'};
+  const command:CreativeCommand={name:'plan.createBatch',payload:{projectId:f.projectId,title:'film',shots:[shot,{...shot,shotId:second}]}};
+  const result=await f.execute(command,'batch');expect(await f.execute(command,'batch')).toEqual(result);
+  expect(f.db.getAllSync('SELECT * FROM creative_plan_batch_members')).toHaveLength(2);
+  expect(f.db.getAllSync("SELECT * FROM creative_decision_requests WHERE state='WAITING'")).toHaveLength(3);
+  expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toEqual([]);
+  await expect(f.execute({name:'plan.createBatch',payload:{...command.payload,shots:[shot,{...shot,shotId:second,expectedShotRevision:99}]}})).rejects.toThrow('SHOT_REVISION_CONFLICT');
+  expect(f.db.getAllSync('SELECT * FROM creative_plan_batches')).toHaveLength(1);
+  expect(f.db.getAllSync('SELECT * FROM creative_plans')).toHaveLength(3);
+  expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
+ }finally{f.db.close();}
+});
 test('retry preserves failed evidence and requires fresh authorization',async()=>{
  const f=await runnable();try{
   await runCreativePlans(f.db as never,f.prepare,200);

@@ -4,6 +4,7 @@ import { applyDraftCommand, videoDraftInput } from './drafts';
 import { applyStoryCommand } from './story';
 const id=z.string().min(1).max(200), revision=z.number().int().nonnegative();
 export const planSchemas={
+  'plan.createBatch':z.object({projectId:id,title:z.string().trim().min(1).max(200),shots:z.array(z.object({shotId:id,expectedShotRevision:revision,title:z.string().trim().min(1).max(200),candidateVersionIds:z.array(id).min(1).max(20),videoPrompt:z.string().trim().min(1).max(10000)}).strict()).min(1).max(20)}).strict(),
   'plan.retryFailed':z.object({id,expectedRevision:revision,expectedShotRevision:revision}).strict(),
   'plan.setPaused':z.object({id,expectedRevision:revision,paused:z.boolean()}).strict(),
   'plan.createSelection':z.object({projectId:id,shotId:id,expectedShotRevision:revision,title:z.string().trim().min(1).max(200),candidateVersionIds:z.array(id).min(1).max(20),videoPrompt:z.string().trim().min(1).max(10000),authorizationId:id.optional()}).strict(),
@@ -38,6 +39,16 @@ async function candidate(tx:AppDatabase,versionId:string,projectId:string){
     WHERE v.id=? AND NOT EXISTS(SELECT 1 FROM creative_asset_trash t WHERE t.asset_id=a.id)`,projectId,versionId))throw new Error('DECISION_CANDIDATE_UNAVAILABLE');
 }
 export async function applyPlanCommand(tx:AppDatabase,name:string,p:any,now:number,makeId:()=>string,commandId:string):Promise<Record<string,string>>{
+  if(name==='plan.createBatch'){
+    if(new Set(p.shots.map((s:any)=>s.shotId)).size!==p.shots.length)throw new Error('DUPLICATE_BATCH_SHOTS');
+    const batchId=makeId();
+    await tx.runAsync('INSERT INTO creative_plan_batches VALUES(?,?,?,?)',batchId,p.projectId,p.title,now);
+    for(const [ordinal,shot] of p.shots.entries()){
+      const result=await applyPlanCommand(tx,'plan.createSelection',{...shot,projectId:p.projectId},now,makeId,commandId);
+      await tx.runAsync('INSERT INTO creative_plan_batch_members VALUES(?,?,?)',batchId,result.planId,ordinal);
+    }
+    return {batchId,shotCount:String(p.shots.length)};
+  }
   if(name==='plan.createSelection'){
     if(!await tx.getFirstAsync('SELECT id FROM creative_projects WHERE id=? AND archived_at IS NULL',p.projectId))throw new Error('PROJECT_NOT_AVAILABLE');
     if(!await tx.getFirstAsync('SELECT id FROM creative_shots WHERE id=? AND project_id=? AND revision=? AND deleted_at IS NULL',p.shotId,p.projectId,p.expectedShotRevision))throw new Error('SHOT_REVISION_CONFLICT');
