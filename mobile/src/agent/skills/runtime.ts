@@ -1,4 +1,6 @@
 import CryptoJS from 'crypto-js';
+import {pinRunRuntime,assertRunAuthority} from '../runSpecification';
+import {createCreativeAgentTools} from '../../creative/agentTools';
 import type { FileData } from 'deepagents/browser';
 import { getOfficialH3SkillFiles } from '../skillBundle';
 import { createH3Agent } from '../h3Agent';
@@ -17,6 +19,7 @@ export function skillFiles(versions: SkillVersion[]): Record<string, FileData> {
 export function createSkillRunPreparer(db: AppDatabase, config: H3AgentConfig, createGraph = createH3Agent) {
   const store = createSkillStore(db);
   return async (input: { threadId: string; runId: string }, signal: AbortSignal, cancel: () => void) => {
+    await assertRunAuthority(db,input.threadId,input.runId);
     const snapshot = await store.capture(input.threadId, input.runId);
     const unsubscribe = onSkillRevoked(id => { if (snapshot.versions.some(ref => ref.id === id)) cancel(); });
     const release = () => { unsubscribe(); signal.removeEventListener('abort', release); };
@@ -26,8 +29,9 @@ export function createSkillRunPreparer(db: AppDatabase, config: H3AgentConfig, c
       if (signal.aborted) throw new Error('运行已停止');
       const files = skillFiles(versions);
       const version = CryptoJS.SHA256(JSON.stringify({ ...getOfficialH3SkillFiles(), ...files })).toString();
+      await pinRunRuntime(db,input.threadId,input.runId,config,version,createCreativeAgentTools().map(t=>t.name));
       return {
-        graph: createGraph(config, { skillFiles: files, assertSkills: async () => { await store.resolve(snapshot); } }) as never,
+        graph: createGraph(config, { skillFiles: files, assertSkills: async () => { await assertRunAuthority(db,input.threadId,input.runId);await store.resolve(snapshot); } }) as never,
         workspace: {
           prepareWorkspaceRun: (saved: unknown, messages: readonly unknown[], budget?: workspace.H3ContextBudget) => workspace.prepareWorkspaceRun(saved, messages, budget, version),
           captureWorkspaceState: (state: unknown, revision: number, budget?: workspace.H3ContextBudget) => workspace.captureWorkspaceState(state, revision, budget, version),
