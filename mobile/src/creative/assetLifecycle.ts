@@ -1,4 +1,5 @@
 import {importedAssetPeers} from './importIdentity';
+import {assertSemanticAssetRemovable} from './semanticDependencies';
 import { z } from 'zod';
 import type { AppDatabase } from '../storage/appDatabase';
 const id=z.string().min(1).max(200),revision=z.number().int().nonnegative();
@@ -22,6 +23,7 @@ export async function applyAssetLifecycle(tx:AppDatabase,name:string,p:any,now:n
     }
   }
   if(name==='asset.trash'){
+    await assertSemanticAssetRemovable(tx,p.id);
     const used=await tx.getFirstAsync(`SELECT asset_id FROM creative_project_assets WHERE asset_id=? UNION ALL
       SELECT v.asset_id FROM creative_shot_assets s JOIN creative_asset_versions v ON v.id=s.version_id JOIN creative_shots h ON h.id=s.shot_id WHERE v.asset_id=? AND h.deleted_at IS NULL UNION ALL
       SELECT v.asset_id FROM creative_draft_inputs i JOIN creative_asset_versions v ON v.id=i.version_id JOIN creative_generation_drafts d ON d.id=i.draft_id WHERE v.asset_id=? AND d.state='EDITING' LIMIT 1`,p.id,p.id,p.id);

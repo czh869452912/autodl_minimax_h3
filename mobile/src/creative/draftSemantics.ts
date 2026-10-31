@@ -16,7 +16,7 @@ export async function captureDraftSemantics(tx:AppDatabase,draftId:string,copyFr
  if(!draft)throw new Error('DRAFT_NOT_FOUND');
  const bindings=draft.shot_id&&draft.project_id?await readShotSemantics(tx,draft.shot_id,draft.project_id):[];
  const items:SemanticSnapshot['items']=[];
- for(const {stale:_,...binding} of bindings){
+ for(const {stale:_,unavailableReferences:__,...binding} of bindings){
   const references=await tx.getAllAsync<{asset_version_id:string;purpose:string}>('SELECT asset_version_id,purpose FROM creative_semantic_references WHERE semantic_version_id=? ORDER BY asset_version_id',binding.version_id);
   items.push({...binding,references});
  }

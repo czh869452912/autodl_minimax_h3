@@ -9,6 +9,7 @@ import CryptoJS from 'crypto-js';
 import { recoverNovelAiMetadata } from './novelAiMetadata';
 import { storySchemas, applyStoryCommand, listCreativeShots } from './story';
 import { draftSchemas, applyDraftCommand, readCreativeDraft, readDraftInputs } from './drafts';
+import {assertSemanticAssetRemovable} from './semanticDependencies';
 import { z } from 'zod';
 import { guardCreativeAgentCommand, type CreativeAgentOrigin } from './agentScope';
 import { lifecycleSchemas,applyAssetLifecycle } from './assetLifecycle';
@@ -211,6 +212,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
             if (await tx.getFirstAsync('SELECT asset_id FROM creative_project_assets WHERE project_id=? AND asset_id=?', p.projectId, p.assetId)) throw new Error('PROJECT_ASSET_ALREADY_LINKED');
             await tx.runAsync('INSERT INTO creative_project_assets VALUES(?,?,?,0)', p.projectId, p.assetId, p.versionId); value = { assetId: p.assetId, projectId: p.projectId }; break;
           case 'asset.unlinkFromProject':
+            await assertSemanticAssetRemovable(tx,p.assetId,p.projectId);
             if(await tx.getFirstAsync('SELECT c.project_id FROM creative_project_covers c JOIN creative_asset_versions v ON v.id=c.version_id WHERE c.project_id=? AND v.asset_id=?',p.projectId,p.assetId))throw new Error('请先更换或移除项目封面');
             changed(await tx.runAsync('DELETE FROM creative_project_assets WHERE project_id=? AND asset_id=? AND revision=?', p.projectId, p.assetId, p.expectedRevision)); value = { assetId: p.assetId, projectId: p.projectId }; break;
           default: value = command.name in semanticSchemas ? await applySemanticCommand(tx,command.name,p,now,deps.id) : command.name in planSchemas ? await applyPlanCommand(tx,command.name,p,now,deps.id,key) : command.name in lifecycleSchemas ? await applyAssetLifecycle(tx,command.name,p,now) : command.name in draftSchemas ? await applyDraftCommand(tx, command.name, p, now, deps.id) : await applyStoryCommand(tx, command.name, p, now, deps.id);

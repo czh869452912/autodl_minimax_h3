@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {readSemanticReferences} from './semanticDependencies';
 import type {AppDatabase} from '../storage/appDatabase';
 const id=z.string().min(1).max(200),revision=z.number().int().nonnegative();
 const content=z.string().trim().min(1).max(20000);
@@ -30,6 +31,7 @@ export async function applySemanticCommand(tx:AppDatabase,name:string,p:any,now:
  }
  if(name==='semantic.adopt'||name==='semantic.bindShot'){
   if(!await tx.getFirstAsync('SELECT id FROM creative_semantic_versions WHERE id=? AND entity_id=?',p.versionId,p.entityId))throw new Error('SEMANTIC_VERSION_MISMATCH');
+  if((await readSemanticReferences(tx,p.versionId,projectId)).some(r=>r.unavailable_reason))throw new Error('SEMANTIC_REFERENCE_UNAVAILABLE');
   if(name==='semantic.adopt')await tx.runAsync('UPDATE creative_semantic_entities SET current_version_id=?,revision=revision+1,updated_at=? WHERE id=?',p.versionId,now,p.entityId);
   else {
    if(p.replaceEntityId&&p.replaceEntityId!==p.entityId){
@@ -62,8 +64,9 @@ export async function readSemanticResources(db:AppDatabase,projectId:string,afte
  return {items:page,nextCursor:rows.length>page.length?page.at(-1)!.id:null};
 }
 export async function readShotSemantics(db:AppDatabase,shotId:string,projectId:string){
- return db.getAllAsync<{entity_id:string;version_id:string;title:string;kind:string;content:string;stale:number}>(`SELECT b.entity_id,b.version_id,e.title,e.kind,v.content,
+ const rows=await db.getAllAsync<{entity_id:string;version_id:string;title:string;kind:string;content:string;stale:number}>(`SELECT b.entity_id,b.version_id,e.title,e.kind,v.content,
   CASE WHEN e.current_version_id IS NOT NULL AND e.current_version_id!=b.version_id THEN 1 ELSE 0 END AS stale
   FROM creative_shot_semantics b JOIN creative_shots s ON s.id=b.shot_id AND s.project_id=? AND s.deleted_at IS NULL
   JOIN creative_semantic_entities e ON e.id=b.entity_id AND e.project_id=s.project_id JOIN creative_semantic_versions v ON v.id=b.version_id WHERE b.shot_id=?`,projectId,shotId);
+ return Promise.all(rows.map(async row=>({...row,unavailableReferences:(await readSemanticReferences(db,row.version_id,projectId)).filter(r=>r.unavailable_reason)})));
 }

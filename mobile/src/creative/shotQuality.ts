@@ -1,3 +1,4 @@
+import {readShotSemantics} from './semanticResources';
 import type {AppDatabase} from '../storage/appDatabase';
 
 /** Structural quality checks only: no model calls, adoption, or claims about visual quality. */
@@ -14,6 +15,7 @@ export async function inspectShotQuality(db:AppDatabase,projectId:string,shotId:
  const stale=await db.getAllAsync<{version_id:string}>(`SELECT b.version_id FROM creative_shot_semantics b JOIN creative_semantic_entities e ON e.id=b.entity_id
  WHERE b.shot_id=? AND e.current_version_id IS NOT NULL AND e.current_version_id!=b.version_id`,shotId);
  for(const row of stale)findings.push({code:'SEMANTIC_REVIEW_REQUIRED',severity:'warning',versionId:row.version_id});
+ for(const semantic of await readShotSemantics(db,shotId,projectId))for(const ref of semantic.unavailableReferences)findings.push({code:'SEMANTIC_REFERENCE_'+ref.unavailable_reason,severity:'error',versionId:ref.asset_version_id});
  const failed=await db.getFirstAsync('SELECT s.id FROM creative_plan_steps s JOIN creative_plans p ON p.id=s.plan_id WHERE p.shot_id=? AND p.state=\'ACTIVE\' AND s.state IN (\'FAILED\',\'BLOCKED\') LIMIT 1',shotId);
  if(failed)findings.push({code:'PLAN_NEEDS_ATTENTION',severity:'warning'});
  return {shotId,shotRevision:shot.revision,findings,status:findings.length?'needs_review':'structural_checks_passed',readOnly:true,
