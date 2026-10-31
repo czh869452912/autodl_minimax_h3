@@ -1,3 +1,5 @@
+import {tool,type StructuredToolInterface} from '@langchain/core/tools';
+import {z} from 'zod';
 import { createDeepAgent, type DeepAgent, type FileData } from 'deepagents/browser';
 import { createMiddleware, type AgentMiddleware } from 'langchain';
 import { adaptDeepAgentStream } from './deepAgentStream';
@@ -30,6 +32,7 @@ export type H3AgentDependencies = {
   skillFiles?: Record<string, FileData>;
   assertSkills?: () => Promise<void>;
   runMiddleware?: AgentMiddleware[];
+  role?: 'assistant'|'review';
 };
 
 export function normalizeCumulativeText(previous: string, next: string): { previous: string; delta: string } {
@@ -41,13 +44,21 @@ export function normalizeCumulativeText(previous: string, next: string): { previ
 export function createH3Agent(config: H3AgentConfig, dependencies: Omit<H3AgentDependencies, 'agentFactory'> = {}): DeepAgent {
   validateH3AgentConfig(config);
   const backend = createH3WorkspaceBackend(dependencies.skillFiles);
-  const policy=creativeToolPolicy();
+  const policy=creativeToolPolicy(dependencies.role);
+  const tools:StructuredToolInterface[]=[...policy.tools];
+  if(dependencies.role!=='review')tools.push(tool(async({question},runtime)=>{
+    await dependencies.assertSkills?.();
+    const reviewer=createH3Agent(config,{...dependencies,role:'review'});
+    const result=await reviewer.invoke({messages:[{role:'user',content:question}]},runtime);
+    const last=result.messages[result.messages.length-1];
+    return JSON.stringify({role:'project-review',adopted:false,report:typeof last?.content==='string'?last.content.slice(0,12000):JSON.stringify(last?.content).slice(0,12000)});
+  },{name:'review_project',description:'Ask an independent read-only project reviewer to inspect exact project objects and report concerns. Shares this run scope, cancellation and cumulative budget. Cannot edit, adopt, spend, delegate again or claim perceptual checks without media.',schema:z.object({question:z.string().min(1).max(6000)}).strict()}));
   return createDeepAgent({
     model: (dependencies.modelFactory ?? createOpenAICompatibleModel)(config),
     skills: [officialH3SkillRoot],
-    systemPrompt: H3_SYSTEM_POLICY,
+    systemPrompt: H3_SYSTEM_POLICY+(dependencies.role==='review'?'\nYou are a read-only independent reviewer. Read exact project facts using tools; report evidence and uncertainties. Do not claim pixels/audio were inspected. Never adopt, change, generate or delegate.':''),
     backend,
-    tools: policy.tools,
+    tools,
     middleware: [
       toolPolicyMiddleware(policy.entries),
       ...(dependencies.runMiddleware??[]),
@@ -125,3 +136,4 @@ export async function* streamH3Agent(
     if (!input.signal.aborted) yield { type: 'error', error: error instanceof Error ? error : new Error(String(error)) };
   }
 }
+

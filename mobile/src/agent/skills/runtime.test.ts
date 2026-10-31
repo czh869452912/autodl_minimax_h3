@@ -92,3 +92,21 @@ test('host tool policy covers framework tools and denies implicit delegation at 
  expect(policy.entries.find((e:any)=>e.name==='generation_submit').requires).toBe('structured-authorization');
  expect(policy.entries.find((e:any)=>e.name==='shot_update').effect).toBe('proposal');
 });
+
+test('independent reviewer has read-only capabilities and shares durable parent counters',async()=>{
+ const db=createInitializedRealSqliteTestDb();try{
+  const models:ScriptedModel[]=[];const toolNames:string[][]=[];
+  const prepare=createSkillRunPreparer(db as never,config,(c,deps)=>createH3Agent(c,{...deps,modelFactory:(()=>{
+   const model=new ScriptedModel(models.length?[new AIMessage('Evidence needs user review')]:[new AIMessage({content:'',tool_calls:[{id:'review',name:'review_project',args:{question:'Review project structure'}}]}),new AIMessage('Review received')]);
+   model.bindTools=((tools:any[])=>{toolNames.push(tools.map(t=>t.name));return model;}) as any;
+   models.push(model);return model;
+  }) as never}));
+  const handle=await prepare({threadId:'t',runId:'review-run'},new AbortController().signal,jest.fn());
+  try{const result=await (handle.graph as unknown as ReturnType<typeof createH3Agent>).invoke({messages:[{role:'user',content:'Ask reviewer'}]});
+   expect(JSON.stringify(result.messages)).toContain('Evidence needs user review');
+   expect(models).toHaveLength(2);expect(models[1].received).toHaveLength(1);
+   expect(toolNames.some(names=>names.includes('shot_get')&&!names.includes('generation_submit')&&!names.includes('review_project'))).toBe(true);
+   expect(db.getFirstSync('SELECT model_calls,tool_calls FROM creative_run_usage')).toEqual({model_calls:3,tool_calls:1});
+  }finally{handle.release();}
+ }finally{db.close();}
+});
