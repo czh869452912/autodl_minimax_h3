@@ -79,3 +79,9 @@
 - 调度读取和提交事务双重检查暂停；准备过程中发生暂停不标记为失败。已发送 Job 不取消，继续核查/归档。
 - 验证：plans/schemaParity/schemaOwnership 共 31 项通过，竞争场景修正后 plans 20 项再次通过；TypeScript 检查通过。
 - 本切片未增加通用 DAG、批量重跑或节点类型；H07 仍为部分完成。
+
+## 回归修正：迁移错误码断言
+
+- 全仓回归发现六个测试仍写死 schema 31 错误码。改为 APP_SCHEMA_VERSION，保留失败、回滚和只读恢复断言。
+- 修正后 runner/schemaParity/plans/SkillLibraryScreen 四文件通过（详见 mobile/workbench-migration-tests.log）；TypeScript 检查通过。
+- 先前全仓运行期间继续修改了文件，其 297 文件通过结果只作为问题定位依据，不能作为最终版本验收。
