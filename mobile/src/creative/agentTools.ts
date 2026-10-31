@@ -1,5 +1,6 @@
 import {preparedCreativeSubmission} from './preparedSubmission';
 import {readDraftReadiness} from './draftReadiness';
+import {readCreativeAuthorizationSummaries} from './budget';
 import {readScopedCreativeText} from './agentTextRead';
 import {readCreativeText} from './textContent';
 import { tool } from '@langchain/core/tools';
@@ -66,7 +67,7 @@ export function createCreativeAgentTools() {
           return JSON.stringify({ nextShotCursor:shots.length>30?{sortKey:last.sort_key,id:last.id}:null, projectId:origin.projectId, project:origin.projectId ? await service.project(origin.projectId) : null,
             shots: shots.slice(0,30).map(s=>({...s,description:s.description.slice(0,500),descriptionTruncated:s.description.length>500})),
             plans: origin.projectId ? await tx.getAllAsync('SELECT id,title,state,revision FROM creative_plans WHERE project_id=? ORDER BY updated_at DESC LIMIT 20',origin.projectId) : [],
-            authorizations: origin.projectId ? await tx.getAllAsync('SELECT id,provider_id,request_limit,expires_at,allow_unknown_cost FROM creative_authorizations WHERE project_id=? AND revoked_at IS NULL AND expires_at>?',origin.projectId,Date.now()) : [],
+            authorizations: origin.projectId ? await readCreativeAuthorizationSummaries(tx,origin.projectId) : {items:[],hasMore:false},
             instruction: origin.projectId ? 'All creative reads and writes are restricted to this project.' : 'User must select a project before reading assets or generating. You may create a new project.' });
         });
       } catch(e) { return failure(e); }

@@ -10,6 +10,24 @@ const units = { novelai: 'anlas', autodl: 'autodl_points' } as const;
 type Authorization = { id: string; revision: number; project_id: string | null; provider_id: CreativeProvider; account_binding_id: string; credential_generation_id: string; execution_epoch: string; allowed_operations_json: string; request_limit: number; amount_limit: number | null; unit: string; allow_unknown_cost: number; max_unknown_requests: number; expires_at: number; revoked_at: number | null };
 export type Reservation = { id: string; authorization_id: string; authorization_revision: number; account_binding_id: string; credential_generation_id: string; execution_epoch: string; command_id: string; job_id: string | null; request_hash: string; operation: string; project_id: string | null; request_units: number; estimate_valid_until: number; reserved_amount: number | null; unit: string; state: string; actual_amount: number | null };
 export type ReserveInput = { authorizationId: string; commandId: string; jobId?: string; requestHash: string; projectId?: string; provider: CreativeProvider; operation: string; requestUnits: number; estimate: { maximum: number | null; unit: string; requestHash: string; validUntil: number } };
+/** A bounded read projection of the ledger, never a spending guarantee. */
+export async function readCreativeAuthorizationSummaries(db:AppDatabase,projectId:string,now=Date.now()) {
+  const rows=await db.getAllAsync<Authorization & {used:number;unknown_used:number}>(`SELECT a.*,
+    COALESCE((SELECT SUM(r.request_units) FROM creative_budget_reservations r WHERE r.authorization_id=a.id AND r.state!='RELEASED'),0) AS used,
+    COALESCE((SELECT SUM(r.request_units) FROM creative_budget_reservations r WHERE r.authorization_id=a.id AND r.state!='RELEASED' AND r.reserved_amount IS NULL),0) AS unknown_used
+    FROM creative_authorizations a
+    JOIN creative_execution_state e ON e.id=1 AND e.epoch=a.execution_epoch
+    JOIN creative_credential_generations g ON g.id=a.credential_generation_id AND g.account_binding_id=a.account_binding_id AND g.status='active'
+    JOIN creative_default_accounts d ON d.provider_id=a.provider_id AND d.credential_generation_id=g.id
+    JOIN creative_projects p ON p.id=a.project_id AND p.archived_at IS NULL
+    WHERE a.project_id=? AND a.revoked_at IS NULL AND a.expires_at>?
+    ORDER BY a.expires_at,a.id LIMIT 21`,projectId,now);
+  return {items:rows.slice(0,20).map(a=>({id:a.id,provider_id:a.provider_id,request_limit:a.request_limit,
+    expires_at:a.expires_at,allow_unknown_cost:a.allow_unknown_cost,operations:JSON.parse(a.allowed_operations_json),
+    remainingRequests:Math.max(0,a.request_limit-a.used),
+    remainingUnknownRequests:a.allow_unknown_cost&&a.amount_limit===null?Math.max(0,Math.min(a.request_limit-a.used,a.max_unknown_requests-a.unknown_used)):0,
+    amountLimit:a.amount_limit,unit:a.unit,dispatchRevalidationRequired:true})),hasMore:rows.length>20};
+}
 async function authorization(tx: AppDatabase, id: string, now: number): Promise<Authorization> {
   const row = await tx.getFirstAsync<Authorization>(`SELECT a.* FROM creative_authorizations a JOIN creative_execution_state e ON e.id=1 AND e.epoch=a.execution_epoch
     JOIN creative_credential_generations g ON g.id=a.credential_generation_id AND g.account_binding_id=a.account_binding_id AND g.status='active'

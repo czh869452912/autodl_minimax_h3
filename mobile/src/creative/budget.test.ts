@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { createRealSqliteTestDb } from '../test/realSqlite';
 import { ensureAppDatabase } from '../storage/database';
 import { createCreativeAccounts } from './accounts';
-import { createCreativeBudget, type ReserveInput } from './budget';
+import { createCreativeBudget, readCreativeAuthorizationSummaries, type ReserveInput } from './budget';
 import { quarantineRestoredExecution } from '../storage/restoreIsolation';
 
 async function fixture(options: { requestLimit?: number; amountLimit?: number | null; unknown?: boolean } = {}) {
@@ -155,4 +155,20 @@ test('visible project allowance excludes held requests, revoked grants and stale
   await f.accounts.connect('novelai','token-new-B');
   expect(await f.budget.availableUnknownRequests('p','novelai')).toBe(0);
  } finally { f.close(); }
+});
+
+test('authorization summaries count held unknown requests and exclude revoked or expired grants',async()=>{
+ const f=await fixture({amountLimit:null,unknown:true});try{
+  f.db.runSync("INSERT INTO creative_projects VALUES('summary','Project','',0,NULL,1,1)");
+  const id=await f.budget.grant({...f.grantInput,projectId:'summary'});
+  const read=()=>readCreativeAuthorizationSummaries(f.db as never,'summary',1000);
+  expect((await read()).items[0]).toMatchObject({id,remainingRequests:2,remainingUnknownRequests:1,amountLimit:null});
+  const reservation=await f.budget.reserve({...f.input,authorizationId:id,projectId:'summary',estimate:{...f.input.estimate,maximum:null}});
+  expect((await read()).items[0]).toMatchObject({remainingRequests:1,remainingUnknownRequests:0});
+  await f.budget.transition(reservation.id,{key:'release-summary',to:'RELEASED'});
+  expect((await read()).items[0].remainingUnknownRequests).toBe(1);
+  expect((await readCreativeAuthorizationSummaries(f.db as never,'summary',10000)).items).toEqual([]);
+  await f.budget.revoke(id);
+  expect((await read()).items).toEqual([]);
+ }finally{f.close();}
 });
