@@ -3,6 +3,7 @@ import {createCreativeService} from './service';
 import {readShotSemantics} from './semanticResources';
 import {inspectShotQuality} from './shotQuality';
 import type {CreativeCommand} from './types';
+import {readSemanticDetail,readSemanticVersionPage} from './semanticReads';
 
 test('active semantic references protect lifecycle; historical references stay traceable and diagnose unavailable inputs',async()=>{
  const db=createInitializedRealSqliteTestDb();try{
@@ -15,6 +16,9 @@ test('active semantic references protect lifecycle; historical references stay t
   const semantic=await execute({name:'semantic.create',payload:{projectId,kind:'character',title:'Lead',content:'Blue',references:[{versionId,purpose:'face'}]}});
   await execute({name:'semantic.adopt',payload:{entityId:semantic.entityId,versionId:semantic.versionId,expectedRevision:0}});
   await execute({name:'semantic.bindShot',payload:{shotId,expectedShotRevision:0,entityId:semantic.entityId,versionId:semantic.versionId}});
+  const detail=await readSemanticDetail(db as never,projectId,semantic.entityId);
+  expect(detail.adopted?.references[0]).toMatchObject({asset_version_id:versionId,purpose:'face',title:'face',unavailable_reason:null});
+  await expect(readSemanticDetail(db as never,'other',semantic.entityId)).rejects.toThrow('NOT_FOUND');
   const draft=await execute({name:'draft.createImage',payload:{projectId,shotId}});
   await expect(execute({name:'asset.unlinkFromProject',payload:{assetId,projectId,expectedRevision:0}})).rejects.toThrow('Lead');
   expect(await service.usage(assetId)).toEqual(expect.arrayContaining([expect.objectContaining({kind:'设定版本',object_id:semantic.versionId,purpose:'face',available:1})]));
@@ -33,5 +37,19 @@ test('active semantic references protect lifecycle; historical references stay t
   await execute({name:'asset.trash',payload:{id:assetId,expectedRevision:asset.revision}});
   expect(await service.usage(assetId)).toEqual(expect.arrayContaining([expect.objectContaining({kind:'设定版本',available:0})]));
   await expect(execute({name:'semantic.bindShot',payload:{entityId:semantic.entityId,versionId:semantic.versionId,shotId,expectedShotRevision:2}})).rejects.toThrow('SEMANTIC_REFERENCE_UNAVAILABLE');
+ }finally{db.close();}
+});
+test('semantic history paging keeps adopted v1 independently of twenty newer candidates',async()=>{
+ const db=createInitializedRealSqliteTestDb();try{
+  const service=createCreativeService(db as never);let n=0;
+  const execute=async(command:CreativeCommand)=>{const r=await service.execute(command,'page-'+n++);if(r.status!=='completed')throw new Error('expected');return r.value;};
+  const {projectId}=await execute({name:'project.create',payload:{title:'film'}});
+  const first=await execute({name:'semantic.create',payload:{projectId,kind:'character',title:'Lead',content:'v1',references:[]}});
+  await execute({name:'semantic.adopt',payload:{entityId:first.entityId,versionId:first.versionId,expectedRevision:0}});
+  for(let i=1;i<=20;i++)await execute({name:'semantic.revise',payload:{entityId:first.entityId,expectedRevision:i,content:'v'+(i+1),references:[]}});
+  const detail=await readSemanticDetail(db as never,projectId,first.entityId);
+  expect(detail.adopted?.id).toBe(first.versionId);expect(detail.page.items).toHaveLength(20);
+  const older=await readSemanticVersionPage(db as never,projectId,first.entityId,detail.page.next!);
+  expect(older.items.map(v=>v.id)).toEqual([first.versionId]);expect(older.next).toBeNull();
  }finally{db.close();}
 });

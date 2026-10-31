@@ -1,7 +1,7 @@
 import type {AppDatabase} from '../storage/appDatabase';
 
 export async function readSemanticReferences(db:AppDatabase,versionId:string,projectId:string){
- return db.getAllAsync<{asset_version_id:string;purpose:string;title:string;version_no:number;kind:string;relative_path:string|null;unavailable_reason:string|null}>(`SELECT r.asset_version_id,r.purpose,a.title,v.version_no,a.kind,b.relative_path,
+ return db.getAllAsync<{asset_id:string;source:'import'|'generated'|'authored';mime:string;blob_sha256:string;asset_version_id:string;purpose:string;title:string;version_no:number;kind:string;relative_path:string|null;unavailable_reason:string|null}>(`SELECT a.id AS asset_id,v.source,b.mime,f.blob_sha256,r.asset_version_id,r.purpose,a.title,v.version_no,a.kind,b.relative_path,
  CASE WHEN t.asset_id IS NOT NULL THEN 'TRASHED' WHEN p.asset_id IS NULL THEN 'OUTSIDE_PROJECT'
  WHEN f.state IS NULL OR f.state!='AVAILABLE' OR fr.state IS NULL OR fr.state!='AVAILABLE' THEN 'ORIGINAL_UNAVAILABLE' ELSE NULL END AS unavailable_reason
  FROM creative_semantic_references r JOIN creative_semantic_versions sv ON sv.id=r.semantic_version_id

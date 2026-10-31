@@ -5,15 +5,28 @@ import {ListAction} from '../ui/ListPageUI';
 import {SemanticResourcesScreen} from './SemanticResourcesScreen';
 import {CreativeAssetPicker} from './CreativeAssetPicker';
 jest.mock('./CreativeAssetPicker',()=>({CreativeAssetPicker:()=>null}));
+jest.mock('./AudioVersionPreview',()=>({AudioVersionPreview:()=>null}));
 const mockExecute=jest.fn(async(..._args:any[])=>({status:'completed',value:{}}));
 const mockEntity={id:'entity',project_id:'p',title:'Lead',kind:'character',revision:0,current_version_id:null as string|null};
 jest.mock('react-native-safe-area-context',()=>({SafeAreaView:require('react-native').View}));
 jest.mock('./useUnsavedChanges',()=>({useUnsavedChanges:()=>((next:()=>void)=>next())}));
 jest.mock('expo-router',()=>({useLocalSearchParams:()=>({projectId:'p'}),useRouter:()=>({back:jest.fn()}),useFocusEffect:(fn:()=>void)=>require('react').useEffect(fn,[fn])}));
 jest.mock('./runtime',()=>({creativeService:()=>({execute:mockExecute,shots:async()=>[{id:"shot",title:"Opening",revision:2}]})}));
+const mockHistory={items:[{id:'v1',version_no:1,content:'Blue coat',references:[]}],next:null as number|null};
+jest.mock('./semanticReads',()=>({readSemanticDetail:async()=>({entity:mockEntity,bindings:[],page:mockHistory,adopted:mockEntity.current_version_id?{id:'v1',version_no:1,content:'Blue coat',references:[]}:null}),readSemanticVersionPage:async()=>({items:[{id:'v0',version_no:0,content:'Older',references:[]}],next:null})}));
 jest.mock('./semanticResources',()=>({readSemanticResources:async()=>({items:[mockEntity],nextCursor:null})}));
 jest.mock('../storage/databaseClient',()=>({getDatabase:()=>({getFirstAsync:async()=>mockEntity,getAllAsync:async(sql:string)=>sql.includes('SELECT id,version_no,content')?[{id:'v1',version_no:1,content:'Blue coat'}]:[]})}));
-beforeEach(()=>{mockExecute.mockClear();mockEntity.current_version_id=null;});
+beforeEach(()=>{mockExecute.mockClear();mockEntity.current_version_id=null;mockHistory.items=[{id:"v1",version_no:1,content:"Blue coat",references:[]}];mockHistory.next=null;});
+test('adopted version remains bindable outside the latest page and older versions can be loaded',async()=>{
+ mockEntity.current_version_id='v1';mockHistory.items=Array.from({length:20},(_,i)=>({id:'v'+(21-i),version_no:21-i,content:'new',references:[]}));mockHistory.next=2;
+ let tree!:ReturnType<typeof create>;try{
+  await act(async()=>{tree=create(<SemanticResourcesScreen/>);});
+  await act(async()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='Lead · 已有采用版本')!.props.onPress());
+  expect(tree.root.findAllByType(ListAction).some(n=>n.props.label==='绑定到 Opening')).toBe(true);
+  await act(async()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='更多历史版本')!.props.onPress());
+  expect(tree.root.findAllByType(ListAction).some(n=>n.props.label==='采用版本 0')).toBe(true);
+ }finally{act(()=>tree.unmount());}
+});
 test('binding and a failed save preserve the editing buffer',async()=>{
  mockEntity.current_version_id='v1';let tree!:ReturnType<typeof create>;
  try{
