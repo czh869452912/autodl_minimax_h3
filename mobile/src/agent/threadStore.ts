@@ -1,3 +1,4 @@
+import {acceptNextRunSkills} from './skills/nextRun';
 import {captureRunFocus} from '../creative/runFocus';
 import type { Message, State } from '@ag-ui/client';
 import type { AppDatabase } from '../storage/appDatabase';
@@ -171,6 +172,7 @@ export function createLocalThreadStore(db: AppDatabase, attachments = createAtta
         const execution=await tx.getFirstAsync<{epoch:string}>('SELECT epoch FROM creative_execution_state WHERE id=1');
         if(!execution)throw new Error('EXECUTION_EPOCH_MISSING');
         await tx.runAsync('INSERT INTO creative_run_specs VALUES(?,?,?,?,?,?)',snapshot.threadId,command.runId,acceptedScope?.project_id??null,acceptedScope?.revision??0,execution.epoch,'user-adoption-v1');
+        await acceptNextRunSkills(tx,snapshot.threadId,command.runId,command.retryOf);
         await tx.runAsync('INSERT INTO agent_submissions VALUES(?,?,?,?,?)', command.id, snapshot.threadId, command.message.id, command.runId, command.draftRevision);
         return { submissionId: command.id, userMessageId: command.message.id, runId: command.runId };
       }); } finally { await stored.releaseStaging().catch(() => undefined); await message?.releaseStaging().catch(() => undefined); }

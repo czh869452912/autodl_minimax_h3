@@ -1,3 +1,4 @@
+import {selectNextRunSkills} from './nextRun';
 import { useUnsavedChanges } from '../../creative/useUnsavedChanges';
 import { usePrimaryNavigationGuard } from '../../navigation/PrimaryNavigation';
 import { CompactWorkbench, IconAction } from '../../creative/WorkbenchUI';
@@ -17,9 +18,10 @@ import { useFallbackBack } from '../../navigation/useFallbackBack';
 
 const template = '---\nname: scene-review\ndescription: 检查场景描述中的主体、动作和镜头是否清楚\n---\n\n阅读用户的场景描述。指出主体、动作与镜头中的歧义，再给出可供审阅的改写。保留用户明确给出的约束。';
 
-export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId }: { projectId?:string; intent?:string; onClose?: () => void; registerLeave?:(guard:((proceed:()=>void)=>void)|undefined)=>void } = {}) {
+export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId, threadId }: { threadId?:string; projectId?:string; intent?:string; onClose?: () => void; registerLeave?:(guard:((proceed:()=>void)=>void)|undefined)=>void } = {}) {
   const router = useRouter();
   const store = useMemo(() => createSkillStore(getDatabase()), []);
+  const [once,setOnce]=useState<string[]|null>(null);
   const [versions, setVersions] = useState<SkillVersion[]>([]);
   const [runs, setRuns] = useState<Awaited<ReturnType<typeof store.runs>>>([]);
   const [advanced,setAdvanced]=useState(false);
@@ -85,6 +87,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId }
           <ListAction label="关闭预览" secondary disabled={busy} onPress={()=>setPreview(undefined)}/>
         </View>
       </View> : null}
+      {threadId?<View style={s.card}><Text style={s.body}>只为此会话下一条消息选择技能，不改变全局或项目组合。</Text><ListAction label="选择下次运行技能" secondary disabled={busy} onPress={()=>setOnce([])}/>{once?<><Text style={s.muted}>已选 {once.length}/8（空选表示仅内置技能）</Text><ListAction label="保存单次选择" disabled={busy} onPress={()=>void run(async()=>{await selectNextRunSkills(getDatabase(),threadId,once);setOnce(null);setNotice('已固定下一条消息的技能，发送时核对项目范围。');})}/></>:null}<ListAction label="取消单次覆盖，使用项目组合" secondary disabled={busy} onPress={()=>void run(async()=>{await selectNextRunSkills(getDatabase(),threadId,null);setOnce(null);setNotice('已恢复项目组合');})}/></View>:null}
       <TextInput accessibilityLabel="搜索技能" placeholder="搜索名称或用途" value={query} onChangeText={setQuery} style={s.input}/>
       <Text style={{fontSize:12,color:COLORS.textMuted}}>{projectId?'项目选择只影响新运行。同名技能固定一个版本；关闭表示此项目不使用该技能。紧急撤销请到全局技能管理。':'启用后用于新运行。同名技能只启用一个版本；停用会停止使用该版本的运行。'}</Text>
       {!versions.length ? <Text style={s.muted}>还没有本地技能，点击右上角 + 导入。内置技能随应用提供。</Text> : null}
@@ -97,6 +100,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId }
           {projectId&&version.projectOverride?<ListAction label="恢复全局选择" secondary disabled={busy} onPress={()=>void run(()=>store.setProjectVersion(projectId,version.name,undefined))}/>:null}
           <Switch accessibilityLabel={`启用 ${version.name} ${version.id.slice(0,8)}`} disabled={busy} value={version.enabled} onValueChange={enabled=>void run(async()=>{if(projectId){await store.setProjectVersion(projectId,version.name,enabled?version.id:null);setNotice('已更新项目技能，仅影响新运行；已有运行保持版本快照。');}else{if(enabled) await store.enable(version.id);else await store.revoke(version.id);setNotice(enabled?'已启用，将用于新运行。':'已停用，相关运行已请求停止。');}})}/>
         </View>
+        {once?<ListAction label={(once.includes(version.id)?'✓ ':'')+'本次选用 '+version.name} secondary disabled={busy} onPress={()=>setOnce(ids=>ids?.includes(version.id)?ids.filter(id=>id!==version.id):(ids?.length??0)<8?[...(ids??[]),version.id]:ids)}/>:null}
         {version.capabilities?<Text style={s.muted}>需要工具：{version.capabilities.tools.join('、')||'无'} · 输入：{version.capabilities.inputs.join('、')} · 输出：{version.capabilities.output}（声明不会授予权限）</Text>:null}
         {expanded===version.id ? <><Text style={s.muted}>{Object.keys(version.files).join(' · ')}</Text><Text selectable style={s.body}>{version.files['SKILL.md']}</Text></> : null}
       </View>)}

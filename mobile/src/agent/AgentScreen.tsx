@@ -412,7 +412,7 @@ function AgentSession({
           onSelect={id=>leaveSkills(()=>uiProps.onSelect(id))}
           onDelete={id=>leaveSkills(()=>uiProps.onDelete(id))}
           headerActions={<AssistantActions onOpenSkills={()=>setSkillsOpen(true)}/>}
-          toolPanel={skillsOpen?<SkillLibraryScreen registerLeave={registerSkillGuard} onClose={()=>setSkillsOpen(false)}/>:undefined}
+          toolPanel={skillsOpen?<SkillLibraryScreen threadId={snapshot.threadId} registerLeave={registerSkillGuard} onClose={()=>setSkillsOpen(false)}/>:undefined}
           headerContext={<View><AgentCreativePanel beforeNavigate={leaveSkills} compact threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />{focus&&!focusDismissed?<View style={{paddingHorizontal:16,paddingBottom:8}}><Text style={{color:COLORS.text}}>当前镜头：{focus.title}</Text><Text style={{color:COLORS.textMuted}}>发送时核对并固定镜头版本</Text><Pressable accessibilityRole="button" accessibilityLabel="移除镜头上下文" onPress={()=>setFocusDismissed(true)} style={{minHeight:48,justifyContent:'center'}}><Text style={{color:COLORS.primaryActive}}>移除镜头上下文</Text></Pressable></View>:null}</View>}
           renderRunArtifacts={runId=><AgentCreativeCards threadId={snapshot.threadId} running={Boolean(agent.isRunning)} runId={runId}/>}
           onExportPrompt={onExportPrompt}
