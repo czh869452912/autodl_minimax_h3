@@ -4,6 +4,7 @@ import { applyDraftCommand, videoDraftInput } from './drafts';
 import { applyStoryCommand } from './story';
 const id=z.string().min(1).max(200), revision=z.number().int().nonnegative();
 export const planSchemas={
+  'plan.setPaused':z.object({id,expectedRevision:revision,paused:z.boolean()}).strict(),
   'plan.createSelection':z.object({projectId:id,shotId:id,expectedShotRevision:revision,title:z.string().trim().min(1).max(200),candidateVersionIds:z.array(id).min(1).max(20),videoPrompt:z.string().trim().min(1).max(10000),authorizationId:id.optional()}).strict(),
   'plan.resolveSelection':z.object({decisionId:id,versionId:id,expectedRevision:revision}).strict(),
   'plan.cancel':z.object({id,expectedRevision:revision}).strict(),
@@ -74,7 +75,12 @@ export async function applyPlanCommand(tx:AppDatabase,name:string,p:any,now:numb
   }
   const plan=await activePlan(tx,p.id);
   if(plan.revision!==p.expectedRevision)throw new Error('PLAN_REVISION_CONFLICT');
-  if(name==='plan.cancel'){
+  if(name==='plan.setPaused'){
+    await tx.runAsync('INSERT INTO creative_plan_controls VALUES(?,?,?) ON CONFLICT(plan_id) DO UPDATE SET paused=excluded.paused,updated_at=excluded.updated_at',plan.id,p.paused?1:0,now);
+    await tx.runAsync('UPDATE creative_plans SET revision=revision+1,updated_at=? WHERE id=?',now,plan.id);
+    await tx.runAsync("UPDATE creative_decision_requests SET plan_revision=plan_revision+1 WHERE plan_id=? AND state='WAITING'",plan.id);
+    if(!p.paused)await tx.runAsync('UPDATE executor_wake_state SET generation=generation+1,requested_at=? WHERE singleton=1',now);
+  }else if(name==='plan.cancel'){
     if(await tx.getFirstAsync("SELECT id FROM creative_plan_steps WHERE plan_id=? AND state='DISPATCHED'",plan.id))throw new Error('请先在任务中心处理已提交的生成任务');
     await tx.runAsync("UPDATE creative_plans SET state='CANCELLED',revision=revision+1,updated_at=? WHERE id=?",now,plan.id);
     await tx.runAsync("UPDATE creative_plan_steps SET state='CANCELLED',revision=revision+1 WHERE plan_id=? AND state NOT IN ('SUCCEEDED','FAILED')",plan.id);

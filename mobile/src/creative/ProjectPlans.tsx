@@ -13,7 +13,7 @@ import {ListAction} from '../ui/ListPageUI';
 import {COLORS} from '../ui/theme';
 import {planVideoSummary,type CreativePlan,type CreativeDecision,type CreativePlanStep} from './plans';
 import type {CreativeShot} from './story';
-type Card={plan:CreativePlan;decision:CreativeDecision;step:CreativePlanStep;candidates:Array<{version_id:string;title:string;relative_path:string|null}>};
+type Card={paused:boolean;plan:CreativePlan;decision:CreativeDecision;step:CreativePlanStep;candidates:Array<{version_id:string;title:string;relative_path:string|null}>};
 export function ProjectPlans({projectId,archived=false,compact=false,initialPlanId}:{projectId:string;initialPlanId?:string;archived?:boolean;compact?:boolean}){
   const router=useRouter(),lock=useRef(false);
   const [cards,setCards]=useState<Card[]>([]),[shots,setShots]=useState<CreativeShot[]>([]),[shotId,setShotId]=useState(''),[prompt,setPrompt]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -28,7 +28,7 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
     for(const plan of plans){
       const decision=await db.getFirstAsync<CreativeDecision>('SELECT * FROM creative_decision_requests WHERE plan_id=?',plan.id);
       const step=await db.getFirstAsync<CreativePlanStep>("SELECT * FROM creative_plan_steps WHERE plan_id=? AND kind='video'",plan.id);
-      if(decision&&step)rows.push({plan,decision,step,candidates:await db.getAllAsync("SELECT c.version_id,a.title,b.relative_path FROM creative_decision_candidates c JOIN creative_asset_versions v ON v.id=c.version_id JOIN creative_assets a ON a.id=v.asset_id LEFT JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE c.decision_id=?",decision.id)});
+      if(decision&&step)rows.push({paused:!!await db.getFirstAsync('SELECT plan_id FROM creative_plan_controls WHERE plan_id=? AND paused=1',plan.id),plan,decision,step,candidates:await db.getAllAsync("SELECT c.version_id,a.title,b.relative_path FROM creative_decision_candidates c JOIN creative_asset_versions v ON v.id=c.version_id JOIN creative_assets a ON a.id=v.asset_id LEFT JOIN creative_version_files f ON f.version_id=v.id AND f.role='original' LEFT JOIN artifact_blobs b ON b.sha256=f.blob_sha256 WHERE c.decision_id=?",decision.id)});
     }
     const shots=await creativeService().shots(projectId);if(epoch===readEpoch.current&&current()){setCards(rows);setShots(shots);}
   },[projectId,initialPlanId]);
@@ -66,6 +66,8 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
           await creativeService().execute({name:'plan.resolveSelection',payload:{decisionId:card.decision.id,versionId:c.version_id,expectedRevision:card.decision.revision}},`selection:${card.decision.id}:${c.version_id}`);
         })}]))}
       </View>):null}
+      {card.plan.state==='ACTIVE'?action(card.paused?'继续后续计划':'暂停后续计划',()=>void work(()=>creativeService().execute({name:'plan.setPaused',payload:{id:card.plan.id,expectedRevision:card.plan.revision,paused:!card.paused}},createId()))):null}
+      {card.paused?<Text style={{color:COLORS.textMuted}}>后续提交已暂停；已发送的生成仍由任务中心核查和归档。</Text>:null}
       {card.plan.state==='ACTIVE'&&card.step.state==='BLOCKED'&&!card.step.job_id?action('授权并继续生成',()=>authorize(card)):null}
       {card.step.job_id?<ListAction label="查看生成任务" secondary onPress={()=>router.push({pathname:'/creative-task/[id]',params:{id:card.step.job_id!,projectId,planId:card.plan.id,stepId:card.step.id}})}/>:null}
       {card.plan.state==='ACTIVE'&&card.step.state!=='DISPATCHED'?action('取消计划',()=>void work(()=>creativeService().execute({name:'plan.cancel',payload:{id:card.plan.id,expectedRevision:card.plan.revision}},createId()))):null}

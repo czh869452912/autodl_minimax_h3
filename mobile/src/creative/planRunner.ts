@@ -5,7 +5,7 @@ import type {CreativePlanStep} from './plans';
 type Submission=Parameters<typeof submitCreativeVideo>[1];
 export async function runCreativePlans(db:AppDatabase,prepare:(draftId:string)=>Promise<Omit<Submission,'authorizationId'|'planStepId'>>,now=Date.now()){
   const steps=await db.getAllAsync<CreativePlanStep & {authorization_id:string|null}>(`SELECT s.*,p.authorization_id FROM creative_plan_steps s JOIN creative_plans p ON p.id=s.plan_id JOIN creative_execution_state e ON e.epoch=p.execution_epoch
-    WHERE p.state='ACTIVE' AND s.kind='video' AND s.state='READY' AND s.job_id IS NULL
+    WHERE p.state='ACTIVE' AND NOT EXISTS(SELECT 1 FROM creative_plan_controls c WHERE c.plan_id=p.id AND c.paused=1) AND s.kind='video' AND s.state='READY' AND s.job_id IS NULL
     AND NOT EXISTS(SELECT 1 FROM creative_plan_dependencies d JOIN creative_plan_steps prerequisite ON prerequisite.id=d.depends_on_step_id WHERE d.step_id=s.id AND prerequisite.state!='SUCCEEDED')
     ORDER BY p.created_at,s.id LIMIT 5`);
   for(const step of steps){
@@ -14,6 +14,8 @@ export async function runCreativePlans(db:AppDatabase,prepare:(draftId:string)=>
       const input=await prepare(step.draft_id);
       await submitCreativeVideo(db,{...input,authorizationId:step.authorization_id,planStepId:step.id},now);
     }catch(e){
+      // A pause is a durable scheduling gate, not a failed preparation.
+      if(e instanceof Error && e.message==='PLAN_PAUSED')continue;
       // The other worker may already have committed. Never overwrite its state.
       await withWriteTransaction(db,tx=>tx.runAsync("UPDATE creative_plan_steps SET state='BLOCKED',revision=revision+1,error_json=? WHERE id=? AND state='READY' AND job_id IS NULL",JSON.stringify({message:e instanceof Error?e.message.slice(0,300):'PLAN_PREPARATION_FAILED'}),step.id).then(()=>undefined));
     }

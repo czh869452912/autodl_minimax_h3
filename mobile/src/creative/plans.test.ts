@@ -189,3 +189,29 @@ test('plan confirmation and resulting draft use the persisted video specificatio
     expect(planVideoInput(JSON.stringify({prompt:'legacy'}))).toMatchObject({prompt:'legacy',resolution:'480p竖',duration:5,seed:''});
   }finally{f.db.close();}
 });
+
+test('durable pause stops later dispatch without cancelling accepted jobs',async()=>{
+ const f=await runnable();try{
+  await f.execute({name:'plan.setPaused',payload:{id:f.plan.planId,expectedRevision:0,paused:true}});
+  await runCreativePlans(f.db as never,f.prepare,200);
+  expect(f.prepare).not.toHaveBeenCalled();expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toEqual([]);
+  await f.execute({name:'plan.setPaused',payload:{id:f.plan.planId,expectedRevision:1,paused:false}});
+  await runCreativePlans(f.db as never,f.prepare,300);
+  expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toHaveLength(1);
+  await f.execute({name:'plan.setPaused',payload:{id:f.plan.planId,expectedRevision:2,paused:true}});
+  expect(f.db.getFirstSync("SELECT state FROM creative_plan_steps WHERE kind='video'")).toEqual({state:'DISPATCHED'});
+  expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toHaveLength(1);
+ }finally{f.db.close();}
+});
+
+test('pause arriving while preparation runs is checked again in submission transaction',async()=>{
+ const f=await runnable();try{
+  await runCreativePlans(f.db as never,async()=>{
+   await f.execute({name:'plan.setPaused',payload:{id:f.plan.planId,expectedRevision:0,paused:true}});
+   return f.input;
+  },200);
+  expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toEqual([]);
+  expect(f.db.getAllSync('SELECT * FROM creative_budget_reservations')).toEqual([]);
+  expect(f.db.getFirstSync("SELECT state FROM creative_plan_steps WHERE kind='video'")).toEqual({state:'READY'});
+ }finally{f.db.close();}
+});
