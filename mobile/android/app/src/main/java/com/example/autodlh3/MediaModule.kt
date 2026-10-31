@@ -42,6 +42,10 @@ internal class MediaWorkExecutors(
 }
 
 class MediaModule(private val context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
+  @ReactMethod
+  fun inspectLocalMedia(source: String, hash: String, kind: String, promise: Promise) {
+    executors.executeMedia { try { promise.resolve(MediaInspection(context).inspect(source,hash,kind)) } catch(e: Exception) { promise.reject("MEDIA_INSPECTION_FAILED",e.message,e) } }
+  }
   private val timelineRenderer = TimelineRenderer(context)
   @ReactMethod
   fun renderTimeline(request: String, promise: Promise) {

@@ -5,6 +5,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.arthenica.ffmpegkit.FFprobeKit
+import com.arthenica.ffmpegkit.FFmpegKit
+import com.arthenica.ffmpegkit.ReturnCode
 import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
@@ -40,6 +42,17 @@ class TimelineRendererInstrumentedTest {
    assertEquals(720,streams.first { it.type=="video" }.width.toInt())
    assertEquals(1280,streams.first { it.type=="video" }.height.toInt())
   } finally { output?.parentFile?.deleteRecursively();source.delete() }
+ }
+ @Test fun localProbeProducesBoundedFramesAndAudioMetadataWithoutNetwork() {
+  val source=fixture();val decoded=File.createTempFile("inspection-test-",".mp4",context.filesDir)
+  try {
+   assertTrue(ReturnCode.isSuccess(FFmpegKit.executeWithArguments(arrayOf("-v","error","-i",source.absolutePath,"-t","1","-c:v","mpeg4","-c:a","aac","-sn","-y",decoded.absolutePath)).returnCode))
+   val hash=MediaIntegrity(context).sha256(decoded.toURI().toString())
+   val inspection=JSONObject(MediaInspection(context).inspect(android.net.Uri.fromFile(decoded).toString(),hash,"video"))
+   assertEquals(3,inspection.getJSONArray("frames").length());assertTrue(inspection.getLong("durationMs")>0);assertTrue(inspection.getBoolean("hasAudio"))
+   val audio=JSONObject(MediaInspection(context).inspect(android.net.Uri.fromFile(decoded).toString(),hash,"audio"));assertEquals(0,audio.getJSONArray("frames").length())
+   for(i in 0 until inspection.getJSONArray("frames").length())File(java.net.URI(inspection.getJSONArray("frames").getJSONObject(i).getString("uri"))).delete()
+  } finally { decoded.delete();source.delete() }
  }
  @Test fun wrongHashAndOutOfBoundsTrimFailWithoutOutput() {
   val source=fixture()

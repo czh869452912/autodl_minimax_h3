@@ -1,3 +1,4 @@
+import {v47Inspection} from './v47Inspection';
 import {v46Search} from './v46Search';
 import {v45Render} from './v45Render';
 import {v44Timeline} from './v44Timeline';
@@ -51,6 +52,7 @@ export type AppDatabaseMigrationOptions = {
 };
 
 const steps = new Map<number, MigrationStep>([
+  [v47Inspection.fromVersion,v47Inspection],
   [v46Search.fromVersion,v46Search],
   [v45Render.fromVersion,v45Render],
   [v44Timeline.fromVersion,v44Timeline],
