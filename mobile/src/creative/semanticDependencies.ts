@@ -15,6 +15,8 @@ export async function readSemanticReferences(db:AppDatabase,versionId:string,pro
 
 /** Historical versions remain inspectable, but only current use prevents unlink/trash. */
 export async function assertSemanticAssetRemovable(db:AppDatabase,assetId:string,projectId?:string){
+ const timeline=await db.getFirstAsync<{title:string}>(`SELECT t.title FROM creative_timeline_inputs i JOIN creative_timelines t ON t.id=i.timeline_id JOIN creative_asset_versions v ON v.id=i.version_id WHERE v.asset_id=? AND t.discarded_at IS NULL AND (? IS NULL OR t.project_id=?) LIMIT 1`,assetId,projectId??null,projectId??null);
+ if(timeline)throw new Error('素材仍被时间线「'+timeline.title+'」使用；请先移除该工程');
  const use=await db.getFirstAsync<{title:string;version_no:number;shot_title:string|null}>(`SELECT e.title,v.version_no,
  (SELECT s.title FROM creative_shot_semantics b JOIN creative_shots s ON s.id=b.shot_id AND s.deleted_at IS NULL WHERE b.version_id=v.id LIMIT 1) AS shot_title
  FROM creative_semantic_references r JOIN creative_semantic_versions v ON v.id=r.semantic_version_id JOIN creative_semantic_entities e ON e.id=v.entity_id

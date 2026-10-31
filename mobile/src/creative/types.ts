@@ -3,7 +3,7 @@ export type CreativeAsset = { id: string; kind: 'image' | 'video' | 'audio' | 'p
 export type AssetVersion = { id: string; assetId: string; versionNo: number; createdAt?: number; source: 'import' | 'generated' | 'authored'; blobSha256?: string; relativePath?: string; mime?: string; state: 'AVAILABLE' | 'MISSING' | 'PENDING'; recipe: Record<string, unknown> };
 export type AsyncExecutionRef = { kind: 'generation'; jobId: string } | { kind: 'export'; deliveryId: string; operationId: string } | { kind: 'file_transfer'; attemptId: string; operationId: string };
 export type CommandResult<T> = { status: 'completed'; receiptId: string; value: T } | { status: 'accepted'; receiptId: string; execution: AsyncExecutionRef };
-export type CreativeCommand = import('./semanticResources').SemanticCommand | import('./story').StoryCommand
+export type CreativeCommand = import('./timelines').TimelineCommand | import('./semanticResources').SemanticCommand | import('./story').StoryCommand
   | import('./changeReview').ReviewCommand
   | import('./authoredText').AuthoredTextCommand
   | import('./plans').PlanCommand
