@@ -45,7 +45,7 @@ export function SemanticResourcesScreen(){
   <Text style={s.title}>参考素材 · {references.length}/20</Text>
   <Text style={s.muted}>固定引用项目内的具体版本；保存设定不会自动向模型发送素材。</Text>
   {references.map(ref=><View key={ref.versionId} style={s.card}><Text selectable style={s.body}>{ref.purpose} · {ref.versionId}</Text><ListAction label={'移除 '+ref.purpose} secondary disabled={busy} onPress={()=>{setReferences(rows=>rows.filter(r=>r.versionId!==ref.versionId));setReferencesDirty(true);}}/></View>)}
-  <TextInput accessibilityLabel="参考用途" value={purpose} onChangeText={setPurpose} maxLength={200} placeholder="例如：外观、服饰、音色" style={s.input}/>
+  <TextInput accessibilityLabel="参考用途" value={purpose} onChangeText={setPurpose} maxLength={100} placeholder="例如：外观、服饰、音色" style={s.input}/>
   <ListAction label="添加图片参考" secondary disabled={busy||references.length>=20||!purpose.trim()} onPress={()=>setPicking('image')}/>
   <ListAction label="添加声音参考" secondary disabled={busy||references.length>=20||!purpose.trim()} onPress={()=>setPicking('audio')}/>
   <TextInput accessibilityLabel="设定内容" placeholder="特征、约束与禁止变化项" multiline value={content} onChangeText={setContent} maxLength={20000} style={[s.input,{minHeight:120}]}/>

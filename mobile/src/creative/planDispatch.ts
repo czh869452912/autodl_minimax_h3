@@ -12,6 +12,10 @@ export async function checkPlanSubmission(tx:AppDatabase,draftId:string,stepId:s
   if(step.state!=='READY'||step.job_id||!await tx.getFirstAsync('SELECT event_id FROM creative_selection_outbox WHERE step_id=? AND execution_epoch=? AND consumed_at IS NULL',step.id,epoch.epoch))throw new Error('PLAN_STEP_NOT_READY');
   if(await tx.getFirstAsync("SELECT d.step_id FROM creative_plan_dependencies d JOIN creative_plan_steps s ON s.id=d.depends_on_step_id WHERE d.step_id=? AND s.state!='SUCCEEDED'",step.id))throw new Error('PLAN_DEPENDENCY_NOT_COMPLETE');
   const input=JSON.parse(step.input_binding_json);
+  const shot=await tx.getFirstAsync<{revision:number;version_id:string|null}>(`SELECT s.revision,a.version_id FROM creative_shots s
+    LEFT JOIN creative_shot_assets a ON a.shot_id=s.id AND a.slot='selected_image'
+    WHERE s.id=? AND s.project_id=? AND s.deleted_at IS NULL`,plan.shot_id,plan.project_id);
+  if(!shot||shot.version_id!==input.versionId||(typeof input.shotRevision==='number'&&shot.revision!==input.shotRevision))throw new Error('镜头已变更，请取消旧计划并重新确认输入；未提交新的生成任务。');
   if(!await tx.getFirstAsync('SELECT version_id FROM creative_draft_inputs WHERE draft_id=? AND ordinal=0 AND version_id=?',draftId,input.versionId))throw new Error('PLAN_INPUT_CHANGED');
   // A deleted originating chat closes unsent automation, but never removes audit.
   const source=await tx.getFirstAsync<{thread_id:string}>(`SELECT o.thread_id FROM creative_command_receipts r JOIN creative_execution_origins o ON o.id=r.execution_origin_id

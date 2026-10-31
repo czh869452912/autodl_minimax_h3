@@ -247,3 +247,16 @@ test('pause arriving while preparation runs is checked again in submission trans
   expect(f.db.getFirstSync("SELECT state FROM creative_plan_steps WHERE kind='video'")).toEqual({state:'READY'});
  }finally{f.db.close();}
 });
+
+test.each(['revision','selection'] as const)('upstream %s change during preparation prevents a stale dispatch',async(change)=>{
+ const f=await runnable();try{
+  await runCreativePlans(f.db as never,async()=>{
+   if(change==='selection')await f.execute({name:'shot.selectOutput',payload:{id:f.shotId,expectedRevision:1,slot:'selected_image',versionId:f.versionId}});
+   else f.db.runSync('UPDATE creative_shots SET revision=revision+1 WHERE id=?',f.shotId);
+   return f.input;
+  },200);
+  expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toEqual([]);
+  expect(f.db.getAllSync('SELECT * FROM creative_budget_reservations')).toEqual([]);
+  expect(f.db.getFirstSync("SELECT state FROM creative_plan_steps WHERE kind='video'")).toEqual({state:'BLOCKED'});
+ }finally{f.db.close();}
+});

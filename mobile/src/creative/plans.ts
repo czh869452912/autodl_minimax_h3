@@ -68,7 +68,7 @@ export async function applyPlanCommand(tx:AppDatabase,name:string,p:any,now:numb
     await applyDraftCommand(tx,'draft.updateVideo',{id:draft.draftId,expectedRevision:0,input:planVideoInput(next.input_binding_json)},now,makeId);
     const binding=JSON.stringify({versionId:p.versionId});
     await tx.runAsync("UPDATE creative_plan_steps SET state='SUCCEEDED',revision=revision+1,result_binding_json=? WHERE id=?",binding,d.step_id);
-    await tx.runAsync("UPDATE creative_plan_steps SET state='READY',revision=revision+1,draft_id=?,input_binding_json=? WHERE id=?",draft.draftId,JSON.stringify({...JSON.parse(next.input_binding_json),versionId:p.versionId}),next.id);
+    await tx.runAsync("UPDATE creative_plan_steps SET state='READY',revision=revision+1,draft_id=?,input_binding_json=? WHERE id=?",draft.draftId,JSON.stringify({...JSON.parse(next.input_binding_json),versionId:p.versionId,shotRevision:d.expected_shot_revision+1}),next.id);
     await tx.runAsync("UPDATE creative_decision_requests SET state='RESOLVED',revision=revision+1,selected_version_id=?,resolved_command_id=?,updated_at=? WHERE id=?",p.versionId,commandId,now,d.id);
     await tx.runAsync('INSERT INTO creative_selection_outbox VALUES(?,?,?,NULL,?)',`selection:${d.id}`,next.id,plan.execution_epoch,now);
     await tx.runAsync('UPDATE executor_wake_state SET generation=generation+1,requested_at=? WHERE singleton=1',now);
@@ -89,7 +89,7 @@ export async function applyPlanCommand(tx:AppDatabase,name:string,p:any,now:numb
     await tx.runAsync('INSERT INTO creative_plan_attempts VALUES(?,?,?,?,?,?)',makeId(),step.id,step.job_id,step.draft_id,JSON.stringify(step),now);
     const draft=await applyDraftCommand(tx,'draft.createVideo',{projectId:plan.project_id,shotId:plan.shot_id,versionId:binding.versionId,prompt:binding.prompt},now,makeId);
     await applyDraftCommand(tx,'draft.updateVideo',{id:draft.draftId,expectedRevision:0,input:JSON.parse(oldDraft.input_json)},now,makeId);
-    await tx.runAsync("UPDATE creative_plan_steps SET state='BLOCKED',revision=revision+1,draft_id=?,job_id=NULL,result_binding_json='{}',error_json=? WHERE id=?",draft.draftId,JSON.stringify({message:'重做需要重新授权一次生成，原任务与费用记录保留。'}),step.id);
+    await tx.runAsync("UPDATE creative_plan_steps SET state='BLOCKED',revision=revision+1,draft_id=?,job_id=NULL,input_binding_json=?,result_binding_json='{}',error_json=? WHERE id=?",draft.draftId,JSON.stringify({...binding,shotRevision:p.expectedShotRevision}),JSON.stringify({message:'重做需要重新授权一次生成，原任务与费用记录保留。'}),step.id);
     await tx.runAsync('UPDATE creative_plans SET authorization_id=NULL,revision=revision+1,updated_at=? WHERE id=?',now,plan.id);
     await tx.runAsync('UPDATE creative_selection_outbox SET consumed_at=NULL WHERE step_id=?',step.id);
     return {planId:plan.id,draftId:draft.draftId,stepId:step.id};
