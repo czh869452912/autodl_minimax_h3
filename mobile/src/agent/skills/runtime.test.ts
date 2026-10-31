@@ -106,7 +106,8 @@ test('independent reviewer has read-only capabilities and shares durable parent 
    expect(JSON.stringify(result.messages)).toContain('Evidence needs user review');
    expect(models).toHaveLength(2);expect(models[1].received).toHaveLength(1);
    expect(toolNames.some(names=>names.includes('shot_get')&&!names.includes('generation_submit')&&!names.includes('review_project'))).toBe(true);
-   expect(db.getFirstSync('SELECT model_calls,tool_calls FROM creative_run_usage')).toEqual({model_calls:3,tool_calls:1});
+   // Scripted models make no network requests; tools still share the persistent budget.
+   expect(db.getFirstSync('SELECT model_calls,tool_calls FROM creative_run_usage')).toEqual({model_calls:0,tool_calls:1});
   }finally{handle.release();}
  }finally{db.close();}
 });

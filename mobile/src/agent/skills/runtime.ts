@@ -1,3 +1,5 @@
+import {createOpenAICompatibleModel} from '../modelAdapter';
+import {reserveRunCall} from '../runUsage';
 import {runUsageMiddleware} from '../runUsage';
 import {getH3ContextBudget} from '../agentTypes';
 import CryptoJS from 'crypto-js';
@@ -34,8 +36,13 @@ export function createSkillRunPreparer(db: AppDatabase, config: H3AgentConfig, c
       const files = skillFiles(versions);
       const version = CryptoJS.SHA256(JSON.stringify({ ...getOfficialH3SkillFiles(), ...files })).toString();
       await pinRunRuntime(db,input.threadId,input.runId,config,version,creativeToolPolicy().entries.map(t=>JSON.stringify(t)));
+      const assertAuthority=async()=>{await assertRunAuthority(db,input.threadId,input.runId);await store.resolve(snapshot);if(signal.aborted)throw new Error('运行已停止');};
       return {
-        graph: createGraph(config, { runMiddleware:[runUsageMiddleware(db,input.threadId,input.runId,getH3ContextBudget(config).outputTokens)], skillFiles: files, assertSkills: async () => { await assertRunAuthority(db,input.threadId,input.runId);await store.resolve(snapshot); } }) as never,
+        graph: createGraph(config, { modelFactory:configuration=>createOpenAICompatibleModel(configuration,{beforeRequest:async body=>{
+          await assertAuthority();
+          // Reserve the serialized request plus configured output, including retries and summaries.
+          await reserveRunCall(db,input.threadId,input.runId,'model',Math.ceil(body.length/2)+getH3ContextBudget(config).outputTokens);
+        }}),runMiddleware:[runUsageMiddleware(db,input.threadId,input.runId,getH3ContextBudget(config).outputTokens,true)], skillFiles: files, assertSkills: async () => { await assertRunAuthority(db,input.threadId,input.runId);await store.resolve(snapshot); } }) as never,
         workspace: {
           prepareWorkspaceRun: (saved: unknown, messages: readonly unknown[], budget?: workspace.H3ContextBudget) => workspace.prepareWorkspaceRun(saved, messages, budget, version),
           captureWorkspaceState: (state: unknown, revision: number, budget?: workspace.H3ContextBudget) => workspace.captureWorkspaceState(state, revision, budget, version),

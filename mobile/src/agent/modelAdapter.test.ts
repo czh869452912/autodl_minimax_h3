@@ -61,3 +61,18 @@ describe('H3 model configuration validation', () => {
     expect(ChatOpenAI).toHaveBeenLastCalledWith(expect.objectContaining({ modelKwargs: { reasoning_effort: 'medium' } }));
   });
 });
+
+test('network hooks cover every SDK request/retry and deny transport before dispatch',async()=>{
+ const original=globalThis.fetch,transport=jest.fn(async()=>new Response('{}',{status:200}));globalThis.fetch=transport;
+ try{
+  const beforeRequest=jest.fn(async(_body:string)=>{});
+  createOpenAICompatibleModel({apiKey:'test',endpoint:'https://example.test/v1',model:'test',timeoutMs:1000,maxRetries:2},{beforeRequest});
+  const fetcher=(jest.mocked(ChatOpenAI).mock.calls.at(-1)![0] as any).configuration.fetch;
+  for(const prompt of ['main','summary','retry'])await fetcher('https://example.test/v1/chat/completions',{method:'POST',body:JSON.stringify({messages:[{role:'user',content:prompt}]})});
+  expect(beforeRequest).toHaveBeenCalledTimes(3);expect(transport).toHaveBeenCalledTimes(3);
+  beforeRequest.mockRejectedValueOnce(new Error('RUN_CALL_LIMIT'));
+  await expect(fetcher('https://example.test/v1/chat/completions',{method:'POST',body:'{}'})).rejects.toThrow('RUN_CALL_LIMIT');
+  await expect(fetcher('https://example.test/v1/chat/completions',{})).rejects.toThrow('UNMETERED');
+  expect(transport).toHaveBeenCalledTimes(3);
+ }finally{globalThis.fetch=original;}
+});

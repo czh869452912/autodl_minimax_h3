@@ -22,12 +22,19 @@ export function validateH3AgentConfig(config: H3AgentConfig): void {
   if (error) throw new Error(error);
 }
 
-export function createOpenAICompatibleModel(config: H3AgentConfig): ChatOpenAI {
+export function createOpenAICompatibleModel(config: H3AgentConfig, hooks?:{beforeRequest:(body:string)=>Promise<void>}): ChatOpenAI {
   validateH3AgentConfig(config);
   // Match the installed SDK's reasoning-model detection so it can translate
   // effort into either Chat Completions or Responses parameters.
   const sdkReasoning = /^(?:o\d|gpt-5(?!-chat))/.test(config.model.trim());
   const effort = config.reasoningEffort;
+  const transport=createStreamingFetch({timeoutMs:config.timeoutMs});
+  const meteredFetch:typeof fetch=hooks?async(input,init)=>{
+    // SDK retries and framework summaries all cross this transport boundary.
+    if(typeof init?.body!=='string')throw new Error('RUN_MODEL_REQUEST_UNMETERED');
+    await hooks.beforeRequest(init.body);
+    return transport(input,init);
+  }:transport;
   const fields: ChatOpenAIFields = {
     model: config.model.trim(),
     // OpenAI reasoning modes reject custom sampling temperatures.
@@ -44,7 +51,7 @@ export function createOpenAICompatibleModel(config: H3AgentConfig): ChatOpenAI {
     configuration: {
       baseURL: config.endpoint.trim(),
       dangerouslyAllowBrowser: true,
-      fetch: createStreamingFetch({ timeoutMs: config.timeoutMs }),
+      fetch: meteredFetch,
     },
   };
   return new ChatOpenAI({ ...fields, ...(isDeepSeekV4(config.model) && config.reasoningEffort !== 'none' ? { completions: new DeepSeekCompletions(fields) } : {}) });

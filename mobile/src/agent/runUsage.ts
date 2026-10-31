@@ -19,11 +19,11 @@ export async function reserveRunCall(db:AppDatabase,threadId:string,runId:string
   await tx.runAsync('UPDATE creative_run_usage SET model_calls=model_calls+?,tool_calls=tool_calls+?,estimated_tokens=estimated_tokens+? WHERE thread_id=? AND run_id=?',kind==='model'?1:0,kind==='tool'?1:0,estimatedTokens,threadId,runId);
  });
 }
-export function runUsageMiddleware(db:AppDatabase,threadId:string,runId:string,outputTokens:number){
+export function runUsageMiddleware(db:AppDatabase,threadId:string,runId:string,outputTokens:number,networkMetered=false){
  return createMiddleware({name:'DurableRunUsage',
   wrapModelCall:async(request,handler)=>{
    const estimate=countTokensApproximately(request.systemMessage?[request.systemMessage,...request.messages]:request.messages,request.tools)+outputTokens;
-   await reserveRunCall(db,threadId,runId,'model',estimate);
+   if(!networkMetered)await reserveRunCall(db,threadId,runId,'model',estimate);
    const response=await handler(request);
    const usage=(response as {usage_metadata?:{total_tokens?:number}}).usage_metadata?.total_tokens;
    if(Number.isSafeInteger(usage)&&usage!>=0)await db.runAsync('UPDATE creative_run_usage SET reported_tokens=reported_tokens+? WHERE thread_id=? AND run_id=?',usage!,threadId,runId);
