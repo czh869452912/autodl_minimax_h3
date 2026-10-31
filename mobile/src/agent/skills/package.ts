@@ -1,10 +1,12 @@
+import {z} from 'zod';
 import CryptoJS from 'crypto-js';
 import { Inflate, strFromU8, strToU8 } from 'fflate';
 import { load, JSON_SCHEMA } from 'js-yaml';
 
 export const SKILL_BYTES = 512 * 1024;
 export const SKILL_FILES = 32;
-export type SkillPackage = { id: string; name: string; description: string; files: Record<string, string> };
+export const skillCapabilitySchema=z.object({version:z.literal(1),tools:z.array(z.string().regex(/^[a-z][a-z0-9_]{0,99}$/)).max(32).default([]),inputs:z.array(z.enum(['text','image','video','audio'])).max(4).default([]),output:z.enum(['text','proposal','quality-report']).default('text')}).strict();
+export type SkillPackage = { capabilities?:z.infer<typeof skillCapabilitySchema>; id: string; name: string; description: string; files: Record<string, string> };
 const fail = (message: string): never => { throw new Error(message); };
 
 function pathName(path: string): string {
@@ -36,6 +38,7 @@ export function validateSkillPackage(input: Record<string, string>): SkillPackag
   const meta = load(front![1], { schema: JSON_SCHEMA }) as Record<string, unknown>;
   if (!meta || typeof meta !== 'object' || Array.isArray(meta) || typeof meta.name !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(meta.name) || meta.name.length > 64 || typeof meta.description !== 'string' || !meta.description.trim() || meta.description.length > 1000) fail('技能 name 必须为小写英文短名，description 不能为空');
   if (['dependencies', 'requires', 'allowed-tools'].some(key => meta[key] != null)) fail('此技能声明了额外依赖或工具权限，请先改为纯文本指导版本');
+  const capabilities=meta['workbench-capabilities']===undefined?undefined:skillCapabilitySchema.parse(meta['workbench-capabilities']);
   // Validate local Markdown references before publication. Remote links stay text.
   for (const [path, text] of Object.entries(files)) {
     for (const match of text.matchAll(/!?\[[^\]]*\]\(([^\s)]+)(?:\s+[^)]*)?\)/g)) {
@@ -51,7 +54,7 @@ export function validateSkillPackage(input: Record<string, string>): SkillPackag
       if (!(destination in files)) fail(`技能引用的文件缺失：${destination}`);
     }
   }
-  return { id: CryptoJS.SHA256(JSON.stringify(files)).toString(), name: meta.name as string, description: (meta.description as string).trim(), files };
+  return { id: CryptoJS.SHA256(JSON.stringify(files)).toString(), name: meta.name as string, description: (meta.description as string).trim(), files, ...(capabilities?{capabilities}:{}) };
 }
 
 function crc32(bytes: Uint8Array): number {

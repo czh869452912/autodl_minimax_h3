@@ -110,3 +110,10 @@ test('independent reviewer has read-only capabilities and shares durable parent 
   }finally{handle.release();}
  }finally{db.close();}
 });
+
+test('missing declared capabilities fail before model construction',async()=>{
+ const db=createInitializedRealSqliteTestDb();try{
+ const store=createSkillStore(db as never);const id=await store.install(validateSkillPackage({'SKILL.md':'---\nname: needs-shell\ndescription: unavailable\nworkbench-capabilities:\n  version: 1\n  tools: [execute]\n---\nCheck.'}));await store.enable(id);
+ const factory=jest.fn();await expect(createSkillRunPreparer(db as never,config,factory)({threadId:'t',runId:'r'},new AbortController().signal,jest.fn())).rejects.toThrow('SKILL_CAPABILITY_MISSING');expect(factory).not.toHaveBeenCalled();
+ }finally{db.close();}
+});

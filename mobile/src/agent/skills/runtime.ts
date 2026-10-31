@@ -29,6 +29,8 @@ export function createSkillRunPreparer(db: AppDatabase, config: H3AgentConfig, c
     try {
       const versions = await store.resolve(snapshot);
       if (signal.aborted) throw new Error('运行已停止');
+      const available=new Set(creativeToolPolicy().entries.map(e=>e.name));
+      for(const version of versions){const missing=version.capabilities?.tools.filter(t=>!available.has(t))??[];if(missing.length)throw new Error('SKILL_CAPABILITY_MISSING: '+version.name+' / '+missing.join(', '));}
       const files = skillFiles(versions);
       const version = CryptoJS.SHA256(JSON.stringify({ ...getOfficialH3SkillFiles(), ...files })).toString();
       await pinRunRuntime(db,input.threadId,input.runId,config,version,creativeToolPolicy().entries.map(t=>JSON.stringify(t)));

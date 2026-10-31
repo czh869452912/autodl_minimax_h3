@@ -33,3 +33,10 @@ test('rejects size bombs, CRC tampering, symlinks and central/local disagreement
   forged.setUint32(dir + 24, 100, true);
   expect(() => readSkillZip(bomb)).toThrow(/声明大小/);
 });
+
+test('capability metadata is declarative, versioned and cannot introduce execution rights',()=>{
+ const body='---\nname: review\ndescription: review\nworkbench-capabilities:\n  version: 1\n  tools: [shot_get]\n  inputs: [text]\n  output: quality-report\n---\nRead facts.';
+ expect(validateSkillPackage({'SKILL.md':body}).capabilities).toEqual({version:1,tools:['shot_get'],inputs:['text'],output:'quality-report'});
+ expect(()=>validateSkillPackage({'SKILL.md':body.replace('version: 1','version: 2')})).toThrow();
+ expect(()=>validateSkillPackage({'SKILL.md':body.replace('output: quality-report','output: quality-report\n  grant: true')})).toThrow();
+});
