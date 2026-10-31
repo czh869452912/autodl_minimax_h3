@@ -313,6 +313,8 @@ test('history uses the resized viewport without an editor overlay and switching 
   expect(tree.root.findAllByProps({testID:'image-workbench-tools'})).toHaveLength(0);
   act(()=>tree.root.findByProps({testID:'image-workbench-canvas'}).parent!.props.onLayout({nativeEvent:{layout:{width:351,height:220,x:0,y:0}}}));
   expect(stage().height).toBeUndefined();
+  expect(button(tree,'生成 1 张图片')).toBeUndefined();
+  act(()=>results().props.onHistoryVisibilityChange(false));
   act(()=>button(tree,'展开画面编辑').props.onPress());
   expect(results().props.historyVisible).toBe(false);
   expect(StyleSheet.flatten(tree.root.findAllByProps({testID:'image-workbench-tools'})[0].props.style).position).toBe('absolute');

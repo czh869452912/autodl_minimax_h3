@@ -1,4 +1,3 @@
-import {useKeyboardVisible} from '../ui/useKeyboardVisible';
 import {returnToProject} from '../navigation/creativeNavigation';
 import { useResultHistory } from './useResultHistory';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -53,8 +52,8 @@ export function CreativeResults({ draft, host='workbench', onlyJob=false, taskDe
   const [heldOriginal,setHeldOriginal]=useState<string>();
   const [processing,setProcessing]=useState(false),[more,setMore]=useState(false),[localHistory,setLocalHistory]=useState(false);
   const history=historyVisible??localHistory;
-  const keyboardVisible=useKeyboardVisible();
-  const historySearch=canvas && history && keyboardVisible && !layout.sideBySide;
+
+  const historySearch=canvas && history && !layout.sideBySide;
   const previewHeight=history && !layout.sideBySide?bounds.height-layout.panelHeight:bounds.height;
   const minimalChrome=canvas && previewHeight<220;
   const setHistory=onHistoryVisibilityChange??setLocalHistory;
@@ -227,7 +226,7 @@ export function CreativeResults({ draft, host='workbench', onlyJob=false, taskDe
   if(!previewVisible)return null;
   return <View style={dock || canvas?{flex:1}:{gap:12}}>
     {canvas && (saveRequested&&deliveryNotice||notice)?<View style={{position:'absolute',bottom:8,left:12,right:12,zIndex:10,padding:8,borderRadius:10,backgroundColor:COLORS.surfaceRaised}}>{saveStatus}<TextAction label="关闭保存提示" onPress={()=>{setSaveRequested(false);setNotice('');}}/></View>:null}
-    {canvas?<View onLayout={event=>setBounds(event.nativeEvent.layout)} style={{flex:1,minHeight:0,flexDirection:layout.sideBySide?'row':'column'}}><View testID="history-preview-region" style={{flex:1,minHeight:0,display:historySearch?'none':'flex'}}>{canvasContent}</View><WorkbenchRegion visible={history && draft.provider_id==='novelai'} size={layout.sideBySide?layout.panelWidth:historySearch?bounds.height:layout.panelHeight} horizontal={layout.sideBySide} testID="inline-image-history" style={{borderRadius:14,borderWidth:0.5,borderColor:COLORS.border,backgroundColor:COLORS.surface}}><ImageHistorySheet source={history?historyScope:undefined} inline rail={layout.sideBySide} versions={versions} selectedId={current?.id} locked={historyLocked} onLock={toggleHistoryLock} onSelect={version=>{setSelectedVersion(version);setSelected(version.id);}} onExport={exportHistory} onClose={()=>setHistory(false)} /></WorkbenchRegion></View>:dock?<ScrollView contentContainerStyle={{padding:16,gap:12}}>{content}</ScrollView>:content}
+    {canvas?<View onLayout={event=>setBounds(event.nativeEvent.layout)} style={{flex:1,minHeight:0,flexDirection:layout.sideBySide?'row':'column'}}><View testID="history-preview-region" style={{flex:1,minHeight:0,display:historySearch?'none':'flex'}}>{canvasContent}</View><WorkbenchRegion visible={history && draft.provider_id==='novelai'} size={layout.sideBySide?layout.panelWidth:historySearch?bounds.height:layout.panelHeight} horizontal={layout.sideBySide} testID="inline-image-history" style={{borderRadius:14,borderWidth:0.5,borderColor:COLORS.border,backgroundColor:COLORS.surface}}><ImageHistorySheet source={history?historyScope:undefined} inline rail={layout.sideBySide || historySearch} versions={versions} selectedId={current?.id} locked={historyLocked} onLock={toggleHistoryLock} onSelect={version=>{setSelectedVersion(version);setSelected(version.id);if(historySearch)setHistory(false);}} onExport={exportHistory} onClose={()=>setHistory(false)} /></WorkbenchRegion></View>:dock?<ScrollView contentContainerStyle={{padding:16,gap:12}}>{content}</ScrollView>:content}
     {!canvas?actions:null}
     {processing && current?<ImageProcessingSheet version={current} projectId={draft.project_id??undefined} shotId={draft.shot_id??undefined} replace={host==='workbench'} onClose={()=>setProcessing(false)} />:null}
     {more?<ParameterSheet title="成果操作" onClose={()=>setMore(false)}>

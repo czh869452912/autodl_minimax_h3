@@ -217,7 +217,7 @@ test('canvas tools use the selected version in place and a new job selects its o
     mockVersions = [{ ...mockVersions[0], id: 'new', versionNo: 3, recipe: { jobId: 'new-job' } }, ...mockVersions];
     await act(async () => { tree.update(<CreativeResults draft={{...draft,job_id:'new-job'}} canvas onEnhance={enhance} onCurrentVersion={current} onJobStatus={status} historySignal={1} />); });
     expect(current).toHaveBeenLastCalledWith(mockVersions[0]);
-    expect(findButton(tree, '查看版本 1')).toBeDefined(); // Inline history stays open for continuous comparison.
+    expect(findButton(tree, '查看版本 1')).toBeUndefined(); // Choosing a result returns to the canvas.
   } finally { act(() => tree?.unmount()); }
 });
 
@@ -336,7 +336,7 @@ test('image canvas keeps history hidden until its explicit history control opens
  }finally{act(()=>tree?.unmount());}
 });
 
-test('history search keeps its query and selection while the keyboard takes the preview space',async()=>{
+test('history browser keeps a stable grid and query across keyboard transitions',async()=>{
   const selected=jest.fn();let tree!:ReturnType<typeof create>;
   const render=()=> <CreativeResults draft={draft} canvas historyVisible onCurrentVersion={selected}/>;
   try{
@@ -353,6 +353,6 @@ test('history search keeps its query and selection while the keyboard takes the 
     mockKeyboardVisible=false;
     await act(async()=>tree.update(render()));
     expect(search().props.value).toBe('12345');
-    expect(StyleSheet.flatten(tree.root.findByProps({testID:'history-preview-region'}).props.style).display).toBe('flex');
+    expect(StyleSheet.flatten(tree.root.findByProps({testID:'history-preview-region'}).props.style).display).toBe('none');
   }finally{act(()=>tree?.unmount());}
 });

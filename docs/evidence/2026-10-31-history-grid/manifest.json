@@ -1,0 +1,47 @@
+[
+  {
+    "name": "beta36-verification.json",
+    "bytes": 495,
+    "sha256": "A46ACD13FC92D59BFCE811192AD9EAFD51DE95C54547F8B6626AE8CE08D70E4E"
+  },
+  {
+    "name": "grid-open.png",
+    "bytes": 262261,
+    "sha256": "FA4ABD12E3E95676A7886439776A1AB6B1E04DA22F55A86664F60054DE4A1519"
+  },
+  {
+    "name": "grid-open.xml",
+    "bytes": 36804,
+    "sha256": "13ACDFD254BAFDE93B0E8987CB8E91385E61BB9B69A1AE968B467BCE490E9DB8"
+  },
+  {
+    "name": "grid-search.png",
+    "bytes": 238137,
+    "sha256": "BBAF4EF1D640544D3A5DF4AADA8B9FC7096260E8E10C89312EAFF1102E8FD9A4"
+  },
+  {
+    "name": "grid-search.xml",
+    "bytes": 29910,
+    "sha256": "0DD4EEE5749F41939640539DF3400907DE74F6C04C66EF4D1C48DC7AB150E9F7"
+  },
+  {
+    "name": "selected-return.png",
+    "bytes": 250204,
+    "sha256": "24381FB5E3F4C76138E2EFE707AF033CE4152D2C7CB56DB3B3A6FE22C163CCAD"
+  },
+  {
+    "name": "selected-return.xml",
+    "bytes": 36085,
+    "sha256": "92CB2A580AA9ED2B9690066384323E29E948DD591450E879A0E6F2E3971E10EA"
+  },
+  {
+    "name": "start.png",
+    "bytes": 252059,
+    "sha256": "C5E27DDF6D5B2676AC97FF635441718815B7F30002641F66526CF1BC959F3BDD"
+  },
+  {
+    "name": "start.xml",
+    "bytes": 36085,
+    "sha256": "0AA11D1493809C54991FC0E977824465BFA6628E46567D44562F8B63F92EF024"
+  }
+]

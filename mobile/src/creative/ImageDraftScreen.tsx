@@ -227,7 +227,7 @@ function ImageCanvas({initialId,embedded}:{initialId:string;embedded:boolean}) {
         {processing==='enhance' && enhanceInput?<NovelAiEnhancePanel input={enhanceInput} editable={!busy && !pending} update={patch=>setEnhanceInput(old=>old?{...old,...patch}:old)} onClose={closeProcessing} />:processing==='upscale'?<View style={c.toolCard}><View style={s.row}><Text style={{color:COLORS.text,fontWeight:'600'}}>清晰放大 · 2×</Text><IconAction label="关闭放大" icon="close" onPress={closeProcessing} disabled={busy} /></View><Text style={c.caption}>宽高各放大 2 倍，保留原图并新增版本。</Text></View>:null}
       </ScrollView>:null}
     </View>
-    {input?<View style={[assist?{display:'none'}:undefined,c.composer,{width:'100%',maxWidth:760,alignSelf:'center'}]}>
+    {input && !historyOpen?<View style={[assist?{display:'none'}:undefined,c.composer,{width:'100%',maxWidth:760,alignSelf:'center'}]}>
 
 
 
