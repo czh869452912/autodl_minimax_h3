@@ -1,3 +1,4 @@
+import {activeLlmConnection,selectLlmConnection} from './llmConnections';
 import { settingsEvents } from './events';
 import { VIDEO_DECODE_MODE_KEY, normalizeVideoDecodeMode, publishVideoDecodeMode, type VideoDecodeMode } from './videoDecodeMode';
 import * as SecureStore from 'expo-secure-store';
@@ -20,6 +21,7 @@ const keys = {
 } as const;
 
 export type AppSettings = {
+  llmConnectionId?:string;llmConnectionRevision?:number;llmSupportsImages?:boolean;
   videoDecodeMode?: VideoDecodeMode;
   autoExportImagesToGallery?: boolean;
   llmEndpoint: string;
@@ -38,6 +40,7 @@ export async function readSettings(): Promise<AppSettings> {
   const [llmEndpoint, llmModel, llmApiKey, llmTimeoutSeconds, llmMaxRetries, autoExportToGallery, keepPrivateCopy, llmContextWindowTokens, llmMaxOutputTokens, llmReasoningEffort, videoDecodeMode, autoExportImagesToGallery] = await Promise.all(
     Object.values(keys).map((key) => SecureStore.getItemAsync(key)),
   );
+  const connection=await activeLlmConnection();
   return {
     autoExportImagesToGallery: autoExportImagesToGallery === 'true',
     videoDecodeMode: normalizeVideoDecodeMode(videoDecodeMode),
@@ -51,10 +54,12 @@ export async function readSettings(): Promise<AppSettings> {
     ...(llmContextWindowTokens ? { llmContextWindowTokens } : {}),
     ...(llmMaxOutputTokens ? { llmMaxOutputTokens } : {}),
     ...(llmReasoningEffort ? { llmReasoningEffort: llmReasoningEffort as ReasoningEffort } : {}),
+    ...(connection?{llmEndpoint:connection.endpoint,llmModel:connection.model,llmApiKey:connection.apiKey,llmSupportsImages:connection.images,llmConnectionId:connection.id,llmConnectionRevision:connection.revision,llmReasoningEffort:'default' as const}:{}),
   };
 }
 
 export async function saveSettings(values: Partial<AppSettings>): Promise<void> {
+  if(values.llmEndpoint!==undefined||values.llmModel!==undefined||values.llmApiKey!==undefined)await selectLlmConnection(null);
   await Promise.all([
     values.autoExportImagesToGallery === undefined ? undefined : SecureStore.setItemAsync(keys.autoExportImagesToGallery, String(values.autoExportImagesToGallery)),
     values.videoDecodeMode === undefined ? undefined : SecureStore.setItemAsync(VIDEO_DECODE_MODE_KEY, normalizeVideoDecodeMode(values.videoDecodeMode)),

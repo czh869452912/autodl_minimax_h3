@@ -1,3 +1,4 @@
+import {assertLlmConnection} from '../../settings/llmConnections';
 import {createOpenAICompatibleModel} from '../modelAdapter';
 import {reserveRunCall} from '../runUsage';
 import {runUsageMiddleware} from '../runUsage';
@@ -33,10 +34,12 @@ export function createSkillRunPreparer(db: AppDatabase, config: H3AgentConfig, c
       if (signal.aborted) throw new Error('运行已停止');
       const available=new Set(creativeToolPolicy().entries.map(e=>e.name));
       for(const version of versions){const missing=version.capabilities?.tools.filter(t=>!available.has(t))??[];if(missing.length)throw new Error('SKILL_CAPABILITY_MISSING: '+version.name+' / '+missing.join(', '));}
+      for(const version of versions){const missing=version.capabilities?.inputs.filter(input=>input!=='text'&&!(input==='image'&&config.supportsImages))??[];if(missing.length)throw new Error('SKILL_INPUT_CAPABILITY_MISSING: '+version.name+' / '+missing.join(', '));}
+      await assertLlmConnection(config);
       const files = skillFiles(versions);
       const version = CryptoJS.SHA256(JSON.stringify({ ...getOfficialH3SkillFiles(), ...files })).toString();
       await pinRunRuntime(db,input.threadId,input.runId,config,version,creativeToolPolicy().entries.map(t=>JSON.stringify(t)));
-      const assertAuthority=async()=>{await assertRunAuthority(db,input.threadId,input.runId);await store.resolve(snapshot);if(signal.aborted)throw new Error('运行已停止');};
+      const assertAuthority=async()=>{await assertLlmConnection(config);await assertRunAuthority(db,input.threadId,input.runId);await store.resolve(snapshot);if(signal.aborted)throw new Error('运行已停止');};
       return {
         graph: createGraph(config, { modelFactory:configuration=>createOpenAICompatibleModel(configuration,{beforeRequest:async body=>{
           await assertAuthority();

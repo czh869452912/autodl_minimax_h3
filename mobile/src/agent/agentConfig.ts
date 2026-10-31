@@ -4,6 +4,7 @@ import type { H3AgentConfig } from './agentTypes';
 export function toH3AgentConfig(settings: AppSettings): H3AgentConfig {
   return {
     apiKey: settings.llmApiKey,
+    ...(settings.llmConnectionId?{connectionId:settings.llmConnectionId,connectionRevision:settings.llmConnectionRevision,supportsImages:settings.llmSupportsImages}:{}),
     endpoint: settings.llmEndpoint,
     model: settings.llmModel,
     timeoutMs: Number(settings.llmTimeoutSeconds) * 1000,

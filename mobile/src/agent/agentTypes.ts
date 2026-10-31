@@ -1,6 +1,7 @@
 import type { ReasoningEffort } from '../config/llmReasoning';
 
 export type H3AgentConfig = {
+  connectionId?:string;connectionRevision?:number;supportsImages?:boolean;
   apiKey: string;
   endpoint: string;
   model: string;
