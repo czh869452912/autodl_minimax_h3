@@ -27,3 +27,10 @@
 - 本地检查通过只表示 needs_preparation；明确 executionAllowed=false，仍需实际参数、原件、凭据和提交授权检查。没有读取密钥或发送探测请求。
 - H05 部分完成；不是任意 Provider 接入，不等于完整预检或外发授权。
 - 验证：draftReadiness 与 agentScope 共七项通过；TypeScript 检查通过。测试确认诊断不创建 Job、授权或预算预留。
+
+## 第四切片：镜头上下文分页与按对象读取
+
+- creative_context 每页返回 30 个镜头和游标，描述限 500 字并标记截断；新增 shot_get 获取完整描述、revision 和采用版本。
+- UI 的原有镜头列表保持兼容；分页针对 Agent 工具，不改变项目排序。
+- 验证：agentScope 和 plans 共 25 项通过，包括 32 镜头分页无重复、完整读取与范围拒绝；TypeScript 检查通过。
+- H04 仍未包含全文索引、授权剩余量；H10 的界面焦点传递尚待实现。

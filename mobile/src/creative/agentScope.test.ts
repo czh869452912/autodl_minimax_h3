@@ -97,3 +97,20 @@ test('asset tools page versions and deny cross-project references',async()=>{
   expect(await invoke('asset_versions',{assetId})).toMatchObject({status:'error',message:'AGENT_PROJECT_SCOPE_MISMATCH'});
  }finally{f.db.close();}
 });
+
+test('project context pages shots and offers scoped full object reads',async()=>{
+ const f=await fixture();try{
+  for(let i=0;i<32;i++)await f.service.execute({name:'shot.create',payload:{projectId:f.projectId,title:'shot '+i,description:'x'.repeat(1000)}},'shot-'+i);
+  const invoke=async(name:string,args:Record<string,unknown>)=>{
+   const t=createCreativeAgentTools().find(t=>t.name===name)!;
+   const r=await (t as import('@langchain/core/tools').StructuredToolInterface).invoke({type:'tool_call',id:'read',name,args},{configurable:{thread_id:'thread',creative_run_id:'run'}});
+   return JSON.parse(String((r as {content:unknown}).content));
+  };
+  const first=await invoke('creative_context',{}),second=await invoke('creative_context',{after:first.nextShotCursor});
+  expect(first.shots).toHaveLength(30);expect(second.shots).toHaveLength(2);expect(second.nextShotCursor).toBeNull();
+  expect(first.shots[0].description).toHaveLength(500);expect(first.shots[0].descriptionTruncated).toBe(true);
+  expect(new Set([...first.shots,...second.shots].map(s=>s.id)).size).toBe(32);
+  expect((await invoke('shot_get',{shotId:first.shots[0].id})).shot.description).toHaveLength(1000);
+  expect(await invoke('shot_get',{shotId:'other-project-shot'})).toMatchObject({status:'error'});
+ }finally{f.db.close();}
+});

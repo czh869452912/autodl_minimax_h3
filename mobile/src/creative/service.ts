@@ -61,7 +61,7 @@ export function createCreativeService(db: AppDatabase, deps = { id: createId, no
   return {
     resultHistoryPage: (options: Parameters<typeof readResultHistoryPage>[1]) => readResultHistoryPage(db,options),
     videoHistory: (draft: Parameters<typeof readVideoHistory>[1],options?:Parameters<typeof readVideoHistory>[2]) => readVideoHistory(db,draft,options),
-    shots: (projectId: string) => listCreativeShots(db, projectId),
+    shots: (projectId: string, page?: Parameters<typeof listCreativeShots>[2]) => listCreativeShots(db, projectId, page),
     draft: (id: string) => readCreativeDraft(db, id),
     creationRecordPage: (options?:CreationQuery) => readCreationRecordPage(db,options),
     creationRecords: (options?:CreationQuery) => readCreationRecords(db,options),

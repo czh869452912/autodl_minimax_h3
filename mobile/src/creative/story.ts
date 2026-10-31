@@ -12,13 +12,13 @@ export const storySchemas = {
 };
 export type StoryCommand = { [K in keyof typeof storySchemas]: { name: K; payload: z.input<typeof storySchemas[K]> } }[keyof typeof storySchemas];
 export type CreativeShot = { id: string; project_id: string; title: string; description: string; sort_key: number; editorial_status: 'planned' | 'working' | 'review' | 'approved'; revision: number; selected_image: string | null; selected_video: string | null; image_state?: string | null; image_asset_id?: string | null };
-export function listCreativeShots(db: AppDatabase, projectId: string) {
+export function listCreativeShots(db: AppDatabase, projectId: string, page?: {limit:number;after?:{sortKey:number;id:string}}) {
   return db.getAllAsync<CreativeShot>(`SELECT s.*,
     (SELECT version_id FROM creative_shot_assets WHERE shot_id=s.id AND slot='selected_image') AS selected_image,
     (SELECT version_id FROM creative_shot_assets WHERE shot_id=s.id AND slot='selected_video') AS selected_video,
     (SELECT f.state FROM creative_shot_assets a LEFT JOIN creative_version_files f ON f.version_id=a.version_id AND f.role='original' WHERE a.shot_id=s.id AND a.slot='selected_image') AS image_state,
     (SELECT v.asset_id FROM creative_shot_assets a JOIN creative_asset_versions v ON v.id=a.version_id WHERE a.shot_id=s.id AND a.slot='selected_image') AS image_asset_id
-    FROM creative_shots s WHERE project_id=? AND deleted_at IS NULL ORDER BY sort_key,id`, projectId);
+    FROM creative_shots s WHERE project_id=? AND deleted_at IS NULL AND (? IS NULL OR sort_key>? OR (sort_key=? AND s.id>?)) ORDER BY sort_key,s.id LIMIT ?`, projectId,page?.after?.sortKey??null,page?.after?.sortKey??null,page?.after?.sortKey??null,page?.after?.id??null,page?Math.min(100,Math.max(1,page.limit)):-1);
 }
 export async function applyStoryCommand(tx: AppDatabase, name: string, p: any, now: number, makeId: () => string): Promise<Record<string, string>> {
   if (!(name in storySchemas)) throw new Error('UNKNOWN_CREATIVE_COMMAND');
