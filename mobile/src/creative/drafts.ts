@@ -118,7 +118,7 @@ export async function applyDraftCommand(tx: AppDatabase, name: string, p: any, n
     if (p.imageVersionIds) await inputs(draftId, p.imageVersionIds);
     else if (selectedVersion) await inputs(draftId, [selectedVersion]);
     if (p.audioVersionIds) await inputs(draftId, p.audioVersionIds, 'audio');
-    await captureDraftSemantics(tx,draftId);
+    await captureDraftSemantics(tx,draftId,undefined,p.semanticUsage);
     return { draftId };
   }
   const draft = await readCreativeDraft(tx, p.id);

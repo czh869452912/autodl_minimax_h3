@@ -1,3 +1,4 @@
+import {compileSemanticVideo} from './semanticCompilation';
 import {z} from 'zod';
 import {readSemanticReferences} from './semanticDependencies';
 import type {AppDatabase} from '../storage/appDatabase';
@@ -5,6 +6,7 @@ const id=z.string().min(1).max(200),revision=z.number().int().nonnegative();
 const content=z.string().trim().min(1).max(20000);
 const references=z.array(z.object({versionId:id,purpose:z.string().trim().min(1).max(100)}).strict()).max(20).default([]);
 export const semanticSchemas={
+ 'semantic.prepareVideo':z.object({projectId:id,shotId:id,expectedShotRevision:revision,prompt:z.string().trim().min(1).max(6000),textVersions:z.array(id).max(8),referenceVersions:z.array(id).max(12)}).strict(),
  'semantic.create':z.object({projectId:id,kind:z.enum(['character','scene','style','voice']),title:z.string().trim().min(1).max(200),content,references}).strict(),
  'semantic.revise':z.object({entityId:id,expectedRevision:revision,content,references}).strict(),
  'semantic.adopt':z.object({entityId:id,expectedRevision:revision,versionId:id}).strict(),
@@ -14,6 +16,7 @@ export const semanticSchemas={
 export type SemanticCommand={[K in keyof typeof semanticSchemas]:{name:K;payload:z.input<typeof semanticSchemas[K]>}}[keyof typeof semanticSchemas];
 export type SemanticEntity={id:string;project_id:string;kind:string;title:string;revision:number;current_version_id:string|null};
 export async function applySemanticCommand(tx:AppDatabase,name:string,p:any,now:number,makeId:()=>string):Promise<Record<string,string>>{
+ if(name==='semantic.prepareVideo')return compileSemanticVideo(tx,p,now,makeId);
  let entity:SemanticEntity|undefined;
  if(name!=='semantic.create'){
   entity=await tx.getFirstAsync<SemanticEntity>('SELECT * FROM creative_semantic_entities WHERE id=?',p.entityId)??undefined;

@@ -59,3 +59,22 @@ test('semantic revisions preserve adopted shot references and expose upstream ch
   expect(db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);
  }finally{db.close();}
 });
+
+test('explicit semantic preparation compiles only selected text and references into a new draft',async()=>{
+ const db=createInitializedRealSqliteTestDb();try{
+  const service=createCreativeService(db as never);let n=0;const execute=async(command:CreativeCommand)=>{const r=await service.execute(command,'compile-'+n++);if(r.status!=='completed')throw Error('command');return r.value;};
+  const {projectId}=await execute({name:'project.create',payload:{title:'film'}});const {shotId}=await execute({name:'shot.create',payload:{projectId,title:'shot'}});
+  const hash='c'.repeat(64);db.runSync('INSERT INTO artifact_blobs VALUES(?,10,?,?,1,1)',hash,'image/png','cas/'+hash);
+  const ref=await execute({name:'asset.import',payload:{projectId,title:'coat',kind:'image',blobSha256:hash}});
+  const first=await execute({name:'semantic.create',payload:{projectId,kind:'character',title:'Lead',content:'Blue coat',references:[{versionId:ref.versionId,purpose:'coat'}]}});
+  await execute({name:'semantic.adopt',payload:{entityId:first.entityId,expectedRevision:0,versionId:first.versionId}});
+  await execute({name:'semantic.bindShot',payload:{entityId:first.entityId,versionId:first.versionId,shotId,expectedShotRevision:0}});
+  const plain=await execute({name:'semantic.prepareVideo',payload:{projectId,shotId,expectedShotRevision:1,prompt:'orbit',textVersions:[],referenceVersions:[]}});
+  const compiled=await execute({name:'semantic.prepareVideo',payload:{projectId,shotId,expectedShotRevision:1,prompt:'orbit',textVersions:[first.versionId],referenceVersions:[ref.versionId]}});
+  expect((await service.draft(plain.draftId))?.input_json).not.toContain('Blue coat');expect((await service.draft(compiled.draftId))?.input_json).toContain('Blue coat');
+  expect((await readDraftSemantics(db as never,compiled.draftId))?.usage?.textVersions).toEqual([first.versionId]);
+  await expect(execute({name:'semantic.prepareVideo',payload:{projectId,shotId,expectedShotRevision:1,prompt:'orbit',textVersions:['foreign'],referenceVersions:[]}})).rejects.toThrow('NOT_BOUND');
+  expect(await service.draftInputs(plain.draftId)).toEqual([]);expect((await service.draftInputs(compiled.draftId)).map(i=>i.version_id)).toEqual([ref.versionId]);
+  expect(db.getAllSync('SELECT * FROM workflow_jobs')).toEqual([]);
+ }finally{db.close();}
+});
