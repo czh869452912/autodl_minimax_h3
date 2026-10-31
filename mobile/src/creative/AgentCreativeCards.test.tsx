@@ -92,3 +92,27 @@ test('proposal navigation uses structural identity even when display names chang
   expect(mockPush).toHaveBeenCalledWith({pathname:'/creative-project/[id]',params:expect.objectContaining({id:'project',tab:'activity',proposalId:'proposal-a'})});
  }finally{act(()=>tree?.unmount());}
 });
+
+jest.mock('./videoRuntime',()=>({prepareCreativeVideo:jest.fn(),confirmCreativeVideo:jest.fn()}));
+jest.mock('./novelAiRuntime',()=>({prepareCreativeImage:jest.fn(),confirmCreativeImage:jest.fn()}));
+test('confirming an exact draft queues it without another model message',async()=>{
+ const {Alert}=require('react-native');
+ const {prepareCreativeImage,confirmCreativeImage}=require('./novelAiRuntime');
+ const editable={...draft,state:'EDITING',job_id:null};
+ read.mockResolvedValue([{kind:'draft',id:'draft',name:'image',draft:editable,outputs:[]}]);
+ const db=require('../storage/databaseClient').getDatabase();
+ // This test supplies stable database identity and distinguishes scope from plan reads.
+ const getDb=jest.spyOn(require('../storage/databaseClient'),'getDatabase').mockReturnValue({...db,getFirstAsync:async(sql:string)=>sql.includes('creative_plan_steps')?null:{project_id:'project'}});
+ prepareCreativeImage.mockResolvedValue({draft:editable,versionIds:['ref'],prepared:{inputSnapshot:{width:832,height:1216}}});
+ confirmCreativeImage.mockResolvedValue({id:'queued-job'});
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ let tree!:ReturnType<typeof create>;try{
+  await act(async()=>{tree=create(<AgentActivityProvider threadId="thread"><AgentCreativeCards threadId="thread" running={false}/></AgentActivityProvider>);});
+  act(()=>tree.root.findByProps({testID:'agent-creative-summary'}).props.onPress());
+  await act(async()=>button(tree,'确认这份草稿并生成').props.onPress());
+  expect(confirmCreativeImage).not.toHaveBeenCalled();
+  const actions=alert.mock.calls.at(-1)![2] as Array<{text:string;onPress:()=>void}>;
+  await act(async()=>actions.find(a=>a.text==='确认生成 1 次')!.onPress());
+  expect(confirmCreativeImage).toHaveBeenCalledTimes(1);
+ }finally{act(()=>tree.unmount());alert.mockRestore();getDb.mockRestore();}
+});

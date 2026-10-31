@@ -1,3 +1,5 @@
+import {prepareCreativeVideo,confirmCreativeVideo} from './videoRuntime';
+import {prepareCreativeImage,confirmCreativeImage} from './novelAiRuntime';
 import { createContext, useContext, useCallback, useRef, useState, useEffect, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -9,7 +11,7 @@ import { COLORS } from '../ui/theme';
 import { readAgentCreativeActivity, agentCreativeActivityLabel, agentCreativeActivitySummary, type AgentCreativeActivity } from './agentCreativeActivity';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getDatabase } from '../storage/databaseClient';
-import { creativeAccounts, creativeBudget } from './accountRuntime';
+import { creativeBudget } from './accountRuntime';
 import type { CreativeDraft } from './drafts';
 import { ListAction } from '../ui/ListPageUI';
 import { creativeUI as s } from './creativeUI';
@@ -53,17 +55,22 @@ export function AgentCreativeCards({ threadId, running, runId }: { threadId: str
       const provider = draft.provider_id === 'novelai' ? 'novelai' : 'autodl';
       const scope = await getDatabase().getFirstAsync<{ project_id: string }>('SELECT project_id FROM creative_agent_scopes WHERE thread_id=?', threadId);
       if (scope?.project_id !== draft.project_id) throw new Error('当前项目已切换，请查看当前项目的草稿');
-      const account = (await creativeAccounts().list()).find(a => a.provider_id === provider);
-      if (!account) throw new Error('请先打开草稿连接生成账号');
-      if (await creativeBudget().availableUnknownRequests(draft.project_id, provider) > 0) { setNotice('当前项目已有可用授权，可以让助手继续。无需重复授权。'); release(); return; }
-      Alert.alert('允许助手继续生成', `允许当前项目最多 1 次${provider === 'novelai' ? '图片' : '视频'}请求，15 分钟有效。费用未知，没有金额上限。授权适用于此项目，不仅限于这份草稿。`, [
-        { text: '取消', style: 'cancel', onPress: release },
-        { text: '授权 1 次', onPress: () => void (async () => {
-          const scope = await getDatabase().getFirstAsync<{ project_id: string }>('SELECT project_id FROM creative_agent_scopes WHERE thread_id=?', threadId);
-          if (scope?.project_id !== draft.project_id) throw new Error('项目范围已改变，请重新确认');
-          if (await creativeBudget().availableUnknownRequests(draft.project_id!, provider) > 0) return;
-          await creativeBudget().grant({ provider, generationId: account.credential_generation_id, projectId: draft.project_id!, operations: [provider === 'novelai' ? 'image.generate' : 'video.generate'], requestLimit: 1, amountLimit: null, allowUnknownCost: true, maxUnknownRequests: 1, expiresAt: Date.now() + 15 * 60000 }); })().then(() => setNotice('已授权。发送“按当前草稿继续”让助手执行；手动编辑仍使用同一草稿。')).catch(e => setError(e.message)).finally(release) },
-      ], { cancelable: false });
+      const db=getDatabase();
+      if(await db.getFirstAsync('SELECT id FROM creative_plan_steps WHERE draft_id=?',draft.id))throw new Error('此草稿属于生产计划，请在计划中授权并继续');
+      const preview=provider==='novelai'?await prepareCreativeImage(draft.id):await prepareCreativeVideo(draft.id);
+      if(preview.draft.revision!==draft.revision)throw new Error('草稿已变化，请刷新后重新确认');
+      const snapshot=preview.prepared.inputSnapshot;
+      const spec=JSON.stringify(Object.fromEntries(Object.entries(snapshot).filter(([key,value])=>['model','resolution','duration','width','height','seed'].includes(key)&&['string','number'].includes(typeof value))));
+      Alert.alert('确认并生成这份草稿', `草稿 ${draft.id.slice(-8)} · 修订 ${preview.draft.revision}。使用 ${provider} 当前绑定账号，固定 ${preview.versionIds.length} 个素材版本。规格：${spec}。仅允许此请求生成 1 次，15 分钟有效；费用未知，没有金额上限。确认后直接入队，无需再次发送消息。`, [
+        {text:'取消',style:'cancel',onPress:release},
+        {text:'确认生成 1 次',onPress:()=>void (async()=>{
+          if(getDatabase()!==db)throw new Error('数据库已切换，请重新确认');
+          const current=await db.getFirstAsync<{project_id:string}>('SELECT project_id FROM creative_agent_scopes WHERE thread_id=?',threadId);
+          if(current?.project_id!==draft.project_id)throw new Error('项目范围已改变，请重新确认');
+          const task=provider==='novelai'?await confirmCreativeImage(preview as Awaited<ReturnType<typeof prepareCreativeImage>>):await confirmCreativeVideo(preview as Awaited<ReturnType<typeof prepareCreativeVideo>>);
+          setNotice(`已加入生成队列 · ${task.id.slice(-8)}。结果将作为候选，仍需审阅采用。`);
+        })().catch(e=>setError(e instanceof Error?e.message:'提交失败，请检查原任务后再操作')).finally(release)},
+      ],{cancelable:false});
     } catch (e) { setError(e instanceof Error ? e.message : '授权失败'); release(); }
   };
   const image=cards.flatMap(card=>card.outputs).find(output=>output.state==='AVAILABLE' && output.relativePath && output.mime?.startsWith('image/'));
@@ -87,7 +94,7 @@ export function AgentCreativeCards({ threadId, running, runId }: { threadId: str
           }}><MediaPreview version={output} kind={card.draft!.provider_id==='novelai'?'image':'video'} label={`生成成果 ${output.versionNo}`} style={{width:180,height:180}} contain/></Pressable>)}</ScrollView>:null}
           <ListAction label={card.draft.state==='EDITING'?'编辑这份草稿':'查看成果与进度'} secondary onPress={()=>{setOpen(false);router.push({pathname:card.draft!.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:card.draft!.id}});}}/>
           {card.jobId?<ListAction label="查看生成任务详情" secondary onPress={()=>{setOpen(false);router.push({pathname:'/creative-task/[id]',params:{id:card.jobId!}});}}/>:null}
-          {card.draft.state==='EDITING'?<ListAction label={allowance[card.draft.provider_id]?`本项目可用授权 ${allowance[card.draft.provider_id]} 次`:'授权本项目 1 次生成'} secondary disabled={busy||running||Boolean(allowance[card.draft.provider_id])} onPress={()=>void grant(card.draft!)}/>:null}
+          {card.draft.state==='EDITING'?<ListAction label="确认这份草稿并生成" secondary disabled={busy||running} onPress={()=>void grant(card.draft!)}/>:null}
         </>:<ListAction label="查看并处理" onPress={()=>{setOpen(false);router.push({pathname:'/creative-project/[id]',params:{id:card.projectId!,tab:card.kind==='proposal'?'activity':'plans',...(card.kind==='proposal'?{proposalId:card.id}:{planId:card.id}),requestId:String(Date.now())}});}}/>}
       </View>)}
       {notice?<Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text>:null}
