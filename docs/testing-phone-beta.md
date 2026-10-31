@@ -310,3 +310,13 @@
 - 3套件38项针对性回归及TypeScript通过。Android模拟器本地视频验证正常/小屏、记录面板及全屏往返，未触发网络生成；原数据与屏幕设置恢复。详情见 `docs/reviews/2026-10-31-video-preview-fit.md`。
 - APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.32-android.apk`，186214261字节。独立测试身份、双ARM、Hermes、86个原生库及16KB对齐通过，签名与beta.31一致，可覆盖升级。
 - SHA-256：`85BAB14CB5A2F08DBABC4C7E9A0C6DA3973059A91D3D9074F5181C54735AC0A2`。报告：`build/phone-beta/beta32-verification.json`。
+
+## 2026-10-31 · beta.33 创作流程与 UX 审计调整
+
+- 版本 `1.5.0-preview.4-beta.33`，versionCode 72；功能提交 `93b00882`。
+- 统一镜头阶段操作、草稿恢复、素材选取和项目设置；创作记录改用数据库分页、筛选搜索和虚拟列表；计划创建采用渐进流程，授权清楚说明版本、次数、有效期和未知费用。
+- 修复模拟器验收发现的搜索空态、缩略图裁切/叠图及全屏弹层冗余无障碍关闭节点。沿用现有主题，补足触控尺寸、活动文案、技能编辑与数据维护分层。
+- 全量292套件1822项通过，后续受影响组件46项通过，类型检查通过。模拟器验收涵盖记录恢复/冷启动、计划准备、账号设置返回、320dp窄屏和2倍字体；详见 `docs/reviews/2026-10-31-ux-closure.md`。
+- 未将完整TalkBack、真实收费生成或可执行金额上限标为通过。手机双ARM包的运行仍需手机验证；模拟器验收使用同源x86_64 debug包。
+- APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.33-android.apk`，186237589字节；独立测试身份、双ARM、Hermes、86个原生库及16KB对齐校验通过，签名与beta.32一致，可覆盖升级测试版。
+- SHA-256：`7B8C70BCBC8FD6ED673F74005583373479250AA7D19D5777045A6B3EA2595618`；报告：`build/phone-beta/beta33-verification.json`。双ARM构建成功并通过发布变体Lint检查。
