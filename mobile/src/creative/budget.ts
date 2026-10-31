@@ -95,7 +95,7 @@ export function createCreativeBudget(db: AppDatabase, now = Date.now) {
         .reduce((sum, r) => sum + Math.max(0, Math.min(r.request_limit-r.used, r.max_unknown_requests-r.unknown_used)), 0);
     },
     async list() { return db.getAllAsync<Authorization>('SELECT * FROM creative_authorizations ORDER BY created_at DESC'); },
-    async grant(input: { provider: CreativeProvider; generationId: string; projectId?: string; operations: string[]; requestLimit: number; amountLimit: number | null; allowUnknownCost: boolean; maxUnknownRequests: number; expiresAt: number; requestBinding?:{commandId:string;requestHash:string} }) {
+    async grant(input: { provider: CreativeProvider; generationId: string; projectId?: string; operations: string[]; requestLimit: number; amountLimit: number | null; allowUnknownCost: boolean; maxUnknownRequests: number; expiresAt: number; requestBinding?:{commandId:string;requestHash:string} }, accept?: (tx:AppDatabase,authorizationId:string)=>Promise<void>) {
       if(input.requestBinding){z.string().min(1).max(200).parse(input.requestBinding.commandId);z.string().regex(/^[a-f0-9]{64}$/).parse(input.requestBinding.requestHash);}
       count.parse(input.requestLimit); money.nullable().parse(input.amountLimit); z.number().int().min(0).max(input.requestLimit).parse(input.maxUnknownRequests);
       z.array(z.enum(['image.generate','video.generate','image.encodeReference'])).min(1).parse(input.operations);
@@ -110,6 +110,7 @@ export function createCreativeBudget(db: AppDatabase, now = Date.now) {
         const id = createId();
         await tx.runAsync('INSERT INTO creative_authorizations VALUES(?,0,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)', id, input.projectId ?? null, input.provider, current.account_binding_id, current.credential_generation_id, epoch.epoch, JSON.stringify([...new Set(input.operations)]), input.requestLimit, input.amountLimit, units[input.provider], input.allowUnknownCost ? 1 : 0, input.maxUnknownRequests, input.expiresAt, now());
         if(input.requestBinding)await tx.runAsync('INSERT INTO creative_authorization_requests VALUES(?,?,?)',id,input.requestBinding.commandId,input.requestBinding.requestHash);
+        if(accept)await accept(tx,id);
         return id;
       });
     },

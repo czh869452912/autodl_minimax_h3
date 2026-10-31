@@ -94,6 +94,7 @@ export async function applyPlanCommand(tx:AppDatabase,name:string,p:any,now:numb
     if(!job||!['FAILED','CANCELLED'].includes(job.status))throw new Error('PLAN_ORIGINAL_RESULT_UNRESOLVED');
     if(!await tx.getFirstAsync('SELECT id FROM creative_shots WHERE id=? AND project_id=? AND revision=? AND deleted_at IS NULL',plan.shot_id,plan.project_id,p.expectedShotRevision))throw new Error('SHOT_REVISION_CONFLICT');
     const binding=JSON.parse(step.input_binding_json);
+    delete binding.approvedSubmission;
     await candidate(tx,binding.versionId,plan.project_id);
     const oldDraft=await tx.getFirstAsync<{input_json:string}>('SELECT input_json FROM creative_generation_drafts WHERE id=?',step.draft_id);
     if(!oldDraft)throw new Error('DRAFT_NOT_FOUND');

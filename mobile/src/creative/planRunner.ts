@@ -11,7 +11,7 @@ export async function runCreativePlans(db:AppDatabase,prepare:(draftId:string)=>
   for(const step of steps){
     try{
       if(!step.authorization_id||!step.draft_id)throw new Error('请授权后继续');
-      const input=await prepare(step.draft_id);
+      const input=JSON.parse(step.input_binding_json).approvedSubmission as Omit<Submission,'authorizationId'|'planStepId'>|undefined ?? await prepare(step.draft_id);
       await submitCreativeVideo(db,{...input,authorizationId:step.authorization_id,planStepId:step.id},now);
     }catch(e){
       // A pause is a durable scheduling gate, not a failed preparation.

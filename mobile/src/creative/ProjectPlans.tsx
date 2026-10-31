@@ -1,3 +1,6 @@
+import {prepareCreativeVideo} from './videoRuntime';
+import {authorizePlanRequest} from './planAuthorization';
+import {preparedCreativeSubmission} from './preparedSubmission';
 import {fetchVideoPrice,quoteVideo,quoteLabel} from './autodlPricing';
 import {useLiveRefresh} from './useLiveRefresh';
 import {useCallback,useEffect,useRef,useState} from 'react';
@@ -6,7 +9,7 @@ import {useRouter} from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import {getDatabase} from '../storage/databaseClient';
 import {creativeFiles,creativeService} from './runtime';
-import {creativeAccounts,creativeBudget} from './accountRuntime';
+
 import {executorWakePort} from '../tasks/executorEvents';
 import {createId} from '../ids';
 import {ListAction} from '../ui/ListPageUI';
@@ -36,15 +39,16 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
   const work=async(fn:()=>Promise<unknown>)=>{if(lock.current||archived)return;lock.current=true;setBusy(true);setError('');try{await fn();executorWakePort.signal('command');await refresh();}catch(e){setError(e instanceof Error?e.message:'操作失败');}finally{lock.current=false;setBusy(false);}};
   const action=(label:string,fn:()=>void)=><ListAction label={label} secondary disabled={busy||archived} onPress={fn}/>;
   const authorize=(card:Card)=>void work(async()=>{
-    const account=(await creativeAccounts().list()).find(a=>a.provider_id==='autodl');if(!account)throw new Error('请先在创作账号面板连接 AutoDL');
-    const binding=JSON.parse(card.step.input_binding_json);
+    if(!card.step.draft_id)throw new Error('计划草稿不可用');
+    const preview=await prepareCreativeVideo(card.step.draft_id);
+    const binding=preview.prepared.inputSnapshot;
     const price=await fetchVideoPrice().catch(()=>undefined);
-    const quote=quoteVideo(price,binding.resolution,binding.duration);
+    const quote=quoteVideo(price,String(binding.resolution??""),Number(binding.duration));
     const estimate=quote?`${quoteLabel(quote)} CNY，查询于 ${new Date(quote.checkedAt).toLocaleTimeString()}。此参考价不是可执行的费用上限；当前服务按未知费用单次授权。`:'无法获取有效估价，费用未知。';
-    Alert.alert('授权此计划继续生成',`${planVideoSummary(card.step.input_binding_json)}。固定输入版本 ${card.decision.selected_version_id ?? '尚未选定'}，使用计划提示词，最多生成 1 次视频，15 分钟有效。${estimate}无金额上限。网络结果不明不会自动重发。`,[
+    Alert.alert('授权此计划继续生成',`${planVideoSummary(card.step.input_binding_json)}。固定输入版本 ${card.decision.selected_version_id ?? '尚未选定'}，使用计划提示词，本次种子 ${String(binding.seed??"由工作流固定")}，最多生成 1 次视频，15 分钟有效。${estimate}无金额上限。网络结果不明不会自动重发。`,[
       {text:'取消',style:'cancel'},{text:'接受未知费用，仅授权一次',onPress:()=>void work(async()=>{
-        const authorizationId=await creativeBudget().grant({provider:'autodl',generationId:account.credential_generation_id,projectId,operations:['video.generate'],requestLimit:1,amountLimit:null,allowUnknownCost:true,maxUnknownRequests:1,expiresAt:Date.now()+15*60000});
-        await creativeService().execute({name:'plan.resume',payload:{id:card.plan.id,expectedRevision:card.plan.revision,authorizationId}},createId());
+        if(preview.db!==getDatabase())throw new Error('数据库已恢复，请重新准备');
+        await authorizePlanRequest(preview.db,{planId:card.plan.id,planRevision:card.plan.revision,stepId:card.step.id,stepRevision:card.step.revision,projectId,generationId:preview.account.credential_generation_id,submission:preparedCreativeSubmission(preview)});
       })}]);
   });
   if (compact && !error && !cards.some(c => c.plan.state === 'ACTIVE' && (c.decision.state === 'WAITING' || c.step.state === 'BLOCKED'))) return null;

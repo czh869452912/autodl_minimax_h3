@@ -8,6 +8,37 @@ import {createCreativeAccounts} from './accounts';
 import {createCreativeBudget} from './budget';
 import { H3_CREATIVE_WORKFLOW_ID as H3_WORKFLOW_ID } from './videoWorkflow';
 import {submitCreativeVideo} from './videoSubmission';
+import {authorizePlanRequest} from './planAuthorization';
+import {readCreativeAuthorizationSummaries} from './budget';
+test('plan confirmation binds the exact request, resumes atomically and never re-prepares seed',async()=>{
+ const f=await runnable();try{
+  f.db.runSync("UPDATE creative_plan_steps SET state='BLOCKED' WHERE kind='video'");
+  const step=f.db.getFirstSync<{id:string;revision:number}>("SELECT id,revision FROM creative_plan_steps WHERE kind='video'")!;
+  const generation=f.db.getFirstSync<{credential_generation_id:string}>('SELECT credential_generation_id FROM creative_authorizations')!;
+  const before=f.db.getAllSync('SELECT * FROM creative_authorizations').length;
+  const input={planId:f.plan.planId,planRevision:0,stepId:step.id,stepRevision:step.revision,projectId:f.projectId,generationId:generation.credential_generation_id,submission:f.input};
+  const auth=await authorizePlanRequest(f.db as never,input,200);
+  expect((await readCreativeAuthorizationSummaries(f.db as never,f.projectId,200)).items.some(a=>a.id===auth)).toBe(false);
+  await expect(createCreativeBudget(f.db as never,()=>200).reserve({authorizationId:auth,commandId:'unrelated',requestHash:'other',projectId:f.projectId,provider:'autodl',operation:'video.generate',requestUnits:1,estimate:{maximum:null,unit:'autodl_points',requestHash:'other',validUntil:9999}})).rejects.toThrow();
+  await expect(authorizePlanRequest(f.db as never,input,200)).rejects.toThrow('PLAN_CONFIRMATION_CHANGED');
+  expect(f.db.getAllSync('SELECT * FROM creative_authorizations')).toHaveLength(before+1);
+  const prepare=jest.fn(async()=>{throw new Error('must not regenerate seed');});
+  await runCreativePlans(f.db as never,prepare,300);
+  expect(prepare).not.toHaveBeenCalled();expect(f.db.getAllSync('SELECT * FROM workflow_jobs')).toHaveLength(1);
+  expect(f.db.getFirstSync('SELECT authorization_id FROM creative_budget_reservations')).toEqual({authorization_id:auth});
+ }finally{f.db.close();}
+});
+test('failed plan resume rolls back its newly granted authorization',async()=>{
+ const f=await runnable();try{
+  f.db.runSync("UPDATE creative_plan_steps SET state='BLOCKED' WHERE kind='video'");
+  const step=f.db.getFirstSync<{id:string;revision:number}>("SELECT id,revision FROM creative_plan_steps WHERE kind='video'")!;
+  const generation=f.db.getFirstSync<{credential_generation_id:string}>('SELECT credential_generation_id FROM creative_authorizations')!;
+  f.db.execSync("CREATE TRIGGER reject_resume BEFORE UPDATE ON creative_plans BEGIN SELECT RAISE(ABORT,'injected'); END");
+  await expect(authorizePlanRequest(f.db as never,{planId:f.plan.planId,planRevision:0,stepId:step.id,stepRevision:step.revision,projectId:f.projectId,generationId:generation.credential_generation_id,submission:f.input},200)).rejects.toThrow('injected');
+  expect(f.db.getAllSync('SELECT * FROM creative_authorizations')).toHaveLength(1);
+  expect(f.db.getAllSync('SELECT * FROM creative_authorization_requests')).toHaveLength(0);
+ }finally{f.db.close();}
+});
 test('multi-shot batch is atomic, replayable and creates only waiting decisions',async()=>{
  const f=await fixture();try{
   const {shotId:second}=await f.execute({name:'shot.create',payload:{projectId:f.projectId,title:'second'}});
