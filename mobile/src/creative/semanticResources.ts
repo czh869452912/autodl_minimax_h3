@@ -7,7 +7,8 @@ export const semanticSchemas={
  'semantic.create':z.object({projectId:id,kind:z.enum(['character','scene','style','voice']),title:z.string().trim().min(1).max(200),content,references}).strict(),
  'semantic.revise':z.object({entityId:id,expectedRevision:revision,content,references}).strict(),
  'semantic.adopt':z.object({entityId:id,expectedRevision:revision,versionId:id}).strict(),
- 'semantic.bindShot':z.object({shotId:id,expectedShotRevision:revision,entityId:id,versionId:id}).strict(),
+ 'semantic.bindShot':z.object({shotId:id,expectedShotRevision:revision,entityId:id,versionId:id,replaceEntityId:id.optional()}).strict(),
+ 'semantic.unbindShot':z.object({shotId:id,expectedShotRevision:revision,entityId:id}).strict(),
 };
 export type SemanticCommand={[K in keyof typeof semanticSchemas]:{name:K;payload:z.input<typeof semanticSchemas[K]>}}[keyof typeof semanticSchemas];
 export type SemanticEntity={id:string;project_id:string;kind:string;title:string;revision:number;current_version_id:string|null};
@@ -16,14 +17,25 @@ export async function applySemanticCommand(tx:AppDatabase,name:string,p:any,now:
  if(name!=='semantic.create'){
   entity=await tx.getFirstAsync<SemanticEntity>('SELECT * FROM creative_semantic_entities WHERE id=?',p.entityId)??undefined;
   if(!entity)throw new Error('SEMANTIC_NOT_FOUND');
-  if(name!=='semantic.bindShot'&&entity.revision!==p.expectedRevision)throw new Error('REVISION_CONFLICT');
+  if(!['semantic.bindShot','semantic.unbindShot'].includes(name)&&entity.revision!==p.expectedRevision)throw new Error('REVISION_CONFLICT');
  }
  const projectId=entity?.project_id??p.projectId;
  if(!await tx.getFirstAsync('SELECT id FROM creative_projects WHERE id=? AND archived_at IS NULL',projectId))throw new Error('PROJECT_NOT_AVAILABLE');
+ if(name==='semantic.unbindShot'){
+  if(!await tx.getFirstAsync('SELECT entity_id FROM creative_shot_semantics WHERE shot_id=? AND entity_id=?',p.shotId,p.entityId))throw new Error('SHOT_SEMANTIC_NOT_BOUND');
+  const changed=await tx.runAsync('UPDATE creative_shots SET revision=revision+1,updated_at=? WHERE id=? AND project_id=? AND revision=? AND deleted_at IS NULL',now,p.shotId,projectId,p.expectedShotRevision);
+  if(changed.changes!==1)throw new Error('SHOT_REVISION_CONFLICT');
+  await tx.runAsync('DELETE FROM creative_shot_semantics WHERE shot_id=? AND entity_id=?',p.shotId,p.entityId);
+  return {entityId:p.entityId,shotId:p.shotId,projectId};
+ }
  if(name==='semantic.adopt'||name==='semantic.bindShot'){
   if(!await tx.getFirstAsync('SELECT id FROM creative_semantic_versions WHERE id=? AND entity_id=?',p.versionId,p.entityId))throw new Error('SEMANTIC_VERSION_MISMATCH');
   if(name==='semantic.adopt')await tx.runAsync('UPDATE creative_semantic_entities SET current_version_id=?,revision=revision+1,updated_at=? WHERE id=?',p.versionId,now,p.entityId);
   else {
+   if(p.replaceEntityId&&p.replaceEntityId!==p.entityId){
+    const removed=await tx.runAsync('DELETE FROM creative_shot_semantics WHERE shot_id=? AND entity_id=?',p.shotId,p.replaceEntityId);
+    if(removed.changes!==1)throw new Error('SHOT_SEMANTIC_NOT_BOUND');
+   }
    const existing=await tx.getFirstAsync('SELECT entity_id FROM creative_shot_semantics WHERE shot_id=? AND entity_id=?',p.shotId,p.entityId);
    if(!existing&&(await tx.getFirstAsync<{n:number}>('SELECT COUNT(*) AS n FROM creative_shot_semantics WHERE shot_id=?',p.shotId))!.n>=8)throw new Error('SHOT_SEMANTIC_LIMIT');
    const changed=await tx.runAsync('UPDATE creative_shots SET revision=revision+1,updated_at=? WHERE id=? AND project_id=? AND revision=? AND deleted_at IS NULL',now,p.shotId,projectId,p.expectedShotRevision);

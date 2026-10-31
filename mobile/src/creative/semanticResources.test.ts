@@ -3,6 +3,28 @@ import {createCreativeService} from './service';
 import {readShotSemantics} from './semanticResources';
 import {readDraftSemantics} from './draftSemantics';
 import type {CreativeCommand} from './types';
+test('full shot supports atomic replacement and revision-checked unbinding without changing old draft',async()=>{
+ const db=createInitializedRealSqliteTestDb();try{
+  const service=createCreativeService(db as never);let key=0;
+  const execute=async(command:CreativeCommand)=>{const r=await service.execute(command,'bind-'+key++);if(r.status!=='completed')throw new Error('expected');return r.value;};
+  const {projectId}=await execute({name:'project.create',payload:{title:'film'}});
+  const {shotId}=await execute({name:'shot.create',payload:{projectId,title:'shot'}});
+  const identities=[];
+  for(let i=0;i<9;i++)identities.push(await execute({name:'semantic.create',payload:{projectId,kind:'character',title:'Person '+i,content:'content',references:[]}}));
+  for(let i=0;i<8;i++)await execute({name:'semantic.bindShot',payload:{shotId,expectedShotRevision:i,entityId:identities[i].entityId,versionId:identities[i].versionId}});
+  const draft=await execute({name:'draft.createVideo',payload:{projectId,shotId,prompt:'scene'}});
+  const before=await readDraftSemantics(db as never,draft.draftId);
+  const replace:CreativeCommand={name:'semantic.bindShot',payload:{shotId,expectedShotRevision:8,entityId:identities[8].entityId,versionId:identities[8].versionId,replaceEntityId:identities[0].entityId}};
+  await expect(execute({...replace,payload:{...replace.payload,expectedShotRevision:7}})).rejects.toThrow('REVISION_CONFLICT');
+  expect(db.getAllSync('SELECT * FROM creative_shot_semantics')).toHaveLength(8);
+  await execute(replace);
+  expect(db.getFirstSync('SELECT * FROM creative_shot_semantics WHERE entity_id=?',identities[0].entityId)).toBeFalsy();
+  await execute({name:'semantic.unbindShot',payload:{shotId,entityId:identities[8].entityId,expectedShotRevision:9}});
+  expect(db.getAllSync('SELECT * FROM creative_shot_semantics')).toHaveLength(7);
+  expect(await readDraftSemantics(db as never,draft.draftId)).toEqual(before);
+  expect(db.getFirstSync("SELECT command_name FROM creative_command_receipts WHERE command_name='semantic.unbindShot'")).not.toBeNull();
+ }finally{db.close();}
+});
 test('semantic revisions preserve adopted shot references and expose upstream changes without copying blobs',async()=>{
  const db=createInitializedRealSqliteTestDb();try{
   const service=createCreativeService(db as never);let n=0;
