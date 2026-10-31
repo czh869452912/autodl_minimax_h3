@@ -1,3 +1,4 @@
+import {readCapabilityCatalog} from './capabilityCatalog';
 import {readDraftSemantics} from './draftSemantics';
 import {inspectShotQuality} from './shotQuality';
 import {semanticSchemas,readShotSemantics,readSemanticResources} from './semanticResources';
@@ -58,6 +59,7 @@ export function createCreativeAgentTools() {
     } catch(e) { return failure(e); }
   }, { name: name.replaceAll('.','_'), description: `Execute ${name} through the shared creative command service. Use current revisions. Project scope is chosen by the user; new projects require the user to select them before further edits. Draft creation never spends credits.`, schema }));
   return [...commands,
+    tool(async({afterId},config:any)=>{try{await originFor(config);return JSON.stringify(await readCapabilityCatalog(getDatabase(),afterId));}catch(e){return failure(e);}},{name:'capability_list',description:'Read installed media capabilities, exact workflow versions, supported inputs and local account gaps. No secrets, remote probe, spending or automatic provider fallback.',schema:z.object({afterId:z.string().max(200).default('')}).strict()}),
     tool(async({shotId},config:any)=>{try{
       const origin=await originFor(config);
       return await withWriteTransaction(getDatabase(),async tx=>{

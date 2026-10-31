@@ -36,6 +36,7 @@ export function ProjectOverview({ project, onShots, onEdit }: { project: Creativ
     {!project.archivedAt?<ListAction label="角色与场景设定" secondary onPress={()=>router.push({pathname:'/project-settings-library',params:{projectId:project.id}})}/>:null}
     {!project.archivedAt?<ListAction label="项目技能" secondary onPress={()=>router.push({pathname:'/agent-skills',params:{projectId:project.id}})}/>:null}
     {!project.archivedAt?<View style={{flexDirection:'row'}}><ListAction label="在助手中继续" secondary icon="auto_awesome" onPress={()=>router.push({pathname:'/(tabs)/agent',params:{projectId:project.id}})}/></View>:null}
+    <ListAction label="制作能力与配置" secondary onPress={()=>router.push('/creative-capabilities')}/>
     <ProjectPlans projectId={project.id} archived={Boolean(project.archivedAt)} compact/>
     {drafts.length?<Text style={s.title}>最近创作</Text>:null}
     {drafts.map(d=><Pressable accessibilityRole="button" accessibilityLabel={d.state==='EDITING'?'继续编辑':'查看进度与成果'} key={d.id} style={s.card} onPress={()=>router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}})}>
