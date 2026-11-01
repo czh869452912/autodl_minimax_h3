@@ -97,3 +97,20 @@ test('history uses trusted thread scope and opens exact historical run without c
  expect(mockStore.setProjectVersion).not.toHaveBeenCalled();
  }finally{act(()=>tree.unmount());mockStore.runs.mockResolvedValue([]);}
 });
+
+
+test('history is an immediate view and local filter does not require traversing builtin cards',async()=>{
+ mockStore.runs.mockResolvedValue([]);mockStore.list.mockResolvedValue([{id:'local',name:'my-local',description:'本地用途',enabled:false,files:{'SKILL.md':'body'}}]);let tree!:ReturnType<typeof create>;
+ try{await act(async()=>{tree=create(<SkillLibraryScreen/>);});
+ expect(JSON.stringify(tree.toJSON())).toContain('品牌宣传短片生成器');expect(JSON.stringify(tree.toJSON())).not.toContain('包指纹');
+ act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='本地导入'&&n.props.onPress)[0].props.onPress());
+ expect(JSON.stringify(tree.toJSON())).toContain('my-local');expect(JSON.stringify(tree.toJSON())).not.toContain('品牌宣传短片生成器');
+ act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());
+ expect(tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.selected).toBe(true);
+ expect(JSON.stringify(tree.toJSON())).toContain('还没有运行记录');expect(tree.root.findAllByProps({accessibilityLabel:'搜索技能'})).toHaveLength(0);
+ act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());
+ act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='内置技能'&&n.props.onPress)[0].props.onPress());
+ const builtin=()=>tree.root.findAll(n=>n.props.accessibilityLabel==='内置：品牌宣传短片生成器'&&n.props.onPress)[0];
+ act(()=>builtin().props.onPress());expect(builtin().props.accessibilityState.expanded).toBe(true);expect(JSON.stringify(tree.toJSON())).toContain('包指纹');
+ }finally{act(()=>tree.unmount());}
+});
