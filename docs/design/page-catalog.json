@@ -1,0 +1,2345 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "date": "2026-11-01",
+    "commit": "56f16751",
+    "product": "Android APK beta.47",
+    "scope": "29 个路由页面、2 个壳层及重要非路由表面；并非所有条件分支",
+    "executionBoundary": "禁止桌面执行端和远端 Worker"
+  },
+  "references": [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "B1",
+    "B2",
+    "B3"
+  ],
+  "pages": [
+    {
+      "id": "app",
+      "name": "应用根与启动恢复",
+      "kind": "shell",
+      "route": "mobile/app/_layout.tsx",
+      "parent": null,
+      "sources": [
+        "mobile/app/_layout.tsx"
+      ],
+      "purpose": "启动、数据可写性和维护恢复",
+      "currentIssue": "恢复/维护会接管整个页面树，不能被普通空态规格遗漏。",
+      "recommendation": "启动阶段使用独立恢复表面，先说明数据状态、可执行恢复及退出；不把错误日志作为唯一说明。",
+      "entry": "冷启动、维护后重启",
+      "back": "恢复完成回原安全入口；不可用时保留恢复页面",
+      "primaryAction": "依状态继续启动或恢复",
+      "states": [
+        "启动中",
+        "旧库",
+        "只读恢复",
+        "维护失败",
+        "就绪"
+      ],
+      "priority": "P1",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": null
+    },
+    {
+      "id": "tabs",
+      "name": "工作台导航壳",
+      "kind": "shell",
+      "route": "mobile/app/(tabs)/_layout.tsx",
+      "parent": "app",
+      "sources": [
+        "mobile/app/(tabs)/_layout.tsx"
+      ],
+      "purpose": "四个主要目的地和辅助目的地承载",
+      "currentIssue": "注册了七个 tab，导航栏只展示四个；任务/旧作品/设置的壳层和返回语义不同。",
+      "recommendation": "四入口继续保留；任务与设置用统一全局 utility stack；旧作品保持迁移入口。先统一体验合同，再考虑改路由结构。",
+      "entry": "根入口或全局导航",
+      "back": "主入口切换保留各自上下文；辅助页返回实际来源",
+      "primaryAction": "切换目的地",
+      "states": [
+        "主入口",
+        "辅助页",
+        "键盘打开",
+        "返回历史"
+      ],
+      "priority": "P1",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "app"
+    },
+    {
+      "id": "entry",
+      "name": "默认入口",
+      "kind": "route",
+      "route": "mobile/app/index.tsx",
+      "parent": "app",
+      "sources": [
+        "mobile/app/index.tsx"
+      ],
+      "purpose": "scheme 冷启动指向创作",
+      "currentIssue": "Redirect 本身合理；它不是要再设计一张欢迎首页。",
+      "recommendation": "保留稳定入口；冷链接校验成功后进入具体对象，失败给安全出口。",
+      "entry": "应用 scheme 根",
+      "back": "进入创作后使用主导航",
+      "primaryAction": "打开最近创作",
+      "states": [
+        "冷启动",
+        "恢复"
+      ],
+      "priority": "P2",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "app"
+    },
+    {
+      "id": "create",
+      "name": "快捷创作",
+      "kind": "route",
+      "route": "mobile/app/(tabs)/create.tsx",
+      "parent": "tabs",
+      "sources": [
+        "mobile/src/creative/CreativeHome.tsx"
+      ],
+      "purpose": "不建项目也可快速图片/视频创作",
+      "currentIssue": "已有预览/编辑分层；创作记录底部又重复项目、素材、工作流导航。",
+      "recommendation": "以画面预览、描述、规格摘要、生成作为主体；记录只负责恢复；全局导航和工作流管理回归各自层级。",
+      "entry": "默认入口、草稿恢复、素材续作",
+      "back": "关闭工具→关闭记录→保留当前创作；切 tab 不丢输入",
+      "primaryAction": "生成或补齐当前阻塞项",
+      "states": [
+        "恢复",
+        "编辑",
+        "工具展开",
+        "提交",
+        "候选",
+        "未知"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2",
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidence": [
+        "docs/design/evidence/2026-11-01/v47-01-create.png"
+      ],
+      "proposalStatus": "proposed",
+      "targetOwner": "tabs"
+    },
+    {
+      "id": "agent",
+      "name": "项目助手",
+      "kind": "route",
+      "route": "mobile/app/(tabs)/agent.tsx",
+      "parent": "tabs",
+      "sources": [
+        "mobile/src/creative/AgentWorkspace.tsx"
+      ],
+      "purpose": "围绕项目对话、提出和执行创作方案",
+      "currentIssue": "空库先要求用户离开助手建项目；默认项目选择与当前作品上下文需更显式。",
+      "recommendation": "空态提供就地轻量建项目；标题持久展示项目，镜头上下文显示可移除 chip；输入区以对话为主。不是新增无范围的执行会话。",
+      "entry": "底部、项目、镜头",
+      "back": "主入口按导航历史；从镜头进入可回原镜头与位置",
+      "primaryAction": "发送消息；运行时停止等待",
+      "states": [
+        "无项目",
+        "未配模型",
+        "会话",
+        "运行",
+        "待审批",
+        "异常"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidence": [
+        "docs/design/evidence/2026-11-01/v47-11-assistant.png",
+        "docs/design/evidence/2026-11-01/v47-13-assistant-return.png"
+      ],
+      "proposalStatus": "proposed",
+      "targetOwner": "tabs"
+    },
+    {
+      "id": "projects",
+      "name": "项目列表",
+      "kind": "route",
+      "route": "mobile/app/(tabs)/projects.tsx",
+      "parent": "tabs",
+      "sources": [
+        "mobile/src/creative/CreativeWorkspace.tsx"
+      ],
+      "purpose": "找到并恢复一个项目",
+      "currentIssue": "新建、归档开关、搜索与共享工作区逻辑混在同一组件；列表对下一步的表达弱。",
+      "recommendation": "卡片显示封面、镜头进展、最近修改和待处理；新建是主动作；归档用范围筛选。保留现有列表能力。",
+      "entry": "底部、助手空态",
+      "back": "主入口；切换保留搜索与滚动",
+      "primaryAction": "新建项目或继续选中项目",
+      "states": [
+        "加载",
+        "空",
+        "筛选空",
+        "归档",
+        "错误"
+      ],
+      "priority": "P2",
+      "references": [
+        "B2",
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "tabs"
+    },
+    {
+      "id": "assets",
+      "name": "全局素材库",
+      "kind": "route",
+      "route": "mobile/app/(tabs)/assets.tsx",
+      "parent": "tabs",
+      "sources": [
+        "mobile/src/creative/CreativeWorkspace.tsx"
+      ],
+      "purpose": "找、导入和整理可复用素材",
+      "currentIssue": "全库、未归属、回收站、历史作品、草稿和迁入入口概念重叠。",
+      "recommendation": "主体为缩略图与类型/范围；导入为明确动作；回收站/旧作品迁移在管理层，草稿不混作素材。显示收纳/采用的区别。",
+      "entry": "底部、工作流选取来源",
+      "back": "主入口保留筛选；详情返回同一列表位置",
+      "primaryAction": "导入或打开素材",
+      "states": [
+        "全库空",
+        "范围空",
+        "筛选空",
+        "缺原件",
+        "回收站"
+      ],
+      "priority": "P1",
+      "references": [
+        "B2",
+        "B3"
+      ],
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidence": [
+        "docs/design/evidence/2026-11-01/v47-15-assets-empty.png"
+      ],
+      "proposalStatus": "proposed",
+      "targetOwner": "tabs"
+    },
+    {
+      "id": "tasks",
+      "name": "任务中心",
+      "kind": "route",
+      "route": "mobile/app/(tabs)/tasks.tsx",
+      "parent": "tabs",
+      "sources": [
+        "mobile/app/(tabs)/tasks.tsx"
+      ],
+      "purpose": "跨工作区观察进度并处理异常",
+      "currentIssue": "任务处理与后台监控/维护概念在一个页面；用户需辨别任务和计划。",
+      "recommendation": "默认待处理/进行中，缩略图+所属项目/镜头+下一步；监控说明和维护下沉设置；行点击统一到任务详情。",
+      "entry": "任务气泡、任务详情、辅助 tab",
+      "back": "返回实际工作区，冷入口回创作",
+      "primaryAction": "处理当前异常；普通状态查看详情",
+      "states": [
+        "排队",
+        "执行",
+        "未知",
+        "归档",
+        "下载失败",
+        "离线"
+      ],
+      "priority": "P1",
+      "references": [
+        "B2",
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidence": [
+        "docs/design/evidence/2026-11-01/v47-16-task-center-empty.png"
+      ],
+      "proposalStatus": "proposed",
+      "targetOwner": "tabs"
+    },
+    {
+      "id": "legacy-gallery",
+      "name": "历史作品",
+      "kind": "route",
+      "route": "mobile/app/(tabs)/gallery.tsx",
+      "parent": "assets",
+      "sources": [
+        "mobile/app/(tabs)/gallery.tsx"
+      ],
+      "purpose": "访问旧版视频结果",
+      "currentIssue": "名称“结果”与新素材库重叠，旧 video 详情又是一套体验。",
+      "recommendation": "明确标“旧版作品”，仅在素材管理/迁入中进入；可中断迁移，保留未迁入项目原记录。不要与新素材库并列营销。",
+      "entry": "素材管理、旧链接",
+      "back": "返回来源；无来源回素材库",
+      "primaryAction": "浏览旧作品或迁入",
+      "states": [
+        "空",
+        "迁入中",
+        "选择管理",
+        "删除失败"
+      ],
+      "priority": "P2",
+      "references": [
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "assets"
+    },
+    {
+      "id": "settings-legacy",
+      "name": "设置 tab 入口",
+      "kind": "route",
+      "route": "mobile/app/(tabs)/settings.tsx",
+      "parent": "tabs",
+      "sources": [
+        "mobile/app/(tabs)/settings.tsx"
+      ],
+      "purpose": "兼容已有设置入口",
+      "currentIssue": "同一设置有隐藏 tab 和独立 stack 两个宿主；不能因为组件相同就认为来源一致。",
+      "recommendation": "一个共享设置模型和 utility shell；旧路径兼容重定向时保留 section/草稿/来源。",
+      "entry": "旧入口或导航调用",
+      "back": "分类返回索引；直达分类返回来源；输入先持久保留",
+      "primaryAction": "进入配置分类",
+      "states": [
+        "索引",
+        "分类",
+        "未保存",
+        "读取失败"
+      ],
+      "priority": "P1",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "tabs"
+    },
+    {
+      "id": "settings",
+      "name": "独立设置",
+      "kind": "route",
+      "route": "mobile/app/settings-panel.tsx",
+      "parent": "app",
+      "sources": [
+        "mobile/app/(tabs)/settings.tsx"
+      ],
+      "purpose": "连接、偏好和数据管理",
+      "currentIssue": "“助手模型”内原连接与独立模型连接形成双配置心智；多个面板保存机制不同。",
+      "recommendation": "设置首页按连接与能力、创作资源、使用偏好、数据维护分组；进入分类后保持单一标题；逐项写明即时生效/保存生效。",
+      "entry": "全局设置、缺配置 CTA",
+      "back": "直达补配置完成回原 draft/version；全部设置进入后返回分类索引",
+      "primaryAction": "保存当前配置",
+      "states": [
+        "直达",
+        "分类索引",
+        "未保存",
+        "保存失败"
+      ],
+      "priority": "P1",
+      "references": [
+        "R6",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "app"
+    },
+    {
+      "id": "project",
+      "name": "项目工作区",
+      "kind": "route",
+      "route": "mobile/app/creative-project/[id].tsx",
+      "parent": "projects",
+      "sources": [
+        "mobile/src/creative/CreativeWorkspace.tsx"
+      ],
+      "purpose": "持续推进同一项目",
+      "currentIssue": "概览/镜头/素材/计划/活动五个视图之外，概览还横向扇出许多工具页。",
+      "recommendation": "项目保留概览、镜头、资料、计划/待办；活动进入历史层；合成到交付；全局配置移出概览常驻区。保留稳定 projectId 和子目标。",
+      "entry": "项目卡、来源关系、任务回流",
+      "back": "真实来源优先；无来源回项目列表；子视图切换不伪造多层返回",
+      "primaryAction": "继续项目推荐下一步",
+      "states": [
+        "有效",
+        "归档",
+        "删除",
+        "子目标缺失",
+        "编辑中"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2",
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "projects"
+    },
+    {
+      "id": "shot-review",
+      "name": "镜头成果审阅",
+      "kind": "route",
+      "route": "mobile/app/creative-shot/[id].tsx",
+      "parent": "project",
+      "sources": [
+        "mobile/src/creative/ShotOutputReview.tsx"
+      ],
+      "purpose": "审阅视频候选并明确采用",
+      "currentIssue": "列表制作与此审阅页分离，候选按钮以编号文本呈现；容易与素材详情/输出预览混淆。",
+      "recommendation": "演进为镜头工作区的“审阅”状态；候选缩略图轨、当前采用标记、版本摘要；主动作采用，续作放次级。",
+      "entry": "镜头已选视频、候选回流",
+      "back": "返回原镜头定位；显式“在项目中定位”与 back 分开",
+      "primaryAction": "采用此固定版本",
+      "states": [
+        "未采用",
+        "有候选",
+        "已采用",
+        "版本失效",
+        "归档"
+      ],
+      "priority": "P1",
+      "references": [
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "project"
+    },
+    {
+      "id": "asset-detail",
+      "name": "素材与版本",
+      "kind": "route",
+      "route": "mobile/app/creative-asset/[id].tsx",
+      "parent": "assets",
+      "sources": [
+        "mobile/src/creative/CreativeWorkspace.tsx"
+      ],
+      "purpose": "预览版本、续作、检查引用和导出",
+      "currentIssue": "同一组件还管理项目/资产列表；详情涉及处理、加入项目、采用、恢复、使用位置等多个层次。",
+      "recommendation": "预览优先，版本轨显示缩略图；常用动作按类型出现；使用位置独立可展开关系区，管理和诊断分层。对选择器返回和普通浏览使用不同意图。",
+      "entry": "素材库、项目、任务、使用位置",
+      "back": "回真实列表/来源，保持 versionId；版本不存在不偷偷选默认",
+      "primaryAction": "依意图选择此版本或保存到手机",
+      "states": [
+        "可用",
+        "缺原件",
+        "缺版本",
+        "多个版本",
+        "回收站",
+        "只读"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2",
+        "B3"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "assets"
+    },
+    {
+      "id": "image-draft",
+      "name": "图片创作详情",
+      "kind": "route",
+      "route": "mobile/app/image-draft/[id].tsx",
+      "parent": "create",
+      "sources": [
+        "mobile/src/creative/ImageDraftScreen.tsx"
+      ],
+      "purpose": "围绕图片草稿生成和编辑",
+      "currentIssue": "已有抽屉、预览和编辑；但生成设置、画面编辑、历史、参考、增强等模式组合需统一表面规则。",
+      "recommendation": "保持大预览+底部紧凑描述/生成；长参数全屏/抽屉分类；当前只打开一个工具；关联项目/镜头可见但不占整段表单。",
+      "entry": "创作恢复、镜头制作、素材续作",
+      "back": "先关工具；保留输入；详情退出回来源",
+      "primaryAction": "生成；阻塞时连接/恢复原件",
+      "states": [
+        "编辑",
+        "图生图",
+        "重绘",
+        "增强",
+        "历史",
+        "候选",
+        "未知",
+        "冲突"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B3"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "create"
+    },
+    {
+      "id": "video-draft",
+      "name": "视频创作详情",
+      "kind": "route",
+      "route": "mobile/app/creative-draft/[id].tsx",
+      "parent": "create",
+      "sources": [
+        "mobile/src/creative/VideoDraftScreen.tsx"
+      ],
+      "purpose": "配置视频输入、提交并审阅结果",
+      "currentIssue": "工作流、账号、参考、参数、辅助、历史均存在；易把编辑下一次输入与查看本次结果混在一起。",
+      "recommendation": "分清当前草稿与已提交任务的时间；参考缩略图内编辑，规格显示摘要，更多参数下沉；生成确认呈现冻结输入和费用。",
+      "entry": "镜头、素材、创作记录",
+      "back": "配置返回原草稿；退出回实际来源；未知任务仍有核查入口",
+      "primaryAction": "生成新尝试或核查当前未知",
+      "states": [
+        "编辑",
+        "缺账号",
+        "工作流变化",
+        "提交",
+        "运行",
+        "候选",
+        "未知"
+      ],
+      "priority": "P1",
+      "references": [
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "create"
+    },
+    {
+      "id": "output-preview",
+      "name": "本次生成输出预览",
+      "kind": "route",
+      "route": "mobile/app/creative-output/[id].tsx",
+      "parent": "video-draft",
+      "sources": [
+        "mobile/src/creative/CreativeOutputPreview.tsx"
+      ],
+      "purpose": "预览指定输出版本和本次结果",
+      "currentIssue": "任务结果、素材详情、镜头审阅都能预览，页面职责需要解释。",
+      "recommendation": "固定为“本次生成的临时审阅入口”，共享同一预览组件；有镜头目标时提供返回目标并采用，不自动采用。管理操作去版本详情。",
+      "entry": "生成结果卡",
+      "back": "关闭回本次结果，保留当前候选；对象失效显示原因",
+      "primaryAction": "继续审阅或返回镜头采用",
+      "states": [
+        "可用",
+        "加载",
+        "输出失效",
+        "归档待完成"
+      ],
+      "priority": "P2",
+      "references": [
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "video-draft"
+    },
+    {
+      "id": "task-detail",
+      "name": "任务与结果详情",
+      "kind": "route",
+      "route": "mobile/app/creative-task/[id].tsx",
+      "parent": "tasks",
+      "sources": [
+        "mobile/app/creative-task/[id].tsx"
+      ],
+      "purpose": "核查一次提交的状态与结果",
+      "currentIssue": "底部有来源计划、完整创作历史、任务中心等多个同级出口，容易形成循环。",
+      "recommendation": "首屏任务状态、结果和一个当前可执行恢复动作；来源用信息链接，任务中心为次级导航；查询明确不会重生成。",
+      "entry": "任务卡、草稿、计划",
+      "back": "back 回来源；打开计划属于显式定位，不冒充返回",
+      "primaryAction": "依状态下载/核查/查看候选",
+      "states": [
+        "运行",
+        "成功",
+        "失败",
+        "未知",
+        "认证错误",
+        "来源丢失"
+      ],
+      "priority": "P1",
+      "references": [
+        "B2",
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "tasks"
+    },
+    {
+      "id": "legacy-video",
+      "name": "旧版视频详情",
+      "kind": "route",
+      "route": "mobile/app/video/[id].tsx",
+      "parent": "legacy-gallery",
+      "sources": [
+        "mobile/app/video/[id].tsx"
+      ],
+      "purpose": "播放与导出旧版视频",
+      "currentIssue": "旧版播放器、Prompt、诊断和新素材详情并存；缺失页与正常页 back 使用不一致。",
+      "recommendation": "保持兼容只读详情；标旧版，先给播放与保存；迁入后指向新素材版本；所有分支使用同一来源返回合同。",
+      "entry": "旧作品列表、旧链接",
+      "back": "有来源返回来源，无来源回旧作品/素材管理",
+      "primaryAction": "播放或保存旧作品",
+      "states": [
+        "加载",
+        "可用",
+        "缺文件",
+        "记录删除",
+        "诊断"
+      ],
+      "priority": "P2",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "legacy-gallery"
+    },
+    {
+      "id": "draft-list",
+      "name": "创作草稿列表",
+      "kind": "route",
+      "route": "mobile/app/creative-drafts.tsx",
+      "parent": "create",
+      "sources": [
+        "mobile/app/creative-drafts.tsx"
+      ],
+      "purpose": "恢复尚未完成的输入",
+      "currentIssue": "与创作记录重复，页首同时有返回和打开工作台。",
+      "recommendation": "作为统一“最近创作”的筛选/兼容入口；草稿行显示项目镜头、缩略图、修改时间，点击精确恢复。不要再扩展第三套历史页。",
+      "entry": "素材管理、旧入口",
+      "back": "返回来源；冷入口回创作",
+      "primaryAction": "继续某份草稿",
+      "states": [
+        "空",
+        "错误",
+        "草稿已删除"
+      ],
+      "priority": "P2",
+      "references": [
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "create"
+    },
+    {
+      "id": "skills",
+      "name": "技能目录",
+      "kind": "route",
+      "route": "mobile/app/agent-skills.tsx",
+      "parent": "agent",
+      "sources": [
+        "mobile/src/agent/skills/SkillLibraryScreen.tsx"
+      ],
+      "purpose": "查找、了解、管理技能及项目组合",
+      "currentIssue": "内置已显示，旧缺陷已修正；当前同页叠加安装、历史、全局/项目/单次选择，开关后果还不相同。",
+      "recommendation": "默认目录展示用途、内置/导入来源、适用性；点击详情；添加独立流程；运行历史归助手历史；管理模式才出现全局停用。项目与单次选择明确标题。",
+      "entry": "助手、项目技能、深链接",
+      "back": "选用关闭回原会话/项目；编辑先处理未保存",
+      "primaryAction": "按进入意图选用，管理态添加技能",
+      "states": [
+        "全局",
+        "项目",
+        "单次",
+        "内置只读",
+        "无匹配",
+        "版本详情"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidence": [
+        "docs/design/evidence/2026-11-01/v47-03-skills.png"
+      ],
+      "proposalStatus": "proposed",
+      "targetOwner": "agent"
+    },
+    {
+      "id": "skill-extract",
+      "name": "对话提炼技能",
+      "kind": "route",
+      "route": "mobile/app/agent-skill-extract.tsx",
+      "parent": "skills",
+      "sources": [
+        "mobile/src/agent/skills/SkillExtractionScreen.tsx"
+      ],
+      "purpose": "将证据提炼为可复用方法并审阅发布",
+      "currentIssue": "选对话/证据、脱敏、发送、编辑发布、历史草稿顺序堆在一张长页面。",
+      "recommendation": "改为证据→外发审阅→草稿审阅的分步流程；草稿列表单独表面；步骤保留输入；本地保存与发布启用分别反馈。",
+      "entry": "技能添加、可选对话上下文",
+      "back": "回上一步先保留；退出回原添加/会话上下文",
+      "primaryAction": "当前步骤的继续/确认发送/发布",
+      "states": [
+        "选证据",
+        "审阅外发",
+        "处理中",
+        "未知",
+        "编辑草稿",
+        "已发布"
+      ],
+      "priority": "P1",
+      "references": [
+        "R6",
+        "B1"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "skills"
+    },
+    {
+      "id": "run-evidence",
+      "name": "运行证据",
+      "kind": "route",
+      "route": "mobile/app/agent-run.tsx",
+      "parent": "agent",
+      "sources": [
+        "mobile/src/agent/skills/SkillRunScreen.tsx"
+      ],
+      "purpose": "只读核验某次运行实际发生的行为",
+      "currentIssue": "源码已补实时刷新；首屏仍直接输出工具 JSON、运行 ID 和会话消息，普通用户难以判断发生了什么。",
+      "recommendation": "摘要显示结果/开始结束/模型/工具次数/技能实际读取；阶段时间线可展开；原始 JSON 和完整会话为诊断层。",
+      "entry": "技能运行记录、后续运行消息链接",
+      "back": "回实际来源；冷入口回助手/项目上下文（需实现）",
+      "primaryAction": "查看某一步证据",
+      "states": [
+        "运行中",
+        "完成",
+        "失败",
+        "刷新失败",
+        "历史不完整"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "agent"
+    },
+    {
+      "id": "capabilities",
+      "name": "制作能力目录",
+      "kind": "route",
+      "route": "mobile/app/creative-capabilities.tsx",
+      "parent": "settings",
+      "sources": [
+        "mobile/src/creative/CapabilityCatalogScreen.tsx"
+      ],
+      "purpose": "了解可制作内容及配置缺口",
+      "currentIssue": "把 provider/version/model/reasons 列表和模型连接、工作流配置拼在一起，用户需自己推导就绪性。",
+      "recommendation": "以用途分组：助手/图片/视频/媒体检查；卡显示可用性与唯一阻塞原因；详细配置进入对应连接。保留本地声明与远程验证区别。",
+      "entry": "项目概览、缺能力提示",
+      "back": "返回实际来源，补配置后回阻塞请求",
+      "primaryAction": "修复当前具体阻塞或查看能力详情",
+      "states": [
+        "可用",
+        "未连接",
+        "工作流失配",
+        "适配器不支持",
+        "分页"
+      ],
+      "priority": "P1",
+      "references": [
+        "B2",
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidence": [
+        "docs/design/evidence/2026-11-01/v47-09-capabilities.png"
+      ],
+      "proposalStatus": "proposed",
+      "targetOwner": "settings"
+    },
+    {
+      "id": "connections",
+      "name": "模型连接与能力声明",
+      "kind": "route",
+      "route": "mobile/app/model-connections.tsx",
+      "parent": "settings",
+      "sources": [
+        "mobile/src/settings/ModelConnectionsScreen.tsx"
+      ],
+      "purpose": "管理助手与检查模型的连接",
+      "currentIssue": "连接列表下直接追加完整新增表单；“使用原有连接”与设置页配置形成两套选择。",
+      "recommendation": "连接列表与添加/编辑分开；卡片展示用途、当前作用范围和本地状态；旧配置有统一来源标识，不复制密钥。撤销放详情危险区，说明中止范围。",
+      "entry": "能力目录、媒体检查",
+      "back": "回来源并刷新能力；冷入口回连接设置",
+      "primaryAction": "新增连接或选择一个连接",
+      "states": [
+        "列表",
+        "添加",
+        "未保存",
+        "已撤销",
+        "当前连接缺失"
+      ],
+      "priority": "P1",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidence": [
+        "docs/design/evidence/2026-11-01/v47-10-connections.png"
+      ],
+      "proposalStatus": "proposed",
+      "targetOwner": "settings"
+    },
+    {
+      "id": "semantic-library",
+      "name": "项目设定库",
+      "kind": "route",
+      "route": "mobile/app/project-settings-library.tsx",
+      "parent": "project",
+      "sources": [
+        "mobile/src/creative/SemanticResourcesScreen.tsx"
+      ],
+      "purpose": "角色/场景/风格/声音及固定版本引用",
+      "currentIssue": "设定列表、历史版本、编辑表单、逐镜头绑定与替换同时出现；规模增长后按钮乘积增长。",
+      "recommendation": "先类型卡片目录，点入设定详情；版本缩略图/摘要；“用于哪些镜头”独立多选器，仅对选中版本显示采用/绑定。",
+      "entry": "项目资料、搜索、使用位置",
+      "back": "回资料来源，保留实体与版本；编辑受保护",
+      "primaryAction": "创建设定或采用当前候选",
+      "states": [
+        "列表",
+        "详情",
+        "版本",
+        "编辑",
+        "绑定",
+        "陈旧引用"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidence": [
+        "docs/design/evidence/2026-11-01/v47-06-semantic-empty.png"
+      ],
+      "proposalStatus": "proposed",
+      "targetOwner": "project"
+    },
+    {
+      "id": "request-setup",
+      "name": "按设定准备镜头请求",
+      "kind": "route",
+      "route": "mobile/app/shot-request-setup.tsx",
+      "parent": "project",
+      "sources": [
+        "mobile/src/creative/SemanticPreparationScreen.tsx"
+      ],
+      "purpose": "从固定设定准备镜头生成输入",
+      "currentIssue": "普通镜头制作和此入口并行，用户必须先理解“准备请求”与“制作视频”的区别。",
+      "recommendation": "合入镜头制作向导中的“输入与参考”步骤；来源版本、缺项和冲突可视化；高级入口兼容而不占每张列表卡。",
+      "entry": "镜头按设定准备",
+      "back": "取消回原镜头；成功回绑定草稿，不再让用户找新请求",
+      "primaryAction": "确认准备输入；生成另行授权",
+      "states": [
+        "缺设定",
+        "缺原件",
+        "已准备",
+        "需授权",
+        "冲突"
+      ],
+      "priority": "P1",
+      "references": [
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "project-shots"
+    },
+    {
+      "id": "timeline",
+      "name": "成片时间线与工程",
+      "kind": "route",
+      "route": "mobile/app/project-timeline.tsx",
+      "parent": "project",
+      "sources": [
+        "mobile/src/creative/TimelineScreen.tsx"
+      ],
+      "purpose": "排列片段、裁剪并本机合成",
+      "currentIssue": "每片段使用毫秒输入及上移/下移/删除按钮；编辑器、已存工程、渲染历史和打包并列。",
+      "recommendation": "预览+可选择片段条，选中后编辑时长/字幕/音量；秒为用户单位，精确输入保留；工程列表和导出动作分层。主流程为编辑→保存快照→本机合成。",
+      "entry": "项目交付、使用位置",
+      "back": "离开先处理未保存；回原项目交付位置",
+      "primaryAction": "保存当前工程；已存状态本机合成",
+      "states": [
+        "无片段",
+        "选片",
+        "编辑",
+        "保存",
+        "合成",
+        "失败",
+        "导出"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidence": [
+        "docs/design/evidence/2026-11-01/v47-05-timeline-empty.png"
+      ],
+      "proposalStatus": "proposed",
+      "targetOwner": "project"
+    },
+    {
+      "id": "search",
+      "name": "项目全文检索",
+      "kind": "route",
+      "route": "mobile/app/project-search.tsx",
+      "parent": "project",
+      "sources": [
+        "mobile/src/creative/ProjectSearchScreen.tsx"
+      ],
+      "purpose": "从项目对象和正文定位来源",
+      "currentIssue": "搜索与“更新全部本地索引”同级，暴露索引维护；结果以版本 ID 辅助信息为主。",
+      "recommendation": "项目标题栏进入搜索，按镜头/设定/素材分组，显示摘要和缩略图；索引覆盖做状态说明，需维护时提供小入口；定位后可返回原查询。",
+      "entry": "项目全文检索入口",
+      "back": "回原项目；结果往返恢复 query/结果/滚动",
+      "primaryAction": "搜索并打开来源",
+      "states": [
+        "初始",
+        "搜索",
+        "无结果",
+        "索引过期",
+        "部分不可读"
+      ],
+      "priority": "P2",
+      "references": [
+        "R6",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "project"
+    },
+    {
+      "id": "media-review",
+      "name": "媒体检查",
+      "kind": "route",
+      "route": "mobile/app/media-review.tsx",
+      "parent": "asset-detail",
+      "sources": [
+        "mobile/src/creative/MediaReviewScreen.tsx"
+      ],
+      "purpose": "本地探测所选媒体，可选模型检查",
+      "currentIssue": "从项目概览进入时要重新选择媒体；本地检查、配模型、外发调用和历史报告一页混合。",
+      "recommendation": "从具体素材版本进入；默认本地结果和抽帧；按需展开模型检查；预览目标/接收方并确认外发；报告进入所选素材历史。",
+      "entry": "素材操作、项目工具兼容入口",
+      "back": "回原版本；配置模型后继续当前检查",
+      "primaryAction": "本地检查；完成后可选模型检查",
+      "states": [
+        "选媒体",
+        "探测",
+        "抽帧",
+        "缺模型",
+        "待确认",
+        "检查中",
+        "未知",
+        "报告"
+      ],
+      "priority": "P1",
+      "references": [
+        "B3"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "asset-detail"
+    },
+    {
+      "id": "consents",
+      "name": "素材外发许可记录",
+      "kind": "route",
+      "route": "mobile/app/outbound-consents.tsx",
+      "parent": "project",
+      "sources": [
+        "mobile/src/creative/OutboundConsentScreen.tsx"
+      ],
+      "purpose": "核查/撤销已绑定请求的许可",
+      "currentIssue": "页面只给供应商、数量和期限，难理解具体素材、任务及是否已发送；与计划生成授权易混淆。",
+      "recommendation": "归入项目设置的权限记录；卡片呈现接收方、缩略图/版本、请求来源、发送状态和可撤销范围；实际授权发生在请求确认处。",
+      "entry": "项目概览、后续请求详情链接",
+      "back": "回项目权限/实际来源",
+      "primaryAction": "查看许可详情；有效未发送时撤销",
+      "states": [
+        "空",
+        "有效",
+        "过期",
+        "已撤销",
+        "已发送",
+        "分页"
+      ],
+      "priority": "P1",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "project"
+    },
+    {
+      "id": "project-overview",
+      "name": "项目 / 概览",
+      "kind": "surface",
+      "route": null,
+      "parent": "project",
+      "sources": [
+        "mobile/src/creative/ProjectOverview.tsx"
+      ],
+      "purpose": "理解进展并继续创作",
+      "currentIssue": "项目资料与规则、制作与配置两组累计八个 ListAction，还嵌计划摘要；视觉上成为入口目录。",
+      "recommendation": "上半屏为进展、一个下一步和最近工作；设定归资料、权限归设置、媒体检查归素材、时间线归交付；概览不重复配置中心。",
+      "entry": "项目概览标签（项目当前默认进入镜头，或恢复已保存子视图）",
+      "back": "同项目切视图；回原项目列表",
+      "primaryAction": "继续最紧迫的镜头/待办",
+      "states": [
+        "无镜头",
+        "有镜头",
+        "待审阅",
+        "归档"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidence": [
+        "docs/design/evidence/2026-11-01/v47-02-overview.png"
+      ],
+      "proposalStatus": "proposed",
+      "targetOwner": "project"
+    },
+    {
+      "id": "project-shots",
+      "name": "项目 / 镜头清单",
+      "kind": "surface",
+      "route": null,
+      "parent": "project",
+      "sources": [
+        "mobile/src/creative/ProjectShots.tsx"
+      ],
+      "purpose": "浏览镜头与进入制作",
+      "currentIssue": "每卡除主动作，仍常驻按设定准备、交给助手、换/制图、草稿等；镜头多时重复成倍。",
+      "recommendation": "列表卡仅画面、简述、图片/视频状态、一个下一步；整卡打开镜头，更多承载低频管理；批量重排进入模式。",
+      "entry": "项目镜头、来源定位",
+      "back": "恢复列表位置/聚焦镜头，不退到空概览",
+      "primaryAction": "按状态制作/审阅",
+      "states": [
+        "无图",
+        "有图",
+        "草稿中",
+        "候选",
+        "采用",
+        "缺原件"
+      ],
+      "priority": "P1",
+      "references": [
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidence": [
+        "docs/design/evidence/2026-11-01/v47-07-shot-card.png"
+      ],
+      "proposalStatus": "proposed",
+      "targetOwner": "project"
+    },
+    {
+      "id": "project-assets",
+      "name": "项目 / 素材",
+      "kind": "surface",
+      "route": null,
+      "parent": "project",
+      "sources": [
+        "mobile/src/creative/CreativeWorkspace.tsx"
+      ],
+      "purpose": "项目收纳与引用素材",
+      "currentIssue": "媒体资产和角色/场景设定分处两处，名称接近但关系不明。",
+      "recommendation": "目标“资料”下媒体与设定分组/子标签；媒体卡显示收纳及镜头引用，不能把加入项目等同镜头采用。",
+      "entry": "项目子视图",
+      "back": "恢复本项目范围与筛选",
+      "primaryAction": "导入或打开素材",
+      "states": [
+        "无素材",
+        "筛选",
+        "引用",
+        "缺原件"
+      ],
+      "priority": "P2",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "project"
+    },
+    {
+      "id": "project-plans",
+      "name": "项目 / 计划",
+      "kind": "surface",
+      "route": null,
+      "parent": "project",
+      "sources": [
+        "mobile/src/creative/ProjectPlans.tsx"
+      ],
+      "purpose": "查看编排、依赖与待授权任务",
+      "currentIssue": "依赖、本地检查、候选选择、暂停、授权、重做、取消等按条件铺在卡片；技术状态压过决策。",
+      "recommendation": "计划列表以需我处理/运行中/完成分组；点入计划步骤图或纵向阶段清单；状态只显示适用动作；依赖高级编辑。",
+      "entry": "项目计划、任务回流",
+      "back": "回原计划焦点；选择后状态更新可见",
+      "primaryAction": "处理当前阻塞步骤",
+      "states": [
+        "待选图",
+        "待授权",
+        "暂停",
+        "执行",
+        "失败",
+        "隔离"
+      ],
+      "priority": "P1",
+      "references": [
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "project"
+    },
+    {
+      "id": "project-activity",
+      "name": "项目 / 活动",
+      "kind": "surface",
+      "route": null,
+      "parent": "project",
+      "sources": [
+        "mobile/src/creative/ProjectActivityPanel.tsx"
+      ],
+      "purpose": "追溯项目变更",
+      "currentIssue": "活动与任务、运行证据、历史并行，用户需猜去哪找发生过的事情。",
+      "recommendation": "活动是统一项目历史视图：用户可读事件、对象卡和结果链接；模型运行/生成任务各自详情只读可展开。",
+      "entry": "项目活动",
+      "back": "返回项目当前工作位",
+      "primaryAction": "打开相关对象或证据",
+      "states": [
+        "无记录",
+        "分页",
+        "来源失效"
+      ],
+      "priority": "P2",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "project"
+    },
+    {
+      "id": "project-manage",
+      "name": "项目设置与封面选择",
+      "kind": "surface",
+      "route": null,
+      "parent": "project",
+      "sources": [
+        "mobile/src/creative/CreativeWorkspace.tsx"
+      ],
+      "purpose": "封面、归档及项目级规则",
+      "currentIssue": "名为项目设置，但这里只管封面/归档，权限和技能在概览。",
+      "recommendation": "项目设置汇集封面、项目技能组合、权限记录和归档；选择封面时显示目标项目及固定版本确认。",
+      "entry": "项目更多",
+      "back": "关闭回原项目视图，不重置滚动",
+      "primaryAction": "保存当前设置",
+      "states": [
+        "普通",
+        "封面选择",
+        "归档"
+      ],
+      "priority": "P2",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "project"
+    },
+    {
+      "id": "shot-editor",
+      "name": "镜头编辑表单",
+      "kind": "surface",
+      "route": null,
+      "parent": "project-shots",
+      "sources": [
+        "mobile/src/creative/ProjectShots.tsx"
+      ],
+      "purpose": "编辑名称、描述和人工状态",
+      "currentIssue": "状态切换使用多个按钮；状态与实际素材进度不可混同。",
+      "recommendation": "聚焦编辑表单；描述占主体；人工审阅状态独立选择且说明；保存/取消固定，保留未保存保护。",
+      "entry": "镜头更多、新建",
+      "back": "关闭/系统返回同一未保存处理",
+      "primaryAction": "保存镜头",
+      "states": [
+        "新建",
+        "编辑",
+        "未保存",
+        "保存失败"
+      ],
+      "priority": "P2",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "project-shots"
+    },
+    {
+      "id": "asset-picker",
+      "name": "素材版本选择器",
+      "kind": "surface",
+      "route": null,
+      "parent": "asset-detail",
+      "sources": [
+        "mobile/src/creative/CreativeAssetPicker.tsx"
+      ],
+      "purpose": "为采用/参考/封面选择固定版本",
+      "currentIssue": "共享选择器承担不同意图，用户必须知道加入项目和采用区别。",
+      "recommendation": "顶部写“为谁选择什么”，范围/类型过滤，版本预览→确认；空态可导入/制作并回流；取消无业务写入。",
+      "entry": "镜头、封面、参考输入、工程",
+      "back": "取消回发起表面；导入返回同一请求并定位候选",
+      "primaryAction": "使用此版本",
+      "states": [
+        "范围空",
+        "全库空",
+        "版本选择",
+        "目标失效",
+        "并发变化"
+      ],
+      "priority": "P1",
+      "references": [
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidence": [
+        "docs/design/evidence/2026-11-01/v47-08-picker-empty.png"
+      ],
+      "proposalStatus": "proposed",
+      "targetOwner": "asset-detail"
+    },
+    {
+      "id": "asset-tools",
+      "name": "素材操作与使用位置",
+      "kind": "surface",
+      "route": null,
+      "parent": "asset-detail",
+      "sources": [
+        "mobile/src/creative/CreativeWorkspace.tsx"
+      ],
+      "purpose": "对选中版本处理和定位引用",
+      "currentIssue": "管理面板含制作、恢复、外发检查和每个使用位置按钮，功能增长继续扩张。",
+      "recommendation": "按当前媒体类型呈现动作组；显示版本关系摘要，引用行点到具体对象；缺原件时恢复取代生成动作；危险项在底部。",
+      "entry": "素材更多",
+      "back": "先关闭工具，保留所选版本",
+      "primaryAction": "当前对象最相关操作",
+      "states": [
+        "图片",
+        "视频",
+        "文本",
+        "缺原件",
+        "回收站"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B3"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "asset-detail"
+    },
+    {
+      "id": "create-records",
+      "name": "创作记录全屏层",
+      "kind": "surface",
+      "route": null,
+      "parent": "create",
+      "sources": [
+        "mobile/src/creative/CreativeHome.tsx"
+      ],
+      "purpose": "查找最近创作与历史输入",
+      "currentIssue": "历史内再次出现项目/素材/工作流导航，层内成为第二导航中心。",
+      "recommendation": "仅保留搜索、媒体/状态筛选、草稿/运行组；管理工作流从设置进入；关闭回原画面。",
+      "entry": "创作历史图标",
+      "back": "关闭回当前草稿，不重置创作",
+      "primaryAction": "恢复选中记录",
+      "states": [
+        "初始",
+        "搜索",
+        "空",
+        "分页"
+      ],
+      "priority": "P2",
+      "references": [
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "create"
+    },
+    {
+      "id": "image-tools",
+      "name": "图片编辑与生成设置",
+      "kind": "surface",
+      "route": null,
+      "parent": "image-draft",
+      "sources": [
+        "mobile/src/creative/ImageDraftScreen.tsx"
+      ],
+      "purpose": "修改描述、模型、参考、蒙版和规格",
+      "currentIssue": "多个展开标志和处理态增加表面组合复杂度。",
+      "recommendation": "统一互斥 activeSurface，描述/参考/规格按任务分组；紧凑态显示改了什么；长编辑使用全屏，避免键盘遮住生成。",
+      "entry": "底部编辑、设置、图像工具",
+      "back": "键盘→当前工具→草稿；明确处理模式退出",
+      "primaryAction": "应用设置后生成",
+      "states": [
+        "描述",
+        "参考",
+        "设置",
+        "蒙版",
+        "增强",
+        "放大"
+      ],
+      "priority": "P1",
+      "references": [
+        "B3"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "image-draft"
+    },
+    {
+      "id": "result-dock",
+      "name": "生成结果与候选工具层",
+      "kind": "surface",
+      "route": null,
+      "parent": "create",
+      "sources": [
+        "mobile/src/creative/CreativeResults.tsx"
+      ],
+      "purpose": "审阅本次结果并继续创作",
+      "currentIssue": "结果层既呈现历史、候选，又提供处理和参数恢复，需避免一组工具覆盖所有媒体。另发现 UpscaleDraftScreen.tsx 无调用引用，不应将它计作可达页面。",
+      "recommendation": "结果缩略图/候选为主体，当前选中对象决定工具；保存与采用分开；放大作为当前图片处理模式而非凭组件文件虚构独立路由。",
+      "entry": "图片/视频工作台结果",
+      "back": "关闭工具回当前结果，保留候选；返回编辑不丢草稿",
+      "primaryAction": "依任务保存或回目标镜头采用",
+      "states": [
+        "生成中",
+        "候选",
+        "处理",
+        "保存中",
+        "缺原件"
+      ],
+      "priority": "P2",
+      "references": [
+        "B1",
+        "B2",
+        "B3"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "create"
+    },
+    {
+      "id": "assistant-context",
+      "name": "助手项目/镜头上下文",
+      "kind": "surface",
+      "route": null,
+      "parent": "agent",
+      "sources": [
+        "mobile/src/creative/AgentCreativePanel.tsx"
+      ],
+      "purpose": "选择对话所属项目",
+      "currentIssue": "项目选择器还提供撤销项目全部生成授权，与项目选择任务不相关。",
+      "recommendation": "选择器只选项目/管理项目；授权撤销去项目权限，运行中提供紧急停止与定位授权；切项目明确切换会话，不迁移原对话。",
+      "entry": "助手标题",
+      "back": "关闭回原会话，不发送消息",
+      "primaryAction": "选定一个项目",
+      "states": [
+        "可选",
+        "运行锁定",
+        "项目失效"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "agent"
+    },
+    {
+      "id": "assistant-conversation",
+      "name": "助手会话与运行交互",
+      "kind": "surface",
+      "route": null,
+      "parent": "agent",
+      "sources": [
+        "mobile/src/agent/AgentScreen.tsx"
+      ],
+      "purpose": "对话、审阅提议并跟踪运行",
+      "currentIssue": "消息、技能、提示词版本、会话管理、运行证据各自工具较多，需明确默认层。",
+      "recommendation": "默认对话+项目/镜头 chips+输入；输入旁简短工具；提议用变更摘要/影响对象/确认动作；运行呈阶段和停止状态，日志再展开。",
+      "entry": "助手主入口",
+      "back": "子工具先关闭；跨项目时保护输入",
+      "primaryAction": "发送或审阅待确认提议",
+      "states": [
+        "空会话",
+        "编辑",
+        "运行",
+        "提议",
+        "待授权",
+        "停止",
+        "失败"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "agent"
+    },
+    {
+      "id": "skill-quick",
+      "name": "会话内技能快速层",
+      "kind": "surface",
+      "route": null,
+      "parent": "agent",
+      "sources": [
+        "mobile/src/agent/AgentScreen.tsx"
+      ],
+      "purpose": "为接下来一条消息选技能",
+      "currentIssue": "共用管理目录组件，可能仍露全局/项目级设置和历史。",
+      "recommendation": "快速层只查找、说明、选用并显示范围/数量；管理跳转全屏且带来源；内置可见但不假装它授予工具权限。",
+      "entry": "助手技能入口",
+      "back": "完成回原输入框，保留焦点与文字",
+      "primaryAction": "确认下次选用",
+      "states": [
+        "项目继承",
+        "单次覆盖",
+        "失效",
+        "只读内置"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "agent"
+    },
+    {
+      "id": "skill-add",
+      "name": "技能添加与安装预览",
+      "kind": "surface",
+      "route": null,
+      "parent": "skills",
+      "sources": [
+        "mobile/src/agent/skills/SkillLibraryScreen.tsx"
+      ],
+      "purpose": "导入或编辑方法后检查安装",
+      "currentIssue": "新增表单展开在目录上方，检查、示例、高级格式、提炼、预览安装均可连续增长。",
+      "recommendation": "进入独立添加状态：选来源→用途编辑→检查预览→安装；保存后返回新条目；安装后是否选用另行明确。",
+      "entry": "目录添加",
+      "back": "回上一步或保留草稿退出；不丢 purpose/scope/text",
+      "primaryAction": "当前阶段继续/安装",
+      "states": [
+        "选来源",
+        "编辑",
+        "格式错误",
+        "预览",
+        "安装完成"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidence": [
+        "docs/design/evidence/2026-11-01/v47-04-skill-add.png"
+      ],
+      "proposalStatus": "proposed",
+      "targetOwner": "skills"
+    },
+    {
+      "id": "skill-history",
+      "name": "技能运行历史",
+      "kind": "surface",
+      "route": null,
+      "parent": "skills",
+      "sources": [
+        "mobile/src/agent/skills/SkillLibraryScreen.tsx"
+      ],
+      "purpose": "找某次运行所用版本和实际读取",
+      "currentIssue": "每条历史包含大量 fingerprint、预算和 ID，在目录内切换全屏内容。",
+      "recommendation": "归助手运行历史的技能筛选；行显示任务名/时间/结果，详情再看版本/实际读取/预算；保留“可发现不等于使用”。",
+      "entry": "技能历史图标、助手运行记录",
+      "back": "返回原筛选和范围",
+      "primaryAction": "打开该次运行",
+      "states": [
+        "空",
+        "当前范围",
+        "全部",
+        "分页"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "agent"
+    },
+    {
+      "id": "prompt-versions",
+      "name": "提示词版本面板",
+      "kind": "surface",
+      "route": null,
+      "parent": "agent",
+      "sources": [
+        "mobile/src/agent/PromptVersionPanel.tsx"
+      ],
+      "purpose": "查看输入修改与各次运行关联",
+      "currentIssue": "版本与运行消息可能并行显示，需让用户知道修改是否用于后续运行。",
+      "recommendation": "以变更摘要、时间、运行状态展示版本；原文/差异展开；“用此版本继续”预填输入，不直接调用。",
+      "entry": "助手消息版本入口",
+      "back": "关闭回原消息锚点",
+      "primaryAction": "选择版本继续编辑",
+      "states": [
+        "当前",
+        "历史",
+        "缺证据",
+        "运行中"
+      ],
+      "priority": "P2",
+      "references": [
+        "B1"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "agent"
+    },
+    {
+      "id": "settings-accounts",
+      "name": "设置 / 创作账号",
+      "kind": "surface",
+      "route": null,
+      "parent": "settings",
+      "sources": [
+        "mobile/src/creative/CreativeAccountPanel.tsx"
+      ],
+      "purpose": "配置生成服务凭据",
+      "currentIssue": "不同提供商凭据面板与助手连接分离，缺少用途导航。",
+      "recommendation": "连接首页可按用途发现；账号详情保留服务名/保存与解绑；不要在每页重画账号设置。",
+      "entry": "设置、缺账号提示",
+      "back": "直达时回原请求并刷新；列表时回连接首页",
+      "primaryAction": "保存当前连接",
+      "states": [
+        "未连接",
+        "已保存",
+        "撤销",
+        "校验失败"
+      ],
+      "priority": "P1",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "settings"
+    },
+    {
+      "id": "settings-assistant",
+      "name": "设置 / 助手模型",
+      "kind": "surface",
+      "route": null,
+      "parent": "settings",
+      "sources": [
+        "mobile/app/(tabs)/settings.tsx"
+      ],
+      "purpose": "配置助手默认模型与高级参数",
+      "currentIssue": "与 model-connections 的“原有连接”并存，用户难判断哪个实际生效。",
+      "recommendation": "统一展示默认连接来源；高级超时/重试/推理折叠；选用连接和编辑连接分开，迁移兼容。",
+      "entry": "设置分类、助手缺配置",
+      "back": "回来源并保留输入；保存后说明后续运行生效",
+      "primaryAction": "保存模型设置",
+      "states": [
+        "默认",
+        "命名连接",
+        "未保存",
+        "错误"
+      ],
+      "priority": "P1",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidence": [
+        "docs/design/evidence/2026-11-01/v47-12-settings-assistant.png"
+      ],
+      "proposalStatus": "proposed",
+      "targetOwner": "settings"
+    },
+    {
+      "id": "settings-workflows",
+      "name": "设置 / 工作流",
+      "kind": "surface",
+      "route": null,
+      "parent": "settings",
+      "sources": [
+        "mobile/src/settings/WorkflowSyncPanel.tsx"
+      ],
+      "purpose": "管理 APK 支持的生成能力定义",
+      "currentIssue": "技术性同步、版本、能力配置与创作意图缺少直接映射。",
+      "recommendation": "用户先看用途和就绪性；详情管理安装版本和同步；变更先显示影响哪些草稿/计划，不能静默套用新协议。",
+      "entry": "设置、能力目录",
+      "back": "回原草稿，保留旧输入并提示版本变化",
+      "primaryAction": "安装/更新选中工作流",
+      "states": [
+        "可用",
+        "更新",
+        "失配",
+        "损坏",
+        "离线"
+      ],
+      "priority": "P2",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "settings"
+    },
+    {
+      "id": "settings-storage",
+      "name": "设置 / 存储导出与数据维护",
+      "kind": "surface",
+      "route": null,
+      "parent": "settings",
+      "sources": [
+        "mobile/src/settings/DataManagementPanel.tsx"
+      ],
+      "purpose": "日常空间管理与备份恢复",
+      "currentIssue": "自动保存偏好、清理、完整备份、数据库与危险操作承载在同一分类。",
+      "recommendation": "上层显示占用和日常安全清理；完整备份、恢复、数据库工具分组；恢复/清空明确预览影响和恢复路径，不靠普通按钮样式区分。",
+      "entry": "设置存储、素材管理",
+      "back": "维护未完成保留状态；返回安全来源",
+      "primaryAction": "依当前任务管理空间或备份",
+      "states": [
+        "健康",
+        "预览清理",
+        "备份",
+        "恢复",
+        "失败",
+        "隔离"
+      ],
+      "priority": "P1",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "settings"
+    },
+    {
+      "id": "settings-playback",
+      "name": "设置 / 视频播放",
+      "kind": "surface",
+      "route": null,
+      "parent": "settings",
+      "sources": [
+        "mobile/app/(tabs)/settings.tsx"
+      ],
+      "purpose": "遇到播放问题时调整解码",
+      "currentIssue": "低频诊断选项占独立分类但合理；需防被当作生成规格。",
+      "recommendation": "保留偏好分类，说明仅影响本机播放；默认自动；保存反馈明确。",
+      "entry": "设置分类",
+      "back": "回设置或原播放器",
+      "primaryAction": "保存解码偏好",
+      "states": [
+        "自动",
+        "选项修改",
+        "未保存"
+      ],
+      "priority": "P3",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "settings"
+    },
+    {
+      "id": "settings-diagnostics",
+      "name": "设置 / 显示与诊断",
+      "kind": "surface",
+      "route": null,
+      "parent": "settings",
+      "sources": [
+        "mobile/src/settings/DisplayDiagnostics.tsx"
+      ],
+      "purpose": "定位布局与运行环境问题",
+      "currentIssue": "诊断不是创作任务，应防止污染普通页首屏。",
+      "recommendation": "置于高级维护；提供可读摘要与复制诊断；不把敏感原始数据默认展开。",
+      "entry": "设置高级",
+      "back": "回设置",
+      "primaryAction": "查看或复制诊断",
+      "states": [
+        "摘要",
+        "展开",
+        "复制反馈"
+      ],
+      "priority": "P3",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "settings"
+    },
+    {
+      "id": "task-inbox",
+      "name": "最近任务气泡",
+      "kind": "surface",
+      "route": null,
+      "parent": "create",
+      "sources": [
+        "mobile/src/tasks/TaskInboxButton.tsx"
+      ],
+      "purpose": "不中断当前创作查看进度",
+      "currentIssue": "紧凑入口方向正确，需保证角标含义和定位与任务中心一致。",
+      "recommendation": "保留最近任务、待处理强调和查看更多；点行到同一任务；关闭不改变画面或输入；全局统一角标投影。",
+      "entry": "工作区任务图标",
+      "back": "遮罩/系统返回关闭气泡",
+      "primaryAction": "查看当前任务",
+      "states": [
+        "空",
+        "进行中",
+        "异常",
+        "更新失败"
+      ],
+      "priority": "P2",
+      "references": [
+        "R6"
+      ],
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidence": [
+        "docs/design/evidence/2026-11-01/v47-14-tasks-empty.png"
+      ],
+      "proposalStatus": "proposed",
+      "targetOwner": "create"
+    },
+    {
+      "id": "prompt-assist",
+      "name": "提示词辅助工具",
+      "kind": "surface",
+      "route": null,
+      "parent": "create",
+      "sources": [
+        "mobile/src/creative/PromptAssistSheet.tsx"
+      ],
+      "purpose": "生成建议并由用户应用到当前输入",
+      "currentIssue": "辅助对话与项目助手相似，但不应让用户误认为已修改项目或启动生成。",
+      "recommendation": "标题说明只改当前描述；建议展示差异与应用/撤销；补模型后回同一辅助会话；不扩张成第二个通用助手。",
+      "entry": "图片/视频帮写描述",
+      "back": "关闭回原编辑，保持未采用建议",
+      "primaryAction": "应用建议",
+      "states": [
+        "输入",
+        "请求",
+        "建议",
+        "应用",
+        "撤销",
+        "失败"
+      ],
+      "priority": "P2",
+      "references": [
+        "B1"
+      ],
+      "evidenceLevel": "source-reviewed",
+      "evidence": [],
+      "proposalStatus": "proposed",
+      "targetOwner": "create"
+    }
+  ],
+  "edges": [
+    {
+      "fromId": "entry",
+      "toId": "create",
+      "type": "navigate",
+      "label": "默认跳转",
+      "context": "",
+      "status": "source-reviewed",
+      "source": "mobile/app/index.tsx"
+    },
+    {
+      "fromId": "projects",
+      "toId": "project",
+      "type": "navigate",
+      "label": "打开项目",
+      "context": "projectId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/CreativeWorkspace.tsx"
+    },
+    {
+      "fromId": "project-overview",
+      "toId": "semantic-library",
+      "type": "navigate",
+      "label": "角色与场景设定",
+      "context": "projectId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectOverview.tsx"
+    },
+    {
+      "fromId": "project-overview",
+      "toId": "skills",
+      "type": "navigate",
+      "label": "项目技能",
+      "context": "projectId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectOverview.tsx"
+    },
+    {
+      "fromId": "project-overview",
+      "toId": "agent",
+      "type": "navigate",
+      "label": "在助手中继续",
+      "context": "projectId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectOverview.tsx"
+    },
+    {
+      "fromId": "project-overview",
+      "toId": "capabilities",
+      "type": "navigate",
+      "label": "制作能力与配置",
+      "context": "",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectOverview.tsx"
+    },
+    {
+      "fromId": "project-overview",
+      "toId": "consents",
+      "type": "navigate",
+      "label": "素材外发许可",
+      "context": "projectId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectOverview.tsx"
+    },
+    {
+      "fromId": "project-overview",
+      "toId": "timeline",
+      "type": "navigate",
+      "label": "成片时间线与工程",
+      "context": "projectId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectOverview.tsx"
+    },
+    {
+      "fromId": "project-overview",
+      "toId": "search",
+      "type": "navigate",
+      "label": "项目全文检索",
+      "context": "projectId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectOverview.tsx"
+    },
+    {
+      "fromId": "project-overview",
+      "toId": "media-review",
+      "type": "navigate",
+      "label": "媒体探测与抽帧检查",
+      "context": "projectId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectOverview.tsx"
+    },
+    {
+      "fromId": "project-shots",
+      "toId": "asset-picker",
+      "type": "navigate",
+      "label": "选定图片/视频",
+      "context": "projectId+shotId+revision+slot",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectShots.tsx"
+    },
+    {
+      "fromId": "project-shots",
+      "toId": "request-setup",
+      "type": "navigate",
+      "label": "按设定准备请求",
+      "context": "projectId+shotId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectShots.tsx"
+    },
+    {
+      "fromId": "project-shots",
+      "toId": "agent",
+      "type": "navigate",
+      "label": "交给助手",
+      "context": "projectId+shotId+shotTitle",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectShots.tsx"
+    },
+    {
+      "fromId": "project-shots",
+      "toId": "video-draft",
+      "type": "navigate",
+      "label": "继续/新建视频草稿",
+      "context": "draftId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectShots.tsx"
+    },
+    {
+      "fromId": "project-shots",
+      "toId": "image-draft",
+      "type": "navigate",
+      "label": "制作参考图",
+      "context": "draftId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectShots.tsx"
+    },
+    {
+      "fromId": "project-shots",
+      "toId": "shot-review",
+      "type": "navigate",
+      "label": "查看镜头视频",
+      "context": "shotId+projectId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectShots.tsx"
+    },
+    {
+      "fromId": "assets",
+      "toId": "asset-detail",
+      "type": "navigate",
+      "label": "打开素材",
+      "context": "assetId+versionId?",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/CreativeWorkspace.tsx"
+    },
+    {
+      "fromId": "asset-tools",
+      "toId": "media-review",
+      "type": "navigate",
+      "label": "检查此版本",
+      "context": "projectId+versionId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/CreativeWorkspace.tsx"
+    },
+    {
+      "fromId": "asset-tools",
+      "toId": "video-draft",
+      "type": "navigate",
+      "label": "从图创建视频",
+      "context": "draftId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/CreativeWorkspace.tsx"
+    },
+    {
+      "fromId": "asset-tools",
+      "toId": "image-draft",
+      "type": "navigate",
+      "label": "恢复参数续作",
+      "context": "draftId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/CreativeWorkspace.tsx"
+    },
+    {
+      "fromId": "asset-detail",
+      "toId": "project",
+      "type": "navigate",
+      "label": "定位使用位置",
+      "context": "projectId+tab+shotId?+requestId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/CreativeWorkspace.tsx"
+    },
+    {
+      "fromId": "create-records",
+      "toId": "image-draft",
+      "type": "restore-workspace",
+      "label": "恢复图片记录",
+      "context": "draftId；当前创作页内切换/恢复组件，不 push 详情路由",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/CreativeHome.tsx"
+    },
+    {
+      "fromId": "create-records",
+      "toId": "video-draft",
+      "type": "restore-workspace",
+      "label": "恢复视频记录",
+      "context": "draftId；当前创作页内切换/恢复组件，不 push 详情路由",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/CreativeHome.tsx"
+    },
+    {
+      "fromId": "image-draft",
+      "toId": "settings",
+      "type": "navigate",
+      "label": "连接创作账号",
+      "context": "section+surface+draftId+requestId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ImageDraftScreen.tsx"
+    },
+    {
+      "fromId": "video-draft",
+      "toId": "settings",
+      "type": "navigate",
+      "label": "连接创作账号",
+      "context": "section+surface+draftId+requestId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/VideoDraftScreen.tsx"
+    },
+    {
+      "fromId": "video-draft",
+      "toId": "task-detail",
+      "type": "navigate",
+      "label": "核查未知结果",
+      "context": "jobId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/VideoDraftScreen.tsx"
+    },
+    {
+      "fromId": "task-inbox",
+      "toId": "tasks",
+      "type": "navigate",
+      "label": "查看全部任务",
+      "context": "",
+      "status": "source-reviewed",
+      "source": "mobile/src/tasks/TaskInboxButton.tsx"
+    },
+    {
+      "fromId": "task-detail",
+      "toId": "tasks",
+      "type": "navigate",
+      "label": "任务中心",
+      "context": "",
+      "status": "source-reviewed",
+      "source": "mobile/app/creative-task/[id].tsx"
+    },
+    {
+      "fromId": "task-detail",
+      "toId": "video-draft",
+      "type": "navigate",
+      "label": "完整创作历史",
+      "context": "draftId / 图片时进入 image-draft",
+      "status": "source-reviewed",
+      "source": "mobile/app/creative-task/[id].tsx"
+    },
+    {
+      "fromId": "task-detail",
+      "toId": "project",
+      "type": "navigate",
+      "label": "定位来源计划",
+      "context": "projectId+planId",
+      "status": "source-reviewed",
+      "source": "mobile/app/creative-task/[id].tsx"
+    },
+    {
+      "fromId": "project-plans",
+      "toId": "task-detail",
+      "type": "navigate",
+      "label": "查看生成任务",
+      "context": "jobId+projectId+planId+stepId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectPlans.tsx"
+    },
+    {
+      "fromId": "skills",
+      "toId": "skill-extract",
+      "type": "navigate",
+      "label": "从对话提炼",
+      "context": "projectId?+threadId?",
+      "status": "source-reviewed",
+      "source": "mobile/src/agent/skills/SkillLibraryScreen.tsx"
+    },
+    {
+      "fromId": "skill-history",
+      "toId": "run-evidence",
+      "type": "navigate",
+      "label": "查看运行",
+      "context": "threadId+runId",
+      "status": "source-reviewed",
+      "source": "mobile/src/agent/skills/SkillLibraryScreen.tsx"
+    },
+    {
+      "fromId": "skill-extract",
+      "toId": "skills",
+      "type": "navigate",
+      "label": "发布后打开技能库",
+      "context": "projectId?+threadId?",
+      "status": "source-reviewed",
+      "source": "mobile/src/agent/skills/SkillExtractionScreen.tsx"
+    },
+    {
+      "fromId": "capabilities",
+      "toId": "connections",
+      "type": "navigate",
+      "label": "模型连接",
+      "context": "",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/CapabilityCatalogScreen.tsx"
+    },
+    {
+      "fromId": "capabilities",
+      "toId": "settings",
+      "type": "navigate",
+      "label": "工作流/账号配置",
+      "context": "section",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/CapabilityCatalogScreen.tsx"
+    },
+    {
+      "fromId": "media-review",
+      "toId": "connections",
+      "type": "navigate",
+      "label": "配置检查模型",
+      "context": "",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/MediaReviewScreen.tsx"
+    },
+    {
+      "fromId": "search",
+      "toId": "asset-detail",
+      "type": "navigate",
+      "label": "查看素材来源",
+      "context": "assetId+versionId+projectId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectSearchScreen.tsx"
+    },
+    {
+      "fromId": "search",
+      "toId": "project",
+      "type": "navigate",
+      "label": "查看镜头来源",
+      "context": "projectId+tab=shots+shotId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectSearchScreen.tsx"
+    },
+    {
+      "fromId": "search",
+      "toId": "semantic-library",
+      "type": "navigate",
+      "label": "查看设定来源",
+      "context": "projectId+entityId+versionId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/ProjectSearchScreen.tsx"
+    },
+    {
+      "fromId": "timeline",
+      "toId": "asset-detail",
+      "type": "navigate",
+      "label": "打开成片/工程文件",
+      "context": "assetId+versionId+projectId",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/TimelineScreen.tsx"
+    },
+    {
+      "fromId": "legacy-gallery",
+      "toId": "legacy-video",
+      "type": "navigate",
+      "label": "打开旧作品",
+      "context": "assetId",
+      "status": "source-reviewed",
+      "source": "mobile/app/(tabs)/gallery.tsx"
+    },
+    {
+      "fromId": "skill-quick",
+      "toId": "skills",
+      "type": "navigate",
+      "label": "进入全屏添加",
+      "context": "intent+projectId+threadId",
+      "status": "source-reviewed",
+      "source": "mobile/src/agent/AgentScreen.tsx"
+    },
+    {
+      "fromId": "create",
+      "toId": "create-records",
+      "type": "open-surface",
+      "label": "创作记录",
+      "context": "",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/CreativeHome.tsx"
+    },
+    {
+      "fromId": "agent",
+      "toId": "assistant-context",
+      "type": "open-surface",
+      "label": "选择项目",
+      "context": "",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/AgentWorkspace.tsx"
+    },
+    {
+      "fromId": "agent",
+      "toId": "skill-quick",
+      "type": "open-surface",
+      "label": "技能快速层",
+      "context": "",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/AgentWorkspace.tsx"
+    },
+    {
+      "fromId": "project",
+      "toId": "project-manage",
+      "type": "open-surface",
+      "label": "项目设置",
+      "context": "",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/CreativeWorkspace.tsx"
+    },
+    {
+      "fromId": "asset-detail",
+      "toId": "asset-tools",
+      "type": "open-surface",
+      "label": "素材操作",
+      "context": "",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/CreativeWorkspace.tsx"
+    }
+  ],
+  "sourceDigests": {
+    "mobile/app/(tabs)/_layout.tsx": "b7722eec648624ab785321235f6cd2fa2f0a30f066be71214ec74dfdaa4618f7",
+    "mobile/app/(tabs)/agent.tsx": "c73b578c12334b2c36f49549253aba8c9063ace706d1ad0ca0949c83fa05841a",
+    "mobile/app/(tabs)/assets.tsx": "6ae760ba03a4c873da40f2819524ee7276b7e1731fc4fd994a6e6ca32bf0769a",
+    "mobile/app/(tabs)/create.tsx": "b7bbfa9f22446afdcedc877beb666bf6ae18d12ff2d65685ebd7246c6de35c43",
+    "mobile/app/(tabs)/gallery.tsx": "dec9705f8b004770c0a07b5e5279a7838fd0ad6ea3cf99b632c07e5fe67baba5",
+    "mobile/app/(tabs)/projects.tsx": "6ecb56de6ddcf59a0854b364ae8f7637761c8dee3f651c7755a75b45d5f4cf66",
+    "mobile/app/(tabs)/settings.tsx": "20058132793bcfb8c45af7d7753b6bd23a683b84709a5a50feb3a25152db44f5",
+    "mobile/app/(tabs)/tasks.tsx": "bfabf414cc6658e8651ed2ea1127d7c1a835fadd03eb13eaf08f0f4a9869dc53",
+    "mobile/app/_layout.tsx": "ea1fdc01ccff166ec1aaf7e97893aa1de73f6050e2dfc9314d7e509ebcb9ec84",
+    "mobile/app/agent-run.tsx": "333b16bcb445d8d936befd242a580f3cfb5e534447ed3676ddd20f1123931b71",
+    "mobile/app/agent-skill-extract.tsx": "d8ce49942fb4659428a14aaeda27207740d1ad38d5b8fb23f74564041c09e41d",
+    "mobile/app/agent-skills.tsx": "d7091b3ce5aa1636067aa6816994bb92a9c94a845ae8383128cb5566d7aefb0f",
+    "mobile/app/creative-asset/[id].tsx": "65dfb266122df481ef62039e1c9709e50fc58d445c93e0a5757c8f38dcdf3de9",
+    "mobile/app/creative-capabilities.tsx": "bbfced4d5d2d460b4a5c54be7e77695a7aa5830f875b163762095018b12bbf48",
+    "mobile/app/creative-draft/[id].tsx": "39a426a4bfeb13b85d53f08efd3255ddfe0f58cf4404ed38b580f4a75288de73",
+    "mobile/app/creative-drafts.tsx": "7f43817dc480e27570a0040bbdfa99aebe7b91bad045c50238c37014a16be742",
+    "mobile/app/creative-output/[id].tsx": "c0ddabf7ae24a063b7ce61a78104edb9e3605535adf500d6f4cfab530a9b1a90",
+    "mobile/app/creative-project/[id].tsx": "dacb11f96335211a424ecfb90d380a1615b6b366d0db8ae0cf614c62e70e86d3",
+    "mobile/app/creative-shot/[id].tsx": "5729be3637d985468af45ba9594abbe0036ba906414388af92a615c08a5e87ac",
+    "mobile/app/creative-task/[id].tsx": "0207169edc075ef12426a0db90caf159231b832250128a2bc0e096c8d2d0728f",
+    "mobile/app/image-draft/[id].tsx": "3b0623a23885f56b84bdeef4869dcd35d62afc04e6f17f73a10acc85a2f2726e",
+    "mobile/app/index.tsx": "c2a9bd8856486cfc16290f01d8184b4c844ed1b6e9938e70a2df6befd20bac35",
+    "mobile/app/media-review.tsx": "78c0a54e16598873bbb977e085e9b3f9daf3bf519b092f520204ec55ddd139f9",
+    "mobile/app/model-connections.tsx": "44a32cf15e3fc1b269c2d6686268c61a6267a0b4a89b4dd1b46e94cdb489be68",
+    "mobile/app/outbound-consents.tsx": "3f5b898e68455735cce3d5e9d5ac5e99d4d31b9a5c499280c510dc6936361648",
+    "mobile/app/project-search.tsx": "ad57549c4c5ba1cca7a0d8192a4e4b1a49b56dd83b726c32929b8108334910e1",
+    "mobile/app/project-settings-library.tsx": "c999aa59b41ed5ac447e5e36400202bc08002853ea4bfd1a59dc77b57d049f38",
+    "mobile/app/project-timeline.tsx": "234918e5f37a7d72ea705f7c8d1d12db50a319d44890d548cc8020e55e2abf64",
+    "mobile/app/settings-panel.tsx": "a7a4149ef6a30f63977a6c02af421d8d0b2854bd6e4ad89989dea09f80a8ccba",
+    "mobile/app/shot-request-setup.tsx": "018897b819a6dd434362b7b45863878a02b430fa788ea7ed57cc0fc4048c3fe8",
+    "mobile/app/video/[id].tsx": "8abbd333bbb3c04591bf0e95a867ea06c4f57b3710c0812e6e37b99dabce4e8c",
+    "mobile/src/agent/AgentScreen.tsx": "829be9714749fcb2785f734281995c68e5cb1d2cc0e408784cb0439ca80273fe",
+    "mobile/src/agent/PromptVersionPanel.tsx": "9c077f7737640b3e144115217fc20acd08676538c486e874216a00a3cd8ce068",
+    "mobile/src/agent/skills/SkillExtractionScreen.tsx": "0d18eb0fe7ffc9292cc20c097654d6ae842a316a03cba92be4da1c65d407c576",
+    "mobile/src/agent/skills/SkillLibraryScreen.tsx": "20f2c46ea61824c6956ee32d16fb5b39501474d7829e505b65f90fe786e305e9",
+    "mobile/src/agent/skills/SkillRunScreen.tsx": "aa3290d6ba7e643b3c4c3b03be2183a23b7dc1d2ad0574ef03c0fc8567d7e6c7",
+    "mobile/src/creative/AgentCreativePanel.tsx": "63cc9f069c372f3b2ae8a2b1c778b57a3a3edf91f5088500ae1119e226081d22",
+    "mobile/src/creative/AgentWorkspace.tsx": "5927e3c94291e40b595b5f4de4efdc19eee27f53eaa9447de409e45d04081ea1",
+    "mobile/src/creative/CapabilityCatalogScreen.tsx": "22e2edce01cc1b9cc870b7e6290c8b46938184744aa67bcbc54b25b84e5094b7",
+    "mobile/src/creative/CreativeAccountPanel.tsx": "8e678926536277d6e8b1653ebd96a8c44afdc9d1d1212cf7eef4161ef0794c31",
+    "mobile/src/creative/CreativeAssetPicker.tsx": "152e4b4a835c3a3e5f9023392f8da1a45204bbee29381cc0658d5c641d8ee6a2",
+    "mobile/src/creative/CreativeHome.tsx": "790143c84d68a79c99732a8074d92e44e6d12e3ddbe4df4d507ea65abff11827",
+    "mobile/src/creative/CreativeOutputPreview.tsx": "148de167186242c0d25f0767d542a8fc197ddf3268545d384e478456fb498280",
+    "mobile/src/creative/CreativeResults.tsx": "e3b9f5e0fd7f88b231fe2036e11f52f3a9d5a94553e7f1a0db2ebb8d77b8dc1a",
+    "mobile/src/creative/CreativeWorkspace.tsx": "5333b7c81acc49ffa76304fffb1a6f8e4eb654ad58791aad41d4cd763c66cc97",
+    "mobile/src/creative/ImageDraftScreen.tsx": "e76bb135c2324f64449ac9c13ee01f515f50bada6781b7c9d8576bf5d8b05f16",
+    "mobile/src/creative/MediaReviewScreen.tsx": "07d764e4cff5e84b3bf37d944e80676f7b38ab0818d315bc81e874c7a22b35f0",
+    "mobile/src/creative/OutboundConsentScreen.tsx": "e3c0f110e46566bea0fe3d854b940b356b0c670da8d690e3b4ca1aa39c09bfa6",
+    "mobile/src/creative/ProjectActivityPanel.tsx": "5999b76132fa99a0299c122fe457fa0b8837959bf0a0090d1026a5910c5851cd",
+    "mobile/src/creative/ProjectOverview.tsx": "a2001373edf8e2fc6d17e65742d71726807b785742051b6caff433d0bd211d5f",
+    "mobile/src/creative/ProjectPlans.tsx": "73c1a9f0f939080f9494a19f9d3c2dbe98c08ac12455166b4ae136d6e944b23c",
+    "mobile/src/creative/ProjectSearchScreen.tsx": "ba0ce8393ca776c127a1614b78cfa78898c74690cc7a811425c54daceb9d968c",
+    "mobile/src/creative/ProjectShots.tsx": "20dfb2f2f60929e63ce7fac08fd818c46dbe98449c968aaea6cb9e15baa6ad20",
+    "mobile/src/creative/PromptAssistSheet.tsx": "e6f1f14a9aee6b914a9f5cc8a4e8df4f3e4c61a5cdcb395f4bb2219e16ce80a0",
+    "mobile/src/creative/SemanticPreparationScreen.tsx": "61964d95d3ade77310e7e31d215f46551f03207b0c1a086c223847bf97fc8bb2",
+    "mobile/src/creative/SemanticResourcesScreen.tsx": "ef99b915fbc0e2177ad785af32cd095ed2cf9c6927b434fd10a54e2da9d76981",
+    "mobile/src/creative/ShotOutputReview.tsx": "a78c87d4d75ffc9380b4be6dba95bcb78eeb51a9ffdfd30e83faa3eda867ae03",
+    "mobile/src/creative/TimelineScreen.tsx": "5cb8dc92a2cfb890d486e26d33d8668efbfe9ccfdc047a937687d73e81f626ff",
+    "mobile/src/creative/VideoDraftScreen.tsx": "cdbb394501726f1d30c8e0fa81f55a8642cffa764c4250db426337c1dd8e19fc",
+    "mobile/src/settings/DataManagementPanel.tsx": "82ae98fea9d8bdfcb1c0b9601409c8c58cf590bd3ba67a4b19b8ec86b039d8b6",
+    "mobile/src/settings/DisplayDiagnostics.tsx": "a3b7eb88eff7e987f4ff87abb3f614befc40e5569c50efaecb26a10cf8f67c20",
+    "mobile/src/settings/ModelConnectionsScreen.tsx": "3416f4606bae0147c3a14b53f94bc578898f44b8a11781442a5f8852fa2d5d5e",
+    "mobile/src/settings/WorkflowSyncPanel.tsx": "686c03f780248005bafd60a0e80f3ae248bdfcf000d9e5ac8f5193174cb424ee",
+    "mobile/src/tasks/TaskInboxButton.tsx": "898cadeead6b4923872354dc1d9791f1c821460e10753f411af4d3d849e016cb"
+  }
+}
