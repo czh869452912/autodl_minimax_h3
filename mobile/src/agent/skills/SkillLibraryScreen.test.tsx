@@ -143,3 +143,15 @@ test('reads persisted once override separately from the unsaved editor',async()=
  mockReadNext.mockResolvedValue({ids:[],valid:true});let tree!:ReturnType<typeof create>;
  try{await act(async()=>{tree=create(<SkillLibraryScreen threadId="t"/>);});expect(JSON.stringify(tree.toJSON())).toContain('已固定，等待下一条消息消费');expect(JSON.stringify(tree.toJSON())).not.toContain('正在编辑，尚未保存');}finally{act(()=>tree.unmount());mockReadNext.mockResolvedValue(null);}
 });
+
+
+test.each([undefined,'add'])('add always reveals an existing draft after history (intent=%s)',async(intent)=>{
+ let tree!:ReturnType<typeof create>;try{await act(async()=>{tree=create(<SkillLibraryScreen intent={intent}/>);});
+ const icon=(label:string)=>tree.root.findAllByType(IconAction).find(n=>n.props.label===label)!.props.onPress();
+ act(()=>icon('添加技能'));act(()=>tree.root.findByProps({accessibilityLabel:'技能用途'}).props.onChangeText('keep existing purpose'));
+ act(()=>icon('技能运行记录'));act(()=>icon('添加技能'));expect(tree.root.findByProps({accessibilityLabel:'技能用途'}).props.value).toBe('keep existing purpose');
+ act(()=>icon('添加技能'));expect(tree.root.findByProps({accessibilityLabel:'技能用途'}).props.value).toBe('keep existing purpose');
+ act(()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='收起添加表单（保留输入）')!.props.onPress());
+ act(()=>icon('添加技能'));expect(tree.root.findByProps({accessibilityLabel:'技能用途'}).props.value).toBe('keep existing purpose');
+ }finally{act(()=>tree.unmount());}
+});
