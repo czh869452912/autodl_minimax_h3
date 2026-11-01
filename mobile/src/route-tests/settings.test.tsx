@@ -253,3 +253,26 @@ it('keeps active identity after preference save and refreshes A to B without los
  expect(text()).toContain('connection-B');expect(text()).toContain('gpt-5.2');expect(tree.root.findByProps({accessibilityLabel:'最大重试次数'}).props.value).toBe('4');cleanups.forEach(fn=>fn());
  }finally{act(()=>tree?.unmount());}
 });
+
+
+it('shows failed focus refresh and retries identity without overwriting dirty preferences',async()=>{
+ const base={llmEndpoint:'https://example.com/v1',llmModel:'gpt-5.1',llmApiKey:'test',llmTimeoutSeconds:'600',llmMaxRetries:'2',autoExportToGallery:true,keepPrivateCopy:true,llmConnectionId:'A',llmConnectionRevision:1,llmSupportsImages:true};
+ jest.mocked(readSettings).mockResolvedValue(base);let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<SettingsScreen/>);});
+  act(()=>tree.root.findByProps({accessibilityLabel:'切换 LLM 高级设置'}).props.onPress());
+  act(()=>tree.root.findByProps({accessibilityLabel:'最大重试次数'}).props.onChangeText('4'));
+  jest.mocked(readSettings).mockRejectedValue(new Error('secure storage locked'));
+  const cleanups:Array<()=>void>=[];
+  await act(async()=>{for(const focus of [...mockFocusCallbacks]){const cleanup=focus();if(cleanup)cleanups.push(cleanup);}});
+  expect(JSON.stringify(tree.toJSON())).toContain('当前连接状态未能更新');
+  expect(JSON.stringify(tree.toJSON())).toContain('上次读取连接（未确认）');
+  expect(tree.root.findByProps({accessibilityLabel:'最大重试次数'}).props.value).toBe('4');
+  jest.mocked(readSettings).mockResolvedValue({...base,llmConnectionId:'B',llmSupportsImages:false});
+  await act(async()=>tree.root.findAll(n=>n.props.accessibilityLabel==='重试读取设置'&&typeof n.props.onPress==='function')[0].props.onPress());
+  expect(JSON.stringify(tree.toJSON())).not.toContain('当前连接状态未能更新');
+  expect(JSON.stringify(tree.toJSON())).toContain('当前连接：B');
+  expect(tree.root.findByProps({accessibilityLabel:'最大重试次数'}).props.value).toBe('4');
+  cleanups.forEach(fn=>fn());
+ }finally{act(()=>tree?.unmount());}
+});
