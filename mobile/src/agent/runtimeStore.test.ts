@@ -559,3 +559,36 @@ it('flushAll reports failed durable saves without disposing the live runtime',as
   fail=false;await expect(registry.flushAll()).resolves.toBeUndefined();
  }finally{fail=false;await registry.disposeAll();}
 });
+
+
+it.each([
+  ['identity', {connectionId:'B'}],
+  ['revision', {connectionRevision:2}],
+  ['images', {supportsImages:false}],
+  ['legacy to explicit', {connectionId:'B',connectionRevision:1}],
+] as const)('refreshes cached configuration for %s and preserves composer',async(name,change)=>{
+ const factory=jest.fn(()=>fakeAgent() as never),registry=createPromptRuntimeRegistry(factory);
+ const before={...config,...(name==='legacy to explicit'?{}:{connectionId:'A',connectionRevision:1,supportsImages:true})};
+ try{
+  const first=registry.ensure(before,snapshot('switch'),store);
+  first.patchClientState({h3Composer:{text:'unsent',revision:3}});
+  await first.flush();
+  const after={...before,...change};
+  const next=registry.ensure(after,snapshot('switch'),store);
+  expect(next).not.toBe(first);expect(factory).toHaveBeenLastCalledWith(after);
+  expect(next.getSnapshot().state).toMatchObject({h3Composer:{text:'unsent',revision:3}});
+  expect(next.getSnapshot().messages).toEqual(first.getSnapshot().messages);
+ }finally{await registry.disposeAll();}
+});
+it('pins a running graph until completion then adopts B without aborting A',async()=>{
+ const factory=jest.fn(()=>fakeAgent() as never),registry=createPromptRuntimeRegistry(factory);
+ try{
+  const first=registry.ensure({...config,connectionId:'A'},snapshot('running-switch'),store);
+  const agent=first.agent as unknown as ReturnType<typeof fakeAgent>;agent.isRunning=true;
+  expect(registry.ensure({...config,connectionId:'B'},snapshot('running-switch'),store)).toBe(first);
+  expect(agent.dispose).not.toHaveBeenCalled();expect(factory).toHaveBeenCalledTimes(1);
+  agent.isRunning=false;
+  const next=registry.ensure({...config,connectionId:'B'},snapshot('running-switch'),store);
+  expect(next).not.toBe(first);expect(factory).toHaveBeenLastCalledWith(expect.objectContaining({connectionId:'B'}));
+ }finally{await registry.disposeAll();}
+});

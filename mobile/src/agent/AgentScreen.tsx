@@ -376,12 +376,21 @@ function AgentSession({
   const registerSkillGuard=useCallback((guard:((proceed:()=>void)=>void)|undefined)=>{skillGuard.current=guard;},[]);
   const leaveSkills=(proceed:()=>void)=>skillGuard.current?skillGuard.current(proceed):proceed();
   const [runIssue, setRunIssue] = useState<RunIssue | null>(null);
+  const [runtimeEpoch,setRuntimeEpoch]=useState(0);
   const runtime = useMemo(
     () => promptRuntimeRegistry.ensure(config, snapshot, threadStore),
-    [config, snapshot.threadId, threadStore],
+    [config, snapshot.threadId, threadStore, runtimeEpoch],
   );
   const adapter = useMemo(() => createAgentRuntimeAdapter(runtime), [runtime]);
   const agent = runtime.agent;
+  useEffect(()=>{
+    let live=true;
+    const subscription=agent.subscribe({onRunFinalized:()=>{
+      // Refresh after finalization has published the last run snapshot.
+      void Promise.resolve().then(()=>{if(live)setRuntimeEpoch(value=>value+1);});
+    }});
+    return()=>{live=false;subscription.unsubscribe();};
+  },[agent]);
   const liveSnapshot = useSyncExternalStore(runtime.subscribeView, runtime.getViewSnapshot, runtime.getViewSnapshot);
   const [isVisible, setVisible] = useState(false);
   useFocusEffect(useCallback(() => {

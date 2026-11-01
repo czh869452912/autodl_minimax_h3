@@ -26,6 +26,7 @@ export type PromptRuntime = {
   dispose: () => Promise<void>;
   disposed: () => boolean;
   idle: () => boolean;
+  busy: () => boolean;
   needsReload: () => boolean;
   subscribe: (listener: (event: RuntimeEvent) => void) => () => void;
 };
@@ -50,7 +51,9 @@ function defaultAgentFactory(config: PromptAgentConfig): H3AgUiAgent {
 }
 
 function configKey(config: PromptAgentConfig): string {
-  return `${H3_GRAPH_VERSION}\u0000${config.endpoint}\u0000${config.model}\u0000${config.apiKey}\u0000${config.timeoutMs}\u0000${config.maxRetries}\u0000${config.contextWindowTokens}\u0000${config.maxOutputTokens}\u0000${config.reasoningEffort ?? 'default'}`;
+  return JSON.stringify([H3_GRAPH_VERSION, config.endpoint, config.model, config.apiKey,
+    config.timeoutMs, config.maxRetries, config.contextWindowTokens, config.maxOutputTokens,
+    config.reasoningEffort ?? 'default', config.connectionId, config.connectionRevision, config.supportsImages]);
 }
 
 function mergeRecoveryComposer(durable: LocalThreadSnapshot, local: LocalThreadSnapshot): LocalThreadSnapshot {
@@ -87,6 +90,9 @@ export function createPromptRuntimeRegistry(
         runtimes.delete(initial.threadId); runtimes.set(initial.threadId, existing);
         return existing.runtime;
       }
+      // A running graph keeps its pinned config. The next ensure after completion
+      // replaces it from its latest snapshot, including the unsent composer.
+      if (existing?.runtime.busy() && !existing.runtime.disposed()) return existing.runtime;
       const seed = existing && !existing.runtime.needsReload()
         ? {
             ...initial,
@@ -368,6 +374,7 @@ export function createPromptRuntimeRegistry(
         flush,
         dispose,
         disposed: () => !active,
+        busy: () => agent.isRunning || accepting,
         idle: () => active && !needsReload && !agent.isRunning && !accepting && !pendingSave && listeners.size === 0 && viewListeners.size === 0,
         needsReload: () => needsReload,
         subscribe: (listener) => {
