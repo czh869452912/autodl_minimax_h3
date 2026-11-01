@@ -114,3 +114,13 @@ test('history is an immediate view and local filter does not require traversing 
  act(()=>builtin().props.onPress());expect(builtin().props.accessibilityState.expanded).toBe(true);expect(JSON.stringify(tree.toJSON())).toContain('包指纹');
  }finally{act(()=>tree.unmount());}
 });
+
+
+test('add from history reveals the import form immediately',async()=>{
+ let tree!:ReturnType<typeof create>;try{await act(async()=>{tree=create(<SkillLibraryScreen/>);});
+ act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());
+ act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='添加技能')!.props.onPress());
+ expect(tree.root.findAllByProps({accessibilityLabel:'技能用途'}).length).toBeGreaterThan(0);
+ expect(tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.selected).toBe(false);
+ }finally{act(()=>tree.unmount());}
+});

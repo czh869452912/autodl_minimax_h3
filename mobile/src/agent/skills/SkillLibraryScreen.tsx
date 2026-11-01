@@ -66,7 +66,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
     <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,gap:6,borderBottomWidth:1,borderColor:COLORS.border}}>
       <IconAction label={onClose ? '关闭技能' : '返回'} icon={onClose ? 'close' : 'arrow_back'} onPress={back}/>
       <Text accessibilityRole="header" style={{flex:1,fontSize:16,fontWeight:'600',color:COLORS.text}}>{projectId?'项目技能':'技能'} · {versions.filter(v=>v.enabled).length} 本地启用 · {builtins.length} 内置可用</Text>
-      <IconAction label="添加技能" icon="add" onPress={()=>{if(onClose){onClose();router.push({pathname:'/agent-skills',params:{intent:'add',projectId,threadId}});}else setImportOpen(!importOpen);}}/>
+      <IconAction label="添加技能" icon="add" onPress={()=>{if(onClose){onClose();router.push({pathname:'/agent-skills',params:{intent:'add',projectId,threadId}});}else {setHistoryOpen(false);setImportOpen(!importOpen);scroll.current?.scrollTo({y:0,animated:false});}}}/>
       <IconAction label="技能运行记录" icon="history" selected={historyOpen} onPress={()=>{setHistoryOpen(!historyOpen);scroll.current?.scrollTo({y:0,animated:false});}}/>
     </View>
     <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:12,gap:10}}>
