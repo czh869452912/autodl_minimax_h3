@@ -18,8 +18,10 @@ import { useFallbackBack } from '../../navigation/useFallbackBack';
 
 const template = '---\nname: scene-review\ndescription: 检查场景描述中的主体、动作和镜头是否清楚\n---\n\n阅读用户的场景描述。指出主体、动作与镜头中的歧义，再给出可供审阅的改写。保留用户明确给出的约束。';
 
-export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId, threadId }: { threadId?:string; projectId?:string; intent?:string; onClose?: () => void; registerLeave?:(guard:((proceed:()=>void)=>void)|undefined)=>void } = {}) {
+export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: requestedProjectId, threadId }: { threadId?:string; projectId?:string; intent?:string; onClose?: () => void; registerLeave?:(guard:((proceed:()=>void)=>void)|undefined)=>void } = {}) {
   const router = useRouter();
+  const [projectId,setProjectId]=useState(requestedProjectId);
+  const [scopeReady,setScopeReady]=useState(!threadId);
   const store = useMemo(() => createSkillStore(getDatabase()), []);
   const [once,setOnce]=useState<string[]|null>(null);
   const [versions, setVersions] = useState<SkillVersion[]>([]);
@@ -36,7 +38,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId, 
   useEffect(()=>{registerLeave?.(proceed=>latestLeave.current(proceed));return()=>registerLeave?.(undefined);},[registerLeave]);
   const back=()=>confirmLeave(()=>onClose?onClose():router.canGoBack()?router.back():router.replace('/(tabs)/agent'));
   useFallbackBack(back);
-  const refresh = useCallback(async () => { const [items, history] = await Promise.all([projectId?store.projectList(projectId):store.list(), store.runs()]); setVersions(items); setRuns(history); }, [store,projectId]);
+  const refresh = useCallback(async () => { setScopeReady(false);const scope=threadId?await getDatabase().getFirstAsync<{project_id:string|null}>('SELECT project_id FROM creative_agent_scopes WHERE thread_id=?',threadId):undefined;if(threadId&&!scope)throw Error('会话范围不可用，请返回后重试');const effective=scope?scope.project_id??undefined:requestedProjectId;const [items, history] = await Promise.all([effective?store.projectList(effective):store.list(), store.runs()]);setProjectId(effective); setVersions(items); setRuns(history);setScopeReady(true); }, [store,requestedProjectId,threadId]);
   useFocusEffect(useCallback(() => { void refresh().catch(error => setNotice(String(error.message))); }, [refresh]));
   const run = async (work: () => Promise<void>) => {
     if (lock.current) return;
@@ -53,11 +55,12 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId, 
     else if (/\.md$/i.test(asset.name)) setPreview(validateSkillPackage({ 'SKILL.md': await file.text() }));
     else throw new Error('请选择 SKILL.md 或单技能 ZIP 文件');
   };
+  if(!scopeReady)return <View><Text>{notice||'正在核对会话技能范围…'}</Text><ListAction label="返回" onPress={back}/></View>;
   const body = <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,gap:6,borderBottomWidth:1,borderColor:COLORS.border}}>
       <IconAction label={onClose ? '关闭技能' : '返回'} icon={onClose ? 'close' : 'arrow_back'} onPress={back}/>
       <Text accessibilityRole="header" style={{flex:1,fontSize:16,fontWeight:'600',color:COLORS.text}}>{projectId?'项目技能':'技能'} · {versions.filter(v=>v.enabled).length} 已启用</Text>
-      <IconAction label="添加技能" icon="add" onPress={()=>{if(onClose){onClose();router.push({pathname:'/agent-skills',params:{intent:'add'}});}else setImportOpen(!importOpen);}}/>
+      <IconAction label="添加技能" icon="add" onPress={()=>{if(onClose){onClose();router.push({pathname:'/agent-skills',params:{intent:'add',projectId,threadId}});}else setImportOpen(!importOpen);}}/>
       <IconAction label="技能运行记录" icon="history" onPress={()=>setHistoryOpen(!historyOpen)}/>
     </View>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:12,gap:10}}>
@@ -65,7 +68,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId, 
       {importOpen && !onClose ? <View style={[s.card,{gap:8}]}>
         <View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>
           <ListAction label="导入 SKILL.md 或 ZIP" disabled={busy} onPress={()=>void run(pick)}/>
-          <ListAction label="从对话提炼技能" secondary disabled={busy} onPress={()=>router.push('/agent-skill-extract')}/>
+          <ListAction label="从对话提炼技能" secondary disabled={busy} onPress={()=>router.push({pathname:'/agent-skill-extract',params:{projectId,threadId}})}/>
         </View>
         <Text style={s.body}>先说明技能帮助完成什么，以及适用的场景。安装后仍需单独启用。</Text>
         <Text style={s.body}>用途与适用范围</Text>

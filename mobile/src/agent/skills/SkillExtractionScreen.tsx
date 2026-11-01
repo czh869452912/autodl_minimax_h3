@@ -13,7 +13,7 @@ import { ListAction } from '../../ui/ListPageUI';
 import { creativeUI as s } from '../../creative/creativeUI';
 
 type Evidence = { id: string; sequence: number; text: string; role: string };
-export function SkillExtractionScreen() {
+export function SkillExtractionScreen({projectId,threadId}:{projectId?:string;threadId?:string}={}) {
   const router = useRouter();
   const db = useMemo(() => getDatabase(), []);
   const threads = useMemo(() => createLocalThreadStore(db), [db]);
@@ -35,14 +35,14 @@ export function SkillExtractionScreen() {
   };
   useEffect(() => {
     alive.current = true;
-    void Promise.all([threads.listSummaries({ limit: 20 }), store.list()]).then(([rows, saved]) => {
+    void Promise.all([threads.listSummaries({ projectId, limit: 20 }), store.list()]).then(([rows, saved]) => {
       if (alive.current) { setSessions(rows); setDrafts(saved); }
     }).catch(() => { if (alive.current) setNotice('无法读取本地证据与草稿，请返回后重试'); });
     return () => { alive.current = false; request.current?.abort(); };
   }, [threads, store]);
   const dirty = draft ? goal !== draft.goal || evidence !== draft.evidence || content !== draft.content : !!(goal || evidence || content);
   const back = useCallback(() => {
-    const leave = () => { request.current?.abort(); router.canGoBack() ? router.back() : router.replace('/agent-skills'); };
+    const leave = () => { request.current?.abort(); router.canGoBack() ? router.back() : router.replace({pathname:'/agent-skills',params:{projectId,threadId}}); };
     if (dirty || busy) Alert.alert('离开技能提炼？', '已保存草稿会保留；尚未保存的编辑会丢失，正在进行的提炼会取消。', [{ text: '继续编辑' }, { text: '离开', onPress: leave }]);
     else leave();
   }, [router, dirty, busy]);
@@ -80,8 +80,8 @@ export function SkillExtractionScreen() {
     {notice ? <Text accessibilityRole="alert" style={s.body}>{notice}</Text> : null}
     <Text style={s.title}>1. 选择证据</Text>
     {sessions.map(session => <ListAction key={session.threadId} label={`选择对话：${session.customTitle || session.summary?.title || '未命名对话'}`} secondary disabled={locked} onPress={() => void work(() => loadMessages(session.threadId))} />)}
-    {sessionPage > 0 ? <ListAction label="较新的对话" secondary disabled={locked} onPress={() => void work(async () => { const page = sessionPage - 1; setSessions(await threads.listSummaries({ limit: 20, offset: page * 20 })); setSessionPage(page); })} /> : null}
-    <ListAction label="更多对话" secondary disabled={locked} onPress={() => void work(async () => { const page = sessionPage + 1; const rows = await threads.listSummaries({ limit: 20, offset: page * 20 }); if (rows.length) { setSessions(rows); setSessionPage(page); } else setNotice('没有更多对话'); })} />
+    {sessionPage > 0 ? <ListAction label="较新的对话" secondary disabled={locked} onPress={() => void work(async () => { const page = sessionPage - 1; setSessions(await threads.listSummaries({ projectId, limit: 20, offset: page * 20 })); setSessionPage(page); })} /> : null}
+    <ListAction label="更多对话" secondary disabled={locked} onPress={() => void work(async () => { const page = sessionPage + 1; const rows = await threads.listSummaries({ projectId, limit: 20, offset: page * 20 }); if (rows.length) { setSessions(rows); setSessionPage(page); } else setNotice('没有更多对话'); })} />
     {messages.map(message => {
       const key = `${source}:${message.id}`, chosen = !!selected[key];
       return <View key={key} style={s.card}><Text style={s.muted}>{message.role}</Text><Text selectable style={s.body}>{message.text}</Text><ListAction label={`${chosen ? '取消选择' : '选择'}证据 ${message.id.slice(-8)}`} secondary disabled={locked} onPress={() => {
@@ -108,7 +108,7 @@ export function SkillExtractionScreen() {
     <ListAction label="检查待发布版本" disabled={locked || !content.trim()} onPress={() => void work(async () => { validateSkillPackage({ 'SKILL.md': content }); setReviewed(await save()); })} />
     {reviewed && !draft?.publishedVersion ? <View style={s.card}><Text style={s.title}>待发布：{validateSkillPackage({ 'SKILL.md': reviewed.content }).name}</Text><Text selectable style={s.body}>{reviewed.content}</Text><ListAction label="确认审阅并发布此版本" disabled={busy} onPress={() => void work(async () => { await store.publish(reviewed); const saved = (await store.list()).find(item => item.id === reviewed.id); if (saved) showDraft(saved); setNotice('已发布到本地技能库，尚未启用。请在技能库中独立启用。'); })} /></View> : null}
     {draft?.publishedVersion ? <Text style={s.muted}>已发布版本 {draft.publishedVersion.slice(0, 12)}；发布内容保持不变。</Text> : null}
-    <ListAction label="打开技能库并选择启用" secondary disabled={busy || dirty} onPress={() => router.push('/agent-skills')} />
+    <ListAction label="打开技能库并选择启用" secondary disabled={busy || dirty} onPress={() => router.push({pathname:'/agent-skills',params:{projectId,threadId}})} />
     <Text style={s.title}>保存的提炼草稿（最近 50 条）</Text>
     <ListAction label="新建提炼草稿" secondary disabled={busy || dirty} onPress={() => showDraft()} />
     {drafts.map(item => <ListAction key={item.id} label={`${item.publishedVersion ? '查看已发布' : '继续审阅'}：${item.goal}`} secondary disabled={busy || dirty} onPress={() => showDraft(item)} />)}

@@ -5,7 +5,7 @@ import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { ListAction } from '../../ui/ListPageUI';
 const mockStore = { projectList:jest.fn(async (_id:string)=>[] as any[]),setProjectVersion:jest.fn(async (_project:string,_name:string,_version:string|null|undefined)=>{}), list: jest.fn(async () => [] as any[]), runs: jest.fn(async () => []), install: jest.fn(async () => 'id'), enable: jest.fn(async () => {}), revoke: jest.fn(async () => {}) };
-jest.mock('../../storage/databaseClient', () => ({ getDatabase: () => ({}) }));
+jest.mock('../../storage/databaseClient', () => ({ getDatabase: () => ({getFirstAsync:async()=>({project_id:'trusted-project'})}) }));
 jest.mock('./store', () => ({ createSkillStore: () => mockStore }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ canGoBack: () => true, back: jest.fn() }), useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]) }));
 jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));
@@ -73,4 +73,12 @@ test('project switches update only project selection and never globally revoke a
   await act(async()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='恢复全局选择')!.props.onPress());
   expect(mockStore.setProjectVersion).toHaveBeenCalledWith('project','scene-review',undefined);
  }finally{act(()=>tree.unmount());}
+});
+
+test('thread panel uses persisted project scope and disables only that project',async()=>{
+ mockStore.projectList.mockResolvedValue([{id:'v',name:'skill',description:'test',enabled:true,files:{'SKILL.md':'body'}}]);mockStore.revoke.mockClear();
+ let tree!:ReturnType<typeof create>;await act(async()=>{tree=create(<SkillLibraryScreen projectId="wrong-route" threadId="thread"/>);});
+ expect(mockStore.projectList).toHaveBeenLastCalledWith('trusted-project');
+ await act(async()=>tree.root.findByType(Switch).props.onValueChange(false));
+ expect(mockStore.setProjectVersion).toHaveBeenLastCalledWith('trusted-project','skill',null);expect(mockStore.revoke).not.toHaveBeenCalled();act(()=>tree.unmount());
 });
