@@ -1,8 +1,9 @@
 jest.mock('expo-router/react-navigation',()=>({useNavigation:()=>({dispatch:jest.fn()}),usePreventRemove:jest.fn()}));
+const mockFocusCallbacks=new Set<()=>void|(()=>void)>();
 const mockBack=jest.fn();let mockRequestId='first';
 let mockSection:string|undefined='assistant';
 beforeEach(()=>{mockSection='assistant';});
-jest.mock('expo-router', () => ({ useRouter:()=>({back:mockBack,canGoBack:()=>true,navigate:jest.fn()}), useLocalSearchParams: () => ({section:mockSection,requestId:mockRequestId}), useFocusEffect: (fn: () => void) => require('react').useEffect(fn, [fn]) }));
+jest.mock('expo-router', () => ({ useRouter:()=>({back:mockBack,canGoBack:()=>true,navigate:jest.fn()}), useLocalSearchParams: () => ({section:mockSection,requestId:mockRequestId}), useFocusEffect: (fn: () => void|(()=>void)) => require('react').useEffect(()=>{mockFocusCallbacks.add(fn);const cleanup=fn();return()=>{mockFocusCallbacks.delete(fn);cleanup?.();};}, [fn]) }));
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { Alert, Linking, ScrollView, Text } from 'react-native';
@@ -235,4 +236,20 @@ it('blocks returning when an unsaved settings draft cannot be persisted',async()
   expect(mockBack).not.toHaveBeenCalled();expect(tree.root.findByProps({accessibilityLabel:'LLM 模型'}).props.value).toBe('changed');
   expect(JSON.stringify(tree.toJSON())).toContain('草稿保存失败');
  }finally{secure.setItemAsync.mockResolvedValue(undefined);act(()=>tree?.unmount());}
+});
+
+it('keeps active identity after preference save and refreshes A to B without losing dirty preferences',async()=>{
+ const base={llmEndpoint:'https://example.com/v1',llmModel:'gpt-5.1',llmApiKey:'test',llmTimeoutSeconds:'600',llmMaxRetries:'2',autoExportToGallery:true,keepPrivateCopy:true,llmConnectionId:'connection-A',llmConnectionRevision:1,llmSupportsImages:true};
+ jest.mocked(readSettings).mockResolvedValueOnce(base);let tree!:ReturnType<typeof create>;
+ try{await act(async()=>{tree=create(<SettingsScreen/>);});
+ const text=()=>tree.root.findAllByType(Text).map(n=>Array.isArray(n.props.children)?n.props.children.join(''):String(n.props.children)).join(' ');
+ expect(text()).toContain('connection-A');expect(tree.root.findAllByProps({accessibilityLabel:'LLM API Key'})).toHaveLength(0);
+ act(()=>tree.root.findByProps({accessibilityLabel:'切换 LLM 高级设置'}).props.onPress());
+ act(()=>tree.root.findByProps({accessibilityLabel:'最大重试次数'}).props.onChangeText('3'));
+ await act(async()=>tree.root.findByProps({accessibilityLabel:'保存设置'}).props.onPress());expect(text()).toContain('connection-A');
+ act(()=>tree.root.findByProps({accessibilityLabel:'最大重试次数'}).props.onChangeText('4'));
+ jest.mocked(readSettings).mockResolvedValue({...base,llmConnectionId:'connection-B',llmModel:'gpt-5.2',llmSupportsImages:false});
+ const cleanups:Array<()=>void>=[];await act(async()=>{for(const focus of [...mockFocusCallbacks]){const cleanup=focus();if(cleanup)cleanups.push(cleanup);}});
+ expect(text()).toContain('connection-B');expect(text()).toContain('gpt-5.2');expect(tree.root.findByProps({accessibilityLabel:'最大重试次数'}).props.value).toBe('4');cleanups.forEach(fn=>fn());
+ }finally{act(()=>tree?.unmount());}
 });

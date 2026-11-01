@@ -18,3 +18,9 @@ test('validates recovered draft keys and types before merging into settings', as
   jest.mocked(SecureStore.getItemAsync).mockResolvedValueOnce('{"llmApiKey":42}');
   await expect(readSettingsDraft()).rejects.toThrow('格式');
 });
+
+test('explicit identity is not serialized into a preference draft or restored as credentials',async()=>{
+ await writeSettingsDraft({llmConnectionId:'A',llmConnectionRevision:1,llmSupportsImages:true,llmEndpoint:'https://example.test',llmModel:'test',llmApiKey:'connection-secret',llmMaxRetries:'4'} as AppSettings);
+ const payload=jest.mocked(SecureStore.setItemAsync).mock.calls.at(-1)![1];expect(JSON.parse(payload)).toEqual({llmMaxRetries:'4'});
+ jest.mocked(SecureStore.getItemAsync).mockResolvedValueOnce(payload);expect(await readSettingsDraft()).toEqual({llmMaxRetries:'4'});
+});

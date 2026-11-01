@@ -1,3 +1,4 @@
+import {validateReasoningEffort} from '../config/llmReasoning';
 import * as SecureStore from 'expo-secure-store';
 import {z} from 'zod';
 import {createId} from '../ids';
@@ -18,7 +19,7 @@ export async function saveLlmConnection(input:Pick<LlmConnection,'title'|'endpoi
  const value=connection.parse({...input,endpoint,id:createId(),revision:1,revoked:false});
  await mutate(data=>{if(data.items.length>=8)throw Error('最多保存 8 个模型连接');data.items.push(value);});return value.id;
 }
-export async function selectLlmConnection(id:string|null){await mutate(data=>{if(id&&!data.items.some(p=>p.id===id&&!p.revoked))throw Error('LLM_CONNECTION_UNAVAILABLE');data.active=id;});}
+export async function selectLlmConnection(id:string|null){const effort=await SecureStore.getItemAsync('llm.reasoningEffort')??'default';const legacyModel=id?undefined:await SecureStore.getItemAsync('llm.model')??'gpt-4o-mini';await mutate(data=>{const selected=data.items.find(p=>p.id===id&&!p.revoked);if(id&&!selected)throw Error('LLM_CONNECTION_UNAVAILABLE');validateReasoningEffort(selected?.model??legacyModel!,effort);data.active=id;});}
 export async function revokeLlmConnection(id:string){await mutate(data=>{const item=data.items.find(p=>p.id===id);if(!item)throw Error('LLM_CONNECTION_UNAVAILABLE');item.revoked=true;item.revision++;});}
 export async function assertLlmConnection(config:{connectionId?:string;connectionRevision?:number}){
  if(!config.connectionId)return;

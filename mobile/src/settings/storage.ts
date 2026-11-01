@@ -1,3 +1,4 @@
+import {validateReasoningEffort} from '../config/llmReasoning';
 import {activeLlmConnection} from './llmConnections';
 import { settingsEvents } from './events';
 import { VIDEO_DECODE_MODE_KEY, normalizeVideoDecodeMode, publishVideoDecodeMode, type VideoDecodeMode } from './videoDecodeMode';
@@ -54,12 +55,13 @@ export async function readSettings(): Promise<AppSettings> {
     ...(llmContextWindowTokens ? { llmContextWindowTokens } : {}),
     ...(llmMaxOutputTokens ? { llmMaxOutputTokens } : {}),
     ...(llmReasoningEffort ? { llmReasoningEffort: llmReasoningEffort as ReasoningEffort } : {}),
-    ...(connection?{llmEndpoint:connection.endpoint,llmModel:connection.model,llmApiKey:connection.apiKey,llmSupportsImages:connection.images,llmConnectionId:connection.id,llmConnectionRevision:connection.revision,llmReasoningEffort:'default' as const}:{}),
+    ...(connection?{llmEndpoint:connection.endpoint,llmModel:connection.model,llmApiKey:connection.apiKey,llmSupportsImages:connection.images,llmConnectionId:connection.id,llmConnectionRevision:connection.revision}:{}),
   };
 }
 
 export async function saveSettings(values: Partial<AppSettings>): Promise<void> {
   const active=await activeLlmConnection();
+  if(active&&values.llmReasoningEffort!==undefined)validateReasoningEffort(values.llmModel??active?.model??await SecureStore.getItemAsync(keys.llmModel)??'gpt-4o-mini',values.llmReasoningEffort);
   if(active){
     for(const [field,current] of [['llmEndpoint',active.endpoint],['llmModel',active.model],['llmApiKey',active.apiKey]] as const){
       if(values[field]!==undefined&&values[field]!==current)throw new Error('请在模型连接管理中显式更换连接');

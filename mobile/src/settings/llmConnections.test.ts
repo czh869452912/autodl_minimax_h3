@@ -1,3 +1,6 @@
+import {toH3AgentConfig} from '../agent/agentConfig';
+import {pinRunRuntime} from '../agent/runSpecification';
+import {createInitializedRealSqliteTestDb} from '../test/realSqlite';
 import * as SecureStore from 'expo-secure-store';
 import {saveLlmConnection,selectLlmConnection,revokeLlmConnection,activeLlmConnection,assertLlmConnection,readLlmConnections} from './llmConnections';
 import {readSettings,saveSettings} from './storage';
@@ -29,3 +32,11 @@ test('saving connections validates HTTPS and serializes concurrent updates',asyn
  await expect(saveSettings({llmModel:'different'})).rejects.toThrow('显式');
  expect((await readLlmConnections()).active).toBe(id);
  });
+
+test('explicit connection effort survives persistence, Agent configuration and runtime specification; incompatible switching is rejected',async()=>{
+ const id=await saveLlmConnection({title:'a',endpoint:'https://example.com/v1',model:'gpt-5.1',apiKey:'test',images:true});await selectLlmConnection(id);await saveSettings({llmReasoningEffort:'low'});
+ const config=toH3AgentConfig(await readSettings());expect(config).toMatchObject({connectionId:id,reasoningEffort:'low'});
+ const db=createInitializedRealSqliteTestDb();try{await pinRunRuntime(db as never,'t','r',config,'skill',[]);expect(JSON.parse(db.getFirstSync<{snapshot_json:string}>('SELECT snapshot_json FROM creative_run_runtime_specs')!.snapshot_json)).toMatchObject({connectionId:id,reasoningEffort:'low'});}finally{db.close();}
+ const incompatible=await saveLlmConnection({title:'pro',endpoint:'https://example.com/v1',model:'gpt-5-pro',apiKey:'test',images:false});await expect(selectLlmConnection(incompatible)).rejects.toThrow('思考强度');expect((await readLlmConnections()).active).toBe(id);
+ await saveSettings({llmReasoningEffort:'default'});await selectLlmConnection(incompatible);expect((await readSettings()).llmReasoningEffort).toBe('default');
+});
