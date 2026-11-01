@@ -1,4 +1,4 @@
-import {confirmOutboundScopes} from './outboundConsentUI';
+import {grantOutboundConsent} from './outboundConsent';
 import {creativeRequestHash} from './videoSubmission';
 import {preparedCreativeSubmission,creativeSubmissionBinding} from './preparedSubmission';
 import {createApplicationProviderRegistry} from '../providers/applicationRegistry';
@@ -54,7 +54,8 @@ export async function confirmCreativeVideo(preview: Awaited<ReturnType<typeof pr
   const active=await createAppWorkflowCatalog().getActive(preview.prepared.workflowId);
   if(!active||active.version!==preview.prepared.workflowVersion||active.contentHash!==preview.prepared.workflowContentHash)throw new Error('工作流版本已变化，请核对后再生成');
   await creativeAccounts(preview.db).resolveExact(preview.account.credential_generation_id);
-  await confirmOutboundScopes(preview.db,[{projectId:preview.draft.project_id,provider:'autodl',generationId:preview.account.credential_generation_id,requestHash:creativeRequestHash(preview.prepared),versions:preview.versionIds}]);
+  // The explicit Generate action authorizes this exact outbound request.
+  await grantOutboundConsent(preview.db,{projectId:preview.draft.project_id,provider:'autodl',generationId:preview.account.credential_generation_id,requestHash:creativeRequestHash(preview.prepared),versions:preview.versionIds});
   const authorizationId = await creativeBudget().grant({ provider: 'autodl', generationId: preview.account.credential_generation_id,
     projectId: preview.draft.project_id ?? undefined, operations: ['video.generate'], requestLimit: 1,
     amountLimit: null, allowUnknownCost: true, maxUnknownRequests: 1, requestBinding:creativeSubmissionBinding(preview), expiresAt: Date.now() + 15 * 60_000 });

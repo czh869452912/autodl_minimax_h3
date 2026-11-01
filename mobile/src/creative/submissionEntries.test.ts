@@ -1,4 +1,6 @@
-jest.mock('./outboundConsentUI',()=>({confirmOutboundScopes:jest.fn(async()=>{})}));
+jest.mock('./outboundConsent',()=>({...jest.requireActual('./outboundConsent'),grantOutboundConsent:jest.fn(async()=> 'consent')}));
+import {grantOutboundConsent} from './outboundConsent';
+import {Alert} from 'react-native';
 import {createInitializedRealSqliteTestDb} from '../test/realSqlite';
 import {createCreativeService} from './service';
 import {createCreativeAgentTools} from './agentTools';
@@ -28,7 +30,11 @@ test.each([true,false])('entry assembly preserves frozen media (audio=%s)',async
   const images=[{uri:'asset://image',sha256:'a'.repeat(64),mime:'image/png',size:10,name:'image'}];
   const audios=withAudio?[{uri:'asset://audio',sha256:'b'.repeat(64),mime:'audio/wav',size:10,name:'audio'}]:[];
   mockPreview={db:mockDb,draft:await service.draft(created.value.draftId),images,audios,versionIds:withAudio?['image','audio']:['image'],prepared:{workflowId:'workflow',workflowVersion:'1',workflowContentHash:'hash'},account:{credential_generation_id:'generation'}};
+  const alert=jest.spyOn(Alert,'alert');
   await confirmCreativeVideo(mockPreview);
+  expect(alert).not.toHaveBeenCalled();
+  expect(grantOutboundConsent).toHaveBeenLastCalledWith(mockDb,expect.objectContaining({versions:mockPreview.versionIds,provider:'autodl'}));
+  alert.mockRestore();
   const tool=createCreativeAgentTools().find(t=>t.name==='generation_submit')!;
   const result=await (tool as import('@langchain/core/tools').StructuredToolInterface).invoke({type:'tool_call',id:'call',name:'generation_submit',args:{draftId:created.value.draftId,authorizationId:'auth'}},{configurable:{thread_id:'thread',creative_run_id:'run'}});
   expect(JSON.parse(String((result as any).content))).toMatchObject({status:'accepted'});
