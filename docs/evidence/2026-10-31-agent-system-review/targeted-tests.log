@@ -1,0 +1,13 @@
+(node:67388) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS src/agent/skills/runtime.test.ts (17.238 s)
+PASS src/creative/budget.test.ts
+PASS src/creative/videoSubmission.test.ts
+PASS src/creative/agentScope.test.ts
+
+Test Suites: 4 passed, 4 total
+Tests:       1 skipped, 31 passed, 32 total
+Snapshots:   0 total
+Time:        22.042 s
+Ran all test suites within paths "src/agent/skills/runtime.test.ts", "src/creative/agentScope.test.ts", "src/creative/budget.test.ts", "src/creative/videoSubmission.test.ts".
+Test results written to: ..\docs\evidence\2026-10-31-agent-system-review\targeted-tests.json

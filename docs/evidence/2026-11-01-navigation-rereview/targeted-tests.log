@@ -1,0 +1,23 @@
+PASS src/creative/CapabilityCatalogScreen.test.tsx
+PASS src/creative/TimelineScreen.test.tsx
+(node:21744) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS src/agent/skills/runtime.test.ts (18.742 s)
+PASS src/route-tests/settings.test.tsx
+PASS src/agent/skills/SkillLibraryScreen.test.tsx
+PASS src/agent/runUsage.test.ts
+PASS src/creative/SemanticPreparationScreen.test.tsx
+PASS src/creative/ProjectSearchScreen.test.tsx
+PASS src/agent/skills/store.test.ts
+PASS src/agent/skills/nextRun.test.ts
+PASS src/settings/llmConnections.test.ts
+PASS src/agent/skills/builtinCatalog.test.ts
+PASS src/navigation/creativeNavigation.test.ts
+PASS src/settings/storage.test.ts
+
+Test Suites: 14 passed, 14 total
+Tests:       49 passed, 49 total
+Snapshots:   0 total
+Time:        28.98 s, estimated 32 s
+Ran all test suites within paths "src/settings/llmConnections.test.ts", "src/settings/storage.test.ts", "src/route-tests/settings.test.tsx", "src/agent/skills/SkillLibraryScreen.test.tsx", "src/agent/skills/builtinCatalog.test.ts", "src/agent/skills/store.test.ts", "src/agent/skills/nextRun.test.ts", "src/agent/skills/runtime.test.ts", "src/agent/runUsage.test.ts", "src/creative/ProjectSearchScreen.test.tsx", "src/creative/TimelineScreen.test.tsx", "src/creative/SemanticPreparationScreen.test.tsx", "src/creative/CapabilityCatalogScreen.test.tsx", "src/navigation/creativeNavigation.test.ts".
+Test results written to: ..\docs\evidence\2026-11-01-navigation-rereview\targeted-tests.json

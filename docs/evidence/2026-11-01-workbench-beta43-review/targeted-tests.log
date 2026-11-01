@@ -1,0 +1,57 @@
+(node:53508) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS src/agent/runtimeStore.test.ts (7.454 s)
+PASS src/agent/AgentScreen.test.tsx (11.468 s)
+  ● Console
+
+    console.error
+      Cannot update a component (`ReadyAgent`) while rendering a different component (`AgentSession`). To locate the bad setState() call inside `AgentSession`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+
+      279 |   const handleSnapshotChange = useCallback(
+      280 |     (next: LocalThreadSnapshot) =>
+    > 281 |       setThreads((items) => sortSessionSnapshots(
+          |       ^
+      282 |         items.map((item) => (item.threadId === next.threadId ? next : item)),
+      283 |       )),
+      284 |     [],
+
+      at scheduleUpdateOnFiber (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:12071:25)
+      at dispatchSetStateInternal (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:6208:13)
+      at dispatchSetState (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:6165:7)
+      at setThreads (src/agent/AgentScreen.tsx:281:7)
+      at listener (src/agent/runtimeStore.ts:150:120)
+      at emit (src/agent/runtimeStore.ts:182:9)
+      at Object.persist (src/agent/runtimeStore.ts:312:116)
+      at ensure (src/agent/AgentScreen.tsx:381:33)
+      at updateMemo (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:5915:19)
+      at Object.useMemo (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:16238:18)
+      at Object.<anonymous>.process.env.NODE_ENV.exports.useMemo (node_modules/react/cjs/react.development.js:1251:34)
+      at AgentSession (src/agent/AgentScreen.tsx:380:26)
+      at Object.react_stack_bottom_frame (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:15670:20)
+      at renderWithHooks (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:4863:22)
+      at updateFunctionComponent (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:7018:19)
+      at beginWork (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:8499:18)
+      at runWithFiberInDEV (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:2315:13)
+      at performUnitOfWork (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:13224:22)
+      at workLoopSync (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:13068:41)
+      at renderRootSync (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:13049:11)
+      at performWorkOnRoot (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:12181:11)
+      at performSyncWorkOnRoot (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:2923:7)
+      at flushSyncWorkAcrossRoots_impl (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:2764:21)
+      at processRootScheduleInMicrotask (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:2796:9)
+      at node_modules/react-test-renderer/cjs/react-test-renderer.development.js:2933:11
+      at flushActQueue (node_modules/react/cjs/react.development.js:590:34)
+      at node_modules/react/cjs/react.development.js:847:21
+
+PASS src/agent/skills/SkillLibraryScreen.test.tsx
+PASS src/agent/skills/SkillRunScreen.test.tsx
+PASS src/creative/CapabilityCatalogScreen.test.tsx
+PASS src/creative/MediaReviewScreen.test.tsx
+PASS src/agent/skills/store.test.ts
+
+Test Suites: 7 passed, 7 total
+Tests:       65 passed, 65 total
+Snapshots:   0 total
+Time:        22.339 s
+Ran all test suites within paths "src/agent/skills/store.test.ts", "src/agent/skills/SkillLibraryScreen.test.tsx", "src/agent/skills/SkillRunScreen.test.tsx", "src/creative/CapabilityCatalogScreen.test.tsx", "src/creative/MediaReviewScreen.test.tsx", "src/agent/AgentScreen.test.tsx", "src/agent/runtimeStore.test.ts".
+Test results written to: ..\docs\evidence\2026-11-01-workbench-beta43-review\targeted-tests.json

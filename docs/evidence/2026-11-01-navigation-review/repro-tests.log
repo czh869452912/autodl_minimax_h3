@@ -1,0 +1,9 @@
+PASS src/creative/navigationReview.repro.test.tsx
+PASS src/settings/navigationReview.repro.test.ts
+
+Test Suites: 2 passed, 2 total
+Tests:       2 passed, 2 total
+Snapshots:   0 total
+Time:        3.573 s
+Ran all test suites within paths "src/settings/navigationReview.repro.test.ts", "src/creative/navigationReview.repro.test.tsx".
+Test results written to: ..\docs\evidence\2026-11-01-navigation-review\repro-tests.json

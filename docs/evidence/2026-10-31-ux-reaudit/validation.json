@@ -1,0 +1,18 @@
+{
+  "artifactIntegrity": true,
+  "productTestsRun": false,
+  "productChanges": false,
+  "localLinksChecked": 62,
+  "sourceDeclarationsChecked": 780,
+  "captures": 51,
+  "controls": 467,
+  "findings": 9,
+  "offlineHtmlChecks": [
+    "JS syntax",
+    "51 cards",
+    "R01 search",
+    "excluded-target filter",
+    "relative media/link existence"
+  ],
+  "offlineHtmlLimit": "DOM stub check; not full browser visual/interaction verification"
+}

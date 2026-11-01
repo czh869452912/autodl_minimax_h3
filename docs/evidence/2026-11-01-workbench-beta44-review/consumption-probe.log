@@ -1,0 +1,11 @@
+(node:22040) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS src/agent/skills/ReviewBeta44.probe.test.tsx
+  √ review reproduction: an open skill panel keeps showing an override after acceptance consumed it (790 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       1 passed, 1 total
+Snapshots:   0 total
+Time:        4.201 s
+Ran all test suites matching /src\\agent\\skills\\ReviewBeta44.probe.test.tsx/i.
+Test results written to: ..\docs\evidence\2026-11-01-workbench-beta44-review\consumption-probe.json

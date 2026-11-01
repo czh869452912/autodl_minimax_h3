@@ -1,0 +1,16 @@
+(node:408) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS src/agent/runtimeStore.test.ts (6.23 s)
+PASS src/agent/skills/runEvents.integration.test.tsx (5.073 s)
+PASS src/agent/skills/SkillLibraryScreen.test.tsx
+PASS src/agent/skills/selectionEvents.integration.test.tsx
+PASS src/agent/runtimeIntegration.test.ts
+PASS src/agent/threadStore.test.ts
+PASS src/agent/skills/SkillRunScreen.test.tsx
+
+Test Suites: 7 passed, 7 total
+Tests:       69 passed, 69 total
+Snapshots:   0 total
+Time:        17.425 s
+Ran all test suites matching /src\\agent\\skills\\runEvents.integration.test.tsx|src\\agent\\skills\\selectionEvents.integration.test.tsx|src\\agent\\skills\\SkillLibraryScreen.test.tsx|src\\agent\\skills\\SkillRunScreen.test.tsx|src\\agent\\threadStore.test.ts|src\\agent\\runtimeStore.test.ts|src\\agent\\runtimeIntegration.test.ts/i.
+Test results written to: ..\docs\evidence\2026-11-01-workbench-beta46-review\targeted-tests.json

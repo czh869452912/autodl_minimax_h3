@@ -1,0 +1,9 @@
+PASS src/agent/skills/beta43-library-state.probe.test.tsx
+PASS src/agent/skills/beta43-run-evidence.probe.test.tsx
+
+Test Suites: 2 passed, 2 total
+Tests:       3 passed, 3 total
+Snapshots:   0 total
+Time:        2.156 s, estimated 3 s
+Ran all test suites within paths "src/agent/skills/beta43-run-evidence.probe.test.tsx", "src/agent/skills/beta43-library-state.probe.test.tsx".
+Test results written to: ..\docs\evidence\2026-11-01-workbench-beta43-review\probes.json

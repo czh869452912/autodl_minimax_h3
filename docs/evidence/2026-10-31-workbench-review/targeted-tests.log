@@ -1,0 +1,19 @@
+(node:19120) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS src/agent/skills/runtime.test.ts
+PASS src/creative/plans.test.ts
+PASS src/creative/budget.test.ts
+PASS src/creative/agentScope.test.ts
+PASS src/creative/submissionEntries.test.ts
+PASS src/creative/SemanticResourcesScreen.test.tsx
+PASS src/creative/semanticResources.test.ts
+PASS src/agent/skills/store.test.ts
+PASS src/creative/shotQuality.test.ts
+PASS src/agent/runSpecification.test.ts
+
+Test Suites: 10 passed, 10 total
+Tests:       58 passed, 58 total
+Snapshots:   0 total
+Time:        13.66 s
+Ran all test suites within paths "src/creative/submissionEntries.test.ts", "src/creative/semanticResources.test.ts", "src/creative/plans.test.ts", "src/creative/agentScope.test.ts", "src/creative/budget.test.ts", "src/agent/runSpecification.test.ts", "src/agent/skills/store.test.ts", "src/agent/skills/runtime.test.ts", "src/creative/shotQuality.test.ts", "src/creative/SemanticResourcesScreen.test.tsx".
+Test results written to: ..\docs\evidence\2026-10-31-workbench-review\targeted-tests.json

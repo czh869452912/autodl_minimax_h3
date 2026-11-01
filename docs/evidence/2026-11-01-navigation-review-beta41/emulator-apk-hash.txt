@@ -1,0 +1,4 @@
+
+Algorithm : SHA256
+Hash      : A5AE9001AD6BE087A77A16AFAAFCD1E2C713959191FF35BF9321C8B22F3D6922
+Path      : C:\Users\czh86\Documents\ChatGPT\autodl\autodl_minimax_h3\mobile\android\app\build\outputs\apk\beta\app-beta.apk

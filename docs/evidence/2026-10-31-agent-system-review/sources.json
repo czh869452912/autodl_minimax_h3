@@ -1,0 +1,58 @@
+[
+  {
+    "repo": "HBAI-Ltd/Toonflow-app",
+    "path": "apps/server/src/agent/runtime/resources.ts",
+    "sha": "aaf8b1d5cec6160adf595ab1c09cb078dc6f0f0b",
+    "lines": 48,
+    "url": "https://github.com/HBAI-Ltd/Toonflow-app/blob/aaf8b1d5cec6160adf595ab1c09cb078dc6f0f0b/apps/server/src/agent/runtime/resources.ts"
+  },
+  {
+    "repo": "HBAI-Ltd/Toonflow-app",
+    "path": "apps/server/src/agent/skills/index.ts",
+    "sha": "aaf8b1d5cec6160adf595ab1c09cb078dc6f0f0b",
+    "lines": 80,
+    "url": "https://github.com/HBAI-Ltd/Toonflow-app/blob/aaf8b1d5cec6160adf595ab1c09cb078dc6f0f0b/apps/server/src/agent/skills/index.ts"
+  },
+  {
+    "repo": "HBAI-Ltd/Toonflow-app",
+    "path": "apps/server/src/agent/runtime/subAgent.ts",
+    "sha": "aaf8b1d5cec6160adf595ab1c09cb078dc6f0f0b",
+    "lines": 116,
+    "url": "https://github.com/HBAI-Ltd/Toonflow-app/blob/aaf8b1d5cec6160adf595ab1c09cb078dc6f0f0b/apps/server/src/agent/runtime/subAgent.ts"
+  },
+  {
+    "repo": "HBAI-Ltd/Toonflow-app",
+    "path": "packages/providers/types.d.ts",
+    "sha": "aaf8b1d5cec6160adf595ab1c09cb078dc6f0f0b",
+    "lines": 275,
+    "url": "https://github.com/HBAI-Ltd/Toonflow-app/blob/aaf8b1d5cec6160adf595ab1c09cb078dc6f0f0b/packages/providers/types.d.ts"
+  },
+  {
+    "repo": "ddcat-ai/open-ai-canvas",
+    "path": "backend/internal/app/cloud_agent_runtime_scheduler.go",
+    "sha": "82fc5c03233c33380a5335146c50bb507deb5692",
+    "lines": 604,
+    "url": "https://github.com/ddcat-ai/open-ai-canvas/blob/82fc5c03233c33380a5335146c50bb507deb5692/backend/internal/app/cloud_agent_runtime_scheduler.go"
+  },
+  {
+    "repo": "ddcat-ai/open-ai-canvas",
+    "path": "backend/internal/agent/tool/policy.go",
+    "sha": "82fc5c03233c33380a5335146c50bb507deb5692",
+    "lines": 215,
+    "url": "https://github.com/ddcat-ai/open-ai-canvas/blob/82fc5c03233c33380a5335146c50bb507deb5692/backend/internal/agent/tool/policy.go"
+  },
+  {
+    "repo": "ddcat-ai/open-ai-canvas",
+    "path": "yingce-agent/README.md",
+    "sha": "82fc5c03233c33380a5335146c50bb507deb5692",
+    "lines": 7,
+    "url": "https://github.com/ddcat-ai/open-ai-canvas/blob/82fc5c03233c33380a5335146c50bb507deb5692/yingce-agent/README.md"
+  },
+  {
+    "repo": "ddcat-ai/open-ai-canvas",
+    "path": "backend/internal/app/cloud_agent_media_approval.go",
+    "sha": "82fc5c03233c33380a5335146c50bb507deb5692",
+    "lines": 284,
+    "url": "https://github.com/ddcat-ai/open-ai-canvas/blob/82fc5c03233c33380a5335146c50bb507deb5692/backend/internal/app/cloud_agent_media_approval.go"
+  }
+]
