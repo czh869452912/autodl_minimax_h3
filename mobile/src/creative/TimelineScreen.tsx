@@ -17,6 +17,8 @@ import {createId} from '../ids';
 const empty=():TimelineSpec=>({schemaVersion:1,orientation:'portrait',clips:[],audio:null});
 export function TimelineScreen(){
  const {projectId,timelineId}=useLocalSearchParams<{projectId:string;timelineId?:string}>(),router=useRouter();
+ const [focusedTimelineId,setFocusedTimelineId]=useState(timelineId);
+ useEffect(()=>setFocusedTimelineId(timelineId),[timelineId]);
  const [spec,setSpec]=useState<TimelineSpec>(empty),[title,setTitle]=useState('项目成片'),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [picker,setPicker]=useState<'video'|'audio'>(),[rows,setRows]=useState<TimelineRow[]>([]),[next,setNext]=useState<{createdAt:number;id:string}>();
  const [renders,setRenders]=useState<Array<{id:string;timeline_id:string;state:string;error:string|null;output_version_id:string|null}>>([]);
@@ -24,8 +26,8 @@ export function TimelineScreen(){
  const [savedOutput,setSavedOutput]=useState<{assetId:string;versionId:string}>();
  const openVersion=async(versionId:string)=>{const [version]=await creativeService().versionsByIds([versionId]);if(!version)throw Error('输出版本不可用');router.push({pathname:'/creative-asset/[id]',params:{id:version.assetId,versionId,projectId}});};
  const lock=useRef(false);const leave=useUnsavedChanges(dirty,busy);
- const refresh=async(after?:{createdAt:number;id:string})=>{if(timelineId){const row=await getDatabase().getFirstAsync<TimelineRow>('SELECT * FROM creative_timelines WHERE id=? AND project_id=? AND discarded_at IS NULL',timelineId,projectId);setRows(row?[row]:[]);setNext(undefined);if(!row)throw Error('指定工程不存在、已移除或不属于此项目');return;}const page=await readTimelinePage(getDatabase(),projectId,after);setRows(page.items);setNext(page.next);};
- useEffect(()=>{void refresh().catch(e=>setError(e.message));},[projectId,timelineId]);
+ const refresh=async(after?:{createdAt:number;id:string})=>{if(focusedTimelineId){const row=await getDatabase().getFirstAsync<TimelineRow>('SELECT * FROM creative_timelines WHERE id=? AND project_id=? AND discarded_at IS NULL',focusedTimelineId,projectId);setRows(row?[row]:[]);setNext(undefined);if(!row)throw Error('指定工程不存在、已移除或不属于此项目');return;}const page=await readTimelinePage(getDatabase(),projectId,after);setRows(page.items);setNext(page.next);};
+ useEffect(()=>{void refresh().catch(e=>setError(e.message));},[projectId,focusedTimelineId]);
  const work=async(fn:()=>Promise<void>)=>{if(lock.current)return;lock.current=true;setBusy(true);setError('');try{await fn();}catch(e){setError(e instanceof Error?e.message:'操作失败');}finally{lock.current=false;setBusy(false);}};
  const update=(value:TimelineSpec)=>{setSpec(value);setDirty(true);};
  const patch=(index:number,value:Partial<TimelineSpec['clips'][number]>)=>update({...spec,clips:spec.clips.map((c,i)=>i===index?{...c,...value}:c)});
@@ -48,7 +50,7 @@ export function TimelineScreen(){
   <ListAction label="按镜头顺序载入已选视频" secondary disabled={busy||spec.clips.length>0} onPress={()=>void work(async()=>{const shots=await creativeService().shots(projectId);const selected=shots.filter(shot=>shot.selected_video);if(selected.length>20)throw new Error('超过 20 个镜头，请手动选择');update({...spec,clips:selected.map(shot=>({versionId:shot.selected_video!,startMs:0,durationMs:5000,caption:''}))});})}/>
   <ListAction label={spec.audio?'替换音轨':'选择项目音轨'} secondary disabled={busy} onPress={()=>setPicker('audio')}/>
   {spec.audio?<View style={s.card}><Text selectable style={s.body}>音轨版本 {spec.audio.versionId}</Text><TextInput accessibilityLabel="音轨起点毫秒" editable={!busy} keyboardType="numeric" value={String(spec.audio.startMs)} onChangeText={v=>update({...spec,audio:{...spec.audio!,startMs:Number(v)}})} style={s.input}/><TextInput accessibilityLabel="音轨音量零到一" editable={!busy} keyboardType="numeric" value={String(spec.audio.volume)} onChangeText={v=>update({...spec,audio:{...spec.audio!,volume:Number(v)}})} style={s.input}/><ListAction label="移除音轨" secondary disabled={busy} onPress={()=>update({...spec,audio:null})}/></View>:null}
-  <ListAction label="保存新工程快照" disabled={busy||!spec.clips.length} onPress={()=>void work(async()=>{await creativeService().execute({name:'timeline.create',payload:{projectId,title,spec}},createId());setDirty(false);await refresh();})}/>
+  <ListAction label="保存新工程快照" disabled={busy||!spec.clips.length} onPress={()=>void work(async()=>{const result=await creativeService().execute({name:'timeline.create',payload:{projectId,title,spec}},createId());if(result.status!=='completed'||!result.value.timelineId)throw Error('工程未保存，已保留编辑');setDirty(false);setFocusedTimelineId(result.value.timelineId);router.setParams({timelineId:result.value.timelineId});})}/>
   <Text style={s.title}>已保存工程</Text>{savedOutput?<ListAction label="打开刚保存的工程文件" onPress={()=>void work(()=>openVersion(savedOutput.versionId))}/>:null}
   {rows.map(row=><View key={row.id} style={s.card}><Text style={s.body}>{row.title} · {new Date(row.created_at).toLocaleString()}</Text>
    <ListAction label="在本机合成" disabled={busy||renders.some(r=>r.timeline_id===row.id&&['QUEUED','RENDERING','SUCCEEDED'].includes(r.state))} onPress={()=>void work(async()=>{await creativeService().execute({name:'timeline.render',payload:{id:row.id}},createId());executorWakePort.signal('command');})}/>
@@ -58,6 +60,6 @@ export function TimelineScreen(){
    <ListAction label="生成工程清单文档" secondary disabled={busy} onPress={()=>void work(async()=>{const manifest=await timelineManifest(getDatabase(),row.id,projectId);const result=await saveCreativeText({title:row.title+' · 工程清单',kind:'document',content:JSON.stringify(manifest,null,2),projectId});if(result.status==='completed')setSavedOutput({assetId:result.value.assetId,versionId:result.value.versionId});setError('工程清单已保存到项目素材，可从素材详情导出；清单不包含媒体文件。');})}/>
    <ListAction label="移除工程" secondary disabled={busy} onPress={()=>Alert.alert('移除工程','保留输入视频、音轨及已经导出的清单。',[{text:'取消',style:'cancel'},{text:'移除',style:'destructive',onPress:()=>void work(async()=>{await creativeService().execute({name:'timeline.discard',payload:{id:row.id}},createId());await refresh();})}])}/>
   </View>)}
-  {next?<ListAction label="更早的工程" secondary disabled={busy} onPress={()=>void work(()=>refresh(next))}/>:null}<ListAction label="最新工程" secondary disabled={busy} onPress={()=>void work(()=>refresh())}/>
- </ScrollView>{picker?<CreativeAssetPicker kind={picker} projectId={projectId} restrictToProject onClose={()=>setPicker(undefined)} onChoose={async version=>{update(picker==='video'?{...spec,clips:[...spec.clips,{versionId:version.id,startMs:0,durationMs:5000,caption:''}]}:{...spec,audio:{versionId:version.id,startMs:0,volume:1}});setPicker(undefined);}}/>:null}</SafeAreaView>;
+  {next?<ListAction label="更早的工程" secondary disabled={busy} onPress={()=>void work(()=>refresh(next))}/>:null}<ListAction label={focusedTimelineId?"刷新此工程":"最新工程"} secondary disabled={busy} onPress={()=>void work(()=>refresh())}/>
+ {focusedTimelineId?<ListAction label="浏览项目全部工程" secondary disabled={busy} onPress={()=>leave(()=>{setFocusedTimelineId(undefined);router.setParams({timelineId:undefined});})}/>:null}</ScrollView>{picker?<CreativeAssetPicker kind={picker} projectId={projectId} restrictToProject onClose={()=>setPicker(undefined)} onChoose={async version=>{update(picker==='video'?{...spec,clips:[...spec.clips,{versionId:version.id,startMs:0,durationMs:5000,caption:''}]}:{...spec,audio:{versionId:version.id,startMs:0,volume:1}});setPicker(undefined);}}/>:null}</SafeAreaView>;
 }
