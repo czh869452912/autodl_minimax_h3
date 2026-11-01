@@ -155,3 +155,14 @@ test.each([undefined,'add'])('add always reveals an existing draft after history
  act(()=>icon('添加技能'));expect(tree.root.findByProps({accessibilityLabel:'技能用途'}).props.value).toBe('keep existing purpose');
  }finally{act(()=>tree.unmount());}
 });
+
+
+test('once editor guards embedded close and native removal with the same decision',async()=>{
+ const close=jest.fn(),alert=jest.spyOn(Alert,'alert'),prevent=require('expo-router/react-navigation').usePreventRemove;let tree!:ReturnType<typeof create>;
+ try{await act(async()=>{tree=create(<SkillLibraryScreen threadId="t" onClose={close}/>);});
+ act(()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='选择下次运行技能')!.props.onPress());
+ act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='关闭技能')!.props.onPress());expect(close).not.toHaveBeenCalled();
+ const registration=prevent.mock.calls.at(-1);expect(registration[0]).toBe(true);
+ act(()=>registration[1]({data:{action:{type:'GO_BACK'}}}));expect(alert).toHaveBeenLastCalledWith('尚有未保存的修改',expect.any(String),expect.any(Array));
+ }finally{act(()=>tree.unmount());alert.mockRestore();}
+});
