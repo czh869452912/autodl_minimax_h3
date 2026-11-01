@@ -21,25 +21,27 @@ const mockStore = {
   remove: async (id: string) => { mockRows.delete(id); },
 };
 function mockCreateAgent() {
-  const subscribers = new Set<(event: { messages: unknown[]; state: object }) => void>();
+  const subscribers = new Set<any>();
   return {
-    threadId: '', agentId: 'test', messages: [] as unknown[], state: {},
+    isRunning:false, threadId: '', agentId: 'test', messages: [] as unknown[], state: {},
     setMessages(messages: unknown[]) { this.messages = messages; },
     setState(state: object) { this.state = state; },
     subscribe(subscriber: { onMessagesChanged: (event: { messages: unknown[]; state: object }) => void }) {
-      subscribers.add(subscriber.onMessagesChanged);
-      return { unsubscribe: () => subscribers.delete(subscriber.onMessagesChanged) };
+      subscribers.add(subscriber);
+      return { unsubscribe: () => subscribers.delete(subscriber) };
     },
-    emit(messages: unknown[]) { this.messages = messages; for (const listener of subscribers) listener({ messages, state: {} }); },
+    emit(messages: unknown[]) { this.messages = messages; for (const listener of subscribers) listener.onMessagesChanged?.({ messages, state: {} }); },
+    finalize() { this.isRunning=false; for(const listener of subscribers)listener.onRunFinalized?.({input:{runId:"run"},messages:this.messages,state:this.state}); },
     dispose() {},
   };
 }
+const mockFocusCallbacks=new Set<()=>void>();
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({}),
   useRouter: () => ({ navigate() {} }),
-  useFocusEffect: (effect: () => void) => { require('react').useEffect(effect, [effect]); },
+  useFocusEffect: (effect: () => void) => { require('react').useEffect(()=>{mockFocusCallbacks.add(effect);const cleanup=effect();return()=>{mockFocusCallbacks.delete(effect);if(typeof cleanup==='function')(cleanup as ()=>void)();};}, [effect]); },
 }));
-jest.mock('../settings/storage', () => ({ readSettings: async () => ({ llmApiKey: 'key', llmEndpoint: 'https://example.invalid', llmModel: 'h3', llmTimeoutSeconds: '600', llmMaxRetries: '2' }) }));
+jest.mock('../settings/storage', () => ({ readSettings: jest.fn(async () => ({ llmApiKey: 'key', llmEndpoint: 'https://example.invalid', llmModel: 'h3', llmTimeoutSeconds: '600', llmMaxRetries: '2' })) }));
 const mockScopeRead=jest.fn(async()=>({project_id:'project-b'}));
 const mockBind=jest.fn(async(..._args:unknown[])=>undefined);
 jest.mock('../creative/projectAgentScope',()=>({bindProjectConversation:(...args:unknown[])=>mockBind(...args)}));
@@ -212,4 +214,25 @@ test('new conversation follows the actual project of a thread opened from global
  await act(async()=>ui().onNew());
  expect(mockScopeRead).toHaveBeenCalledWith(expect.stringContaining('creative_agent_scopes'),'a');
  expect(mockBind).toHaveBeenLastCalledWith(expect.anything(),expect.any(String),'project-b');
+});
+
+
+test('a settings switch during a run adopts B after completion without dropping the composer',async()=>{
+ const storage=require('../settings/storage');const provider=require('./LocalCopilotKitProvider').LocalCopilotKitProvider;
+ const base={llmApiKey:'key',llmEndpoint:'https://example.invalid',llmModel:'h3',llmTimeoutSeconds:'600',llmMaxRetries:'2',llmConnectionId:'A',llmConnectionRevision:1,llmSupportsImages:true};
+ const cleanups:Array<()=>void>=[];const original=storage.readSettings.getMockImplementation();const ensure=jest.spyOn(promptRuntimeRegistry,'ensure');
+ try{
+  storage.readSettings.mockResolvedValue(base);mockRows.set('a',thread('a'));
+  await act(async()=>{tree=create(<AgentScreen/>);});
+  const first=tree.root.findByType(provider).props.agent;first.isRunning=true;
+  const runtime=ensure.mock.results.at(-1)!.value;
+  act(()=>runtime.patchClientState({h3Composer:{text:'keep my input',revision:5}}));
+  storage.readSettings.mockResolvedValue({...base,llmConnectionId:'B',llmSupportsImages:false});
+  await act(async()=>{for(const focus of [...mockFocusCallbacks]){const cleanup=focus() as unknown;if(typeof cleanup==='function')cleanups.push(cleanup as ()=>void);}});
+  expect(tree.root.findByType(provider).props.agent).toBe(first);
+  await act(async()=>first.finalize());
+  expect(tree.root.findByType(provider).props.agent).not.toBe(first);
+  expect(ensure).toHaveBeenLastCalledWith(expect.objectContaining({connectionId:'B',supportsImages:false}),expect.anything(),expect.anything());
+  expect(tree.root.findByType(provider).props.agent.state).toMatchObject({h3Composer:{text:'keep my input',revision:5}});
+ }finally{cleanups.forEach(fn=>fn());storage.readSettings.mockImplementation(original);ensure.mockRestore();}
 });
