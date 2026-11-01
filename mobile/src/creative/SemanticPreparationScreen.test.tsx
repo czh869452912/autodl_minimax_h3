@@ -1,0 +1,23 @@
+import React from 'react';
+import {act,create} from 'react-test-renderer';
+import {TextInput} from 'react-native';
+import {ListAction} from '../ui/ListPageUI';
+const mockGuard=jest.fn(),mockReplace=jest.fn(),mockExecute=jest.fn();
+jest.mock('./useUnsavedChanges',()=>({useUnsavedChanges:(...args:unknown[])=>mockGuard(...args)}));
+jest.mock('expo-router',()=>({useLocalSearchParams:()=>({projectId:'p',shotId:'s'}),useRouter:()=>({back:jest.fn(),replace:mockReplace})}));
+jest.mock('../storage/databaseClient',()=>({getDatabase:()=>({getFirstAsync:async()=>({revision:1,description:'initial'})})}));
+jest.mock('./semanticResources',()=>({readShotSemantics:async()=>[]}));
+jest.mock('./semanticDependencies',()=>({readSemanticReferences:async()=>[]}));
+jest.mock('./runtime',()=>({creativeService:()=>({execute:mockExecute})}));
+import {SemanticPreparationScreen} from './SemanticPreparationScreen';
+test('protects changed preparation, preserves failed input and releases guard only after success',async()=>{
+ let tree!:ReturnType<typeof create>;await act(async()=>{tree=create(<SemanticPreparationScreen/>);});
+ expect(mockGuard).toHaveBeenLastCalledWith(false,false);
+ act(()=>tree.root.findByType(TextInput).props.onChangeText('changed'));
+ expect(mockGuard).toHaveBeenLastCalledWith(true,false);
+ mockExecute.mockRejectedValueOnce(new Error('offline'));
+ const submit=()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='按以上用途新建视频草稿')!.props.onPress();
+ await act(async()=>submit());expect(tree.root.findByType(TextInput).props.value).toBe('changed');expect(mockReplace).not.toHaveBeenCalled();
+ mockExecute.mockResolvedValueOnce({status:'completed',value:{draftId:'new'}});await act(async()=>submit());
+ expect(mockGuard).toHaveBeenLastCalledWith(false,false);expect(mockReplace).toHaveBeenCalledWith({pathname:'/creative-draft/[id]',params:{id:'new'}});act(()=>tree.unmount());
+});
