@@ -1,3 +1,4 @@
+import {useSourceBack} from '../navigation/useSourceBack';
 import {useCallback,useState} from 'react';
 import {ScrollView,Text,View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -7,10 +8,11 @@ import {readCapabilityCatalog,type Capability} from './capabilityCatalog';
 import {ListAction} from '../ui/ListPageUI';
 import {creativeUI as s} from './creativeUI';
 export function CapabilityCatalogScreen(){
+ const back=useSourceBack();
  const router=useRouter(),[after,setAfter]=useState(''),[items,setItems]=useState<Capability[]>([]),[next,setNext]=useState<string>(),[error,setError]=useState('');
  useFocusEffect(useCallback(()=>{let active=true;setError('');void readCapabilityCatalog(getDatabase(),after).then(page=>{if(active){setItems(page.items);setNext(page.next);}}).catch(e=>{if(active){setItems([]);setNext(undefined);setError(e.message);}});return()=>{active=false;};},[after]));
  return <SafeAreaView style={s.screen}><ScrollView contentContainerStyle={{padding:16,gap:12}}>
-  <ListAction label="返回项目" secondary onPress={()=>router.back()}/><Text style={s.title}>制作能力</Text>
+  <ListAction label="返回来源" secondary onPress={back}/><Text style={s.title}>制作能力</Text>
   <Text style={s.body}>以下来自已安装工作流和本地账号状态。不会发送素材或请求生成；实际请求仍需准备、核验并授权。不会自动切换服务。</Text>
   <ListAction label="模型连接与输入能力" secondary onPress={()=>router.push('/model-connections')}/>
   {error?<Text accessibilityRole="alert" style={s.body}>{error}</Text>:null}
