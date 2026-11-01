@@ -1,3 +1,4 @@
+import {skillSelectionEvents} from './skills/selectionEvents';
 import {acceptNextRunSkills} from './skills/nextRun';
 import {captureRunFocus} from '../creative/runFocus';
 import type { Message, State } from '@ag-ui/client';
@@ -143,7 +144,7 @@ export function createLocalThreadStore(db: AppDatabase, attachments = createAtta
       try {
         message = await attachments.externalize(command.message);
         const acceptedMessage = message.value;
-        return await withWriteTransaction(db, async tx => {
+        const receipt = await withWriteTransaction(db, async tx => {
         await assertAppDatabaseWritableAsync(tx);
         const prior = await tx.getFirstAsync<{ thread_id: string; user_message_id: string; run_id: string }>('SELECT * FROM agent_submissions WHERE id=?', command.id);
         if (prior) {
@@ -175,7 +176,10 @@ export function createLocalThreadStore(db: AppDatabase, attachments = createAtta
         await acceptNextRunSkills(tx,snapshot.threadId,command.runId,command.retryOf);
         await tx.runAsync('INSERT INTO agent_submissions VALUES(?,?,?,?,?)', command.id, snapshot.threadId, command.message.id, command.runId, command.draftRevision);
         return { submissionId: command.id, userMessageId: command.message.id, runId: command.runId };
-      }); } finally { await stored.releaseStaging().catch(() => undefined); await message?.releaseStaging().catch(() => undefined); }
+      });
+        skillSelectionEvents.publish(snapshot.threadId);
+        return receipt;
+      } finally { await stored.releaseStaging().catch(() => undefined); await message?.releaseStaging().catch(() => undefined); }
     },
     async load(threadId: string): Promise<LocalThreadSnapshot | null> {
       await migrate(threadId);

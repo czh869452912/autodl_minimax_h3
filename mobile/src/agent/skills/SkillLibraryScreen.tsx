@@ -1,3 +1,4 @@
+import {skillSelectionEvents} from './selectionEvents';
 import {builtinSkillCatalog} from './builtinCatalog';
 import {selectNextRunSkills,readNextRunSkills} from './nextRun';
 import { useUnsavedChanges } from '../../creative/useUnsavedChanges';
@@ -45,8 +46,35 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
   useEffect(()=>{registerLeave?.(proceed=>latestLeave.current(proceed));return()=>registerLeave?.(undefined);},[registerLeave]);
   const back=()=>confirmLeave(()=>onClose?onClose():router.canGoBack()?router.back():router.replace('/(tabs)/agent'));
   useFallbackBack(back);
-  const refresh = useCallback(async () => { setScopeReady(false);const scope=threadId?await getDatabase().getFirstAsync<{project_id:string|null}>('SELECT project_id FROM creative_agent_scopes WHERE thread_id=?',threadId):undefined;if(threadId&&!scope)throw Error('会话范围不可用，请返回后重试');const effective=scope?scope.project_id??undefined:requestedProjectId;const [items, history, pending] = await Promise.all([effective?store.projectList(effective):store.list(), store.runs({...((historyScope==='all')?{}:threadId?{threadId}:{projectId:effective}),after:historyAfter,limit:21}),threadId?readNextRunSkills(getDatabase(),threadId):Promise.resolve(null)]);setSavedOnce(pending);setProjectId(effective); setVersions(items); setRuns(history);setScopeReady(true); }, [store,requestedProjectId,threadId,historyScope,historyAfter]);
+  const readGeneration=useRef(0);
+  const refresh = useCallback(async (background = false) => {
+    const generation = ++readGeneration.current;
+    if (!background) setScopeReady(false);
+    const scope = threadId ? await getDatabase().getFirstAsync<{project_id:string|null}>(
+      'SELECT project_id FROM creative_agent_scopes WHERE thread_id=?', threadId) : undefined;
+    if (threadId && !scope) throw Error('会话范围不可用，请返回后重试');
+    const effective = scope ? scope.project_id ?? undefined : requestedProjectId;
+    const [items, history, pending] = await Promise.all([
+      effective ? store.projectList(effective) : store.list(),
+      store.runs({...((historyScope === 'all') ? {} : threadId ? {threadId} : {projectId:effective}), after:historyAfter, limit:21}),
+      threadId ? readNextRunSkills(getDatabase(), threadId) : Promise.resolve(null),
+    ]);
+    // A newer read or a changed/unmounted panel supersedes this result.
+    if (generation !== readGeneration.current) return;
+    setSavedOnce(pending);
+    setProjectId(effective);
+    setVersions(items);
+    setRuns(history);
+    setScopeReady(true);
+  }, [store, requestedProjectId, threadId, historyScope, historyAfter]);
   useFocusEffect(useCallback(() => { void refresh().catch(error => setNotice(String(error.message))); }, [refresh]));
+  useEffect(() => {
+    const unsubscribe = skillSelectionEvents.subscribe(changed => {
+      // Refresh committed state, leaving the user's unsaved `once` draft intact.
+      if (changed === threadId) void refresh(true).catch(error => setNotice('技能状态刷新失败，请重新打开面板：' + error.message));
+    });
+    return () => { unsubscribe(); readGeneration.current++; };
+  }, [threadId, refresh]);
   const run = async (work: () => Promise<void>) => {
     if (lock.current) return;
     lock.current = true; setBusy(true); setNotice('');

@@ -1,3 +1,4 @@
+import {skillSelectionEvents} from './selectionEvents';
 import {builtinSkillSnapshot} from './builtinCatalog';
 import type {AppDatabase} from '../../storage/appDatabase';
 import {withWriteTransaction} from '../../storage/sqliteBusy';
@@ -12,6 +13,7 @@ export async function selectNextRunSkills(db:AppDatabase,threadId:string,ids:str
   if(new Set(selected.map(v=>v.name)).size!==selected.length)throw new Error('同名技能只能选择一个版本');
   await tx.runAsync('INSERT INTO agent_skill_next_runs VALUES(?,?,?,?,?) ON CONFLICT(thread_id) DO UPDATE SET project_id=excluded.project_id,scope_revision=excluded.scope_revision,execution_epoch=excluded.execution_epoch,versions_json=excluded.versions_json',threadId,scope?.project_id??null,scope?.revision??0,epoch,JSON.stringify(selected.map(v=>({id:v.id,revocation:v.revocation}))));
  });
+ skillSelectionEvents.publish(threadId);
 }
 /** Runs in the message acceptance transaction: no gap between selection consumption and run creation. */
 export async function acceptNextRunSkills(tx:AppDatabase,threadId:string,runId:string,retryOf?:string){
