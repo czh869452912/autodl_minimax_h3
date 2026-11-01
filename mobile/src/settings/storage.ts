@@ -1,4 +1,4 @@
-import {activeLlmConnection,selectLlmConnection} from './llmConnections';
+import {activeLlmConnection} from './llmConnections';
 import { settingsEvents } from './events';
 import { VIDEO_DECODE_MODE_KEY, normalizeVideoDecodeMode, publishVideoDecodeMode, type VideoDecodeMode } from './videoDecodeMode';
 import * as SecureStore from 'expo-secure-store';
@@ -59,7 +59,13 @@ export async function readSettings(): Promise<AppSettings> {
 }
 
 export async function saveSettings(values: Partial<AppSettings>): Promise<void> {
-  if(values.llmEndpoint!==undefined||values.llmModel!==undefined||values.llmApiKey!==undefined)await selectLlmConnection(null);
+  const active=await activeLlmConnection();
+  if(active){
+    for(const [field,current] of [['llmEndpoint',active.endpoint],['llmModel',active.model],['llmApiKey',active.apiKey]] as const){
+      if(values[field]!==undefined&&values[field]!==current)throw new Error('请在模型连接管理中显式更换连接');
+    }
+    values={...values,llmEndpoint:undefined,llmModel:undefined,llmApiKey:undefined};
+  }
   await Promise.all([
     values.autoExportImagesToGallery === undefined ? undefined : SecureStore.setItemAsync(keys.autoExportImagesToGallery, String(values.autoExportImagesToGallery)),
     values.videoDecodeMode === undefined ? undefined : SecureStore.setItemAsync(VIDEO_DECODE_MODE_KEY, normalizeVideoDecodeMode(values.videoDecodeMode)),

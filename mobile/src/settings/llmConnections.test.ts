@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import {saveLlmConnection,selectLlmConnection,revokeLlmConnection,activeLlmConnection,assertLlmConnection,readLlmConnections} from './llmConnections';
-import {readSettings} from './storage';
+import {readSettings,saveSettings} from './storage';
 const values=new Map<string,string>();
 jest.mock('expo-secure-store',()=>({getItemAsync:jest.fn(),setItemAsync:jest.fn()}));
 beforeEach(()=>{values.clear();jest.mocked(SecureStore.getItemAsync).mockImplementation(async k=>values.get(k)??null);jest.mocked(SecureStore.setItemAsync).mockImplementation(async(k,v)=>{values.set(k,v);});});
@@ -20,3 +20,12 @@ test('saving connections validates HTTPS and serializes concurrent updates',asyn
  await Promise.all(['a','b'].map(title=>saveLlmConnection({title,endpoint:'https://example.com/v1',model:title,apiKey:'secret',images:false})));
  expect((await readLlmConnections()).items).toHaveLength(2);
 });
+
+ test('ordinary full settings saves retain selected identity and never copy its secret to legacy settings',async()=>{
+ const id=await saveLlmConnection({title:'vision',endpoint:'https://example.com/v1',model:'vision',apiKey:'test-secret',images:true});await selectLlmConnection(id);
+ const settings=await readSettings();await saveSettings({...settings,autoExportToGallery:false});
+ expect(await readSettings()).toMatchObject({llmConnectionId:id,llmConnectionRevision:1,llmSupportsImages:true,autoExportToGallery:false});
+ expect(values.has('llm.apiKey')).toBe(false);
+ await expect(saveSettings({llmModel:'different'})).rejects.toThrow('显式');
+ expect((await readLlmConnections()).active).toBe(id);
+ });
