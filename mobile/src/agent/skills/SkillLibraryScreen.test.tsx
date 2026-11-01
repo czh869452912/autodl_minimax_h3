@@ -4,10 +4,11 @@ import { IconAction } from '../../creative/WorkbenchUI';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { ListAction } from '../../ui/ListPageUI';
-const mockStore = { projectList:jest.fn(async (_id:string)=>[] as any[]),setProjectVersion:jest.fn(async (_project:string,_name:string,_version:string|null|undefined)=>{}), list: jest.fn(async () => [] as any[]), runs: jest.fn(async () => []), install: jest.fn(async () => 'id'), enable: jest.fn(async () => {}), revoke: jest.fn(async () => {}) };
+const mockPush=jest.fn();
+const mockStore = { projectList:jest.fn(async (_id:string)=>[] as any[]),setProjectVersion:jest.fn(async (_project:string,_name:string,_version:string|null|undefined)=>{}), list: jest.fn(async () => [] as any[]), runs: jest.fn(async (..._args:any[]) => [] as any[]), install: jest.fn(async () => 'id'), enable: jest.fn(async () => {}), revoke: jest.fn(async () => {}) };
 jest.mock('../../storage/databaseClient', () => ({ getDatabase: () => ({getFirstAsync:async()=>({project_id:'trusted-project'})}) }));
 jest.mock('./store', () => ({ createSkillStore: () => mockStore }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ canGoBack: () => true, back: jest.fn() }), useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]) }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push:mockPush,canGoBack: () => true, back: jest.fn() }), useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]) }));
 jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));
 jest.mock('expo-file-system', () => ({ File: jest.fn() }));
 import { SkillLibraryScreen } from './SkillLibraryScreen';
@@ -81,4 +82,18 @@ test('thread panel uses persisted project scope and disables only that project',
  expect(mockStore.projectList).toHaveBeenLastCalledWith('trusted-project');
  await act(async()=>tree.root.findByType(Switch).props.onValueChange(false));
  expect(mockStore.setProjectVersion).toHaveBeenLastCalledWith('trusted-project','skill',null);expect(mockStore.revoke).not.toHaveBeenCalled();act(()=>tree.unmount());
+});
+
+
+test('history uses trusted thread scope and opens exact historical run without changing selection',async()=>{
+ mockStore.runs.mockResolvedValue([{threadId:'thread',runId:'old-run',createdAt:1,projectTitle:'可信项目',threadTitle:'原会话',status:'completed',skillNames:{old:'历史名称'},snapshot:{versions:[{id:'old'}]}}]);
+ mockStore.setProjectVersion.mockClear();let tree!:ReturnType<typeof create>;
+ try{await act(async()=>{tree=create(<SkillLibraryScreen threadId="thread" projectId="wrong"/>);});
+ expect(mockStore.runs).toHaveBeenLastCalledWith(expect.objectContaining({threadId:'thread',limit:21}));
+ act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());
+ expect(JSON.stringify(tree.toJSON())).toContain('历史名称');
+ act(()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='查看运行 old-run')!.props.onPress());
+ expect(mockPush).toHaveBeenLastCalledWith({pathname:'/agent-run',params:{threadId:'thread',runId:'old-run'}});
+ expect(mockStore.setProjectVersion).not.toHaveBeenCalled();
+ }finally{act(()=>tree.unmount());mockStore.runs.mockResolvedValue([]);}
 });

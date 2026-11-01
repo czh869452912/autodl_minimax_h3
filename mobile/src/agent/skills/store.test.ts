@@ -56,3 +56,22 @@ test('project overrides pin versions, exclude global skills and preserve existin
   await expect(store.resolve(pinned)).rejects.toThrow('停用');
  }finally{db.close();}
 });
+
+
+test('filters before paging and traverses equal timestamps without gaps across projects',async()=>{
+ const db=createInitializedRealSqliteTestDb(),store=createSkillStore(db as never),clock=jest.spyOn(Date,'now');
+ try{
+  for(const p of ['A','B','empty'])db.runSync('INSERT INTO creative_projects VALUES(?,?,?,0,NULL,1,1)',p,p,'');
+  for(const p of ['A','B'])db.runSync('INSERT INTO creative_agent_scopes VALUES(?,?,0,1)',p+'-thread',p);
+  const id=await store.install(pkg('historic'));await store.enable(id);
+  clock.mockReturnValue(100);await store.capture('A-thread','old');await store.revoke(id);
+  clock.mockReturnValue(200);for(let n=0;n<25;n++)await store.capture('B-thread','run-'+String(n).padStart(2,'0'));
+  const a=await store.runs({projectId:'A'});expect(a.map(r=>r.runId)).toEqual(['old']);expect(a[0].skillNames[id]).toBe('scene-review');
+  expect(await store.runs({projectId:'empty'})).toEqual([]);
+  expect((await store.runs({threadId:'A-thread'})).map(r=>r.runId)).toEqual(['old']);
+  const page=await store.runs();const last=page.at(-1)!;
+  const next=await store.runs({after:{createdAt:last.createdAt,threadId:last.threadId,runId:last.runId}});
+  const keys=[...page,...next].map(r=>r.threadId+':'+r.runId);expect(keys).toHaveLength(26);expect(new Set(keys).size).toBe(26);
+  expect(next.at(-1)?.runId).toBe('old');expect((await store.list())[0].enabled).toBe(false);
+ }finally{clock.mockRestore();db.close();}
+});

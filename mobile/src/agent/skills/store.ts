@@ -97,9 +97,25 @@ export function createSkillStore(db: AppDatabase) {
       }
       return versions;
     },
-    async runs(): Promise<Array<{ threadId: string; runId: string; snapshot: SkillSnapshot; reads?:string[]; usage?:{model_calls:number;tool_calls:number;estimated_tokens:number;reported_tokens:number} }>> {
-      const rows = await db.getAllAsync<{ thread_id: string; run_id: string; snapshot_json: string }>('SELECT * FROM agent_skill_runs ORDER BY created_at DESC LIMIT 20');
-      return Promise.all(rows.map(async row => ({ threadId: row.thread_id, runId: row.run_id, snapshot: JSON.parse(row.snapshot_json),reads:(await db.getAllAsync<{payload_json:string}>("SELECT payload_json FROM agent_client_records WHERE thread_id=? AND json_extract(payload_json,'$.kind')='skill-read' AND json_extract(payload_json,'$.runId')=? ORDER BY id LIMIT 100",row.thread_id,row.run_id)).map(item=>JSON.parse(item.payload_json).path as string),usage:await db.getFirstAsync<{model_calls:number;tool_calls:number;estimated_tokens:number;reported_tokens:number}>('SELECT model_calls,tool_calls,estimated_tokens,reported_tokens FROM creative_run_usage WHERE thread_id=? AND run_id=?',row.thread_id,row.run_id)??undefined })));
+    async runs(options:{projectId?:string;threadId?:string;after?:{createdAt:number;threadId:string;runId:string};limit?:number}={}): Promise<Array<{ threadId:string; runId:string; createdAt:number;projectId:string|null;projectTitle:string|null;threadTitle:string|null;status:string|null;skillNames:Record<string,string>;snapshot:SkillSnapshot; reads?:string[]; usage?:{model_calls:number;tool_calls:number;estimated_tokens:number;reported_tokens:number} }>> {
+      const after=options.after;
+      const rows=await db.getAllAsync<{thread_id:string;run_id:string;snapshot_json:string;created_at:number;project_id:string|null;project_title:string|null;thread_title:string|null;status:string|null}>(`
+        SELECT r.*,s.project_id,p.title AS project_title,COALESCE(t.custom_title,t.title) AS thread_title,json_extract(a.payload_json,'$.status') AS status
+        FROM agent_skill_runs r LEFT JOIN creative_agent_scopes s ON s.thread_id=r.thread_id
+        LEFT JOIN creative_projects p ON p.id=s.project_id LEFT JOIN agent_thread_index t ON t.thread_id=r.thread_id
+        LEFT JOIN agent_runs a ON a.thread_id=r.thread_id AND a.id=r.run_id
+        WHERE (? IS NULL OR s.project_id=?) AND (? IS NULL OR r.thread_id=?)
+        AND (? IS NULL OR (r.created_at,r.thread_id,r.run_id)<(?,?,?))
+        ORDER BY r.created_at DESC,r.thread_id DESC,r.run_id DESC LIMIT ?`,
+        options.projectId??null,options.projectId??null,options.threadId??null,options.threadId??null,
+        after?.createdAt??null,after?.createdAt??null,after?.threadId??null,after?.runId??null,Math.max(1,Math.min(options.limit??20,100)));
+      return Promise.all(rows.map(async row=>{
+        const snapshot=JSON.parse(row.snapshot_json) as SkillSnapshot;
+        const names=await Promise.all(snapshot.versions.map(async ref=>[ref.id,(await db.getFirstAsync<{name:string}>('SELECT name FROM agent_skill_versions WHERE id=?',ref.id))?.name??'版本不可用'] as const));
+        return {threadId:row.thread_id,runId:row.run_id,createdAt:row.created_at,projectId:row.project_id,projectTitle:row.project_title,threadTitle:row.thread_title,status:row.status,skillNames:Object.fromEntries(names),snapshot,
+          reads:(await db.getAllAsync<{payload_json:string}>("SELECT payload_json FROM agent_client_records WHERE thread_id=? AND json_extract(payload_json,'$.kind')='skill-read' AND json_extract(payload_json,'$.runId')=? ORDER BY id LIMIT 100",row.thread_id,row.run_id)).map(item=>JSON.parse(item.payload_json).path as string),
+          usage:await db.getFirstAsync<{model_calls:number;tool_calls:number;estimated_tokens:number;reported_tokens:number}>('SELECT model_calls,tool_calls,estimated_tokens,reported_tokens FROM creative_run_usage WHERE thread_id=? AND run_id=?',row.thread_id,row.run_id)??undefined};
+      }));
     },
   };
 }
