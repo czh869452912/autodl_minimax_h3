@@ -2,7 +2,7 @@ import {toH3AgentConfig} from '../agent/agentConfig';
 import {pinRunRuntime} from '../agent/runSpecification';
 import {createInitializedRealSqliteTestDb} from '../test/realSqlite';
 import * as SecureStore from 'expo-secure-store';
-import {saveLlmConnection,selectLlmConnection,revokeLlmConnection,activeLlmConnection,assertLlmConnection,readLlmConnections} from './llmConnections';
+import {clearRevokedLlmConnection,saveLlmConnection,selectLlmConnection,revokeLlmConnection,activeLlmConnection,assertLlmConnection,readLlmConnections} from './llmConnections';
 import {readSettings,saveSettings} from './storage';
 const values=new Map<string,string>();
 jest.mock('expo-secure-store',()=>({getItemAsync:jest.fn(),setItemAsync:jest.fn()}));
@@ -39,4 +39,12 @@ test('explicit connection effort survives persistence, Agent configuration and r
  const db=createInitializedRealSqliteTestDb();try{await pinRunRuntime(db as never,'t','r',config,'skill',[]);expect(JSON.parse(db.getFirstSync<{snapshot_json:string}>('SELECT snapshot_json FROM creative_run_runtime_specs')!.snapshot_json)).toMatchObject({connectionId:id,reasoningEffort:'low'});}finally{db.close();}
  const incompatible=await saveLlmConnection({title:'pro',endpoint:'https://example.com/v1',model:'gpt-5-pro',apiKey:'test',images:false});await expect(selectLlmConnection(incompatible)).rejects.toThrow('思考强度');expect((await readLlmConnections()).active).toBe(id);
  await saveSettings({llmReasoningEffort:'default'});await selectLlmConnection(incompatible);expect((await readSettings()).llmReasoningEffort).toBe('default');
+});
+
+test('more than eight credential rotations release slots without resurrecting old identities or implicit fallback',async()=>{
+ values.set('llm.apiKey','legacy-secret');const old:string[]=[];
+ for(let i=0;i<12;i++){const id=await saveLlmConnection({title:'rotation',endpoint:'https://example.com/v1',model:'gpt-5.1',apiKey:'secret-'+i,images:true});await selectLlmConnection(id);await expect(clearRevokedLlmConnection(id)).rejects.toThrow('已撤销');await revokeLlmConnection(id);expect((await readLlmConnections()).items.find(v=>v.id===id)?.apiKey).toBe('');await clearRevokedLlmConnection(id);expect((await readSettings()).llmApiKey).toBe('');expect((await readLlmConnections()).active).toBe(id);old.push(id);}
+ expect((await readLlmConnections()).items).toHaveLength(0);expect((await readLlmConnections()).tombstones).toHaveLength(12);
+ for(const id of old){await expect(assertLlmConnection({connectionId:id,connectionRevision:1})).rejects.toThrow('REVOKED');await expect(selectLlmConnection(id)).rejects.toThrow('UNAVAILABLE');}
+ const next=await saveLlmConnection({title:'new',endpoint:'https://example.com/v1',model:'gpt-5.1',apiKey:'new-secret',images:true});expect((await readLlmConnections()).active).toBe(old.at(-1));await selectLlmConnection(next);expect((await readSettings()).llmApiKey).toBe('new-secret');
 });
