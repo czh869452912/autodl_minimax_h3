@@ -16,14 +16,14 @@ import {saveCreativeText} from './fileImport';
 import {createId} from '../ids';
 const empty=():TimelineSpec=>({schemaVersion:1,orientation:'portrait',clips:[],audio:null});
 export function TimelineScreen(){
- const {projectId}=useLocalSearchParams<{projectId:string}>(),router=useRouter();
+ const {projectId,timelineId}=useLocalSearchParams<{projectId:string;timelineId?:string}>(),router=useRouter();
  const [spec,setSpec]=useState<TimelineSpec>(empty),[title,setTitle]=useState('项目成片'),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [picker,setPicker]=useState<'video'|'audio'>(),[rows,setRows]=useState<TimelineRow[]>([]),[next,setNext]=useState<{createdAt:number;id:string}>();
  const [renders,setRenders]=useState<Array<{id:string;timeline_id:string;state:string;error:string|null;output_version_id:string|null}>>([]);
  useLiveRefresh(async current=>{if(!rows.length){if(current())setRenders([]);return;}const ids=rows.map(row=>row.id);const results=await getDatabase().getAllAsync<{id:string;timeline_id:string;state:string;error:string|null;output_version_id:string|null}>(`SELECT r.* FROM creative_timeline_renders r WHERE r.timeline_id IN (${ids.map(()=>'?').join(',')}) AND r.id=(SELECT latest.id FROM creative_timeline_renders latest WHERE latest.timeline_id=r.timeline_id ORDER BY latest.created_at DESC,latest.id DESC LIMIT 1) ORDER BY r.created_at DESC`,...ids);if(current())setRenders(results);},2000,projectId+':'+rows.map(row=>row.id).join(','));
  const lock=useRef(false);const leave=useUnsavedChanges(dirty,busy);
- const refresh=async(after?:{createdAt:number;id:string})=>{const page=await readTimelinePage(getDatabase(),projectId,after);setRows(page.items);setNext(page.next);};
- useEffect(()=>{void refresh().catch(e=>setError(e.message));},[projectId]);
+ const refresh=async(after?:{createdAt:number;id:string})=>{if(timelineId){const row=await getDatabase().getFirstAsync<TimelineRow>('SELECT * FROM creative_timelines WHERE id=? AND project_id=? AND discarded_at IS NULL',timelineId,projectId);setRows(row?[row]:[]);setNext(undefined);if(!row)throw Error('指定工程不存在、已移除或不属于此项目');return;}const page=await readTimelinePage(getDatabase(),projectId,after);setRows(page.items);setNext(page.next);};
+ useEffect(()=>{void refresh().catch(e=>setError(e.message));},[projectId,timelineId]);
  const work=async(fn:()=>Promise<void>)=>{if(lock.current)return;lock.current=true;setBusy(true);setError('');try{await fn();}catch(e){setError(e instanceof Error?e.message:'操作失败');}finally{lock.current=false;setBusy(false);}};
  const update=(value:TimelineSpec)=>{setSpec(value);setDirty(true);};
  const patch=(index:number,value:Partial<TimelineSpec['clips'][number]>)=>update({...spec,clips:spec.clips.map((c,i)=>i===index?{...c,...value}:c)});
