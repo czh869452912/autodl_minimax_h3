@@ -1,5 +1,5 @@
 import type {AppDatabase} from '../storage/appDatabase';
-export type UsageEdge={kind:string;object_id:string;version_id:string|null;title:string;project_id:string|null;project_title:string|null;version_no:number|null;provider_id:string|null;available:number;purpose:string|null};
+export type UsageEdge={kind:'项目'|'封面'|'镜头'|'设定版本'|'草稿输入'|'任务冻结输入'|'时间线';object_id:string;version_id:string|null;title:string;project_id:string|null;project_title:string|null;version_no:number|null;provider_id:string|null;available:number;purpose:string|null};
 /** Bounded read-only relation pages; deletion protection remains transactional and unbounded. */
 export function readUsageGraph(db:AppDatabase,assetId:string,offset=0){
  return db.getAllAsync<UsageEdge>(`WITH edges AS (

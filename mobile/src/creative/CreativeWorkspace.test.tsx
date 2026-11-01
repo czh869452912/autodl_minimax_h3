@@ -243,3 +243,33 @@ test('all generated versions are directly selectable and new results preserve se
   expect(tree.root.findByProps({accessibilityLabel:'资产名称'}).props.value).toBe('Unsaved batch title');
  }finally{act(()=>tree?.unmount());interval.mockRestore();mockService.asset.mockResolvedValue(undefined);mockService.versions.mockResolvedValue([]);}
 });
+
+test('cover usage opens overview even when project history was on shots',async()=>{
+ const project={id:'cover-project',title:'Cover project',brief:'',revision:1};
+ mockService.projects.mockResolvedValue([project]);
+ mockService.asset.mockResolvedValue({id:'cover-asset',kind:'image',title:'Cover image',revision:1,currentVersionId:'cover-v'});
+ mockService.versions.mockResolvedValue([{id:'cover-v',assetId:'cover-asset',versionNo:1,state:'MISSING',mime:'image/png',recipe:{}}]);
+ mockService.usage.mockResolvedValueOnce([{kind:'封面',object_id:project.id,version_id:'cover-v',title:project.title,project_id:project.id,project_title:project.title,version_no:1,available:1}] as never);
+ let tree!:ReturnType<typeof create>;try{
+  await act(async()=>{tree=create(<CreativeWorkspace mode="assets" assetId="cover-asset"/>);});
+  act(()=>press(tree,'素材操作'));
+  const {RecordRow}=require('../ui/RecordRow');
+  act(()=>tree.root.findAllByType(RecordRow).find(n=>n.props.title===project.title&&n.props.detail?.includes('项目封面'))!.props.onPress());
+  const destination=mockPush.mock.calls.at(-1)![0];
+  expect(destination.params.tab).toBe('brief');
+  act(()=>tree.unmount());
+  await act(async()=>{tree=create(<CreativeWorkspace mode="projects" projectId={project.id} initialTab={destination.params.tab}/>);});
+  expect(tree.root.findAll(n=>n.props.accessibilityLabel==='概览'&&n.props.accessibilityState?.checked).length).toBeGreaterThan(0);
+ }finally{act(()=>tree?.unmount());mockService.projects.mockResolvedValue([]);mockService.asset.mockResolvedValue(undefined);mockService.versions.mockResolvedValue([]);}
+});
+
+test.each([
+ ['项目','/creative-project/[id]',{id:'object',tab:'assets'}],['封面','/creative-project/[id]',{id:'object',tab:'brief'}],
+ ['镜头','/creative-project/[id]',{id:'project',tab:'shots',shotId:'object'}],['设定版本','/project-settings-library',{projectId:'project',versionId:'object'}],
+ ['草稿输入','/image-draft/[id]',{id:'object'}],['任务冻结输入','/creative-task/[id]',{id:'object'}],['时间线','/project-timeline',{projectId:'project',timelineId:'object'}],
+])('usage click %s preserves its typed destination',async(kind,pathname,params)=>{
+ mockService.asset.mockResolvedValue({id:'usage-a',kind:'image',title:'A',revision:1,currentVersionId:'usage-v'});
+ mockService.versions.mockResolvedValue([{id:'usage-v',assetId:'usage-a',versionNo:1,state:'MISSING',mime:'image/png',recipe:{}}]);
+ mockService.usage.mockResolvedValue([{kind,object_id:'object',version_id:'usage-v',title:'Source',project_id:'project',project_title:null,version_no:1,available:1,provider_id:'novelai'}] as never);
+ let tree!:ReturnType<typeof create>;try{await act(async()=>{tree=create(<CreativeWorkspace mode="assets" assetId="usage-a"/>);});act(()=>press(tree,'素材操作'));const {RecordRow}=require('../ui/RecordRow');act(()=>tree.root.findAllByType(RecordRow).find(n=>n.props.title==='Source')!.props.onPress());expect(mockPush).toHaveBeenLastCalledWith({pathname,params:expect.objectContaining(params)});}finally{act(()=>tree?.unmount());mockService.usage.mockResolvedValue([]);mockService.asset.mockResolvedValue(undefined);mockService.versions.mockResolvedValue([]);}
+});
