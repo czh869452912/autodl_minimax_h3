@@ -1,4 +1,4 @@
-import {skillSelectionEvents} from './skills/selectionEvents';
+import {runEvents} from './runEvents';
 import {acceptNextRunSkills} from './skills/nextRun';
 import {captureRunFocus} from '../creative/runFocus';
 import type { Message, State } from '@ag-ui/client';
@@ -114,10 +114,10 @@ export function createLocalThreadStore(db: AppDatabase, attachments = createAtta
   const store = {
     async recoverInterruptedRuns(liveThreadIds: readonly string[]): Promise<void> {
       const live = new Set(liveThreadIds);
+      const changed = new Set<string>();
       await withWriteTransaction(db, async tx => {
         await assertAppDatabaseWritableAsync(tx);
         const rows = await tx.getAllAsync<PayloadRow & { thread_id: string }>('SELECT thread_id,id,payload_json FROM agent_runs');
-        const changed = new Set<string>();
         for (const row of rows) {
           if (live.has(row.thread_id)) continue;
           const run = readPromptRuns({ h3Runs: [decode(row.payload_json, object)] })[0];
@@ -132,6 +132,7 @@ export function createLocalThreadStore(db: AppDatabase, attachments = createAtta
           await tx.runAsync('UPDATE agent_thread_index SET last_run_json=? WHERE thread_id=?', latest?.payload_json ?? null, id);
         }
       });
+      for (const threadId of changed) runEvents.publish({threadId,kind:'status-changed'});
     },
     async accept(snapshot: LocalThreadSnapshot, command: SubmissionCommand): Promise<SubmissionReceipt> {
       const prior = await db.getFirstAsync<{ thread_id: string; user_message_id: string; run_id: string }>('SELECT * FROM agent_submissions WHERE id=?', command.id);
@@ -177,7 +178,7 @@ export function createLocalThreadStore(db: AppDatabase, attachments = createAtta
         await tx.runAsync('INSERT INTO agent_submissions VALUES(?,?,?,?,?)', command.id, snapshot.threadId, command.message.id, command.runId, command.draftRevision);
         return { submissionId: command.id, userMessageId: command.message.id, runId: command.runId };
       });
-        skillSelectionEvents.publish(snapshot.threadId);
+        runEvents.publish({threadId:snapshot.threadId,kind:'accepted'});
         return receipt;
       } finally { await stored.releaseStaging().catch(() => undefined); await message?.releaseStaging().catch(() => undefined); }
     },
@@ -230,9 +231,18 @@ export function createLocalThreadStore(db: AppDatabase, attachments = createAtta
       const title = typeof user?.content === 'string' ? user.content.slice(0, 40) : '';
       const stored = await attachments.externalize({ ...snapshot, messages, state, summary: { title, messageCount: snapshot.messages.filter(m => ['user', 'assistant'].includes(m.role)).length } });
       try {
-        await withWriteTransaction(db, tx => writeSnapshot(tx, stored.value as LocalThreadSnapshot));
+        const statusChanged = await withWriteTransaction(db, async tx => {
+          let changed = false;
+          for (const run of readPromptRuns(stored.value.state)) {
+            const old = await tx.getFirstAsync<PayloadRow>('SELECT payload_json FROM agent_runs WHERE thread_id=? AND id=?', snapshot.threadId, run.id);
+            if (!old || decode<{status:string}>(old.payload_json, object).status !== run.status) changed = true;
+          }
+          await writeSnapshot(tx, stored.value as LocalThreadSnapshot);
+          return changed;
+        });
         durableFields.delete(snapshot.threadId); durableFields.set(snapshot.threadId, fields);
         if (durableFields.size > 5) durableFields.delete(durableFields.keys().next().value!);
+        if (statusChanged) runEvents.publish({threadId:snapshot.threadId,kind:'status-changed'});
       }
       finally { await stored.releaseStaging(); }
     },

@@ -1,3 +1,4 @@
+import {runEvents} from '../runEvents';
 import {skillSelectionEvents} from './selectionEvents';
 import {builtinSkillCatalog} from './builtinCatalog';
 import {selectNextRunSkills,readNextRunSkills} from './nextRun';
@@ -73,8 +74,13 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
       // Refresh committed state, leaving the user's unsaved `once` draft intact.
       if (changed === threadId) void refresh(true).catch(error => setNotice('技能状态刷新失败，请重新打开面板：' + error.message));
     });
-    return () => { unsubscribe(); readGeneration.current++; };
-  }, [threadId, refresh]);
+    const unsubscribeRuns = runEvents.subscribe(event => {
+      if (historyScope === 'all' || !threadId || event.threadId === threadId) {
+        void refresh(true).catch(error => setNotice('运行记录刷新失败：' + error.message));
+      }
+    });
+    return () => { unsubscribe(); unsubscribeRuns(); readGeneration.current++; };
+  }, [threadId, historyScope, refresh]);
   const run = async (work: () => Promise<void>) => {
     if (lock.current) return;
     lock.current = true; setBusy(true); setNotice('');
@@ -96,7 +102,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
       <IconAction label={onClose ? '关闭技能' : '返回'} icon={onClose ? 'close' : 'arrow_back'} onPress={back}/>
       <Text accessibilityRole="header" style={{flex:1,fontSize:16,fontWeight:'600',color:COLORS.text}}>{projectId?'项目技能':'技能'} · {versions.filter(v=>v.enabled).length} 本地启用 · {builtins.length} 内置可用</Text>
       <IconAction label="添加技能" icon="add" onPress={()=>{if(onClose){confirmLeave(()=>{onClose();router.push({pathname:'/agent-skills',params:{intent:'add',projectId,threadId}});});}else {setHistoryOpen(false);setImportOpen(true);scroll.current?.scrollTo({y:0,animated:false});}}}/>
-      <IconAction label="技能运行记录" icon="history" selected={historyOpen} onPress={()=>{setHistoryOpen(!historyOpen);scroll.current?.scrollTo({y:0,animated:false});}}/>
+      <IconAction label="技能运行记录" icon="history" selected={historyOpen} onPress={()=>{if(!historyOpen)void refresh(true).catch(error=>setNotice('运行记录刷新失败：'+error.message));setHistoryOpen(!historyOpen);scroll.current?.scrollTo({y:0,animated:false});}}/>
     </View>
     <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:12,gap:10}}>
       {notice ? <Text accessibilityRole="alert" style={s.body}>{notice}</Text> : null}
