@@ -1,3 +1,5 @@
+const mockReadNext=jest.fn(async()=>null as any),mockSelectNext=jest.fn(async()=>{});
+jest.mock('./nextRun',()=>({readNextRunSkills:(...args:unknown[])=>mockReadNext(...args as []),selectNextRunSkills:(...args:unknown[])=>mockSelectNext(...args as [])}));
 jest.mock('expo-router/react-navigation',()=>({useNavigation:()=>({dispatch:jest.fn()}),usePreventRemove:jest.fn()}));
 import { Alert, TextInput, Switch } from 'react-native';
 import { IconAction } from '../../creative/WorkbenchUI';
@@ -123,4 +125,21 @@ test('add from history reveals the import form immediately',async()=>{
  expect(tree.root.findAllByProps({accessibilityLabel:'技能用途'}).length).toBeGreaterThan(0);
  expect(tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.selected).toBe(false);
  }finally{act(()=>tree.unmount());}
+});
+
+
+test.each([false,true])('unsaved once selection (selected=%s) is guarded and never auto-saved',async(selected)=>{
+ mockSelectNext.mockClear();mockReadNext.mockResolvedValue(null);mockStore.projectList.mockResolvedValue([{id:'v',name:'local',description:'test',files:{'SKILL.md':'body'},enabled:true}]);
+ let guard:((proceed:()=>void)=>void)|undefined,tree!:ReturnType<typeof create>;const proceed=jest.fn(),alert=jest.spyOn(Alert,'alert');
+ try{await act(async()=>{tree=create(<SkillLibraryScreen threadId="t" registerLeave={value=>{guard=value;}}/>);});
+ const click=(label:string)=>tree.root.findAllByType(ListAction).find(n=>n.props.label===label)!.props.onPress();
+ act(()=>click('选择下次运行技能'));if(selected)act(()=>click('本次选用 local'));
+ act(()=>guard!(proceed));expect(proceed).not.toHaveBeenCalled();expect(alert).toHaveBeenCalledWith('尚有未保存的修改',expect.any(String),expect.any(Array));
+ act(()=>alert.mock.calls.at(-1)![2]!.find(v=>v.text==='继续编辑')?.onPress?.());expect(JSON.stringify(tree.toJSON())).toContain('正在编辑，尚未保存');expect(mockSelectNext).not.toHaveBeenCalled();
+ act(()=>alert.mock.calls.at(-1)![2]!.find(v=>v.text==='放弃修改')!.onPress!());expect(proceed).toHaveBeenCalledTimes(1);
+ }finally{act(()=>tree.unmount());alert.mockRestore();}
+});
+test('reads persisted once override separately from the unsaved editor',async()=>{
+ mockReadNext.mockResolvedValue({ids:[],valid:true});let tree!:ReturnType<typeof create>;
+ try{await act(async()=>{tree=create(<SkillLibraryScreen threadId="t"/>);});expect(JSON.stringify(tree.toJSON())).toContain('已固定，等待下一条消息消费');expect(JSON.stringify(tree.toJSON())).not.toContain('正在编辑，尚未保存');}finally{act(()=>tree.unmount());mockReadNext.mockResolvedValue(null);}
 });

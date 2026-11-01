@@ -1,5 +1,5 @@
 import {builtinSkillCatalog} from './builtinCatalog';
-import {selectNextRunSkills} from './nextRun';
+import {selectNextRunSkills,readNextRunSkills} from './nextRun';
 import { useUnsavedChanges } from '../../creative/useUnsavedChanges';
 import { usePrimaryNavigationGuard } from '../../navigation/PrimaryNavigation';
 import { CompactWorkbench, IconAction } from '../../creative/WorkbenchUI';
@@ -25,6 +25,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
   const [projectId,setProjectId]=useState(requestedProjectId);
   const [scopeReady,setScopeReady]=useState(!threadId);
   const store = useMemo(() => createSkillStore(getDatabase()), []);
+  const [savedOnce,setSavedOnce]=useState<Awaited<ReturnType<typeof readNextRunSkills>>>(null);
   const [once,setOnce]=useState<string[]|null>(null);
   const [versions, setVersions] = useState<SkillVersion[]>([]);
   const [runs, setRuns] = useState<Awaited<ReturnType<typeof store.runs>>>([]);
@@ -38,13 +39,13 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
   const scroll=useRef<ScrollView>(null);
   const [filter,setFilter]=useState<'all'|'local'|'builtin'|'selected'>('all');
   const lock = useRef(false);
-  const confirmLeave=useUnsavedChanges(Boolean(text.trim() || purpose.trim() || scope.trim() || preview),busy);
+  const confirmLeave=useUnsavedChanges(Boolean(once!==null || text.trim() || purpose.trim() || scope.trim() || preview),busy);
   usePrimaryNavigationGuard('agent',confirmLeave,Boolean(onClose));
   const latestLeave=useRef(confirmLeave);latestLeave.current=confirmLeave;
   useEffect(()=>{registerLeave?.(proceed=>latestLeave.current(proceed));return()=>registerLeave?.(undefined);},[registerLeave]);
   const back=()=>confirmLeave(()=>onClose?onClose():router.canGoBack()?router.back():router.replace('/(tabs)/agent'));
   useFallbackBack(back);
-  const refresh = useCallback(async () => { setScopeReady(false);const scope=threadId?await getDatabase().getFirstAsync<{project_id:string|null}>('SELECT project_id FROM creative_agent_scopes WHERE thread_id=?',threadId):undefined;if(threadId&&!scope)throw Error('会话范围不可用，请返回后重试');const effective=scope?scope.project_id??undefined:requestedProjectId;const [items, history] = await Promise.all([effective?store.projectList(effective):store.list(), store.runs({...((historyScope==='all')?{}:threadId?{threadId}:{projectId:effective}),after:historyAfter,limit:21})]);setProjectId(effective); setVersions(items); setRuns(history);setScopeReady(true); }, [store,requestedProjectId,threadId,historyScope,historyAfter]);
+  const refresh = useCallback(async () => { setScopeReady(false);const scope=threadId?await getDatabase().getFirstAsync<{project_id:string|null}>('SELECT project_id FROM creative_agent_scopes WHERE thread_id=?',threadId):undefined;if(threadId&&!scope)throw Error('会话范围不可用，请返回后重试');const effective=scope?scope.project_id??undefined:requestedProjectId;const [items, history, pending] = await Promise.all([effective?store.projectList(effective):store.list(), store.runs({...((historyScope==='all')?{}:threadId?{threadId}:{projectId:effective}),after:historyAfter,limit:21}),threadId?readNextRunSkills(getDatabase(),threadId):Promise.resolve(null)]);setSavedOnce(pending);setProjectId(effective); setVersions(items); setRuns(history);setScopeReady(true); }, [store,requestedProjectId,threadId,historyScope,historyAfter]);
   useFocusEffect(useCallback(() => { void refresh().catch(error => setNotice(String(error.message))); }, [refresh]));
   const run = async (work: () => Promise<void>) => {
     if (lock.current) return;
@@ -66,7 +67,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
     <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,gap:6,borderBottomWidth:1,borderColor:COLORS.border}}>
       <IconAction label={onClose ? '关闭技能' : '返回'} icon={onClose ? 'close' : 'arrow_back'} onPress={back}/>
       <Text accessibilityRole="header" style={{flex:1,fontSize:16,fontWeight:'600',color:COLORS.text}}>{projectId?'项目技能':'技能'} · {versions.filter(v=>v.enabled).length} 本地启用 · {builtins.length} 内置可用</Text>
-      <IconAction label="添加技能" icon="add" onPress={()=>{if(onClose){onClose();router.push({pathname:'/agent-skills',params:{intent:'add',projectId,threadId}});}else {setHistoryOpen(false);setImportOpen(!importOpen);scroll.current?.scrollTo({y:0,animated:false});}}}/>
+      <IconAction label="添加技能" icon="add" onPress={()=>{if(onClose){confirmLeave(()=>{onClose();router.push({pathname:'/agent-skills',params:{intent:'add',projectId,threadId}});});}else {setHistoryOpen(false);setImportOpen(!importOpen);scroll.current?.scrollTo({y:0,animated:false});}}}/>
       <IconAction label="技能运行记录" icon="history" selected={historyOpen} onPress={()=>{setHistoryOpen(!historyOpen);scroll.current?.scrollTo({y:0,animated:false});}}/>
     </View>
     <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:12,gap:10}}>
@@ -98,7 +99,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
           <ListAction label="关闭预览" secondary disabled={busy} onPress={()=>setPreview(undefined)}/>
         </View>
       </View> : null}
-      {threadId?<View style={s.card}><Text style={s.body}>只为此会话下一条消息选择技能，不改变全局或项目组合。</Text><ListAction label="选择下次运行技能" secondary disabled={busy} onPress={()=>setOnce([])}/>{once?<><Text style={s.muted}>已选 {once.length}/8（空选表示仅内置技能）</Text><ListAction label="保存单次选择" disabled={busy} onPress={()=>void run(async()=>{await selectNextRunSkills(getDatabase(),threadId,once);setOnce(null);setNotice('已固定下一条消息的技能，发送时核对项目范围。');})}/></>:null}<ListAction label="取消单次覆盖，使用项目组合" secondary disabled={busy} onPress={()=>void run(async()=>{await selectNextRunSkills(getDatabase(),threadId,null);setOnce(null);setNotice('已恢复项目组合');})}/></View>:null}
+      {threadId?<View style={s.card}><Text style={s.body}>只为此会话下一条消息选择技能，不改变全局或项目组合。</Text><Text style={s.muted}>{savedOnce?`${savedOnce.valid?'已固定，等待下一条消息消费':'已固定但已失效，请重新选择'}：${savedOnce.ids.length?savedOnce.ids.map(id=>versions.find(v=>v.id===id)?.name??id).join('、'):'仅内置技能'}`:'当前使用项目组合，没有单次覆盖'}</Text><ListAction label="选择下次运行技能" secondary disabled={busy} onPress={()=>setOnce(savedOnce?.ids??[])}/>{once?<><Text style={s.muted}>正在编辑，尚未保存 · 已选 {once.length}/8（空选表示仅内置技能）</Text><ListAction label="保存单次选择" disabled={busy} onPress={()=>void run(async()=>{await selectNextRunSkills(getDatabase(),threadId,once);setOnce(null);setNotice('已固定下一条消息的技能，发送时核对项目范围。');})}/></>:null}<ListAction label="取消单次覆盖，使用项目组合" secondary disabled={busy} onPress={()=>void run(async()=>{await selectNextRunSkills(getDatabase(),threadId,null);setOnce(null);setNotice('已恢复项目组合');})}/></View>:null}
       <View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{(['all','local','builtin','selected'] as const).map(value=><Pressable key={value} accessibilityRole="radio" accessibilityState={{checked:filter===value}} accessibilityLabel={{all:'全部技能',local:'本地导入',builtin:'内置技能',selected:'当前启用'}[value]} onPress={()=>setFilter(value)} style={{minHeight:44,padding:10}}><Text style={s.body}>{{all:'全部技能',local:'本地导入',builtin:'内置技能',selected:'当前启用'}[value]}</Text></Pressable>)}</View>
       <TextInput accessibilityLabel="搜索技能" placeholder="搜索名称或用途" value={query} onChangeText={setQuery} style={s.input}/>
       <Text style={{fontSize:12,color:COLORS.textMuted}}>{projectId?'项目选择只影响新运行。同名技能固定一个版本；关闭表示此项目不使用该技能。紧急撤销请到全局技能管理。':'启用后用于新运行。同名技能只启用一个版本；停用会停止使用该版本的运行。'}</Text>

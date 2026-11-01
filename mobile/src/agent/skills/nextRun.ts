@@ -24,3 +24,15 @@ export async function acceptNextRunSkills(tx:AppDatabase,threadId:string,runId:s
  await tx.runAsync('INSERT INTO agent_skill_runs VALUES(?,?,?,?)',threadId,runId,JSON.stringify(snapshot),Date.now());
  await tx.runAsync('DELETE FROM agent_skill_next_runs WHERE thread_id=?',threadId);
 }
+
+/** Read the durable pending override without consuming or applying it. */
+export async function readNextRunSkills(db:AppDatabase,threadId:string):Promise<{ids:string[];valid:boolean}|null>{
+ const pending=await db.getFirstAsync<{project_id:string|null;scope_revision:number;execution_epoch:string;versions_json:string}>('SELECT * FROM agent_skill_next_runs WHERE thread_id=?',threadId);
+ if(!pending)return null;
+ const scope=await db.getFirstAsync<{project_id:string|null;revision:number}>('SELECT * FROM creative_agent_scopes WHERE thread_id=?',threadId);
+ const epoch=(await db.getFirstAsync<{epoch:string}>('SELECT epoch FROM creative_execution_state WHERE id=1'))?.epoch;
+ const refs=JSON.parse(pending.versions_json) as Array<{id:string;revocation:number}>;
+ let valid=pending.execution_epoch===epoch&&pending.project_id===(scope?.project_id??null)&&pending.scope_revision===(scope?.revision??0);
+ if(valid){try{await createSkillStore(db).resolve({epoch:pending.execution_epoch,versions:refs});}catch{valid=false;}}
+ return {ids:refs.map(ref=>ref.id),valid};
+}

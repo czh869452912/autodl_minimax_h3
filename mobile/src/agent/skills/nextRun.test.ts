@@ -1,5 +1,5 @@
 import {createInitializedRealSqliteTestDb} from '../../test/realSqlite';
-import {selectNextRunSkills,acceptNextRunSkills} from './nextRun';
+import {selectNextRunSkills,acceptNextRunSkills,readNextRunSkills} from './nextRun';
 import {createSkillStore} from './store';
 import {validateSkillPackage} from './package';
 import {withWriteTransaction} from '../../storage/sqliteBusy';
@@ -15,5 +15,16 @@ test('single-run override is consumed atomically, retried from snapshot and reje
  await withWriteTransaction(db as never,tx=>acceptNextRunSkills(tx,'t','retry','r'));expect(await store.capture('t','retry')).toEqual(await store.capture('t','r'));
  await selectNextRunSkills(db as never,'t',[id]);db.runSync("UPDATE creative_execution_state SET epoch='changed'");
  await expect(withWriteTransaction(db as never,tx=>acceptNextRunSkills(tx,'t','bad'))).rejects.toThrow('范围已变化');
+ }finally{db.close();}
+});
+
+
+test('pending selection reads are non-consuming, distinguish empty override and mark revoked versions invalid',async()=>{
+ const db=createInitializedRealSqliteTestDb();try{
+ expect(await readNextRunSkills(db as never,'t')).toBeNull();
+ await selectNextRunSkills(db as never,'t',[]);expect(await readNextRunSkills(db as never,'t')).toEqual({ids:[],valid:true});expect(await readNextRunSkills(db as never,'t')).toEqual({ids:[],valid:true});
+ const store=createSkillStore(db as never),id=await store.install(validateSkillPackage({'SKILL.md':'---\nname: once\ndescription: once\n---\nReview'}));
+ await selectNextRunSkills(db as never,'t',[id]);await store.revoke(id);expect(await readNextRunSkills(db as never,'t')).toEqual({ids:[id],valid:false});
+ await selectNextRunSkills(db as never,'t',null);expect(await readNextRunSkills(db as never,'t')).toBeNull();
  }finally{db.close();}
 });
