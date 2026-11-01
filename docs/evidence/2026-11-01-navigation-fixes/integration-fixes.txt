@@ -1,0 +1,10 @@
+(node:2092) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS src/agent/skills/runtime.test.ts
+PASS src/route-tests/settings.test.tsx
+
+Test Suites: 2 passed, 2 total
+Tests:       20 passed, 20 total
+Snapshots:   0 total
+Time:        6.32 s, estimated 33 s
+Ran all test suites matching /src\\agent\\skills\\runtime.test.ts|src\\route-tests\\settings.test.tsx/i.

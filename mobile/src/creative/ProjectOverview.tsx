@@ -33,18 +33,21 @@ export function ProjectOverview({ project, onShots, onEdit }: { project: Creativ
     <Pressable accessibilityRole="button" accessibilityLabel={project.archivedAt?'查看镜头与成果':'查看镜头与下一步'} onPress={onShots} style={[s.card,{borderColor:COLORS.primary}]}>
       <Text style={s.title}>{project.archivedAt?'项目成果':'镜头进度'} →</Text><Text style={s.body}>{summary}</Text>
     </Pressable>
+    {drafts.length?<Text style={s.title}>最近创作</Text>:null}
+    {drafts.map(d=><Pressable accessibilityRole="button" accessibilityLabel={d.state==='EDITING'?'继续编辑':'查看进度与成果'} key={d.id} style={s.card} onPress={()=>router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}})}>
+      <Text style={s.muted}>{d.provider_id==='novelai'?'图片':'视频'} · {d.state==='EDITING'?'编辑中':'已提交'} →</Text><Text style={s.body} numberOfLines={2}>{draftPresentation(d).title}</Text><Text style={s.muted}>{draftPresentation(d).updated}</Text>
+    </Pressable>)}
+    <Text style={s.title}>项目资料与规则</Text>
     {!project.archivedAt?<ListAction label="角色与场景设定" secondary onPress={()=>router.push({pathname:'/project-settings-library',params:{projectId:project.id}})}/>:null}
     {!project.archivedAt?<ListAction label="项目技能" secondary onPress={()=>router.push({pathname:'/agent-skills',params:{projectId:project.id}})}/>:null}
     {!project.archivedAt?<View style={{flexDirection:'row'}}><ListAction label="在助手中继续" secondary icon="auto_awesome" onPress={()=>router.push({pathname:'/(tabs)/agent',params:{projectId:project.id}})}/></View>:null}
+    <Text style={s.title}>制作与配置</Text>
     <ListAction label="制作能力与配置" secondary onPress={()=>router.push('/creative-capabilities')}/>
     <ListAction label="素材外发许可" secondary onPress={()=>router.push({pathname:'/outbound-consents',params:{projectId:project.id}})}/>
     <ListAction label="成片时间线与工程" secondary onPress={()=>router.push({pathname:'/project-timeline',params:{projectId:project.id}})}/>
     <ListAction label="项目全文检索" secondary onPress={()=>router.push({pathname:'/project-search',params:{projectId:project.id}})}/>
     <ListAction label="媒体探测与抽帧检查" secondary onPress={()=>router.push({pathname:'/media-review',params:{projectId:project.id}})}/>
     <ProjectPlans projectId={project.id} archived={Boolean(project.archivedAt)} compact/>
-    {drafts.length?<Text style={s.title}>最近创作</Text>:null}
-    {drafts.map(d=><Pressable accessibilityRole="button" accessibilityLabel={d.state==='EDITING'?'继续编辑':'查看进度与成果'} key={d.id} style={s.card} onPress={()=>router.push({pathname:d.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:d.id}})}>
-      <Text style={s.muted}>{d.provider_id==='novelai'?'图片':'视频'} · {d.state==='EDITING'?'编辑中':'已提交'} →</Text><Text style={s.body} numberOfLines={2}>{draftPresentation(d).title}</Text><Text style={s.muted}>{draftPresentation(d).updated}</Text>
-    </Pressable>)}
+
   </View>;
 }

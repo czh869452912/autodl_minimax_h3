@@ -1,0 +1,415 @@
+(node:8756) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS src/agent/skills/runtime.test.ts
+PASS src/route-tests/settings.test.tsx
+PASS src/creative/TimelineScreen.test.tsx
+PASS src/agent/PromptAssistantUi.test.tsx (12.599 s)
+PASS src/agent/AgentScreen.test.tsx (6.128 s)
+PASS src/agent/aguiAgent.test.ts
+PASS src/agent/modelAdapterWire.test.ts (5.991 s)
+PASS src/creative/CreativeWorkspace.test.tsx
+PASS src/agent/runtimeStore.test.ts
+PASS src/workflows/registry/remoteSync.test.ts
+PASS src/creative/ImageDraftScreen.test.tsx
+PASS src/creative/uxScale.test.ts
+  ● Console
+
+    console.info
+      {"versions":100,"selectionMs":3,"returned":40,"environment":"host SQLite; not Android frames/memory"}
+
+      at info (src/creative/uxScale.test.ts:26:11)
+
+    console.info
+      {"versions":1000,"selectionMs":5,"returned":40,"environment":"host SQLite; not Android frames/memory"}
+
+      at info (src/creative/uxScale.test.ts:26:11)
+
+    console.info
+      {"versions":10000,"selectionMs":27,"returned":40,"environment":"host SQLite; not Android frames/memory"}
+
+      at info (src/creative/uxScale.test.ts:26:11)
+
+    console.info
+      {"drafts":100,"firstPageMs":4,"returned":30,"environment":"host SQLite; not Android frames/memory"}
+
+      at info (src/creative/uxScale.test.ts:42:11)
+
+    console.info
+      {"drafts":1000,"firstPageMs":15,"returned":30,"environment":"host SQLite; not Android frames/memory"}
+
+      at info (src/creative/uxScale.test.ts:42:11)
+
+    console.info
+      {"drafts":10000,"firstPageMs":231,"returned":30,"environment":"host SQLite; not Android frames/memory"}
+
+      at info (src/creative/uxScale.test.ts:42:11)
+
+PASS src/create/CreateFormHandoff.test.tsx
+PASS src/creative/videoHistory.test.ts
+PASS src/creative/budget.test.ts
+PASS src/creative/VideoDraftScreen.test.tsx
+PASS src/test/architectureBoundaries.test.ts
+PASS src/creative/CreativeResults.test.tsx
+PASS src/agent/agentWorkspace.test.ts
+PASS src/creative/plans.test.ts
+PASS src/creative/ProjectObjectFocus.test.tsx
+PASS src/agent/PromptVersionPanel.test.tsx
+PASS src/creative/CreativeHome.test.tsx
+PASS src/tasks/monitorRuntime.test.ts
+PASS src/route-tests/tasks.test.tsx
+PASS src/creative/videoSubmission.test.ts
+PASS src/creative/novelAiExecution.test.ts
+PASS src/creative/PromptAssistSheet.test.tsx
+  ● Console
+
+    console.error
+      Each child in a list should have a unique "key" prop.
+      
+      Check the render method of `View`. It was passed a child from VirtualizedList. See https://react.dev/link/warning-keys for more information.
+
+      at node_modules/react-test-renderer/cjs/react-test-renderer.development.js:15850:21
+      at runWithFiberInDEV (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:2315:13)
+      at warnForMissingKey (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:15849:11)
+      at warnOnInvalidKey (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:3703:13)
+      at reconcileChildrenArray (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:3812:29)
+      at reconcileChildFibersImpl (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:4097:30)
+      at node_modules/react-test-renderer/cjs/react-test-renderer.development.js:4202:33
+      at reconcileChildren (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:6685:13)
+      at beginWork (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:8576:13)
+      at runWithFiberInDEV (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:2315:13)
+      at performUnitOfWork (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:13224:22)
+      at workLoopSync (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:13068:41)
+      at renderRootSync (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:13049:11)
+      at performWorkOnRoot (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:12181:11)
+      at performWorkOnRootViaSchedulerTask (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:2908:7)
+      at flushActQueue (node_modules/react/cjs/react.development.js:590:34)
+      at recursivelyFlushAsyncActWork (node_modules/react/cjs/react.development.js:566:13)
+      at Immediate._onImmediate (node_modules/react/cjs/react.development.js:849:32)
+
+PASS src/create/createForm.test.ts
+PASS src/creative/PromptDiscussions.test.tsx
+PASS src/agent/promptHandoff.test.ts
+PASS src/storage/tagDictionaryQuery.test.ts
+PASS src/ui/ImagePreview.test.tsx
+PASS src/storage/schemaParity.test.ts
+PASS src/agent/skills/SkillLibraryScreen.test.tsx
+PASS src/workflows/executor/tick.test.ts
+PASS src/creative/submissionEntries.test.ts
+PASS src/creative/ImageHistorySheet.test.tsx
+PASS src/tasks/providerExecution.test.ts
+PASS src/creative/ImageMetadataPanel.test.tsx
+PASS src/creative/NovelAiEditorLayout.test.tsx
+PASS src/route-tests/creative-task.test.tsx
+PASS src/agent/aguiAgentPipeline.test.ts
+PASS src/agent/submissionCommands.test.ts
+PASS src/creative/taskRecovery.test.ts
+PASS src/agent/threadRecords.test.ts
+PASS src/workflows/executor/mediaCommandService.test.ts
+PASS src/creative/ProjectShots.test.tsx
+PASS src/creative/SemanticResourcesScreen.test.tsx
+PASS src/agent/runtimeIntegration.test.ts
+PASS src/creative/DraftParametersSheet.test.tsx
+PASS src/workflows/executor/recoveryAcceptance.test.ts
+PASS src/workflows/executor/artifactOperation.test.ts
+PASS src/workflows/registry/releaseCoordinator.test.ts
+PASS src/workflows/executor/operationRepository.test.ts
+PASS src/tasks/serviceAdmission.test.ts
+PASS src/tasks/boundRuntime.test.ts
+PASS src/agent/skills/SkillExtractionScreen.test.tsx
+PASS src/creative/promptAssistantSession.test.ts
+PASS src/workflows/executor/durableExecutor.test.ts
+PASS src/ui/draggableBottomSheet.test.tsx
+PASS src/media/reconciliation.test.ts
+PASS src/creative/NovelAiImageImport.test.tsx
+PASS src/creative/exportExecution.test.ts
+PASS src/creative/UpscaleDraftScreen.test.tsx
+PASS src/tasks/TaskCardRow.test.tsx
+PASS src/creative/PromptChunkLibrary.test.tsx
+PASS src/route-tests/root-layout.test.tsx
+PASS src/creative/timelineRender.test.ts
+PASS src/route-tests/gallery.test.tsx
+PASS src/creative/CreativeAssetPicker.test.tsx
+PASS src/ui/ZoomableImage.test.tsx
+PASS src/create/createServices.test.ts
+PASS src/tasks/TaskInboxButton.test.tsx
+PASS src/creative/service.test.ts
+PASS src/creative/drafts.test.ts
+PASS src/creative/importIdentity.test.ts
+PASS src/agent/promptHandoffLifecycle.test.ts
+PASS src/route-tests/tabs-layout.test.tsx
+PASS src/creative/videoRuntime.test.ts
+PASS src/creative/CreativeOutputPreview.test.tsx
+PASS src/agent/threadStore.test.ts
+PASS src/creative/projectAgentScope.test.ts
+PASS src/creative/ShotOutputReview.test.tsx
+PASS src/tasks/DownloadNetworkHelp.test.tsx
+PASS src/creative/VersionComparison.test.tsx
+PASS src/tasks/repository.test.ts
+PASS src/tasks/credentialBinding.test.ts
+PASS src/creative/SemanticPreparationScreen.test.tsx
+PASS src/agent/attachmentStore.test.ts
+PASS src/tasks/projectionRepository.test.ts
+PASS src/creative/ProjectSearchScreen.test.tsx
+PASS src/creative/agentScope.test.ts
+PASS src/storage/readOnlyWrites.test.ts
+PASS src/agent/runUsage.test.ts
+PASS src/storage/creativeCapture.test.ts
+PASS src/storage/DatabaseRecoveryScreen.test.tsx
+PASS src/creative/VideoReferenceCards.test.tsx
+PASS src/creative/capabilityCatalog.test.ts
+PASS src/creative/accountRuntime.test.ts
+PASS src/workflows/executor/jobStateRepository.test.ts
+PASS src/create/submissionCommand.test.ts
+PASS src/creative/MediaPreview.test.tsx
+PASS src/creative/fileResources.test.ts
+PASS src/creative/semanticResources.test.ts
+PASS src/creative/novelAiRuntime.test.ts
+PASS src/creative/AudioVersionPreview.test.tsx
+PASS src/creative/WeightedPromptInput.test.tsx
+PASS src/media/GalleryCard.test.tsx
+PASS src/creative/AgentCreativeCards.test.tsx
+PASS src/creative/NovelAiNumberField.test.tsx
+PASS src/creative/videoPipeline.test.ts
+PASS src/providers/applicationRegistry.test.ts
+PASS src/conversation/timeline.test.tsx
+PASS src/navigation/PrimaryNavigation.test.tsx
+PASS src/creative/VideoGenerationHistory.test.tsx
+PASS src/route-tests/media-route-ownership.test.ts
+PASS src/route-tests/video-detail.test.tsx
+PASS src/workflows/registry/releaseManifest.test.ts
+PASS src/tasks/TaskOutputThumbnail.test.tsx
+PASS src/create/AttachmentPreview.test.tsx
+PASS src/creative/story.test.ts
+PASS src/tasks/notifyListeners.test.ts
+PASS src/creative/mediaReview.test.ts
+PASS src/creative/AgentWorkspace.test.tsx
+PASS src/creative/imageWorkbenchSession.test.ts
+PASS src/storage/backup.test.ts
+PASS src/agent/assistantImagePicker.test.ts
+PASS src/storage/migrations/runner.test.ts
+PASS src/workflows/registry/repository.test.ts
+PASS src/tasks/taskCommandService.test.ts
+PASS src/storage/database.test.ts
+PASS src/creative/semanticDependencies.test.ts
+PASS src/storage/databaseAccess.test.ts
+PASS src/agent/promptDraft.test.ts
+PASS src/ui/ui-contract.test.ts
+PASS src/creative/workbenchRepairAcceptance.test.ts
+PASS src/creative/novelAiProtocol.test.ts
+PASS src/workflows/registry/crypto.test.ts
+PASS src/agent/h3Agent.test.ts
+PASS src/creative/fileImport.test.ts
+PASS src/agent/skills/draftStore.test.ts
+PASS src/creative/agentCreativeActivity.test.ts
+PASS src/create/submissionInput.test.ts
+PASS src/creative/ChunkPromptInput.test.tsx
+PASS src/agent/skills/store.test.ts
+PASS src/workflows/registry/builtin.test.ts
+PASS src/creative/projectActivity.test.ts
+PASS src/tasks/taskCommandContention.test.ts
+PASS src/create/submissionValidation.test.ts
+PASS src/creative/projectSearch.test.ts
+PASS src/workflows/registry/catalog.test.ts
+PASS src/creative/uxContracts.test.ts
+PASS src/agent/deepAgentStream.test.ts
+PASS src/creative/TagCompletionProvider.test.tsx
+PASS src/agent/timelineProjection.test.ts
+PASS src/creative/draftReadiness.test.ts
+PASS src/creative/legacyMigration.test.ts
+PASS src/agent/HistoryList.test.tsx
+PASS src/creative/timelines.test.ts
+PASS src/tasks/scheduler.test.ts
+PASS src/creative/projectPresentation.test.ts
+PASS src/creative/changeReview.test.ts
+PASS src/media/cas.test.ts
+PASS src/workflows/registry/service.test.ts
+PASS src/creative/NovelAiUsageBar.test.tsx
+PASS src/creative/authoredText.test.ts
+PASS src/agent/skills/package.test.ts
+PASS src/tasks/downloadPolicy.test.ts
+PASS src/creative/novelAiEnhanceRuntime.test.ts
+PASS src/tasks/monitorStopContention.test.ts
+PASS src/workflows/executor/manualMediaAcceptance.test.ts
+PASS src/media/VideoPlayer.test.tsx
+PASS src/agent/modelTranscript.test.ts
+PASS src/workflows/renderer/WorkflowForm.test.tsx
+PASS src/storage/schemaOwnership.test.ts
+PASS src/agent/skills/nextRun.test.ts
+PASS src/creative/planReads.test.ts
+PASS src/creative/assetLifecycle.test.ts
+PASS src/workflows/executor/exportOperation.test.ts
+PASS src/creative/novelAiMetadata.test.ts
+PASS src/creative/novelAiEnhancement.test.ts
+PASS src/creative/useDraftSync.test.tsx
+  ● Console
+
+    console.error
+      An update to Harness inside a test was not wrapped in act(...).
+      
+      When testing, code that causes React state updates should be wrapped into act(...):
+      
+      act(() => {
+        /* fire events that update state */
+      });
+      /* assert on the output */
+      
+      This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+      34 |     const row = await creativeService().draft(id);
+      35 |     if (!row || row.revision !== current.current.draft?.revision || row.state !== current.current.draft?.state) {
+    > 36 |       setConflict(true); throw new Error('草稿已在其他入口更新，请先载入最新内容');
+         |       ^
+      37 |     }
+      38 |   };
+      39 |   return { conflict, reload, assertCurrent };
+
+      at node_modules/react-test-renderer/cjs/react-test-renderer.development.js:14402:19
+      at runWithFiberInDEV (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:2315:13)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:14401:9)
+      at scheduleUpdateOnFiber (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:12086:9)
+      at dispatchSetStateInternal (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:6208:13)
+      at dispatchSetState (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:6165:7)
+      at Object.setConflict (src/creative/useDraftSync.ts:36:7)
+      at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+      at _next (node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+
+PASS src/creative/shotQuality.test.ts
+PASS src/creative/ImageEditorDrawer.test.tsx
+PASS src/creative/novelAiMetadataImport.test.ts
+PASS src/creative/legacyOutput.test.ts
+PASS src/media/inputReader.test.ts
+PASS src/creative/novelAiUpscale.test.ts
+PASS src/workflows/executor/mediaDeliveryAcceptance.test.ts
+PASS src/creative/promptAssistant.test.ts
+PASS src/tasks/TaskRecoveryNotice.test.tsx
+PASS src/creative/workbenchSessions.test.ts
+PASS src/tasks/monitorQueue.test.ts
+PASS src/tasks/executorRunner.test.ts
+PASS src/settings/DataManagementPanel.test.tsx
+PASS src/creative/migrationAudit.test.ts
+PASS src/agent/runSpecification.test.ts
+PASS src/workflows/executor/compatibilityQueue.test.ts
+PASS src/creative/novelAiResponseImport.test.ts
+PASS src/workflows/runtime/runtimeDurable.test.ts
+PASS src/tasks/taskListSession.test.ts
+PASS src/native/imagePicker.test.ts
+PASS src/creative/creationRecords.test.ts
+PASS src/agent/modelAdapter.test.ts
+PASS src/workflows/registry/import.test.ts
+PASS src/ui/KeyboardSurface.test.tsx
+PASS src/storage/restoreIsolation.test.ts
+PASS src/storage/resourceCleanup.test.ts
+PASS src/storage/databaseClient.test.ts
+PASS src/media/repository.test.ts
+PASS src/tasks/taskProjectionRepair.test.ts
+PASS src/storage/creativeBackupRuntime.test.ts
+PASS src/creative/resultHistory.test.ts
+PASS src/creative/anlasEstimate.test.ts
+PASS src/settings/validation.test.ts
+PASS src/creative/WorkbenchMotion.test.tsx
+PASS src/settings/storage.test.ts
+PASS src/settings/llmConnections.test.ts
+PASS src/creative/promptChunks.test.ts
+PASS src/workflows/registry/packageBoundary.test.ts
+PASS src/storage/sqliteBusy.test.ts
+PASS src/creative/novelAiUsage.test.ts
+PASS src/workflows/providers/autodl/metadata.test.ts
+PASS src/creative/accountVerification.test.ts
+PASS src/agent/skills/extraction.test.ts
+PASS src/shims/copilotKitStreamingFetch.test.ts
+PASS src/workflows/schema/package.test.ts
+PASS src/agent/imageAttachmentUpload.test.ts
+PASS src/agent/agentPresentation.test.ts
+PASS src/creative/legacyCreativeHandoff.test.ts
+PASS src/tasks/syncPolicy.test.ts
+PASS src/tasks/download.test.ts
+PASS src/security/urlPolicy.test.ts
+PASS src/media/retireVideoConversion.test.ts
+PASS src/creative/novelAiAdapter.test.ts
+PASS src/tasks/terminalEvents.test.ts
+PASS src/storage/foreignKeyConnection.test.ts
+PASS src/media/playbackRouting.test.tsx
+PASS src/agent/localBoundary.test.ts
+PASS src/native/useTaskMonitorStatus.test.tsx
+PASS src/jobs/referenceCompatibility.test.ts
+PASS src/media/casRepository.test.ts
+PASS src/workflows/providers/autodl/adapter.test.ts
+PASS src/settings/WorkflowSyncPanel.test.tsx
+PASS src/agent/reasoningConfig.test.ts
+PASS src/storage/fileBackup.test.ts
+PASS src/security/androidConfig.test.ts
+PASS src/native/media.test.ts
+PASS src/providers/httpTransport.test.ts
+PASS src/media/base64.test.ts
+PASS src/workflows/registry/remoteRepository.test.ts
+PASS src/tasks/executorWakeRepository.test.ts
+PASS src/creative/creativeIdea.test.ts
+PASS src/workflows/providers/downloadPolicy.test.ts
+PASS src/workflows/executor/errorPolicy.test.ts
+PASS src/agent/assistantWorkspace.test.ts
+PASS src/jobs/repository.test.ts
+PASS src/workflows/runtime/runtime.test.ts
+PASS src/tasks/foregroundExecutorScheduler.test.ts
+PASS src/creative/useResultHistory.test.tsx
+PASS src/creative/creativeError.test.ts
+PASS src/native/taskMonitor.test.ts
+PASS src/workflows/providers/autodl/prepareInputs.test.ts
+PASS src/settings/draft.test.ts
+PASS src/workflows/executor/artifactErrors.test.ts
+PASS src/workflows/compiler/jsonPointer.test.ts
+PASS src/agent/skills/builtinCatalog.test.ts
+PASS src/tasks/backgroundRegistration.test.ts
+PASS src/config/appVersion.test.ts
+PASS src/workflows/registry/identity.test.ts
+PASS src/workflows/registry/canonicalize.test.ts
+PASS src/workflows/renderer/registry.test.ts
+PASS src/agent/imageMentions.test.ts
+PASS src/media/videoNavigation.test.ts
+PASS src/agent/runTimeline.test.ts
+PASS src/workflows/executor/cycle.test.ts
+PASS src/creative/imageWorkbenchLayout.test.ts
+PASS src/agent/LocalCopilotKitProvider.test.ts
+PASS src/agent/agentRuntimeAdapter.test.ts
+PASS src/workflows/providers/autodl/client.test.ts
+PASS src/creative/autodlPricing.test.ts
+PASS src/agent/promptParser.test.ts
+PASS src/agent/eventContract.test.ts
+PASS src/agent/skillBundle.test.ts
+PASS src/tasks/localMedia.test.ts
+PASS src/ui/draggableBottomSheet.test.ts
+PASS src/agent/promptVersions.test.ts
+PASS src/workflows/registry/gitSource.test.ts
+PASS src/creative/tagCompletion.test.ts
+PASS src/media/catalog.test.ts
+PASS src/agent/imageMessageIdentity.test.ts
+PASS src/workflows/schema/conditions.test.ts
+PASS src/workflows/providers/autodl/mapping.test.ts
+PASS src/workflows/inputModel.test.ts
+PASS src/creative/tagDictionary.test.ts
+PASS src/creative/autodlWallet.test.ts
+PASS src/tasks/projection.test.ts
+PASS src/navigation/types.test.ts
+PASS src/media/materializer.test.ts
+PASS src/tasks/networkRecovery.test.ts
+PASS src/workflows/compiler/compiler.test.ts
+PASS src/ui/keyboardGeometry.test.ts
+PASS src/agent/timelineScroll.test.ts
+PASS src/agent/agentTypes.test.ts
+PASS src/creative/previewQueue.test.ts
+PASS src/creative/textContent.test.ts
+PASS src/workflows/schema/validator.test.ts
+PASS src/media/mediaValidation.test.ts
+PASS src/gallery/presentation.test.ts
+PASS src/routerRouteSafety.test.ts
+PASS src/agent/agentConfig.test.ts
+PASS src/tasks/presentation.test.ts
+PASS src/creative/recipeDiff.test.ts
+PASS src/workflows/registry/semver.test.ts
+PASS src/navigation/creativeNavigation.test.ts
+PASS src/agent/promptBindings.test.ts
+
+Test Suites: 1 skipped, 317 passed, 317 of 318 total
+Tests:       4 skipped, 1922 passed, 1926 total
+Snapshots:   0 total
+Time:        183.51 s
+Ran all test suites.

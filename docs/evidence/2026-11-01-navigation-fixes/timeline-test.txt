@@ -1,0 +1,9 @@
+PASS src/creative/TimelineScreen.test.tsx
+  √ opens exact old timeline independently of paging and routes its new package to the exact version (307 ms)
+  √ missing or out-of-scope timeline is explained instead of falling back to recent results (6 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       2 passed, 2 total
+Snapshots:   0 total
+Time:        1.813 s
+Ran all test suites matching /src\\creative\\TimelineScreen.test.tsx/i.

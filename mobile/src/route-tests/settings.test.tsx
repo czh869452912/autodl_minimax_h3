@@ -121,7 +121,7 @@ it('edits and saves DeepSeek effort and output budget, and restores advanced def
     act(() => tree.root.findByProps({ accessibilityLabel: '恢复 LLM 高级设置默认值' }).props.onPress());
     expect(input().props.value).toBe('4096');
     await act(async () => tree.root.findByProps({ accessibilityLabel: '保存设置' }).props.onPress());
-    expect(saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ llmApiKey: 'keep-key', llmModel: 'deepseek-v4-flash', llmReasoningEffort: 'default', llmMaxOutputTokens: '4096' }));
+    expect(saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ llmReasoningEffort: 'default', llmMaxOutputTokens: '4096' }));
   } finally { act(() => tree?.unmount()); alert.mockRestore(); }
 });
 

@@ -11,11 +11,12 @@ import {activeLlmConnection} from '../settings/llmConnections';
 import type {ReviewRow} from './mediaReview';
 import {saveCreativeText} from './fileImport';
 export function MediaReviewScreen(){
- const {projectId}=useLocalSearchParams<{projectId:string}>(),router=useRouter(),lock=useRef(false),controller=useRef<AbortController|null>(null);
+ const {projectId,versionId:initialVersionId}=useLocalSearchParams<{projectId:string;versionId?:string}>(),router=useRouter(),lock=useRef(false),controller=useRef<AbortController|null>(null);
  const [picker,setPicker]=useState<'image'|'video'|'audio'>(),[versionId,setVersionId]=useState(''),[inspected,setInspected]=useState<Inspection>(),[prompt,setPrompt]=useState('检查主体外观、构图、可见瑕疵和抽帧之间的一致性，列出依据与不确定性。'),[rows,setRows]=useState<ReviewRow[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [next,setNext]=useState<{createdAt:number;id:string}>();
  const refresh=async(after?:{createdAt:number;id:string})=>{const page=await getDatabase().getAllAsync<ReviewRow>('SELECT * FROM creative_media_reviews WHERE project_id=? AND (? IS NULL OR created_at<? OR (created_at=? AND id<?)) ORDER BY created_at DESC,id DESC LIMIT 21',projectId,after?.createdAt??null,after?.createdAt??null,after?.createdAt??null,after?.id??null);setRows(page.slice(0,20));setNext(page.length>20?{createdAt:page[19].created_at,id:page[19].id}:undefined);};
  useEffect(()=>{void refresh().catch(e=>setError(e.message));return()=>controller.current?.abort();},[projectId]);
+ useEffect(()=>{let active=true;if(!initialVersionId)return;lock.current=true;setBusy(true);setInspected(undefined);setVersionId(initialVersionId);void inspectProjectMedia(projectId,initialVersionId).then(value=>{if(active)setInspected(value);}).catch(e=>{if(active)setError(e.message);}).finally(()=>{if(active){lock.current=false;setBusy(false);}});return()=>{active=false;};},[projectId,initialVersionId]);
  const work=async(fn:()=>Promise<void>,keepPage=false)=>{if(lock.current)return;lock.current=true;setBusy(true);setError('');try{await fn();if(!keepPage)await refresh();}catch(e){setError(e instanceof Error?e.message:'检查失败');await refresh().catch(()=>undefined);}finally{lock.current=false;setBusy(false);}};
  const prepare=()=>void work(async()=>{
   const connection=await activeLlmConnection();if(!connection||connection.revoked||!connection.images)throw Error('请在模型连接页显式选择支持图片的连接');if(!inspected)throw Error('请先本地探测');

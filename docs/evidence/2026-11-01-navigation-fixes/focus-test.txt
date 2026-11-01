@@ -1,0 +1,8 @@
+PASS src/creative/CapabilityCatalogScreen.test.tsx (18.47 s)
+  √ account gap links to accounts and re-entering the screen refreshes diagnostics (2814 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       1 passed, 1 total
+Snapshots:   0 total
+Time:        22.496 s
+Ran all test suites matching /src\\creative\\CapabilityCatalogScreen.test.tsx/i.

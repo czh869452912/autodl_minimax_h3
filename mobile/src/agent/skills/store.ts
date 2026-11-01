@@ -5,7 +5,7 @@ import { assertAppDatabaseWritableAsync } from '../../storage/database';
 import { validateSkillPackage, type SkillPackage } from './package';
 
 export type SkillVersion = SkillPackage & { createdAt: number; revocation: number; enabled: boolean; projectOverride?:boolean };
-export type SkillSnapshot = { builtin?:ReturnType<typeof builtinSkillSnapshot>; builtinReads?:string[]; epoch: string; versions: Array<{ id: string; revocation: number }> };
+export type SkillSnapshot = { builtin?:ReturnType<typeof builtinSkillSnapshot>; epoch: string; versions: Array<{ id: string; revocation: number }> };
 type Row = { id: string; name: string; description: string; files_json: string; created_at: number; revocation: number; enabled?: number };
 const listeners = new Set<(id: string) => void>();
 export function onSkillRevoked(listener: (id: string) => void): () => void { listeners.add(listener); return () => { listeners.delete(listener); }; }
@@ -97,9 +97,9 @@ export function createSkillStore(db: AppDatabase) {
       }
       return versions;
     },
-    async runs(): Promise<Array<{ threadId: string; runId: string; snapshot: SkillSnapshot; usage?:{model_calls:number;tool_calls:number;estimated_tokens:number;reported_tokens:number} }>> {
+    async runs(): Promise<Array<{ threadId: string; runId: string; snapshot: SkillSnapshot; reads?:string[]; usage?:{model_calls:number;tool_calls:number;estimated_tokens:number;reported_tokens:number} }>> {
       const rows = await db.getAllAsync<{ thread_id: string; run_id: string; snapshot_json: string }>('SELECT * FROM agent_skill_runs ORDER BY created_at DESC LIMIT 20');
-      return Promise.all(rows.map(async row => ({ threadId: row.thread_id, runId: row.run_id, snapshot: JSON.parse(row.snapshot_json),usage:await db.getFirstAsync<{model_calls:number;tool_calls:number;estimated_tokens:number;reported_tokens:number}>('SELECT model_calls,tool_calls,estimated_tokens,reported_tokens FROM creative_run_usage WHERE thread_id=? AND run_id=?',row.thread_id,row.run_id)??undefined })));
+      return Promise.all(rows.map(async row => ({ threadId: row.thread_id, runId: row.run_id, snapshot: JSON.parse(row.snapshot_json),reads:(await db.getAllAsync<{payload_json:string}>("SELECT payload_json FROM agent_client_records WHERE thread_id=? AND json_extract(payload_json,'$.kind')='skill-read' AND json_extract(payload_json,'$.runId')=? ORDER BY id LIMIT 100",row.thread_id,row.run_id)).map(item=>JSON.parse(item.payload_json).path as string),usage:await db.getFirstAsync<{model_calls:number;tool_calls:number;estimated_tokens:number;reported_tokens:number}>('SELECT model_calls,tool_calls,estimated_tokens,reported_tokens FROM creative_run_usage WHERE thread_id=? AND run_id=?',row.thread_id,row.run_id)??undefined })));
     },
   };
 }
