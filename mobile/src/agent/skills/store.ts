@@ -1,10 +1,11 @@
+import {builtinSkillSnapshot,builtinSkillFingerprint} from './builtinCatalog';
 import type { AppDatabase } from '../../storage/appDatabase';
 import { withWriteTransaction } from '../../storage/sqliteBusy';
 import { assertAppDatabaseWritableAsync } from '../../storage/database';
 import { validateSkillPackage, type SkillPackage } from './package';
 
 export type SkillVersion = SkillPackage & { createdAt: number; revocation: number; enabled: boolean; projectOverride?:boolean };
-export type SkillSnapshot = { epoch: string; versions: Array<{ id: string; revocation: number }> };
+export type SkillSnapshot = { builtin?:ReturnType<typeof builtinSkillSnapshot>; builtinReads?:string[]; epoch: string; versions: Array<{ id: string; revocation: number }> };
 type Row = { id: string; name: string; description: string; files_json: string; created_at: number; revocation: number; enabled?: number };
 const listeners = new Set<(id: string) => void>();
 export function onSkillRevoked(listener: (id: string) => void): () => void { listeners.add(listener); return () => { listeners.delete(listener); }; }
@@ -79,12 +80,13 @@ export function createSkillStore(db: AppDatabase) {
           SELECT version_id FROM agent_skill_project_bindings WHERE project_id=? AND version_id IS NOT NULL
           UNION SELECT b.version_id FROM agent_skill_bindings b WHERE NOT EXISTS(SELECT 1 FROM agent_skill_project_bindings p WHERE p.project_id=? AND p.name=b.name)) ORDER BY v.id`,projectId,projectId);
         if(versions.length>8)throw new Error('项目技能组合超过 8 个，请调整后重新运行');
-        const snapshot = { epoch, versions };
+        const snapshot = { epoch, versions, builtin:builtinSkillSnapshot() };
         await tx.runAsync('INSERT INTO agent_skill_runs(thread_id,run_id,snapshot_json,created_at) VALUES(?,?,?,?)', threadId, runId, JSON.stringify(snapshot), Date.now());
         return snapshot;
       });
     },
     async resolve(snapshot: SkillSnapshot): Promise<SkillVersion[]> {
+      if(snapshot.builtin&&snapshot.builtin.fingerprint!==builtinSkillFingerprint)throw new Error('内置技能包已升级，请开始新运行');
       const epoch = (await db.getFirstAsync<{ epoch: string }>('SELECT epoch FROM creative_execution_state WHERE id=1'))?.epoch;
       if (!snapshot || snapshot.epoch !== epoch || !Array.isArray(snapshot.versions) || snapshot.versions.length > 8) throw new Error('技能运行快照不可恢复，请开始新的运行');
       const versions: SkillVersion[] = [];

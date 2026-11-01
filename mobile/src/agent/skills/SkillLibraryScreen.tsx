@@ -1,3 +1,4 @@
+import {builtinSkillCatalog} from './builtinCatalog';
 import {selectNextRunSkills} from './nextRun';
 import { useUnsavedChanges } from '../../creative/useUnsavedChanges';
 import { usePrimaryNavigationGuard } from '../../navigation/PrimaryNavigation';
@@ -20,6 +21,7 @@ const template = '---\nname: scene-review\ndescription: 检查场景描述中的
 
 export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: requestedProjectId, threadId }: { threadId?:string; projectId?:string; intent?:string; onClose?: () => void; registerLeave?:(guard:((proceed:()=>void)=>void)|undefined)=>void } = {}) {
   const router = useRouter();
+  const builtins=useMemo(builtinSkillCatalog,[]);
   const [projectId,setProjectId]=useState(requestedProjectId);
   const [scopeReady,setScopeReady]=useState(!threadId);
   const store = useMemo(() => createSkillStore(getDatabase()), []);
@@ -59,7 +61,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
   const body = <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,gap:6,borderBottomWidth:1,borderColor:COLORS.border}}>
       <IconAction label={onClose ? '关闭技能' : '返回'} icon={onClose ? 'close' : 'arrow_back'} onPress={back}/>
-      <Text accessibilityRole="header" style={{flex:1,fontSize:16,fontWeight:'600',color:COLORS.text}}>{projectId?'项目技能':'技能'} · {versions.filter(v=>v.enabled).length} 已启用</Text>
+      <Text accessibilityRole="header" style={{flex:1,fontSize:16,fontWeight:'600',color:COLORS.text}}>{projectId?'项目技能':'技能'} · {versions.filter(v=>v.enabled).length} 本地启用 · {builtins.length} 内置可用</Text>
       <IconAction label="添加技能" icon="add" onPress={()=>{if(onClose){onClose();router.push({pathname:'/agent-skills',params:{intent:'add',projectId,threadId}});}else setImportOpen(!importOpen);}}/>
       <IconAction label="技能运行记录" icon="history" onPress={()=>setHistoryOpen(!historyOpen)}/>
     </View>
@@ -93,6 +95,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
       {threadId?<View style={s.card}><Text style={s.body}>只为此会话下一条消息选择技能，不改变全局或项目组合。</Text><ListAction label="选择下次运行技能" secondary disabled={busy} onPress={()=>setOnce([])}/>{once?<><Text style={s.muted}>已选 {once.length}/8（空选表示仅内置技能）</Text><ListAction label="保存单次选择" disabled={busy} onPress={()=>void run(async()=>{await selectNextRunSkills(getDatabase(),threadId,once);setOnce(null);setNotice('已固定下一条消息的技能，发送时核对项目范围。');})}/></>:null}<ListAction label="取消单次覆盖，使用项目组合" secondary disabled={busy} onPress={()=>void run(async()=>{await selectNextRunSkills(getDatabase(),threadId,null);setOnce(null);setNotice('已恢复项目组合');})}/></View>:null}
       <TextInput accessibilityLabel="搜索技能" placeholder="搜索名称或用途" value={query} onChangeText={setQuery} style={s.input}/>
       <Text style={{fontSize:12,color:COLORS.textMuted}}>{projectId?'项目选择只影响新运行。同名技能固定一个版本；关闭表示此项目不使用该技能。紧急撤销请到全局技能管理。':'启用后用于新运行。同名技能只启用一个版本；停用会停止使用该版本的运行。'}</Text>
+      {builtins.filter(v=>`${v.name} ${v.description}`.toLowerCase().includes(query.trim().toLowerCase())).map(v=><View key={v.path} style={s.card}><ListAction label={'内置：'+v.name} secondary onPress={()=>setExpanded(expanded===v.path?undefined:v.path)}/><Text style={s.body}>{v.description}</Text><Text selectable style={s.muted}>随 APK 提供，只读且始终可发现；可用不表示实际使用。指令不授予工具或外发权限。包指纹 {v.fingerprint}</Text>{expanded===v.path?Object.entries(v.files).map(([path,body])=><View key={path}><Text style={s.title}>{path}</Text><Text selectable style={s.body}>{body}</Text></View>):null}</View>)}
       {!versions.length ? <Text style={s.muted}>还没有本地技能，点击右上角 + 导入。内置技能随应用提供。</Text> : null}
       {versions.filter(v=>`${v.name} ${v.description}`.toLowerCase().includes(query.trim().toLowerCase())).map(version=><View key={version.id} style={[s.card,{padding:10,gap:8}]}>
         <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
@@ -107,7 +110,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
         {version.capabilities?<Text style={s.muted}>需要工具：{version.capabilities.tools.join('、')||'无'} · 输入：{version.capabilities.inputs.join('、')} · 输出：{version.capabilities.output}（声明不会授予权限）</Text>:null}
         {expanded===version.id ? <><Text style={s.muted}>{Object.keys(version.files).join(' · ')}</Text><Text selectable style={s.body}>{version.files['SKILL.md']}</Text></> : null}
       </View>)}
-      {historyOpen ? <View style={s.card}><Text style={s.title}>最近运行的技能快照</Text>{!runs.length?<Text style={s.muted}>还没有运行记录</Text>:runs.map(item=><Text key={`${item.threadId}:${item.runId}`} selectable style={s.muted}>{item.runId.slice(0,12)} · {item.snapshot.versions.length?item.snapshot.versions.map(ref=>`${versions.find(v=>v.id===ref.id)?.name??'缺失技能'}@${ref.id.slice(0,8)}`).join('、'):'仅内置技能'}{item.usage?` · 模型 ${item.usage.model_calls}/32 · 工具 ${item.usage.tool_calls}/100 · 估算预留 ${item.usage.estimated_tokens} tokens · 已报告 ${item.usage.reported_tokens} tokens`:''}</Text>)}</View>:null}
+      {historyOpen ? <View style={s.card}><Text style={s.title}>最近运行的技能快照</Text>{!runs.length?<Text style={s.muted}>还没有运行记录</Text>:runs.map(item=><Text key={`${item.threadId}:${item.runId}`} selectable style={s.muted}>{item.runId.slice(0,12)} · {item.snapshot.versions.length?item.snapshot.versions.map(ref=>`${versions.find(v=>v.id===ref.id)?.name??'缺失技能'}@${ref.id.slice(0,8)}`).join('、'):'仅内置技能'}{' · 内置包：'+(item.snapshot.builtin?.fingerprint??'旧运行未记录，不能用当前包解释')+' · 已完成文件读取：'+(item.snapshot.builtinReads?.join('、')||'无记录（不能据此推断未使用）')}{item.usage?` · 模型 ${item.usage.model_calls}/32 · 工具 ${item.usage.tool_calls}/100 · 估算预留 ${item.usage.estimated_tokens} tokens · 已报告 ${item.usage.reported_tokens} tokens`:''}</Text>)}</View>:null}
     </ScrollView>
   </KeyboardAvoidingView>;
   return <CompactWorkbench>{onClose ? body : <SafeAreaView style={s.screen}>{body}</SafeAreaView>}</CompactWorkbench>;

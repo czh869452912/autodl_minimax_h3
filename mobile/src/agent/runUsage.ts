@@ -29,6 +29,10 @@ export function runUsageMiddleware(db:AppDatabase,threadId:string,runId:string,o
    if(Number.isSafeInteger(usage)&&usage!>=0)await db.runAsync('UPDATE creative_run_usage SET reported_tokens=reported_tokens+? WHERE thread_id=? AND run_id=?',usage!,threadId,runId);
    return response;
   },
-  wrapToolCall:async(request,handler)=>{await reserveRunCall(db,threadId,runId,'tool');return handler(request);},
+  wrapToolCall:async(request,handler)=>{await reserveRunCall(db,threadId,runId,'tool');const result=await handler(request);
+   const path=request.toolCall.args?.file_path;
+   if(request.toolCall.name==='read_file'&&typeof path==='string'&&/^\/skills\/[^/]+\//.test(path)&&!path.includes('..')&&(result as {status?:string}).status!=='error'){
+    await withWriteTransaction(db,async tx=>{const row=await tx.getFirstAsync<{snapshot_json:string}>('SELECT snapshot_json FROM agent_skill_runs WHERE thread_id=? AND run_id=?',threadId,runId);if(!row)return;const snapshot=JSON.parse(row.snapshot_json);if(!snapshot.builtin)return;snapshot.builtinReads=[...new Set([...(snapshot.builtinReads??[]),path])].slice(0,100);await tx.runAsync('UPDATE agent_skill_runs SET snapshot_json=? WHERE thread_id=? AND run_id=?',JSON.stringify(snapshot),threadId,runId);});
+   }return result;},
  });
 }

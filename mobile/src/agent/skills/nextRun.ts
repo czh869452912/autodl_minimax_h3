@@ -1,3 +1,4 @@
+import {builtinSkillSnapshot} from './builtinCatalog';
 import type {AppDatabase} from '../../storage/appDatabase';
 import {withWriteTransaction} from '../../storage/sqliteBusy';
 import {createSkillStore} from './store';
@@ -19,7 +20,7 @@ export async function acceptNextRunSkills(tx:AppDatabase,threadId:string,runId:s
  const scope=await tx.getFirstAsync<{project_id:string|null;revision:number}>('SELECT * FROM creative_agent_scopes WHERE thread_id=?',threadId);
  const epoch=(await tx.getFirstAsync<{epoch:string}>('SELECT epoch FROM creative_execution_state WHERE id=1'))!.epoch;
  if(pending.execution_epoch!==epoch||pending.project_id!==(scope?.project_id??null)||pending.scope_revision!==(scope?.revision??0))throw new Error('单次技能范围已变化，请重新选择');
- const snapshot={epoch,versions:JSON.parse(pending.versions_json)};await createSkillStore(tx).resolve(snapshot);
+ const snapshot={epoch,versions:JSON.parse(pending.versions_json),builtin:builtinSkillSnapshot()};await createSkillStore(tx).resolve(snapshot);
  await tx.runAsync('INSERT INTO agent_skill_runs VALUES(?,?,?,?)',threadId,runId,JSON.stringify(snapshot),Date.now());
  await tx.runAsync('DELETE FROM agent_skill_next_runs WHERE thread_id=?',threadId);
 }
