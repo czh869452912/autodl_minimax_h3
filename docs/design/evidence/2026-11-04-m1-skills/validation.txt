@@ -1,0 +1,29 @@
+2026-11-04 M1 validation; local worktree based on db7aa4d6
+
+Native: :app:assembleDebug -PreactNativeArchitectures=x86_64
+BUILD SUCCESSFUL in 3m 10s
+359 actionable tasks: 41 executed, 318 up-to-date
+
+TypeScript: node node_modules/typescript/bin/tsc --noEmit
+Exit 0 (final source)
+
+Jest: node node_modules/jest/bin/jest.js --runInBand with these suites:
+src/agent/skills/SkillQuickPicker.integration.test.tsx
+src/agent/PromptAssistantUi.test.tsx
+src/agent/AgentScreen.test.tsx
+src/ui/draggableBottomSheet.test.tsx
+src/agent/skills/SkillLibraryScreen.test.tsx
+src/agent/skills/store.test.ts
+src/ui/KeyboardSurface.test.tsx
+src/agent/skills/nextRun.test.ts
+Test Suites: 8 passed, 8 total
+Tests: 121 passed, 121 total
+Snapshots: 0 total
+After this run: only picker title shortened and a keyboard comment clarified.
+
+Catalog: node scripts/design/check-page-catalog.mjs --check-sources
+PASS: 31 route files, 58 catalog entries, 51 click edges.
+Source/runtime behavior requires separate review.
+
+Archived local SSE fixture: GET health and streaming POST passed.
+git diff --check: exit 0 (only existing line-ending conversion notices).

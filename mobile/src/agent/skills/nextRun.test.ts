@@ -3,6 +3,18 @@ import {selectNextRunSkills,acceptNextRunSkills,readNextRunSkills} from './nextR
 import {createSkillStore} from './store';
 import {validateSkillPackage} from './package';
 import {withWriteTransaction} from '../../storage/sqliteBusy';
+
+test('a picker opened before scope or epoch drift cannot save or clear the pending override',async()=>{
+ const db=createInitializedRealSqliteTestDb();try{
+ const epoch=(await db.getFirstAsync<{epoch:string}>('SELECT epoch FROM creative_execution_state WHERE id=1'))!.epoch;
+ await selectNextRunSkills(db as never,'t',[]);
+ await expect(selectNextRunSkills(db as never,'t',null,{projectId:'other',revision:0,epoch})).rejects.toThrow('会话范围已变化');
+ expect(await readNextRunSkills(db as never,'t')).toEqual({ids:[],valid:true});
+ await expect(selectNextRunSkills(db as never,'t',[],{projectId:null,revision:0,epoch:'old'})).rejects.toThrow('会话范围已变化');
+ await selectNextRunSkills(db as never,'t',null,{projectId:null,revision:0,epoch});
+ expect(await readNextRunSkills(db as never,'t')).toBeNull();
+ }finally{db.close();}
+});
 test('single-run override is consumed atomically, retried from snapshot and rejects scope drift',async()=>{
  const db=createInitializedRealSqliteTestDb();try{
  const store=createSkillStore(db as never);const id=await store.install(validateSkillPackage({'SKILL.md':'---\nname: once\ndescription: once\n---\nReview'}));

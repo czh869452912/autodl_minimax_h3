@@ -3,6 +3,7 @@ import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from '../ui/Ke
 import { useCallback, useRef, useState } from 'react';
 import { Modal, Pressable, Text, TextInput, View } from 'react-native';
 import { AppIcon } from '../ui/icons';
+import { COLORS } from '../ui/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getDatabase } from '../storage/databaseClient';
@@ -38,7 +39,7 @@ export function AgentCreativePanel({ threadId, running, compact=false, beforeNav
 
   const projectTitle=projects.find(p => p.id === selected)?.title ?? (selected ? '项目不可用' : '选择项目');
   return <View style={compact?{flex:1}:{ paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}>
-    {compact?<Pressable accessibilityRole="button" accessibilityLabel="切换创作项目" disabled={running || busy} onPress={()=>setExpanded(true)} style={{minHeight:44,flexDirection:'row',alignItems:'center',gap:4}}><Text numberOfLines={1} style={[s.title,{flexShrink:1}]}>{projectTitle}</Text><AppIcon name="expand_more" size={18}/></Pressable>:<View style={s.row}><Text style={s.muted}>当前项目：{projectTitle}</Text><TextAction label="项目" disabled={running || busy} onPress={() => setExpanded(true)} /></View>}
+    {compact?<View><Pressable accessibilityRole="button" accessibilityLabel="切换创作项目" accessibilityHint={running?'当前正在运行，完成后可切换项目':'打开另一个项目的会话'} accessibilityState={{disabled:running||busy}} disabled={running || busy} onPress={()=>setExpanded(true)} style={{minHeight:48,flexDirection:'row',alignItems:'center',gap:4}}><Text numberOfLines={1} style={[s.title,{flexShrink:1}]}>{projectTitle}</Text><AppIcon name="expand_more" size={18}/></Pressable>{running?<Text style={{fontSize:12,color:COLORS.textMuted}}>运行中，暂不能切换项目</Text>:null}</View>:<View style={s.row}><Text style={s.muted}>当前项目：{projectTitle}</Text><TextAction label="项目" disabled={running || busy} onPress={() => setExpanded(true)} /></View>}
     {!selected && !compact ? <Text style={s.muted}>可先讨论想法。制作素材前，请选择项目或让助手创建项目后再选择。</Text> : null}
     {!expanded && notice && !compact ? <Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text> : null}
     {expanded ? <Modal visible animationType="slide" onRequestClose={() => setExpanded(false)}><SafeAreaView style={s.screen}><KeyboardSurface style={{flex:1}}><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">

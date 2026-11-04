@@ -1,0 +1,26 @@
+{
+  "stage": "installed",
+  "projectDefaultCount": 0,
+  "globalDefaultCount": 0,
+  "pending": [],
+  "snapshots": [],
+  "installedM2": [
+    {
+      "id": "9bb7c707baf66bd80b318781b696ee55bcfadc0fe1b9795e2400a797fe2789b2",
+      "name": "m2-device-review",
+      "revocation": 0,
+      "files": [
+        "SKILL.md",
+        "notes.md"
+      ]
+    },
+    {
+      "id": "373c3d59ae83bca92c232d33f0e520bee76552cb767331c648c92cb49baafabc",
+      "name": "my-creative-skill",
+      "revocation": 0,
+      "files": [
+        "SKILL.md"
+      ]
+    }
+  ]
+}

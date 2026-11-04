@@ -1,0 +1,15 @@
+M2 final verification — 2026-11-04
+Source base: db7aa4d6 + approved M1 and M2 working-tree edits.
+TypeScript: node node_modules/typescript/bin/tsc --noEmit — PASS (exit 0).
+Related Jest: 10 suites, 141 tests passed; elapsed 17.23 s.
+Native x86_64 debug: BUILD SUCCESSFUL in 1m 46s; 359 tasks, 23 executed, 336 up-to-date.
+Final sampled APK includes freshly exported Hermes QA fixture bundle; native build output and sampling APK are distinct artifacts.
+Hermes bytecode header: c61fbc03c103191f — verified.
+Final APK SHA-256: a128b1c87e6f9e9d3e542346570a9d6294b4867817a947a957154688cc3312bd
+Final Hermes bundle SHA-256: c171eac6208836284fb9c12b9eee695fe1d65ec002f1d37bdac81c153bcbb0fe
+Catalog --write: PASS; 31 route files, 58 catalog entries, 54 click edges.
+Catalog --check-sources: PASS.
+git diff --check: PASS (line-ending notices only).
+Final device samples 30–38: Android17/API37; font2 source/edit/review, font1 source/edit/IME-check/review/install/locate.
+Initial business-branch samples 03–29 retain their initial candidate identity; see README for boundaries.
+TalkBack, provider calls, extraction execution, rotation and device failure injection not verified.

@@ -151,10 +151,12 @@
       "route": "mobile/app/(tabs)/agent.tsx",
       "parent": "tabs",
       "sources": [
-        "mobile/src/creative/AgentWorkspace.tsx"
+        "mobile/src/creative/AgentWorkspace.tsx",
+        "mobile/src/agent/AgentScreen.tsx",
+        "mobile/src/creative/AgentCreativePanel.tsx"
       ],
       "purpose": "围绕项目对话、提出和执行创作方案",
-      "currentIssue": "空库先要求用户离开助手建项目；默认项目选择与当前作品上下文需更显式。",
+      "currentIssue": "M1 已补输入旁技能选用与明确范围；无项目空态仍须离开助手建项目，提议/授权等后续任务待重组。",
       "recommendation": "空态提供就地轻量建项目；标题持久展示项目，镜头上下文显示可移除 chip；输入区以对话为主。不是新增无范围的执行会话。",
       "entry": "底部、项目、镜头",
       "back": "主入口按导航历史；从镜头进入可回原镜头与位置",
@@ -172,12 +174,13 @@
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper; M1 local fixture candidate sample",
       "evidence": [
         "docs/design/evidence/2026-11-01/v47-11-assistant.png",
-        "docs/design/evidence/2026-11-01/v47-13-assistant-return.png"
+        "docs/design/evidence/2026-11-01/v47-13-assistant-return.png",
+        "docs/design/evidence/2026-11-04-m1-skills/03-candidate-agent.png"
       ],
-      "proposalStatus": "proposed",
+      "proposalStatus": "partially-implemented",
       "targetOwner": "tabs"
     },
     {
@@ -671,11 +674,11 @@
         "mobile/src/agent/skills/SkillLibraryScreen.tsx"
       ],
       "purpose": "查找、了解、管理技能及项目组合",
-      "currentIssue": "内置已显示，旧缺陷已修正；当前同页叠加安装、历史、全局/项目/单次选择，开关后果还不相同。",
-      "recommendation": "默认目录展示用途、内置/导入来源、适用性；点击详情；添加独立流程；运行历史归助手历史；管理模式才出现全局停用。项目与单次选择明确标题。",
+      "currentIssue": "M1 已区分项目默认/全局管理标题、范围与全局停用确认；M2 添加已为独立任务，完成定位固定版本。运行历史仍与目录共享，待 M5。",
+      "recommendation": "保持范围说明与分步添加；后续运行历史归助手，目录保持按用途和来源浏览。",
       "entry": "助手、项目技能、深链接",
-      "back": "选用关闭回原会话/项目；编辑先处理未保存",
-      "primaryAction": "按进入意图选用，管理态添加技能",
+      "back": "管理回实际来源；添加先处理未保存，完成可定位确切版本",
+      "primaryAction": "浏览技能与管理默认；添加进入独立任务",
       "states": [
         "全局",
         "项目",
@@ -689,11 +692,16 @@
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidenceLevel": "source-reviewed; device-sampled M1 project/global scopes and revoke; M2 add/install/highlighted version with defaults unchanged",
       "evidence": [
-        "docs/design/evidence/2026-11-01/v47-03-skills.png"
+        "docs/design/evidence/2026-11-01/v47-03-skills.png",
+        "docs/design/evidence/2026-11-04-m1-skills/07-project-management.png",
+        "docs/design/evidence/2026-11-04-m1-skills/08-global-confirmation.png",
+        "docs/design/evidence/2026-11-04-m2-skills/12-located.png",
+        "docs/design/evidence/2026-11-04-m2-skills/22-origin-management.png",
+        "docs/design/evidence/2026-11-04-m2-skills/38-final-located.png"
       ],
-      "proposalStatus": "proposed",
+      "proposalStatus": "partially-implemented",
       "targetOwner": "agent"
     },
     {
@@ -1414,11 +1422,12 @@
       "route": null,
       "parent": "agent",
       "sources": [
-        "mobile/src/creative/AgentCreativePanel.tsx"
+        "mobile/src/creative/AgentCreativePanel.tsx",
+        "mobile/src/agent/AgentScreen.tsx"
       ],
       "purpose": "选择对话所属项目",
-      "currentIssue": "项目选择器还提供撤销项目全部生成授权，与项目选择任务不相关。",
-      "recommendation": "选择器只选项目/管理项目；授权撤销去项目权限，运行中提供紧急停止与定位授权；切项目明确切换会话，不迁移原对话。",
+      "currentIssue": "M1 项目留标题、镜头移至输入附近，运行时说明禁用原因；项目选择器仍含撤销全部生成授权，待 M3 迁移。",
+      "recommendation": "保持项目/镜头范围与运行锁定；授权撤销在 M3 迁移到权限表面。",
       "entry": "助手标题",
       "back": "关闭回原会话，不发送消息",
       "primaryAction": "选定一个项目",
@@ -1433,7 +1442,7 @@
       ],
       "evidenceLevel": "source-reviewed",
       "evidence": [],
-      "proposalStatus": "proposed",
+      "proposalStatus": "partially-implemented",
       "targetOwner": "agent"
     },
     {
@@ -1443,10 +1452,12 @@
       "route": null,
       "parent": "agent",
       "sources": [
-        "mobile/src/agent/AgentScreen.tsx"
+        "mobile/src/agent/AgentScreen.tsx",
+        "mobile/src/agent/PromptAssistantUi.tsx",
+        "mobile/src/agent/skills/SkillQuickPicker.tsx"
       ],
       "purpose": "对话、审阅提议并跟踪运行",
-      "currentIssue": "消息、技能、提示词版本、会话管理、运行证据各自工具较多，需明确默认层。",
+      "currentIssue": "M1 输入旁已接入快速选技能并保留草稿/附件；提议、请求、运行与历史的重组仍待 M3/M5。",
       "recommendation": "默认对话+项目/镜头 chips+输入；输入旁简短工具；提议用变更摘要/影响对象/确认动作；运行呈阶段和停止状态，日志再展开。",
       "entry": "助手主入口",
       "back": "子工具先关闭；跨项目时保护输入",
@@ -1465,9 +1476,14 @@
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed",
-      "evidence": [],
-      "proposalStatus": "proposed",
+      "evidenceLevel": "source-reviewed; device-sampled composer draft/attachment round trip, restart and two local fixture messages",
+      "evidence": [
+        "docs/design/evidence/2026-11-04-m1-skills/05-cancel-return.png",
+        "docs/design/evidence/2026-11-04-m1-skills/10-confirmed-return.png",
+        "docs/design/evidence/2026-11-04-m1-skills/11-reopened.png",
+        "docs/design/evidence/2026-11-04-m1-skills/12-first-completed.png"
+      ],
+      "proposalStatus": "partially-implemented",
       "targetOwner": "agent"
     },
     {
@@ -1477,27 +1493,49 @@
       "route": null,
       "parent": "agent",
       "sources": [
-        "mobile/src/agent/AgentScreen.tsx"
+        "mobile/src/agent/skills/SkillQuickPicker.tsx",
+        "mobile/src/agent/skills/nextRun.ts",
+        "mobile/src/agent/AgentScreen.tsx",
+        "mobile/src/ui/DraggableSheet.tsx"
       ],
       "purpose": "为接下来一条消息选技能",
-      "currentIssue": "共用管理目录组件，可能仍露全局/项目级设置和历史。",
-      "recommendation": "快速层只查找、说明、选用并显示范围/数量；管理跳转全屏且带来源；内置可见但不假装它授予工具权限。",
-      "entry": "助手技能入口",
-      "back": "完成回原输入框，保留焦点与文字",
+      "currentIssue": "M1 已独立快速层；M2 管理明确提交新单次选择后会采用新结果，未提交仍保留未确认草稿。TalkBack、旋转及全部异常设备矩阵仍待补齐。",
+      "recommendation": "保持仅下次消息任务；项目/全局管理单独进入，来源身份用 returnThreadId，正文和附件留原会话。",
+      "entry": "会话输入旁“技能”",
+      "back": "确认或取消回原输入；管理正常返回保留未确认草稿，明确提交新单次选择则采用新结果；进程重启仅恢复已确认选择",
       "primaryAction": "确认下次选用",
       "states": [
         "项目继承",
-        "单次覆盖",
-        "失效",
-        "只读内置"
+        "编辑未确认",
+        "空选仅内置",
+        "已固定单次",
+        "版本失效",
+        "管理返回",
+        "运行锁定",
+        "范围变化",
+        "读取失败"
       ],
       "priority": "P1",
       "references": [
         "B1"
       ],
-      "evidenceLevel": "source-reviewed",
-      "evidence": [],
-      "proposalStatus": "proposed",
+      "evidenceLevel": "source-reviewed; device-sampled cancel/manage/confirm/reopen/send, keyboard confirm, 2x font narrow viewport with local model fixture; not full device matrix; M2 explicit install-and-select return sampled on initial candidate",
+      "evidence": [
+        "docs/design/evidence/2026-11-04-m1-skills/04-picker-default.png",
+        "docs/design/evidence/2026-11-04-m1-skills/06-picker-selected.png",
+        "docs/design/evidence/2026-11-04-m1-skills/09-management-return.png",
+        "docs/design/evidence/2026-11-04-m1-skills/10-confirmed-return.png",
+        "docs/design/evidence/2026-11-04-m1-skills/11-reopened.png",
+        "docs/design/evidence/2026-11-04-m1-skills/12-first-completed.png",
+        "docs/design/evidence/2026-11-04-m1-skills/15-search-fixed.png",
+        "docs/design/evidence/2026-11-04-m1-skills/17-final-completed.png",
+        "docs/design/evidence/2026-11-04-m1-skills/21-final-picker.png",
+        "docs/design/evidence/2026-11-04-m1-skills/22-font2-final.png",
+        "docs/design/evidence/2026-11-04-m1-skills/24-font2-scrolled-final.png",
+        "docs/design/evidence/2026-11-04-m2-skills/25-origin-picker-return.png",
+        "docs/design/evidence/2026-11-04-m2-skills/26-origin-composer-return.png"
+      ],
+      "proposalStatus": "implemented",
       "targetOwner": "agent"
     },
     {
@@ -1507,31 +1545,57 @@
       "route": null,
       "parent": "skills",
       "sources": [
-        "mobile/src/agent/skills/SkillLibraryScreen.tsx"
+        "mobile/app/agent-skills.tsx",
+        "mobile/src/agent/skills/SkillAddFlow.tsx",
+        "mobile/src/agent/skills/SkillLibraryScreen.tsx",
+        "mobile/src/agent/skills/package.ts",
+        "mobile/src/agent/skills/store.ts",
+        "mobile/src/agent/skills/nextRun.ts"
       ],
       "purpose": "导入或编辑方法后检查安装",
-      "currentIssue": "新增表单展开在目录上方，检查、示例、高级格式、提炼、预览安装均可连续增长。",
-      "recommendation": "进入独立添加状态：选来源→用途编辑→检查预览→安装；保存后返回新条目；安装后是否选用另行明确。",
-      "entry": "目录添加",
-      "back": "回上一步或保留草稿退出；不丢 purpose/scope/text",
+      "currentIssue": "M2 已将添加独立为来源、编辑、检查、安装结果；安装默认不变，明确选用与保存分离。未安装草稿仅当前任务内存保留；提炼重组待 M5。",
+      "recommendation": "保持阶段与范围合同；用现有安装服务检查审阅版本，编辑后重检、覆盖先确认。继续补 TalkBack、旋转和大包设备验收。",
+      "entry": "目录添加、兼容菜单添加、intent=add 深链接",
+      "back": "上一步保留草稿；关闭或系统返回先确认放弃；完成可定位确切版本，或明确单次选用后返回原会话",
       "primaryAction": "当前阶段继续/安装",
       "states": [
         "选来源",
-        "编辑",
+        "导入取消",
+        "用途与范围草稿",
+        "正文编辑",
+        "覆盖确认",
         "格式错误",
-        "预览",
-        "安装完成"
+        "附加文件预览",
+        "重新检查",
+        "安装失败重试",
+        "安装完成",
+        "固定版本定位",
+        "原会话单次选用",
+        "范围变化拒绝",
+        "未保存离开"
       ],
       "priority": "P1",
       "references": [
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper",
+      "evidenceLevel": "source-reviewed; device-sampled source/edit/review/install/locate, MD error, ZIP references, cancel/replace/leave, origin return; final keyboard and 2x font retested; failure/scope drift integration-tested only",
       "evidence": [
-        "docs/design/evidence/2026-11-01/v47-04-skill-add.png"
+        "docs/design/evidence/2026-11-01/v47-04-skill-add.png",
+        "docs/design/evidence/2026-11-04-m2-skills/01-baseline-add.png",
+        "docs/design/evidence/2026-11-04-m2-skills/15-format-error.png",
+        "docs/design/evidence/2026-11-04-m2-skills/19-zip-reference.png",
+        "docs/design/evidence/2026-11-04-m2-skills/24-origin-selected.png",
+        "docs/design/evidence/2026-11-04-m2-skills/30-final-font2-source.png",
+        "docs/design/evidence/2026-11-04-m2-skills/32-final-font2-review.png",
+        "docs/design/evidence/2026-11-04-m2-skills/33-final-source.png",
+        "docs/design/evidence/2026-11-04-m2-skills/34-final-editor.png",
+        "docs/design/evidence/2026-11-04-m2-skills/35-final-keyboard.png",
+        "docs/design/evidence/2026-11-04-m2-skills/36-final-review.png",
+        "docs/design/evidence/2026-11-04-m2-skills/37-final-installed.png",
+        "docs/design/evidence/2026-11-04-m2-skills/38-final-located.png"
       ],
-      "proposalStatus": "proposed",
+      "proposalStatus": "implemented",
       "targetOwner": "skills"
     },
     {
@@ -1840,6 +1904,41 @@
       "evidence": [],
       "proposalStatus": "proposed",
       "targetOwner": "create"
+    },
+    {
+      "id": "skill-management-inline",
+      "name": "会话菜单技能管理（兼容入口）",
+      "kind": "surface",
+      "route": null,
+      "parent": "skills",
+      "sources": [
+        "mobile/src/agent/AgentScreen.tsx",
+        "mobile/src/agent/skills/SkillLibraryScreen.tsx"
+      ],
+      "purpose": "兼容原菜单与会话内技能管理",
+      "currentIssue": "仍展开完整目录，含旧单次兼容与历史；M1 输入旁快速入口已独立，M2 添加从兼容入口推入独立路由任务。",
+      "recommendation": "保留兼容入口回流与未保存保护，M5 再收口历史；避免扩展此内嵌目录。",
+      "entry": "助手菜单→技能管理",
+      "back": "关闭管理回原会话；长编辑继续执行未保存保护",
+      "primaryAction": "管理项目默认或打开完整添加",
+      "states": [
+        "目录",
+        "单次兼容",
+        "未保存",
+        "添加",
+        "历史"
+      ],
+      "priority": "P2",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed; baseline device sample only",
+      "evidence": [
+        "docs/design/evidence/2026-11-04-m1-skills/02-baseline-skills.png"
+      ],
+      "proposalStatus": "partially-implemented",
+      "targetOwner": "skills"
     }
   ],
   "edges": [
@@ -2123,13 +2222,13 @@
       "source": "mobile/src/creative/ProjectPlans.tsx"
     },
     {
-      "fromId": "skills",
+      "fromId": "skill-add",
       "toId": "skill-extract",
       "type": "navigate",
-      "label": "从对话提炼",
-      "context": "projectId?+threadId?",
+      "label": "打开对话提炼",
+      "context": "projectId?+原会话 threadId?；有草稿时先保留/安装；M2 仅源码核对入口，提炼完整重组待 M5",
       "status": "source-reviewed",
-      "source": "mobile/src/agent/skills/SkillLibraryScreen.tsx"
+      "source": "mobile/src/agent/skills/SkillAddFlow.tsx"
     },
     {
       "fromId": "skill-history",
@@ -2225,10 +2324,10 @@
       "fromId": "skill-quick",
       "toId": "skills",
       "type": "navigate",
-      "label": "进入全屏添加",
-      "context": "intent+projectId+threadId",
-      "status": "source-reviewed",
-      "source": "mobile/src/agent/AgentScreen.tsx"
+      "label": "管理技能与项目默认",
+      "context": "projectId+returnThreadId（来源身份）；正文/附件/未确认草稿留原组件；返回核对明确提交结果",
+      "status": "device-sampled M1/M2 synthetic fixture",
+      "source": "mobile/src/agent/skills/SkillQuickPicker.tsx"
     },
     {
       "fromId": "create",
@@ -2252,10 +2351,10 @@
       "fromId": "agent",
       "toId": "skill-quick",
       "type": "open-surface",
-      "label": "技能快速层",
-      "context": "",
-      "status": "source-reviewed",
-      "source": "mobile/src/creative/AgentWorkspace.tsx"
+      "label": "输入旁技能快速层",
+      "context": "threadId+会话范围；保留输入",
+      "status": "device-sampled local fixture",
+      "source": "mobile/src/agent/AgentScreen.tsx"
     },
     {
       "fromId": "project",
@@ -2274,6 +2373,60 @@
       "context": "",
       "status": "source-reviewed",
       "source": "mobile/src/creative/CreativeWorkspace.tsx"
+    },
+    {
+      "fromId": "agent",
+      "toId": "skill-management-inline",
+      "type": "open-surface",
+      "label": "助手菜单→技能管理（兼容）",
+      "context": "threadId；既有未保存保护",
+      "status": "source-reviewed",
+      "source": "mobile/src/agent/AgentScreen.tsx"
+    },
+    {
+      "fromId": "skill-management-inline",
+      "toId": "skills",
+      "type": "navigate",
+      "label": "添加技能",
+      "context": "intent=add+projectId+threadId；先处理未保存",
+      "status": "source-reviewed",
+      "source": "mobile/src/agent/skills/SkillLibraryScreen.tsx"
+    },
+    {
+      "fromId": "skills",
+      "toId": "skills",
+      "type": "navigate",
+      "label": "打开全局技能管理",
+      "context": "清除 projectId/threadId；正常 back 回项目管理",
+      "status": "device-sampled local fixture",
+      "source": "mobile/src/agent/skills/SkillLibraryScreen.tsx"
+    },
+    {
+      "fromId": "skills",
+      "toId": "skill-add",
+      "type": "open-surface",
+      "label": "添加技能",
+      "context": "同一路由独立任务；项目范围与可选 returnThreadId 保留，不展示目录/历史",
+      "status": "device-sampled M2 fixture",
+      "source": "mobile/src/agent/skills/SkillLibraryScreen.tsx"
+    },
+    {
+      "fromId": "skill-add",
+      "toId": "skills",
+      "type": "open-surface",
+      "label": "查看已安装版本",
+      "context": "确切版本 id；本地筛选、清除搜索、版本置顶展开；不改默认",
+      "status": "device-sampled M2 final fixture",
+      "source": "mobile/src/agent/skills/SkillLibraryScreen.tsx"
+    },
+    {
+      "fromId": "skill-add",
+      "toId": "skill-quick",
+      "type": "restore-workspace",
+      "label": "从快速层进入时，安装后返回原会话",
+      "context": "来源返回栈；明确用于下次消息后采用新选择，仅安装则保留未确认草稿；正文/附件仍在原会话",
+      "status": "device-sampled M2 initial fixture",
+      "source": "mobile/src/agent/skills/SkillAddFlow.tsx"
     }
   ],
   "sourceDigests": {
@@ -2288,7 +2441,7 @@
     "mobile/app/_layout.tsx": "ea1fdc01ccff166ec1aaf7e97893aa1de73f6050e2dfc9314d7e509ebcb9ec84",
     "mobile/app/agent-run.tsx": "333b16bcb445d8d936befd242a580f3cfb5e534447ed3676ddd20f1123931b71",
     "mobile/app/agent-skill-extract.tsx": "d8ce49942fb4659428a14aaeda27207740d1ad38d5b8fb23f74564041c09e41d",
-    "mobile/app/agent-skills.tsx": "d7091b3ce5aa1636067aa6816994bb92a9c94a845ae8383128cb5566d7aefb0f",
+    "mobile/app/agent-skills.tsx": "a0bd0756540032a26749b8751a6d095417080dbcb77aacc83aab82b89b6116a7",
     "mobile/app/creative-asset/[id].tsx": "65dfb266122df481ef62039e1c9709e50fc58d445c93e0a5757c8f38dcdf3de9",
     "mobile/app/creative-capabilities.tsx": "bbfced4d5d2d460b4a5c54be7e77695a7aa5830f875b163762095018b12bbf48",
     "mobile/app/creative-draft/[id].tsx": "39a426a4bfeb13b85d53f08efd3255ddfe0f58cf4404ed38b580f4a75288de73",
@@ -2308,12 +2461,12 @@
     "mobile/app/settings-panel.tsx": "a7a4149ef6a30f63977a6c02af421d8d0b2854bd6e4ad89989dea09f80a8ccba",
     "mobile/app/shot-request-setup.tsx": "018897b819a6dd434362b7b45863878a02b430fa788ea7ed57cc0fc4048c3fe8",
     "mobile/app/video/[id].tsx": "8abbd333bbb3c04591bf0e95a867ea06c4f57b3710c0812e6e37b99dabce4e8c",
-    "mobile/src/agent/AgentScreen.tsx": "829be9714749fcb2785f734281995c68e5cb1d2cc0e408784cb0439ca80273fe",
+    "mobile/src/agent/AgentScreen.tsx": "7be00a1cc632bb46351796256daec5f8bc3010f400554d8179ae26dcb64050f7",
     "mobile/src/agent/PromptVersionPanel.tsx": "9c077f7737640b3e144115217fc20acd08676538c486e874216a00a3cd8ce068",
     "mobile/src/agent/skills/SkillExtractionScreen.tsx": "0d18eb0fe7ffc9292cc20c097654d6ae842a316a03cba92be4da1c65d407c576",
-    "mobile/src/agent/skills/SkillLibraryScreen.tsx": "20f2c46ea61824c6956ee32d16fb5b39501474d7829e505b65f90fe786e305e9",
+    "mobile/src/agent/skills/SkillLibraryScreen.tsx": "63f9a9cdd450efb5ec50ce549b76fbd4b0b3979801c004c19116c5326605d02b",
     "mobile/src/agent/skills/SkillRunScreen.tsx": "aa3290d6ba7e643b3c4c3b03be2183a23b7dc1d2ad0574ef03c0fc8567d7e6c7",
-    "mobile/src/creative/AgentCreativePanel.tsx": "63cc9f069c372f3b2ae8a2b1c778b57a3a3edf91f5088500ae1119e226081d22",
+    "mobile/src/creative/AgentCreativePanel.tsx": "31ae9a970c7e59dc631286ee7cde5799b56ae357c451c30fbd401edb71753cbe",
     "mobile/src/creative/AgentWorkspace.tsx": "5927e3c94291e40b595b5f4de4efdc19eee27f53eaa9447de409e45d04081ea1",
     "mobile/src/creative/CapabilityCatalogScreen.tsx": "22e2edce01cc1b9cc870b7e6290c8b46938184744aa67bcbc54b25b84e5094b7",
     "mobile/src/creative/CreativeAccountPanel.tsx": "8e678926536277d6e8b1653ebd96a8c44afdc9d1d1212cf7eef4161ef0794c31",
@@ -2340,6 +2493,40 @@
     "mobile/src/settings/DisplayDiagnostics.tsx": "a3b7eb88eff7e987f4ff87abb3f614befc40e5569c50efaecb26a10cf8f67c20",
     "mobile/src/settings/ModelConnectionsScreen.tsx": "3416f4606bae0147c3a14b53f94bc578898f44b8a11781442a5f8852fa2d5d5e",
     "mobile/src/settings/WorkflowSyncPanel.tsx": "686c03f780248005bafd60a0e80f3ae248bdfcf000d9e5ac8f5193174cb424ee",
-    "mobile/src/tasks/TaskInboxButton.tsx": "898cadeead6b4923872354dc1d9791f1c821460e10753f411af4d3d849e016cb"
-  }
+    "mobile/src/tasks/TaskInboxButton.tsx": "898cadeead6b4923872354dc1d9791f1c821460e10753f411af4d3d849e016cb",
+    "mobile/src/agent/PromptAssistantUi.tsx": "1335aa902884143da079d40978c3bf62195becc90687c6a55de106b8193efac7",
+    "mobile/src/agent/skills/nextRun.ts": "bfec5dd50a8dc9102f3c4cc6f47649c813de588f2a45de5e346d2aa09fdd032e",
+    "mobile/src/agent/skills/SkillQuickPicker.tsx": "bef0a4631316b641b29f261dcdfe2db013d900da56845e79759c253d06846f0c",
+    "mobile/src/ui/DraggableSheet.tsx": "33161904262afda9a7fb397ce4197c498e1f3b6c8aea0e19cb735c820699dab7",
+    "mobile/src/agent/skills/SkillAddFlow.tsx": "5b854d79f280c8cf476ff1a71137dcd86b83e66eb43e25085631b2c714ef944e"
+  },
+  "revisions": [
+    {
+      "date": "2026-11-04",
+      "sourceBase": "db7aa4d6",
+      "scope": "M1 quick skill selection, scopes and composer context; partial implementation of F4/D002",
+      "evidence": "docs/design/evidence/2026-11-04-m1-skills/README.md",
+      "reviewedSources": [
+        "mobile/src/agent/AgentScreen.tsx",
+        "mobile/src/agent/PromptAssistantUi.tsx",
+        "mobile/src/creative/AgentCreativePanel.tsx",
+        "mobile/src/agent/skills/SkillLibraryScreen.tsx",
+        "mobile/src/agent/skills/nextRun.ts",
+        "mobile/src/agent/skills/SkillQuickPicker.tsx",
+        "mobile/src/ui/DraggableSheet.tsx"
+      ]
+    },
+    {
+      "date": "2026-11-04",
+      "sourceBase": "db7aa4d6 + approved M1 working-tree slice",
+      "scope": "M2 staged skill addition, fixed-version locate and explicit origin-thread selection; F4/D003",
+      "evidence": "docs/design/evidence/2026-11-04-m2-skills/README.md",
+      "reviewedSources": [
+        "mobile/app/agent-skills.tsx",
+        "mobile/src/agent/skills/SkillAddFlow.tsx",
+        "mobile/src/agent/skills/SkillLibraryScreen.tsx",
+        "mobile/src/agent/skills/SkillQuickPicker.tsx"
+      ]
+    }
+  ]
 }

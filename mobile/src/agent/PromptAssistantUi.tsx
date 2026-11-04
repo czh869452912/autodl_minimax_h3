@@ -97,6 +97,7 @@ export function PromptAssistantUi({
   headerContext,
   headerActions,
   toolPanel,
+  renderComposerContext,
   workflowDefinition,
   workflows,
   workflowLoadIssue,
@@ -120,6 +121,7 @@ export function PromptAssistantUi({
   headerContext?: React.ReactNode;
   headerActions?: React.ReactNode;
   toolPanel?: React.ReactNode;
+  renderComposerContext?: (returnToInput: () => void) => React.ReactNode;
   workflowDefinition?: WorkflowDefinition;
   workflows?: WorkflowChoice[];
   workflowLoadIssue?: string;
@@ -383,6 +385,7 @@ export function PromptAssistantUi({
             onSelectSuggestion={applySuggestion}
           />
           <View testID="conversation-composer-dock" style={styles.composerDock}>
+            {renderComposerContext?.(() => inputRef.current?.focus())}
             <Composer
               value={draft}
               onChangeText={handleDraftChange}

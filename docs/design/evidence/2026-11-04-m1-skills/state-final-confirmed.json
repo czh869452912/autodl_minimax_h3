@@ -1,0 +1,26 @@
+{
+  "stage": "final-confirmed",
+  "projectDefaultCount": 0,
+  "globalDefaultCount": 0,
+  "pending": [
+    [
+      {
+        "id": "737327819b07ef105821e6d56c73155e68dbce366aec26d5b17ca4283e41be38",
+        "revocation": 0
+      }
+    ]
+  ],
+  "snapshots": [
+    {
+      "localVersions": [
+        {
+          "id": "9a46389bc97aa4f37bd440f7f4b8013c401d1c3d03226f4344d6b3b44f452184",
+          "revocation": 1
+        }
+      ]
+    },
+    {
+      "localVersions": []
+    }
+  ]
+}

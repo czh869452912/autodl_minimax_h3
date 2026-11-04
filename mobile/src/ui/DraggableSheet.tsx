@@ -1,7 +1,7 @@
 import { KeyboardSurface, KeyboardAwareScrollView as ScrollView } from './KeyboardSurface';
 import React, { createContext, useContext, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Animated, AccessibilityInfo, findNodeHandle, Keyboard, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, AccessibilityInfo, findNodeHandle, Keyboard, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { resolveBottomSheetRelease, type SheetSnap } from './draggableBottomSheet';
 import { COLORS } from './theme';
 import { AppIcon } from './icons';
@@ -20,7 +20,8 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
   onClose: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
-}> (function DraggableBottomSheet({ visible, title, onClose, children, footer }, ref) {
+  keyboardAvoidance?: 'measured' | 'layout';
+}> (function DraggableBottomSheet({ visible, title, onClose, children, footer, keyboardAvoidance = 'measured' }, ref) {
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [layoutHeight, setLayoutHeight] = useState(height);
@@ -32,6 +33,9 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
   const [hasInputFocus, setInputFocus] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(true);
   const headingRef = useRef<Text>(null);
+  // Opt-in modal avoidance uses its own layout; measured remains the default
+  // for callers that track focus in the underlying Activity.
+  const KeyboardContainer = keyboardAvoidance === 'layout' ? KeyboardAvoidingView : KeyboardSurface;
   useEffect(() => {
     let mounted = true;
     void AccessibilityInfo.isReduceMotionEnabled().then(value => { if (mounted) setReduceMotion(value); }).catch(() => undefined);
@@ -41,7 +45,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
   useEffect(() => {
     if (!visible) return;
     const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (event) => {
-      if (!ownsFocus.current) return;
+      if (!ownsFocus.current && keyboardAvoidance !== 'layout') return;
       if (!keyboardVisible.current) snapBeforeKeyboard.current = snap;
       keyboardVisible.current = true;
       setSnap('expanded');
@@ -52,7 +56,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
       show.remove();
       hide.remove();
     };
-  }, [height, visible, snap]);
+  }, [height, visible, snap, keyboardAvoidance]);
   // The backdrop is laid out inside the keyboard-safe area on both platforms.
   const availableHeight = Math.max(1, layoutHeight);
   const collapsedOffset = availableHeight * 0.45;
@@ -121,8 +125,9 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
 
   return (
     <Modal visible={visible} transparent statusBarTranslucent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={close} onShow={() => { const target = findNodeHandle(headingRef.current); if (target) AccessibilityInfo.setAccessibilityFocus(target); }}>
-      <KeyboardSurface
-        enabled={hasInputFocus}
+      <KeyboardContainer
+        enabled={keyboardAvoidance === 'layout' ? visible : hasInputFocus}
+        {...(keyboardAvoidance === 'layout' ? {behavior: 'padding' as const} : {})}
         style={styles.modalSurface}
       >
         <View style={styles.backdrop} onLayout={event => setLayoutHeight(event.nativeEvent.layout.height)}>
@@ -143,7 +148,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, {
             </View>
           </Animated.View>
         </View>
-      </KeyboardSurface>
+      </KeyboardContainer>
     </Modal>
   );
 });

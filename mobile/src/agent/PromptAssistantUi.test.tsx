@@ -62,6 +62,28 @@ function renderedText(tree: ReturnType<typeof create>): string[] {
 }
 
 describe('Prompt assistant UI primitives', () => {
+  it('keeps text, selection and attachments while a composer context selector opens and returns', async () => {
+    const accepted = jest.fn(async () => undefined);
+    const image = {id: 'reference', type: 'image', status: 'ready', displayName: '图片1', size: 10, source: {type: 'url', value: 'file://reference'}};
+    function Context({onReturn}: {onReturn: () => void}) {
+      const [open, setOpen] = React.useState(false);
+      return <Pressable accessibilityLabel={open ? '返回输入测试' : '选用测试'} onPress={() => { setOpen(!open); if (open) onReturn(); }}><Text>{open ? '选择中' : '选择技能'}</Text></Pressable>;
+    }
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<PromptAssistantUi {...basePromptProps} clientState={{h3Composer: {text: '雨夜镜头 @图片1', attachments: [image]}}} onAccept={accepted} renderComposerContext={onReturn => <Context onReturn={onReturn}/>}/>); });
+    act(() => tree.root.findByType(Composer).props.onSelectionChange({nativeEvent: {selection: {start: 2, end: 2}}}));
+    const before = tree.root.findByType(Composer);
+    act(() => tree.root.findByProps({accessibilityLabel: '选用测试'}).props.onPress());
+    act(() => tree.root.findByProps({accessibilityLabel: '返回输入测试'}).props.onPress());
+    expect(tree.root.findByType(Composer)).toBe(before);
+    expect(before.props.value).toBe('雨夜镜头 @图片1');
+    expect(before.props.selection).toEqual({start: 2, end: 2});
+    expect(before.props.attachments).toEqual([expect.objectContaining({id: 'reference', displayName: '图片1'})]);
+    await act(async () => before.props.onSubmit(before.props.value));
+    expect(accepted).toHaveBeenCalledWith(expect.objectContaining({text: '雨夜镜头 @图片1', attachments: [expect.objectContaining({id: 'reference'})]}));
+    act(() => tree.unmount());
+  });
+
   it('keeps expanded edits and cursor position when returning to the compact composer', () => {
     let tree!: ReturnType<typeof create>;
     act(() => { tree = create(<PromptAssistantUi {...basePromptProps} />); });

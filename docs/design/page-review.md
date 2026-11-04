@@ -6,11 +6,11 @@
 
 ## 范围与结论
 
-覆盖 29 个路由页面、2 个壳层、26 个重要子表面；记录 48 条源码确认的关键点击边。非路由清单不宣称穷尽全部 JSX 分支，点击边也不是运行时全图。
+覆盖 29 个路由页面、2 个壳层、27 个重要子表面；记录 54 条源码确认的关键点击边。非路由清单不宣称穷尽全部 JSX 分支，点击边也不是运行时全图。
 
-当前实现已有四入口、预览、参数抽屉、任务气泡、明确采用和不可变版本，方向不必推倒。但项目概览承担工具目录，镜头列表承担编辑器，技能目录承担多个流程，时间线承担参数表与工程管理，导致正确能力仍难使用。应按对象和状态重组任务，不再给每项能力补一个常驻按钮。
+当前实现已有四入口、预览、参数抽屉、任务气泡、明确采用和不可变版本，方向不必推倒。M1 技能快速选用、M2 分步添加已独立；项目概览仍承担工具目录，镜头列表承担编辑器，技能目录与运行历史共享，时间线承担参数表与工程管理。应继续按对象和状态重组任务，不再给每项能力补一个常驻按钮。
 
-目录中的归属是信息组织视角，不等于 Expo 文件嵌套或真实 back 栈。所有“建议”均为 proposed，尚未实施。页面状态是需要覆盖的规格，不能当作已通过的设备测试。
+目录中的归属是信息组织视角，不等于 Expo 文件嵌套或真实 back 栈。建议按条目标记 proposed / partially-implemented / implemented，设备覆盖单独记录在 evidenceLevel；页面状态是需要覆盖的规格，不能当作已通过的设备测试。历史基线与后续切片分别记录，见 D002/D003。
 
 ## 当前主要跳转：概览的扇出
 
@@ -87,6 +87,7 @@ flowchart LR
         对话提炼技能 [route; skill-extract]
         技能添加与安装预览 [surface; skill-add]
         技能运行历史 [surface; skill-history]
+        会话菜单技能管理（兼容入口） [surface; skill-management-inline]
       运行证据 [route; run-evidence]
       助手项目/镜头上下文 [surface; assistant-context]
       助手会话与运行交互 [surface; assistant-conversation]
@@ -140,6 +141,8 @@ flowchart LR
 
 **展示与交互建议**：启动阶段使用独立恢复表面，先说明数据状态、可执行恢复及退出；不把错误日志作为唯一说明。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：依状态继续启动或恢复。**目标归属**：根。
 
 **进入与返回**：冷启动、维护后重启 → 本表面；恢复完成回原安全入口；不可用时保留恢复页面。
@@ -156,6 +159,8 @@ flowchart LR
 **现状问题**：注册了七个 tab，导航栏只展示四个；任务/旧作品/设置的壳层和返回语义不同。
 
 **展示与交互建议**：四入口继续保留；任务与设置用统一全局 utility stack；旧作品保持迁移入口。先统一体验合同，再考虑改路由结构。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：切换目的地。**目标归属**：应用根与启动恢复。
 
@@ -174,6 +179,8 @@ flowchart LR
 
 **展示与交互建议**：保留稳定入口；冷链接校验成功后进入具体对象，失败给安全出口。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：打开最近创作。**目标归属**：应用根与启动恢复。
 
 **进入与返回**：应用 scheme 根 → 本表面；进入创作后使用主导航。
@@ -191,6 +198,8 @@ flowchart LR
 
 **展示与交互建议**：以画面预览、描述、规格摘要、生成作为主体；记录只负责恢复；全局导航和工作流管理回归各自层级。
 
+**实施状态**：proposed。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper。
+
 **主操作**：生成或补齐当前阻塞项。**目标归属**：工作台导航壳。
 
 **进入与返回**：默认入口、草稿恢复、素材续作 → 本表面；关闭工具→关闭记录→保留当前创作；切 tab 不丢输入。
@@ -204,9 +213,11 @@ flowchart LR
 
 **任务**：围绕项目对话、提出和执行创作方案。
 
-**现状问题**：空库先要求用户离开助手建项目；默认项目选择与当前作品上下文需更显式。
+**现状问题**：M1 已补输入旁技能选用与明确范围；无项目空态仍须离开助手建项目，提议/授权等后续任务待重组。
 
 **展示与交互建议**：空态提供就地轻量建项目；标题持久展示项目，镜头上下文显示可移除 chip；输入区以对话为主。不是新增无范围的执行会话。
+
+**实施状态**：partially-implemented。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper; M1 local fixture candidate sample。
 
 **主操作**：发送消息；运行时停止等待。**目标归属**：工作台导航壳。
 
@@ -214,7 +225,7 @@ flowchart LR
 
 **应覆盖状态**：无项目 / 未配模型 / 会话 / 运行 / 待审批 / 异常。
 
-**依据**：[src/creative/AgentWorkspace.tsx](../../mobile/src/creative/AgentWorkspace.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[v47-11-assistant.png](../../docs/design/evidence/2026-11-01/v47-11-assistant.png)、[v47-13-assistant-return.png](../../docs/design/evidence/2026-11-01/v47-13-assistant-return.png)。
+**依据**：[src/creative/AgentWorkspace.tsx](../../mobile/src/creative/AgentWorkspace.tsx)、[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/creative/AgentCreativePanel.tsx](../../mobile/src/creative/AgentCreativePanel.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[v47-11-assistant.png](../../docs/design/evidence/2026-11-01/v47-11-assistant.png)、[v47-13-assistant-return.png](../../docs/design/evidence/2026-11-01/v47-13-assistant-return.png)、[03-candidate-agent.png](../../docs/design/evidence/2026-11-04-m1-skills/03-candidate-agent.png)。
 
 <a id="projects"></a>
 ### 项目列表 · projects · P2
@@ -224,6 +235,8 @@ flowchart LR
 **现状问题**：新建、归档开关、搜索与共享工作区逻辑混在同一组件；列表对下一步的表达弱。
 
 **展示与交互建议**：卡片显示封面、镜头进展、最近修改和待处理；新建是主动作；归档用范围筛选。保留现有列表能力。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：新建项目或继续选中项目。**目标归属**：工作台导航壳。
 
@@ -242,6 +255,8 @@ flowchart LR
 
 **展示与交互建议**：主体为缩略图与类型/范围；导入为明确动作；回收站/旧作品迁移在管理层，草稿不混作素材。显示收纳/采用的区别。
 
+**实施状态**：proposed。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper。
+
 **主操作**：导入或打开素材。**目标归属**：工作台导航壳。
 
 **进入与返回**：底部、工作流选取来源 → 本表面；主入口保留筛选；详情返回同一列表位置。
@@ -258,6 +273,8 @@ flowchart LR
 **现状问题**：任务处理与后台监控/维护概念在一个页面；用户需辨别任务和计划。
 
 **展示与交互建议**：默认待处理/进行中，缩略图+所属项目/镜头+下一步；监控说明和维护下沉设置；行点击统一到任务详情。
+
+**实施状态**：proposed。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper。
 
 **主操作**：处理当前异常；普通状态查看详情。**目标归属**：工作台导航壳。
 
@@ -276,6 +293,8 @@ flowchart LR
 
 **展示与交互建议**：明确标“旧版作品”，仅在素材管理/迁入中进入；可中断迁移，保留未迁入项目原记录。不要与新素材库并列营销。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：浏览旧作品或迁入。**目标归属**：全局素材库。
 
 **进入与返回**：素材管理、旧链接 → 本表面；返回来源；无来源回素材库。
@@ -292,6 +311,8 @@ flowchart LR
 **现状问题**：同一设置有隐藏 tab 和独立 stack 两个宿主；不能因为组件相同就认为来源一致。
 
 **展示与交互建议**：一个共享设置模型和 utility shell；旧路径兼容重定向时保留 section/草稿/来源。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：进入配置分类。**目标归属**：工作台导航壳。
 
@@ -310,6 +331,8 @@ flowchart LR
 
 **展示与交互建议**：设置首页按连接与能力、创作资源、使用偏好、数据维护分组；进入分类后保持单一标题；逐项写明即时生效/保存生效。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：保存当前配置。**目标归属**：应用根与启动恢复。
 
 **进入与返回**：全局设置、缺配置 CTA → 本表面；直达补配置完成回原 draft/version；全部设置进入后返回分类索引。
@@ -326,6 +349,8 @@ flowchart LR
 **现状问题**：概览/镜头/素材/计划/活动五个视图之外，概览还横向扇出许多工具页。
 
 **展示与交互建议**：项目保留概览、镜头、资料、计划/待办；活动进入历史层；合成到交付；全局配置移出概览常驻区。保留稳定 projectId 和子目标。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：继续项目推荐下一步。**目标归属**：项目列表。
 
@@ -344,6 +369,8 @@ flowchart LR
 
 **展示与交互建议**：演进为镜头工作区的“审阅”状态；候选缩略图轨、当前采用标记、版本摘要；主动作采用，续作放次级。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：采用此固定版本。**目标归属**：项目工作区。
 
 **进入与返回**：镜头已选视频、候选回流 → 本表面；返回原镜头定位；显式“在项目中定位”与 back 分开。
@@ -360,6 +387,8 @@ flowchart LR
 **现状问题**：同一组件还管理项目/资产列表；详情涉及处理、加入项目、采用、恢复、使用位置等多个层次。
 
 **展示与交互建议**：预览优先，版本轨显示缩略图；常用动作按类型出现；使用位置独立可展开关系区，管理和诊断分层。对选择器返回和普通浏览使用不同意图。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：依意图选择此版本或保存到手机。**目标归属**：全局素材库。
 
@@ -378,6 +407,8 @@ flowchart LR
 
 **展示与交互建议**：保持大预览+底部紧凑描述/生成；长参数全屏/抽屉分类；当前只打开一个工具；关联项目/镜头可见但不占整段表单。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：生成；阻塞时连接/恢复原件。**目标归属**：快捷创作。
 
 **进入与返回**：创作恢复、镜头制作、素材续作 → 本表面；先关工具；保留输入；详情退出回来源。
@@ -394,6 +425,8 @@ flowchart LR
 **现状问题**：工作流、账号、参考、参数、辅助、历史均存在；易把编辑下一次输入与查看本次结果混在一起。
 
 **展示与交互建议**：分清当前草稿与已提交任务的时间；参考缩略图内编辑，规格显示摘要，更多参数下沉；生成确认呈现冻结输入和费用。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：生成新尝试或核查当前未知。**目标归属**：快捷创作。
 
@@ -412,6 +445,8 @@ flowchart LR
 
 **展示与交互建议**：固定为“本次生成的临时审阅入口”，共享同一预览组件；有镜头目标时提供返回目标并采用，不自动采用。管理操作去版本详情。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：继续审阅或返回镜头采用。**目标归属**：视频创作详情。
 
 **进入与返回**：生成结果卡 → 本表面；关闭回本次结果，保留当前候选；对象失效显示原因。
@@ -428,6 +463,8 @@ flowchart LR
 **现状问题**：底部有来源计划、完整创作历史、任务中心等多个同级出口，容易形成循环。
 
 **展示与交互建议**：首屏任务状态、结果和一个当前可执行恢复动作；来源用信息链接，任务中心为次级导航；查询明确不会重生成。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：依状态下载/核查/查看候选。**目标归属**：任务中心。
 
@@ -446,6 +483,8 @@ flowchart LR
 
 **展示与交互建议**：保持兼容只读详情；标旧版，先给播放与保存；迁入后指向新素材版本；所有分支使用同一来源返回合同。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：播放或保存旧作品。**目标归属**：历史作品。
 
 **进入与返回**：旧作品列表、旧链接 → 本表面；有来源返回来源，无来源回旧作品/素材管理。
@@ -463,6 +502,8 @@ flowchart LR
 
 **展示与交互建议**：作为统一“最近创作”的筛选/兼容入口；草稿行显示项目镜头、缩略图、修改时间，点击精确恢复。不要再扩展第三套历史页。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：继续某份草稿。**目标归属**：快捷创作。
 
 **进入与返回**：素材管理、旧入口 → 本表面；返回来源；冷入口回创作。
@@ -476,17 +517,19 @@ flowchart LR
 
 **任务**：查找、了解、管理技能及项目组合。
 
-**现状问题**：内置已显示，旧缺陷已修正；当前同页叠加安装、历史、全局/项目/单次选择，开关后果还不相同。
+**现状问题**：M1 已区分项目默认/全局管理标题、范围与全局停用确认；M2 添加已为独立任务，完成定位固定版本。运行历史仍与目录共享，待 M5。
 
-**展示与交互建议**：默认目录展示用途、内置/导入来源、适用性；点击详情；添加独立流程；运行历史归助手历史；管理模式才出现全局停用。项目与单次选择明确标题。
+**展示与交互建议**：保持范围说明与分步添加；后续运行历史归助手，目录保持按用途和来源浏览。
 
-**主操作**：按进入意图选用，管理态添加技能。**目标归属**：项目助手。
+**实施状态**：partially-implemented。**证据范围**：source-reviewed; device-sampled M1 project/global scopes and revoke; M2 add/install/highlighted version with defaults unchanged。
 
-**进入与返回**：助手、项目技能、深链接 → 本表面；选用关闭回原会话/项目；编辑先处理未保存。
+**主操作**：浏览技能与管理默认；添加进入独立任务。**目标归属**：项目助手。
+
+**进入与返回**：助手、项目技能、深链接 → 本表面；管理回实际来源；添加先处理未保存，完成可定位确切版本。
 
 **应覆盖状态**：全局 / 项目 / 单次 / 内置只读 / 无匹配 / 版本详情。
 
-**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[v47-03-skills.png](../../docs/design/evidence/2026-11-01/v47-03-skills.png)。
+**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[v47-03-skills.png](../../docs/design/evidence/2026-11-01/v47-03-skills.png)、[07-project-management.png](../../docs/design/evidence/2026-11-04-m1-skills/07-project-management.png)、[08-global-confirmation.png](../../docs/design/evidence/2026-11-04-m1-skills/08-global-confirmation.png)、[12-located.png](../../docs/design/evidence/2026-11-04-m2-skills/12-located.png)、[22-origin-management.png](../../docs/design/evidence/2026-11-04-m2-skills/22-origin-management.png)、[38-final-located.png](../../docs/design/evidence/2026-11-04-m2-skills/38-final-located.png)。
 
 <a id="skill-extract"></a>
 ### 对话提炼技能 · skill-extract · P1
@@ -496,6 +539,8 @@ flowchart LR
 **现状问题**：选对话/证据、脱敏、发送、编辑发布、历史草稿顺序堆在一张长页面。
 
 **展示与交互建议**：改为证据→外发审阅→草稿审阅的分步流程；草稿列表单独表面；步骤保留输入；本地保存与发布启用分别反馈。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：当前步骤的继续/确认发送/发布。**目标归属**：技能目录。
 
@@ -514,6 +559,8 @@ flowchart LR
 
 **展示与交互建议**：摘要显示结果/开始结束/模型/工具次数/技能实际读取；阶段时间线可展开；原始 JSON 和完整会话为诊断层。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：查看某一步证据。**目标归属**：项目助手。
 
 **进入与返回**：技能运行记录、后续运行消息链接 → 本表面；回实际来源；冷入口回助手/项目上下文（需实现）。
@@ -530,6 +577,8 @@ flowchart LR
 **现状问题**：把 provider/version/model/reasons 列表和模型连接、工作流配置拼在一起，用户需自己推导就绪性。
 
 **展示与交互建议**：以用途分组：助手/图片/视频/媒体检查；卡显示可用性与唯一阻塞原因；详细配置进入对应连接。保留本地声明与远程验证区别。
+
+**实施状态**：proposed。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper。
 
 **主操作**：修复当前具体阻塞或查看能力详情。**目标归属**：独立设置。
 
@@ -548,6 +597,8 @@ flowchart LR
 
 **展示与交互建议**：连接列表与添加/编辑分开；卡片展示用途、当前作用范围和本地状态；旧配置有统一来源标识，不复制密钥。撤销放详情危险区，说明中止范围。
 
+**实施状态**：proposed。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper。
+
 **主操作**：新增连接或选择一个连接。**目标归属**：独立设置。
 
 **进入与返回**：能力目录、媒体检查 → 本表面；回来源并刷新能力；冷入口回连接设置。
@@ -564,6 +615,8 @@ flowchart LR
 **现状问题**：设定列表、历史版本、编辑表单、逐镜头绑定与替换同时出现；规模增长后按钮乘积增长。
 
 **展示与交互建议**：先类型卡片目录，点入设定详情；版本缩略图/摘要；“用于哪些镜头”独立多选器，仅对选中版本显示采用/绑定。
+
+**实施状态**：proposed。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper。
 
 **主操作**：创建设定或采用当前候选。**目标归属**：项目工作区。
 
@@ -582,6 +635,8 @@ flowchart LR
 
 **展示与交互建议**：合入镜头制作向导中的“输入与参考”步骤；来源版本、缺项和冲突可视化；高级入口兼容而不占每张列表卡。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：确认准备输入；生成另行授权。**目标归属**：项目 / 镜头清单。
 
 **进入与返回**：镜头按设定准备 → 本表面；取消回原镜头；成功回绑定草稿，不再让用户找新请求。
@@ -598,6 +653,8 @@ flowchart LR
 **现状问题**：每片段使用毫秒输入及上移/下移/删除按钮；编辑器、已存工程、渲染历史和打包并列。
 
 **展示与交互建议**：预览+可选择片段条，选中后编辑时长/字幕/音量；秒为用户单位，精确输入保留；工程列表和导出动作分层。主流程为编辑→保存快照→本机合成。
+
+**实施状态**：proposed。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper。
 
 **主操作**：保存当前工程；已存状态本机合成。**目标归属**：项目工作区。
 
@@ -616,6 +673,8 @@ flowchart LR
 
 **展示与交互建议**：项目标题栏进入搜索，按镜头/设定/素材分组，显示摘要和缩略图；索引覆盖做状态说明，需维护时提供小入口；定位后可返回原查询。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：搜索并打开来源。**目标归属**：项目工作区。
 
 **进入与返回**：项目全文检索入口 → 本表面；回原项目；结果往返恢复 query/结果/滚动。
@@ -632,6 +691,8 @@ flowchart LR
 **现状问题**：从项目概览进入时要重新选择媒体；本地检查、配模型、外发调用和历史报告一页混合。
 
 **展示与交互建议**：从具体素材版本进入；默认本地结果和抽帧；按需展开模型检查；预览目标/接收方并确认外发；报告进入所选素材历史。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：本地检查；完成后可选模型检查。**目标归属**：素材与版本。
 
@@ -650,6 +711,8 @@ flowchart LR
 
 **展示与交互建议**：归入项目设置的权限记录；卡片呈现接收方、缩略图/版本、请求来源、发送状态和可撤销范围；实际授权发生在请求确认处。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：查看许可详情；有效未发送时撤销。**目标归属**：项目工作区。
 
 **进入与返回**：项目概览、后续请求详情链接 → 本表面；回项目权限/实际来源。
@@ -666,6 +729,8 @@ flowchart LR
 **现状问题**：项目资料与规则、制作与配置两组累计八个 ListAction，还嵌计划摘要；视觉上成为入口目录。
 
 **展示与交互建议**：上半屏为进展、一个下一步和最近工作；设定归资料、权限归设置、媒体检查归素材、时间线归交付；概览不重复配置中心。
+
+**实施状态**：proposed。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper。
 
 **主操作**：继续最紧迫的镜头/待办。**目标归属**：项目工作区。
 
@@ -684,6 +749,8 @@ flowchart LR
 
 **展示与交互建议**：列表卡仅画面、简述、图片/视频状态、一个下一步；整卡打开镜头，更多承载低频管理；批量重排进入模式。
 
+**实施状态**：proposed。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper。
+
 **主操作**：按状态制作/审阅。**目标归属**：项目工作区。
 
 **进入与返回**：项目镜头、来源定位 → 本表面；恢复列表位置/聚焦镜头，不退到空概览。
@@ -700,6 +767,8 @@ flowchart LR
 **现状问题**：媒体资产和角色/场景设定分处两处，名称接近但关系不明。
 
 **展示与交互建议**：目标“资料”下媒体与设定分组/子标签；媒体卡显示收纳及镜头引用，不能把加入项目等同镜头采用。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：导入或打开素材。**目标归属**：项目工作区。
 
@@ -718,6 +787,8 @@ flowchart LR
 
 **展示与交互建议**：计划列表以需我处理/运行中/完成分组；点入计划步骤图或纵向阶段清单；状态只显示适用动作；依赖高级编辑。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：处理当前阻塞步骤。**目标归属**：项目工作区。
 
 **进入与返回**：项目计划、任务回流 → 本表面；回原计划焦点；选择后状态更新可见。
@@ -734,6 +805,8 @@ flowchart LR
 **现状问题**：活动与任务、运行证据、历史并行，用户需猜去哪找发生过的事情。
 
 **展示与交互建议**：活动是统一项目历史视图：用户可读事件、对象卡和结果链接；模型运行/生成任务各自详情只读可展开。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：打开相关对象或证据。**目标归属**：项目工作区。
 
@@ -752,6 +825,8 @@ flowchart LR
 
 **展示与交互建议**：项目设置汇集封面、项目技能组合、权限记录和归档；选择封面时显示目标项目及固定版本确认。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：保存当前设置。**目标归属**：项目工作区。
 
 **进入与返回**：项目更多 → 本表面；关闭回原项目视图，不重置滚动。
@@ -768,6 +843,8 @@ flowchart LR
 **现状问题**：状态切换使用多个按钮；状态与实际素材进度不可混同。
 
 **展示与交互建议**：聚焦编辑表单；描述占主体；人工审阅状态独立选择且说明；保存/取消固定，保留未保存保护。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：保存镜头。**目标归属**：项目 / 镜头清单。
 
@@ -786,6 +863,8 @@ flowchart LR
 
 **展示与交互建议**：顶部写“为谁选择什么”，范围/类型过滤，版本预览→确认；空态可导入/制作并回流；取消无业务写入。
 
+**实施状态**：proposed。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper。
+
 **主操作**：使用此版本。**目标归属**：素材与版本。
 
 **进入与返回**：镜头、封面、参考输入、工程 → 本表面；取消回发起表面；导入返回同一请求并定位候选。
@@ -802,6 +881,8 @@ flowchart LR
 **现状问题**：管理面板含制作、恢复、外发检查和每个使用位置按钮，功能增长继续扩张。
 
 **展示与交互建议**：按当前媒体类型呈现动作组；显示版本关系摘要，引用行点到具体对象；缺原件时恢复取代生成动作；危险项在底部。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：当前对象最相关操作。**目标归属**：素材与版本。
 
@@ -820,6 +901,8 @@ flowchart LR
 
 **展示与交互建议**：仅保留搜索、媒体/状态筛选、草稿/运行组；管理工作流从设置进入；关闭回原画面。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：恢复选中记录。**目标归属**：快捷创作。
 
 **进入与返回**：创作历史图标 → 本表面；关闭回当前草稿，不重置创作。
@@ -836,6 +919,8 @@ flowchart LR
 **现状问题**：多个展开标志和处理态增加表面组合复杂度。
 
 **展示与交互建议**：统一互斥 activeSurface，描述/参考/规格按任务分组；紧凑态显示改了什么；长编辑使用全屏，避免键盘遮住生成。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：应用设置后生成。**目标归属**：图片创作详情。
 
@@ -854,6 +939,8 @@ flowchart LR
 
 **展示与交互建议**：结果缩略图/候选为主体，当前选中对象决定工具；保存与采用分开；放大作为当前图片处理模式而非凭组件文件虚构独立路由。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：依任务保存或回目标镜头采用。**目标归属**：快捷创作。
 
 **进入与返回**：图片/视频工作台结果 → 本表面；关闭工具回当前结果，保留候选；返回编辑不丢草稿。
@@ -867,9 +954,11 @@ flowchart LR
 
 **任务**：选择对话所属项目。
 
-**现状问题**：项目选择器还提供撤销项目全部生成授权，与项目选择任务不相关。
+**现状问题**：M1 项目留标题、镜头移至输入附近，运行时说明禁用原因；项目选择器仍含撤销全部生成授权，待 M3 迁移。
 
-**展示与交互建议**：选择器只选项目/管理项目；授权撤销去项目权限，运行中提供紧急停止与定位授权；切项目明确切换会话，不迁移原对话。
+**展示与交互建议**：保持项目/镜头范围与运行锁定；授权撤销在 M3 迁移到权限表面。
+
+**实施状态**：partially-implemented。**证据范围**：source-reviewed。
 
 **主操作**：选定一个项目。**目标归属**：项目助手。
 
@@ -877,16 +966,18 @@ flowchart LR
 
 **应覆盖状态**：可选 / 运行锁定 / 项目失效。
 
-**依据**：[src/creative/AgentCreativePanel.tsx](../../mobile/src/creative/AgentCreativePanel.tsx)；对照 B1（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
+**依据**：[src/creative/AgentCreativePanel.tsx](../../mobile/src/creative/AgentCreativePanel.tsx)、[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)；对照 B1（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
 
 <a id="assistant-conversation"></a>
 ### 助手会话与运行交互 · assistant-conversation · P1
 
 **任务**：对话、审阅提议并跟踪运行。
 
-**现状问题**：消息、技能、提示词版本、会话管理、运行证据各自工具较多，需明确默认层。
+**现状问题**：M1 输入旁已接入快速选技能并保留草稿/附件；提议、请求、运行与历史的重组仍待 M3/M5。
 
 **展示与交互建议**：默认对话+项目/镜头 chips+输入；输入旁简短工具；提议用变更摘要/影响对象/确认动作；运行呈阶段和停止状态，日志再展开。
+
+**实施状态**：partially-implemented。**证据范围**：source-reviewed; device-sampled composer draft/attachment round trip, restart and two local fixture messages。
 
 **主操作**：发送或审阅待确认提议。**目标归属**：项目助手。
 
@@ -894,41 +985,45 @@ flowchart LR
 
 **应覆盖状态**：空会话 / 编辑 / 运行 / 提议 / 待授权 / 停止 / 失败。
 
-**依据**：[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)；对照 B1、B2（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
+**依据**：[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/agent/PromptAssistantUi.tsx](../../mobile/src/agent/PromptAssistantUi.tsx)、[src/agent/skills/SkillQuickPicker.tsx](../../mobile/src/agent/skills/SkillQuickPicker.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[05-cancel-return.png](../../docs/design/evidence/2026-11-04-m1-skills/05-cancel-return.png)、[10-confirmed-return.png](../../docs/design/evidence/2026-11-04-m1-skills/10-confirmed-return.png)、[11-reopened.png](../../docs/design/evidence/2026-11-04-m1-skills/11-reopened.png)、[12-first-completed.png](../../docs/design/evidence/2026-11-04-m1-skills/12-first-completed.png)。
 
 <a id="skill-quick"></a>
 ### 会话内技能快速层 · skill-quick · P1
 
 **任务**：为接下来一条消息选技能。
 
-**现状问题**：共用管理目录组件，可能仍露全局/项目级设置和历史。
+**现状问题**：M1 已独立快速层；M2 管理明确提交新单次选择后会采用新结果，未提交仍保留未确认草稿。TalkBack、旋转及全部异常设备矩阵仍待补齐。
 
-**展示与交互建议**：快速层只查找、说明、选用并显示范围/数量；管理跳转全屏且带来源；内置可见但不假装它授予工具权限。
+**展示与交互建议**：保持仅下次消息任务；项目/全局管理单独进入，来源身份用 returnThreadId，正文和附件留原会话。
+
+**实施状态**：implemented。**证据范围**：source-reviewed; device-sampled cancel/manage/confirm/reopen/send, keyboard confirm, 2x font narrow viewport with local model fixture; not full device matrix; M2 explicit install-and-select return sampled on initial candidate。
 
 **主操作**：确认下次选用。**目标归属**：项目助手。
 
-**进入与返回**：助手技能入口 → 本表面；完成回原输入框，保留焦点与文字。
+**进入与返回**：会话输入旁“技能” → 本表面；确认或取消回原输入；管理正常返回保留未确认草稿，明确提交新单次选择则采用新结果；进程重启仅恢复已确认选择。
 
-**应覆盖状态**：项目继承 / 单次覆盖 / 失效 / 只读内置。
+**应覆盖状态**：项目继承 / 编辑未确认 / 空选仅内置 / 已固定单次 / 版本失效 / 管理返回 / 运行锁定 / 范围变化 / 读取失败。
 
-**依据**：[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)；对照 B1（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
+**依据**：[src/agent/skills/SkillQuickPicker.tsx](../../mobile/src/agent/skills/SkillQuickPicker.tsx)、[src/agent/skills/nextRun.ts](../../mobile/src/agent/skills/nextRun.ts)、[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/ui/DraggableSheet.tsx](../../mobile/src/ui/DraggableSheet.tsx)；对照 B1（见 [调研](research.md)）。本轮截图：[04-picker-default.png](../../docs/design/evidence/2026-11-04-m1-skills/04-picker-default.png)、[06-picker-selected.png](../../docs/design/evidence/2026-11-04-m1-skills/06-picker-selected.png)、[09-management-return.png](../../docs/design/evidence/2026-11-04-m1-skills/09-management-return.png)、[10-confirmed-return.png](../../docs/design/evidence/2026-11-04-m1-skills/10-confirmed-return.png)、[11-reopened.png](../../docs/design/evidence/2026-11-04-m1-skills/11-reopened.png)、[12-first-completed.png](../../docs/design/evidence/2026-11-04-m1-skills/12-first-completed.png)、[15-search-fixed.png](../../docs/design/evidence/2026-11-04-m1-skills/15-search-fixed.png)、[17-final-completed.png](../../docs/design/evidence/2026-11-04-m1-skills/17-final-completed.png)、[21-final-picker.png](../../docs/design/evidence/2026-11-04-m1-skills/21-final-picker.png)、[22-font2-final.png](../../docs/design/evidence/2026-11-04-m1-skills/22-font2-final.png)、[24-font2-scrolled-final.png](../../docs/design/evidence/2026-11-04-m1-skills/24-font2-scrolled-final.png)、[25-origin-picker-return.png](../../docs/design/evidence/2026-11-04-m2-skills/25-origin-picker-return.png)、[26-origin-composer-return.png](../../docs/design/evidence/2026-11-04-m2-skills/26-origin-composer-return.png)。
 
 <a id="skill-add"></a>
 ### 技能添加与安装预览 · skill-add · P1
 
 **任务**：导入或编辑方法后检查安装。
 
-**现状问题**：新增表单展开在目录上方，检查、示例、高级格式、提炼、预览安装均可连续增长。
+**现状问题**：M2 已将添加独立为来源、编辑、检查、安装结果；安装默认不变，明确选用与保存分离。未安装草稿仅当前任务内存保留；提炼重组待 M5。
 
-**展示与交互建议**：进入独立添加状态：选来源→用途编辑→检查预览→安装；保存后返回新条目；安装后是否选用另行明确。
+**展示与交互建议**：保持阶段与范围合同；用现有安装服务检查审阅版本，编辑后重检、覆盖先确认。继续补 TalkBack、旋转和大包设备验收。
+
+**实施状态**：implemented。**证据范围**：source-reviewed; device-sampled source/edit/review/install/locate, MD error, ZIP references, cancel/replace/leave, origin return; final keyboard and 2x font retested; failure/scope drift integration-tested only。
 
 **主操作**：当前阶段继续/安装。**目标归属**：技能目录。
 
-**进入与返回**：目录添加 → 本表面；回上一步或保留草稿退出；不丢 purpose/scope/text。
+**进入与返回**：目录添加、兼容菜单添加、intent=add 深链接 → 本表面；上一步保留草稿；关闭或系统返回先确认放弃；完成可定位确切版本，或明确单次选用后返回原会话。
 
-**应覆盖状态**：选来源 / 编辑 / 格式错误 / 预览 / 安装完成。
+**应覆盖状态**：选来源 / 导入取消 / 用途与范围草稿 / 正文编辑 / 覆盖确认 / 格式错误 / 附加文件预览 / 重新检查 / 安装失败重试 / 安装完成 / 固定版本定位 / 原会话单次选用 / 范围变化拒绝 / 未保存离开。
 
-**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[v47-04-skill-add.png](../../docs/design/evidence/2026-11-01/v47-04-skill-add.png)。
+**依据**：[app/agent-skills.tsx](../../mobile/app/agent-skills.tsx)、[src/agent/skills/SkillAddFlow.tsx](../../mobile/src/agent/skills/SkillAddFlow.tsx)、[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)、[src/agent/skills/package.ts](../../mobile/src/agent/skills/package.ts)、[src/agent/skills/store.ts](../../mobile/src/agent/skills/store.ts)、[src/agent/skills/nextRun.ts](../../mobile/src/agent/skills/nextRun.ts)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[v47-04-skill-add.png](../../docs/design/evidence/2026-11-01/v47-04-skill-add.png)、[01-baseline-add.png](../../docs/design/evidence/2026-11-04-m2-skills/01-baseline-add.png)、[15-format-error.png](../../docs/design/evidence/2026-11-04-m2-skills/15-format-error.png)、[19-zip-reference.png](../../docs/design/evidence/2026-11-04-m2-skills/19-zip-reference.png)、[24-origin-selected.png](../../docs/design/evidence/2026-11-04-m2-skills/24-origin-selected.png)、[30-final-font2-source.png](../../docs/design/evidence/2026-11-04-m2-skills/30-final-font2-source.png)、[32-final-font2-review.png](../../docs/design/evidence/2026-11-04-m2-skills/32-final-font2-review.png)、[33-final-source.png](../../docs/design/evidence/2026-11-04-m2-skills/33-final-source.png)、[34-final-editor.png](../../docs/design/evidence/2026-11-04-m2-skills/34-final-editor.png)、[35-final-keyboard.png](../../docs/design/evidence/2026-11-04-m2-skills/35-final-keyboard.png)、[36-final-review.png](../../docs/design/evidence/2026-11-04-m2-skills/36-final-review.png)、[37-final-installed.png](../../docs/design/evidence/2026-11-04-m2-skills/37-final-installed.png)、[38-final-located.png](../../docs/design/evidence/2026-11-04-m2-skills/38-final-located.png)。
 
 <a id="skill-history"></a>
 ### 技能运行历史 · skill-history · P1
@@ -938,6 +1033,8 @@ flowchart LR
 **现状问题**：每条历史包含大量 fingerprint、预算和 ID，在目录内切换全屏内容。
 
 **展示与交互建议**：归助手运行历史的技能筛选；行显示任务名/时间/结果，详情再看版本/实际读取/预算；保留“可发现不等于使用”。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：打开该次运行。**目标归属**：项目助手。
 
@@ -956,6 +1053,8 @@ flowchart LR
 
 **展示与交互建议**：以变更摘要、时间、运行状态展示版本；原文/差异展开；“用此版本继续”预填输入，不直接调用。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：选择版本继续编辑。**目标归属**：项目助手。
 
 **进入与返回**：助手消息版本入口 → 本表面；关闭回原消息锚点。
@@ -972,6 +1071,8 @@ flowchart LR
 **现状问题**：不同提供商凭据面板与助手连接分离，缺少用途导航。
 
 **展示与交互建议**：连接首页可按用途发现；账号详情保留服务名/保存与解绑；不要在每页重画账号设置。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：保存当前连接。**目标归属**：独立设置。
 
@@ -990,6 +1091,8 @@ flowchart LR
 
 **展示与交互建议**：统一展示默认连接来源；高级超时/重试/推理折叠；选用连接和编辑连接分开，迁移兼容。
 
+**实施状态**：proposed。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper。
+
 **主操作**：保存模型设置。**目标归属**：独立设置。
 
 **进入与返回**：设置分类、助手缺配置 → 本表面；回来源并保留输入；保存后说明后续运行生效。
@@ -1006,6 +1109,8 @@ flowchart LR
 **现状问题**：技术性同步、版本、能力配置与创作意图缺少直接映射。
 
 **展示与交互建议**：用户先看用途和就绪性；详情管理安装版本和同步；变更先显示影响哪些草稿/计划，不能静默套用新协议。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：安装/更新选中工作流。**目标归属**：独立设置。
 
@@ -1024,6 +1129,8 @@ flowchart LR
 
 **展示与交互建议**：上层显示占用和日常安全清理；完整备份、恢复、数据库工具分组；恢复/清空明确预览影响和恢复路径，不靠普通按钮样式区分。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：依当前任务管理空间或备份。**目标归属**：独立设置。
 
 **进入与返回**：设置存储、素材管理 → 本表面；维护未完成保留状态；返回安全来源。
@@ -1040,6 +1147,8 @@ flowchart LR
 **现状问题**：低频诊断选项占独立分类但合理；需防被当作生成规格。
 
 **展示与交互建议**：保留偏好分类，说明仅影响本机播放；默认自动；保存反馈明确。
+
+**实施状态**：proposed。**证据范围**：source-reviewed。
 
 **主操作**：保存解码偏好。**目标归属**：独立设置。
 
@@ -1058,6 +1167,8 @@ flowchart LR
 
 **展示与交互建议**：置于高级维护；提供可读摘要与复制诊断；不把敏感原始数据默认展开。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：查看或复制诊断。**目标归属**：独立设置。
 
 **进入与返回**：设置高级 → 本表面；回设置。
@@ -1074,6 +1185,8 @@ flowchart LR
 **现状问题**：紧凑入口方向正确，需保证角标含义和定位与任务中心一致。
 
 **展示与交互建议**：保留最近任务、待处理强调和查看更多；点行到同一任务；关闭不改变画面或输入；全局统一角标投影。
+
+**实施状态**：proposed。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper。
 
 **主操作**：查看当前任务。**目标归属**：快捷创作。
 
@@ -1092,6 +1205,8 @@ flowchart LR
 
 **展示与交互建议**：标题说明只改当前描述；建议展示差异与应用/撤销；补模型后回同一辅助会话；不扩张成第二个通用助手。
 
+**实施状态**：proposed。**证据范围**：source-reviewed。
+
 **主操作**：应用建议。**目标归属**：快捷创作。
 
 **进入与返回**：图片/视频帮写描述 → 本表面；关闭回原编辑，保持未采用建议。
@@ -1099,6 +1214,25 @@ flowchart LR
 **应覆盖状态**：输入 / 请求 / 建议 / 应用 / 撤销 / 失败。
 
 **依据**：[src/creative/PromptAssistSheet.tsx](../../mobile/src/creative/PromptAssistSheet.tsx)；对照 B1（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
+
+<a id="skill-management-inline"></a>
+### 会话菜单技能管理（兼容入口） · skill-management-inline · P2
+
+**任务**：兼容原菜单与会话内技能管理。
+
+**现状问题**：仍展开完整目录，含旧单次兼容与历史；M1 输入旁快速入口已独立，M2 添加从兼容入口推入独立路由任务。
+
+**展示与交互建议**：保留兼容入口回流与未保存保护，M5 再收口历史；避免扩展此内嵌目录。
+
+**实施状态**：partially-implemented。**证据范围**：source-reviewed; baseline device sample only。
+
+**主操作**：管理项目默认或打开完整添加。**目标归属**：技能目录。
+
+**进入与返回**：助手菜单→技能管理 → 本表面；关闭管理回原会话；长编辑继续执行未保存保护。
+
+**应覆盖状态**：目录 / 单次兼容 / 未保存 / 添加 / 历史。
+
+**依据**：[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[02-baseline-skills.png](../../docs/design/evidence/2026-11-04-m1-skills/02-baseline-skills.png)。
 
 ## 关键点击关系与上下文
 
@@ -1137,7 +1271,7 @@ flowchart LR
 | 任务与结果详情 | 完整创作历史 | 视频创作详情 | draftId / 图片时进入 image-draft | navigate |
 | 任务与结果详情 | 定位来源计划 | 项目工作区 | projectId+planId | navigate |
 | 项目 / 计划 | 查看生成任务 | 任务与结果详情 | jobId+projectId+planId+stepId | navigate |
-| 技能目录 | 从对话提炼 | 对话提炼技能 | projectId?+threadId? | navigate |
+| 技能添加与安装预览 | 打开对话提炼 | 对话提炼技能 | projectId?+原会话 threadId?；有草稿时先保留/安装；M2 仅源码核对入口，提炼完整重组待 M5 | navigate |
 | 技能运行历史 | 查看运行 | 运行证据 | threadId+runId | navigate |
 | 对话提炼技能 | 发布后打开技能库 | 技能目录 | projectId?+threadId? | navigate |
 | 制作能力目录 | 模型连接 | 模型连接与能力声明 | 无业务对象参数 / 由当前工作区恢复 | navigate |
@@ -1148,12 +1282,18 @@ flowchart LR
 | 项目全文检索 | 查看设定来源 | 项目设定库 | projectId+entityId+versionId | navigate |
 | 成片时间线与工程 | 打开成片/工程文件 | 素材与版本 | assetId+versionId+projectId | navigate |
 | 历史作品 | 打开旧作品 | 旧版视频详情 | assetId | navigate |
-| 会话内技能快速层 | 进入全屏添加 | 技能目录 | intent+projectId+threadId | navigate |
+| 会话内技能快速层 | 管理技能与项目默认 | 技能目录 | projectId+returnThreadId（来源身份）；正文/附件/未确认草稿留原组件；返回核对明确提交结果 | navigate |
 | 快捷创作 | 创作记录 | 创作记录全屏层 | 无业务对象参数 / 由当前工作区恢复 | open-surface |
 | 项目助手 | 选择项目 | 助手项目/镜头上下文 | 无业务对象参数 / 由当前工作区恢复 | open-surface |
-| 项目助手 | 技能快速层 | 会话内技能快速层 | 无业务对象参数 / 由当前工作区恢复 | open-surface |
+| 项目助手 | 输入旁技能快速层 | 会话内技能快速层 | threadId+会话范围；保留输入 | open-surface |
 | 项目工作区 | 项目设置 | 项目设置与封面选择 | 无业务对象参数 / 由当前工作区恢复 | open-surface |
 | 素材与版本 | 素材操作 | 素材操作与使用位置 | 无业务对象参数 / 由当前工作区恢复 | open-surface |
+| 项目助手 | 助手菜单→技能管理（兼容） | 会话菜单技能管理（兼容入口） | threadId；既有未保存保护 | open-surface |
+| 会话菜单技能管理（兼容入口） | 添加技能 | 技能目录 | intent=add+projectId+threadId；先处理未保存 | navigate |
+| 技能目录 | 打开全局技能管理 | 技能目录 | 清除 projectId/threadId；正常 back 回项目管理 | navigate |
+| 技能目录 | 添加技能 | 技能添加与安装预览 | 同一路由独立任务；项目范围与可选 returnThreadId 保留，不展示目录/历史 | open-surface |
+| 技能添加与安装预览 | 查看已安装版本 | 技能目录 | 确切版本 id；本地筛选、清除搜索、版本置顶展开；不改默认 | open-surface |
+| 技能添加与安装预览 | 从快速层进入时，安装后返回原会话 | 会话内技能快速层 | 来源返回栈；明确用于下次消息后采用新选择，仅安装则保留未确认草稿；正文/附件仍在原会话 | restore-workspace |
 
 ## 审查优先级
 

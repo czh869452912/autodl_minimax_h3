@@ -8,7 +8,8 @@ import { act, create } from 'react-test-renderer';
 import { ListAction } from '../../ui/ListPageUI';
 const mockPush=jest.fn();
 const mockStore = { projectList:jest.fn(async (_id:string)=>[] as any[]),setProjectVersion:jest.fn(async (_project:string,_name:string,_version:string|null|undefined)=>{}), list: jest.fn(async () => [] as any[]), runs: jest.fn(async (..._args:any[]) => [] as any[]), install: jest.fn(async () => 'id'), enable: jest.fn(async () => {}), revoke: jest.fn(async () => {}) };
-jest.mock('../../storage/databaseClient', () => ({ getDatabase: () => ({getFirstAsync:async()=>({project_id:'trusted-project'})}) }));
+const mockDb={getFirstAsync:async(sql:string)=>sql.includes('creative_execution_state')?{epoch:'epoch'}:{project_id:'trusted-project',revision:0}};
+jest.mock('../../storage/databaseClient', () => ({ getDatabase: () => mockDb }));
 jest.mock('./store', () => ({ createSkillStore: () => mockStore }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push:mockPush,canGoBack: () => true, back: jest.fn() }), useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]) }));
 jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));
@@ -20,10 +21,11 @@ test('review and install do not enable a skill until the user selects its versio
   await act(async () => { tree = create(<SkillLibraryScreen />); });
   const click = async (label: string) => { await act(async () => tree.root.findAllByType(ListAction).find(node => node.props.label === label)!.props.onPress()); };
   act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='添加技能')!.props.onPress());
-  await click('填入技能示例'); await click('检查粘贴的技能');
+  await click('手写或粘贴技能'); await click('填入技能示例'); await click('检查技能');
   expect(mockStore.install).not.toHaveBeenCalled(); expect(mockStore.enable).not.toHaveBeenCalled();
   mockStore.install.mockImplementationOnce(async (pkg?: any) => { mockStore.list.mockResolvedValue([{ ...pkg, createdAt: 1, revocation: 0, enabled: false }]); return pkg.id; });
   await click('安装此版本'); expect(mockStore.enable).not.toHaveBeenCalled();
+  await click('查看已安装版本'); expect(JSON.stringify(tree.toJSON())).toContain('刚安装的版本');
   const action = tree.root.findByType(Switch);
   await act(async () => action.props.onValueChange(true)); expect(mockStore.enable).toHaveBeenCalledWith(expect.stringMatching(/^[a-f0-9]{64}$/));
   await act(async () => tree.unmount());
@@ -37,12 +39,17 @@ test('switching off revokes the selected version and blocks duplicate writes whi
  let tree!:ReturnType<typeof create>;
  await act(async()=>{tree=create(<SkillLibraryScreen/>);});
  const toggle=tree.root.findByType(Switch);
- act(()=>{toggle.props.onValueChange(false);toggle.props.onValueChange(false);});
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ act(()=>toggle.props.onValueChange(false));
+ expect(mockStore.revoke).not.toHaveBeenCalled();
+ const confirm=alert.mock.calls.at(-1)![2]!.find(button=>button.text==='全局停用')!.onPress!;
+ act(()=>{confirm();confirm();});
  expect(mockStore.revoke).toHaveBeenCalledTimes(1);
  expect(mockStore.revoke).toHaveBeenCalledWith('enabled-version');
  expect(tree.root.findByType(Switch).props.disabled).toBe(true);
  await act(async()=>finish());
  expect(tree.root.findByType(Switch).props.disabled).toBe(false);
+ alert.mockRestore();
  act(()=>tree.unmount());
 });
 
@@ -54,6 +61,7 @@ test('context changes share the unsaved import guard',async()=>{
  try{
   await act(async()=>{tree=create(<SkillLibraryScreen registerLeave={value=>{guard=value;}}/>);});
   act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='添加技能')!.props.onPress());
+  act(()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='手写或粘贴技能')!.props.onPress());
   act(()=>tree.root.findAllByType(TextInput).find(n=>n.props.accessibilityLabel==='技能用途')!.props.onChangeText('unfinished skill'));
   act(()=>guard!(proceed));
   expect(proceed).not.toHaveBeenCalled();
@@ -118,12 +126,13 @@ test('history is an immediate view and local filter does not require traversing 
 });
 
 
-test('add from history reveals the import form immediately',async()=>{
+test('add from history shows only source choices, without the directory or history',async()=>{
  let tree!:ReturnType<typeof create>;try{await act(async()=>{tree=create(<SkillLibraryScreen/>);});
  act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());
  act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='添加技能')!.props.onPress());
- expect(tree.root.findAllByProps({accessibilityLabel:'技能用途'}).length).toBeGreaterThan(0);
- expect(tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.selected).toBe(false);
+ expect(JSON.stringify(tree.toJSON())).toContain('选择来源');
+ expect(tree.root.findAllByProps({accessibilityLabel:'搜索技能'})).toHaveLength(0);
+ expect(tree.root.findAllByType(IconAction).some(n=>n.props.label==='技能运行记录')).toBe(false);
  }finally{act(()=>tree.unmount());}
 });
 
@@ -145,17 +154,19 @@ test('reads persisted once override separately from the unsaved editor',async()=
 });
 
 
-test.each([undefined,'add'])('add always reveals an existing draft after history (intent=%s)',async(intent)=>{
- let tree!:ReturnType<typeof create>;try{await act(async()=>{tree=create(<SkillLibraryScreen intent={intent}/>);});
+test.each([undefined,'add'])('step back preserves the draft and closing the task requires a decision (intent=%s)',async(intent)=>{
+ let tree!:ReturnType<typeof create>;const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ try{await act(async()=>{tree=create(<SkillLibraryScreen intent={intent}/>);});
  const icon=(label:string)=>tree.root.findAllByType(IconAction).find(n=>n.props.label===label)!.props.onPress();
- act(()=>icon('添加技能'));act(()=>tree.root.findByProps({accessibilityLabel:'技能用途'}).props.onChangeText('keep existing purpose'));
- act(()=>icon('技能运行记录'));act(()=>icon('添加技能'));expect(tree.root.findByProps({accessibilityLabel:'技能用途'}).props.value).toBe('keep existing purpose');
- act(()=>icon('添加技能'));expect(tree.root.findByProps({accessibilityLabel:'技能用途'}).props.value).toBe('keep existing purpose');
- act(()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='收起添加表单（保留输入）')!.props.onPress());
- act(()=>icon('添加技能'));expect(tree.root.findByProps({accessibilityLabel:'技能用途'}).props.value).toBe('keep existing purpose');
- }finally{act(()=>tree.unmount());}
+ const click=(label:string)=>tree.root.findAllByType(ListAction).find(n=>n.props.label===label)!.props.onPress();
+ if(!intent)act(()=>icon('添加技能'));
+ act(()=>click('手写或粘贴技能'));act(()=>tree.root.findByProps({accessibilityLabel:'技能用途'}).props.onChangeText('keep existing purpose'));
+ act(()=>icon('返回来源'));expect(JSON.stringify(tree.toJSON())).toContain('已有未安装草稿');
+ act(()=>icon('关闭添加'));expect(alert).toHaveBeenLastCalledWith('尚有未保存的修改',expect.any(String),expect.any(Array));
+ act(()=>click('继续编辑草稿'));expect(tree.root.findByProps({accessibilityLabel:'技能用途'}).props.value).toBe('keep existing purpose');
+ expect(tree.root.findAllByProps({accessibilityLabel:'搜索技能'})).toHaveLength(0);
+ }finally{act(()=>tree.unmount());alert.mockRestore();}
 });
-
 
 test('once editor guards embedded close and native removal with the same decision',async()=>{
  const close=jest.fn(),alert=jest.spyOn(Alert,'alert'),prevent=require('expo-router/react-navigation').usePreventRemove;let tree!:ReturnType<typeof create>;

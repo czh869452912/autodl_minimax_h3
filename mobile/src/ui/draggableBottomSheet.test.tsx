@@ -1,13 +1,29 @@
 import { KeyboardSurface } from './KeyboardSurface';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { AccessibilityInfo, Animated, Keyboard, Modal, Text } from 'react-native';
+import { AccessibilityInfo, Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, View } from 'react-native';
 import { DraggableBottomSheet } from './DraggableSheet';
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 24, bottom: 16, left: 0, right: 0 }) }));
 
 describe('DraggableBottomSheet', () => {
   beforeEach(() => { jest.useFakeTimers(); jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockReturnValue(new Promise(() => undefined)); });
   afterEach(() => { jest.clearAllTimers(); jest.useRealTimers(); jest.restoreAllMocks(); });
+  it('keeps a layout-based modal footer above Android IME and restores it on hide', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    const callbacks = new Map<string, Array<(event: any) => void>>();
+    jest.spyOn(Keyboard, 'addListener').mockImplementation((name, callback) => { callbacks.set(name, [...callbacks.get(name) ?? [], callback]); return {remove: () => undefined}; });
+    let tree!: ReturnType<typeof create>;
+    act(() => { tree = create(<DraggableBottomSheet visible keyboardAvoidance="layout" title="技能" onClose={() => undefined} footer={<Text>确认</Text>}><Text>搜索</Text></DraggableBottomSheet>); });
+    expect(tree.root.findByType(KeyboardAvoidingView).props.enabled).toBe(true);
+    act(() => tree.root.findByProps({testID: 'bottom-sheet-surface'}).props.onBlur());
+    const root = () => tree.root.findByType(KeyboardAvoidingView).findAllByType(View)[0];
+    await act(async () => root().props.onLayout({persist: () => undefined, nativeEvent: {layout: {x: 0, y: 0, width: 400, height: 800}}}));
+    await act(async () => callbacks.get('keyboardDidShow')?.forEach(callback => callback({duration: 0, endCoordinates: {screenX: 0, screenY: 500, width: 400, height: 300}})));
+    expect(StyleSheet.flatten(root().props.style).paddingBottom).toBe(300);
+    await act(async () => callbacks.get('keyboardDidHide')?.forEach(callback => callback({duration: 0})));
+    expect(StyleSheet.flatten(root().props.style).paddingBottom).toBe(0);
+    act(() => tree.unmount());
+  });
   it('renders an accessible handle with a full touch target and sheet content', () => {
     let tree!: ReturnType<typeof create>;
     act(() => {

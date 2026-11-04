@@ -1,0 +1,19 @@
+{
+  "stage": "second",
+  "projectDefaultCount": 0,
+  "globalDefaultCount": 0,
+  "pending": [],
+  "snapshots": [
+    {
+      "localVersions": [
+        {
+          "id": "9a46389bc97aa4f37bd440f7f4b8013c401d1c3d03226f4344d6b3b44f452184",
+          "revocation": 1
+        }
+      ]
+    },
+    {
+      "localVersions": []
+    }
+  ]
+}

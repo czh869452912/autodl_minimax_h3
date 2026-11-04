@@ -1,4 +1,5 @@
 import { SkillLibraryScreen } from './skills/SkillLibraryScreen';
+import { SkillQuickPicker } from './skills/SkillQuickPicker';
 import {ListAction} from '../ui/ListPageUI';
 import {AssistantActions} from '../creative/AssistantActions';
 import { createAgentRuntimeAdapter } from './agentRuntimeAdapter';
@@ -422,7 +423,11 @@ function AgentSession({
           onDelete={id=>leaveSkills(()=>uiProps.onDelete(id))}
           headerActions={<AssistantActions onOpenSkills={()=>setSkillsOpen(true)}/>}
           toolPanel={skillsOpen?<SkillLibraryScreen threadId={snapshot.threadId} registerLeave={registerSkillGuard} onClose={()=>setSkillsOpen(false)}/>:undefined}
-          headerContext={<View><AgentCreativePanel beforeNavigate={leaveSkills} compact threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />{focus&&!focusDismissed?<View style={{paddingHorizontal:16,paddingBottom:8}}><Text style={{color:COLORS.text}}>当前镜头：{focus.title}</Text><Text style={{color:COLORS.textMuted}}>发送时核对并固定镜头版本</Text><Pressable accessibilityRole="button" accessibilityLabel="移除镜头上下文" onPress={()=>setFocusDismissed(true)} style={{minHeight:48,justifyContent:'center'}}><Text style={{color:COLORS.primaryActive}}>移除镜头上下文</Text></Pressable></View>:null}</View>}
+          headerContext={<AgentCreativePanel beforeNavigate={leaveSkills} compact threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />}
+          renderComposerContext={returnToInput=><View>
+            {focus&&!focusDismissed?<View style={{paddingHorizontal:12,flexDirection:'row',alignItems:'center',gap:8}}><View style={{flex:1}}><Text numberOfLines={2} style={{color:COLORS.text,fontSize:13}}>当前镜头：{focus.title}</Text><Text style={{color:COLORS.textMuted,fontSize:12}}>发送时核对镜头版本</Text></View><Pressable accessibilityRole="button" accessibilityLabel="移除镜头上下文" disabled={Boolean(agent.isRunning)} accessibilityState={{disabled:Boolean(agent.isRunning)}} onPress={()=>setFocusDismissed(true)} style={{minHeight:48,minWidth:48,justifyContent:'center'}}><Text style={{color:COLORS.primaryActive}}>移除</Text></Pressable></View>:null}
+            <SkillQuickPicker threadId={snapshot.threadId} running={Boolean(agent.isRunning)} onReturn={returnToInput}/>
+          </View>}
           renderRunArtifacts={runId=><AgentCreativeCards threadId={snapshot.threadId} running={Boolean(agent.isRunning)} runId={runId}/>}
           onExportPrompt={onExportPrompt}
           onExportHandoff={onExportHandoff}
