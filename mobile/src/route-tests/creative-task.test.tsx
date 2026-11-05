@@ -6,7 +6,8 @@ let mockProvider='novelai',mockReviewed=false;
 const mockAcknowledge=jest.fn(async()=>{mockReviewed=true;});
 const mockBack=jest.fn();
 jest.mock('expo-router',()=>({useLocalSearchParams:()=>({id:'original',returnToWorkbench:'1'}),useRouter:()=>({back:mockBack,canGoBack:()=>true}),useFocusEffect:(fn:()=>void)=>require('react').useEffect(fn,[fn])}));
-jest.mock('../storage/databaseClient',()=>({getDatabase:()=>({getFirstAsync:async()=>({id:'draft',provider_id:mockProvider,target_asset_id:'asset',job_id:'original'})})}));
+const mockDb={getFirstAsync:async()=>({id:'draft',provider_id:mockProvider,target_asset_id:'asset',job_id:'original'})};
+jest.mock('../storage/databaseClient',()=>({getDatabase:()=>mockDb}));
 jest.mock('../jobs/repository',()=>({createJobRepository:()=>({get:async()=>({id:'original',status:'UNKNOWN',adapterId:mockProvider==='novelai'?'novelai-image':'autodl-comfyui',inputSnapshot:{prompt:'scene'},createdAt:1})})}));
 jest.mock('../creative/taskRecovery',()=>({unknownTaskReviewed:async()=>mockReviewed,acknowledgeUnknownTask:(...args:unknown[])=>(mockAcknowledge as any)(...args)}));
 jest.mock('../creative/CreativeResults',()=>({CreativeResults:()=>null,creativeJobLabel:(status:string)=>status}));
@@ -30,7 +31,7 @@ test.each(['novelai','autodl'])('%s unknown task exposes provider-specific revie
     if(provider==='novelai'){act(()=>button('已核查，解除本次等待').props.onPress());
     expect(mockAcknowledge).not.toHaveBeenCalled();
     await act(async()=>alert.mock.calls[0][2]!.find(action=>action.text==='已核查，继续创作')!.onPress!());
-    expect(mockAcknowledge).toHaveBeenCalledWith(expect.anything(),'original');}else{expect(mockAcknowledge).not.toHaveBeenCalled();expect(JSON.stringify(tree.toJSON())).toContain('可返回工作台继续提交新视频');}
+    expect(mockAcknowledge).toHaveBeenCalledWith(expect.anything(),'original');}else{expect(mockAcknowledge).not.toHaveBeenCalled();expect(JSON.stringify(tree.toJSON())).toContain('先查询或在服务商核查原任务');}
     expect(button('已核查，解除本次等待')).toBeUndefined();
     act(()=>button('返回').props.onPress());
     expect(mockBack).toHaveBeenCalledTimes(1);

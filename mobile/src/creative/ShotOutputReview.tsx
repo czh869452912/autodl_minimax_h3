@@ -1,8 +1,9 @@
+import {useLiveRefresh} from './useLiveRefresh';
 import {useFallbackBack} from '../navigation/useFallbackBack';
-import {useCallback,useRef,useState} from 'react';
+import {useCallback,useEffect,useRef,useState} from 'react';
 import {Text,View,ScrollView} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {useFocusEffect,useRouter} from 'expo-router';
+import {useRouter} from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import {creativeService,creativeFiles} from './runtime';
 import type {CreativeShot} from './story';
@@ -30,7 +31,9 @@ export function ShotOutputReview({projectId,shotId}:{projectId:string;shotId:str
   if(shot.selected_video&&!versions.some(v=>v.id===shot.selected_video))versions.unshift(...await service.versionsByIds([shot.selected_video]));
   return {shot,drafts,versions,archived:!!project.archivedAt};
  },[projectId,shotId]);
- useFocusEffect(useCallback(()=>{let live=true;void load().then(value=>{if(live){setReview(value);setError('');}}).catch(e=>{if(live)setError(e.message);});return()=>{live=false;};},[load]));
+ useEffect(()=>{setReview(undefined);setSelected(undefined);setError('');setNotice('');},[projectId,shotId]);
+ useLiveRefresh(async current=>{try{const value=await load();if(current()){setReview(value);setError('');}}catch(e){if(current())setError(e instanceof Error?e.message:'候选读取失败');}},2500,`${projectId}:${shotId}`);
+
  const target=selected??review?.shot.selected_video??undefined;
  const version=review?.versions.find(v=>v.id===target);
  const back=()=>router.canGoBack()?router.back():void returnToProject(router,{projectId,shotId}).catch(()=>setError('项目读取失败'));
@@ -49,6 +52,7 @@ export function ShotOutputReview({projectId,shotId}:{projectId:string;shotId:str
   <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,gap:8}}><IconAction label="返回" icon="arrow_back" disabled={busy} onPress={back}/><Text style={[s.title,{flex:1}]}>镜头成果审阅</Text></View>
   <ScrollView contentContainerStyle={s.content}>
    {review?<><Text style={s.title}>{review.shot.title}</Text><Text style={s.muted}>{review.shot.description}</Text>
+    <Text style={s.muted}>本地归档 {review.versions.length} 个候选；选择只预览，采用后才更新镜头。保存手机请进入素材详情。</Text>
     <Text style={s.body}>{target===review.shot.selected_video?'镜头已采用':'候选预览'}{version?' · 版本 '+version.versionNo:''}</Text>
     {version?.state==='AVAILABLE'&&version.relativePath?<View style={{height:260}}><VideoPlayer source={FileSystem.documentDirectory+version.relativePath}/></View>:<Text style={s.muted}>{target&&!version?'指定版本已不可用，未替换为其他候选':version?'版本记录仍保留，原文件待恢复':'此镜头尚未采用视频，请选择候选'}</Text>}
     <View style={s.row}>{review.versions.map((v,index)=><TextAction key={v.id} label={(v.id===review.shot.selected_video?'已采用 · ':'候选 · ')+(index+1)+' · v'+v.versionNo} onPress={()=>{setSelected(v.id);setNotice('');}}/>)}</View>

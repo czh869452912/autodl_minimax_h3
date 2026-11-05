@@ -1,3 +1,5 @@
+import {AppState} from 'react-native';
+beforeEach(()=>Object.defineProperty(AppState,'currentState',{value:'active',configurable:true}));
 import React from 'react';
 import {act,create} from 'react-test-renderer';
 import {ShotOutputReview} from './ShotOutputReview';
@@ -18,4 +20,15 @@ test('missing adopted output stays unavailable until a user explicitly selects a
   await act(async()=>press(tree,'采用此版本'));
   expect(mockExecute).toHaveBeenCalledWith({name:'shot.selectOutput',payload:{id:'s',expectedRevision:4,slot:'selected_video',versionId:'b'}},expect.any(String));
  }finally{act(()=>tree?.unmount());}
+});
+
+test('new archived candidates appear while open without silently changing the selected candidate',async()=>{
+ jest.useFakeTimers();let tree!:ReturnType<typeof create>;
+ try{await act(async()=>{tree=create(<ShotOutputReview projectId="p" shotId="s"/>);});
+ act(()=>press(tree,'候选 · 1 · v2'));
+ mockVersions.push({...mockVersions[0],id:'new',versionNo:3});
+ await act(async()=>{jest.advanceTimersByTime(2500);});
+ expect(JSON.stringify(tree.toJSON())).toContain('v3');
+ await act(async()=>press(tree,'采用此版本'));expect(mockExecute.mock.calls[0][0].payload.versionId).toBe('b');
+ }finally{act(()=>tree?.unmount());jest.useRealTimers();}
 });

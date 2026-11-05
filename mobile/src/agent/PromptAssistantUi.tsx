@@ -397,7 +397,7 @@ export function PromptAssistantUi({
               onCancel={() => {
                 if (!isRunning) return;
                 if(onCancel)onCancel();else agent.abortRun?.();
-                onRunIssueChange({ kind: 'aborted', message: '已停止生成' });
+                onRunIssueChange({ kind: 'aborted', message: '已停止本轮助手；已提交的生成任务继续处理' });
               }}
               isRunning={isRunning}
               submitting={submitting}

@@ -28,21 +28,22 @@ export default function CreativeTask() {
   const [busy,setBusy]=useState(false);
   const provider=taskProviderPresentation(job?.adapterId);
   useFocusEffect(useCallback(() => {
-    let active = true;setJob(undefined);setDraft(null);setError('');setNotice('');
+    let active = true,reading=false;setJob(undefined);setDraft(null);setError('');setNotice('');
     const load = async () => {
-      const db = getDatabase(); const job = await createJobRepository(db).get(id);
+      if(reading)return;reading=true;
+      try{const db = getDatabase(); const job = await createJobRepository(db).get(id);
       const draft = await db.getFirstAsync<CreativeDraft>('SELECT * FROM creative_generation_drafts WHERE job_id=?', id);
       const reviewed=await unknownTaskReviewed(db,id);
-      if (active) { setReviewed(reviewed);setJob(job); setDraft(draft); setError(job ? '' : '未找到此任务，原记录可能已移除'); }
+      if (active&&db===getDatabase()) { setReviewed(reviewed);setJob(job); setDraft(draft); setError(job ? '' : '未找到此任务，原记录可能已移除'); }}finally{reading=false;}
     };
     void load().catch(() => {if(active)setError('读取任务失败');});
     const timer = setInterval(() => void load().catch(() => undefined), 2500);
     return () => { active = false; clearInterval(timer); };
   }, [id]));
-  return <CompactWorkbench><SafeAreaView style={s.screen}><View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8}}><IconAction label="返回" icon="arrow_back" onPress={()=>router.canGoBack()?router.back():router.replace('/(tabs)/tasks')}/><Text style={s.title}>任务与结果</Text></View><ScrollView contentContainerStyle={s.content}>
-    {draft?.target_asset_id?<CreativeResults key={id} draft={draft} taskDetail onlyJob host="task"/>:null}
+  return <CompactWorkbench><SafeAreaView style={s.screen}><View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8}}><IconAction label="返回" icon="arrow_back" onPress={()=>router.canGoBack()?router.back():router.replace('/(tabs)/tasks')}/><Text style={s.title}>生成任务与候选</Text></View><ScrollView contentContainerStyle={s.content}>
     {job ? <View style={s.card}>
-      <Text accessibilityLiveRegion="polite" style={s.title}>{creativeJobLabel(job.status)}</Text>
+      <Text style={s.muted}>服务端生成任务 · 独立于助手运行</Text><Text accessibilityLiveRegion="polite" style={s.title}>{creativeJobLabel(job.status)}</Text>
+      <Text style={s.body}>{job.status==='UNKNOWN'?'先核查原任务；当前页面不会重新提交或重复消费。':['SUCCEEDED','PARTIAL_SUCCEEDED'].includes(job.status)?'生成结果需完成本地归档，再审阅并采用固定候选。保存到手机是单独操作。':job.status==='FAILED'?'本次已确定失败。保留原任务，修复输入后准备新草稿并重新核对许可。':'可以离开后返回查看。停止助手、暂停计划都不会撤回已提交的服务端任务。'}</Text>
       <Text numberOfLines={2} style={s.body}>{String(job.inputSnapshot.prompt ?? job.inputSnapshot.input ?? '创作任务')}</Text>
       <Text style={s.muted}>{new Date(job.createdAt).toLocaleString()}</Text><TaskTiming compact task={{...job,status:job.status==='SUCCEEDED'?'SUCCESS':job.status==='PARTIAL_SUCCEEDED'?'PARTIAL_SUCCESS':['FAILED','CANCELLED','UNKNOWN','RUNNING'].includes(job.status)?job.status as 'FAILED'|'CANCELLED'|'UNKNOWN'|'RUNNING':'QUEUED'}}/>
       {job.error || job.lastError ? <Text style={s.error}>{/^(PROVIDER_SUBMIT_UNKNOWN|SUBMIT_OUTCOME_UNKNOWN)$/.test(job.lastError?.code??job.error?.code??'')?'上一次提交未取得确认，暂时无法判断服务端是否已受理。':job.error?.message ?? job.lastError?.message}</Text> : null}
@@ -51,12 +52,13 @@ export default function CreativeTask() {
         <Text style={s.muted}>{job.providerHandle?'原任务可能仍在执行，可同步状态并对照服务端记录。':provider.reviewHint}</Text>
         {provider.reviewUrl?<ListAction label={`打开 ${provider.name} 核查`} onPress={()=>void Linking.openURL(provider.reviewUrl!).catch(()=>setError(`无法打开 ${provider.name}，请在浏览器核查生成记录`))}/>:null}
         {draft?.provider_id==='novelai'&&!reviewed?<ListAction label="已核查，解除本次等待" disabled={busy} onPress={()=>Alert.alert('继续新的尝试？',`请确认已核查 ${provider.name} 原任务。原任务结果和消费记录会保留；继续创作可能产生新的费用。本操作只解除工作台等待，生成仍需你点击。`,[{text:'继续核查',style:'cancel'},{text:'已核查，继续创作',onPress:()=>{setBusy(true);void acknowledgeUnknownTask(getDatabase(),id).then(()=>{setReviewed(true);setNotice('已解除工作台等待，原任务记录已保留');}).catch(e=>setError(e.message)).finally(()=>setBusy(false));}}])}/>:null}
-        {draft?.provider_id!=='novelai'?<Text style={s.muted}>可返回工作台继续提交新视频；原任务仍会保留并继续核查。</Text>:null}
+        {draft?.provider_id!=='novelai'?<Text style={s.muted}>先查询或在服务商核查原任务，再决定是否另建尝试；新请求需要重新确认，可能重复消费。</Text>:null}
       {reviewed?<Text style={s.muted}>已完成本次核查，可返回工作台调整输入并重新生成。原任务结果仍待确认。</Text>:null}
       </>:null}
-      {job.providerHandle&&!['SUCCEEDED','PARTIAL_SUCCEEDED','FAILED','CANCELLED'].includes(job.status)?<ListAction label="同步任务状态" onPress={()=>void getTaskServices().taskCommandService.requestRefresh({maintenance:'force-next-slice'}).then(()=>setNotice('已请求查询，不会重新生成')).catch(e=>setError(e.message))}/>:null}
+      {job.providerHandle&&!['SUCCEEDED','PARTIAL_SUCCEEDED','FAILED','CANCELLED'].includes(job.status)?<ListAction label={job.status==='UNKNOWN'?'查询原任务状态':'同步任务状态'} disabled={busy} onPress={()=>{if(busy)return;setBusy(true);void getTaskServices().taskCommandService.requestRefresh({maintenance:'force-next-slice'}).then(()=>setNotice('已请求查询原任务，不会重新生成')).catch(e=>setError(e.message)).finally(()=>setBusy(false));}}/>:null}
       {/CREDENTIAL|AUTH/.test(job.lastError?.code??job.error?.code??'')?<ListAction label="管理创作账号" onPress={()=>router.push({pathname:'/settings-panel',params:{section:'accounts'}})}/>:null}
     </View> : null}
+    {draft?.target_asset_id?<CreativeResults key={id} draft={draft} taskDetail onlyJob host="task"/>:null}
     {projectId && planId ? <ListAction label="返回来源计划" onPress={()=>void returnToProject(router,{projectId,planId}).catch(()=>setError('来源项目读取失败'))}/> : null}
     {draft ? <ListAction label="打开这次创作与完整历史" onPress={() => router.push({pathname:draft.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:draft.id}})} /> : null}
     <ListAction label="打开任务中心处理下载或异常" onPress={() => router.push('/(tabs)/tasks')} />

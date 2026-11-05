@@ -418,7 +418,7 @@
         "mobile/src/creative/ShotOutputReview.tsx"
       ],
       "purpose": "审阅视频候选并明确采用",
-      "currentIssue": "列表制作与此审阅页分离，候选按钮以编号文本呈现；容易与素材详情/输出预览混淆。",
+      "currentIssue": "M3c 已明确任务/归档/采用边界；未知结果先核查，候选前台刷新不替换显式预览。",
       "recommendation": "演进为镜头工作区的“审阅”状态；候选缩略图轨、当前采用标记、版本摘要；主动作采用，续作放次级。",
       "entry": "镜头已选视频、候选回流",
       "back": "返回原镜头定位；显式“在项目中定位”与 back 分开",
@@ -434,9 +434,9 @@
       "references": [
         "B2"
       ],
-      "evidenceLevel": "source-reviewed",
+      "evidenceLevel": "source-reviewed; unknown outcome offline Android sample, candidate lifecycle automated",
       "evidence": [],
-      "proposalStatus": "proposed",
+      "proposalStatus": "implemented (M3c presentation)",
       "targetOwner": "project"
     },
     {
@@ -2690,7 +2690,7 @@
     "mobile/app/creative-output/[id].tsx": "c0ddabf7ae24a063b7ce61a78104edb9e3605535adf500d6f4cfab530a9b1a90",
     "mobile/app/creative-project/[id].tsx": "dacb11f96335211a424ecfb90d380a1615b6b366d0db8ae0cf614c62e70e86d3",
     "mobile/app/creative-shot/[id].tsx": "5729be3637d985468af45ba9594abbe0036ba906414388af92a615c08a5e87ac",
-    "mobile/app/creative-task/[id].tsx": "0207169edc075ef12426a0db90caf159231b832250128a2bc0e096c8d2d0728f",
+    "mobile/app/creative-task/[id].tsx": "e98097bcd5f5735b5b0b65c8b528f954629d4e0a0ef2d8017d71d7484e9da530",
     "mobile/app/image-draft/[id].tsx": "3b0623a23885f56b84bdeef4869dcd35d62afc04e6f17f73a10acc85a2f2726e",
     "mobile/app/index.tsx": "c2a9bd8856486cfc16290f01d8184b4c844ed1b6e9938e70a2df6befd20bac35",
     "mobile/app/media-review.tsx": "78c0a54e16598873bbb977e085e9b3f9daf3bf519b092f520204ec55ddd139f9",
@@ -2714,7 +2714,7 @@
     "mobile/src/creative/CreativeAssetPicker.tsx": "152e4b4a835c3a3e5f9023392f8da1a45204bbee29381cc0658d5c641d8ee6a2",
     "mobile/src/creative/CreativeHome.tsx": "790143c84d68a79c99732a8074d92e44e6d12e3ddbe4df4d507ea65abff11827",
     "mobile/src/creative/CreativeOutputPreview.tsx": "148de167186242c0d25f0767d542a8fc197ddf3268545d384e478456fb498280",
-    "mobile/src/creative/CreativeResults.tsx": "e3b9f5e0fd7f88b231fe2036e11f52f3a9d5a94553e7f1a0db2ebb8d77b8dc1a",
+    "mobile/src/creative/CreativeResults.tsx": "f560857e5b64c580f8efd3ce038877c23a9f501707891b97c0dc6ff74ab46c0a",
     "mobile/src/creative/CreativeWorkspace.tsx": "5333b7c81acc49ffa76304fffb1a6f8e4eb654ad58791aad41d4cd763c66cc97",
     "mobile/src/creative/ImageDraftScreen.tsx": "e76bb135c2324f64449ac9c13ee01f515f50bada6781b7c9d8576bf5d8b05f16",
     "mobile/src/creative/MediaReviewScreen.tsx": "07d764e4cff5e84b3bf37d944e80676f7b38ab0818d315bc81e874c7a22b35f0",
@@ -2727,7 +2727,7 @@
     "mobile/src/creative/PromptAssistSheet.tsx": "e6f1f14a9aee6b914a9f5cc8a4e8df4f3e4c61a5cdcb395f4bb2219e16ce80a0",
     "mobile/src/creative/SemanticPreparationScreen.tsx": "61964d95d3ade77310e7e31d215f46551f03207b0c1a086c223847bf97fc8bb2",
     "mobile/src/creative/SemanticResourcesScreen.tsx": "ef99b915fbc0e2177ad785af32cd095ed2cf9c6927b434fd10a54e2da9d76981",
-    "mobile/src/creative/ShotOutputReview.tsx": "a78c87d4d75ffc9380b4be6dba95bcb78eeb51a9ffdfd30e83faa3eda867ae03",
+    "mobile/src/creative/ShotOutputReview.tsx": "4b04b4f4b878942147970713129dd18f4684e31434fa2fda4a69f47b35059604",
     "mobile/src/creative/TimelineScreen.tsx": "5cb8dc92a2cfb890d486e26d33d8668efbfe9ccfdc047a937687d73e81f626ff",
     "mobile/src/creative/VideoDraftScreen.tsx": "cdbb394501726f1d30c8e0fa81f55a8642cffa764c4250db426337c1dd8e19fc",
     "mobile/src/settings/DataManagementPanel.tsx": "82ae98fea9d8bdfcb1c0b9601409c8c58cf590bd3ba67a4b19b8ec86b039d8b6",
@@ -2735,7 +2735,7 @@
     "mobile/src/settings/ModelConnectionsScreen.tsx": "3416f4606bae0147c3a14b53f94bc578898f44b8a11781442a5f8852fa2d5d5e",
     "mobile/src/settings/WorkflowSyncPanel.tsx": "686c03f780248005bafd60a0e80f3ae248bdfcf000d9e5ac8f5193174cb424ee",
     "mobile/src/tasks/TaskInboxButton.tsx": "898cadeead6b4923872354dc1d9791f1c821460e10753f411af4d3d849e016cb",
-    "mobile/src/agent/PromptAssistantUi.tsx": "1335aa902884143da079d40978c3bf62195becc90687c6a55de106b8193efac7",
+    "mobile/src/agent/PromptAssistantUi.tsx": "7afb7c97ad37e24061d1c6e33697bfbff5a5b97bce8b9b9ebd1a748da7332a19",
     "mobile/src/agent/skills/nextRun.ts": "bfec5dd50a8dc9102f3c4cc6f47649c813de588f2a45de5e346d2aa09fdd032e",
     "mobile/src/agent/skills/SkillQuickPicker.tsx": "bef0a4631316b641b29f261dcdfe2db013d900da56845e79759c253d06846f0c",
     "mobile/src/ui/DraggableSheet.tsx": "33161904262afda9a7fb397ce4197c498e1f3b6c8aea0e19cb735c820699dab7",
@@ -2747,7 +2747,8 @@
     "mobile/src/creative/changeReview.ts": "6da71816f999e5c45644159849c7849cbd4c454376f7c6d1c07edf81f48702b7",
     "mobile/src/creative/GenerationRequestReview.tsx": "62b7126764446c79bac825c95e5bb7af7fc6c614e6193b3b7b4ae961d11731e7",
     "mobile/src/creative/PlanRequestReview.tsx": "944bc08ab9e5cd68ba7f9d70e8a2ee8f677d37856a36bc4da531305c2b139994",
-    "mobile/src/creative/planReviewTargets.ts": "8132b83a14a49723800062f578bf6574bae614f33694935f9d35ebf9f58f7f88"
+    "mobile/src/creative/planReviewTargets.ts": "8132b83a14a49723800062f578bf6574bae614f33694935f9d35ebf9f58f7f88",
+    "mobile/src/conversation/ConversationInput.tsx": "b0f1f36f7c6050f60c82aa73cf5141575a7aeeb9e762f71354f485212bcf7522"
   },
   "revisions": [
     {
@@ -2811,6 +2812,19 @@
         "mobile/src/creative/GenerationRequestReview.tsx",
         "mobile/src/creative/PlanRequestReview.tsx",
         "mobile/src/creative/planReviewTargets.ts"
+      ]
+    },
+    {
+      "date": "2026-11-05",
+      "sourceBase": "84e3bd5a",
+      "scope": "M3c task outcome and candidate lifecycle",
+      "evidence": "docs/design/evidence/2026-11-05-agent-roadmap/README.md",
+      "reviewedSources": [
+        "mobile/app/creative-task/[id].tsx",
+        "mobile/src/creative/ShotOutputReview.tsx",
+        "mobile/src/creative/CreativeResults.tsx",
+        "mobile/src/agent/PromptAssistantUi.tsx",
+        "mobile/src/conversation/ConversationInput.tsx"
       ]
     }
   ]

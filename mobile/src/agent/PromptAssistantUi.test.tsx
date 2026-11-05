@@ -1124,7 +1124,7 @@ describe('Prompt assistant UI primitives', () => {
     });
     act(() => tree.root.findByProps({ accessibilityLabel: '停止本轮' }).props.onPress());
     expect(abortRun).toHaveBeenCalledTimes(1);
-    expect(tree.root.findAllByType(Text).some((node) => node.props.children === '已停止生成')).toBe(true);
+    expect(tree.root.findAllByType(Text).some((node) => node.props.children === '已停止本轮助手；已提交的生成任务继续处理')).toBe(true);
     act(() => tree.unmount());
   });
 
@@ -1156,7 +1156,7 @@ describe('Prompt assistant UI primitives', () => {
     act(() => tree.root.findByProps({ accessibilityLabel: '停止本轮' }).props.onPress());
     expect(abortRun).toHaveBeenCalledTimes(1);
     expect(tree.root.findByProps({ accessibilityLabel: '重试上一轮' })).toBeTruthy();
-    expect(renderedText(tree)).toContain('已停止生成');
+    expect(renderedText(tree)).toContain('已停止本轮助手；已提交的生成任务继续处理');
     act(() => tree.unmount());
   });
 

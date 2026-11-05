@@ -13,8 +13,8 @@ export function ConversationInput({ inputRef, style, value, ...props }: TextInpu
 }
 
 export function ConversationSend({running,busy,disabled,onSend,onStop}:{running:boolean;busy?:boolean;disabled?:boolean;onSend:()=>void;onStop:()=>void}) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={running?'停止本轮':busy?'发送中':'发送消息'} accessibilityState={{disabled:!running&&disabled,busy}} disabled={!running&&disabled} onPress={running?onStop:onSend}
-    style={({pressed})=>({width:44,height:44,borderRadius:12,alignItems:'center',justifyContent:'center',backgroundColor:!running&&disabled?COLORS.surfaceRaised:COLORS.primary,opacity:pressed?0.7:1})}>
+  return <Pressable accessibilityRole="button" accessibilityHint={running?'停止助手回复与后续工具调用，已提交的生成任务继续处理':undefined} accessibilityLabel={running?'停止本轮':busy?'发送中':'发送消息'} accessibilityState={{disabled:!running&&disabled,busy}} disabled={!running&&disabled} onPress={running?onStop:onSend}
+    style={({pressed})=>({width:48,height:48,borderRadius:12,alignItems:'center',justifyContent:'center',backgroundColor:!running&&disabled?COLORS.surfaceRaised:COLORS.primary,opacity:pressed?0.7:1})}>
     {busy&&!running?<ActivityIndicator color={COLORS.textMuted}/>:<AppIcon name={running?'close':'send'} size={19} color={!running&&disabled?COLORS.textMuted:COLORS.onPrimary}/>}
   </Pressable>;
 }

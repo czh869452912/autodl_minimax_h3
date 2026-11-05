@@ -368,11 +368,11 @@ flowchart LR
 
 **任务**：审阅视频候选并明确采用。
 
-**现状问题**：列表制作与此审阅页分离，候选按钮以编号文本呈现；容易与素材详情/输出预览混淆。
+**现状问题**：M3c 已明确任务/归档/采用边界；未知结果先核查，候选前台刷新不替换显式预览。
 
 **展示与交互建议**：演进为镜头工作区的“审阅”状态；候选缩略图轨、当前采用标记、版本摘要；主动作采用，续作放次级。
 
-**实施状态**：proposed。**证据范围**：source-reviewed。
+**实施状态**：implemented (M3c presentation)。**证据范围**：source-reviewed; unknown outcome offline Android sample, candidate lifecycle automated。
 
 **主操作**：采用此固定版本。**目标归属**：项目工作区。
 
