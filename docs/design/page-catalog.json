@@ -1148,10 +1148,11 @@
       "route": null,
       "parent": "project",
       "sources": [
-        "mobile/src/creative/ProjectPlans.tsx"
+        "mobile/src/creative/ProjectPlans.tsx",
+        "mobile/src/creative/planPresentation.ts"
       ],
       "purpose": "查看编排、依赖与待授权任务",
-      "currentIssue": "列表/详情/创建/批次范围已分工；请求按持久化批次审阅，暂停不撤回已提交任务。",
+      "currentIssue": "列表/详情/创建/批次范围已分工；取消/隔离优先显示记录，失败可处理；迟到读取不跨项目回填。请求按持久化批次审阅。",
       "recommendation": "计划列表以需我处理/运行中/完成分组；点入计划步骤图或纵向阶段清单；状态只显示适用动作；依赖高级编辑。",
       "entry": "项目计划、任务回流",
       "back": "回原计划焦点；选择后状态更新可见",
@@ -1162,7 +1163,9 @@
         "暂停",
         "执行",
         "失败",
-        "隔离"
+        "隔离",
+        "取消",
+        "完成"
       ],
       "priority": "P1",
       "references": [
@@ -2029,7 +2032,7 @@
         "mobile/src/creative/planReviewTargets.ts"
       ],
       "purpose": "核对原草稿的确切请求并分别确认外发与消费许可",
-      "currentIssue": "单次、计划与批次共用请求字段与分别确认许可；真实供应商验证独立记录",
+      "currentIssue": "单次、计划与批次共用请求审阅与双许可；图片含实际处理参数/蒙版来源/超分尺寸，编码不显示；真实供应商验证独立记录。",
       "recommendation": "单次/计划/批次共用准确请求字段和 prepare/confirm；保存配置不提交，退出不写许可；真实供应商验收单独记录。",
       "entry": "本轮创作中的固定草稿请求入口",
       "back": "关闭返回原本轮创作；编辑打开原固定草稿",
@@ -3009,7 +3012,7 @@
     "mobile/src/creative/OutboundConsentScreen.tsx": "e3c0f110e46566bea0fe3d854b940b356b0c670da8d690e3b4ca1aa39c09bfa6",
     "mobile/src/creative/ProjectActivityPanel.tsx": "371cbe2e74ec630c53e1ae1c92ec50773a186ae9f79e8e4155d9f7545b064801",
     "mobile/src/creative/ProjectOverview.tsx": "036d5be3d69af534a3f8378ac63a224990b17bd6ffa19b021dd109b1aa0ebccf",
-    "mobile/src/creative/ProjectPlans.tsx": "9d2e2c8fecc519aa21bb298ed456a62cfe66ca40399b3ab9919fc94ec08a07ee",
+    "mobile/src/creative/ProjectPlans.tsx": "4b8b798ea4a9687e76a186207e075ee8218ad6196f8cfff5a3635bb58bfc69d3",
     "mobile/src/creative/ProjectSearchScreen.tsx": "ba0ce8393ca776c127a1614b78cfa78898c74690cc7a811425c54daceb9d968c",
     "mobile/src/creative/ProjectShots.tsx": "20dfb2f2f60929e63ce7fac08fd818c46dbe98449c968aaea6cb9e15baa6ad20",
     "mobile/src/creative/PromptAssistSheet.tsx": "e6f1f14a9aee6b914a9f5cc8a4e8df4f3e4c61a5cdcb395f4bb2219e16ce80a0",
@@ -3033,7 +3036,7 @@
     "mobile/src/creative/ProposalReviewCard.tsx": "675bde9e3fc801d3dd4d34a11ce06d9668f0c5e7e3890cd5b1474b2180293f61",
     "mobile/src/creative/proposalPresentation.ts": "36c3492fd2f44ad01c2d16b8fffb2264c1f2c908ce1ae5807d4226e8da2246c4",
     "mobile/src/creative/changeReview.ts": "6da71816f999e5c45644159849c7849cbd4c454376f7c6d1c07edf81f48702b7",
-    "mobile/src/creative/GenerationRequestReview.tsx": "62b7126764446c79bac825c95e5bb7af7fc6c614e6193b3b7b4ae961d11731e7",
+    "mobile/src/creative/GenerationRequestReview.tsx": "78af1655dddc7b4e4f303cb1ab12eb92ee865db7bde5b1e1034ce130de9f8784",
     "mobile/src/creative/PlanRequestReview.tsx": "c1c57eead16ba7757b6b2fe82986982fac24096268c5579b67319bd54e7d6a2c",
     "mobile/src/creative/planReviewTargets.ts": "8132b83a14a49723800062f578bf6574bae614f33694935f9d35ebf9f58f7f88",
     "mobile/src/conversation/ConversationInput.tsx": "b0f1f36f7c6050f60c82aa73cf5141575a7aeeb9e762f71354f485212bcf7522",
@@ -3042,7 +3045,8 @@
     "mobile/src/agent/HistoryList.tsx": "f3ca133b4a36903b2cc567f90ac111b89628102da07a94367524440ad9b02584",
     "mobile/src/agent/LocalHistoryBrowser.tsx": "3b2915ce6ae58c2a5be273debb88f2ad416232658fa6b6155ca9012436533bd6",
     "mobile/src/creative/ProjectPermissions.tsx": "32ba42d6956412778e46a3ebb64cf975bec7953b3be8bb746d974ec754ece4f8",
-    "mobile/src/creative/projectPermissionStore.ts": "3d5eb4a930b63acd39f80f059677cd271aba42c39018533c4f2c7f2c13310b90"
+    "mobile/src/creative/projectPermissionStore.ts": "3d5eb4a930b63acd39f80f059677cd271aba42c39018533c4f2c7f2c13310b90",
+    "mobile/src/creative/planPresentation.ts": "0e9bb560bb579ab30518aea6353375502df08dbbae3d35d2818704d4e419c4d6"
   },
   "revisions": [
     {
@@ -3177,6 +3181,17 @@
         "mobile/src/creative/projectPermissionStore.ts",
         "mobile/src/creative/AgentCreativePanel.tsx",
         "mobile/src/creative/ProjectOverview.tsx"
+      ]
+    },
+    {
+      "date": "2026-11-05",
+      "sourceBase": "245b1129 + post-implementation review fixes",
+      "scope": "M1–M5 source/regression/document review; terminal plan states, stale project reads, video recovery and image request details corrected; no new device validation",
+      "evidence": "docs/design/agent-post-implementation-review.md",
+      "reviewedSources": [
+        "mobile/src/creative/ProjectPlans.tsx",
+        "mobile/src/creative/planPresentation.ts",
+        "mobile/src/creative/GenerationRequestReview.tsx"
       ]
     }
   ]
