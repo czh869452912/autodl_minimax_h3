@@ -1144,7 +1144,7 @@
         "mobile/src/creative/ProjectPlans.tsx"
       ],
       "purpose": "查看编排、依赖与待授权任务",
-      "currentIssue": "依赖、本地检查、候选选择、暂停、授权、重做、取消等按条件铺在卡片；技术状态压过决策。",
+      "currentIssue": "M3b2 已迁移确切请求审阅；列表和详情、依赖搜索仍待 M4。",
       "recommendation": "计划列表以需我处理/运行中/完成分组；点入计划步骤图或纵向阶段清单；状态只显示适用动作；依赖高级编辑。",
       "entry": "项目计划、任务回流",
       "back": "回原计划焦点；选择后状态更新可见",
@@ -2004,17 +2004,20 @@
     },
     {
       "id": "generation-request-review",
-      "name": "单次生成请求审阅",
+      "name": "生成请求审阅",
       "kind": "surface",
       "route": null,
       "parent": "assistant-creative-cards",
       "sources": [
         "mobile/src/creative/AgentCreativeCards.tsx",
         "mobile/src/creative/GenerationRequestReview.tsx",
-        "mobile/src/creative/CreativeAccountPanel.tsx"
+        "mobile/src/creative/CreativeAccountPanel.tsx",
+        "mobile/src/creative/ProjectPlans.tsx",
+        "mobile/src/creative/PlanRequestReview.tsx",
+        "mobile/src/creative/planReviewTargets.ts"
       ],
       "purpose": "核对原草稿的确切请求并分别确认外发与消费许可",
-      "currentIssue": "M3b1 已替换会话单次确认弹窗；计划与批次仍待迁移，视频工作流字段展示仍需继续核对",
+      "currentIssue": "单次、计划与批次共用请求字段与分别确认许可；真实供应商验证独立记录",
       "recommendation": "沿用现有主题与 prepare/confirm；保存账号不提交，退出不写许可；计划授权迁移独立验收。",
       "entry": "本轮创作中的固定草稿请求入口",
       "back": "关闭返回原本轮创作；编辑打开原固定草稿",
@@ -2039,7 +2042,7 @@
         "docs/design/evidence/2026-11-05-m3b-request/03-permission-default.png",
         "docs/design/evidence/2026-11-05-m3b-request/05-both-checked.png"
       ],
-      "proposalStatus": "partially-implemented (M3b1; plan/batch pending)",
+      "proposalStatus": "implemented (M3b UI; offline device sampling)",
       "targetOwner": "agent"
     },
     {
@@ -2649,6 +2652,22 @@
       "type": "navigate",
       "source": "mobile/src/creative/AgentCreativeCards.tsx",
       "context": "固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文"
+    },
+    {
+      "fromId": "project-plans",
+      "toId": "generation-request-review",
+      "label": "核对计划请求",
+      "type": "open-surface",
+      "source": "mobile/src/creative/ProjectPlans.tsx",
+      "context": "projectId + planId 或持久化 batchId；范围独立于当前分页"
+    },
+    {
+      "fromId": "project-plans",
+      "toId": "generation-request-review",
+      "label": "核对批次请求",
+      "type": "open-surface",
+      "source": "mobile/src/creative/ProjectPlans.tsx",
+      "context": "projectId + planId 或持久化 batchId；范围独立于当前分页"
     }
   ],
   "sourceDigests": {
@@ -2702,7 +2721,7 @@
     "mobile/src/creative/OutboundConsentScreen.tsx": "e3c0f110e46566bea0fe3d854b940b356b0c670da8d690e3b4ca1aa39c09bfa6",
     "mobile/src/creative/ProjectActivityPanel.tsx": "371cbe2e74ec630c53e1ae1c92ec50773a186ae9f79e8e4155d9f7545b064801",
     "mobile/src/creative/ProjectOverview.tsx": "a2001373edf8e2fc6d17e65742d71726807b785742051b6caff433d0bd211d5f",
-    "mobile/src/creative/ProjectPlans.tsx": "73c1a9f0f939080f9494a19f9d3c2dbe98c08ac12455166b4ae136d6e944b23c",
+    "mobile/src/creative/ProjectPlans.tsx": "fe7c116bfabb119e0f621bbe358a679d91bab8fd2adcdb9e044e1e6134bc8330",
     "mobile/src/creative/ProjectSearchScreen.tsx": "ba0ce8393ca776c127a1614b78cfa78898c74690cc7a811425c54daceb9d968c",
     "mobile/src/creative/ProjectShots.tsx": "20dfb2f2f60929e63ce7fac08fd818c46dbe98449c968aaea6cb9e15baa6ad20",
     "mobile/src/creative/PromptAssistSheet.tsx": "e6f1f14a9aee6b914a9f5cc8a4e8df4f3e4c61a5cdcb395f4bb2219e16ce80a0",
@@ -2726,7 +2745,9 @@
     "mobile/src/creative/ProposalReviewCard.tsx": "675bde9e3fc801d3dd4d34a11ce06d9668f0c5e7e3890cd5b1474b2180293f61",
     "mobile/src/creative/proposalPresentation.ts": "36c3492fd2f44ad01c2d16b8fffb2264c1f2c908ce1ae5807d4226e8da2246c4",
     "mobile/src/creative/changeReview.ts": "6da71816f999e5c45644159849c7849cbd4c454376f7c6d1c07edf81f48702b7",
-    "mobile/src/creative/GenerationRequestReview.tsx": "3827880b94a308d6b2ecd49881af8c7853ffeb03492f4ed736356fa741bd7598"
+    "mobile/src/creative/GenerationRequestReview.tsx": "62b7126764446c79bac825c95e5bb7af7fc6c614e6193b3b7b4ae961d11731e7",
+    "mobile/src/creative/PlanRequestReview.tsx": "944bc08ab9e5cd68ba7f9d70e8a2ee8f677d37856a36bc4da531305c2b139994",
+    "mobile/src/creative/planReviewTargets.ts": "8132b83a14a49723800062f578bf6574bae614f33694935f9d35ebf9f58f7f88"
   },
   "revisions": [
     {
@@ -2778,6 +2799,18 @@
       "reviewedSources": [
         "mobile/src/creative/AgentCreativeCards.tsx",
         "mobile/src/creative/GenerationRequestReview.tsx"
+      ]
+    },
+    {
+      "date": "2026-11-05",
+      "sourceBase": "61b014e0",
+      "scope": "M3b2 exact plan/batch request review",
+      "evidence": "docs/design/evidence/2026-11-05-agent-roadmap/README.md",
+      "reviewedSources": [
+        "mobile/src/creative/ProjectPlans.tsx",
+        "mobile/src/creative/GenerationRequestReview.tsx",
+        "mobile/src/creative/PlanRequestReview.tsx",
+        "mobile/src/creative/planReviewTargets.ts"
       ]
     }
   ]

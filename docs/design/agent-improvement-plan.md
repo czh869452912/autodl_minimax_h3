@@ -1,6 +1,6 @@
 # Agent UX/UI 改进实施计划
 
-日期：2026-11-04（Asia/Shanghai）。状态：M1a/M1b、M2、M3a、M3b1 已接入源码；M0 仅完成这些切片必要基线与合同，M3b2/其余配置恢复、M3c、M4/M5 planned。具体已测/未测状态见 [M1](agent-m1-implementation.md)、[M2](agent-m2-implementation.md) 与 [M3a 实现与验证](agent-m3a-implementation.md)。依据 [50 项逐项评估](agent-action-review.md)、[目标与流程合同](target-and-flows.md) 和 D001–D004；编号沿用评估中的 01–50。目标为 Android APK，使用现有主题、对象身份与执行能力。
+日期：2026-11-04（Asia/Shanghai）。状态：M1a/M1b、M2、M3a、M3b1 已接入源码；M0 仅完成这些切片必要基线与合同，M3b2 已接入；M3c、M4/M5 继续推进。具体已测/未测状态见 [M1](agent-m1-implementation.md)、[M2](agent-m2-implementation.md) 与 [M3a 实现与验证](agent-m3a-implementation.md)。依据 [50 项逐项评估](agent-action-review.md)、[目标与流程合同](target-and-flows.md) 和 D001–D004；编号沿用评估中的 01–50。目标为 Android APK，使用现有主题、对象身份与执行能力。
 
 ## 目标与组织方式
 
@@ -116,3 +116,5 @@ M1 结束后，用实际设计、实现、设备验证耗时估计后续工作�
 ## 完成判据
 
 用户能说清“当前作用哪个项目/镜头、下一步做什么、会不会提交/消费、完成后到哪里”；核心任务可从入口完成并可靠返回；输入、版本、许可与历史不因界面重组而变化。以任务完成与误操作改善衡量，按钮总数只作为辅助观察。
+
+2026-11-05 续：M3b2 计划/批次已接入同一请求审阅及配置恢复，50 项相关测试通过，离线设备核对请求范围与取消。见 [续作记录](agent-roadmap-completion.md)。

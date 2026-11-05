@@ -6,7 +6,7 @@
 
 ## 范围与结论
 
-覆盖 29 个路由页面、2 个壳层、30 个重要子表面；记录 64 条源码确认的关键点击边。非路由清单不宣称穷尽全部 JSX 分支，点击边也不是运行时全图。
+覆盖 29 个路由页面、2 个壳层、30 个重要子表面；记录 66 条源码确认的关键点击边。非路由清单不宣称穷尽全部 JSX 分支，点击边也不是运行时全图。
 
 当前实现已有四入口、预览、参数抽屉、任务气泡、明确采用和不可变版本，方向不必推倒。M1 技能快速选用、M2 分步添加已独立，M3a 建议与草稿审阅、M3b1 单次请求审阅已按对象与状态接入；项目概览仍承担工具目录，镜头列表承担编辑器，技能目录与运行历史共享，时间线承担参数表与工程管理。应继续按对象和状态重组任务，不再给每项能力补一个常驻按钮。
 
@@ -94,7 +94,7 @@ flowchart LR
       会话内技能快速层 [surface; skill-quick]
       提示词版本面板 [surface; prompt-versions]
       助手本轮创作对象卡 [surface; assistant-creative-cards]
-        单次生成请求审阅 [surface; generation-request-review]
+        生成请求审阅 [surface; generation-request-review]
         单次请求准备恢复 [surface; generation-request-recovery]
     项目列表 [route; projects]
       项目工作区 [route; project]
@@ -786,7 +786,7 @@ flowchart LR
 
 **任务**：查看编排、依赖与待授权任务。
 
-**现状问题**：依赖、本地检查、候选选择、暂停、授权、重做、取消等按条件铺在卡片；技术状态压过决策。
+**现状问题**：M3b2 已迁移确切请求审阅；列表和详情、依赖搜索仍待 M4。
 
 **展示与交互建议**：计划列表以需我处理/运行中/完成分组；点入计划步骤图或纵向阶段清单；状态只显示适用动作；依赖高级编辑。
 
@@ -1257,15 +1257,15 @@ flowchart LR
 **依据**：[src/creative/AgentCreativeCards.tsx](../../mobile/src/creative/AgentCreativeCards.tsx)、[src/creative/agentCreativeActivity.ts](../../mobile/src/creative/agentCreativeActivity.ts)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[01-baseline-conversation.png](../../docs/design/evidence/2026-11-04-m3-review/01-baseline-conversation.png)、[02-baseline-cards.png](../../docs/design/evidence/2026-11-04-m3-review/02-baseline-cards.png)、[04-candidate-conversation.png](../../docs/design/evidence/2026-11-04-m3-review/04-candidate-conversation.png)、[05-candidate-cards.png](../../docs/design/evidence/2026-11-04-m3-review/05-candidate-cards.png)、[08-return-conversation.png](../../docs/design/evidence/2026-11-04-m3-review/08-return-conversation.png)、[14-resolved-cards.png](../../docs/design/evidence/2026-11-04-m3-review/14-resolved-cards.png)、[15-open-draft.png](../../docs/design/evidence/2026-11-04-m3-review/15-open-draft.png)。
 
 <a id="generation-request-review"></a>
-### 单次生成请求审阅 · generation-request-review · P1
+### 生成请求审阅 · generation-request-review · P1
 
 **任务**：核对原草稿的确切请求并分别确认外发与消费许可。
 
-**现状问题**：M3b1 已替换会话单次确认弹窗；计划与批次仍待迁移，视频工作流字段展示仍需继续核对
+**现状问题**：单次、计划与批次共用请求字段与分别确认许可；真实供应商验证独立记录
 
 **展示与交互建议**：沿用现有主题与 prepare/confirm；保存账号不提交，退出不写许可；计划授权迁移独立验收。
 
-**实施状态**：partially-implemented (M3b1; plan/batch pending)。**证据范围**：source-reviewed; offline request UI device samples, no real dispatch。
+**实施状态**：implemented (M3b UI; offline device sampling)。**证据范围**：source-reviewed; offline request UI device samples, no real dispatch。
 
 **主操作**：确认两项许可后生成一次。**目标归属**：项目助手。
 
@@ -1273,7 +1273,7 @@ flowchart LR
 
 **应覆盖状态**：准备中 / 待确认外发 / 待确认消费 / 正在提交 / 范围变化 / 提交失败。
 
-**依据**：[src/creative/AgentCreativeCards.tsx](../../mobile/src/creative/AgentCreativeCards.tsx)、[src/creative/GenerationRequestReview.tsx](../../mobile/src/creative/GenerationRequestReview.tsx)、[src/creative/CreativeAccountPanel.tsx](../../mobile/src/creative/CreativeAccountPanel.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[01-baseline-alert.png](../../docs/design/evidence/2026-11-05-m3b-request/01-baseline-alert.png)、[02-request-top.png](../../docs/design/evidence/2026-11-05-m3b-request/02-request-top.png)、[03-permission-default.png](../../docs/design/evidence/2026-11-05-m3b-request/03-permission-default.png)、[05-both-checked.png](../../docs/design/evidence/2026-11-05-m3b-request/05-both-checked.png)。
+**依据**：[src/creative/AgentCreativeCards.tsx](../../mobile/src/creative/AgentCreativeCards.tsx)、[src/creative/GenerationRequestReview.tsx](../../mobile/src/creative/GenerationRequestReview.tsx)、[src/creative/CreativeAccountPanel.tsx](../../mobile/src/creative/CreativeAccountPanel.tsx)、[src/creative/ProjectPlans.tsx](../../mobile/src/creative/ProjectPlans.tsx)、[src/creative/PlanRequestReview.tsx](../../mobile/src/creative/PlanRequestReview.tsx)、[src/creative/planReviewTargets.ts](../../mobile/src/creative/planReviewTargets.ts)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[01-baseline-alert.png](../../docs/design/evidence/2026-11-05-m3b-request/01-baseline-alert.png)、[02-request-top.png](../../docs/design/evidence/2026-11-05-m3b-request/02-request-top.png)、[03-permission-default.png](../../docs/design/evidence/2026-11-05-m3b-request/03-permission-default.png)、[05-both-checked.png](../../docs/design/evidence/2026-11-05-m3b-request/05-both-checked.png)。
 
 <a id="generation-request-recovery"></a>
 ### 单次请求准备恢复 · generation-request-recovery · P1
@@ -1359,11 +1359,13 @@ flowchart LR
 | 助手本轮创作对象卡 | 完善图片草稿 | 图片创作详情 | 固定 draft.id，不调用模型或提交生成 | navigate |
 | 助手本轮创作对象卡 | 完善视频草稿 | 视频创作详情 | 固定 draft.id；M3a 源码核对，未走视频设备任务 | navigate |
 | 助手本轮创作对象卡 | 查看计划步骤 | 项目 / 计划 | projectId+planId+requestId；M3a 源码核对，计划重组留 M4 | navigate |
-| 助手本轮创作对象卡 | 核对这份草稿的生成请求 | 单次生成请求审阅 | 固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文 | open-surface |
+| 助手本轮创作对象卡 | 核对这份草稿的生成请求 | 生成请求审阅 | 固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文 | open-surface |
 | 助手本轮创作对象卡 | 请求准备失败 | 单次请求准备恢复 | 固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文 | open-surface |
-| 单次请求准备恢复 | 重新核对原草稿 | 单次生成请求审阅 | 固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文 | open-surface |
+| 单次请求准备恢复 | 重新核对原草稿 | 生成请求审阅 | 固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文 | open-surface |
 | 单次请求准备恢复 | 编辑原图片草稿 | 图片创作详情 | 固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文 | navigate |
 | 单次请求准备恢复 | 编辑原视频草稿 | 视频创作详情 | 固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文 | navigate |
+| 项目 / 计划 | 核对计划请求 | 生成请求审阅 | projectId + planId 或持久化 batchId；范围独立于当前分页 | open-surface |
+| 项目 / 计划 | 核对批次请求 | 生成请求审阅 | projectId + planId 或持久化 batchId；范围独立于当前分页 | open-surface |
 
 ## 审查优先级
 

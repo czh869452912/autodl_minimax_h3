@@ -1,11 +1,14 @@
+import {ParameterSheet} from './WorkbenchUI';
+import {CreativeAccountPanel} from './CreativeAccountPanel';
 import {readPlanDependencies} from './planDependencies';
-import {confirmOutboundScopes} from './outboundConsentUI';
+import {grantOutboundConsent} from './outboundConsent';
+import {PlanRequestReview} from './PlanRequestReview';
+import {readBatchReviewTargets,type PlanReviewTarget} from './planReviewTargets';
 import {creativeRequestHash} from './videoSubmission';
 import {readPlanPage,readPlanBatchPage,type PlanCursor,type PlanFilter,type PlanBatchSummary} from './planReads';
 import {prepareCreativeVideo} from './videoRuntime';
 import {authorizePlanBatch,authorizePlanRequest,type PlanApproval} from './planAuthorization';
 import {preparedCreativeSubmission} from './preparedSubmission';
-import {fetchVideoPrice,quoteVideo,quoteLabel} from './autodlPricing';
 import {useLiveRefresh} from './useLiveRefresh';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {Alert,Image,Text,TextInput,View} from 'react-native';
@@ -31,6 +34,11 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
   const [filter,setFilter]=useState<PlanFilter>('all'),[pageHistory,setPageHistory]=useState<Array<PlanCursor|undefined>>([]),[pageNext,setPageNext]=useState<PlanCursor>();
   const [batches,setBatches]=useState<PlanBatchSummary[]>([]),[batchCursor,setBatchCursor]=useState<PlanCursor>(),[batchNext,setBatchNext]=useState<PlanCursor>();
   const [dependencyTarget,setDependencyTarget]=useState<string>();
+  const owner=useRef(''),context=`${projectId}:${initialPlanId??''}:${batchId??''}`;owner.current=context;
+  type Review={db:ReturnType<typeof getDatabase>;context:string;batchId?:string;approvals:PlanApproval[];items:Array<{title:string;preview:Awaited<ReturnType<typeof prepareCreativeVideo>>}>;excluded:Array<{title:string;reason:string}>};
+  const [review,setReview]=useState<Review>();
+  const [recovery,setRecovery]=useState<{targets:PlanReviewTarget[];excluded:Review['excluded'];batchId?:string;message:string}>();
+  useEffect(()=>{owner.current=context;setReview(undefined);setRecovery(undefined);return()=>{owner.current='';};},[context]);
   const pageCursor=pageHistory[pageHistory.length-1];
   const readEpoch=useRef(0);
   const refresh=useCallback(async(current:()=>boolean=()=>true)=>{
@@ -49,36 +57,53 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
   useLiveRefresh(async current=>{try{await refresh(current);}catch{if(current())setError('计划读取失败');}},2000,`${projectId}:${initialPlanId??''}:${batchId??''}:${filter}:${pageCursor?.id??''}:${batchCursor?.id??''}`);
   const work=async(fn:()=>Promise<unknown>)=>{if(lock.current||archived)return;lock.current=true;setBusy(true);setError('');try{await fn();executorWakePort.signal('command');await refresh();}catch(e){setError(e instanceof Error?e.message:'操作失败');}finally{lock.current=false;setBusy(false);}};
   const action=(label:string,fn:()=>void)=><ListAction label={label} secondary disabled={busy||archived} onPress={fn}/>;
+  const prepareReview=async(targets:PlanReviewTarget[],excluded:Array<{title:string;reason:string}>,selectedBatch?:string)=>{
+    if(!targets.length)throw Error('没有已选图且等待授权的镜头；暂停、未选图与已有任务均未纳入。');
+    const db=getDatabase(),origin=context,approvals:PlanApproval[]=[],items:Review['items']=[];
+    for(const card of targets){
+      if(!card.step.draft_id)throw Error('计划草稿不可用');
+      let preview:Awaited<ReturnType<typeof prepareCreativeVideo>>;
+      try{preview=await prepareCreativeVideo(card.step.draft_id);}catch(e){if(owner.current===origin&&getDatabase()===db)setRecovery({targets,excluded,batchId:selectedBatch,message:e instanceof Error?e.message:'请求准备失败'});return;}
+      if(db!==getDatabase()||preview.db!==db||owner.current!==origin)throw Error('计划范围或数据库已变化，请重新准备');
+      approvals.push({planId:card.plan.id,planRevision:card.plan.revision,stepId:card.step.id,stepRevision:card.step.revision,projectId,generationId:preview.account.credential_generation_id,submission:preparedCreativeSubmission(preview)});
+      items.push({title:card.plan.title,preview});
+    }
+    setRecovery(undefined);setReview({db,context:origin,batchId:selectedBatch,approvals,items,excluded});
+  };
   const authorize=(card:Card)=>void work(async()=>{
-    if(!card.step.draft_id)throw new Error('计划草稿不可用');
-    const preview=await prepareCreativeVideo(card.step.draft_id);
-    const binding=preview.prepared.inputSnapshot;
-    const price=await fetchVideoPrice().catch(()=>undefined);
-    const quote=quoteVideo(price,String(binding.resolution??""),Number(binding.duration));
-    const estimate=quote?`${quoteLabel(quote)} CNY，查询于 ${new Date(quote.checkedAt).toLocaleTimeString()}。此参考价不是可执行的费用上限；当前服务按未知费用单次授权。`:'无法获取有效估价，费用未知。';
-    Alert.alert('授权此计划继续生成',`${planVideoSummary(card.step.input_binding_json)}。固定输入版本 ${JSON.parse(card.step.input_binding_json).versionId ?? '尚未选定'}，使用计划提示词，本次种子 ${String(binding.seed??"由工作流固定")}，最多生成 1 次视频，15 分钟有效。${estimate}无金额上限。网络结果不明不会自动重发。`,[
-      {text:'取消',style:'cancel'},{text:'接受未知费用，仅授权一次',onPress:()=>void work(async()=>{
-        if(preview.db!==getDatabase())throw new Error('数据库已恢复，请重新准备');
-        await confirmOutboundScopes(preview.db,[{projectId,provider:'autodl',generationId:preview.account.credential_generation_id,requestHash:creativeRequestHash(preview.prepared),versions:preview.versionIds}]);
-        await authorizePlanRequest(preview.db,{planId:card.plan.id,planRevision:card.plan.revision,stepId:card.step.id,stepRevision:card.step.revision,projectId,generationId:preview.account.credential_generation_id,submission:preparedCreativeSubmission(preview)});
-      })}]);
+    if(card.paused)throw Error('请先恢复此计划的后续提交，再重新审阅');
+    await prepareReview([card],[]);
   });
   const authorizeBatch=()=>void work(async()=>{
-    if(!batchId)throw new Error('请先选择批次');
-    const candidates=cards.filter(c=>c.plan.state==='ACTIVE'&&c.step.state==='BLOCKED'&&!c.step.job_id&&!c.paused);
-    if(!candidates.length)throw new Error('没有已选图且等待授权的镜头');
-    const db=getDatabase(),approvals:PlanApproval[]=[];
-    for(const card of candidates){
-      if(!card.step.draft_id)throw new Error('计划草稿不可用');
-      const preview=await prepareCreativeVideo(card.step.draft_id);
-      if(preview.db!==db)throw new Error('数据库已切换');
-      approvals.push({planId:card.plan.id,planRevision:card.plan.revision,stepId:card.step.id,stepRevision:card.step.revision,projectId,generationId:preview.account.credential_generation_id,submission:preparedCreativeSubmission(preview)});
-    }
-    const details=approvals.map((a,i)=>candidates[i].plan.title+' · '+planVideoSummary(candidates[i].step.input_binding_json)+' · 输入 '+a.submission.versionIds.join(',')+' · 种子 '+String(a.submission.prepared.inputSnapshot.seed)).join('\n');
-    Alert.alert('确认本批次具体请求',details+'\n共 '+approvals.length+' 次视频，每个请求仅 1 次，15 分钟有效。费用未知，无金额上限。暂停或未选图镜头不在范围内；结果不明不自动重发。',[{text:'取消',style:'cancel'},{text:'授权这些请求',onPress:()=>void work(async()=>{if(db!==getDatabase())throw new Error('数据库已恢复，请重新准备');await confirmOutboundScopes(db,approvals.map(a=>({projectId,provider:'autodl',generationId:a.generationId,requestHash:creativeRequestHash(a.submission.prepared),versions:a.submission.versionIds})));await authorizePlanBatch(db,batchId,projectId,approvals);})}]);
+    if(!batchId)throw Error('请先选择批次');
+    const targets=await readBatchReviewTargets(getDatabase(),projectId,batchId);
+    await prepareReview(targets.included,targets.excluded,batchId);
   });
-  if (compact && !error && !cards.some(c => c.plan.state === 'ACTIVE' && (c.decision.state === 'WAITING' || c.step.state === 'BLOCKED'))) return null;
+  const confirmReview=async()=>{
+    if(!review)return;
+    const selected=review;setReview(undefined);
+    await work(async()=>{
+      if(selected.db!==getDatabase()||owner.current!==selected.context)throw Error('计划范围或数据库已变化，请重新审阅');
+      for(const approval of selected.approvals){
+        if(await selected.db.getFirstAsync('SELECT plan_id FROM creative_plan_controls WHERE plan_id=? AND paused=1',approval.planId))throw Error('计划已暂停，请重新审阅本次集合');
+      }
+      for(const approval of selected.approvals)await grantOutboundConsent(selected.db,{projectId,provider:'autodl',generationId:approval.generationId,requestHash:creativeRequestHash(approval.submission.prepared),versions:approval.submission.versionIds});
+      if(selected.batchId)await authorizePlanBatch(selected.db,selected.batchId,projectId,selected.approvals);
+      else await authorizePlanRequest(selected.db,selected.approvals[0]);
+    });
+  };
+  if (compact && !recovery && !review && !error && !cards.some(c => c.plan.state === 'ACTIVE' && (c.decision.state === 'WAITING' || c.step.state === 'BLOCKED'))) return null;
   return <View style={{gap:12}}>
+    {recovery?<ParameterSheet title="计划请求尚未就绪" fullScreen onClose={()=>{if(!busy)setRecovery(undefined);}}>
+      <Text accessibilityRole="alert" style={{color:COLORS.danger}}>{recovery.message}</Text>
+      <Text style={{color:COLORS.textMuted}}>保留原计划。配置保存不会提交；返回后需重新核对请求，旧版本变化会阻止授权。</Text>
+      {/连接|凭据|账号|CREDENTIAL|ACCOUNT/.test(recovery.message)?<CreativeAccountPanel provider="autodl"/>:null}
+      {/工作流|WORKFLOW/.test(recovery.message)?action('配置生成工作流',()=>router.push('/creative-capabilities')):null}
+      {action('重新核对计划请求',()=>void work(()=>prepareReview(recovery.targets,recovery.excluded,recovery.batchId)))}
+      {recovery.targets.map(t=><View key={t.plan.id}>{t.step.draft_id?action('编辑 '+t.plan.title+' 的原草稿',()=>router.push({pathname:'/creative-draft/[id]',params:{id:t.step.draft_id!}})):null}</View>)}
+      {action('返回计划',()=>setRecovery(undefined))}
+    </ParameterSheet>:null}
+    {review?<PlanRequestReview items={review.items} excluded={review.excluded} batch={!!review.batchId} busy={busy} error={error} onClose={()=>{if(!busy)setReview(undefined);}} onConfirm={confirmReview}/>:null}
     <Text style={{color:COLORS.text,fontSize:20,fontWeight:'700'}}>{compact?'需要你处理':'选图与视频计划'}</Text>
     {!compact ? <Text style={{color:COLORS.textMuted}}>计划会保留候选、选定版本与生成状态。视频结果归档为候选，不会覆盖镜头已选成果。</Text> : null}
     {!compact&&!initialPlanId?<View style={{gap:8}}>

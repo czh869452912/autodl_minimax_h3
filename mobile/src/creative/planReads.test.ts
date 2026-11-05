@@ -1,6 +1,7 @@
 import {createInitializedRealSqliteTestDb} from '../test/realSqlite';
 import {createCreativeService} from './service';
 import {readPlanPage,readPlanBatchPage} from './planReads';
+import {readBatchReviewTargets} from './planReviewTargets';
 test('plan pages remain complete at equal timestamps and batch filters stay project scoped',async()=>{
  const db=await createInitializedRealSqliteTestDb();try{
  const service=createCreativeService(db as never);let n=0;
@@ -20,5 +21,14 @@ test('plan pages remain complete at equal timestamps and batch filters stay proj
  expect((await readPlanPage(db as never,projectId,{batchId:'batch',filter:'failed'})).items).toHaveLength(10);
  expect((await readPlanPage(db as never,'other',{batchId:'batch'})).items).toEqual([]);
  expect((await readPlanBatchPage(db as never,'other')).items).toEqual([]);
+ for(let i=0;i<20;i+=2){
+ const draft=await service.execute({name:'draft.createVideo',payload:{projectId,prompt:'move'}},'draft'+i);if(draft.status!=='completed')throw Error('draft');
+ db.runSync("UPDATE creative_plan_steps SET draft_id=? WHERE plan_id=?",draft.value.draftId,'plan'+String(i).padStart(3,'0'));
+ }
+ db.runSync("INSERT INTO creative_plan_controls VALUES('plan000',1,1)");
+ const review=await readBatchReviewTargets(db as never,projectId,'batch');
+ expect(review.included).toHaveLength(9);expect(review.excluded).toHaveLength(11);
+ expect(review.excluded).toContainEqual({title:'plan000',reason:'后续已暂停'});
+ expect((await readBatchReviewTargets(db as never,'other','batch')).included).toEqual([]);
  }finally{db.close();}
 });
