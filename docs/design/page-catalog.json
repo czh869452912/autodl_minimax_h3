@@ -1023,7 +1023,7 @@
       "purpose": "核查/撤销已绑定请求的许可",
       "currentIssue": "页面只给供应商、数量和期限，难理解具体素材、任务及是否已发送；与计划生成授权易混淆。",
       "recommendation": "归入项目设置的权限记录；卡片呈现接收方、缩略图/版本、请求来源、发送状态和可撤销范围；实际授权发生在请求确认处。",
-      "entry": "项目概览、后续请求详情链接",
+      "entry": "项目概览→项目权限→管理素材外发许可，或原有请求入口",
       "back": "回项目权限/实际来源",
       "primaryAction": "查看许可详情；有效未发送时撤销",
       "states": [
@@ -1053,7 +1053,7 @@
         "mobile/src/creative/ProjectOverview.tsx"
       ],
       "purpose": "理解进展并继续创作",
-      "currentIssue": "项目资料与规则、制作与配置两组累计八个 ListAction，还嵌计划摘要；视觉上成为入口目录。",
+      "currentIssue": "项目概览仍承担多工具入口；本轮仅将生成授权与外发记录组织为项目权限，不将全产品概览重设计标记完成。",
       "recommendation": "上半屏为进展、一个下一步和最近工作；设定归资料、权限归设置、媒体检查归素材、时间线归交付；概览不重复配置中心。",
       "entry": "项目概览标签（项目当前默认进入镜头，或恢复已保存子视图）",
       "back": "同项目切视图；回原项目列表",
@@ -1452,8 +1452,8 @@
         "mobile/src/agent/AgentScreen.tsx"
       ],
       "purpose": "选择对话所属项目",
-      "currentIssue": "M1 项目留标题、镜头移至输入附近，运行时说明禁用原因；项目选择器仍含撤销全部生成授权，待 M3 迁移。",
-      "recommendation": "保持项目/镜头范围与运行锁定；授权撤销在 M3 迁移到权限表面。",
+      "currentIssue": "M1 显示项目/镜头范围与运行锁定；第 43 项已将批量撤销移至项目权限，切换器只负责项目选择。",
+      "recommendation": "保持来源会话与输入保护；切换不撤销授权，不重新绑定原 transcript。",
       "entry": "助手标题",
       "back": "关闭回原会话，不发送消息",
       "primaryAction": "选定一个项目",
@@ -1468,7 +1468,7 @@
       ],
       "evidenceLevel": "source-reviewed",
       "evidence": [],
-      "proposalStatus": "partially-implemented",
+      "proposalStatus": "implemented (Agent scope)",
       "targetOwner": "agent"
     },
     {
@@ -2264,6 +2264,43 @@
       ],
       "proposalStatus": "implemented (M5c)",
       "targetOwner": "agent"
+    },
+    {
+      "id": "project-permissions",
+      "name": "项目权限与生成授权",
+      "kind": "surface",
+      "parent": "project",
+      "sources": [
+        "mobile/src/creative/ProjectPermissions.tsx",
+        "mobile/src/creative/projectPermissionStore.ts",
+        "mobile/src/creative/ProjectOverview.tsx"
+      ],
+      "purpose": "核对项目生成授权并明确撤销",
+      "currentIssue": "第 43 项已从项目切换器移出；先展示完整未到期授权，再审阅/确认，写入时原子核对成员和修订。",
+      "recommendation": "生成授权与素材外发许可分别管理；撤销不取消已提交任务、不退款，保留任务及费用记录。",
+      "entry": "项目概览→项目权限",
+      "back": "关闭回原概览；外发记录返回实际权限来源",
+      "primaryAction": "读取清单后核对撤销范围",
+      "states": [
+        "读取中",
+        "空清单",
+        "有效授权",
+        "显示更多",
+        "撤销审阅",
+        "取消",
+        "清单变化",
+        "写入失败",
+        "已撤销"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed; real SQLite cancellation/isolation/change/rollback; offline Android entry/empty/return sample",
+      "evidence": [],
+      "proposalStatus": "implemented (item 43)",
+      "targetOwner": "project"
     }
   ],
   "edges": [
@@ -2323,10 +2360,10 @@
     },
     {
       "fromId": "project-overview",
-      "toId": "consents",
+      "toId": "project-permissions",
       "type": "navigate",
-      "label": "素材外发许可",
-      "context": "projectId",
+      "label": "项目权限",
+      "context": "固定 projectId；关闭回概览；不在项目切换器撤销",
       "status": "source-reviewed",
       "source": "mobile/src/creative/ProjectOverview.tsx"
     },
@@ -2909,6 +2946,14 @@
       "type": "open-surface",
       "source": "mobile/src/agent/AgentScreen.tsx",
       "context": "projectId；只读，无模型运行，无创建/删除/重命名"
+    },
+    {
+      "fromId": "project-permissions",
+      "toId": "consents",
+      "type": "navigate",
+      "source": "mobile/src/creative/ProjectPermissions.tsx",
+      "label": "管理素材外发许可",
+      "context": "projectId；独立记录；返回同一权限表面"
     }
   ],
   "sourceDigests": {
@@ -2948,7 +2993,7 @@
     "mobile/src/agent/skills/SkillExtractionScreen.tsx": "0aba0f4deab6d6c11a2c253f2e26df03610d5fd312adcb788fc51112ea922647",
     "mobile/src/agent/skills/SkillLibraryScreen.tsx": "47cb8626a58ae5bba5915384b6d4df9fe3b3adbe1ca9d8d4e78f5b51622dbba4",
     "mobile/src/agent/skills/SkillRunScreen.tsx": "0a6780529e1a0ff86e4c17cf487d3a002fde3ce61bd9842f173b95f5e0dfedd4",
-    "mobile/src/creative/AgentCreativePanel.tsx": "31ae9a970c7e59dc631286ee7cde5799b56ae357c451c30fbd401edb71753cbe",
+    "mobile/src/creative/AgentCreativePanel.tsx": "33ec6469d366205cc72fc8663f50ec07b737185ccca576b57eacb9484ccb5351",
     "mobile/src/creative/AgentWorkspace.tsx": "5927e3c94291e40b595b5f4de4efdc19eee27f53eaa9447de409e45d04081ea1",
     "mobile/src/creative/CapabilityCatalogScreen.tsx": "22e2edce01cc1b9cc870b7e6290c8b46938184744aa67bcbc54b25b84e5094b7",
     "mobile/src/creative/CreativeAccountPanel.tsx": "8e678926536277d6e8b1653ebd96a8c44afdc9d1d1212cf7eef4161ef0794c31",
@@ -2961,7 +3006,7 @@
     "mobile/src/creative/MediaReviewScreen.tsx": "07d764e4cff5e84b3bf37d944e80676f7b38ab0818d315bc81e874c7a22b35f0",
     "mobile/src/creative/OutboundConsentScreen.tsx": "e3c0f110e46566bea0fe3d854b940b356b0c670da8d690e3b4ca1aa39c09bfa6",
     "mobile/src/creative/ProjectActivityPanel.tsx": "371cbe2e74ec630c53e1ae1c92ec50773a186ae9f79e8e4155d9f7545b064801",
-    "mobile/src/creative/ProjectOverview.tsx": "a2001373edf8e2fc6d17e65742d71726807b785742051b6caff433d0bd211d5f",
+    "mobile/src/creative/ProjectOverview.tsx": "036d5be3d69af534a3f8378ac63a224990b17bd6ffa19b021dd109b1aa0ebccf",
     "mobile/src/creative/ProjectPlans.tsx": "9d2e2c8fecc519aa21bb298ed456a62cfe66ca40399b3ab9919fc94ec08a07ee",
     "mobile/src/creative/ProjectSearchScreen.tsx": "ba0ce8393ca776c127a1614b78cfa78898c74690cc7a811425c54daceb9d968c",
     "mobile/src/creative/ProjectShots.tsx": "20dfb2f2f60929e63ce7fac08fd818c46dbe98449c968aaea6cb9e15baa6ad20",
@@ -2993,7 +3038,9 @@
     "mobile/src/creative/planReads.ts": "e4be01dc140f608a9ee02bea1f753a4b3e77be1955946449a5412f505ae78536",
     "mobile/src/creative/AssistantActions.tsx": "23a6ea16c8b6224dd89f5648416f624dc17feb81357f7270ceb6fa62143cb1bf",
     "mobile/src/agent/HistoryList.tsx": "f3ca133b4a36903b2cc567f90ac111b89628102da07a94367524440ad9b02584",
-    "mobile/src/agent/LocalHistoryBrowser.tsx": "3b2915ce6ae58c2a5be273debb88f2ad416232658fa6b6155ca9012436533bd6"
+    "mobile/src/agent/LocalHistoryBrowser.tsx": "3b2915ce6ae58c2a5be273debb88f2ad416232658fa6b6155ca9012436533bd6",
+    "mobile/src/creative/ProjectPermissions.tsx": "32ba42d6956412778e46a3ebb64cf975bec7953b3be8bb746d974ec754ece4f8",
+    "mobile/src/creative/projectPermissionStore.ts": "3d5eb4a930b63acd39f80f059677cd271aba42c39018533c4f2c7f2c13310b90"
   },
   "revisions": [
     {

@@ -8,7 +8,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getDatabase } from '../storage/databaseClient';
 import { creativeService } from './runtime';
-import { creativeBudget } from './accountRuntime';
 import { ListAction } from '../ui/ListPageUI';
 import type { CreativeProject } from './types';
 import { TextAction } from './WorkbenchUI';
@@ -48,10 +47,6 @@ export function AgentCreativePanel({ threadId, running, compact=false, beforeNav
       {projects.filter(p => p.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(p => <RecordRow key={p.id} title={p.title} detail={p.brief || '项目会话与创作成果'} selected={p.id===selected} disabled={running || busy} onPress={() => void choose(p.id)} />)}
       <ListAction label="管理项目" secondary onPress={() => {const proceed=()=>{setExpanded(false);router.navigate('/(tabs)/projects');};if(beforeNavigate)beforeNavigate(proceed);else proceed();}} />
 
-      {selected ? <ListAction label="撤销当前项目全部生成授权" secondary disabled={busy} onPress={() => {
-        if (lock.current) return; lock.current = true; setBusy(true);
-        void creativeBudget().list().then(async rows => { for (const row of rows) if (row.project_id === selected && row.revoked_at == null) await creativeBudget().revoke(row.id); setNotice('当前项目授权已撤销'); }).catch(() => setNotice('撤销失败')).finally(() => { lock.current = false; setBusy(false); });
-      }} /> : null}
       {notice ? <Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text> : null}
     </ScrollView></KeyboardSurface></SafeAreaView></Modal> : null}
   </View>;

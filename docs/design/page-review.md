@@ -6,7 +6,7 @@
 
 ## 范围与结论
 
-覆盖 29 个路由页面、2 个壳层、35 个重要子表面；记录 73 条源码确认的关键点击边。非路由清单不宣称穷尽全部 JSX 分支，点击边也不是运行时全图。
+覆盖 29 个路由页面、2 个壳层、36 个重要子表面；记录 74 条源码确认的关键点击边。非路由清单不宣称穷尽全部 JSX 分支，点击边也不是运行时全图。
 
 当前实现已有四入口、预览、参数抽屉、任务气泡、明确采用和不可变版本，方向不必推倒。M1 技能快速选用、M2 分步添加已独立，M3a 建议与草稿审阅、M3b1 单次请求审阅已按对象与状态接入；项目概览仍承担工具目录，镜头列表承担编辑器，技能目录与运行历史共享，时间线承担参数表与工程管理。应继续按对象和状态重组任务，不再给每项能力补一个常驻按钮。
 
@@ -21,7 +21,7 @@ flowchart LR
   overview --> ov1[技能目录]
   overview --> ov2[项目助手]
   overview --> ov3[制作能力目录]
-  overview --> ov4[素材外发许可记录]
+  overview --> ov4[项目权限与生成授权]
   overview --> ov5[成片时间线与工程]
   overview --> ov6[项目全文检索]
   overview --> ov7[媒体检查]
@@ -116,6 +116,7 @@ flowchart LR
           计划范围选择 [surface; project-plan-range]
         项目 / 活动 [surface; project-activity]
         项目设置与封面选择 [surface; project-manage]
+        项目权限与生成授权 [surface; project-permissions]
     全局素材库 [route; assets]
       历史作品 [route; legacy-gallery]
         旧版视频详情 [route; legacy-video]
@@ -723,7 +724,7 @@ flowchart LR
 
 **主操作**：查看许可详情；有效未发送时撤销。**目标归属**：项目工作区。
 
-**进入与返回**：项目概览、后续请求详情链接 → 本表面；回项目权限/实际来源。
+**进入与返回**：项目概览→项目权限→管理素材外发许可，或原有请求入口 → 本表面；回项目权限/实际来源。
 
 **应覆盖状态**：空 / 有效 / 过期 / 已撤销 / 已发送 / 分页。
 
@@ -734,7 +735,7 @@ flowchart LR
 
 **任务**：理解进展并继续创作。
 
-**现状问题**：项目资料与规则、制作与配置两组累计八个 ListAction，还嵌计划摘要；视觉上成为入口目录。
+**现状问题**：项目概览仍承担多工具入口；本轮仅将生成授权与外发记录组织为项目权限，不将全产品概览重设计标记完成。
 
 **展示与交互建议**：上半屏为进展、一个下一步和最近工作；设定归资料、权限归设置、媒体检查归素材、时间线归交付；概览不重复配置中心。
 
@@ -962,11 +963,11 @@ flowchart LR
 
 **任务**：选择对话所属项目。
 
-**现状问题**：M1 项目留标题、镜头移至输入附近，运行时说明禁用原因；项目选择器仍含撤销全部生成授权，待 M3 迁移。
+**现状问题**：M1 显示项目/镜头范围与运行锁定；第 43 项已将批量撤销移至项目权限，切换器只负责项目选择。
 
-**展示与交互建议**：保持项目/镜头范围与运行锁定；授权撤销在 M3 迁移到权限表面。
+**展示与交互建议**：保持来源会话与输入保护；切换不撤销授权，不重新绑定原 transcript。
 
-**实施状态**：partially-implemented。**证据范围**：source-reviewed。
+**实施状态**：implemented (Agent scope)。**证据范围**：source-reviewed。
 
 **主操作**：选定一个项目。**目标归属**：项目助手。
 
@@ -1394,6 +1395,25 @@ flowchart LR
 
 **依据**：[src/agent/LocalHistoryBrowser.tsx](../../mobile/src/agent/LocalHistoryBrowser.tsx)、[src/agent/HistoryList.tsx](../../mobile/src/agent/HistoryList.tsx)、[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)；对照 B1（见 [调研](research.md)）。本轮截图：[local-history-list-final.png](../../docs/design/evidence/2026-11-05-agent-roadmap/local-history-list-final.png)、[local-history-detail-final.png](../../docs/design/evidence/2026-11-05-agent-roadmap/local-history-detail-final.png)。
 
+<a id="project-permissions"></a>
+### 项目权限与生成授权 · project-permissions · P1
+
+**任务**：核对项目生成授权并明确撤销。
+
+**现状问题**：第 43 项已从项目切换器移出；先展示完整未到期授权，再审阅/确认，写入时原子核对成员和修订。
+
+**展示与交互建议**：生成授权与素材外发许可分别管理；撤销不取消已提交任务、不退款，保留任务及费用记录。
+
+**实施状态**：implemented (item 43)。**证据范围**：source-reviewed; real SQLite cancellation/isolation/change/rollback; offline Android entry/empty/return sample。
+
+**主操作**：读取清单后核对撤销范围。**目标归属**：项目工作区。
+
+**进入与返回**：项目概览→项目权限 → 本表面；关闭回原概览；外发记录返回实际权限来源。
+
+**应覆盖状态**：读取中 / 空清单 / 有效授权 / 显示更多 / 撤销审阅 / 取消 / 清单变化 / 写入失败 / 已撤销。
+
+**依据**：[src/creative/ProjectPermissions.tsx](../../mobile/src/creative/ProjectPermissions.tsx)、[src/creative/projectPermissionStore.ts](../../mobile/src/creative/projectPermissionStore.ts)、[src/creative/ProjectOverview.tsx](../../mobile/src/creative/ProjectOverview.tsx)；对照 B1、B2（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
+
 ## 关键点击关系与上下文
 
 以下是当前实现的人工核对边；不是目标路由配置，也不保证全部分支都在设备走通。模态关闭、取消选择和写入后的回流要求见 target-and-flows.md。
@@ -1406,7 +1426,7 @@ flowchart LR
 | 项目 / 概览 | 项目技能 | 技能目录 | projectId | navigate |
 | 项目 / 概览 | 在助手中继续 | 项目助手 | projectId | navigate |
 | 项目 / 概览 | 制作能力与配置 | 制作能力目录 | 无业务对象参数 / 由当前工作区恢复 | navigate |
-| 项目 / 概览 | 素材外发许可 | 素材外发许可记录 | projectId | navigate |
+| 项目 / 概览 | 项目权限 | 项目权限与生成授权 | 固定 projectId；关闭回概览；不在项目切换器撤销 | navigate |
 | 项目 / 概览 | 成片时间线与工程 | 成片时间线与工程 | projectId | navigate |
 | 项目 / 概览 | 项目全文检索 | 项目全文检索 | projectId | navigate |
 | 项目 / 概览 | 媒体探测与抽帧检查 | 媒体检查 | projectId | navigate |
@@ -1473,6 +1493,7 @@ flowchart LR
 | 技能目录 | 运行记录快捷入口 | 会话运行历史 | 固定 threadId/runId；只读，不消费单次技能或创建运行 | open-surface |
 | 会话运行历史 | 查看原运行 | 运行证据 | 固定 threadId/runId；只读，不消费单次技能或创建运行 | navigate |
 | 项目助手 | 缺模型时查看本地对话 | 未连接模型的本地对话 | projectId；只读，无模型运行，无创建/删除/重命名 | open-surface |
+| 项目权限与生成授权 | 管理素材外发许可 | 素材外发许可记录 | projectId；独立记录；返回同一权限表面 | navigate |
 
 ## 审查优先级
 

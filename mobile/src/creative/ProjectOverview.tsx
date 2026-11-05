@@ -1,3 +1,4 @@
+import {ProjectPermissions} from './ProjectPermissions';
 import { draftPresentation } from './workPresentation';
 import { IconAction } from './WorkbenchUI';
 import { COLORS } from '../ui/theme';
@@ -13,6 +14,7 @@ import { creativeUI as s } from './creativeUI';
 
 export function ProjectOverview({ project, onShots, onEdit }: { project: CreativeProject; onShots: () => void; onEdit: () => void }) {
   const router = useRouter();
+  const [permissions,setPermissions]=useState(false);
   const [drafts, setDrafts] = useState<CreativeDraft[]>([]);
   const [summary, setSummary] = useState('正在读取镜头进展…');
   useFocusEffect(useCallback(() => {
@@ -43,7 +45,8 @@ export function ProjectOverview({ project, onShots, onEdit }: { project: Creativ
     {!project.archivedAt?<View style={{flexDirection:'row'}}><ListAction label="在助手中继续" secondary icon="auto_awesome" onPress={()=>router.push({pathname:'/(tabs)/agent',params:{projectId:project.id}})}/></View>:null}
     <Text style={s.title}>制作与配置</Text>
     <ListAction label="制作能力与配置" secondary onPress={()=>router.push('/creative-capabilities')}/>
-    <ListAction label="素材外发许可" secondary onPress={()=>router.push({pathname:'/outbound-consents',params:{projectId:project.id}})}/>
+    <ListAction label="项目权限" secondary onPress={()=>setPermissions(true)}/>
+    {permissions?<ProjectPermissions key={project.id} projectId={project.id} title={project.title} onClose={()=>setPermissions(false)}/>:null}
     <ListAction label="成片时间线与工程" secondary onPress={()=>router.push({pathname:'/project-timeline',params:{projectId:project.id}})}/>
     <ListAction label="项目全文检索" secondary onPress={()=>router.push({pathname:'/project-search',params:{projectId:project.id}})}/>
     <ListAction label="媒体探测与抽帧检查" secondary onPress={()=>router.push({pathname:'/media-review',params:{projectId:project.id}})}/>
