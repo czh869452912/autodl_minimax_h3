@@ -11,3 +11,5 @@ M3b2: open fixture project → plans → three-shot batch → request review. Ex
 M3c: offline standalone UNKNOWN workflow job inserted into stopped isolated QA DB; no generation operation or credentials. Task before/after composite inspected: next action is provider review, status remains unknown, no regeneration. Generation receipt absent so query button correctly unavailable. Never opened provider website. Candidate identity/polling/adoption and stop scope covered by regression tests, not by this device fixture.
 
 M4a: plans-after/plan-detail-after/plan-checks-after/plan-dependencies-after/plan-create-range-after/plan-candidates-auto-after. No plan mutation or dispatch. Combined plans-comparison.jpg inspected; retained theme and readable fields, details moved out of rows. Batch header still occupies space and is addressed next.
+
+M4b: plans-batch-after, batch-range-after, batch-range-applied and batch-dependency-review-after. Range confirmation then one included request/two excluded. Composite inspected, three plan summaries now visible without checks crowding list. Project-change/reset-title follow-up is automated-only in this slice, included in next bundle.

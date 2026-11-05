@@ -11,7 +11,7 @@ import {authorizePlanBatch,authorizePlanRequest,type PlanApproval} from './planA
 import {preparedCreativeSubmission} from './preparedSubmission';
 import {useLiveRefresh} from './useLiveRefresh';
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {Alert,Image,Text,TextInput,View} from 'react-native';
+import {Alert,Image,Pressable,Text,TextInput,View} from 'react-native';
 import {useRouter} from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import {getDatabase} from '../storage/databaseClient';
@@ -31,15 +31,16 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
   const [choices,setChoices]=useState<Array<{id:string;title:string}>>([]),[selected,setSelected]=useState<string[]>([]);
   const [choiceNext,setChoiceNext]=useState<{createdAt:number;id:string}>();
   const [batchSelection,setBatchSelection]=useState<string[]|null>(null),[batchId,setBatchId]=useState<string>();
+  const [rangeOpen,setRangeOpen]=useState(false),[rangeTitle,setRangeTitle]=useState('全部计划'),[rangeDraft,setRangeDraft]=useState<{id?:string;title:string}>({title:'全部计划'});
   const [filter,setFilter]=useState<PlanFilter>('all'),[pageHistory,setPageHistory]=useState<Array<PlanCursor|undefined>>([]),[pageNext,setPageNext]=useState<PlanCursor>();
   const [batches,setBatches]=useState<PlanBatchSummary[]>([]),[batchCursor,setBatchCursor]=useState<PlanCursor>(),[batchNext,setBatchNext]=useState<PlanCursor>();
   const [dependencyTarget,setDependencyTarget]=useState<string>(),[dependencyQuery,setDependencyQuery]=useState(''),[dependencyRows,setDependencyRows]=useState<CreativePlan[]>([]),[dependencyAfter,setDependencyAfter]=useState<PlanCursor>(),[dependencyNext,setDependencyNext]=useState<PlanCursor>();
   const [detailId,setDetailId]=useState(initialPlanId),[checksOpen,setChecksOpen]=useState(false),[creation,setCreation]=useState<'choose'|'single'|'batch'>(),[candidate,setCandidate]=useState<{planId:string;versionId:string}>();
-  useEffect(()=>{setDetailId(initialPlanId);setChecksOpen(false);setCandidate(undefined);setCreation(undefined);setShotId('');setPrompt('');setChoices([]);setSelected([]);setChoicesLoaded(false);setDependencyTarget(undefined);},[projectId,initialPlanId]);
+  useEffect(()=>{setDetailId(initialPlanId);setChecksOpen(false);setCandidate(undefined);setCreation(undefined);setBatchId(undefined);setRangeTitle('全部计划');setRangeOpen(false);setFilter('all');setPageHistory([]);setShotId('');setPrompt('');setChoices([]);setSelected([]);setChoicesLoaded(false);setDependencyTarget(undefined);},[projectId,initialPlanId]);
   useEffect(()=>{let live=true;setDependencyRows([]);setDependencyNext(undefined);if(dependencyTarget)void readDependencyPlanPage(getDatabase(),projectId,dependencyTarget,dependencyQuery,dependencyAfter).then(page=>{if(live){setDependencyRows(page.items);setDependencyNext(page.next);}}).catch(()=>{if(live)setError('前置计划读取失败，请重新搜索');});return()=>{live=false;};},[projectId,dependencyTarget,dependencyQuery,dependencyAfter]);
 
   const owner=useRef(''),context=`${projectId}:${initialPlanId??''}:${batchId??''}`;owner.current=context;
-  type Review={db:ReturnType<typeof getDatabase>;context:string;batchId?:string;approvals:PlanApproval[];items:Array<{title:string;preview:Awaited<ReturnType<typeof prepareCreativeVideo>>}>;excluded:Array<{title:string;reason:string}>};
+  type Review={db:ReturnType<typeof getDatabase>;context:string;batchId?:string;approvals:PlanApproval[];items:Array<{title:string;note?:string;preview:Awaited<ReturnType<typeof prepareCreativeVideo>>}>;excluded:Array<{title:string;reason:string}>};
   const [review,setReview]=useState<Review>();
   const [recovery,setRecovery]=useState<{targets:PlanReviewTarget[];excluded:Review['excluded'];batchId?:string;message:string}>();
   useEffect(()=>{owner.current=context;setReview(undefined);setRecovery(undefined);return()=>{owner.current='';};},[context]);
@@ -70,7 +71,8 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
       try{preview=await prepareCreativeVideo(card.step.draft_id);}catch(e){if(owner.current===origin&&getDatabase()===db)setRecovery({targets,excluded,batchId:selectedBatch,message:e instanceof Error?e.message:'请求准备失败'});return;}
       if(db!==getDatabase()||preview.db!==db||owner.current!==origin)throw Error('计划范围或数据库已变化，请重新准备');
       approvals.push({planId:card.plan.id,planRevision:card.plan.revision,stepId:card.step.id,stepRevision:card.step.revision,projectId,generationId:preview.account.credential_generation_id,submission:preparedCreativeSubmission(preview)});
-      items.push({title:card.plan.title,preview});
+      const dependencies=await readPlanDependencies(db,card.step.id);
+      items.push({title:card.plan.title,preview,note:dependencies.length?'前置计划：'+dependencies.map(dep=>`${dep.title} · ${dep.state==='SUCCEEDED'?'已完成':'尚未完成，授权后仍需等待'}`).join('；'):'无前置计划；提交前仍会核对镜头与素材版本。'});
     }
     setRecovery(undefined);setReview({db,context:origin,batchId:selectedBatch,approvals,items,excluded});
   };
@@ -118,9 +120,9 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
       {card.plan.state==='ACTIVE'&&card.step.state==='FAILED'?action('重做失败镜头',()=>Alert.alert('准备重做此镜头','保留原任务和费用记录，创建新的草稿；不会自动生成，随后需重新授权。',[{text:'取消',style:'cancel'},{text:'准备重做',onPress:()=>void work(async()=>{const shot=shots.find(s=>s.id===card.plan.shot_id);if(!shot)throw new Error('镜头不可用');await creativeService().execute({name:'plan.retryFailed',payload:{id:card.plan.id,expectedRevision:card.plan.revision,expectedShotRevision:shot.revision}},createId());})}])):null}
       {card.plan.state==='ACTIVE'?action(card.paused?'继续后续计划':'暂停后续计划',()=>void work(()=>creativeService().execute({name:'plan.setPaused',payload:{id:card.plan.id,expectedRevision:card.plan.revision,paused:!card.paused}},createId()))):null}
       {card.paused?<Text style={{color:COLORS.textMuted}}>后续提交已暂停；已发送的生成仍由任务中心核查和归档。</Text>:null}
-      {card.plan.state==='ACTIVE'&&card.step.state==='BLOCKED'&&!card.step.job_id&&!card.paused?<>{action('授权并继续生成',()=>authorize(card))}{action('按当前镜头重新准备',()=>{const shot=shots.find(s=>s.id===card.plan.shot_id);if(!shot?.selected_image){setError('请先为镜头选定图片');return;}const nextPrompt=shot.description.trim()||JSON.parse(card.step.input_binding_json).prompt;Alert.alert('重新准备此镜头',`输入图片：${shot.selected_image}\n提示词：${nextPrompt}\n${planVideoSummary(card.step.input_binding_json)}。保留原草稿和历史任务，后续需重新授权。`,[{text:'取消',style:'cancel'},{text:'确认输入',onPress:()=>void work(()=>creativeService().execute({name:'plan.reprepare',payload:{id:card.plan.id,expectedRevision:card.plan.revision,expectedShotRevision:shot.revision,prompt:nextPrompt}},createId()))}]);})}</>:null}
+      {card.plan.state==='ACTIVE'&&card.step.state==='BLOCKED'&&!card.step.job_id&&!card.paused?<>{<ListAction label="核对生成请求与许可" disabled={busy||archived} onPress={()=>authorize(card)}/>}{action('按当前镜头重新准备',()=>{const shot=shots.find(s=>s.id===card.plan.shot_id);if(!shot?.selected_image){setError('请先为镜头选定图片');return;}const nextPrompt=shot.description.trim()||JSON.parse(card.step.input_binding_json).prompt;Alert.alert('重新准备此镜头',`输入图片：${shot.selected_image}\n提示词：${nextPrompt}\n${planVideoSummary(card.step.input_binding_json)}。保留原草稿和历史任务，后续需重新授权。`,[{text:'取消',style:'cancel'},{text:'确认输入',onPress:()=>void work(()=>creativeService().execute({name:'plan.reprepare',payload:{id:card.plan.id,expectedRevision:card.plan.revision,expectedShotRevision:shot.revision,prompt:nextPrompt}},createId()))}]);})}</>:null}
       {card.step.job_id?<ListAction label="查看生成任务" secondary onPress={()=>router.push({pathname:'/creative-task/[id]',params:{id:card.step.job_id!,projectId,planId:card.plan.id,stepId:card.step.id}})}/>:null}
-      {card.plan.state==='ACTIVE'&&card.step.state!=='DISPATCHED'?action('取消计划',()=>void work(()=>creativeService().execute({name:'plan.cancel',payload:{id:card.plan.id,expectedRevision:card.plan.revision}},createId()))):null}
+      {card.plan.state==='ACTIVE'&&card.step.state!=='DISPATCHED'?action('取消计划',()=>Alert.alert('取消此计划？','保留原草稿、任务与费用记录。取消不撤回服务端已提交的任务，也不会退款。',[{text:'继续保留',style:'cancel'},{text:'取消此计划',style:'destructive',onPress:()=>void work(()=>creativeService().execute({name:'plan.cancel',payload:{id:card.plan.id,expectedRevision:card.plan.revision}},createId()))}])):null}
       {card.plan.state==='QUARANTINED'?<Text style={{color:COLORS.textMuted}}>请先核对旧任务结果。确需再次生成时新建计划并重新授权，可能重复消费。</Text>:null}
 </View>;
   const detailCard=cards.find(c=>c.plan.id===detailId);
@@ -135,12 +137,21 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
       {choiceNext?action('加载更多图片候选',()=>void work(async()=>{const page=await creativeService().availableVersionPage({kind:'image',projectId,after:choiceNext});setChoices(old=>[...old,...page.items.filter(item=>!old.some(c=>c.id===item.version.id)).map(item=>({id:item.version.id,title:`${item.title} · 版本 ${item.version.versionNo}`}))]);setChoiceNext(page.next);})):null}
       {selected.length>0?action('保存计划（不消费）',()=>void work(async()=>{const shot=shots.find(s=>s.id===shotId);if(!shot)throw new Error('请先选择镜头');for(const id of selected)await creativeFiles().verify(id);await creativeService().execute({name:'plan.createSelection',payload:{projectId,shotId,expectedShotRevision:shot.revision,title:`${shot.title} · 选图生成视频`,candidateVersionIds:selected,videoPrompt:prompt}},createId());setSelected([]);setChoices([]);setChoicesLoaded(false);setShotId('');setPrompt('');setCreation(undefined); })):null}
     </View>:null}</>:null}{creation==='batch'?<>{batchSelection?<View style={{gap:8}}><Text style={{color:COLORS.text}}>选择镜头 · {batchSelection.length}/20，仅建立计划，不会生成</Text>
-      {shots.filter(s=>s.selected_image&&s.description.trim()).map(shot=><View key={shot.id}>{action((batchSelection.includes(shot.id)?'✓ ':'')+shot.title,()=>setBatchSelection(ids=>ids?.includes(shot.id)?ids.filter(id=>id!==shot.id):(ids?.length??0)<20?[...(ids??[]),shot.id]:ids))}</View>)}
+      {shots.map(shot=>{const ready=!!shot.selected_image&&!!shot.description.trim(),chosen=batchSelection.includes(shot.id);return <Pressable key={shot.id} accessibilityRole="checkbox" accessibilityLabel={shot.title} accessibilityState={{checked:chosen,disabled:!ready||busy}} disabled={!ready||busy} onPress={()=>setBatchSelection(ids=>ids?.includes(shot.id)?ids.filter(id=>id!==shot.id):(ids?.length??0)<20?[...(ids??[]),shot.id]:ids)} style={{minHeight:48,padding:12,borderWidth:1,borderColor:COLORS.border,borderRadius:12,gap:6}}><Text style={{color:COLORS.text}}>{chosen?'已选 · ':''}{shot.title}</Text><Text style={{color:COLORS.textMuted}}>{!shot.selected_image?'需先选定参考图':!shot.description.trim()?'需填写动作描述':'参考图已选定 · 描述已就绪'}</Text></Pressable>;})}
       {!shots.some(s=>s.selected_image&&s.description.trim())?<Text style={{color:COLORS.textMuted}}>请先为镜头选定图片并填写动作描述。</Text>:null}
-      {batchSelection.length?action('确认所选镜头并建立批次',()=>{const ready=shots.filter(s=>batchSelection.includes(s.id));Alert.alert('准备多镜头计划',ready.map(s=>s.title).join('、')+'。逐镜头审阅并授权后才会生成。',[{text:'取消',style:'cancel'},{text:'建立计划',onPress:()=>void work(async()=>{await creativeService().execute({name:'plan.createBatch',payload:{projectId,title:'多镜头制作',shots:ready.map(s=>({shotId:s.id,expectedShotRevision:s.revision,title:s.title,candidateVersionIds:[s.selected_image!],videoPrompt:s.description}))}},createId());setBatchSelection(null);setCreation(undefined);setBatchId(undefined);setPageHistory([]);setBatchCursor(undefined);})}]);}):null}
+      {batchSelection.length?action('确认所选镜头并建立批次',()=>{const ready=shots.filter(s=>batchSelection.includes(s.id));Alert.alert('准备多镜头计划',ready.map(s=>s.title).join('、')+'。逐镜头审阅并授权后才会生成。',[{text:'取消',style:'cancel'},{text:'建立计划',onPress:()=>void work(async()=>{await creativeService().execute({name:'plan.createBatch',payload:{projectId,title:'多镜头制作',shots:ready.map(s=>({shotId:s.id,expectedShotRevision:s.revision,title:s.title,candidateVersionIds:[s.selected_image!],videoPrompt:s.description}))}},createId());setBatchSelection(null);setCreation(undefined);setBatchId(undefined);setRangeTitle('全部计划');setPageHistory([]);setBatchCursor(undefined);})}]);}):null}
       {action('取消选择镜头',()=>{setBatchSelection(null);setCreation('choose');})}</View>:null}</>:null}</>;
   if (compact && !recovery && !review && !error && !cards.some(c => c.plan.state === 'ACTIVE' && (c.decision.state === 'WAITING' || c.step.state === 'BLOCKED'))) return null;
   return <View style={{gap:12}}>
+    {rangeOpen?<ParameterSheet title="选择计划范围" fullScreen onClose={()=>setRangeOpen(false)}>
+      <Text style={{color:COLORS.textMuted}}>选择仅预览范围，确认后才切换。批次摘要来自完整批次，列表每页最多 30 项。</Text>
+      {action((!rangeDraft.id?'已选 · ':'')+'全部计划',()=>setRangeDraft({title:'全部计划'}))}
+      {batches.map(batch=><View key={batch.id}>{action((rangeDraft.id===batch.id?'已选 · ':'')+batch.title,()=>setRangeDraft({id:batch.id,title:batch.title}))}<Text style={{color:COLORS.textMuted}}>{batch.total} 个镜头 · {batch.completed} 已完成 · {batch.active} 未完成 · {batch.failed} 失败 · {batch.blocked} 待处理</Text></View>)}
+      {batchNext?action('更早的批次',()=>setBatchCursor(batchNext)):null}
+      {batchCursor?action('最新批次',()=>setBatchCursor(undefined)):null}
+      <ListAction label="确认此范围" onPress={()=>{setBatchId(rangeDraft.id);setRangeTitle(rangeDraft.title);setPageHistory([]);setDetailId(undefined);setRangeOpen(false);}}/>
+      {action('取消，保留原范围',()=>setRangeOpen(false))}
+    </ParameterSheet>:null}
     {creation?<ParameterSheet title={creation==='choose'?'新建计划':creation==='single'?'准备单镜头计划':'准备多镜头批次'} fullScreen onClose={closeCreation}>{creationBody}{creation!=='choose'?action('返回范围选择',()=>setCreation('choose')):null}</ParameterSheet>:null}
     {detailCard&&!review&&!recovery?<ParameterSheet title="计划详情" fullScreen onClose={()=>{if(!busy)setDetailId(undefined);}}>{renderDetails(detailCard)}</ParameterSheet>:null}
     {recovery?<ParameterSheet title="计划请求尚未就绪" fullScreen onClose={()=>{if(!busy)setRecovery(undefined);}}>
@@ -156,12 +167,8 @@ export function ProjectPlans({projectId,archived=false,compact=false,initialPlan
     <Text style={{color:COLORS.text,fontSize:20,fontWeight:'700'}}>{compact?'需要你处理':'选图与视频计划'}</Text>
     {!compact ? <Text style={{color:COLORS.textMuted}}>计划会保留候选、选定版本与生成状态。视频结果归档为候选，不会覆盖镜头已选成果。</Text> : null}
     {!compact&&!initialPlanId?<View style={{gap:8}}>
-      <Text style={{color:COLORS.text,fontWeight:'700'}}>制作批次</Text>
-      {action('全部计划',()=>{setBatchId(undefined);setPageHistory([]);})}
-      {batches.map(batch=><View key={batch.id}>{action((batchId===batch.id?'✓ ':'')+batch.title,()=>{setBatchId(batch.id);setPageHistory([]);})}<Text style={{color:COLORS.textMuted}}>{batch.total} 个镜头 · {batch.completed} 已完成 · {batch.active} 未完成 · {batch.failed} 失败 · {batch.blocked} 待处理</Text></View>)}
-      {batchId&&!archived?action('准备并授权此批次待处理请求',authorizeBatch):null}
-      {batchNext?action('更早的批次',()=>setBatchCursor(batchNext)):null}
-      {batchCursor?action('最新批次',()=>setBatchCursor(undefined)):null}
+      {action('范围：'+rangeTitle,()=>{setRangeDraft({id:batchId,title:rangeTitle});setRangeOpen(true);})}
+      {batchId&&!archived?<ListAction label="核对批次待授权请求" disabled={busy} onPress={authorizeBatch}/>:null}
       <View style={{flexDirection:'row',gap:8}}>{(['all','unfinished','failed'] as const).map(value=><View key={value}>{action(({all:'全部',unfinished:'仅未完成',failed:'仅失败'})[value]+(filter===value?' ✓':''),()=>{setFilter(value);setPageHistory([]);})}</View>)}</View>
     </View>:null}
     {!compact&&!archived? action('新建计划',()=>setCreation('choose')):null}

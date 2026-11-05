@@ -55,3 +55,15 @@ test('selecting a shot automatically reads candidates without creating a plan or
  expect(mockAvailable).toHaveBeenCalledWith({kind:'image',projectId:'p'});expect(JSON.stringify(tree.toJSON())).toContain('Reference · 版本 3');expect(mockExecute).not.toHaveBeenCalled();
  }finally{act(()=>tree.unmount());}
 });
+
+test('batch range preview and cancellation retain the original query until explicitly applied',async()=>{
+ mockQuery.mockImplementation(async(sql:string)=>sql.includes('SELECT b.*')?[{id:'batch',title:'Batch range',total:20,completed:2,active:18,failed:1,blocked:4,created_at:1}]:[]);
+ let tree!:ReturnType<typeof create>;try{await act(async()=>{tree=create(<ProjectPlans projectId="p"/>);});
+ await act(async()=>click(tree,'范围：全部计划'));await act(async()=>click(tree,'Batch range'));await act(async()=>click(tree,'取消，保留原范围'));
+ expect(JSON.stringify(tree.toJSON())).toContain('范围：全部计划');
+ await act(async()=>click(tree,'范围：全部计划'));await act(async()=>click(tree,'Batch range'));await act(async()=>click(tree,'确认此范围'));
+ expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('OR p.id=?'),'p',null,null,'batch','batch','all','all','all',null,null,null,null);
+ expect(JSON.stringify(tree.toJSON())).toContain('范围：Batch range');
+ await act(async()=>tree.update(<ProjectPlans projectId="other"/>));expect(JSON.stringify(tree.toJSON())).toContain('范围：全部计划');
+ }finally{act(()=>tree.unmount());}
+});
