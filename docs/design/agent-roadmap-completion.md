@@ -25,3 +25,9 @@ Validation: typecheck clean, 4 suites/41 tests. Includes project-wide equal-time
 Batch range selection now has preview/confirm/cancel; rows display current-page counts separately from complete batch summaries. Project changes clear selection, filter and preparation identity. Multi-shot preparation shows unavailable shots and their missing requirements. Request review includes dependency waiting notes. Single-plan request review is the primary detail action; cancellation explicitly explains retained task/cost records.
 
 Validation: 4 suites/42 tests plus scope-change regression rerun (5 component tests); typecheck clean before scope-reset follow-up. Offline range apply/request membership sampled; batch-list-comparison.jpg inspected. Candidate bundle predates the small project-change/reset-label follow-up; that behavior is covered by the component regression and will be included in subsequent device bundles. No real dispatch, cancellation/refund, or upstream media adoption simulated as success. Remaining implementation: M5.
+
+## M5a — skill extraction
+
+Saved drafts are independent from evidence selection, outbound review, content review and fixed-version publication. Recipient identity and cost purpose precede explicit send; changed model credentials/revision require another review. Back preserves edits; saving evidence stays local. Publishing locates the exact version without enabling it.
+
+Validation: typecheck clean; 4 suites/22 tests, including real SQLite draft/publication, changed recipient and saved-draft resume. Offline Android selected persisted text, reviewed loopback recipient, saved locally and reopened unchanged. Composite inspected. Installation storage resolved by replacing only the task QA package with data retained and backed up. One native Fabric crash occurred when deeplinking during startup; normal launch then warm navigation succeeded. No live model call or device publication claimed. Remaining implementation: M5b/M5c.

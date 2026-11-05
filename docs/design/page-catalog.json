@@ -714,27 +714,30 @@
         "mobile/src/agent/skills/SkillExtractionScreen.tsx"
       ],
       "purpose": "将证据提炼为可复用方法并审阅发布",
-      "currentIssue": "选对话/证据、脱敏、发送、编辑发布、历史草稿顺序堆在一张长页面。",
+      "currentIssue": "M5a 已拆分本地草稿列表及四步提炼；模型外发与固定版本发布启用分别确认。真实模型和辅助技术验收未覆盖。",
       "recommendation": "改为证据→外发审阅→草稿审阅的分步流程；草稿列表单独表面；步骤保留输入；本地保存与发布启用分别反馈。",
       "entry": "技能添加、可选对话上下文",
       "back": "回上一步先保留；退出回原添加/会话上下文",
       "primaryAction": "当前步骤的继续/确认发送/发布",
       "states": [
+        "草稿列表",
         "选证据",
-        "审阅外发",
-        "处理中",
-        "未知",
-        "编辑草稿",
-        "已发布"
+        "核对接收方与外发",
+        "处理中与取消",
+        "审阅正文",
+        "核对固定版本",
+        "已发布，未启用"
       ],
       "priority": "P1",
       "references": [
         "R6",
         "B1"
       ],
-      "evidenceLevel": "source-reviewed",
-      "evidence": [],
-      "proposalStatus": "proposed",
+      "evidenceLevel": "source-reviewed; offline device evidence selection/save/resume; automated publication/config-change guard",
+      "evidence": [
+        "docs/design/evidence/2026-11-05-agent-roadmap/extraction-comparison.jpg"
+      ],
+      "proposalStatus": "implemented; acceptance coverage recorded separately",
       "targetOwner": "skills"
     },
     {
@@ -2806,7 +2809,7 @@
     "mobile/app/_layout.tsx": "ea1fdc01ccff166ec1aaf7e97893aa1de73f6050e2dfc9314d7e509ebcb9ec84",
     "mobile/app/agent-run.tsx": "333b16bcb445d8d936befd242a580f3cfb5e534447ed3676ddd20f1123931b71",
     "mobile/app/agent-skill-extract.tsx": "d8ce49942fb4659428a14aaeda27207740d1ad38d5b8fb23f74564041c09e41d",
-    "mobile/app/agent-skills.tsx": "a0bd0756540032a26749b8751a6d095417080dbcb77aacc83aab82b89b6116a7",
+    "mobile/app/agent-skills.tsx": "90458c335fda95aafbc337c388de54ab9e2e916d21304402d21974617cf1da65",
     "mobile/app/creative-asset/[id].tsx": "65dfb266122df481ef62039e1c9709e50fc58d445c93e0a5757c8f38dcdf3de9",
     "mobile/app/creative-capabilities.tsx": "bbfced4d5d2d460b4a5c54be7e77695a7aa5830f875b163762095018b12bbf48",
     "mobile/app/creative-draft/[id].tsx": "39a426a4bfeb13b85d53f08efd3255ddfe0f58cf4404ed38b580f4a75288de73",
@@ -2828,8 +2831,8 @@
     "mobile/app/video/[id].tsx": "8abbd333bbb3c04591bf0e95a867ea06c4f57b3710c0812e6e37b99dabce4e8c",
     "mobile/src/agent/AgentScreen.tsx": "7be00a1cc632bb46351796256daec5f8bc3010f400554d8179ae26dcb64050f7",
     "mobile/src/agent/PromptVersionPanel.tsx": "9c077f7737640b3e144115217fc20acd08676538c486e874216a00a3cd8ce068",
-    "mobile/src/agent/skills/SkillExtractionScreen.tsx": "0d18eb0fe7ffc9292cc20c097654d6ae842a316a03cba92be4da1c65d407c576",
-    "mobile/src/agent/skills/SkillLibraryScreen.tsx": "63f9a9cdd450efb5ec50ce549b76fbd4b0b3979801c004c19116c5326605d02b",
+    "mobile/src/agent/skills/SkillExtractionScreen.tsx": "6442b548a341bd0e8f8a1ef8de4363c23eef30bcd81c4a37f23906d7266eb2a6",
+    "mobile/src/agent/skills/SkillLibraryScreen.tsx": "c69e0c8a1e0edccd09562863eb9a8a9f0bdbbf8c5c6113bfbc383b617dc46d3c",
     "mobile/src/agent/skills/SkillRunScreen.tsx": "aa3290d6ba7e643b3c4c3b03be2183a23b7dc1d2ad0574ef03c0fc8567d7e6c7",
     "mobile/src/creative/AgentCreativePanel.tsx": "31ae9a970c7e59dc631286ee7cde5799b56ae357c451c30fbd401edb71753cbe",
     "mobile/src/creative/AgentWorkspace.tsx": "5927e3c94291e40b595b5f4de4efdc19eee27f53eaa9447de409e45d04081ea1",
@@ -2970,6 +2973,17 @@
       "reviewedSources": [
         "mobile/src/creative/ProjectPlans.tsx",
         "mobile/src/creative/PlanRequestReview.tsx"
+      ]
+    },
+    {
+      "date": "2026-11-05",
+      "sourceBase": "49eedc0f",
+      "scope": "M5a staged skill extraction with recipient review and exact published version",
+      "evidence": "docs/design/evidence/2026-11-05-agent-roadmap/README.md",
+      "reviewedSources": [
+        "mobile/app/agent-skills.tsx",
+        "mobile/src/agent/skills/SkillLibraryScreen.tsx",
+        "mobile/src/agent/skills/SkillExtractionScreen.tsx"
       ]
     }
   ]

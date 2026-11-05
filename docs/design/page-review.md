@@ -542,19 +542,19 @@ flowchart LR
 
 **任务**：将证据提炼为可复用方法并审阅发布。
 
-**现状问题**：选对话/证据、脱敏、发送、编辑发布、历史草稿顺序堆在一张长页面。
+**现状问题**：M5a 已拆分本地草稿列表及四步提炼；模型外发与固定版本发布启用分别确认。真实模型和辅助技术验收未覆盖。
 
 **展示与交互建议**：改为证据→外发审阅→草稿审阅的分步流程；草稿列表单独表面；步骤保留输入；本地保存与发布启用分别反馈。
 
-**实施状态**：proposed。**证据范围**：source-reviewed。
+**实施状态**：implemented; acceptance coverage recorded separately。**证据范围**：source-reviewed; offline device evidence selection/save/resume; automated publication/config-change guard。
 
 **主操作**：当前步骤的继续/确认发送/发布。**目标归属**：技能目录。
 
 **进入与返回**：技能添加、可选对话上下文 → 本表面；回上一步先保留；退出回原添加/会话上下文。
 
-**应覆盖状态**：选证据 / 审阅外发 / 处理中 / 未知 / 编辑草稿 / 已发布。
+**应覆盖状态**：草稿列表 / 选证据 / 核对接收方与外发 / 处理中与取消 / 审阅正文 / 核对固定版本 / 已发布，未启用。
 
-**依据**：[src/agent/skills/SkillExtractionScreen.tsx](../../mobile/src/agent/skills/SkillExtractionScreen.tsx)；对照 R6、B1（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
+**依据**：[src/agent/skills/SkillExtractionScreen.tsx](../../mobile/src/agent/skills/SkillExtractionScreen.tsx)；对照 R6、B1（见 [调研](research.md)）。本轮截图：[extraction-comparison.jpg](../../docs/design/evidence/2026-11-05-agent-roadmap/extraction-comparison.jpg)。
 
 <a id="run-evidence"></a>
 ### 运行证据 · run-evidence · P1

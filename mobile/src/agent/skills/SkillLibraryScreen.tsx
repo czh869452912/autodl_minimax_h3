@@ -17,7 +17,7 @@ import { ListAction } from '../../ui/ListPageUI';
 import { creativeUI as s } from '../../creative/creativeUI';
 import { useFallbackBack } from '../../navigation/useFallbackBack';
 
-export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: requestedProjectId, threadId, returnThreadId }: { threadId?:string; returnThreadId?:string; projectId?:string; intent?:string; onClose?: () => void; registerLeave?:(guard:((proceed:()=>void)=>void)|undefined)=>void } = {}) {
+export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: requestedProjectId, threadId, returnThreadId,initialVersionId }: { initialVersionId?:string; threadId?:string; returnThreadId?:string; projectId?:string; intent?:string; onClose?: () => void; registerLeave?:(guard:((proceed:()=>void)=>void)|undefined)=>void } = {}) {
   const router = useRouter();
   const builtins=useMemo(builtinSkillCatalog,[]);
   const [projectId,setProjectId]=useState(requestedProjectId);
@@ -30,9 +30,9 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
   const [historyScope,setHistoryScope]=useState<'current'|'all'>('current');
   const [historyAfter,setHistoryAfter]=useState<{createdAt:number;threadId:string;runId:string}>();
   const [addStatus,setAddStatus]=useState<SkillAddStatus>({dirty:false,busy:false});
-  const [highlighted,setHighlighted]=useState<string>();
+  const [highlighted,setHighlighted]=useState<string|undefined>(initialVersionId);
   const [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
-  const [importOpen,setImportOpen]=useState(intent==='add'),[historyOpen,setHistoryOpen]=useState(false),[expanded,setExpanded]=useState<string>(),[query,setQuery]=useState('');
+  const [importOpen,setImportOpen]=useState(intent==='add'),[historyOpen,setHistoryOpen]=useState(false),[expanded,setExpanded]=useState<string|undefined>(initialVersionId),[query,setQuery]=useState('');
   const scroll=useRef<ScrollView>(null);
   const [filter,setFilter]=useState<'all'|'local'|'builtin'|'selected'>('all');
   const lock = useRef(false);
@@ -109,7 +109,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
       {orderedVersions.filter(v=>filter!=='builtin'&&(filter!=='selected'||v.enabled)).filter(v=>`${v.name} ${v.description}`.toLowerCase().includes(query.trim().toLowerCase())).map(version=><View key={version.id} style={[s.card,{padding:10,gap:8}]}>
         <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
           <Pressable accessibilityRole="button" accessibilityLabel={`查看 ${version.name} ${version.id.slice(0,8)}`} accessibilityState={{expanded:expanded===version.id}} onPress={()=>setExpanded(expanded===version.id?undefined:version.id)} style={{flex:1,minHeight:44,justifyContent:'center',gap:3}}>
-            {version.id===highlighted?<Text style={s.muted}>刚安装的版本</Text>:null}<Text style={s.title}>{version.name}</Text><Text numberOfLines={expanded===version.id?undefined:2} style={{fontSize:13,lineHeight:18,color:COLORS.textMuted}}>{version.description}</Text>
+            {version.id===highlighted?<Text style={s.muted}>{initialVersionId===version.id?'当前发布版本':'刚安装的版本'}</Text>:null}<Text style={s.title}>{version.name}</Text><Text numberOfLines={expanded===version.id?undefined:2} style={{fontSize:13,lineHeight:18,color:COLORS.textMuted}}>{version.description}</Text>
             <Text style={{fontSize:11,color:COLORS.textMuted}}>{version.id.slice(0,8)} · {projectId?(version.projectOverride?'此项目单独设置':'继承全局默认'):'全局默认'} · {expanded===version.id?'收起正文':'查看正文'}</Text>
           </Pressable>
           {projectId&&version.projectOverride?<ListAction label="恢复全局选择" secondary disabled={busy} onPress={()=>void run(()=>store.setProjectVersion(projectId,version.name,undefined))}/>:null}
