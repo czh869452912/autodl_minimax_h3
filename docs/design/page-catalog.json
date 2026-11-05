@@ -1144,7 +1144,7 @@
         "mobile/src/creative/ProjectPlans.tsx"
       ],
       "purpose": "查看编排、依赖与待授权任务",
-      "currentIssue": "M3b2 已迁移确切请求审阅；列表和详情、依赖搜索仍待 M4。",
+      "currentIssue": "M4a 列表显示状态与下一步，详情承载输入/候选/检查；批次范围选择待 M4b。",
       "recommendation": "计划列表以需我处理/运行中/完成分组；点入计划步骤图或纵向阶段清单；状态只显示适用动作；依赖高级编辑。",
       "entry": "项目计划、任务回流",
       "back": "回原计划焦点；选择后状态更新可见",
@@ -1161,9 +1161,9 @@
       "references": [
         "B2"
       ],
-      "evidenceLevel": "source-reviewed",
+      "evidenceLevel": "source-reviewed; offline Android detail/creation/dependency samples",
       "evidence": [],
-      "proposalStatus": "proposed",
+      "proposalStatus": "partially-implemented (M4a)",
       "targetOwner": "project"
     },
     {
@@ -2079,6 +2079,74 @@
       "evidence": [],
       "proposalStatus": "partially-implemented (M3b1; plan/batch pending)",
       "targetOwner": "agent"
+    },
+    {
+      "id": "project-plan-detail",
+      "name": "计划详情",
+      "kind": "surface",
+      "route": null,
+      "parent": "project-plans",
+      "sources": [
+        "mobile/src/creative/ProjectPlans.tsx",
+        "mobile/src/creative/planReads.ts"
+      ],
+      "purpose": "围绕一个固定计划处理参考、输入、检查、许可与执行",
+      "currentIssue": "已复用原计划服务和主题分离任务表面。",
+      "recommendation": "计划列表以需我处理/运行中/完成分组；点入计划步骤图或纵向阶段清单；状态只显示适用动作；依赖高级编辑。",
+      "entry": "计划列表",
+      "back": "完成返回原计划列表、分页与筛选；未保存准备留在当前挂载工作区",
+      "primaryAction": "按状态核对原计划",
+      "states": [
+        "待选图",
+        "检查与依赖",
+        "待许可",
+        "暂停",
+        "失败",
+        "任务已提交",
+        "候选归档"
+      ],
+      "priority": "P1",
+      "references": [
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed; offline Android detail/creation/dependency samples",
+      "evidence": [],
+      "proposalStatus": "implemented (M4a)",
+      "targetOwner": "project-plans"
+    },
+    {
+      "id": "project-plan-create",
+      "name": "准备计划",
+      "kind": "surface",
+      "route": null,
+      "parent": "project-plans",
+      "sources": [
+        "mobile/src/creative/ProjectPlans.tsx",
+        "mobile/src/creative/planReads.ts"
+      ],
+      "purpose": "先选单/多镜头，再准备固定参考与提示词；保存不生成",
+      "currentIssue": "已复用原计划服务和主题分离任务表面。",
+      "recommendation": "计划列表以需我处理/运行中/完成分组；点入计划步骤图或纵向阶段清单；状态只显示适用动作；依赖高级编辑。",
+      "entry": "计划列表",
+      "back": "完成返回原计划列表、分页与筛选；未保存准备留在当前挂载工作区",
+      "primaryAction": "保存计划（不消费）",
+      "states": [
+        "范围选择",
+        "单镜头",
+        "多镜头",
+        "候选自动读取",
+        "无参考",
+        "保存失败",
+        "返回保留"
+      ],
+      "priority": "P1",
+      "references": [
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed; offline Android detail/creation/dependency samples",
+      "evidence": [],
+      "proposalStatus": "implemented (M4a)",
+      "targetOwner": "project-plans"
     }
   ],
   "edges": [
@@ -2668,6 +2736,22 @@
       "type": "open-surface",
       "source": "mobile/src/creative/ProjectPlans.tsx",
       "context": "projectId + planId 或持久化 batchId；范围独立于当前分页"
+    },
+    {
+      "fromId": "project-plans",
+      "toId": "project-plan-detail",
+      "label": "打开具体计划",
+      "type": "open-surface",
+      "source": "mobile/src/creative/ProjectPlans.tsx",
+      "context": "固定 projectId/planId；列表上下文保持挂载"
+    },
+    {
+      "fromId": "project-plans",
+      "toId": "project-plan-create",
+      "label": "新建计划",
+      "type": "open-surface",
+      "source": "mobile/src/creative/ProjectPlans.tsx",
+      "context": "固定 projectId/planId；列表上下文保持挂载"
     }
   ],
   "sourceDigests": {
@@ -2721,7 +2805,7 @@
     "mobile/src/creative/OutboundConsentScreen.tsx": "e3c0f110e46566bea0fe3d854b940b356b0c670da8d690e3b4ca1aa39c09bfa6",
     "mobile/src/creative/ProjectActivityPanel.tsx": "371cbe2e74ec630c53e1ae1c92ec50773a186ae9f79e8e4155d9f7545b064801",
     "mobile/src/creative/ProjectOverview.tsx": "a2001373edf8e2fc6d17e65742d71726807b785742051b6caff433d0bd211d5f",
-    "mobile/src/creative/ProjectPlans.tsx": "fe7c116bfabb119e0f621bbe358a679d91bab8fd2adcdb9e044e1e6134bc8330",
+    "mobile/src/creative/ProjectPlans.tsx": "fe646e081ac3ca83f7cd4c698459363eefd75f263a3b928f671ccc71fc9f3f52",
     "mobile/src/creative/ProjectSearchScreen.tsx": "ba0ce8393ca776c127a1614b78cfa78898c74690cc7a811425c54daceb9d968c",
     "mobile/src/creative/ProjectShots.tsx": "20dfb2f2f60929e63ce7fac08fd818c46dbe98449c968aaea6cb9e15baa6ad20",
     "mobile/src/creative/PromptAssistSheet.tsx": "e6f1f14a9aee6b914a9f5cc8a4e8df4f3e4c61a5cdcb395f4bb2219e16ce80a0",
@@ -2748,7 +2832,8 @@
     "mobile/src/creative/GenerationRequestReview.tsx": "62b7126764446c79bac825c95e5bb7af7fc6c614e6193b3b7b4ae961d11731e7",
     "mobile/src/creative/PlanRequestReview.tsx": "944bc08ab9e5cd68ba7f9d70e8a2ee8f677d37856a36bc4da531305c2b139994",
     "mobile/src/creative/planReviewTargets.ts": "8132b83a14a49723800062f578bf6574bae614f33694935f9d35ebf9f58f7f88",
-    "mobile/src/conversation/ConversationInput.tsx": "b0f1f36f7c6050f60c82aa73cf5141575a7aeeb9e762f71354f485212bcf7522"
+    "mobile/src/conversation/ConversationInput.tsx": "b0f1f36f7c6050f60c82aa73cf5141575a7aeeb9e762f71354f485212bcf7522",
+    "mobile/src/creative/planReads.ts": "e4be01dc140f608a9ee02bea1f753a4b3e77be1955946449a5412f505ae78536"
   },
   "revisions": [
     {
@@ -2825,6 +2910,16 @@
         "mobile/src/creative/CreativeResults.tsx",
         "mobile/src/agent/PromptAssistantUi.tsx",
         "mobile/src/conversation/ConversationInput.tsx"
+      ]
+    },
+    {
+      "date": "2026-11-05",
+      "sourceBase": "3183e457",
+      "scope": "M4a plan detail/preparation/dependency picker",
+      "evidence": "docs/design/evidence/2026-11-05-agent-roadmap/README.md",
+      "reviewedSources": [
+        "mobile/src/creative/ProjectPlans.tsx",
+        "mobile/src/creative/planReads.ts"
       ]
     }
   ]

@@ -6,7 +6,7 @@
 
 ## 范围与结论
 
-覆盖 29 个路由页面、2 个壳层、30 个重要子表面；记录 66 条源码确认的关键点击边。非路由清单不宣称穷尽全部 JSX 分支，点击边也不是运行时全图。
+覆盖 29 个路由页面、2 个壳层、32 个重要子表面；记录 68 条源码确认的关键点击边。非路由清单不宣称穷尽全部 JSX 分支，点击边也不是运行时全图。
 
 当前实现已有四入口、预览、参数抽屉、任务气泡、明确采用和不可变版本，方向不必推倒。M1 技能快速选用、M2 分步添加已独立，M3a 建议与草稿审阅、M3b1 单次请求审阅已按对象与状态接入；项目概览仍承担工具目录，镜头列表承担编辑器，技能目录与运行历史共享，时间线承担参数表与工程管理。应继续按对象和状态重组任务，不再给每项能力补一个常驻按钮。
 
@@ -109,6 +109,8 @@ flowchart LR
           镜头编辑表单 [surface; shot-editor]
         项目 / 素材 [surface; project-assets]
         项目 / 计划 [surface; project-plans]
+          计划详情 [surface; project-plan-detail]
+          准备计划 [surface; project-plan-create]
         项目 / 活动 [surface; project-activity]
         项目设置与封面选择 [surface; project-manage]
     全局素材库 [route; assets]
@@ -786,11 +788,11 @@ flowchart LR
 
 **任务**：查看编排、依赖与待授权任务。
 
-**现状问题**：M3b2 已迁移确切请求审阅；列表和详情、依赖搜索仍待 M4。
+**现状问题**：M4a 列表显示状态与下一步，详情承载输入/候选/检查；批次范围选择待 M4b。
 
 **展示与交互建议**：计划列表以需我处理/运行中/完成分组；点入计划步骤图或纵向阶段清单；状态只显示适用动作；依赖高级编辑。
 
-**实施状态**：proposed。**证据范围**：source-reviewed。
+**实施状态**：partially-implemented (M4a)。**证据范围**：source-reviewed; offline Android detail/creation/dependency samples。
 
 **主操作**：处理当前阻塞步骤。**目标归属**：项目工作区。
 
@@ -1294,6 +1296,44 @@ flowchart LR
 
 **依据**：[src/creative/AgentCreativeCards.tsx](../../mobile/src/creative/AgentCreativeCards.tsx)、[src/creative/GenerationRequestReview.tsx](../../mobile/src/creative/GenerationRequestReview.tsx)、[src/creative/CreativeAccountPanel.tsx](../../mobile/src/creative/CreativeAccountPanel.tsx)；对照 B1、B2（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
 
+<a id="project-plan-detail"></a>
+### 计划详情 · project-plan-detail · P1
+
+**任务**：围绕一个固定计划处理参考、输入、检查、许可与执行。
+
+**现状问题**：已复用原计划服务和主题分离任务表面。
+
+**展示与交互建议**：计划列表以需我处理/运行中/完成分组；点入计划步骤图或纵向阶段清单；状态只显示适用动作；依赖高级编辑。
+
+**实施状态**：implemented (M4a)。**证据范围**：source-reviewed; offline Android detail/creation/dependency samples。
+
+**主操作**：按状态核对原计划。**目标归属**：项目 / 计划。
+
+**进入与返回**：计划列表 → 本表面；完成返回原计划列表、分页与筛选；未保存准备留在当前挂载工作区。
+
+**应覆盖状态**：待选图 / 检查与依赖 / 待许可 / 暂停 / 失败 / 任务已提交 / 候选归档。
+
+**依据**：[src/creative/ProjectPlans.tsx](../../mobile/src/creative/ProjectPlans.tsx)、[src/creative/planReads.ts](../../mobile/src/creative/planReads.ts)；对照 B2（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
+
+<a id="project-plan-create"></a>
+### 准备计划 · project-plan-create · P1
+
+**任务**：先选单/多镜头，再准备固定参考与提示词；保存不生成。
+
+**现状问题**：已复用原计划服务和主题分离任务表面。
+
+**展示与交互建议**：计划列表以需我处理/运行中/完成分组；点入计划步骤图或纵向阶段清单；状态只显示适用动作；依赖高级编辑。
+
+**实施状态**：implemented (M4a)。**证据范围**：source-reviewed; offline Android detail/creation/dependency samples。
+
+**主操作**：保存计划（不消费）。**目标归属**：项目 / 计划。
+
+**进入与返回**：计划列表 → 本表面；完成返回原计划列表、分页与筛选；未保存准备留在当前挂载工作区。
+
+**应覆盖状态**：范围选择 / 单镜头 / 多镜头 / 候选自动读取 / 无参考 / 保存失败 / 返回保留。
+
+**依据**：[src/creative/ProjectPlans.tsx](../../mobile/src/creative/ProjectPlans.tsx)、[src/creative/planReads.ts](../../mobile/src/creative/planReads.ts)；对照 B2（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
+
 ## 关键点击关系与上下文
 
 以下是当前实现的人工核对边；不是目标路由配置，也不保证全部分支都在设备走通。模态关闭、取消选择和写入后的回流要求见 target-and-flows.md。
@@ -1366,6 +1406,8 @@ flowchart LR
 | 单次请求准备恢复 | 编辑原视频草稿 | 视频创作详情 | 固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文 | navigate |
 | 项目 / 计划 | 核对计划请求 | 生成请求审阅 | projectId + planId 或持久化 batchId；范围独立于当前分页 | open-surface |
 | 项目 / 计划 | 核对批次请求 | 生成请求审阅 | projectId + planId 或持久化 batchId；范围独立于当前分页 | open-surface |
+| 项目 / 计划 | 打开具体计划 | 计划详情 | 固定 projectId/planId；列表上下文保持挂载 | open-surface |
+| 项目 / 计划 | 新建计划 | 准备计划 | 固定 projectId/planId；列表上下文保持挂载 | open-surface |
 
 ## 审查优先级
 

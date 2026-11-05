@@ -24,3 +24,14 @@ export async function readPlanBatchPage(db:AppDatabase,projectId:string,after?:P
  const items=rows.slice(0,20),last=items[items.length-1];
  return {items,next:rows.length>20&&last?{createdAt:last.created_at,id:last.id}:undefined};
 }
+
+/** Project-wide dependency picker; independent of the visible plan page and batch. */
+export async function readDependencyPlanPage(db:AppDatabase,projectId:string,targetId:string,query:string,after?:PlanCursor){
+ const rows=await db.getAllAsync<CreativePlan & {created_at:number}>(`SELECT p.* FROM creative_plans p
+ WHERE p.project_id=? AND p.id!=? AND p.state IN ('ACTIVE','COMPLETED')
+ AND (instr(lower(p.title),lower(?))>0 OR instr(p.id,?)>0)
+ AND (? IS NULL OR p.created_at<? OR (p.created_at=? AND p.id<?))
+ ORDER BY p.created_at DESC,p.id DESC LIMIT 31`,projectId,targetId,query.trim(),query.trim(),after?.createdAt??null,after?.createdAt??null,after?.createdAt??null,after?.id??null);
+ const items=rows.slice(0,30),last=items[items.length-1];
+ return {items,next:rows.length>30&&last?{createdAt:last.created_at,id:last.id}:undefined};
+}

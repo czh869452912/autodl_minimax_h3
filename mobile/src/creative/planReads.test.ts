@@ -1,6 +1,6 @@
 import {createInitializedRealSqliteTestDb} from '../test/realSqlite';
 import {createCreativeService} from './service';
-import {readPlanPage,readPlanBatchPage} from './planReads';
+import {readPlanPage,readPlanBatchPage,readDependencyPlanPage} from './planReads';
 import {readBatchReviewTargets} from './planReviewTargets';
 test('plan pages remain complete at equal timestamps and batch filters stay project scoped',async()=>{
  const db=await createInitializedRealSqliteTestDb();try{
@@ -21,6 +21,13 @@ test('plan pages remain complete at equal timestamps and batch filters stay proj
  expect((await readPlanPage(db as never,projectId,{batchId:'batch',filter:'failed'})).items).toHaveLength(10);
  expect((await readPlanPage(db as never,'other',{batchId:'batch'})).items).toEqual([]);
  expect((await readPlanBatchPage(db as never,'other')).items).toEqual([]);
+ const deps=await readDependencyPlanPage(db as never,projectId,'plan064','plan');
+ const deps2=await readDependencyPlanPage(db as never,projectId,'plan064','plan',deps.next);
+ expect(deps.items).toHaveLength(30);expect(deps2.items).toHaveLength(30);
+ expect(new Set([...deps.items,...deps2.items].map(p=>p.id)).size).toBe(60);
+ expect(deps.items.some(p=>p.id==='plan064')).toBe(false);
+ expect((await readDependencyPlanPage(db as never,projectId,'plan064','plan000')).items.map(p=>p.id)).toEqual(['plan000']);
+ expect((await readDependencyPlanPage(db as never,'other','plan064','')).items).toEqual([]);
  for(let i=0;i<20;i+=2){
  const draft=await service.execute({name:'draft.createVideo',payload:{projectId,prompt:'move'}},'draft'+i);if(draft.status!=='completed')throw Error('draft');
  db.runSync("UPDATE creative_plan_steps SET draft_id=? WHERE plan_id=?",draft.value.draftId,'plan'+String(i).padStart(3,'0'));

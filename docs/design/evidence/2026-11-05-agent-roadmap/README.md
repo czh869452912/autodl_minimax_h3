@@ -9,3 +9,5 @@ M3b2: open fixture project → plans → three-shot batch → request review. Ex
 50 automated tests cover scoped batch reads, equal-time pagination, immutable draft bindings, opt-in consent and duplicate guard; typecheck passed. No TalkBack, larger font, live cost, live model or live provider verification is claimed. Later slice results append here.
 
 M3c: offline standalone UNKNOWN workflow job inserted into stopped isolated QA DB; no generation operation or credentials. Task before/after composite inspected: next action is provider review, status remains unknown, no regeneration. Generation receipt absent so query button correctly unavailable. Never opened provider website. Candidate identity/polling/adoption and stop scope covered by regression tests, not by this device fixture.
+
+M4a: plans-after/plan-detail-after/plan-checks-after/plan-dependencies-after/plan-create-range-after/plan-candidates-auto-after. No plan mutation or dispatch. Combined plans-comparison.jpg inspected; retained theme and readable fields, details moved out of rows. Batch header still occupies space and is addressed next.
