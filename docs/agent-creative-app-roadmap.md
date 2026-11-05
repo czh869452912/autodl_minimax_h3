@@ -1,6 +1,8 @@
 # Agent 辅助综合创作 App：架构与实施路线
 
-日期：2026-10-23。状态：实施设计，尚未实现。依据：当前源码、NovelAIPromptStudio README、NovelAI 官方文档及用户提供的窄屏截图；官网交互及真实 API 请求仍待验证。
+> 历史设计（2026-10-23），保留最初路线与设计依据。下文“尚未实现”“待验证”均是当时状态；不得用它判断当前分支。现行架构见 [Android Agent 工作台](architecture/agent-video-workbench.md)，Agent UX 改造见 [设计谱系](design/README.md) 和 [复核报告](design/agent-post-implementation-review.md)。更广泛产品设想仍按具体目录状态追踪，不因 Agent 50 项完成而全部标记实现。
+
+日期：2026-10-23。状态：当时的实施设计。依据：当时源码、NovelAIPromptStudio README、NovelAI 官方文档及用户提供的窄屏截图；官网交互及真实 API 请求仍待验证。
 
 补充：已完成内置浏览器基础出图与部分界面检查，详见 [官网测试记录](novelai-browser-test-record.md)。后续先复用记录与样本，仅补测未覆盖或已发生变化的能力；真实 API 接入仍待验证。
 

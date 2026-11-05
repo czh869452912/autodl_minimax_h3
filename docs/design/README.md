@@ -19,7 +19,9 @@
 
 11. [M3b1 单次请求实现与验证](agent-m3b1-implementation.md)：可滚动审阅、双许可、取消与账号恢复；这是单次草稿历史切片报告；后续已按独立提交完成。
 
-12. [Agent 50 项收尾对照](agent-final-reconciliation.md) 和 [M3b2–M5 续作记录](agent-roadmap-completion.md)：逐项结果、保留行为、提交链、最终 70 套/600 项回归与设备证据限制。
+12. [Agent 50 项收尾对照](agent-final-reconciliation.md) 和 [M3b2–M5 续作记录](agent-roadmap-completion.md)：逐项结果、保留行为、提交链、实施收尾时 70 套/600 项回归与设备证据限制。
+
+13. [Agent 改造后复核](agent-post-implementation-review.md)：全部 50 项对应的源码/合同复核、修正项、180 套扩大回归及旧文档校正；本轮无新增设备/线上验收。
 
 `page-catalog.json` 是页面清单和逐页建议的结构化来源。`page-review.md` 是它的生成视图，避免维护两套清单。流程与决策使用 Markdown + Mermaid；截图与版本一起保留。这样延续现有仓库工作方式，无需另建付费设计平台。
 

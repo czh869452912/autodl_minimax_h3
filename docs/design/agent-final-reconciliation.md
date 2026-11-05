@@ -2,7 +2,9 @@
 
 2026-11-05，分支 `codex/creative-app`。本页逐项对照初评 01–50。M1–M5 的实现已完成；“保留”表示审查后沿用原有正确行为，并非每项都需要新按钮或新路由。全产品概览、时间线等其他设计提案不在这 50 项范围内。
 
-实现与验证分别记账：最终相关回归 **70 套、600 项通过**，TypeScript 通过，目录严格检查通过。设备为隔离 Android debug 原生壳与当轮 Hermes，使用合成项目、离线准备及回环模型；不是发布 APK，也不是供应商端到端验收。详见 [分阶段记录](agent-roadmap-completion.md) 和 [设备证据及包身份](evidence/2026-11-05-agent-roadmap/README.md)。M1/M2/M3a 的设备范围仍以原报告为准。
+实现与验证分别记账：实施收尾时相关回归 **70 套、600 项通过**，TypeScript 通过，目录严格检查通过。设备为隔离 Android debug 原生壳与当轮 Hermes，使用合成项目、离线准备及回环模型；不是发布 APK，也不是供应商端到端验收。详见 [分阶段记录](agent-roadmap-completion.md) 和 [设备证据及包身份](evidence/2026-11-05-agent-roadmap/README.md)。M1/M2/M3a 的设备范围仍以原报告为准。
+
+改造后已再做 [完整复核](agent-post-implementation-review.md)：覆盖全部 Agent/conversation/creative 回归，补正计划终态、跨项目迟到读取、视频恢复用途和图片处理审阅。后续验证数字以复核报告为准，以下保留原 50 项实施归属。
 
 ## 逐项结果
 
