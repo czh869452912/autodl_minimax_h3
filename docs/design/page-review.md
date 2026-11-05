@@ -8,9 +8,9 @@
 
 覆盖 29 个路由页面、2 个壳层、36 个重要子表面；记录 74 条源码确认的关键点击边。非路由清单不宣称穷尽全部 JSX 分支，点击边也不是运行时全图。
 
-当前实现已有四入口、预览、参数抽屉、任务气泡、明确采用和不可变版本，方向不必推倒。M1 技能快速选用、M2 分步添加已独立，M3a 建议与草稿审阅、M3b1 单次请求审阅已按对象与状态接入；项目概览仍承担工具目录，镜头列表承担编辑器，技能目录与运行历史共享，时间线承担参数表与工程管理。应继续按对象和状态重组任务，不再给每项能力补一个常驻按钮。
+Agent 50 项 M1–M5 已完成实现：输入与技能范围、添加/提炼、建议/请求许可、任务/候选、计划/批次及会话历史/诊断按对象和阶段组织；项目权限承接全部生成授权撤销。逐项结果与保留行为见 agent-final-reconciliation.md。全产品项目概览、镜头编辑器、时间线等其他提案仍按条目状态追踪。离线设备采样、自动回归与完整线上/辅助技术验收分别记录。
 
-目录中的归属是信息组织视角，不等于 Expo 文件嵌套或真实 back 栈。建议按条目标记 proposed / partially-implemented / implemented，设备覆盖单独记录在 evidenceLevel；页面状态是需要覆盖的规格，不能当作已通过的设备测试。历史基线与后续切片分别记录，见 D002–D005。
+目录中的归属是信息组织视角，不等于 Expo 文件嵌套或真实 back 栈。建议按条目标记 proposed / partially-implemented / implemented，设备覆盖单独记录在 evidenceLevel；页面状态是需要覆盖的规格，不能当作已通过的设备测试。历史基线与后续切片分别记录，见 D002–D007。
 
 ## 当前主要跳转：概览的扇出
 
@@ -811,11 +811,11 @@ flowchart LR
 
 **任务**：追溯项目变更。
 
-**现状问题**：M3a 已将待审阅建议与已记录活动分组；建议按对象/变化字段审阅，冲突保留三方内容，已处理显示实际状态与时间。活动、任务与运行历史的进一步归并仍待 M5。
+**现状问题**：待审阅与已记录分区；具名字段差异、三方冲突、终态时间和更多诊断已接入。打开来源保留实际返回栈。
 
 **展示与交互建议**：保持同一 proposal 身份与领域事务；只展开变化字段，长对照可展开完整正文。继续补齐来源失效、读屏与历史导航验收。
 
-**实施状态**：partially-implemented。**证据范围**：source-reviewed; M3a synthetic Android samples of project/shot adoption, rejection, revision conflict, terminal history and return; 2x font scrolling; no provider generation。
+**实施状态**：implemented (Agent item 50 scope)。**证据范围**：source-reviewed; M3a synthetic Android samples of project/shot adoption, rejection, revision conflict, terminal history and return; 2x font scrolling; no provider generation。
 
 **主操作**：待审阅建议按对象审阅并采用或拒绝；历史打开相关对象。**目标归属**：项目工作区。
 
@@ -1248,11 +1248,11 @@ flowchart LR
 
 **任务**：从当前轮次找到修改建议、生成草稿、计划和候选的下一步。
 
-**现状问题**：M3a 已显示待审阅数量、对象名与变化字段，待审阅优先，终态保留可追溯；空描述草稿主操作为完善。请求授权和执行到候选的完整重组仍待 M3b/M3c。
+**现状问题**：本轮按提议/草稿/任务/候选呈现；请求审阅双许可、任务身份与未知结果恢复已接入，候选仍需明确采用。
 
 **展示与交互建议**：保持 runId 与固定对象身份，不能把修改建议称作已生成成果；请求审阅继续复用原 prepare/confirm，不新建执行状态。
 
-**实施状态**：partially-implemented。**证据范围**：source-reviewed; M3a synthetic Android sampled summary, priority, exact proposal navigation, terminal return, empty draft detail; full generation/authorization deferred。
+**实施状态**：implemented (Agent M3 scope)。**证据范围**：source-reviewed; M3a synthetic Android sampled summary, priority, exact proposal navigation, terminal return, empty draft detail; full generation/authorization deferred。
 
 **主操作**：待审阅→审阅修改；已处理→查看修改结果；空描述草稿→完善；计划→查看步骤。**目标归属**：项目助手。
 
@@ -1269,7 +1269,7 @@ flowchart LR
 
 **现状问题**：单次、计划与批次共用请求字段与分别确认许可；真实供应商验证独立记录
 
-**展示与交互建议**：沿用现有主题与 prepare/confirm；保存账号不提交，退出不写许可；计划授权迁移独立验收。
+**展示与交互建议**：单次/计划/批次共用准确请求字段和 prepare/confirm；保存配置不提交，退出不写许可；真实供应商验收单独记录。
 
 **实施状态**：implemented (M3b UI; offline device sampling)。**证据范围**：source-reviewed; offline request UI device samples, no real dispatch。
 
@@ -1286,11 +1286,11 @@ flowchart LR
 
 **任务**：修复账号或草稿后重新核对原请求。
 
-**现状问题**：M3b1 已提供原位账号管理与原草稿编辑；完整连接用途恢复仍待后续
+**现状问题**：单次与计划/批次均保留原对象；账号原位管理、工作流用途配置后重新准备/核对，不自动提交。
 
-**展示与交互建议**：沿用现有主题与 prepare/confirm；保存账号不提交，退出不写许可；计划授权迁移独立验收。
+**展示与交互建议**：保留原固定对象与输入；配置变化需重新 prepare/审阅，不能扩展授权。
 
-**实施状态**：partially-implemented (M3b1; plan/batch pending)。**证据范围**：source-reviewed + mocked UI regression; no device account recovery。
+**实施状态**：implemented (Agent M3/M5 scope)。**证据范围**：source-reviewed + mocked UI regression; no device account recovery。
 
 **主操作**：重新核对原草稿。**目标归属**：项目助手。
 
@@ -1412,7 +1412,7 @@ flowchart LR
 
 **应覆盖状态**：读取中 / 空清单 / 有效授权 / 显示更多 / 撤销审阅 / 取消 / 清单变化 / 写入失败 / 已撤销。
 
-**依据**：[src/creative/ProjectPermissions.tsx](../../mobile/src/creative/ProjectPermissions.tsx)、[src/creative/projectPermissionStore.ts](../../mobile/src/creative/projectPermissionStore.ts)、[src/creative/ProjectOverview.tsx](../../mobile/src/creative/ProjectOverview.tsx)；对照 B1、B2（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
+**依据**：[src/creative/ProjectPermissions.tsx](../../mobile/src/creative/ProjectPermissions.tsx)、[src/creative/projectPermissionStore.ts](../../mobile/src/creative/projectPermissionStore.ts)、[src/creative/ProjectOverview.tsx](../../mobile/src/creative/ProjectOverview.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[permissions-comparison.jpg](../../docs/design/evidence/2026-11-05-agent-roadmap/permissions-comparison.jpg)。
 
 ## 关键点击关系与上下文
 

@@ -1186,7 +1186,7 @@
         "mobile/src/creative/changeReview.ts"
       ],
       "purpose": "追溯项目变更",
-      "currentIssue": "M3a 已将待审阅建议与已记录活动分组；建议按对象/变化字段审阅，冲突保留三方内容，已处理显示实际状态与时间。活动、任务与运行历史的进一步归并仍待 M5。",
+      "currentIssue": "待审阅与已记录分区；具名字段差异、三方冲突、终态时间和更多诊断已接入。打开来源保留实际返回栈。",
       "recommendation": "保持同一 proposal 身份与领域事务；只展开变化字段，长对照可展开完整正文。继续补齐来源失效、读屏与历史导航验收。",
       "entry": "项目活动",
       "back": "来自会话时返回原会话；保留 proposalId 定位与原轮次",
@@ -1219,7 +1219,7 @@
         "docs/design/evidence/2026-11-04-m3-review/13-shot-applied.png",
         "docs/design/evidence/2026-11-04-m3-review/17-font2-comparison.png"
       ],
-      "proposalStatus": "partially-implemented",
+      "proposalStatus": "implemented (Agent item 50 scope)",
       "targetOwner": "project"
     },
     {
@@ -1982,7 +1982,7 @@
         "mobile/src/creative/agentCreativeActivity.ts"
       ],
       "purpose": "从当前轮次找到修改建议、生成草稿、计划和候选的下一步",
-      "currentIssue": "M3a 已显示待审阅数量、对象名与变化字段，待审阅优先，终态保留可追溯；空描述草稿主操作为完善。请求授权和执行到候选的完整重组仍待 M3b/M3c。",
+      "currentIssue": "本轮按提议/草稿/任务/候选呈现；请求审阅双许可、任务身份与未知结果恢复已接入，候选仍需明确采用。",
       "recommendation": "保持 runId 与固定对象身份，不能把修改建议称作已生成成果；请求审阅继续复用原 prepare/confirm，不新建执行状态。",
       "entry": "会话对应轮次的“本轮创作”摘要",
       "back": "关闭回当前会话；进入项目审阅/草稿详情再返回原轮次",
@@ -2011,7 +2011,7 @@
         "docs/design/evidence/2026-11-04-m3-review/14-resolved-cards.png",
         "docs/design/evidence/2026-11-04-m3-review/15-open-draft.png"
       ],
-      "proposalStatus": "partially-implemented",
+      "proposalStatus": "implemented (Agent M3 scope)",
       "targetOwner": "agent"
     },
     {
@@ -2030,7 +2030,7 @@
       ],
       "purpose": "核对原草稿的确切请求并分别确认外发与消费许可",
       "currentIssue": "单次、计划与批次共用请求字段与分别确认许可；真实供应商验证独立记录",
-      "recommendation": "沿用现有主题与 prepare/confirm；保存账号不提交，退出不写许可；计划授权迁移独立验收。",
+      "recommendation": "单次/计划/批次共用准确请求字段和 prepare/confirm；保存配置不提交，退出不写许可；真实供应商验收单独记录。",
       "entry": "本轮创作中的固定草稿请求入口",
       "back": "关闭返回原本轮创作；编辑打开原固定草稿",
       "primaryAction": "确认两项许可后生成一次",
@@ -2069,8 +2069,8 @@
         "mobile/src/creative/CreativeAccountPanel.tsx"
       ],
       "purpose": "修复账号或草稿后重新核对原请求",
-      "currentIssue": "M3b1 已提供原位账号管理与原草稿编辑；完整连接用途恢复仍待后续",
-      "recommendation": "沿用现有主题与 prepare/confirm；保存账号不提交，退出不写许可；计划授权迁移独立验收。",
+      "currentIssue": "单次与计划/批次均保留原对象；账号原位管理、工作流用途配置后重新准备/核对，不自动提交。",
+      "recommendation": "保留原固定对象与输入；配置变化需重新 prepare/审阅，不能扩展授权。",
       "entry": "本轮创作中的固定草稿请求入口",
       "back": "关闭返回原本轮创作；编辑打开原固定草稿",
       "primaryAction": "重新核对原草稿",
@@ -2089,7 +2089,7 @@
       ],
       "evidenceLevel": "source-reviewed + mocked UI regression; no device account recovery",
       "evidence": [],
-      "proposalStatus": "partially-implemented (M3b1; plan/batch pending)",
+      "proposalStatus": "implemented (Agent M3/M5 scope)",
       "targetOwner": "agent"
     },
     {
@@ -2298,7 +2298,9 @@
         "B2"
       ],
       "evidenceLevel": "source-reviewed; real SQLite cancellation/isolation/change/rollback; offline Android entry/empty/return sample",
-      "evidence": [],
+      "evidence": [
+        "docs/design/evidence/2026-11-05-agent-roadmap/permissions-comparison.jpg"
+      ],
       "proposalStatus": "implemented (item 43)",
       "targetOwner": "project"
     }
@@ -3160,6 +3162,21 @@
         "mobile/src/agent/skills/SkillLibraryScreen.tsx",
         "mobile/src/creative/AssistantActions.tsx",
         "mobile/src/agent/AgentScreen.tsx"
+      ]
+    },
+    {
+      "date": "2026-11-05",
+      "sourceBase": "719d639f",
+      "scope": "M5c and final 01–50 reconciliation; item 43 project permissions included; implementation and acceptance coverage separate",
+      "evidence": "docs/design/evidence/2026-11-05-agent-roadmap/README.md",
+      "reviewedSources": [
+        "mobile/src/agent/LocalHistoryBrowser.tsx",
+        "mobile/src/agent/PromptAssistantUi.tsx",
+        "mobile/src/agent/PromptVersionPanel.tsx",
+        "mobile/src/creative/ProjectPermissions.tsx",
+        "mobile/src/creative/projectPermissionStore.ts",
+        "mobile/src/creative/AgentCreativePanel.tsx",
+        "mobile/src/creative/ProjectOverview.tsx"
       ]
     }
   ]
