@@ -358,3 +358,11 @@
 - ARM双ABI APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.38-android.apk`。
 - SHA256：`C749BAE4D58582ABE8D5F9058A1EB8FEFB6CAE63C46ED877CF6D91720E4A1AEC`。
 - 详细报告：[片段与Rescale验收](reviews/2026-10-31-prompt-chunks.md)。
+
+## 2026-11-05 · beta.48 Agent 交互改造预发布
+
+- 版本 `1.5.0-preview.4-beta.48` / versionCode 87，包名 `com.example.autodlh3.beta`；Expo 与原生版本已同步，沿用 beta.47 签名。
+- 包含 Agent M1–M5 和项目权限改造，以及计划终态、跨项目迟到读取、图片/蒙版/超分请求审阅及文档复核修正。
+- 双 ARM APK：`build/phone-beta/AutoDL-H3-1.5.0-preview.4-beta.48-android.apk`；SHA-256：`208d57f515d36a794238bcb9f3252e8b4125a8e111882acd1ec8b30a7e4c867b`。
+- 全量自动回归 332 套、2041 项通过；1 套、4 项既有跳过。类型、技能、发布身份、进程恢复及实际 APK 签名/版本/86 个原生库对齐检查通过。
+- 没有安装至用户手机或调用真实模型/生成服务；真机完整升级、导出与可访问性等覆盖边界见 [本次构建与核验](verification/beta48-pre-release.md)。

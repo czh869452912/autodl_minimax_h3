@@ -28,6 +28,9 @@ test('beta Expo identity is isolated and leaves production config unchanged', ()
       name: 'AutoDL H3 测试版', scheme: 'autodlh3-beta',
       android: { package: 'com.example.autodlh3.beta' },
     });
+    const betaSuffix = text('android/app/build.gradle').match(/versionNameSuffix\s+'([^']+)'/)?.[1];
+    expect(betaSuffix).toMatch(/^-beta\.\d+$/);
+    expect(configure({ config }).version).toBe(config.version + betaSuffix);
     expect(config.android.package).toBe('com.example.autodlh3');
     expect(config.scheme).toBe('autodlh3');
   } finally {
