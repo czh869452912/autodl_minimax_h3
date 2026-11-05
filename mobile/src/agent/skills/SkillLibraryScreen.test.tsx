@@ -102,7 +102,7 @@ test('history uses trusted thread scope and opens exact historical run without c
  expect(mockStore.runs).toHaveBeenLastCalledWith(expect.objectContaining({threadId:'thread',limit:21}));
  act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());
  expect(JSON.stringify(tree.toJSON())).toContain('历史名称');
- act(()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='查看运行 old-run')!.props.onPress());
+ act(()=>tree.root.findAllByType(ListAction).find(n=>n.props.label.startsWith('查看运行：原会话'))!.props.onPress());
  expect(mockPush).toHaveBeenLastCalledWith({pathname:'/agent-run',params:{threadId:'thread',runId:'old-run'}});
  expect(mockStore.setProjectVersion).not.toHaveBeenCalled();
  }finally{act(()=>tree.unmount());mockStore.runs.mockResolvedValue([]);}
@@ -116,9 +116,9 @@ test('history is an immediate view and local filter does not require traversing 
  act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='本地导入'&&n.props.onPress)[0].props.onPress());
  expect(JSON.stringify(tree.toJSON())).toContain('my-local');expect(JSON.stringify(tree.toJSON())).not.toContain('品牌宣传短片生成器');
  act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());
- expect(tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.selected).toBe(true);
+ expect(JSON.stringify(tree.toJSON())).toContain('会话运行历史');
  expect(JSON.stringify(tree.toJSON())).toContain('还没有运行记录');expect(tree.root.findAllByProps({accessibilityLabel:'搜索技能'})).toHaveLength(0);
- act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());
+ act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='返回来源')!.props.onPress());
  act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='内置技能'&&n.props.onPress)[0].props.onPress());
  const builtin=()=>tree.root.findAll(n=>n.props.accessibilityLabel==='内置：品牌宣传短片生成器'&&n.props.onPress)[0];
  act(()=>builtin().props.onPress());expect(builtin().props.accessibilityState.expanded).toBe(true);expect(JSON.stringify(tree.toJSON())).toContain('包指纹');
@@ -129,6 +129,7 @@ test('history is an immediate view and local filter does not require traversing 
 test('add from history shows only source choices, without the directory or history',async()=>{
  let tree!:ReturnType<typeof create>;try{await act(async()=>{tree=create(<SkillLibraryScreen/>);});
  act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());
+ act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='返回来源')!.props.onPress());
  act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='添加技能')!.props.onPress());
  expect(JSON.stringify(tree.toJSON())).toContain('选择来源');
  expect(tree.root.findAllByProps({accessibilityLabel:'搜索技能'})).toHaveLength(0);
@@ -176,4 +177,12 @@ test('once editor guards embedded close and native removal with the same decisio
  const registration=prevent.mock.calls.at(-1);expect(registration[0]).toBe(true);
  act(()=>registration[1]({data:{action:{type:'GO_BACK'}}}));expect(alert).toHaveBeenLastCalledWith('尚有未保存的修改',expect.any(String),expect.any(Array));
  }finally{act(()=>tree.unmount());alert.mockRestore();}
+});
+
+
+test('conversation history intent shows read-only scoped history without library editing controls',async()=>{
+ mockStore.runs.mockResolvedValue([]);let tree!:ReturnType<typeof create>;try{await act(async()=>{tree=create(<SkillLibraryScreen intent="history" threadId="t"/>);});
+ expect(mockStore.runs).toHaveBeenLastCalledWith(expect.objectContaining({threadId:'t',limit:21}));expect(tree.root.findAllByType(Switch)).toHaveLength(0);expect(tree.root.findAllByProps({accessibilityLabel:'搜索技能'})).toHaveLength(0);
+ await act(async()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='查看全部范围')!.props.onPress());expect(mockStore.runs).toHaveBeenLastCalledWith({after:undefined,limit:21});
+ }finally{act(()=>tree.unmount());}
 });

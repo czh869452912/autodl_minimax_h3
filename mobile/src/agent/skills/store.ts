@@ -97,7 +97,7 @@ export function createSkillStore(db: AppDatabase) {
       }
       return versions;
     },
-    async runs(options:{projectId?:string;threadId?:string;after?:{createdAt:number;threadId:string;runId:string};limit?:number}={}): Promise<Array<{ threadId:string; runId:string; createdAt:number;projectId:string|null;projectTitle:string|null;threadTitle:string|null;status:string|null;skillNames:Record<string,string>;snapshot:SkillSnapshot; reads?:string[]; usage?:{model_calls:number;tool_calls:number;estimated_tokens:number;reported_tokens:number} }>> {
+    async runs(options:{projectId?:string;threadId?:string;runId?:string;after?:{createdAt:number;threadId:string;runId:string};limit?:number}={}): Promise<Array<{ threadId:string; runId:string; createdAt:number;projectId:string|null;projectTitle:string|null;threadTitle:string|null;status:string|null;skillNames:Record<string,string>;snapshot:SkillSnapshot; reads?:string[]; usage?:{model_calls:number;tool_calls:number;estimated_tokens:number;reported_tokens:number} }>> {
       const after=options.after;
       const rows=await db.getAllAsync<{thread_id:string;run_id:string;snapshot_json:string;created_at:number;project_id:string|null;project_title:string|null;thread_title:string|null;status:string|null}>(`
         SELECT r.*,s.project_id,p.title AS project_title,COALESCE(t.custom_title,t.title) AS thread_title,json_extract(a.payload_json,'$.status') AS status
@@ -105,9 +105,10 @@ export function createSkillStore(db: AppDatabase) {
         LEFT JOIN creative_projects p ON p.id=s.project_id LEFT JOIN agent_thread_index t ON t.thread_id=r.thread_id
         LEFT JOIN agent_runs a ON a.thread_id=r.thread_id AND a.id=r.run_id
         WHERE (? IS NULL OR s.project_id=?) AND (? IS NULL OR r.thread_id=?)
+        AND (? IS NULL OR r.run_id=?)
         AND (? IS NULL OR (r.created_at,r.thread_id,r.run_id)<(?,?,?))
         ORDER BY r.created_at DESC,r.thread_id DESC,r.run_id DESC LIMIT ?`,
-        options.projectId??null,options.projectId??null,options.threadId??null,options.threadId??null,
+        options.projectId??null,options.projectId??null,options.threadId??null,options.threadId??null,options.runId??null,options.runId??null,
         after?.createdAt??null,after?.createdAt??null,after?.threadId??null,after?.runId??null,Math.max(1,Math.min(options.limit??20,100)));
       return Promise.all(rows.map(async row=>{
         const snapshot=JSON.parse(row.snapshot_json) as SkillSnapshot;

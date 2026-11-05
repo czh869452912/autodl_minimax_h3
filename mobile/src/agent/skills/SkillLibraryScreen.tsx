@@ -1,3 +1,4 @@
+import {RUN_LABELS} from '../../conversation/activityLabels';
 import {runEvents} from '../runEvents';
 import {skillSelectionEvents} from './selectionEvents';
 import {builtinSkillCatalog} from './builtinCatalog';
@@ -32,7 +33,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
   const [addStatus,setAddStatus]=useState<SkillAddStatus>({dirty:false,busy:false});
   const [highlighted,setHighlighted]=useState<string|undefined>(initialVersionId);
   const [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
-  const [importOpen,setImportOpen]=useState(intent==='add'),[historyOpen,setHistoryOpen]=useState(false),[expanded,setExpanded]=useState<string|undefined>(initialVersionId),[query,setQuery]=useState('');
+  const [importOpen,setImportOpen]=useState(intent==='add'),[historyOpen,setHistoryOpen]=useState(intent==='history'),[expanded,setExpanded]=useState<string|undefined>(initialVersionId),[query,setQuery]=useState('');
   const scroll=useRef<ScrollView>(null);
   const [filter,setFilter]=useState<'all'|'local'|'builtin'|'selected'>('all');
   const lock = useRef(false);
@@ -41,7 +42,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
   const latestLeave=useRef(confirmLeave);latestLeave.current=confirmLeave;
   useEffect(()=>{registerLeave?.(proceed=>latestLeave.current(proceed));return()=>registerLeave?.(undefined);},[registerLeave]);
   const back=()=>confirmLeave(()=>onClose?onClose():router.canGoBack()?router.back():router.replace('/(tabs)/agent'));
-  useFallbackBack(back);
+  useFallbackBack(()=>historyOpen&&intent!=='history'?setHistoryOpen(false):back());
   const readGeneration=useRef(0);
   const refresh = useCallback(async (background = false) => {
     const generation = ++readGeneration.current;
@@ -63,7 +64,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
     setRuns(history);
     setScopeReady(true);
   }, [store, requestedProjectId, threadId, historyScope, historyAfter]);
-  useFocusEffect(useCallback(() => { void refresh().catch(error => setNotice(String(error.message))); }, [refresh]));
+  useFocusEffect(useCallback(() => { void refresh(true).catch(error => setNotice(String(error.message))); }, [refresh]));
   useEffect(() => {
     const unsubscribe = skillSelectionEvents.subscribe(changed => {
       // Refresh committed state, leaving the user's unsaved `once` draft intact.
@@ -86,17 +87,22 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
   if(importOpen && !onClose)return <CompactWorkbench><SafeAreaView style={s.screen}><SkillAddFlow projectId={projectId} threadId={threadId??returnThreadId} onStatus={setAddStatus}
     onCancel={()=>confirmLeave(()=>{setImportOpen(false);setAddStatus({dirty:false,busy:false});})} onReturn={back}
     onDone={id=>{setImportOpen(false);setAddStatus({dirty:false,busy:false});setHighlighted(id);setExpanded(id);setFilter('local');setQuery('');setHistoryOpen(false);setNotice('版本已安装，默认选择保持原样。');void refresh(true).catch(()=>setNotice('已安装，但目录刷新失败，请返回后重新打开。'));scroll.current?.scrollTo({y:0,animated:false});}}/></SafeAreaView></CompactWorkbench>;
+  if(historyOpen){
+    const closeHistory=()=>intent==='history'?back():setHistoryOpen(false);
+    const history=<View style={{flex:1}}><View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,borderBottomWidth:1,borderColor:COLORS.border}}><IconAction label="返回来源" icon="arrow_back" onPress={closeHistory}/><Text accessibilityRole="header" style={s.title}>会话运行历史</Text></View><ScrollView contentContainerStyle={{padding:12,gap:12}}>{notice?<Text accessibilityRole="alert">{notice}</Text>:null}<Text style={s.muted}>只读查看已保存的运行；进入详情可核对执行阶段、固定版本及实际读取记录。</Text><View style={s.card}><Text style={s.title}>运行历史 · {historyScope==='all'?'全部':threadId?'本会话':projectId?'本项目':'全部'}</Text><ListAction label={historyScope==='all'?'返回当前范围':'查看全部范围'} secondary onPress={()=>{setHistoryScope(value=>value==='all'?'current':'all');setHistoryAfter(undefined);}}/>{!runs.length?<Text style={s.muted}>还没有运行记录</Text>:runs.slice(0,20).map(item=><View key={`${item.threadId}:${item.runId}`} ><ListAction label={'查看运行：'+(item.threadTitle??'未命名会话')+' · '+new Date(item.createdAt).toLocaleString()} secondary onPress={()=>confirmLeave(()=>router.push({pathname:'/agent-run',params:{threadId:item.threadId,runId:item.runId}}))}/><Text style={s.body}>{item.projectTitle??item.projectId??'无项目'} · {item.threadTitle??item.threadId} · {new Date(item.createdAt).toLocaleString()} · {RUN_LABELS[item.status as keyof typeof RUN_LABELS]??'状态未记录'}</Text><Text style={s.muted}>固定技能：{item.snapshot.versions.length?item.snapshot.versions.map(ref=>item.skillNames?.[ref.id]??'版本不可用').join('、'):'仅内置技能'} · 已完成文件读取 {item.reads?.length??0} 条</Text></View>)}{runs.length>20?<ListAction label="更早的运行" onPress={()=>{const last=runs[19];setHistoryAfter({createdAt:last.createdAt,threadId:last.threadId,runId:last.runId});}}/>:null}{historyAfter?<ListAction label="最新运行" onPress={()=>setHistoryAfter(undefined)}/>:null}</View></ScrollView></View>;
+    return <CompactWorkbench>{onClose?history:<SafeAreaView style={s.screen}>{history}</SafeAreaView>}</CompactWorkbench>;
+  }
   const orderedVersions=highlighted?[...versions.filter(v=>v.id===highlighted),...versions.filter(v=>v.id!==highlighted)]:versions;
   const body = <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,gap:6,borderBottomWidth:1,borderColor:COLORS.border}}>
       <IconAction label={onClose ? '关闭技能' : '返回'} icon={onClose ? 'close' : 'arrow_back'} onPress={back}/>
       <Text accessibilityRole="header" style={{flex:1,fontSize:16,fontWeight:'600',color:COLORS.text}}>{projectId?'项目默认技能':'全局技能管理'}</Text>
       <IconAction label="添加技能" icon="add" onPress={()=>{if(onClose){confirmLeave(()=>{onClose();router.push({pathname:'/agent-skills',params:{intent:'add',projectId,threadId}});});}else {setHistoryOpen(false);setImportOpen(true);scroll.current?.scrollTo({y:0,animated:false});}}}/>
-      <IconAction label="技能运行记录" icon="history" selected={historyOpen} onPress={()=>{if(!historyOpen)void refresh(true).catch(error=>setNotice('运行记录刷新失败：'+error.message));setHistoryOpen(!historyOpen);scroll.current?.scrollTo({y:0,animated:false});}}/>
+      <IconAction label="技能运行记录" icon="history" selected={historyOpen} onPress={()=>{if(onClose){confirmLeave(()=>{onClose();router.push({pathname:'/agent-skills',params:{intent:'history',threadId,projectId}});});}else{void refresh(true).catch(error=>setNotice('运行记录刷新失败：'+error.message));setHistoryOpen(true);}}}/>
     </View>
     <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:12,gap:10}}>
       {notice ? <Text accessibilityRole="alert" style={s.body}>{notice}</Text> : null}
-      {historyOpen ? <View style={s.card}><Text style={s.title}>最近运行的技能快照 · {historyScope==='all'?'全部':threadId?'本会话':projectId?'本项目':'全部'}</Text><ListAction label={historyScope==='all'?'返回当前范围':'查看全部范围'} secondary onPress={()=>{setHistoryScope(value=>value==='all'?'current':'all');setHistoryAfter(undefined);}}/>{!runs.length?<Text style={s.muted}>还没有运行记录</Text>:runs.slice(0,20).map(item=><View key={`${item.threadId}:${item.runId}`} ><ListAction label={'查看运行 '+item.runId.slice(0,12)} secondary onPress={()=>confirmLeave(()=>router.push({pathname:'/agent-run',params:{threadId:item.threadId,runId:item.runId}}))}/><Text style={s.body}>{item.projectTitle??item.projectId??'无项目'} · {item.threadTitle??item.threadId} · {new Date(item.createdAt).toLocaleString()} · {item.status??'状态未记录'}</Text><Text selectable style={s.muted}>{item.runId.slice(0,12)} · {item.snapshot.versions.length?item.snapshot.versions.map(ref=>`${item.skillNames?.[ref.id]??'版本不可用'}@${ref.id.slice(0,8)}`).join('、'):'仅内置技能'}{' · 内置包：'+(item.snapshot.builtin?.fingerprint??'旧运行未记录，不能用当前包解释')+' · 已完成文件读取：'+(item.reads?.join('、')||'无记录（不能据此推断未使用）')}{item.usage?` · 模型 ${item.usage.model_calls}/32 · 工具 ${item.usage.tool_calls}/100 · 估算预留 ${item.usage.estimated_tokens} tokens · 已报告 ${item.usage.reported_tokens} tokens`:''}</Text></View>)}{runs.length>20?<ListAction label="更早的运行" onPress={()=>{const last=runs[19];setHistoryAfter({createdAt:last.createdAt,threadId:last.threadId,runId:last.runId});}}/>:null}{historyAfter?<ListAction label="最新运行" onPress={()=>setHistoryAfter(undefined)}/>:null}</View>:null}
+
       {!historyOpen?<>
       {threadId?<View style={s.card}><Text style={s.body}>只为此会话下一条消息选择技能，不改变全局或项目组合。</Text><Text style={s.muted}>{savedOnce?`${savedOnce.valid?'已固定，等待下一条消息消费':'已固定但已失效，请重新选择'}：${savedOnce.ids.length?savedOnce.ids.map(id=>versions.find(v=>v.id===id)?.name??id).join('、'):'仅内置技能'}`:'当前使用项目组合，没有单次覆盖'}</Text><ListAction label="选择下次运行技能" secondary disabled={busy} onPress={()=>setOnce(savedOnce?.ids??[])}/>{once?<><Text style={s.muted}>正在编辑，尚未保存 · 已选 {once.length}/8（空选表示仅内置技能）</Text><ListAction label="保存单次选择" disabled={busy} onPress={()=>void run(async()=>{await selectNextRunSkills(getDatabase(),threadId,once);setOnce(null);setNotice('已固定下一条消息的技能，发送时核对项目范围。');})}/></>:null}<ListAction label="取消单次覆盖，使用项目组合" secondary disabled={busy} onPress={()=>void run(async()=>{await selectNextRunSkills(getDatabase(),threadId,null);setOnce(null);setNotice('已恢复项目组合');})}/></View>:null}
       <View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{(['all','local','builtin','selected'] as const).map(value=><Pressable key={value} accessibilityRole="radio" accessibilityState={{checked:filter===value}} accessibilityLabel={{all:'全部技能',local:'本地导入',builtin:'内置技能',selected:'当前启用'}[value]} onPress={()=>setFilter(value)} style={{minHeight:44,padding:10}}><Text style={s.body}>{{all:'全部技能',local:'本地导入',builtin:'内置技能',selected:'当前启用'}[value]}</Text></Pressable>)}</View>

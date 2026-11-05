@@ -75,3 +75,13 @@ test('filters before paging and traverses equal timestamps without gaps across p
   expect(next.at(-1)?.runId).toBe('old');expect((await store.list())[0].enabled).toBe(false);
  }finally{clock.mockRestore();db.close();}
 });
+
+
+test('exact historical run lookup does not depend on the latest history page or current versions',async()=>{
+ const db=createInitializedRealSqliteTestDb(),store=createSkillStore(db as never);try{
+ const old=await store.install(pkg('old'));await store.enable(old);await store.capture('thread','old-run');
+ const next=await store.install(pkg('new'));await store.enable(next);await store.capture('thread','new-run');await store.capture('other','old-run');
+ const rows=await store.runs({threadId:'thread',runId:'old-run',limit:1});expect(rows).toHaveLength(1);expect(rows[0].snapshot.versions[0].id).toBe(old);expect(rows[0].runId).toBe('old-run');expect(rows[0].threadId).toBe('thread');
+ expect(await store.runs({threadId:'missing',runId:'old-run',limit:1})).toEqual([]);
+ }finally{db.close();}
+});

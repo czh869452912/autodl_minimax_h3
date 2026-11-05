@@ -5,10 +5,11 @@ import {ImagePreview} from '../../ui/ImagePreview';
 import React from 'react';
 import {act,create} from 'react-test-renderer';
 import {ListAction} from '../../ui/ListPageUI';
-const mockLoad=jest.fn();
+const mockLoad=jest.fn(),mockRuns=jest.fn(async()=>[] as any[]);
+jest.mock('./store',()=>({createSkillStore:()=>({runs:mockRuns})}));
 let mockParams={threadId:'t',runId:'r'};
 const mockFocus=new Set<()=>void>();
-beforeEach(()=>{mockParams={threadId:'t',runId:'r'};mockLoad.mockReset();});
+beforeEach(()=>{mockParams={threadId:'t',runId:'r'};mockLoad.mockReset();mockRuns.mockReset();mockRuns.mockResolvedValue([]);});
 jest.mock('expo-router',()=>({useLocalSearchParams:()=>mockParams,useFocusEffect:(effect:()=>void)=>require('react').useEffect(()=>{mockFocus.add(effect);const cleanup=effect();return()=>{mockFocus.delete(effect);if(typeof cleanup==='function')(cleanup as ()=>void)();};},[effect])}));
 jest.mock('../../navigation/useSourceBack',()=>({useSourceBack:()=>jest.fn()}));
 jest.mock('../../storage/databaseClient',()=>({getDatabase:()=>({})}));
@@ -63,5 +64,17 @@ test('route change invalidates old reads and resets message scope',async()=>{
  mockLoad.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve;}));await act(async()=>runEvents.publish({threadId:'t',kind:'status-changed'}));
  mockParams={threadId:'new',runId:'r'};mockLoad.mockResolvedValue({...record('new thread'),threadId:'new'});await act(async()=>tree.update(<SkillRunScreen/>));await act(async()=>release(record('old thread')));
  expect(JSON.stringify(tree.toJSON())).toContain('new thread');expect(JSON.stringify(tree.toJSON())).not.toContain('old thread');expect(tree.root.findAllByType(ListAction).some(n=>n.props.label==='查看原会话全部消息')).toBe(true);
+ }finally{act(()=>tree.unmount());}
+});
+
+
+test('summary and expandable stages precede fixed-version diagnostics without consulting current selection',async()=>{
+ mockLoad.mockResolvedValue({threadId:'t',messages:[],state:{h3Runs:[{id:'r',status:'completed',userMessageId:'u',messageIds:[],startedAt:1,endedAt:20,tools:[{id:'tool',name:'read_file',status:'complete',startedAt:2,endedAt:3,summary:'read historical method',arguments:'private arguments',output:'recorded output'}]}]}});
+ mockRuns.mockResolvedValue([{snapshot:{versions:[{id:'fixed-old'}],builtin:{fingerprint:'old-package'}},skillNames:{'fixed-old':'historical method'},reads:['skills/fixed-old/SKILL.md'],usage:{model_calls:2,tool_calls:1,estimated_tokens:100,reported_tokens:90}}]);
+ let tree!:ReturnType<typeof create>;try{await act(async()=>{tree=create(<SkillRunScreen/>);});
+ expect(mockRuns).toHaveBeenLastCalledWith({threadId:'t',runId:'r',limit:1});
+ const output=()=>JSON.stringify(tree.toJSON());expect(output()).toContain('已完成');expect(output()).toContain('读取写作规范');expect(output()).not.toContain('private arguments');expect(output()).not.toContain('fixed-old');
+ act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='阶段：读取写作规范'&&n.props.onPress)[0].props.onPress());expect(output()).toContain('recorded output');expect(output()).not.toContain('private arguments');
+ act(()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='技能与诊断')!.props.onPress());expect(output()).toContain('fixed-old');expect(output()).toContain('old-package');expect(output()).toContain('private arguments');expect(output()).toContain('skills/fixed-old/SKILL.md');
  }finally{act(()=>tree.unmount());}
 });

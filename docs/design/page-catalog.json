@@ -750,10 +750,10 @@
         "mobile/src/agent/skills/SkillRunScreen.tsx"
       ],
       "purpose": "只读核验某次运行实际发生的行为",
-      "currentIssue": "源码已补实时刷新；首屏仍直接输出工具 JSON、运行 ID 和会话消息，普通用户难以判断发生了什么。",
+      "currentIssue": "M5b 已按结果摘要、可展开阶段、固定版本与原始诊断组织；真实工具调用与辅助技术设备验收另列。",
       "recommendation": "摘要显示结果/开始结束/模型/工具次数/技能实际读取；阶段时间线可展开；原始 JSON 和完整会话为诊断层。",
       "entry": "技能运行记录、后续运行消息链接",
-      "back": "回实际来源；冷入口回助手/项目上下文（需实现）",
+      "back": "返回实际来源；无导航栈通过 useSourceBack 回助手",
       "primaryAction": "查看某一步证据",
       "states": [
         "运行中",
@@ -767,9 +767,11 @@
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed",
-      "evidence": [],
-      "proposalStatus": "proposed",
+      "evidenceLevel": "source-reviewed; offline same-run and synthetic-stage device samples; late-refresh/image/exact-lookup regressions",
+      "evidence": [
+        "docs/design/evidence/2026-11-05-agent-roadmap/run-comparison.jpg"
+      ],
+      "proposalStatus": "implemented; acceptance coverage recorded separately",
       "targetOwner": "agent"
     },
     {
@@ -2182,6 +2184,41 @@
       "evidence": [],
       "proposalStatus": "implemented (M4a/M4b)",
       "targetOwner": "project-plans"
+    },
+    {
+      "id": "conversation-run-history",
+      "name": "会话运行历史",
+      "kind": "surface",
+      "parent": "agent",
+      "sources": [
+        "mobile/src/agent/skills/SkillLibraryScreen.tsx",
+        "mobile/src/creative/AssistantActions.tsx"
+      ],
+      "purpose": "在会话或项目范围内只读追溯历史运行",
+      "currentIssue": "M5b 独立历史任务已接入会话菜单，技能目录保留快捷入口；分页和范围沿用原读取合同。",
+      "recommendation": "会话归属优先，行显示名称、时间、状态和固定技能摘要；指纹、预算、原始记录在运行详情。",
+      "entry": "助手菜单或技能目录历史快捷入口",
+      "back": "返回原会话或原技能筛选；详情返回保留历史范围与分页",
+      "primaryAction": "查看所选运行",
+      "states": [
+        "本会话",
+        "本项目",
+        "全部范围",
+        "空记录",
+        "更早运行",
+        "读取失败"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed; offline same-run and synthetic-stage device samples; late-refresh/image/exact-lookup regressions",
+      "evidence": [
+        "docs/design/evidence/2026-11-05-agent-roadmap/history-after.png"
+      ],
+      "proposalStatus": "implemented; acceptance coverage recorded separately",
+      "targetOwner": "agent"
     }
   ],
   "edges": [
@@ -2795,6 +2832,30 @@
       "type": "open-surface",
       "source": "mobile/src/creative/ProjectPlans.tsx",
       "context": "只在确认时更改 batchId；切项目清理范围"
+    },
+    {
+      "fromId": "agent",
+      "toId": "conversation-run-history",
+      "label": "查看会话运行历史",
+      "type": "navigate",
+      "source": "mobile/src/creative/AssistantActions.tsx",
+      "context": "固定 threadId/runId；只读，不消费单次技能或创建运行"
+    },
+    {
+      "fromId": "skills",
+      "toId": "conversation-run-history",
+      "label": "运行记录快捷入口",
+      "type": "open-surface",
+      "source": "mobile/src/agent/skills/SkillLibraryScreen.tsx",
+      "context": "固定 threadId/runId；只读，不消费单次技能或创建运行"
+    },
+    {
+      "fromId": "conversation-run-history",
+      "toId": "run-evidence",
+      "label": "查看原运行",
+      "type": "navigate",
+      "source": "mobile/src/agent/skills/SkillLibraryScreen.tsx",
+      "context": "固定 threadId/runId；只读，不消费单次技能或创建运行"
     }
   ],
   "sourceDigests": {
@@ -2829,11 +2890,11 @@
     "mobile/app/settings-panel.tsx": "a7a4149ef6a30f63977a6c02af421d8d0b2854bd6e4ad89989dea09f80a8ccba",
     "mobile/app/shot-request-setup.tsx": "018897b819a6dd434362b7b45863878a02b430fa788ea7ed57cc0fc4048c3fe8",
     "mobile/app/video/[id].tsx": "8abbd333bbb3c04591bf0e95a867ea06c4f57b3710c0812e6e37b99dabce4e8c",
-    "mobile/src/agent/AgentScreen.tsx": "7be00a1cc632bb46351796256daec5f8bc3010f400554d8179ae26dcb64050f7",
+    "mobile/src/agent/AgentScreen.tsx": "b8f360a9bfd9f9153006508a2927036990ef8568345e00656bae6b453c183573",
     "mobile/src/agent/PromptVersionPanel.tsx": "9c077f7737640b3e144115217fc20acd08676538c486e874216a00a3cd8ce068",
     "mobile/src/agent/skills/SkillExtractionScreen.tsx": "6442b548a341bd0e8f8a1ef8de4363c23eef30bcd81c4a37f23906d7266eb2a6",
-    "mobile/src/agent/skills/SkillLibraryScreen.tsx": "c69e0c8a1e0edccd09562863eb9a8a9f0bdbbf8c5c6113bfbc383b617dc46d3c",
-    "mobile/src/agent/skills/SkillRunScreen.tsx": "aa3290d6ba7e643b3c4c3b03be2183a23b7dc1d2ad0574ef03c0fc8567d7e6c7",
+    "mobile/src/agent/skills/SkillLibraryScreen.tsx": "ad35f54fbec22aaf094c83a100cd2ba64a81fe6529cfa32718aa6f7734065034",
+    "mobile/src/agent/skills/SkillRunScreen.tsx": "0a6780529e1a0ff86e4c17cf487d3a002fde3ce61bd9842f173b95f5e0dfedd4",
     "mobile/src/creative/AgentCreativePanel.tsx": "31ae9a970c7e59dc631286ee7cde5799b56ae357c451c30fbd401edb71753cbe",
     "mobile/src/creative/AgentWorkspace.tsx": "5927e3c94291e40b595b5f4de4efdc19eee27f53eaa9447de409e45d04081ea1",
     "mobile/src/creative/CapabilityCatalogScreen.tsx": "22e2edce01cc1b9cc870b7e6290c8b46938184744aa67bcbc54b25b84e5094b7",
@@ -2876,7 +2937,8 @@
     "mobile/src/creative/PlanRequestReview.tsx": "c1c57eead16ba7757b6b2fe82986982fac24096268c5579b67319bd54e7d6a2c",
     "mobile/src/creative/planReviewTargets.ts": "8132b83a14a49723800062f578bf6574bae614f33694935f9d35ebf9f58f7f88",
     "mobile/src/conversation/ConversationInput.tsx": "b0f1f36f7c6050f60c82aa73cf5141575a7aeeb9e762f71354f485212bcf7522",
-    "mobile/src/creative/planReads.ts": "e4be01dc140f608a9ee02bea1f753a4b3e77be1955946449a5412f505ae78536"
+    "mobile/src/creative/planReads.ts": "e4be01dc140f608a9ee02bea1f753a4b3e77be1955946449a5412f505ae78536",
+    "mobile/src/creative/AssistantActions.tsx": "23a6ea16c8b6224dd89f5648416f624dc17feb81357f7270ceb6fa62143cb1bf"
   },
   "revisions": [
     {
@@ -2984,6 +3046,18 @@
         "mobile/app/agent-skills.tsx",
         "mobile/src/agent/skills/SkillLibraryScreen.tsx",
         "mobile/src/agent/skills/SkillExtractionScreen.tsx"
+      ]
+    },
+    {
+      "date": "2026-11-05",
+      "sourceBase": "66053144",
+      "scope": "M5b conversation history and layered run evidence",
+      "evidence": "docs/design/evidence/2026-11-05-agent-roadmap/README.md",
+      "reviewedSources": [
+        "mobile/src/agent/skills/SkillRunScreen.tsx",
+        "mobile/src/agent/skills/SkillLibraryScreen.tsx",
+        "mobile/src/creative/AssistantActions.tsx",
+        "mobile/src/agent/AgentScreen.tsx"
       ]
     }
   ]

@@ -421,7 +421,7 @@ function AgentSession({
           onNew={()=>leaveSkills(uiProps.onNew)}
           onSelect={id=>leaveSkills(()=>uiProps.onSelect(id))}
           onDelete={id=>leaveSkills(()=>uiProps.onDelete(id))}
-          headerActions={<AssistantActions onOpenSkills={()=>setSkillsOpen(true)}/>}
+          headerActions={<AssistantActions threadId={snapshot.threadId} beforeNavigate={leaveSkills} onOpenSkills={()=>setSkillsOpen(true)}/>}
           toolPanel={skillsOpen?<SkillLibraryScreen threadId={snapshot.threadId} registerLeave={registerSkillGuard} onClose={()=>setSkillsOpen(false)}/>:undefined}
           headerContext={<AgentCreativePanel beforeNavigate={leaveSkills} compact threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />}
           renderComposerContext={returnToInput=><View>

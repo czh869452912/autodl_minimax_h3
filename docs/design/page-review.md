@@ -6,7 +6,7 @@
 
 ## 范围与结论
 
-覆盖 29 个路由页面、2 个壳层、33 个重要子表面；记录 69 条源码确认的关键点击边。非路由清单不宣称穷尽全部 JSX 分支，点击边也不是运行时全图。
+覆盖 29 个路由页面、2 个壳层、34 个重要子表面；记录 72 条源码确认的关键点击边。非路由清单不宣称穷尽全部 JSX 分支，点击边也不是运行时全图。
 
 当前实现已有四入口、预览、参数抽屉、任务气泡、明确采用和不可变版本，方向不必推倒。M1 技能快速选用、M2 分步添加已独立，M3a 建议与草稿审阅、M3b1 单次请求审阅已按对象与状态接入；项目概览仍承担工具目录，镜头列表承担编辑器，技能目录与运行历史共享，时间线承担参数表与工程管理。应继续按对象和状态重组任务，不再给每项能力补一个常驻按钮。
 
@@ -96,6 +96,7 @@ flowchart LR
       助手本轮创作对象卡 [surface; assistant-creative-cards]
         生成请求审阅 [surface; generation-request-review]
         单次请求准备恢复 [surface; generation-request-recovery]
+      会话运行历史 [surface; conversation-run-history]
     项目列表 [route; projects]
       项目工作区 [route; project]
         镜头成果审阅 [route; shot-review]
@@ -561,19 +562,19 @@ flowchart LR
 
 **任务**：只读核验某次运行实际发生的行为。
 
-**现状问题**：源码已补实时刷新；首屏仍直接输出工具 JSON、运行 ID 和会话消息，普通用户难以判断发生了什么。
+**现状问题**：M5b 已按结果摘要、可展开阶段、固定版本与原始诊断组织；真实工具调用与辅助技术设备验收另列。
 
 **展示与交互建议**：摘要显示结果/开始结束/模型/工具次数/技能实际读取；阶段时间线可展开；原始 JSON 和完整会话为诊断层。
 
-**实施状态**：proposed。**证据范围**：source-reviewed。
+**实施状态**：implemented; acceptance coverage recorded separately。**证据范围**：source-reviewed; offline same-run and synthetic-stage device samples; late-refresh/image/exact-lookup regressions。
 
 **主操作**：查看某一步证据。**目标归属**：项目助手。
 
-**进入与返回**：技能运行记录、后续运行消息链接 → 本表面；回实际来源；冷入口回助手/项目上下文（需实现）。
+**进入与返回**：技能运行记录、后续运行消息链接 → 本表面；返回实际来源；无导航栈通过 useSourceBack 回助手。
 
 **应覆盖状态**：运行中 / 完成 / 失败 / 刷新失败 / 历史不完整。
 
-**依据**：[src/agent/skills/SkillRunScreen.tsx](../../mobile/src/agent/skills/SkillRunScreen.tsx)；对照 B1、B2（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
+**依据**：[src/agent/skills/SkillRunScreen.tsx](../../mobile/src/agent/skills/SkillRunScreen.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[run-comparison.jpg](../../docs/design/evidence/2026-11-05-agent-roadmap/run-comparison.jpg)。
 
 <a id="capabilities"></a>
 ### 制作能力目录 · capabilities · P1
@@ -1354,6 +1355,25 @@ flowchart LR
 
 **依据**：[src/creative/ProjectPlans.tsx](../../mobile/src/creative/ProjectPlans.tsx)、[src/creative/PlanRequestReview.tsx](../../mobile/src/creative/PlanRequestReview.tsx)；对照 B2（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
 
+<a id="conversation-run-history"></a>
+### 会话运行历史 · conversation-run-history · P1
+
+**任务**：在会话或项目范围内只读追溯历史运行。
+
+**现状问题**：M5b 独立历史任务已接入会话菜单，技能目录保留快捷入口；分页和范围沿用原读取合同。
+
+**展示与交互建议**：会话归属优先，行显示名称、时间、状态和固定技能摘要；指纹、预算、原始记录在运行详情。
+
+**实施状态**：implemented; acceptance coverage recorded separately。**证据范围**：source-reviewed; offline same-run and synthetic-stage device samples; late-refresh/image/exact-lookup regressions。
+
+**主操作**：查看所选运行。**目标归属**：项目助手。
+
+**进入与返回**：助手菜单或技能目录历史快捷入口 → 本表面；返回原会话或原技能筛选；详情返回保留历史范围与分页。
+
+**应覆盖状态**：本会话 / 本项目 / 全部范围 / 空记录 / 更早运行 / 读取失败。
+
+**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)、[src/creative/AssistantActions.tsx](../../mobile/src/creative/AssistantActions.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[history-after.png](../../docs/design/evidence/2026-11-05-agent-roadmap/history-after.png)。
+
 ## 关键点击关系与上下文
 
 以下是当前实现的人工核对边；不是目标路由配置，也不保证全部分支都在设备走通。模态关闭、取消选择和写入后的回流要求见 target-and-flows.md。
@@ -1429,6 +1449,9 @@ flowchart LR
 | 项目 / 计划 | 打开具体计划 | 计划详情 | 固定 projectId/planId；列表上下文保持挂载 | open-surface |
 | 项目 / 计划 | 新建计划 | 准备计划 | 固定 projectId/planId；列表上下文保持挂载 | open-surface |
 | 项目 / 计划 | 范围选择 | 计划范围选择 | 只在确认时更改 batchId；切项目清理范围 | open-surface |
+| 项目助手 | 查看会话运行历史 | 会话运行历史 | 固定 threadId/runId；只读，不消费单次技能或创建运行 | navigate |
+| 技能目录 | 运行记录快捷入口 | 会话运行历史 | 固定 threadId/runId；只读，不消费单次技能或创建运行 | open-surface |
+| 会话运行历史 | 查看原运行 | 运行证据 | 固定 threadId/runId；只读，不消费单次技能或创建运行 | navigate |
 
 ## 审查优先级
 
