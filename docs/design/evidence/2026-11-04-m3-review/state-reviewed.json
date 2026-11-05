@@ -1,0 +1,54 @@
+{
+  "project": {
+    "id": "a5afde39a20d971563d6454f4d5fa712",
+    "title": "M3 审阅测试",
+    "brief": "灯塔短片：强调告别，保留角色与暖色调。",
+    "revision": 1
+  },
+  "shots": [
+    {
+      "id": "42548e435e9b065918b232d767fd09ca",
+      "title": "海岸近景",
+      "description": "用户已改写：男孩坐在海岸石阶上，镜头固定。",
+      "revision": 1
+    },
+    {
+      "id": "c07a834ec991fada751f4ed555889cdf",
+      "title": "港口夜景",
+      "description": "她望向远处，镜头移动。",
+      "revision": 0
+    },
+    {
+      "id": "c0ba17aeb64fa7df6f73ca2a0370fe36",
+      "title": "灯塔远景",
+      "description": "女孩站在灯塔左侧，朝海面挥手。镜头从全景缓慢推进至中景，保持暖色调。",
+      "revision": 1
+    }
+  ],
+  "proposals": [
+    {
+      "id": "266c1b04565e4d11740346d39b69da68",
+      "state": "APPLIED",
+      "resolved_at": 1793805992363
+    },
+    {
+      "id": "e3ea77b22bfc4715162127ccd7bff786",
+      "state": "WAITING",
+      "resolved_at": null
+    },
+    {
+      "id": "c97645861e74ebc2d216b87313789ac6",
+      "state": "REJECTED",
+      "resolved_at": 1793805804561
+    },
+    {
+      "id": "0181067d84034f080ec6e3cec3a063cf",
+      "state": "APPLIED",
+      "resolved_at": 1793805705186
+    }
+  ],
+  "generationJobs": 0,
+  "authorizations": 0,
+  "outboundConsents": 0,
+  "reservations": 0
+}

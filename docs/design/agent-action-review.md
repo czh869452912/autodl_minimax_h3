@@ -1,6 +1,6 @@
 # Agent 操作逐项评估与优化合同
 
-日期：2026-11-04（Asia/Shanghai）。本文保留初评时的 **proposed 评估基线**；后续 M1/M2 切片已实施，当前完成项与验证范围见 [M1](agent-m1-implementation.md) 和 [M2 实现与验证](agent-m2-implementation.md)，其余按 [阶段计划](agent-improvement-plan.md) 推进。沿用 D001、F3/F4/F5 与现有页面稳定 ID，不新建第二套页面目录。初评源码基线 `db7aa4d6`，当时目录严格检查通过（31 路由文件、57 条目、48 点击边）；当前目录见 README。Android APK 内完成全部方案；禁止桌面执行端、远端 Worker。
+日期：2026-11-04（Asia/Shanghai）。本文保留初评时的 **proposed 评估基线**；后续 M1/M2、M3a 切片已实施，当前完成项与验证范围见 [M1](agent-m1-implementation.md)、[M2](agent-m2-implementation.md) 和 [M3a 实现与验证](agent-m3a-implementation.md)，其余按 [阶段计划](agent-improvement-plan.md) 推进。沿用 D001、F3/F4/F5 与现有页面稳定 ID，不新建第二套页面目录。初评源码基线 `db7aa4d6`，当时目录严格检查通过（31 路由文件、57 条目、48 点击边）；当前目录见 README。Android APK 内完成全部方案；禁止桌面执行端、远端 Worker。
 
 ## 结论与证据边界
 

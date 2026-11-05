@@ -1,0 +1,25 @@
+M3a verification, 2026-11-04
+Base commit: e6fc2dff (M1/M2 committed)
+
+PASS TypeScript: node node_modules/typescript/bin/tsc --noEmit (mobile)
+PASS Jest: 9 suites, 58 tests (8.252 s)
+  ProjectActivityPanel.integration; AgentCreativeCards; agentCreativeActivity;
+  changeReview; projectActivity; ProjectObjectFocus; CreativeWorkspace;
+  AgentScreen; AgentWorkspace.
+PASS Expo export:embed: Android Hermes, 4343 modules, 49 assets
+  Existing LangChain export-map fallback warnings; export completed.
+PASS APK zipalign/sign/install and launch (isolated com.example.autodlh3)
+PASS Three APK hashes and Hermes headers verified
+PASS Synthetic project/shot acceptance, rejection, conflict and draft navigation
+PASS Final bundle revisit: summary, cards, conflict, fixed image draft,
+  terminal result link to original proposal
+PASS Data readback: APPLIED=2, REJECTED=1, WAITING=1; jobs/authorizations/
+  outbound consents/reservations all zero for synthetic project
+PASS Visual comparisons: comparison.png, flow-samples.png, font2.png,
+  final-smoke.png; 2.0 font scroll access sampled in initial candidate
+
+No new Gradle/release build, real model/provider calls or full M3 acceptance.
+Initial candidate and final patch coverage are separately listed in README.md.
+PASS Catalog generation, default consistency and --check-sources:
+  31 route files, 59 entries (29 routes, 2 shells, 28 surfaces), 59 click edges.
+PASS git diff --check (line-ending normalization warnings only).

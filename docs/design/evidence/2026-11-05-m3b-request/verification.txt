@@ -1,0 +1,17 @@
+M3b1, 2026-11-05
+PASS TypeScript --noEmit (mobile), final exit 0.
+PASS Jest: 6 suites, 31 tests, 34.192 s.
+PASS Android Hermes export: 4344 modules, 49 assets.
+PASS Same debug native shell, zipalign/sign/install; no new Gradle/release build.
+PASS APK hashes re-read; metadata retained.
+PASS XML submission enabled gate: default false, outbound only false, both true.
+PASS Device system back, reopen clears both consents, explicit cancel.
+PASS Screenshot comparison opened and reviewed (comparison.png).
+PASS Catalog --write and --check-sources: 31 route files, 61 entries, 64 edges.
+PASS git diff --check, only line ending normalization warnings.
+
+Offline QA replaces prepare with a deterministic image request preview and
+confirm with refusal. No real credential, provider dispatch or model call.
+UI queue success is mocked in automated tests; device did not press Submit.
+Plan/batch authorization and full workflow/config coverage remain pending.
+Known limitation: returning to cards resets their scroll position.

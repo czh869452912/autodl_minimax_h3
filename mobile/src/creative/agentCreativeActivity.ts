@@ -2,8 +2,10 @@ import type { AppDatabase } from '../storage/appDatabase';
 import { createCreativeService } from './service';
 import type { CreativeDraft } from './drafts';
 import type { AssetVersion } from './types';
+import type {ChangeProposal} from './changeReview';
+import {proposalChanges,proposalState,proposalSubject} from './proposalPresentation';
 
-export type AgentCreativeActivity = { id:string;kind:'draft'|'plan'|'proposal'; runId?:string; name:string; draft?:CreativeDraft; jobId?:string; status?:string; projectId?:string; outputs:AssetVersion[] };
+export type AgentCreativeActivity = { id:string;kind:'draft'|'plan'|'proposal'; runId?:string; name:string; draft?:CreativeDraft; proposal?:ChangeProposal; jobId?:string; status?:string; projectId?:string; outputs:AssetVersion[] };
 
 /** Read durable command receipts and archived outputs, never the assistant's claim of completion. */
 export async function readAgentCreativeActivity(db:AppDatabase,threadId:string):Promise<AgentCreativeActivity[]> {
@@ -30,9 +32,10 @@ export async function readAgentCreativeActivity(db:AppDatabase,threadId:string):
       if(seen.has(id))continue;
       const object=result.value.planId
         ?await db.getFirstAsync<{project_id:string;state:string}>('SELECT project_id,state FROM creative_plans WHERE id=?',id)
-        :await db.getFirstAsync<{project_id:string;state:string}>('SELECT project_id,state FROM creative_change_proposals WHERE id=?',id);
-      if(object?.project_id===scope.project_id && ['ACTIVE','WAITING'].includes(object.state)){
-        seen.add(id);cards.push({kind:result.value.planId?'plan':'proposal',id,runId:row.run_id,name:result.value.planId?'选图与后续制作':'修改建议待审阅',projectId:object.project_id,outputs:[]});
+        :await db.getFirstAsync<ChangeProposal>('SELECT * FROM creative_change_proposals WHERE id=?',id);
+      if(object?.project_id===scope.project_id && (result.value.proposalId || object.state==='ACTIVE')){
+        const proposal=result.value.proposalId?object as ChangeProposal:undefined;
+        seen.add(id);cards.push({kind:result.value.planId?'plan':'proposal',id,runId:row.run_id,name:proposal?proposalSubject(proposal):'选图与后续制作',proposal,status:object.state,projectId:object.project_id,outputs:[]});
       }
     }
     if(cards.length>=20)break;
@@ -42,6 +45,8 @@ export async function readAgentCreativeActivity(db:AppDatabase,threadId:string):
 }
 
 export function agentCreativeActivityLabel(card:AgentCreativeActivity):string {
+  if(card.kind==='proposal')return `${proposalState(card.proposal?.state??card.status??'WAITING')}${card.proposal?` · ${proposalChanges(card.proposal).length} 项修改`:''}`;
+  if(card.kind==='plan')return '计划 · 查看当前步骤与阻塞';
   const available=card.outputs.filter(output=>output.state==='AVAILABLE' && output.relativePath);
   if(available.length)return `已有 ${available.length} 个成果可查看${card.status==='PARTIAL_SUCCEEDED'?' · 部分完成':card.status==='FAILED'?' · 任务失败':''}`;
   if(card.status==='SUCCEEDED'||card.status==='PARTIAL_SUCCEEDED')return card.outputs.length?'生成已完成 · 原文件待恢复':'生成已完成 · 正在归档成果';
@@ -50,8 +55,11 @@ export function agentCreativeActivityLabel(card:AgentCreativeActivity):string {
 }
 
 export function agentCreativeActivitySummary(cards:AgentCreativeActivity[]):string {
+  const reviews=cards.filter(card=>card.kind==='proposal'&&(card.proposal?.state??card.status??'WAITING')==='WAITING').length;
+  const drafts=cards.filter(card=>card.draft?.state==='EDITING').length;
   const outputs=cards.reduce((count,card)=>count+card.outputs.filter(output=>output.state==='AVAILABLE' && output.relativePath).length,0);
   const pending=cards.filter(card=>card.status && ['READY_TO_SUBMIT','SUBMITTING','QUEUED','RUNNING'].includes(card.status));
-  if(outputs)return `${outputs} 个成果可查看${pending.length?` · ${pending.length} 个任务进行中`:''}`;
+  const parts=[reviews?`待审阅 ${reviews} 项修改`:'',drafts?`${drafts} 份草稿待完善`:'',outputs?`${outputs} 个候选可查看`:'',pending.length?`${pending.length} 个任务进行中${pending.length===1?`（${agentCreativeActivityLabel(pending[0])}）`:''}`:''].filter(Boolean);
+  if(parts.length)return parts.join(' · ');
   return cards.length?agentCreativeActivityLabel(pending[0]??cards[0]):'尚无生成任务';
 }

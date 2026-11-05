@@ -1173,27 +1173,46 @@
       "route": null,
       "parent": "project",
       "sources": [
-        "mobile/src/creative/ProjectActivityPanel.tsx"
+        "mobile/src/creative/ProjectActivityPanel.tsx",
+        "mobile/src/creative/ProposalReviewCard.tsx",
+        "mobile/src/creative/proposalPresentation.ts",
+        "mobile/src/creative/changeReview.ts"
       ],
       "purpose": "追溯项目变更",
-      "currentIssue": "活动与任务、运行证据、历史并行，用户需猜去哪找发生过的事情。",
-      "recommendation": "活动是统一项目历史视图：用户可读事件、对象卡和结果链接；模型运行/生成任务各自详情只读可展开。",
+      "currentIssue": "M3a 已将待审阅建议与已记录活动分组；建议按对象/变化字段审阅，冲突保留三方内容，已处理显示实际状态与时间。活动、任务与运行历史的进一步归并仍待 M5。",
+      "recommendation": "保持同一 proposal 身份与领域事务；只展开变化字段，长对照可展开完整正文。继续补齐来源失效、读屏与历史导航验收。",
       "entry": "项目活动",
-      "back": "返回项目当前工作位",
-      "primaryAction": "打开相关对象或证据",
+      "back": "来自会话时返回原会话；保留 proposalId 定位与原轮次",
+      "primaryAction": "待审阅建议按对象审阅并采用或拒绝；历史打开相关对象",
       "states": [
+        "读取中",
+        "读取失败",
         "无记录",
-        "分页",
-        "来源失效"
+        "指定建议不可用",
+        "待审阅列表",
+        "固定建议对照",
+        "长对照展开",
+        "修订冲突三方对照",
+        "已采用",
+        "已拒绝",
+        "隔离或过期"
       ],
       "priority": "P2",
       "references": [
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed",
-      "evidence": [],
-      "proposalStatus": "proposed",
+      "evidenceLevel": "source-reviewed; M3a synthetic Android samples of project/shot adoption, rejection, revision conflict, terminal history and return; 2x font scrolling; no provider generation",
+      "evidence": [
+        "docs/design/evidence/2026-11-04-m3-review/03-baseline-proposal.png",
+        "docs/design/evidence/2026-11-04-m3-review/06-project-review.png",
+        "docs/design/evidence/2026-11-04-m3-review/07-project-applied.png",
+        "docs/design/evidence/2026-11-04-m3-review/10-shot-rejected.png",
+        "docs/design/evidence/2026-11-04-m3-review/11-conflict-review.png",
+        "docs/design/evidence/2026-11-04-m3-review/13-shot-applied.png",
+        "docs/design/evidence/2026-11-04-m3-review/17-font2-comparison.png"
+      ],
+      "proposalStatus": "partially-implemented",
       "targetOwner": "project"
     },
     {
@@ -1939,6 +1958,124 @@
       ],
       "proposalStatus": "partially-implemented",
       "targetOwner": "skills"
+    },
+    {
+      "id": "assistant-creative-cards",
+      "name": "助手本轮创作对象卡",
+      "kind": "surface",
+      "route": null,
+      "parent": "agent",
+      "sources": [
+        "mobile/src/creative/AgentCreativeCards.tsx",
+        "mobile/src/creative/agentCreativeActivity.ts"
+      ],
+      "purpose": "从当前轮次找到修改建议、生成草稿、计划和候选的下一步",
+      "currentIssue": "M3a 已显示待审阅数量、对象名与变化字段，待审阅优先，终态保留可追溯；空描述草稿主操作为完善。请求授权和执行到候选的完整重组仍待 M3b/M3c。",
+      "recommendation": "保持 runId 与固定对象身份，不能把修改建议称作已生成成果；请求审阅继续复用原 prepare/confirm，不新建执行状态。",
+      "entry": "会话对应轮次的“本轮创作”摘要",
+      "back": "关闭回当前会话；进入项目审阅/草稿详情再返回原轮次",
+      "primaryAction": "待审阅→审阅修改；已处理→查看修改结果；空描述草稿→完善；计划→查看步骤",
+      "states": [
+        "待审阅与草稿并存",
+        "对象摘要",
+        "原始轮次",
+        "已采用/拒绝",
+        "空描述草稿",
+        "读取失败",
+        "任务与候选（既有路径，M3a未重测完整生成）"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed; M3a synthetic Android sampled summary, priority, exact proposal navigation, terminal return, empty draft detail; full generation/authorization deferred",
+      "evidence": [
+        "docs/design/evidence/2026-11-04-m3-review/01-baseline-conversation.png",
+        "docs/design/evidence/2026-11-04-m3-review/02-baseline-cards.png",
+        "docs/design/evidence/2026-11-04-m3-review/04-candidate-conversation.png",
+        "docs/design/evidence/2026-11-04-m3-review/05-candidate-cards.png",
+        "docs/design/evidence/2026-11-04-m3-review/08-return-conversation.png",
+        "docs/design/evidence/2026-11-04-m3-review/14-resolved-cards.png",
+        "docs/design/evidence/2026-11-04-m3-review/15-open-draft.png"
+      ],
+      "proposalStatus": "partially-implemented",
+      "targetOwner": "agent"
+    },
+    {
+      "id": "generation-request-review",
+      "name": "单次生成请求审阅",
+      "kind": "surface",
+      "route": null,
+      "parent": "assistant-creative-cards",
+      "sources": [
+        "mobile/src/creative/AgentCreativeCards.tsx",
+        "mobile/src/creative/GenerationRequestReview.tsx",
+        "mobile/src/creative/CreativeAccountPanel.tsx"
+      ],
+      "purpose": "核对原草稿的确切请求并分别确认外发与消费许可",
+      "currentIssue": "M3b1 已替换会话单次确认弹窗；计划与批次仍待迁移，视频工作流字段展示仍需继续核对",
+      "recommendation": "沿用现有主题与 prepare/confirm；保存账号不提交，退出不写许可；计划授权迁移独立验收。",
+      "entry": "本轮创作中的固定草稿请求入口",
+      "back": "关闭返回原本轮创作；编辑打开原固定草稿",
+      "primaryAction": "确认两项许可后生成一次",
+      "states": [
+        "准备中",
+        "待确认外发",
+        "待确认消费",
+        "正在提交",
+        "范围变化",
+        "提交失败"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed; offline request UI device samples, no real dispatch",
+      "evidence": [
+        "docs/design/evidence/2026-11-05-m3b-request/01-baseline-alert.png",
+        "docs/design/evidence/2026-11-05-m3b-request/02-request-top.png",
+        "docs/design/evidence/2026-11-05-m3b-request/03-permission-default.png",
+        "docs/design/evidence/2026-11-05-m3b-request/05-both-checked.png"
+      ],
+      "proposalStatus": "partially-implemented (M3b1; plan/batch pending)",
+      "targetOwner": "agent"
+    },
+    {
+      "id": "generation-request-recovery",
+      "name": "单次请求准备恢复",
+      "kind": "surface",
+      "route": null,
+      "parent": "assistant-creative-cards",
+      "sources": [
+        "mobile/src/creative/AgentCreativeCards.tsx",
+        "mobile/src/creative/GenerationRequestReview.tsx",
+        "mobile/src/creative/CreativeAccountPanel.tsx"
+      ],
+      "purpose": "修复账号或草稿后重新核对原请求",
+      "currentIssue": "M3b1 已提供原位账号管理与原草稿编辑；完整连接用途恢复仍待后续",
+      "recommendation": "沿用现有主题与 prepare/confirm；保存账号不提交，退出不写许可；计划授权迁移独立验收。",
+      "entry": "本轮创作中的固定草稿请求入口",
+      "back": "关闭返回原本轮创作；编辑打开原固定草稿",
+      "primaryAction": "重新核对原草稿",
+      "states": [
+        "缺账号",
+        "缺素材或规格",
+        "原位管理账号",
+        "重新准备",
+        "编辑原草稿",
+        "返回"
+      ],
+      "priority": "P1",
+      "references": [
+        "B1",
+        "B2"
+      ],
+      "evidenceLevel": "source-reviewed + mocked UI regression; no device account recovery",
+      "evidence": [],
+      "proposalStatus": "partially-implemented (M3b1; plan/batch pending)",
+      "targetOwner": "agent"
     }
   ],
   "edges": [
@@ -2427,6 +2564,91 @@
       "context": "来源返回栈；明确用于下次消息后采用新选择，仅安装则保留未确认草稿；正文/附件仍在原会话",
       "status": "device-sampled M2 initial fixture",
       "source": "mobile/src/agent/skills/SkillAddFlow.tsx"
+    },
+    {
+      "fromId": "assistant-conversation",
+      "toId": "assistant-creative-cards",
+      "type": "open-surface",
+      "label": "本轮创作",
+      "context": "threadId+runId；显示该轮持久化命令关联对象，保持原输入",
+      "status": "device-sampled M3a synthetic fixture",
+      "source": "mobile/src/creative/AgentCreativeCards.tsx"
+    },
+    {
+      "fromId": "assistant-creative-cards",
+      "toId": "project-activity",
+      "type": "navigate",
+      "label": "审阅修改 / 查看修改结果",
+      "context": "projectId+proposalId+requestId；同一固定建议，原会话返回栈保留",
+      "status": "device-sampled M3a synthetic fixture",
+      "source": "mobile/src/creative/AgentCreativeCards.tsx"
+    },
+    {
+      "fromId": "assistant-creative-cards",
+      "toId": "image-draft",
+      "type": "navigate",
+      "label": "完善图片草稿",
+      "context": "固定 draft.id，不调用模型或提交生成",
+      "status": "device-sampled M3a synthetic fixture",
+      "source": "mobile/src/creative/AgentCreativeCards.tsx"
+    },
+    {
+      "fromId": "assistant-creative-cards",
+      "toId": "video-draft",
+      "type": "navigate",
+      "label": "完善视频草稿",
+      "context": "固定 draft.id；M3a 源码核对，未走视频设备任务",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/AgentCreativeCards.tsx"
+    },
+    {
+      "fromId": "assistant-creative-cards",
+      "toId": "project-plans",
+      "type": "navigate",
+      "label": "查看计划步骤",
+      "context": "projectId+planId+requestId；M3a 源码核对，计划重组留 M4",
+      "status": "source-reviewed",
+      "source": "mobile/src/creative/AgentCreativeCards.tsx"
+    },
+    {
+      "fromId": "assistant-creative-cards",
+      "toId": "generation-request-review",
+      "label": "核对这份草稿的生成请求",
+      "type": "open-surface",
+      "source": "mobile/src/creative/AgentCreativeCards.tsx",
+      "context": "固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文"
+    },
+    {
+      "fromId": "assistant-creative-cards",
+      "toId": "generation-request-recovery",
+      "label": "请求准备失败",
+      "type": "open-surface",
+      "source": "mobile/src/creative/AgentCreativeCards.tsx",
+      "context": "固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文"
+    },
+    {
+      "fromId": "generation-request-recovery",
+      "toId": "generation-request-review",
+      "label": "重新核对原草稿",
+      "type": "open-surface",
+      "source": "mobile/src/creative/AgentCreativeCards.tsx",
+      "context": "固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文"
+    },
+    {
+      "fromId": "generation-request-recovery",
+      "toId": "image-draft",
+      "label": "编辑原图片草稿",
+      "type": "navigate",
+      "source": "mobile/src/creative/AgentCreativeCards.tsx",
+      "context": "固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文"
+    },
+    {
+      "fromId": "generation-request-recovery",
+      "toId": "video-draft",
+      "label": "编辑原视频草稿",
+      "type": "navigate",
+      "source": "mobile/src/creative/AgentCreativeCards.tsx",
+      "context": "固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文"
     }
   ],
   "sourceDigests": {
@@ -2478,7 +2700,7 @@
     "mobile/src/creative/ImageDraftScreen.tsx": "e76bb135c2324f64449ac9c13ee01f515f50bada6781b7c9d8576bf5d8b05f16",
     "mobile/src/creative/MediaReviewScreen.tsx": "07d764e4cff5e84b3bf37d944e80676f7b38ab0818d315bc81e874c7a22b35f0",
     "mobile/src/creative/OutboundConsentScreen.tsx": "e3c0f110e46566bea0fe3d854b940b356b0c670da8d690e3b4ca1aa39c09bfa6",
-    "mobile/src/creative/ProjectActivityPanel.tsx": "5999b76132fa99a0299c122fe457fa0b8837959bf0a0090d1026a5910c5851cd",
+    "mobile/src/creative/ProjectActivityPanel.tsx": "371cbe2e74ec630c53e1ae1c92ec50773a186ae9f79e8e4155d9f7545b064801",
     "mobile/src/creative/ProjectOverview.tsx": "a2001373edf8e2fc6d17e65742d71726807b785742051b6caff433d0bd211d5f",
     "mobile/src/creative/ProjectPlans.tsx": "73c1a9f0f939080f9494a19f9d3c2dbe98c08ac12455166b4ae136d6e944b23c",
     "mobile/src/creative/ProjectSearchScreen.tsx": "ba0ce8393ca776c127a1614b78cfa78898c74690cc7a811425c54daceb9d968c",
@@ -2498,7 +2720,13 @@
     "mobile/src/agent/skills/nextRun.ts": "bfec5dd50a8dc9102f3c4cc6f47649c813de588f2a45de5e346d2aa09fdd032e",
     "mobile/src/agent/skills/SkillQuickPicker.tsx": "bef0a4631316b641b29f261dcdfe2db013d900da56845e79759c253d06846f0c",
     "mobile/src/ui/DraggableSheet.tsx": "33161904262afda9a7fb397ce4197c498e1f3b6c8aea0e19cb735c820699dab7",
-    "mobile/src/agent/skills/SkillAddFlow.tsx": "5b854d79f280c8cf476ff1a71137dcd86b83e66eb43e25085631b2c714ef944e"
+    "mobile/src/agent/skills/SkillAddFlow.tsx": "5b854d79f280c8cf476ff1a71137dcd86b83e66eb43e25085631b2c714ef944e",
+    "mobile/src/creative/AgentCreativeCards.tsx": "b0e4624234aac1c4f92a933484deeecf41ede57dbfa645681ff8bc6e9ec288c6",
+    "mobile/src/creative/agentCreativeActivity.ts": "d1ba46b1dff8370ce1525eb03391faf5e0d5b9f37a696fbf644b41e64339780c",
+    "mobile/src/creative/ProposalReviewCard.tsx": "675bde9e3fc801d3dd4d34a11ce06d9668f0c5e7e3890cd5b1474b2180293f61",
+    "mobile/src/creative/proposalPresentation.ts": "36c3492fd2f44ad01c2d16b8fffb2264c1f2c908ce1ae5807d4226e8da2246c4",
+    "mobile/src/creative/changeReview.ts": "6da71816f999e5c45644159849c7849cbd4c454376f7c6d1c07edf81f48702b7",
+    "mobile/src/creative/GenerationRequestReview.tsx": "3827880b94a308d6b2ecd49881af8c7853ffeb03492f4ed736356fa741bd7598"
   },
   "revisions": [
     {
@@ -2526,6 +2754,30 @@
         "mobile/src/agent/skills/SkillAddFlow.tsx",
         "mobile/src/agent/skills/SkillLibraryScreen.tsx",
         "mobile/src/agent/skills/SkillQuickPicker.tsx"
+      ]
+    },
+    {
+      "date": "2026-11-04",
+      "sourceBase": "e6fc2dff + M3a working tree",
+      "scope": "M3a proposal and draft cards, exact review and durable terminal results; M3b/M3c pending",
+      "evidence": "docs/design/evidence/2026-11-04-m3-review/README.md",
+      "reviewedSources": [
+        "mobile/src/creative/AgentCreativeCards.tsx",
+        "mobile/src/creative/agentCreativeActivity.ts",
+        "mobile/src/creative/ProjectActivityPanel.tsx",
+        "mobile/src/creative/ProposalReviewCard.tsx",
+        "mobile/src/creative/proposalPresentation.ts",
+        "mobile/src/creative/changeReview.ts"
+      ]
+    },
+    {
+      "date": "2026-11-05",
+      "sourceBase": "e6fc2dff + approved M3a working tree",
+      "scope": "M3b1 single draft request review and preparation recovery; plan/batch M3b pending",
+      "evidence": "docs/design/evidence/2026-11-05-m3b-request/README.md",
+      "reviewedSources": [
+        "mobile/src/creative/AgentCreativeCards.tsx",
+        "mobile/src/creative/GenerationRequestReview.tsx"
       ]
     }
   ]

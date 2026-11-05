@@ -3,7 +3,7 @@ import type {AppDatabase} from '../storage/appDatabase';
 import {applyStoryCommand,storySchemas} from './story';
 export const reviewSchemas={'change.resolve':z.object({id:z.string().min(1).max(200),accept:z.boolean()}).strict()};
 export type ReviewCommand={name:'change.resolve';payload:z.input<typeof reviewSchemas['change.resolve']>};
-export type ChangeProposal={id:string;project_id:string;command_name:'project.update'|'shot.update';payload_json:string;before_json:string;state:string};
+export type ChangeProposal={id:string;project_id:string;command_name:'project.update'|'shot.update';payload_json:string;before_json:string;state:string;created_at?:number;resolved_at?:number|null};
 export async function proposeCreativeChange(tx:AppDatabase,name:'project.update'|'shot.update',p:any,now:number,makeId:()=>string){
   const row=await tx.getFirstAsync<Record<string,any>>(name==='project.update'?'SELECT * FROM creative_projects WHERE id=? AND archived_at IS NULL':'SELECT * FROM creative_shots WHERE id=? AND deleted_at IS NULL',p.id);
   if(!row||row.revision!==p.expectedRevision)throw new Error('REVISION_CONFLICT');

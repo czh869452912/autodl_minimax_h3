@@ -12,6 +12,7 @@ jest.mock('./accountRuntime',()=>({creativeAccounts:jest.fn(),creativeBudget:()=
 jest.mock('./agentCreativeActivity',()=>({...jest.requireActual('./agentCreativeActivity'),readAgentCreativeActivity:jest.fn()}));
 jest.mock('expo-file-system/legacy',()=>({documentDirectory:'file:///documents/'}));
 jest.mock('./MediaPreview',()=>({MediaPreview:()=>null}));
+jest.mock('./CreativeAccountPanel',()=>({CreativeAccountPanel:()=>null}));
 jest.mock('../ui/icons',()=>({AppIcon:()=>null}));
 jest.mock('../ui/ImagePreview',()=>({ImagePreview:()=>null}));
 jest.mock('./WorkbenchUI',()=>({ParameterSheet:({children}: {children:React.ReactNode})=><>{children}</>}));
@@ -44,7 +45,7 @@ test('polls the actual job and lets the user open its archived original image or
     expect(tree.root.findByProps({testID:'agent-creative-summary'}).props.accessibilityLabel).toContain('排队中');
     rows=[{...rows[0],status:'SUCCEEDED',outputs:[output]}];
     await act(async()=>{jest.advanceTimersByTime(2500);});
-    expect(tree.root.findByProps({testID:'agent-creative-summary'}).props.accessibilityLabel).toContain('1 个成果可查看');
+    expect(tree.root.findByProps({testID:'agent-creative-summary'}).props.accessibilityLabel).toContain('1 个候选可查看');
     act(()=>tree.root.findByProps({testID:'agent-creative-summary'}).props.onPress());
     act(()=>button(tree,'查看生成成果 1').props.onPress());
     expect(tree.root.findByType(ImagePreview).props.uri).toBe('file:///documents/cas/result.png');
@@ -88,31 +89,107 @@ test('proposal navigation uses structural identity even when display names chang
  let tree!:ReturnType<typeof create>;
  try{
   await act(async()=>{tree=create(<AgentActivityProvider threadId="thread"><AgentCreativeCards threadId="thread" running={false}/></AgentActivityProvider>);});
-  act(()=>tree.root.findByProps({testID:'agent-creative-summary'}).props.onPress());act(()=>button(tree,'查看并处理').props.onPress());
+  act(()=>tree.root.findByProps({testID:'agent-creative-summary'}).props.onPress());act(()=>button(tree,'审阅修改').props.onPress());
   expect(mockPush).toHaveBeenCalledWith({pathname:'/creative-project/[id]',params:expect.objectContaining({id:'project',tab:'activity',proposalId:'proposal-a'})});
+ }finally{act(()=>tree?.unmount());}
+});
+
+test('an empty draft offers completion first and never exposes the generation request action',async()=>{
+ read.mockResolvedValue([{kind:'draft',id:'draft',name:'图片草稿',draft:{...draft,state:'EDITING',job_id:null,input_json:'{"prompt":"","width":832,"height":1216}'},outputs:[]}]);
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<AgentActivityProvider threadId="thread"><AgentCreativeCards threadId="thread" running={false}/></AgentActivityProvider>);});
+  act(()=>tree.root.findByProps({testID:'agent-creative-summary'}).props.onPress());
+  expect(button(tree,'完善这份草稿')).toBeDefined();
+  expect(button(tree,'核对这份草稿的生成请求')).toBeUndefined();
+  act(()=>button(tree,'完善这份草稿').props.onPress());
+  expect(mockPush).toHaveBeenCalledWith({pathname:'/image-draft/[id]',params:{id:'draft'}});
+ }finally{act(()=>tree?.unmount());}
+});
+
+test('a resolved proposal stays discoverable under its original identity with a result action',async()=>{
+ read.mockResolvedValue([{id:'proposal-old',kind:'proposal',name:'项目：灯塔短片',status:'APPLIED',projectId:'project',outputs:[]}]);
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<AgentActivityProvider threadId="thread"><AgentCreativeCards threadId="thread" running={false}/></AgentActivityProvider>);});
+  act(()=>tree.root.findByProps({testID:'agent-creative-summary'}).props.onPress());
+  expect(button(tree,'审阅修改')).toBeUndefined();act(()=>button(tree,'查看修改结果').props.onPress());
+  expect(mockPush).toHaveBeenCalledWith({pathname:'/creative-project/[id]',params:expect.objectContaining({id:'project',proposalId:'proposal-old',tab:'activity'})});
  }finally{act(()=>tree?.unmount());}
 });
 
 jest.mock('./videoRuntime',()=>({prepareCreativeVideo:jest.fn(),confirmCreativeVideo:jest.fn()}));
 jest.mock('./novelAiRuntime',()=>({prepareCreativeImage:jest.fn(),confirmCreativeImage:jest.fn()}));
 test('confirming an exact draft queues it without another model message',async()=>{
- const {Alert}=require('react-native');
+
  const {prepareCreativeImage,confirmCreativeImage}=require('./novelAiRuntime');
  const editable={...draft,state:'EDITING',job_id:null};
  read.mockResolvedValue([{kind:'draft',id:'draft',name:'image',draft:editable,outputs:[]}]);
  const db=require('../storage/databaseClient').getDatabase();
  // This test supplies stable database identity and distinguishes scope from plan reads.
- const getDb=jest.spyOn(require('../storage/databaseClient'),'getDatabase').mockReturnValue({...db,getFirstAsync:async(sql:string)=>sql.includes('creative_plan_steps')?null:{project_id:'project'}});
- prepareCreativeImage.mockResolvedValue({draft:editable,versionIds:['ref'],prepared:{inputSnapshot:{width:832,height:1216}}});
+ const stableDb={...db,getFirstAsync:async(sql:string)=>sql.includes('creative_plan_steps')?null:{project_id:'project'}};
+ const getDb=jest.spyOn(require('../storage/databaseClient'),'getDatabase').mockReturnValue(stableDb);
+ prepareCreativeImage.mockResolvedValue({db:stableDb,draft:editable,account:{account_binding_id:'account',credential_generation_id:'generation'},versionIds:['ref'],prepared:{inputSnapshot:{width:832,height:1216},requestInput:{input:'tennis',parameters:{} }}});
  confirmCreativeImage.mockResolvedValue({id:'queued-job'});
- const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+
  let tree!:ReturnType<typeof create>;try{
   await act(async()=>{tree=create(<AgentActivityProvider threadId="thread"><AgentCreativeCards threadId="thread" running={false}/></AgentActivityProvider>);});
   act(()=>tree.root.findByProps({testID:'agent-creative-summary'}).props.onPress());
-  await act(async()=>button(tree,'确认这份草稿并生成').props.onPress());
+  await act(async()=>button(tree,'核对这份草稿的生成请求').props.onPress());
   expect(confirmCreativeImage).not.toHaveBeenCalled();
-  const actions=alert.mock.calls.at(-1)![2] as Array<{text:string;onPress:()=>void}>;
-  await act(async()=>actions.find(a=>a.text==='确认生成 1 次')!.onPress());
+  expect(button(tree,'确认许可并生成 1 次').props.disabled).toBe(true);
+  act(()=>button(tree,'允许本次文字与素材外发').props.onPress());
+  expect(button(tree,'确认许可并生成 1 次').props.disabled).toBe(true);
+  act(()=>button(tree,'接受未知费用，仅允许本请求一次').props.onPress());
+  await act(async()=>{const confirm=button(tree,'确认许可并生成 1 次').props.onPress;confirm();confirm();});
   expect(confirmCreativeImage).toHaveBeenCalledTimes(1);
- }finally{act(()=>tree.unmount());alert.mockRestore();getDb.mockRestore();}
+ }finally{act(()=>tree.unmount());getDb.mockRestore();}
+});
+
+test('cancel discards local consent and scope changes reject the reviewed request',async()=>{
+ const {prepareCreativeImage,confirmCreativeImage}=require('./novelAiRuntime');
+ const editable={...draft,state:'EDITING',job_id:null};
+ let project='project';
+ const db={getFirstAsync:async(sql:string)=>sql.includes('creative_plan_steps')?null:{project_id:project}};
+ const getDb=jest.spyOn(require('../storage/databaseClient'),'getDatabase').mockReturnValue(db);
+ prepareCreativeImage.mockResolvedValue({db,draft:editable,account:{account_binding_id:'a',credential_generation_id:'g'},versionIds:[],prepared:{inputSnapshot:{},requestInput:{input:'effective text',parameters:{}}}});
+ read.mockResolvedValue([{kind:'draft',id:'draft',name:'image',draft:editable,outputs:[]}]);
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<AgentActivityProvider threadId="thread"><AgentCreativeCards threadId="thread" running={false}/></AgentActivityProvider>);});
+  act(()=>tree.root.findByProps({testID:'agent-creative-summary'}).props.onPress());
+  await act(async()=>button(tree,'核对这份草稿的生成请求').props.onPress());
+  act(()=>button(tree,'允许本次文字与素材外发').props.onPress());
+  act(()=>button(tree,'取消，返回本轮创作').props.onPress());
+  expect(confirmCreativeImage).not.toHaveBeenCalled();
+  await act(async()=>button(tree,'核对这份草稿的生成请求').props.onPress());
+  expect(button(tree,'允许本次文字与素材外发').props.accessibilityState.checked).toBe(false);
+  act(()=>button(tree,'允许本次文字与素材外发').props.onPress());
+  act(()=>button(tree,'接受未知费用，仅允许本请求一次').props.onPress());
+  project='other';
+  await act(async()=>button(tree,'确认许可并生成 1 次').props.onPress());
+  expect(confirmCreativeImage).not.toHaveBeenCalled();
+  expect(JSON.stringify(tree.toJSON())).toContain('项目范围已改变');
+ }finally{act(()=>tree.unmount());getDb.mockRestore();}
+});
+
+test('missing account recovers the same draft through preparation without automatically confirming',async()=>{
+ const {prepareCreativeImage,confirmCreativeImage}=require('./novelAiRuntime');
+ const editable={...draft,state:'EDITING',job_id:null};
+ const db={getFirstAsync:async(sql:string)=>sql.includes('creative_plan_steps')?null:{project_id:'project'}};
+ const getDb=jest.spyOn(require('../storage/databaseClient'),'getDatabase').mockReturnValue(db);
+ prepareCreativeImage.mockRejectedValueOnce(Error('请先连接 NovelAI 创作账号')).mockResolvedValue({db,draft:editable,account:{account_binding_id:'a',credential_generation_id:'g'},versionIds:[],prepared:{inputSnapshot:{},requestInput:{input:'test',parameters:{}}}});
+ read.mockResolvedValue([{kind:'draft',id:'draft',name:'image',draft:editable,outputs:[]}]);
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<AgentActivityProvider threadId="thread"><AgentCreativeCards threadId="thread" running={false}/></AgentActivityProvider>);});
+  act(()=>tree.root.findByProps({testID:'agent-creative-summary'}).props.onPress());
+  await act(async()=>button(tree,'核对这份草稿的生成请求').props.onPress());
+  expect(JSON.stringify(tree.toJSON())).toContain('请先连接 NovelAI');
+  expect(confirmCreativeImage).not.toHaveBeenCalled();
+  await act(async()=>button(tree,'重新核对原草稿').props.onPress());
+  expect(prepareCreativeImage).toHaveBeenLastCalledWith('draft');
+  expect(button(tree,'允许本次文字与素材外发').props.accessibilityState.checked).toBe(false);
+  expect(confirmCreativeImage).not.toHaveBeenCalled();
+ }finally{act(()=>tree.unmount());getDb.mockRestore();}
 });

@@ -5,8 +5,9 @@ import {act,create} from 'react-test-renderer';
 import {ProjectActivity} from './ProjectActivityPanel';
 import {ProjectPlans} from './ProjectPlans';
 const mockQuery=jest.fn(),mockFirst=jest.fn();
+const mockDb={getAllAsync:mockQuery,getFirstAsync:mockFirst};
 jest.mock('expo-router',()=>({useFocusEffect:(fn:()=>void)=>require('react').useEffect(fn,[fn]),useRouter:()=>({push:jest.fn()})}));
-jest.mock('../storage/databaseClient',()=>({getDatabase:()=>({getAllAsync:mockQuery,getFirstAsync:mockFirst})}));
+jest.mock('../storage/databaseClient',()=>({getDatabase:()=>mockDb}));
 jest.mock('./projectActivity',()=>({readProjectActivity:async()=>[]}));
 jest.mock('./runtime',()=>({creativeService:()=>({shots:async()=>[]})}));
 jest.mock('./accountRuntime',()=>({creativeAccounts:()=>({}),creativeBudget:()=>({})}));
@@ -17,12 +18,13 @@ test('proposal focus reads the exact ID beyond the waiting page and ignores a de
  let tree!:ReturnType<typeof create>;
  try{
   await act(async()=>{tree=create(<ProjectActivity projectId="p" initialProposalId="a"/>);});
-  mockQuery.mockResolvedValue([{id:'b',state:'APPLIED',before_json:'{"title":"before B"}',payload_json:'{"title":"after B"}'}]);
+  mockQuery.mockResolvedValue([{id:'b',command_name:'project.update',state:'APPLIED',project_id:'p',before_json:'{"title":"before B"}',payload_json:'{"title":"after B"}'}]);
   await act(async()=>tree.update(<ProjectActivity projectId="p" initialProposalId="b"/>));
-  await act(async()=>release([{id:'a',state:'WAITING',before_json:'{"title":"before A"}',payload_json:'{}'}]));
+  await act(async()=>release([{id:'a',command_name:'project.update',state:'WAITING',project_id:'p',before_json:'{"title":"before A"}',payload_json:'{}'}]));
   expect(JSON.stringify(tree.toJSON())).toContain('before B');expect(JSON.stringify(tree.toJSON())).not.toContain('before A');
   expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('OR id=?'),'p','b','b');
-  expect(tree.root.findAll(n=>n.props.accessibilityLabel==='采用这项修改'&&n.props.disabled===true).length).toBeGreaterThan(0);
+  expect(tree.root.findAll(n=>n.props.accessibilityLabel==='采用这项修改')).toHaveLength(0);
+  expect(JSON.stringify(tree.toJSON())).toContain('这份修改已采用');
  }finally{act(()=>tree?.unmount());}
 });
 test('plan focus queries project and plan identity before pagination',async()=>{

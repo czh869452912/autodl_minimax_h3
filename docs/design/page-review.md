@@ -6,11 +6,11 @@
 
 ## 范围与结论
 
-覆盖 29 个路由页面、2 个壳层、27 个重要子表面；记录 54 条源码确认的关键点击边。非路由清单不宣称穷尽全部 JSX 分支，点击边也不是运行时全图。
+覆盖 29 个路由页面、2 个壳层、30 个重要子表面；记录 64 条源码确认的关键点击边。非路由清单不宣称穷尽全部 JSX 分支，点击边也不是运行时全图。
 
-当前实现已有四入口、预览、参数抽屉、任务气泡、明确采用和不可变版本，方向不必推倒。M1 技能快速选用、M2 分步添加已独立；项目概览仍承担工具目录，镜头列表承担编辑器，技能目录与运行历史共享，时间线承担参数表与工程管理。应继续按对象和状态重组任务，不再给每项能力补一个常驻按钮。
+当前实现已有四入口、预览、参数抽屉、任务气泡、明确采用和不可变版本，方向不必推倒。M1 技能快速选用、M2 分步添加已独立，M3a 建议与草稿审阅、M3b1 单次请求审阅已按对象与状态接入；项目概览仍承担工具目录，镜头列表承担编辑器，技能目录与运行历史共享，时间线承担参数表与工程管理。应继续按对象和状态重组任务，不再给每项能力补一个常驻按钮。
 
-目录中的归属是信息组织视角，不等于 Expo 文件嵌套或真实 back 栈。建议按条目标记 proposed / partially-implemented / implemented，设备覆盖单独记录在 evidenceLevel；页面状态是需要覆盖的规格，不能当作已通过的设备测试。历史基线与后续切片分别记录，见 D002/D003。
+目录中的归属是信息组织视角，不等于 Expo 文件嵌套或真实 back 栈。建议按条目标记 proposed / partially-implemented / implemented，设备覆盖单独记录在 evidenceLevel；页面状态是需要覆盖的规格，不能当作已通过的设备测试。历史基线与后续切片分别记录，见 D002–D005。
 
 ## 当前主要跳转：概览的扇出
 
@@ -93,6 +93,9 @@ flowchart LR
       助手会话与运行交互 [surface; assistant-conversation]
       会话内技能快速层 [surface; skill-quick]
       提示词版本面板 [surface; prompt-versions]
+      助手本轮创作对象卡 [surface; assistant-creative-cards]
+        单次生成请求审阅 [surface; generation-request-review]
+        单次请求准备恢复 [surface; generation-request-recovery]
     项目列表 [route; projects]
       项目工作区 [route; project]
         镜头成果审阅 [route; shot-review]
@@ -802,19 +805,19 @@ flowchart LR
 
 **任务**：追溯项目变更。
 
-**现状问题**：活动与任务、运行证据、历史并行，用户需猜去哪找发生过的事情。
+**现状问题**：M3a 已将待审阅建议与已记录活动分组；建议按对象/变化字段审阅，冲突保留三方内容，已处理显示实际状态与时间。活动、任务与运行历史的进一步归并仍待 M5。
 
-**展示与交互建议**：活动是统一项目历史视图：用户可读事件、对象卡和结果链接；模型运行/生成任务各自详情只读可展开。
+**展示与交互建议**：保持同一 proposal 身份与领域事务；只展开变化字段，长对照可展开完整正文。继续补齐来源失效、读屏与历史导航验收。
 
-**实施状态**：proposed。**证据范围**：source-reviewed。
+**实施状态**：partially-implemented。**证据范围**：source-reviewed; M3a synthetic Android samples of project/shot adoption, rejection, revision conflict, terminal history and return; 2x font scrolling; no provider generation。
 
-**主操作**：打开相关对象或证据。**目标归属**：项目工作区。
+**主操作**：待审阅建议按对象审阅并采用或拒绝；历史打开相关对象。**目标归属**：项目工作区。
 
-**进入与返回**：项目活动 → 本表面；返回项目当前工作位。
+**进入与返回**：项目活动 → 本表面；来自会话时返回原会话；保留 proposalId 定位与原轮次。
 
-**应覆盖状态**：无记录 / 分页 / 来源失效。
+**应覆盖状态**：读取中 / 读取失败 / 无记录 / 指定建议不可用 / 待审阅列表 / 固定建议对照 / 长对照展开 / 修订冲突三方对照 / 已采用 / 已拒绝 / 隔离或过期。
 
-**依据**：[src/creative/ProjectActivityPanel.tsx](../../mobile/src/creative/ProjectActivityPanel.tsx)；对照 B1、B2（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
+**依据**：[src/creative/ProjectActivityPanel.tsx](../../mobile/src/creative/ProjectActivityPanel.tsx)、[src/creative/ProposalReviewCard.tsx](../../mobile/src/creative/ProposalReviewCard.tsx)、[src/creative/proposalPresentation.ts](../../mobile/src/creative/proposalPresentation.ts)、[src/creative/changeReview.ts](../../mobile/src/creative/changeReview.ts)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[03-baseline-proposal.png](../../docs/design/evidence/2026-11-04-m3-review/03-baseline-proposal.png)、[06-project-review.png](../../docs/design/evidence/2026-11-04-m3-review/06-project-review.png)、[07-project-applied.png](../../docs/design/evidence/2026-11-04-m3-review/07-project-applied.png)、[10-shot-rejected.png](../../docs/design/evidence/2026-11-04-m3-review/10-shot-rejected.png)、[11-conflict-review.png](../../docs/design/evidence/2026-11-04-m3-review/11-conflict-review.png)、[13-shot-applied.png](../../docs/design/evidence/2026-11-04-m3-review/13-shot-applied.png)、[17-font2-comparison.png](../../docs/design/evidence/2026-11-04-m3-review/17-font2-comparison.png)。
 
 <a id="project-manage"></a>
 ### 项目设置与封面选择 · project-manage · P2
@@ -1234,6 +1237,63 @@ flowchart LR
 
 **依据**：[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[02-baseline-skills.png](../../docs/design/evidence/2026-11-04-m1-skills/02-baseline-skills.png)。
 
+<a id="assistant-creative-cards"></a>
+### 助手本轮创作对象卡 · assistant-creative-cards · P1
+
+**任务**：从当前轮次找到修改建议、生成草稿、计划和候选的下一步。
+
+**现状问题**：M3a 已显示待审阅数量、对象名与变化字段，待审阅优先，终态保留可追溯；空描述草稿主操作为完善。请求授权和执行到候选的完整重组仍待 M3b/M3c。
+
+**展示与交互建议**：保持 runId 与固定对象身份，不能把修改建议称作已生成成果；请求审阅继续复用原 prepare/confirm，不新建执行状态。
+
+**实施状态**：partially-implemented。**证据范围**：source-reviewed; M3a synthetic Android sampled summary, priority, exact proposal navigation, terminal return, empty draft detail; full generation/authorization deferred。
+
+**主操作**：待审阅→审阅修改；已处理→查看修改结果；空描述草稿→完善；计划→查看步骤。**目标归属**：项目助手。
+
+**进入与返回**：会话对应轮次的“本轮创作”摘要 → 本表面；关闭回当前会话；进入项目审阅/草稿详情再返回原轮次。
+
+**应覆盖状态**：待审阅与草稿并存 / 对象摘要 / 原始轮次 / 已采用/拒绝 / 空描述草稿 / 读取失败 / 任务与候选（既有路径，M3a未重测完整生成）。
+
+**依据**：[src/creative/AgentCreativeCards.tsx](../../mobile/src/creative/AgentCreativeCards.tsx)、[src/creative/agentCreativeActivity.ts](../../mobile/src/creative/agentCreativeActivity.ts)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[01-baseline-conversation.png](../../docs/design/evidence/2026-11-04-m3-review/01-baseline-conversation.png)、[02-baseline-cards.png](../../docs/design/evidence/2026-11-04-m3-review/02-baseline-cards.png)、[04-candidate-conversation.png](../../docs/design/evidence/2026-11-04-m3-review/04-candidate-conversation.png)、[05-candidate-cards.png](../../docs/design/evidence/2026-11-04-m3-review/05-candidate-cards.png)、[08-return-conversation.png](../../docs/design/evidence/2026-11-04-m3-review/08-return-conversation.png)、[14-resolved-cards.png](../../docs/design/evidence/2026-11-04-m3-review/14-resolved-cards.png)、[15-open-draft.png](../../docs/design/evidence/2026-11-04-m3-review/15-open-draft.png)。
+
+<a id="generation-request-review"></a>
+### 单次生成请求审阅 · generation-request-review · P1
+
+**任务**：核对原草稿的确切请求并分别确认外发与消费许可。
+
+**现状问题**：M3b1 已替换会话单次确认弹窗；计划与批次仍待迁移，视频工作流字段展示仍需继续核对
+
+**展示与交互建议**：沿用现有主题与 prepare/confirm；保存账号不提交，退出不写许可；计划授权迁移独立验收。
+
+**实施状态**：partially-implemented (M3b1; plan/batch pending)。**证据范围**：source-reviewed; offline request UI device samples, no real dispatch。
+
+**主操作**：确认两项许可后生成一次。**目标归属**：项目助手。
+
+**进入与返回**：本轮创作中的固定草稿请求入口 → 本表面；关闭返回原本轮创作；编辑打开原固定草稿。
+
+**应覆盖状态**：准备中 / 待确认外发 / 待确认消费 / 正在提交 / 范围变化 / 提交失败。
+
+**依据**：[src/creative/AgentCreativeCards.tsx](../../mobile/src/creative/AgentCreativeCards.tsx)、[src/creative/GenerationRequestReview.tsx](../../mobile/src/creative/GenerationRequestReview.tsx)、[src/creative/CreativeAccountPanel.tsx](../../mobile/src/creative/CreativeAccountPanel.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[01-baseline-alert.png](../../docs/design/evidence/2026-11-05-m3b-request/01-baseline-alert.png)、[02-request-top.png](../../docs/design/evidence/2026-11-05-m3b-request/02-request-top.png)、[03-permission-default.png](../../docs/design/evidence/2026-11-05-m3b-request/03-permission-default.png)、[05-both-checked.png](../../docs/design/evidence/2026-11-05-m3b-request/05-both-checked.png)。
+
+<a id="generation-request-recovery"></a>
+### 单次请求准备恢复 · generation-request-recovery · P1
+
+**任务**：修复账号或草稿后重新核对原请求。
+
+**现状问题**：M3b1 已提供原位账号管理与原草稿编辑；完整连接用途恢复仍待后续
+
+**展示与交互建议**：沿用现有主题与 prepare/confirm；保存账号不提交，退出不写许可；计划授权迁移独立验收。
+
+**实施状态**：partially-implemented (M3b1; plan/batch pending)。**证据范围**：source-reviewed + mocked UI regression; no device account recovery。
+
+**主操作**：重新核对原草稿。**目标归属**：项目助手。
+
+**进入与返回**：本轮创作中的固定草稿请求入口 → 本表面；关闭返回原本轮创作；编辑打开原固定草稿。
+
+**应覆盖状态**：缺账号 / 缺素材或规格 / 原位管理账号 / 重新准备 / 编辑原草稿 / 返回。
+
+**依据**：[src/creative/AgentCreativeCards.tsx](../../mobile/src/creative/AgentCreativeCards.tsx)、[src/creative/GenerationRequestReview.tsx](../../mobile/src/creative/GenerationRequestReview.tsx)、[src/creative/CreativeAccountPanel.tsx](../../mobile/src/creative/CreativeAccountPanel.tsx)；对照 B1、B2（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
+
 ## 关键点击关系与上下文
 
 以下是当前实现的人工核对边；不是目标路由配置，也不保证全部分支都在设备走通。模态关闭、取消选择和写入后的回流要求见 target-and-flows.md。
@@ -1294,6 +1354,16 @@ flowchart LR
 | 技能目录 | 添加技能 | 技能添加与安装预览 | 同一路由独立任务；项目范围与可选 returnThreadId 保留，不展示目录/历史 | open-surface |
 | 技能添加与安装预览 | 查看已安装版本 | 技能目录 | 确切版本 id；本地筛选、清除搜索、版本置顶展开；不改默认 | open-surface |
 | 技能添加与安装预览 | 从快速层进入时，安装后返回原会话 | 会话内技能快速层 | 来源返回栈；明确用于下次消息后采用新选择，仅安装则保留未确认草稿；正文/附件仍在原会话 | restore-workspace |
+| 助手会话与运行交互 | 本轮创作 | 助手本轮创作对象卡 | threadId+runId；显示该轮持久化命令关联对象，保持原输入 | open-surface |
+| 助手本轮创作对象卡 | 审阅修改 / 查看修改结果 | 项目 / 活动 | projectId+proposalId+requestId；同一固定建议，原会话返回栈保留 | navigate |
+| 助手本轮创作对象卡 | 完善图片草稿 | 图片创作详情 | 固定 draft.id，不调用模型或提交生成 | navigate |
+| 助手本轮创作对象卡 | 完善视频草稿 | 视频创作详情 | 固定 draft.id；M3a 源码核对，未走视频设备任务 | navigate |
+| 助手本轮创作对象卡 | 查看计划步骤 | 项目 / 计划 | projectId+planId+requestId；M3a 源码核对，计划重组留 M4 | navigate |
+| 助手本轮创作对象卡 | 核对这份草稿的生成请求 | 单次生成请求审阅 | 固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文 | open-surface |
+| 助手本轮创作对象卡 | 请求准备失败 | 单次请求准备恢复 | 固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文 | open-surface |
+| 单次请求准备恢复 | 重新核对原草稿 | 单次生成请求审阅 | 固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文 | open-surface |
+| 单次请求准备恢复 | 编辑原图片草稿 | 图片创作详情 | 固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文 | navigate |
+| 单次请求准备恢复 | 编辑原视频草稿 | 视频创作详情 | 固定 draftId + projectId；重新准备后才确认，不携带凭据或提示词正文 | navigate |
 
 ## 审查优先级
 
