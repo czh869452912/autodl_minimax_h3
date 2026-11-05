@@ -453,7 +453,7 @@ export function PromptAssistantUi({
           }}><Text style={briefStyles.submitText}>加入草稿</Text></Pressable>
       }>
         <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="none" contentContainerStyle={briefStyles.fields}>
-          <Text style={briefStyles.hint}>填写已确定的内容，其余可以和助手继续讨论。</Text>
+          <Text style={briefStyles.hint}>仅追加到现有草稿末尾，不发送。填写已确定的内容，其余可以和助手继续讨论。</Text>
           {([['subject', '主体与动作', '谁在做什么，例如：一位少女穿过雨巷'], ['camera', '镜头与运动', '例如：近景起镜，缓慢后拉'], ['style', '风格与氛围', '例如：电影感、暖色、安静'], ['duration', '期望时长', '例如：8 秒']] as const).map(([key, label, placeholder]) => <View key={key} style={{ gap: 6 }}>
             <Text style={briefStyles.label}>{label}</Text>
             <TextInput accessibilityLabel={label} placeholder={placeholder} placeholderTextColor={LIGHT_PROMPT_COLORS.muted} value={brief[key]} onFocus={() => briefSheet.current?.expand()} onChangeText={value => setBrief(current => ({ ...current, [key]: value }))} style={briefStyles.input} />
@@ -927,9 +927,9 @@ function ImageMentionSheet({
 export function AttachmentStrip({
   attachments,
   onOpenPicker,
-  onRemoveAttachment,
+  onRemoveAttachment,onReference,
 }: {
-  attachments: AttachmentLike[];
+  onReference?:()=>void;attachments: AttachmentLike[];
   onOpenPicker: () => Promise<void>;
   onRemoveAttachment?: (id: string) => void;
 }) {
@@ -979,6 +979,7 @@ export function AttachmentStrip({
           </View>
         ))}
       </ScrollView>
+      {onReference&&attachments.some(item=>item.status==='ready')?<Pressable accessibilityRole="button" accessibilityLabel="引用已就绪图片" onPress={onReference} style={{minHeight:48,justifyContent:'center',paddingHorizontal:12}}><Text style={styles.composerActionText}>引用图片到光标处</Text></Pressable>:null}
       <ReferenceImagePreview uri={preview?.source ? getSourceUrl(preview.source as never) || null : null} onClose={() => setPreview(null)} />
     </>
   );
@@ -1027,7 +1028,13 @@ export function Composer({
   const editorRef = useRef<TextInput>(null);
   const nearLimit = value.length >= 3600;
   const overLimit = value.length > 4000;
-  const closeEditor = () => setEditing(false);
+  const restoreEditorFocus=useRef(false);
+  const closeEditor = () => {restoreEditorFocus.current=true;setEditing(false);};
+  useEffect(()=>{
+    if(editing||!restoreEditorFocus.current)return;
+    const timer=setTimeout(()=>{restoreEditorFocus.current=false;inputRef?.current?.focus();},350);
+    return()=>clearTimeout(timer);
+  },[editing,inputRef]);
   const counter = nearLimit ? (
     <Text accessibilityLiveRegion="polite" accessibilityLabel={overLimit ? `已超出 ${value.length - 4000} 字，请缩短后发送，草稿已保留` : `已输入 ${value.length} 字，上限 4000 字`}
       style={[styles.characterCount, overLimit && styles.characterCountError]}>
@@ -1059,7 +1066,7 @@ export function Composer({
                 selection={selection} onSelectionChange={onSelectionChange} scrollEnabled textAlignVertical="top"
                 selectionColor={COLORS.primary} style={styles.editorInput} />
             </View>
-            <View style={styles.editorFooter}><Text style={styles.editorHint}>收起后保留草稿</Text>{counter}</View>
+            <View style={styles.editorFooter}><Text style={styles.editorHint}>完成仅收起编辑，保留草稿、光标与附件，不发送</Text>{counter}</View>
           </View>
         </KeyboardSurface>
       </Modal>
@@ -1068,6 +1075,7 @@ export function Composer({
         attachments={attachments}
         onOpenPicker={onOpenPicker}
         onRemoveAttachment={onRemoveAttachment}
+        onReference={onOpenMentionPicker}
       />
       <View style={styles.composerRow}>
         <Pressable accessibilityRole="button" accessibilityLabel="添加图片附件" onPress={()=>void onOpenPicker()} style={styles.addButton}><AppIcon name="add_photo_alternate" size={19} color={LIGHT_PROMPT_COLORS.ink}/></Pressable>
@@ -1077,6 +1085,7 @@ export function Composer({
         <Pressable accessibilityRole="button" accessibilityLabel="更多创作操作" onPress={()=>{Keyboard.dismiss();setToolsOpen(true);}} style={styles.addButton}><AppIcon name="more_horiz" size={20} color={LIGHT_PROMPT_COLORS.muted}/></Pressable>
         <ConversationSend running={isRunning} busy={submitting} disabled={disabled} onSend={()=>{if(!disabled)onSubmit(value);}} onStop={onCancel}/>
       </View>
+      {value.length>=180||value.includes('\n')?<Pressable accessibilityRole="button" accessibilityLabel="展开长输入" accessibilityHint="全屏编辑现有草稿，完成后保留光标与附件，不发送" onPress={()=>setEditing(true)} style={{minHeight:48,flexDirection:'row',alignItems:'center',justifyContent:'flex-end',gap:6,paddingHorizontal:12}}><AppIcon name="open_in_full" size={18} color={LIGHT_PROMPT_COLORS.muted}/><Text style={styles.composerActionText}>展开编辑</Text></Pressable>:null}
       {counter}
       <DraggableBottomSheet visible={toolsOpen} title="创作操作" onClose={()=>setToolsOpen(false)}>
         <View testID="composer-actions" style={{gap:4}}>

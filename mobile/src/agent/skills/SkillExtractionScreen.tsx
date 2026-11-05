@@ -16,9 +16,10 @@ import { creativeUI as s } from '../../creative/creativeUI';
 type Evidence = { id: string; sequence: number; text: string; role: string };
 export function SkillExtractionScreen({projectId,threadId}:{projectId?:string;threadId?:string}={}) {
   const router = useRouter();
+  const [draftActions,setDraftActions]=useState(false);
   const [stage,setStage]=useState<'home'|'evidence'|'send'|'review'|'publish'>('home'),[recipient,setRecipient]=useState<H3AgentConfig>();
   const scroll=useRef<ScrollView>(null);
-  const move=(next:typeof stage)=>{setStage(next);setNotice('');scroll.current?.scrollTo({y:0,animated:false});};
+  const move=(next:typeof stage)=>{setStage(next);setDraftActions(false);setNotice('');scroll.current?.scrollTo({y:0,animated:false});};
   const db = useMemo(() => getDatabase(), []);
   const threads = useMemo(() => createLocalThreadStore(db), [db]);
   const store = useMemo(() => createSkillDraftStore(db), [db]);
@@ -119,6 +120,7 @@ export function SkillExtractionScreen({projectId,threadId}:{projectId?:string;th
     {stage==='send'?<>
     <Text style={s.title}>核对发送内容与接收方</Text>
     <Text selectable style={s.body}>{recipientLabel}</Text>
+    <ListAction label="配置接收模型" secondary disabled={busy} onPress={()=>router.push({pathname:'/settings-panel',params:{section:'assistant'}})}/>
     <Text style={s.muted}>仅向上述模型发送下方目标和证据，可能产生模型费用。不会发送附件、工具记录或生成许可，也不会发布技能。</Text>
     <Text style={s.muted}>常见密钥、链接、邮箱、手机号和路径已预先遮蔽；仍需自行移除私人信息、人物/项目名称和一次性授权。这里只发送下方目标和证据。</Text>
     <TextInput accessibilityLabel="提炼目标" value={goal} editable={!locked} maxLength={500} placeholder="希望复用的方法及适用范围" style={s.input} onChangeText={value => { setGoal(value); setReviewed(undefined); }} />
@@ -142,6 +144,7 @@ export function SkillExtractionScreen({projectId,threadId}:{projectId?:string;th
     <ListAction label="查看发布版本并独立选用" secondary disabled={busy || dirty || !draft?.publishedVersion} onPress={() => router.push({pathname:'/agent-skills',params:{projectId,threadId,versionId:draft?.publishedVersion??undefined}})} />
     </>:null}
     {stage!=='home'?<ListAction label="保存的草稿与新建" secondary disabled={busy} onPress={()=>move('home')}/>:null}
-    {draft&&stage!=='home' ? <ListAction label="删除此提炼草稿" secondary disabled={busy} onPress={() => Alert.alert('删除提炼草稿？', '删除保存的证据和草稿，不会删除原对话或已发布的技能版本。', [{ text: '取消' }, { text: '删除', style: 'destructive', onPress: () => void work(async () => { await store.remove(draft); showDraft();move('home'); }) }])} /> : null}
+    {draft&&stage!=='home'?<ListAction label={draftActions?'收起草稿操作':'草稿操作'} secondary disabled={busy} onPress={()=>setDraftActions(!draftActions)}/>:null}
+    {draft&&stage!=='home'&&draftActions ? <ListAction label="删除此提炼草稿" secondary disabled={busy} onPress={() => Alert.alert('删除提炼草稿？', '删除保存的证据和草稿，不会删除原对话或已发布的技能版本。', [{ text: '取消' }, { text: '删除', style: 'destructive', onPress: () => void work(async () => { await store.remove(draft); showDraft();move('home'); }) }])} /> : null}
   </ScrollView></KeyboardAvoidingView></SafeAreaView>;
 }

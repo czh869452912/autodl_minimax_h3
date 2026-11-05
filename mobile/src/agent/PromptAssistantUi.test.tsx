@@ -164,9 +164,10 @@ describe('Prompt assistant UI primitives', () => {
     expect(submit().props.disabled).toBe(true);
     act(() => tree.root.findByProps({ accessibilityLabel: '主体与动作' }).props.onChangeText('  '));
     expect(submit().props.accessibilityState.disabled).toBe(true);
+    act(()=>tree.root.findByProps({accessibilityLabel:'创作想法'}).props.onChangeText('已有文字'));
     act(() => tree.root.findByProps({ accessibilityLabel: '主体与动作' }).props.onChangeText('雨中散步'));
     act(() => submit().props.onPress());
-    expect(tree.root.findByType(Composer).props.value).toBe('主体与动作：雨中散步');
+    expect(tree.root.findByType(Composer).props.value).toBe('已有文字\n主体与动作：雨中散步');
     act(() => tree.root.findByProps({ accessibilityLabel: '更多创作操作' }).props.onPress());
     act(() => tree.root.findByProps({ accessibilityLabel: '补充创作信息' }).props.onPress());
     expect(tree.root.findByProps({ accessibilityLabel: '主体与动作' }).props.value).toBe('');

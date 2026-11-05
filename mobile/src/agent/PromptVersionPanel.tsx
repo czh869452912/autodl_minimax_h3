@@ -40,6 +40,7 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onDe
   const selected = versions.find((version) => version.id === selectedVersionId) ?? versions[versions.length - 1];
   const selectedIndex = versions.findIndex((version) => version.id === selected?.id);
   const prior = versions[selectedIndex - 1];
+  const [operations,setOperations]=useState(false);
   const [compare, setCompare] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [preview, setPreview] = useState<{ version: PromptVersion; threadId: string } | null>(null);
@@ -70,9 +71,9 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onDe
   useEffect(() => {
     generation.current++;
     exportLock.current = false;
-    setBusy(false); setPreview(null); setError(''); setCompare(false); setExpanded(false); setCopyStatus(''); setVisibleCount(50);
+    setBusy(false); setPreview(null); setError('');setOperations(false); setCompare(false); setExpanded(false); setCopyStatus(''); setVisibleCount(50);
   }, [threadId]);
-  useEffect(() => { setExpanded(false); setCopyStatus(''); }, [selected?.id]);
+  useEffect(() => { setExpanded(false);setOperations(false);setCompare(false);setRestoreStatus('');setCopyStatus(''); }, [selected?.id]);
   const diff = useMemo(() => compare && selected && prior ? diffPromptVersions(prior.promptText, selected.promptText) : [], [compare, selected?.promptText, prior?.promptText]);
   const activePreview = preview?.threadId === threadId ? preview : null;
   const bindings = preparePromptExport(activePreview?.version.promptText ?? '', activePreview?.version.images.filter(image => included.includes(image.id)) ?? []);
@@ -143,10 +144,13 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onDe
     <Text style={styles.muted}>创建于 {new Date(selected.createdAt).toLocaleString('zh-CN')}</Text>
     <SheetScrollView style={inSheet ? { flex: 1 } : { flexGrow: 0 }} contentContainerStyle={{ gap: 12, paddingBottom: 12 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
     <Text selectable numberOfLines={expanded ? undefined : inSheet ? 3 : 7} style={styles.prompt}>{selected.promptText}</Text>
-    <View style={styles.row}><Action label={expanded ? '收起 Prompt' : '展开 Prompt'} onPress={() => { if (!expanded) onExpand?.(); setExpanded(!expanded); }} />{prior && <Action label={compare ? '关闭版本比较' : '比较上一版本'} onPress={() => { if (!compare) onExpand?.(); setCompare(!compare); }} />}</View>
+    <View style={styles.row}><Action label={expanded ? '收起 Prompt' : '展开 Prompt'} onPress={() => { if (!expanded) onExpand?.(); setExpanded(!expanded); }} /></View>
     {compare && prior && <View style={styles.diff}><Text style={styles.muted}>V{selectedIndex} → V{selectedIndex + 1} · − 删除 / + 新增</Text><SheetScrollView style={styles.diffScroll} nestedScrollEnabled>{diff.map((line, index) => <Text key={index} selectable style={[styles.diffLine, line.kind === 'removed' && styles.removed, line.kind === 'added' && styles.added]}>{line.kind === 'added' ? '+ ' : line.kind === 'removed' ? '− ' : '  '}{line.text}</Text>)}</SheetScrollView></View>}
     </SheetScrollView>
     <View style={[{ gap: 10 }, inSheet && styles.sheetFooter]}>
+      <Action label="预览并带入创建页" primary disabled={disabled} onPress={openPreview} />
+      <Action label={operations?'收起版本操作':'版本操作'} onPress={()=>{if(!operations)onExpand?.();setOperations(!operations);}}/>
+      {operations?<><Text style={styles.muted}>复制与比较只处理已保存版本，不重新运行模型或生成任务。</Text>{prior?<Action label={compare?'关闭版本比较':'比较上一版本'} onPress={()=>{if(!compare)onExpand?.();setCompare(!compare);}}/>:null}
       <View style={styles.row}><Action label="复制版本 Prompt" onPress={copyPrompt} /><Action label="复制为最新版本" disabled={disabled || restoring} onPress={() => {
         if (disabled || restoreLock.current) return;
         restoreLock.current = true; setRestoring(true);
@@ -155,14 +159,14 @@ export function PromptVersionPanel({ versions, selectedVersionId, onSelect, onDe
         restoreTimer.current = setTimeout(() => { restoreLock.current = false; setRestoring(false); }, 1000);
       }} /></View>
       {onDelete ? <Action label="从版本列表移除" disabled={disabled} onPress={() => Alert.alert('移除此版本？', '此版本将从列表隐藏。原始对话和已经带入生成页的草稿保留。', [{ text: '取消', style: 'cancel' }, { text: '移除', style: 'destructive', onPress: () => onDelete(selected.id) }])} /> : null}
-      <Action label="预览并带入创建页" primary disabled={disabled} onPress={openPreview} />
+      </>:null}
     {copyStatus ? <Text accessibilityLiveRegion="polite" style={styles.muted}>{copyStatus}</Text> : null}
     {restoreStatus ? <Text accessibilityLiveRegion="polite" style={styles.muted}>{restoreStatus}</Text> : null}
     </View>
     {activePreview && <Modal visible transparent statusBarTranslucent animationType="slide" onRequestClose={() => { if (!busy) setPreview(null); }}>
       <KeyboardSurface style={styles.overlay}>
         <View style={styles.modal} accessibilityViewIsModal onFocus={event => event.stopPropagation()} onBlur={event => event.stopPropagation()}>
-          <Text style={styles.title}>带入创建页前确认</Text>
+          <Text style={styles.title}>带入创建页前确认</Text><Text style={styles.muted}>仅预填创建草稿，不提交生成；仍需在创建页核对请求并确认。</Text>
           <SheetScrollView style={styles.previewScroll} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.previewContent}>
             {workflows && <WorkflowSelector definitions={workflows.map(item => item.definition)} selectedId={workflowDefinition.id} disabled={busy} onSelect={selectTarget} />}
             {alignmentNotices.map((notice, index) => <Text key={index} style={styles.muted}>{notice}</Text>)}
@@ -198,10 +202,10 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '600', color: colors.ink },
   muted: { fontSize: 13, lineHeight: 19, color: colors.muted },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-  version: { minHeight: 44, paddingHorizontal: 14, justifyContent: 'center', borderWidth: 1, borderColor: colors.line, borderRadius: 10 },
+  version: { minHeight: 48, paddingHorizontal: 14, justifyContent: 'center', borderWidth: 1, borderColor: colors.line, borderRadius: 10 },
   activeVersion: { borderColor: colors.ink, backgroundColor: colors.background },
   prompt: { fontSize: 13, lineHeight: 21, color: colors.ink },
-  action: { minHeight: 44, paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center', borderWidth: 1, borderColor: colors.line, borderRadius: 10 },
+  action: { minHeight: 48, paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center', borderWidth: 1, borderColor: colors.line, borderRadius: 10 },
   actionText: { fontSize: 13, color: colors.ink },
   primary: { backgroundColor: colors.accent, borderColor: colors.accent, alignItems: 'center', minHeight: 48 },
   primaryText: { color: colors.surface },

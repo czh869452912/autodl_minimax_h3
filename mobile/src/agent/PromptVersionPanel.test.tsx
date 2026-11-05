@@ -116,11 +116,14 @@ it('selects a compact old version, shows real changes, restores, and copies only
   let tree!: ReturnType<typeof create>;
   act(() => { tree = create(<PromptVersionPanel versions={versions} threadId="t" onSelect={onSelect} onRestore={onRestore} onExport={async () => undefined} />); });
   expect(text(tree)).toContain('最新');
+  expect(text(tree)).not.toContain('复制版本 Prompt');
+  act(() => press(tree, '版本操作'));
   act(() => press(tree, '比较上一版本'));
   expect(text(tree)).toContain('− old'); expect(text(tree)).toContain('+ new');
   act(() => press(tree, '选择版本 1'));
   expect(onSelect).toHaveBeenCalledWith('v1');
   act(() => { tree.update(<PromptVersionPanel versions={versions} selectedVersionId="v1" threadId="t" onSelect={onSelect} onRestore={onRestore} onExport={async () => undefined} />); });
+  act(() => press(tree, '版本操作'));
   act(() => { press(tree, '复制为最新版本'); press(tree, '复制为最新版本'); });
   expect(onRestore).toHaveBeenCalledTimes(1);
   expect(text(tree)).toContain('已复制为最新版本');

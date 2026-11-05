@@ -6,7 +6,7 @@
 
 ## 范围与结论
 
-覆盖 29 个路由页面、2 个壳层、34 个重要子表面；记录 72 条源码确认的关键点击边。非路由清单不宣称穷尽全部 JSX 分支，点击边也不是运行时全图。
+覆盖 29 个路由页面、2 个壳层、35 个重要子表面；记录 73 条源码确认的关键点击边。非路由清单不宣称穷尽全部 JSX 分支，点击边也不是运行时全图。
 
 当前实现已有四入口、预览、参数抽屉、任务气泡、明确采用和不可变版本，方向不必推倒。M1 技能快速选用、M2 分步添加已独立，M3a 建议与草稿审阅、M3b1 单次请求审阅已按对象与状态接入；项目概览仍承担工具目录，镜头列表承担编辑器，技能目录与运行历史共享，时间线承担参数表与工程管理。应继续按对象和状态重组任务，不再给每项能力补一个常驻按钮。
 
@@ -86,7 +86,7 @@ flowchart LR
       技能目录 [route; skills]
         对话提炼技能 [route; skill-extract]
         技能添加与安装预览 [surface; skill-add]
-        技能运行历史 [surface; skill-history]
+        技能目录运行历史快捷入口 [surface; skill-history]
         会话菜单技能管理（兼容入口） [surface; skill-management-inline]
       运行证据 [route; run-evidence]
       助手项目/镜头上下文 [surface; assistant-context]
@@ -97,6 +97,7 @@ flowchart LR
         生成请求审阅 [surface; generation-request-review]
         单次请求准备恢复 [surface; generation-request-recovery]
       会话运行历史 [surface; conversation-run-history]
+      未连接模型的本地对话 [surface; local-history-browser]
     项目列表 [route; projects]
       项目工作区 [route; project]
         镜头成果审阅 [route; shot-review]
@@ -220,11 +221,11 @@ flowchart LR
 
 **任务**：围绕项目对话、提出和执行创作方案。
 
-**现状问题**：M1 已补输入旁技能选用与明确范围；无项目空态仍须离开助手建项目，提议/授权等后续任务待重组。
+**现状问题**：M1–M5 Agent 操作重组已接入；缺模型可只读查看本项目本地记录。无项目就地建项目属于原全产品提案，非本轮 Agent 50 项范围。
 
 **展示与交互建议**：空态提供就地轻量建项目；标题持久展示项目，镜头上下文显示可移除 chip；输入区以对话为主。不是新增无范围的执行会话。
 
-**实施状态**：partially-implemented。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper; M1 local fixture candidate sample。
+**实施状态**：partially-implemented。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper; M1 local fixture candidate sample; M5c disconnected scoped local history device sample。
 
 **主操作**：发送消息；运行时停止等待。**目标归属**：工作台导航壳。
 
@@ -232,7 +233,7 @@ flowchart LR
 
 **应覆盖状态**：无项目 / 未配模型 / 会话 / 运行 / 待审批 / 异常。
 
-**依据**：[src/creative/AgentWorkspace.tsx](../../mobile/src/creative/AgentWorkspace.tsx)、[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/creative/AgentCreativePanel.tsx](../../mobile/src/creative/AgentCreativePanel.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[v47-11-assistant.png](../../docs/design/evidence/2026-11-01/v47-11-assistant.png)、[v47-13-assistant-return.png](../../docs/design/evidence/2026-11-01/v47-13-assistant-return.png)、[03-candidate-agent.png](../../docs/design/evidence/2026-11-04-m1-skills/03-candidate-agent.png)。
+**依据**：[src/creative/AgentWorkspace.tsx](../../mobile/src/creative/AgentWorkspace.tsx)、[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/creative/AgentCreativePanel.tsx](../../mobile/src/creative/AgentCreativePanel.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[v47-11-assistant.png](../../docs/design/evidence/2026-11-01/v47-11-assistant.png)、[v47-13-assistant-return.png](../../docs/design/evidence/2026-11-01/v47-13-assistant-return.png)、[03-candidate-agent.png](../../docs/design/evidence/2026-11-04-m1-skills/03-candidate-agent.png)、[local-history-entry-final.png](../../docs/design/evidence/2026-11-05-agent-roadmap/local-history-entry-final.png)。
 
 <a id="projects"></a>
 ### 项目列表 · projects · P2
@@ -524,11 +525,11 @@ flowchart LR
 
 **任务**：查找、了解、管理技能及项目组合。
 
-**现状问题**：M1 已区分项目默认/全局管理标题、范围与全局停用确认；M2 添加已为独立任务，完成定位固定版本。运行历史仍与目录共享，待 M5。
+**现状问题**：管理、添加、提炼及会话历史已按任务分工；历史快捷入口保留目录未保存选择。
 
-**展示与交互建议**：保持范围说明与分步添加；后续运行历史归助手，目录保持按用途和来源浏览。
+**展示与交互建议**：保持用途/来源浏览和明确范围；历史详情不反推当前技能，完整设备矩阵另行验收。
 
-**实施状态**：partially-implemented。**证据范围**：source-reviewed; device-sampled M1 project/global scopes and revoke; M2 add/install/highlighted version with defaults unchanged。
+**实施状态**：implemented (Agent M1–M5 scope)。**证据范围**：source-reviewed; device-sampled M1 project/global scopes and revoke; M2 add/install/highlighted version with defaults unchanged。
 
 **主操作**：浏览技能与管理默认；添加进入独立任务。**目标归属**：项目助手。
 
@@ -536,7 +537,7 @@ flowchart LR
 
 **应覆盖状态**：全局 / 项目 / 单次 / 内置只读 / 无匹配 / 版本详情。
 
-**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[v47-03-skills.png](../../docs/design/evidence/2026-11-01/v47-03-skills.png)、[07-project-management.png](../../docs/design/evidence/2026-11-04-m1-skills/07-project-management.png)、[08-global-confirmation.png](../../docs/design/evidence/2026-11-04-m1-skills/08-global-confirmation.png)、[12-located.png](../../docs/design/evidence/2026-11-04-m2-skills/12-located.png)、[22-origin-management.png](../../docs/design/evidence/2026-11-04-m2-skills/22-origin-management.png)、[38-final-located.png](../../docs/design/evidence/2026-11-04-m2-skills/38-final-located.png)。
+**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[v47-03-skills.png](../../docs/design/evidence/2026-11-01/v47-03-skills.png)、[07-project-management.png](../../docs/design/evidence/2026-11-04-m1-skills/07-project-management.png)、[08-global-confirmation.png](../../docs/design/evidence/2026-11-04-m1-skills/08-global-confirmation.png)、[12-located.png](../../docs/design/evidence/2026-11-04-m2-skills/12-located.png)、[22-origin-management.png](../../docs/design/evidence/2026-11-04-m2-skills/22-origin-management.png)、[38-final-located.png](../../docs/design/evidence/2026-11-04-m2-skills/38-final-located.png)、[history-draft-return-final.png](../../docs/design/evidence/2026-11-05-agent-roadmap/history-draft-return-final.png)。
 
 <a id="skill-extract"></a>
 ### 对话提炼技能 · skill-extract · P1
@@ -980,11 +981,11 @@ flowchart LR
 
 **任务**：对话、审阅提议并跟踪运行。
 
-**现状问题**：M1 输入旁已接入快速选技能并保留草稿/附件；提议、请求、运行与历史的重组仍待 M3/M5。
+**现状问题**：M1–M5 已接入技能快速层、长输入就近展开、图片引用入口、追加简报与版本操作分层；发送/停止与过程折叠保留。
 
 **展示与交互建议**：默认对话+项目/镜头 chips+输入；输入旁简短工具；提议用变更摘要/影响对象/确认动作；运行呈阶段和停止状态，日志再展开。
 
-**实施状态**：partially-implemented。**证据范围**：source-reviewed; device-sampled composer draft/attachment round trip, restart and two local fixture messages。
+**实施状态**：implemented (Agent M1–M5 scope)。**证据范围**：source-reviewed; offline composer/editor/version device samples; image identity regression-tested。
 
 **主操作**：发送或审阅待确认提议。**目标归属**：项目助手。
 
@@ -992,7 +993,7 @@ flowchart LR
 
 **应覆盖状态**：空会话 / 编辑 / 运行 / 提议 / 待授权 / 停止 / 失败。
 
-**依据**：[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/agent/PromptAssistantUi.tsx](../../mobile/src/agent/PromptAssistantUi.tsx)、[src/agent/skills/SkillQuickPicker.tsx](../../mobile/src/agent/skills/SkillQuickPicker.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[05-cancel-return.png](../../docs/design/evidence/2026-11-04-m1-skills/05-cancel-return.png)、[10-confirmed-return.png](../../docs/design/evidence/2026-11-04-m1-skills/10-confirmed-return.png)、[11-reopened.png](../../docs/design/evidence/2026-11-04-m1-skills/11-reopened.png)、[12-first-completed.png](../../docs/design/evidence/2026-11-04-m1-skills/12-first-completed.png)。
+**依据**：[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/agent/PromptAssistantUi.tsx](../../mobile/src/agent/PromptAssistantUi.tsx)、[src/agent/skills/SkillQuickPicker.tsx](../../mobile/src/agent/skills/SkillQuickPicker.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[05-cancel-return.png](../../docs/design/evidence/2026-11-04-m1-skills/05-cancel-return.png)、[10-confirmed-return.png](../../docs/design/evidence/2026-11-04-m1-skills/10-confirmed-return.png)、[11-reopened.png](../../docs/design/evidence/2026-11-04-m1-skills/11-reopened.png)、[12-first-completed.png](../../docs/design/evidence/2026-11-04-m1-skills/12-first-completed.png)、[composer-comparison.jpg](../../docs/design/evidence/2026-11-05-agent-roadmap/composer-comparison.jpg)。
 
 <a id="skill-quick"></a>
 ### 会话内技能快速层 · skill-quick · P1
@@ -1018,7 +1019,7 @@ flowchart LR
 
 **任务**：导入或编辑方法后检查安装。
 
-**现状问题**：M2 已将添加独立为来源、编辑、检查、安装结果；安装默认不变，明确选用与保存分离。未安装草稿仅当前任务内存保留；提炼重组待 M5。
+**现状问题**：M2 已将添加独立为来源、编辑、检查、安装结果；安装默认不变，明确选用与保存分离。未安装草稿仅当前任务内存保留；提炼已在 M5a 独立分阶段。
 
 **展示与交互建议**：保持阶段与范围合同；用现有安装服务检查审阅版本，编辑后重检、覆盖先确认。继续补 TalkBack、旋转和大包设备验收。
 
@@ -1033,15 +1034,15 @@ flowchart LR
 **依据**：[app/agent-skills.tsx](../../mobile/app/agent-skills.tsx)、[src/agent/skills/SkillAddFlow.tsx](../../mobile/src/agent/skills/SkillAddFlow.tsx)、[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)、[src/agent/skills/package.ts](../../mobile/src/agent/skills/package.ts)、[src/agent/skills/store.ts](../../mobile/src/agent/skills/store.ts)、[src/agent/skills/nextRun.ts](../../mobile/src/agent/skills/nextRun.ts)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[v47-04-skill-add.png](../../docs/design/evidence/2026-11-01/v47-04-skill-add.png)、[01-baseline-add.png](../../docs/design/evidence/2026-11-04-m2-skills/01-baseline-add.png)、[15-format-error.png](../../docs/design/evidence/2026-11-04-m2-skills/15-format-error.png)、[19-zip-reference.png](../../docs/design/evidence/2026-11-04-m2-skills/19-zip-reference.png)、[24-origin-selected.png](../../docs/design/evidence/2026-11-04-m2-skills/24-origin-selected.png)、[30-final-font2-source.png](../../docs/design/evidence/2026-11-04-m2-skills/30-final-font2-source.png)、[32-final-font2-review.png](../../docs/design/evidence/2026-11-04-m2-skills/32-final-font2-review.png)、[33-final-source.png](../../docs/design/evidence/2026-11-04-m2-skills/33-final-source.png)、[34-final-editor.png](../../docs/design/evidence/2026-11-04-m2-skills/34-final-editor.png)、[35-final-keyboard.png](../../docs/design/evidence/2026-11-04-m2-skills/35-final-keyboard.png)、[36-final-review.png](../../docs/design/evidence/2026-11-04-m2-skills/36-final-review.png)、[37-final-installed.png](../../docs/design/evidence/2026-11-04-m2-skills/37-final-installed.png)、[38-final-located.png](../../docs/design/evidence/2026-11-04-m2-skills/38-final-located.png)。
 
 <a id="skill-history"></a>
-### 技能运行历史 · skill-history · P1
+### 技能目录运行历史快捷入口 · skill-history · P1
 
 **任务**：找某次运行所用版本和实际读取。
 
-**现状问题**：每条历史包含大量 fingerprint、预算和 ID，在目录内切换全屏内容。
+**现状问题**：M5b/M5c 已改为会话历史摘要表面；返回保留未保存单次选择及目录筛选。
 
-**展示与交互建议**：归助手运行历史的技能筛选；行显示任务名/时间/结果，详情再看版本/实际读取/预算；保留“可发现不等于使用”。
+**展示与交互建议**：沿用会话历史身份及分页，原始指纹/预算只在运行详情查看。
 
-**实施状态**：proposed。**证据范围**：source-reviewed。
+**实施状态**：implemented (shortcut)。**证据范围**：source-reviewed; final offline directory/history/unsaved return sampled。
 
 **主操作**：打开该次运行。**目标归属**：项目助手。
 
@@ -1049,26 +1050,26 @@ flowchart LR
 
 **应覆盖状态**：空 / 当前范围 / 全部 / 分页。
 
-**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)；对照 B1（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
+**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)；对照 B1（见 [调研](research.md)）。本轮截图：[history-draft-return-final.png](../../docs/design/evidence/2026-11-05-agent-roadmap/history-draft-return-final.png)。
 
 <a id="prompt-versions"></a>
 ### 提示词版本面板 · prompt-versions · P2
 
 **任务**：查看输入修改与各次运行关联。
 
-**现状问题**：版本与运行消息可能并行显示，需让用户知道修改是否用于后续运行。
+**现状问题**：M5c 已优先预览与草稿带入；比较、复制、移除收进版本操作。复制不重跑，带入不提交。
 
-**展示与交互建议**：以变更摘要、时间、运行状态展示版本；原文/差异展开；“用此版本继续”预填输入，不直接调用。
+**展示与交互建议**：保持固定版本和图片绑定校验；原文/差异展开，删除只隐藏版本。
 
-**实施状态**：proposed。**证据范围**：source-reviewed。
+**实施状态**：implemented (M5c)。**证据范围**：source-reviewed; synthetic saved versions before/after device sample; bindings regression-tested。
 
-**主操作**：选择版本继续编辑。**目标归属**：项目助手。
+**主操作**：预览并带入创建草稿。**目标归属**：项目助手。
 
 **进入与返回**：助手消息版本入口 → 本表面；关闭回原消息锚点。
 
 **应覆盖状态**：当前 / 历史 / 缺证据 / 运行中。
 
-**依据**：[src/agent/PromptVersionPanel.tsx](../../mobile/src/agent/PromptVersionPanel.tsx)；对照 B1（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
+**依据**：[src/agent/PromptVersionPanel.tsx](../../mobile/src/agent/PromptVersionPanel.tsx)；对照 B1（见 [调研](research.md)）。本轮截图：[versions-comparison.jpg](../../docs/design/evidence/2026-11-05-agent-roadmap/versions-comparison.jpg)。
 
 <a id="settings-accounts"></a>
 ### 设置 / 创作账号 · settings-accounts · P1
@@ -1227,11 +1228,11 @@ flowchart LR
 
 **任务**：兼容原菜单与会话内技能管理。
 
-**现状问题**：仍展开完整目录，含旧单次兼容与历史；M1 输入旁快速入口已独立，M2 添加从兼容入口推入独立路由任务。
+**现状问题**：兼容管理入口保留原会话；添加为独立任务，历史为只读表面且返回保留未保存单次草案。
 
-**展示与交互建议**：保留兼容入口回流与未保存保护，M5 再收口历史；避免扩展此内嵌目录。
+**展示与交互建议**：保持兼容返回与离开保护，高频单次选用使用快速层。
 
-**实施状态**：partially-implemented。**证据范围**：source-reviewed; baseline device sample only。
+**实施状态**：implemented (compatibility scope)。**证据范围**：source-reviewed; baseline device sample only。
 
 **主操作**：管理项目默认或打开完整添加。**目标归属**：技能目录。
 
@@ -1368,11 +1369,30 @@ flowchart LR
 
 **主操作**：查看所选运行。**目标归属**：项目助手。
 
-**进入与返回**：助手菜单或技能目录历史快捷入口 → 本表面；返回原会话或原技能筛选；详情返回保留历史范围与分页。
+**进入与返回**：助手菜单或技能目录历史快捷入口 → 本表面；回会话或原技能目录；目录未保存选择保留，详情返回保持历史范围与分页。
 
 **应覆盖状态**：本会话 / 本项目 / 全部范围 / 空记录 / 更早运行 / 读取失败。
 
 **依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)、[src/creative/AssistantActions.tsx](../../mobile/src/creative/AssistantActions.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[history-after.png](../../docs/design/evidence/2026-11-05-agent-roadmap/history-after.png)。
+
+<a id="local-history-browser"></a>
+### 未连接模型的本地对话 · local-history-browser · P2
+
+**任务**：缺少模型连接时只读查看当前项目已保存对话。
+
+**现状问题**：M5c 已接入，不依赖模型运行时；项目范围检查、晚到读取保护和列表保留已覆盖。
+
+**展示与交互建议**：只读证据与发送能力分开；配置仍回原任务，不自动发送。
+
+**实施状态**：implemented (M5c)。**证据范围**：source-reviewed; disconnected project list/detail/return device-sampled; late-read/scope regressions。
+
+**主操作**：查看保存的对话。**目标归属**：项目助手。
+
+**进入与返回**：未连接模型→查看本地对话 → 本表面；详情回原列表，完成回缺配置表面。
+
+**应覆盖状态**：加载 / 本项目 / 搜索 / 分页 / 详情 / 已删除 / 范围变化 / 读取失败。
+
+**依据**：[src/agent/LocalHistoryBrowser.tsx](../../mobile/src/agent/LocalHistoryBrowser.tsx)、[src/agent/HistoryList.tsx](../../mobile/src/agent/HistoryList.tsx)、[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)；对照 B1（见 [调研](research.md)）。本轮截图：[local-history-list-final.png](../../docs/design/evidence/2026-11-05-agent-roadmap/local-history-list-final.png)、[local-history-detail-final.png](../../docs/design/evidence/2026-11-05-agent-roadmap/local-history-detail-final.png)。
 
 ## 关键点击关系与上下文
 
@@ -1411,9 +1431,9 @@ flowchart LR
 | 任务与结果详情 | 完整创作历史 | 视频创作详情 | draftId / 图片时进入 image-draft | navigate |
 | 任务与结果详情 | 定位来源计划 | 项目工作区 | projectId+planId | navigate |
 | 项目 / 计划 | 查看生成任务 | 任务与结果详情 | jobId+projectId+planId+stepId | navigate |
-| 技能添加与安装预览 | 打开对话提炼 | 对话提炼技能 | projectId?+原会话 threadId?；有草稿时先保留/安装；M2 仅源码核对入口，提炼完整重组待 M5 | navigate |
-| 技能运行历史 | 查看运行 | 运行证据 | threadId+runId | navigate |
-| 对话提炼技能 | 发布后打开技能库 | 技能目录 | projectId?+threadId? | navigate |
+| 技能添加与安装预览 | 打开对话提炼 | 对话提炼技能 | projectId?+原会话 threadId?；先处理未保存内容；提炼使用独立四阶段任务 | navigate |
+| 技能目录运行历史快捷入口 | 查看运行 | 运行证据 | threadId+runId | navigate |
+| 对话提炼技能 | 发布后打开技能库 | 技能目录 | projectId?+threadId?+固定 publishedVersion；定位已发布版本，不启用 | navigate |
 | 制作能力目录 | 模型连接 | 模型连接与能力声明 | 无业务对象参数 / 由当前工作区恢复 | navigate |
 | 制作能力目录 | 工作流/账号配置 | 独立设置 | section | navigate |
 | 媒体检查 | 配置检查模型 | 模型连接与能力声明 | 无业务对象参数 / 由当前工作区恢复 | navigate |
@@ -1449,9 +1469,10 @@ flowchart LR
 | 项目 / 计划 | 打开具体计划 | 计划详情 | 固定 projectId/planId；列表上下文保持挂载 | open-surface |
 | 项目 / 计划 | 新建计划 | 准备计划 | 固定 projectId/planId；列表上下文保持挂载 | open-surface |
 | 项目 / 计划 | 范围选择 | 计划范围选择 | 只在确认时更改 batchId；切项目清理范围 | open-surface |
-| 项目助手 | 查看会话运行历史 | 会话运行历史 | 固定 threadId/runId；只读，不消费单次技能或创建运行 | navigate |
+| 项目助手 | 查看会话运行历史 | 会话运行历史 | 可信 threadId 推导项目范围；离开保护；只读不创建运行、不消费单次技能 | navigate |
 | 技能目录 | 运行记录快捷入口 | 会话运行历史 | 固定 threadId/runId；只读，不消费单次技能或创建运行 | open-surface |
 | 会话运行历史 | 查看原运行 | 运行证据 | 固定 threadId/runId；只读，不消费单次技能或创建运行 | navigate |
+| 项目助手 | 缺模型时查看本地对话 | 未连接模型的本地对话 | projectId；只读，无模型运行，无创建/删除/重命名 | open-surface |
 
 ## 审查优先级
 

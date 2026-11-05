@@ -1,3 +1,4 @@
+import {LocalHistoryBrowser} from './LocalHistoryBrowser';
 import { SkillLibraryScreen } from './skills/SkillLibraryScreen';
 import { SkillQuickPicker } from './skills/SkillQuickPicker';
 import {ListAction} from '../ui/ListPageUI';
@@ -81,14 +82,14 @@ export default function AgentScreen({ projectId, focus }: {projectId?:string;foc
     };
   }, []);
   useFocusEffect(refresh);
-  if (error) return <StatusView message={error} />;
+  if (error) return <StatusView projectId={projectId} message={error} />;
   if (!config) return <StatusView loading />;
   if (!isH3AgentConfigReady(config))
-    return <StatusView message="尚未配置完整的 LLM 设置" />;
+    return <StatusView projectId={projectId} message="尚未连接助手模型" />;
   const configError = getH3AgentConfigError(config);
   if (configError)
     return (
-      <StatusView
+      <StatusView projectId={projectId}
         message={
           configError === 'LLM API endpoint must be an HTTP(S) URL'
             ? 'LLM API 地址格式无效'
@@ -287,7 +288,7 @@ function ReadyAgent({
   useEffect(() => promptRuntimeRegistry.subscribeSummary(handleSnapshotChange), [handleSnapshotChange]);
   const searchHistory = useCallback(async (query: string, more = false) => {
     const request = ++historyPage.current;
-    const page = await threadStore.listSummaries({ query, limit: 50, offset: more ? threads.length : 0 });
+    const page = await threadStore.listSummaries({ projectId, query, limit: 50, offset: more ? threads.length : 0 });
     if (request !== historyPage.current) return;
     setHistoryQuery(query); setHasMoreThreads(page.length === 50);
     setThreads(current => more ? [...current, ...page.filter(row => !current.some(old => old.threadId === row.threadId))] : page);
@@ -464,13 +465,13 @@ function AgentSession({
 }
 
 function StatusView({
-  loading,
+  projectId,loading,
   message,
 }: {
-  loading?: boolean;
+  projectId?:string;loading?: boolean;
   message?: string;
 }) {
-  const router = useRouter();
+  const router = useRouter(),[historyOpen,setHistoryOpen]=useState(false);
   return (
     <View style={styles.status}>
       {!loading?<View style={{position:'absolute',top:4,right:8,flexDirection:'row'}}><AssistantActions/></View>:null}
@@ -479,8 +480,9 @@ function StatusView({
         {message ?? '正在加载 Prompt 助手…'}
       </Text>
       {!loading ? (
-        <ListAction label="打开 LLM 设置" icon="settings" onPress={()=>router.navigate({pathname:'/settings-panel',params:{section:'assistant'}})}/>
+        <View style={{gap:12}}><Text style={styles.statusHint}>连接模型后可发送消息与使用助手工具；本地历史仍可只读查看。</Text><ListAction label="连接助手模型" icon="settings" onPress={()=>router.navigate({pathname:'/settings-panel',params:{section:'assistant'}})}/><ListAction label="查看本地对话" secondary onPress={()=>setHistoryOpen(true)}/></View>
       ) : null}
+      {historyOpen?<LocalHistoryBrowser projectId={projectId} onClose={()=>setHistoryOpen(false)}/>:null}
     </View>
   );
 }

@@ -25,3 +25,10 @@ test('a failed next page retries pagination without restarting the search or cle
     expect(tree.root.findAllByProps({ accessibilityLabel: '重试读取更多对话' })).toHaveLength(0);
   } finally { act(() => tree?.unmount()); jest.useRealTimers(); }
 });
+
+
+test('read-only history retains search and rows while removing creation and management actions',()=>{
+ const {RecordRow}=require('../ui/RecordRow');let tree!:ReturnType<typeof create>;try{act(()=>{tree=create(<HistoryList readOnly threads={[{threadId:'a',messages:[],state:{},createdAt:1,updatedAt:1}]} activeThreadId="" onNew={jest.fn()} onSelect={jest.fn()} onDelete={jest.fn()} onRename={jest.fn()} onRenameVisibilityChange={jest.fn()}/>);});
+ expect(tree.root.findAllByProps({accessibilityLabel:'历史中新建对话'})).toHaveLength(0);expect(tree.root.findAllByType(RecordRow)[0].props.trailing).toBeNull();expect(tree.root.findByProps({accessibilityLabel:'搜索对话'})).toBeTruthy();
+ }finally{act(()=>tree.unmount());}
+});

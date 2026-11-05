@@ -37,7 +37,7 @@ test.each([false,true])('mounted panel follows committed acceptance, including e
  await act(async()=>{await accept('run');});expect(output()).toContain('当前使用项目组合，没有单次覆盖');expect(output()).not.toContain('已固定，等待下一条消息消费');
  expect(await readNextRunSkills(mockDb as never,'thread')).toBeNull();expect((await skills.capture('thread','run')).versions.map(v=>v.id)).toEqual(empty?[]:[id]);
  await click('选择下次运行技能');expect(tree!.root.findAllByType(ListAction).some(n=>n.props.label==='✓ 本次选用 once')).toBe(false);
- await act(async()=>tree!.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());expect(output()).toContain('查看运行 run');
+ await act(async()=>tree!.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());expect(output()).toContain('查看运行：');
  await act(async()=>{await accept('second');});expect((await skills.capture('thread','second')).versions).toEqual([]);
 });
 test('rollback keeps saved override and emits no commit event',async()=>{

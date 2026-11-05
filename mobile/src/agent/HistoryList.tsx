@@ -29,8 +29,8 @@ export function HistoryList({
   onRename,
   onSearchHistory,
   onLoadMoreHistory,
-  onRenameVisibilityChange,
-}: HistoryProps & { onRenameVisibilityChange: (visible: boolean) => void }) {
+  onRenameVisibilityChange,readOnly=false,
+}: HistoryProps & { readOnly?:boolean; onRenameVisibilityChange: (visible: boolean) => void }) {
   const [query, setQuery] = useState('');
   const [renameTarget, setRenameTarget] = useState<LocalThreadSnapshot | null>(
     null,
@@ -79,31 +79,31 @@ export function HistoryList({
         />
         {query ? <Pressable accessibilityRole="button" accessibilityLabel="清除搜索" style={{ minWidth: 48, minHeight: 48, justifyContent: 'center' }} onPress={() => setQuery('')}><Text>清除</Text></Pressable> : null}
       </View>
-      <Pressable
+      {!readOnly?<Pressable
         accessibilityLabel="历史中新建对话"
         onPress={onNew}
         style={styles.newHistory}
       >
         <AppIcon name="add" size={18} color={LIGHT_PROMPT_COLORS.ink} />
         <Text style={styles.newHistoryText}>新对话</Text>
-      </Pressable>
+      </Pressable>:null}
       {searching ? <ActivityIndicator accessibilityLabel="正在搜索对话" /> : searchError ? <Pressable accessibilityRole="button" style={{ minHeight: 48 }} onPress={() => setSearchRetry(value => value + 1)}><Text accessibilityRole="alert">{searchError}</Text></Pressable> : null}
       <SectionList
         keyboardShouldPersistTaps="handled"
         sections={sections}
-        ListEmptyComponent={<Text accessibilityLiveRegion="polite" style={styles.historyMeta}>{query ? '没有匹配的对话，试试其他关键词' : '暂无对话，点击新对话开始'}</Text>}
+        ListEmptyComponent={<Text accessibilityLiveRegion="polite" style={styles.historyMeta}>{query ? '没有匹配的对话，试试其他关键词' : readOnly?'暂无已保存的本地对话':'暂无对话，点击新对话开始'}</Text>}
         style={styles.historyList}
         ListFooterComponent={paging ? <ActivityIndicator accessibilityLabel="正在加载更多对话" /> : pageError ? <Pressable accessibilityRole="button" accessibilityLabel="重试读取更多对话" style={{ minHeight: 48 }} onPress={loadMore}><Text accessibilityRole="alert">读取更多对话失败，点击重试</Text></Pressable> : null}
         onEndReached={() => { if (!pageError) loadMore(); }}
         keyExtractor={(thread) => thread.threadId}
         renderSectionHeader={({ section }) => <Text style={styles.groupLabel}>{section.title}</Text>}
         renderItem={({ item: thread }) => (
-          <RecordRow title={sessionDisplayTitle(thread, threads)} detail={`${sessionMessageCount(thread)} 条消息 · ${sessionRunLabel(thread.state) || new Date(thread.updatedAt).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}`} selected={thread.threadId===activeThreadId} onPress={()=>onSelect(thread.threadId)} trailing={
+          <RecordRow title={sessionDisplayTitle(thread, threads)} detail={`${sessionMessageCount(thread)} 条消息 · ${sessionRunLabel(thread.state) || new Date(thread.updatedAt).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}`} selected={thread.threadId===activeThreadId} onPress={()=>onSelect(thread.threadId)} trailing={!readOnly?
             <Pressable accessibilityRole="button" accessibilityLabel={`管理会话 ${sessionTitle(thread)}`} style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }} onPress={() => Alert.alert('管理会话', sessionTitle(thread), [
               { text: '取消', style: 'cancel' },
               { text: '重命名', onPress: () => { setRenameError(''); setRenameTarget(thread); setRenameValue(sessionTitle(thread)); } },
               { text: '删除', style: 'destructive', onPress: () => Alert.alert('删除会话', '删除后无法恢复本机会话记录；此会话正在运行的请求也会停止。', [{ text: '取消', style: 'cancel' }, { text: '删除', style: 'destructive', onPress: () => onDelete(thread.threadId) }]) },
-            ])}><Text style={styles.more}>•••</Text></Pressable>
+            ])}><Text style={styles.more}>•••</Text></Pressable>:null
           }/>
         )}
       />

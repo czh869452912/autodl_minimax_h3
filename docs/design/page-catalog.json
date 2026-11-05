@@ -156,7 +156,7 @@
         "mobile/src/creative/AgentCreativePanel.tsx"
       ],
       "purpose": "围绕项目对话、提出和执行创作方案",
-      "currentIssue": "M1 已补输入旁技能选用与明确范围；无项目空态仍须离开助手建项目，提议/授权等后续任务待重组。",
+      "currentIssue": "M1–M5 Agent 操作重组已接入；缺模型可只读查看本项目本地记录。无项目就地建项目属于原全产品提案，非本轮 Agent 50 项范围。",
       "recommendation": "空态提供就地轻量建项目；标题持久展示项目，镜头上下文显示可移除 chip；输入区以对话为主。不是新增无范围的执行会话。",
       "entry": "底部、项目、镜头",
       "back": "主入口按导航历史；从镜头进入可回原镜头与位置",
@@ -174,11 +174,12 @@
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper; M1 local fixture candidate sample",
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper; M1 local fixture candidate sample; M5c disconnected scoped local history device sample",
       "evidence": [
         "docs/design/evidence/2026-11-01/v47-11-assistant.png",
         "docs/design/evidence/2026-11-01/v47-13-assistant-return.png",
-        "docs/design/evidence/2026-11-04-m1-skills/03-candidate-agent.png"
+        "docs/design/evidence/2026-11-04-m1-skills/03-candidate-agent.png",
+        "docs/design/evidence/2026-11-05-agent-roadmap/local-history-entry-final.png"
       ],
       "proposalStatus": "partially-implemented",
       "targetOwner": "tabs"
@@ -674,8 +675,8 @@
         "mobile/src/agent/skills/SkillLibraryScreen.tsx"
       ],
       "purpose": "查找、了解、管理技能及项目组合",
-      "currentIssue": "M1 已区分项目默认/全局管理标题、范围与全局停用确认；M2 添加已为独立任务，完成定位固定版本。运行历史仍与目录共享，待 M5。",
-      "recommendation": "保持范围说明与分步添加；后续运行历史归助手，目录保持按用途和来源浏览。",
+      "currentIssue": "管理、添加、提炼及会话历史已按任务分工；历史快捷入口保留目录未保存选择。",
+      "recommendation": "保持用途/来源浏览和明确范围；历史详情不反推当前技能，完整设备矩阵另行验收。",
       "entry": "助手、项目技能、深链接",
       "back": "管理回实际来源；添加先处理未保存，完成可定位确切版本",
       "primaryAction": "浏览技能与管理默认；添加进入独立任务",
@@ -699,9 +700,10 @@
         "docs/design/evidence/2026-11-04-m1-skills/08-global-confirmation.png",
         "docs/design/evidence/2026-11-04-m2-skills/12-located.png",
         "docs/design/evidence/2026-11-04-m2-skills/22-origin-management.png",
-        "docs/design/evidence/2026-11-04-m2-skills/38-final-located.png"
+        "docs/design/evidence/2026-11-04-m2-skills/38-final-located.png",
+        "docs/design/evidence/2026-11-05-agent-roadmap/history-draft-return-final.png"
       ],
-      "proposalStatus": "partially-implemented",
+      "proposalStatus": "implemented (Agent M1–M5 scope)",
       "targetOwner": "agent"
     },
     {
@@ -1481,7 +1483,7 @@
         "mobile/src/agent/skills/SkillQuickPicker.tsx"
       ],
       "purpose": "对话、审阅提议并跟踪运行",
-      "currentIssue": "M1 输入旁已接入快速选技能并保留草稿/附件；提议、请求、运行与历史的重组仍待 M3/M5。",
+      "currentIssue": "M1–M5 已接入技能快速层、长输入就近展开、图片引用入口、追加简报与版本操作分层；发送/停止与过程折叠保留。",
       "recommendation": "默认对话+项目/镜头 chips+输入；输入旁简短工具；提议用变更摘要/影响对象/确认动作；运行呈阶段和停止状态，日志再展开。",
       "entry": "助手主入口",
       "back": "子工具先关闭；跨项目时保护输入",
@@ -1500,14 +1502,15 @@
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed; device-sampled composer draft/attachment round trip, restart and two local fixture messages",
+      "evidenceLevel": "source-reviewed; offline composer/editor/version device samples; image identity regression-tested",
       "evidence": [
         "docs/design/evidence/2026-11-04-m1-skills/05-cancel-return.png",
         "docs/design/evidence/2026-11-04-m1-skills/10-confirmed-return.png",
         "docs/design/evidence/2026-11-04-m1-skills/11-reopened.png",
-        "docs/design/evidence/2026-11-04-m1-skills/12-first-completed.png"
+        "docs/design/evidence/2026-11-04-m1-skills/12-first-completed.png",
+        "docs/design/evidence/2026-11-05-agent-roadmap/composer-comparison.jpg"
       ],
-      "proposalStatus": "partially-implemented",
+      "proposalStatus": "implemented (Agent M1–M5 scope)",
       "targetOwner": "agent"
     },
     {
@@ -1577,7 +1580,7 @@
         "mobile/src/agent/skills/nextRun.ts"
       ],
       "purpose": "导入或编辑方法后检查安装",
-      "currentIssue": "M2 已将添加独立为来源、编辑、检查、安装结果；安装默认不变，明确选用与保存分离。未安装草稿仅当前任务内存保留；提炼重组待 M5。",
+      "currentIssue": "M2 已将添加独立为来源、编辑、检查、安装结果；安装默认不变，明确选用与保存分离。未安装草稿仅当前任务内存保留；提炼已在 M5a 独立分阶段。",
       "recommendation": "保持阶段与范围合同；用现有安装服务检查审阅版本，编辑后重检、覆盖先确认。继续补 TalkBack、旋转和大包设备验收。",
       "entry": "目录添加、兼容菜单添加、intent=add 深链接",
       "back": "上一步保留草稿；关闭或系统返回先确认放弃；完成可定位确切版本，或明确单次选用后返回原会话",
@@ -1624,7 +1627,7 @@
     },
     {
       "id": "skill-history",
-      "name": "技能运行历史",
+      "name": "技能目录运行历史快捷入口",
       "kind": "surface",
       "route": null,
       "parent": "skills",
@@ -1632,8 +1635,8 @@
         "mobile/src/agent/skills/SkillLibraryScreen.tsx"
       ],
       "purpose": "找某次运行所用版本和实际读取",
-      "currentIssue": "每条历史包含大量 fingerprint、预算和 ID，在目录内切换全屏内容。",
-      "recommendation": "归助手运行历史的技能筛选；行显示任务名/时间/结果，详情再看版本/实际读取/预算；保留“可发现不等于使用”。",
+      "currentIssue": "M5b/M5c 已改为会话历史摘要表面；返回保留未保存单次选择及目录筛选。",
+      "recommendation": "沿用会话历史身份及分页，原始指纹/预算只在运行详情查看。",
       "entry": "技能历史图标、助手运行记录",
       "back": "返回原筛选和范围",
       "primaryAction": "打开该次运行",
@@ -1647,9 +1650,11 @@
       "references": [
         "B1"
       ],
-      "evidenceLevel": "source-reviewed",
-      "evidence": [],
-      "proposalStatus": "proposed",
+      "evidenceLevel": "source-reviewed; final offline directory/history/unsaved return sampled",
+      "evidence": [
+        "docs/design/evidence/2026-11-05-agent-roadmap/history-draft-return-final.png"
+      ],
+      "proposalStatus": "implemented (shortcut)",
       "targetOwner": "agent"
     },
     {
@@ -1662,11 +1667,11 @@
         "mobile/src/agent/PromptVersionPanel.tsx"
       ],
       "purpose": "查看输入修改与各次运行关联",
-      "currentIssue": "版本与运行消息可能并行显示，需让用户知道修改是否用于后续运行。",
-      "recommendation": "以变更摘要、时间、运行状态展示版本；原文/差异展开；“用此版本继续”预填输入，不直接调用。",
+      "currentIssue": "M5c 已优先预览与草稿带入；比较、复制、移除收进版本操作。复制不重跑，带入不提交。",
+      "recommendation": "保持固定版本和图片绑定校验；原文/差异展开，删除只隐藏版本。",
       "entry": "助手消息版本入口",
       "back": "关闭回原消息锚点",
-      "primaryAction": "选择版本继续编辑",
+      "primaryAction": "预览并带入创建草稿",
       "states": [
         "当前",
         "历史",
@@ -1677,9 +1682,11 @@
       "references": [
         "B1"
       ],
-      "evidenceLevel": "source-reviewed",
-      "evidence": [],
-      "proposalStatus": "proposed",
+      "evidenceLevel": "source-reviewed; synthetic saved versions before/after device sample; bindings regression-tested",
+      "evidence": [
+        "docs/design/evidence/2026-11-05-agent-roadmap/versions-comparison.jpg"
+      ],
+      "proposalStatus": "implemented (M5c)",
       "targetOwner": "agent"
     },
     {
@@ -1940,8 +1947,8 @@
         "mobile/src/agent/skills/SkillLibraryScreen.tsx"
       ],
       "purpose": "兼容原菜单与会话内技能管理",
-      "currentIssue": "仍展开完整目录，含旧单次兼容与历史；M1 输入旁快速入口已独立，M2 添加从兼容入口推入独立路由任务。",
-      "recommendation": "保留兼容入口回流与未保存保护，M5 再收口历史；避免扩展此内嵌目录。",
+      "currentIssue": "兼容管理入口保留原会话；添加为独立任务，历史为只读表面且返回保留未保存单次草案。",
+      "recommendation": "保持兼容返回与离开保护，高频单次选用使用快速层。",
       "entry": "助手菜单→技能管理",
       "back": "关闭管理回原会话；长编辑继续执行未保存保护",
       "primaryAction": "管理项目默认或打开完整添加",
@@ -1961,7 +1968,7 @@
       "evidence": [
         "docs/design/evidence/2026-11-04-m1-skills/02-baseline-skills.png"
       ],
-      "proposalStatus": "partially-implemented",
+      "proposalStatus": "implemented (compatibility scope)",
       "targetOwner": "skills"
     },
     {
@@ -2198,7 +2205,7 @@
       "currentIssue": "M5b 独立历史任务已接入会话菜单，技能目录保留快捷入口；分页和范围沿用原读取合同。",
       "recommendation": "会话归属优先，行显示名称、时间、状态和固定技能摘要；指纹、预算、原始记录在运行详情。",
       "entry": "助手菜单或技能目录历史快捷入口",
-      "back": "返回原会话或原技能筛选；详情返回保留历史范围与分页",
+      "back": "回会话或原技能目录；目录未保存选择保留，详情返回保持历史范围与分页",
       "primaryAction": "查看所选运行",
       "states": [
         "本会话",
@@ -2218,6 +2225,44 @@
         "docs/design/evidence/2026-11-05-agent-roadmap/history-after.png"
       ],
       "proposalStatus": "implemented; acceptance coverage recorded separately",
+      "targetOwner": "agent"
+    },
+    {
+      "id": "local-history-browser",
+      "name": "未连接模型的本地对话",
+      "kind": "surface",
+      "parent": "agent",
+      "sources": [
+        "mobile/src/agent/LocalHistoryBrowser.tsx",
+        "mobile/src/agent/HistoryList.tsx",
+        "mobile/src/agent/AgentScreen.tsx"
+      ],
+      "purpose": "缺少模型连接时只读查看当前项目已保存对话",
+      "currentIssue": "M5c 已接入，不依赖模型运行时；项目范围检查、晚到读取保护和列表保留已覆盖。",
+      "recommendation": "只读证据与发送能力分开；配置仍回原任务，不自动发送。",
+      "entry": "未连接模型→查看本地对话",
+      "back": "详情回原列表，完成回缺配置表面",
+      "primaryAction": "查看保存的对话",
+      "states": [
+        "加载",
+        "本项目",
+        "搜索",
+        "分页",
+        "详情",
+        "已删除",
+        "范围变化",
+        "读取失败"
+      ],
+      "priority": "P2",
+      "references": [
+        "B1"
+      ],
+      "evidenceLevel": "source-reviewed; disconnected project list/detail/return device-sampled; late-read/scope regressions",
+      "evidence": [
+        "docs/design/evidence/2026-11-05-agent-roadmap/local-history-list-final.png",
+        "docs/design/evidence/2026-11-05-agent-roadmap/local-history-detail-final.png"
+      ],
+      "proposalStatus": "implemented (M5c)",
       "targetOwner": "agent"
     }
   ],
@@ -2506,7 +2551,7 @@
       "toId": "skill-extract",
       "type": "navigate",
       "label": "打开对话提炼",
-      "context": "projectId?+原会话 threadId?；有草稿时先保留/安装；M2 仅源码核对入口，提炼完整重组待 M5",
+      "context": "projectId?+原会话 threadId?；先处理未保存内容；提炼使用独立四阶段任务",
       "status": "source-reviewed",
       "source": "mobile/src/agent/skills/SkillAddFlow.tsx"
     },
@@ -2524,7 +2569,7 @@
       "toId": "skills",
       "type": "navigate",
       "label": "发布后打开技能库",
-      "context": "projectId?+threadId?",
+      "context": "projectId?+threadId?+固定 publishedVersion；定位已发布版本，不启用",
       "status": "source-reviewed",
       "source": "mobile/src/agent/skills/SkillExtractionScreen.tsx"
     },
@@ -2839,7 +2884,7 @@
       "label": "查看会话运行历史",
       "type": "navigate",
       "source": "mobile/src/creative/AssistantActions.tsx",
-      "context": "固定 threadId/runId；只读，不消费单次技能或创建运行"
+      "context": "可信 threadId 推导项目范围；离开保护；只读不创建运行、不消费单次技能"
     },
     {
       "fromId": "skills",
@@ -2856,6 +2901,14 @@
       "type": "navigate",
       "source": "mobile/src/agent/skills/SkillLibraryScreen.tsx",
       "context": "固定 threadId/runId；只读，不消费单次技能或创建运行"
+    },
+    {
+      "fromId": "agent",
+      "toId": "local-history-browser",
+      "label": "缺模型时查看本地对话",
+      "type": "open-surface",
+      "source": "mobile/src/agent/AgentScreen.tsx",
+      "context": "projectId；只读，无模型运行，无创建/删除/重命名"
     }
   ],
   "sourceDigests": {
@@ -2890,10 +2943,10 @@
     "mobile/app/settings-panel.tsx": "a7a4149ef6a30f63977a6c02af421d8d0b2854bd6e4ad89989dea09f80a8ccba",
     "mobile/app/shot-request-setup.tsx": "018897b819a6dd434362b7b45863878a02b430fa788ea7ed57cc0fc4048c3fe8",
     "mobile/app/video/[id].tsx": "8abbd333bbb3c04591bf0e95a867ea06c4f57b3710c0812e6e37b99dabce4e8c",
-    "mobile/src/agent/AgentScreen.tsx": "b8f360a9bfd9f9153006508a2927036990ef8568345e00656bae6b453c183573",
-    "mobile/src/agent/PromptVersionPanel.tsx": "9c077f7737640b3e144115217fc20acd08676538c486e874216a00a3cd8ce068",
-    "mobile/src/agent/skills/SkillExtractionScreen.tsx": "6442b548a341bd0e8f8a1ef8de4363c23eef30bcd81c4a37f23906d7266eb2a6",
-    "mobile/src/agent/skills/SkillLibraryScreen.tsx": "ad35f54fbec22aaf094c83a100cd2ba64a81fe6529cfa32718aa6f7734065034",
+    "mobile/src/agent/AgentScreen.tsx": "911896d2417f0e5d36166e2fb5ca127f0bfe21e0fe969f46322a94ffb05cda20",
+    "mobile/src/agent/PromptVersionPanel.tsx": "cbde8767fcef977122b8aaeee0c34a0f93ca8f1d007924852cb200df3e0100ba",
+    "mobile/src/agent/skills/SkillExtractionScreen.tsx": "0aba0f4deab6d6c11a2c253f2e26df03610d5fd312adcb788fc51112ea922647",
+    "mobile/src/agent/skills/SkillLibraryScreen.tsx": "47cb8626a58ae5bba5915384b6d4df9fe3b3adbe1ca9d8d4e78f5b51622dbba4",
     "mobile/src/agent/skills/SkillRunScreen.tsx": "0a6780529e1a0ff86e4c17cf487d3a002fde3ce61bd9842f173b95f5e0dfedd4",
     "mobile/src/creative/AgentCreativePanel.tsx": "31ae9a970c7e59dc631286ee7cde5799b56ae357c451c30fbd401edb71753cbe",
     "mobile/src/creative/AgentWorkspace.tsx": "5927e3c94291e40b595b5f4de4efdc19eee27f53eaa9447de409e45d04081ea1",
@@ -2923,12 +2976,12 @@
     "mobile/src/settings/ModelConnectionsScreen.tsx": "3416f4606bae0147c3a14b53f94bc578898f44b8a11781442a5f8852fa2d5d5e",
     "mobile/src/settings/WorkflowSyncPanel.tsx": "686c03f780248005bafd60a0e80f3ae248bdfcf000d9e5ac8f5193174cb424ee",
     "mobile/src/tasks/TaskInboxButton.tsx": "898cadeead6b4923872354dc1d9791f1c821460e10753f411af4d3d849e016cb",
-    "mobile/src/agent/PromptAssistantUi.tsx": "7afb7c97ad37e24061d1c6e33697bfbff5a5b97bce8b9b9ebd1a748da7332a19",
+    "mobile/src/agent/PromptAssistantUi.tsx": "51c5281ad5c0e4b0702cbf9022a10c492fa95764bddeb00af401bba346a3323b",
     "mobile/src/agent/skills/nextRun.ts": "bfec5dd50a8dc9102f3c4cc6f47649c813de588f2a45de5e346d2aa09fdd032e",
     "mobile/src/agent/skills/SkillQuickPicker.tsx": "bef0a4631316b641b29f261dcdfe2db013d900da56845e79759c253d06846f0c",
     "mobile/src/ui/DraggableSheet.tsx": "33161904262afda9a7fb397ce4197c498e1f3b6c8aea0e19cb735c820699dab7",
     "mobile/src/agent/skills/SkillAddFlow.tsx": "5b854d79f280c8cf476ff1a71137dcd86b83e66eb43e25085631b2c714ef944e",
-    "mobile/src/creative/AgentCreativeCards.tsx": "b0e4624234aac1c4f92a933484deeecf41ede57dbfa645681ff8bc6e9ec288c6",
+    "mobile/src/creative/AgentCreativeCards.tsx": "45e597258555ba0a9a240e4f2e1d706c6cab5f3301fc37034cf166519b991b59",
     "mobile/src/creative/agentCreativeActivity.ts": "d1ba46b1dff8370ce1525eb03391faf5e0d5b9f37a696fbf644b41e64339780c",
     "mobile/src/creative/ProposalReviewCard.tsx": "675bde9e3fc801d3dd4d34a11ce06d9668f0c5e7e3890cd5b1474b2180293f61",
     "mobile/src/creative/proposalPresentation.ts": "36c3492fd2f44ad01c2d16b8fffb2264c1f2c908ce1ae5807d4226e8da2246c4",
@@ -2938,7 +2991,9 @@
     "mobile/src/creative/planReviewTargets.ts": "8132b83a14a49723800062f578bf6574bae614f33694935f9d35ebf9f58f7f88",
     "mobile/src/conversation/ConversationInput.tsx": "b0f1f36f7c6050f60c82aa73cf5141575a7aeeb9e762f71354f485212bcf7522",
     "mobile/src/creative/planReads.ts": "e4be01dc140f608a9ee02bea1f753a4b3e77be1955946449a5412f505ae78536",
-    "mobile/src/creative/AssistantActions.tsx": "23a6ea16c8b6224dd89f5648416f624dc17feb81357f7270ceb6fa62143cb1bf"
+    "mobile/src/creative/AssistantActions.tsx": "23a6ea16c8b6224dd89f5648416f624dc17feb81357f7270ceb6fa62143cb1bf",
+    "mobile/src/agent/HistoryList.tsx": "f3ca133b4a36903b2cc567f90ac111b89628102da07a94367524440ad9b02584",
+    "mobile/src/agent/LocalHistoryBrowser.tsx": "3b2915ce6ae58c2a5be273debb88f2ad416232658fa6b6155ca9012436533bd6"
   },
   "revisions": [
     {

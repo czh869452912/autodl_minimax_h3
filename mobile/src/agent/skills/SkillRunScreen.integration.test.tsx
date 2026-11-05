@@ -1,3 +1,4 @@
+import {RUN_LABELS} from '../../conversation/activityLabels';
 import React from 'react';
 import {act,create} from 'react-test-renderer';
 import {createInitializedRealSqliteTestDb} from '../../test/realSqlite';
@@ -25,25 +26,26 @@ let store:ReturnType<typeof createLocalThreadStore>;
 const snapshot=():LocalThreadSnapshot=>({threadId:'thread',messages:[],state:{},createdAt:1,updatedAt:1});
 const output=(component:typeof SkillLibraryScreen|typeof SkillRunScreen)=>JSON.stringify(tree!.root.findByType(component).findAllByType(require('react-native').Text).map(node=>node.props.children));
 const screens=(detailKey='detail')=><><SkillLibraryScreen key="list" threadId="thread" onClose={()=>{}}/><SkillRunScreen key={detailKey}/></>;
-async function history(){await act(async()=>tree!.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());}
+async function history(){await act(async()=>tree!.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录'||n.props.label==='返回来源')!.props.onPress());}
 beforeEach(async()=>{mockRunId='run';mockDb=createInitializedRealSqliteTestDb();mockDb.runSync('INSERT INTO creative_agent_scopes(thread_id,project_id,revision,updated_at) VALUES(?,NULL,0,1)','thread');store=createLocalThreadStore(mockDb as never);await selectNextRunSkills(mockDb as never,'thread',[]);await store.accept(snapshot(),{id:'submission',runId:'run',draftRevision:0,message:{id:'question',role:'user',content:'Review scene'}});});
 afterEach(()=>{if(tree)act(()=>tree!.unmount());tree=undefined;mockDb.close();});
 
 test.each(['completed','failed','cancelled'] as const)('detail opened before %s updates status, messages and errors with history',async status=>{
  await act(async()=>{tree=create(screens());});await history();
- expect(output(SkillRunScreen)).toContain('queued');
+ expect(output(SkillRunScreen)).toContain(RUN_LABELS.queued);
  const durable=(await store.load('thread'))!;
  const runs=readPromptRuns(durable.state).map(run=>({...endPromptRun(run,status,Date.now(),status==='failed'?'review-final-error':undefined),messageIds:['answer'],tools:[{id:'tool',name:'review',status:'complete' as const,startedAt:1,endedAt:2,output:'review-tool-output'}]}));
  await act(async()=>{await store.save({...durable,messages:[...durable.messages,{id:'answer',role:'assistant',content:'review-final-output'}],state:{...durable.state,h3Runs:runs},updatedAt:Date.now()});});
  expect((await createSkillStore(mockDb as never).runs({threadId:'thread'}))[0].status).toBe(status);
- expect(output(SkillLibraryScreen)).toContain(status);expect(output(SkillLibraryScreen)).not.toContain('queued');
- expect(output(SkillRunScreen)).toContain(status);expect(output(SkillRunScreen)).toContain('review-final-output');
+ expect(output(SkillLibraryScreen)).toContain(RUN_LABELS[status]);expect(output(SkillLibraryScreen)).not.toContain(RUN_LABELS.queued);
+ expect(output(SkillRunScreen)).toContain(RUN_LABELS[status]);expect(output(SkillRunScreen)).toContain('review-final-output');
  await act(async()=>tree!.root.findAllByType(ListAction).find(n=>n.props.label==='查看原会话全部消息')!.props.onPress());
- expect(output(SkillRunScreen)).toContain(status);expect(output(SkillRunScreen)).toContain('review-final-output');
- await act(async()=>tree!.update(screens()));expect(output(SkillRunScreen)).toContain(status);
+ expect(output(SkillRunScreen)).toContain(RUN_LABELS[status]);expect(output(SkillRunScreen)).toContain('review-final-output');
+ await act(async()=>tree!.update(screens()));expect(output(SkillRunScreen)).toContain(RUN_LABELS[status]);
  expect(tree!.root.findAllByType(ListAction).some(n=>n.props.label==='仅看此运行消息')).toBe(true);
  await act(async()=>tree!.update(screens('reopened-detail')));
- expect(output(SkillRunScreen)).toContain(status);expect(output(SkillRunScreen)).toContain('review-final-output');
+ expect(output(SkillRunScreen)).toContain(RUN_LABELS[status]);expect(output(SkillRunScreen)).toContain('review-final-output');
+ await act(async()=>tree!.root.findAll(n=>n.props?.accessibilityLabel==='阶段：执行 review'&&n.props.onPress)[0].props.onPress());
  expect(output(SkillRunScreen)).toContain('review-tool-output');
  if(status==='failed')expect(output(SkillRunScreen)).toContain('review-final-error');
 });
@@ -52,7 +54,7 @@ test('recovery publishes interrupted only after commit and updates the mounted h
  await act(async()=>{tree=create(screens());});await history();const observed=jest.fn();const unsubscribe=runEvents.subscribe(observed);
  try{
   await act(async()=>{await store.recoverInterruptedRuns([]);});
-  expect(output(SkillLibraryScreen)).toContain('interrupted');expect(output(SkillRunScreen)).toContain('interrupted');
+  expect(output(SkillLibraryScreen)).toContain(RUN_LABELS.interrupted);expect(output(SkillRunScreen)).toContain(RUN_LABELS.interrupted);
   expect((await createSkillStore(mockDb as never).runs({threadId:'thread'}))[0].status).toBe('interrupted');
   expect(observed).toHaveBeenCalledWith({threadId:'thread',kind:'status-changed'});
   observed.mockClear();await act(async()=>{await store.recoverInterruptedRuns([]);});expect(observed).not.toHaveBeenCalled();
@@ -71,10 +73,10 @@ test('actual local AGUI/runtime completion updates open detail and history',asyn
   // The custom offline graph bypasses createSkillRunPreparer; capture its normal skill snapshot explicitly.
   await createSkillStore(mockDb as never).capture('thread','live-run');
   completion=runtime.agent.runAgent({runId:'live-run'});await began;await registry.flushAll();
-  await act(async()=>{tree=create(screens());});await history();expect(output(SkillRunScreen)).toContain('running');
+  await act(async()=>{tree=create(screens());});await history();expect(output(SkillRunScreen)).toContain(RUN_LABELS.running);
   await act(async()=>{release();await completion;await registry.flushAll();});
   const persisted=(await store.load('thread'))!;expect(readPromptRuns(persisted.state).find(run=>run.id==='live-run')?.status).toBe('completed');
-  expect(JSON.stringify(persisted.messages)).toContain('live-final-output');expect(output(SkillLibraryScreen)).toContain('completed');
-  expect(output(SkillRunScreen)).toContain('completed');expect(output(SkillRunScreen)).toContain('live-final-output');
+  expect(JSON.stringify(persisted.messages)).toContain('live-final-output');expect(output(SkillLibraryScreen)).toContain(RUN_LABELS.completed);
+  expect(output(SkillRunScreen)).toContain(RUN_LABELS.completed);expect(output(SkillRunScreen)).toContain('live-final-output');
  }finally{release?.();await completion?.catch(()=>{});await registry.disposeAll();}
 });

@@ -1,0 +1,9 @@
+{
+  "label": "final",
+  "baseApk": "C:\\Users\\czh86\\Documents\\ChatGPT\\autodl\\autodl_minimax_h3\\mobile\\android\\app\\build\\outputs\\apk\\debug\\app-debug.apk",
+  "baseSha256": "0d0df165df5594040b170fba3d842e2466841d4f866a88dd71aba282459b835a",
+  "bundleSha256": "8ae8821fc4d108ba668f07621a7181af7f4dd51ef83db5d9d0413f77e2a791a7",
+  "samplingApk": "C:\\Users\\czh86\\Documents\\ChatGPT\\autodl\\autodl_minimax_h3\\build\\roadmap-qa\\final.apk",
+  "sha256": "9a499e1c521c0c5122bfdb13a4bdebdcd9fd80b4314271d54c24694f57e79ea5",
+  "limit": "Existing x86_64 debug native shell with freshly bundled JS; QA bootstrap uses synthetic local data and loopback model. Not a release APK."
+}

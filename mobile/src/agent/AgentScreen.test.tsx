@@ -201,11 +201,13 @@ test('closing an Agent surface flushes but keeps another live session and its su
  await other.flush();expect(mockRows.get('b')?.messages).toEqual([{id:'later',role:'assistant',content:'still active'}]);
 });
 
-test('history icon searches all conversations even when the workspace starts in a project',async()=>{
- mockRows.set('a',thread('a'));const list=jest.spyOn(mockStore,'listSummaries');
+test('history search and pagination retain the workspace project scope',async()=>{
+ for(let i=0;i<50;i++)mockRows.set('scope-'+i,thread('scope-'+i));const list=jest.spyOn(mockStore,'listSummaries');
  try{await act(async()=>{tree=create(<AgentScreen projectId="project-a"/>);});
  await act(async()=>ui().onSearchHistory('needle'));
- expect(list).toHaveBeenLastCalledWith({query:'needle',limit:50,offset:0});
+ expect(list).toHaveBeenLastCalledWith({projectId:'project-a',query:'needle',limit:50,offset:0});
+ await act(async()=>ui().onLoadMoreHistory());
+ expect(list).toHaveBeenLastCalledWith(expect.objectContaining({projectId:'project-a',query:'needle'}));
  }finally{list.mockRestore();}
 });
 
@@ -235,4 +237,13 @@ test('a settings switch during a run adopts B after completion without dropping 
   expect(ensure).toHaveBeenLastCalledWith(expect.objectContaining({connectionId:'B',supportsImages:false}),expect.anything(),expect.anything());
   expect(tree.root.findByType(provider).props.agent.state).toMatchObject({h3Composer:{text:'keep my input',revision:5}});
  }finally{cleanups.forEach(fn=>fn());storage.readSettings.mockImplementation(original);ensure.mockRestore();}
+});
+
+
+test('missing model keeps scoped local evidence accessible without creating an agent runtime',async()=>{
+ require('../settings/storage').readSettings.mockResolvedValueOnce({llmApiKey:'',llmEndpoint:'',llmModel:''});
+ await act(async()=>{tree=create(<AgentScreen projectId="offline-project"/>);});
+ expect(tree.root.findAllByType(PromptAssistantUi)).toHaveLength(0);expect(promptRuntimeRegistry.liveThreadIds()).toEqual([]);
+ const {ListAction}=require('../ui/ListPageUI');act(()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='查看本地对话')!.props.onPress());
+ const {LocalHistoryBrowser}=require('./LocalHistoryBrowser');expect(tree.root.findByType(LocalHistoryBrowser).props.projectId).toBe('offline-project');expect(promptRuntimeRegistry.liveThreadIds()).toEqual([]);
 });

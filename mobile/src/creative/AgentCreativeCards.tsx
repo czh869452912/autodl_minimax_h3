@@ -104,6 +104,7 @@ export function AgentCreativeCards({ threadId, running, runId }: { threadId: str
       <Text accessibilityRole="alert" style={s.error}>{recovery.message}</Text>
       <Text style={s.body}>仍保留原草稿。保存账号或编辑草稿都不会提交生成；返回后需要重新准备并审阅请求。</Text>
       {/连接|凭据|账号|CREDENTIAL|ACCOUNT/.test(recovery.message)?<CreativeAccountPanel provider={recovery.draft.provider_id==='novelai'?'novelai':'autodl'}/>:null}
+      {/工作流|WORKFLOW|能力/.test(recovery.message)?<ListAction label="配置生成工作流" secondary onPress={()=>router.push({pathname:'/creative-capabilities',params:{purpose:recovery.draft.provider_id==='novelai'?'image':'video'}})}/>:null}
       <ListAction label="重新核对原草稿" disabled={busy||running} onPress={()=>void grant(recovery.draft)}/>
       <ListAction label="编辑原草稿" secondary onPress={()=>{const draft=recovery.draft;setRecovery(undefined);setOpen(false);router.push({pathname:draft.provider_id==='novelai'?'/image-draft/[id]':'/creative-draft/[id]',params:{id:draft.id}});}}/>
       <ListAction label="返回本轮创作" secondary onPress={()=>setRecovery(undefined)}/>

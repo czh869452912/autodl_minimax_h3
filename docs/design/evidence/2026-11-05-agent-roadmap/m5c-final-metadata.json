@@ -1,0 +1,9 @@
+{
+  "label": "m5c-final",
+  "baseApk": "C:\\Users\\czh86\\Documents\\ChatGPT\\autodl\\autodl_minimax_h3\\mobile\\android\\app\\build\\outputs\\apk\\debug\\app-debug.apk",
+  "baseSha256": "0d0df165df5594040b170fba3d842e2466841d4f866a88dd71aba282459b835a",
+  "bundleSha256": "fce46750fe3500fc2abe4bcf4fbe17d0d3993cdee6a8d2fa23dd8d20333254d8",
+  "samplingApk": "C:\\Users\\czh86\\Documents\\ChatGPT\\autodl\\autodl_minimax_h3\\build\\roadmap-qa\\m5c-final.apk",
+  "sha256": "7c793aa0dc8188d8b1f327e67f75e9f70187c6610003a3f9ca33c4dad49991e5",
+  "limit": "Existing x86_64 debug native shell with freshly bundled JS; QA bootstrap uses synthetic local data and loopback model. Not a release APK."
+}
