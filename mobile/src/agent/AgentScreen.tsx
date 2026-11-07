@@ -1,3 +1,4 @@
+import {SafeAreaView} from 'react-native-safe-area-context';
 import {LocalHistoryBrowser} from './LocalHistoryBrowser';
 import { SkillLibraryScreen } from './skills/SkillLibraryScreen';
 import { SkillQuickPicker } from './skills/SkillQuickPicker';
@@ -6,7 +7,7 @@ import {AssistantActions} from '../creative/AssistantActions';
 import { createAgentRuntimeAdapter } from './agentRuntimeAdapter';
 import { CopilotChat } from '@copilotkit/react-native';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getDatabase } from '../storage/databaseClient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { readSettings } from '../settings/storage';
@@ -423,7 +424,6 @@ function AgentSession({
           onSelect={id=>leaveSkills(()=>uiProps.onSelect(id))}
           onDelete={id=>leaveSkills(()=>uiProps.onDelete(id))}
           headerActions={<AssistantActions threadId={snapshot.threadId} beforeNavigate={leaveSkills} onOpenSkills={()=>setSkillsOpen(true)}/>}
-          toolPanel={skillsOpen?<SkillLibraryScreen threadId={snapshot.threadId} registerLeave={registerSkillGuard} onClose={()=>setSkillsOpen(false)}/>:undefined}
           headerContext={<AgentCreativePanel beforeNavigate={leaveSkills} compact threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />}
           renderComposerContext={returnToInput=><View>
             {focus&&!focusDismissed?<View style={{paddingHorizontal:12,flexDirection:'row',alignItems:'center',gap:8}}><View style={{flex:1}}><Text numberOfLines={2} style={{color:COLORS.text,fontSize:13}}>当前镜头：{focus.title}</Text><Text style={{color:COLORS.textMuted,fontSize:12}}>发送时核对镜头版本</Text></View><Pressable accessibilityRole="button" accessibilityLabel="移除镜头上下文" disabled={Boolean(agent.isRunning)} accessibilityState={{disabled:Boolean(agent.isRunning)}} onPress={()=>setFocusDismissed(true)} style={{minHeight:48,minWidth:48,justifyContent:'center'}}><Text style={{color:COLORS.primaryActive}}>移除</Text></Pressable></View>:null}
@@ -458,7 +458,7 @@ function AgentSession({
               });
             }
           }}
-        /></AgentActivityProvider>
+        />{skillsOpen?<Modal visible animationType="slide" onRequestClose={()=>leaveSkills(()=>setSkillsOpen(false))}><SafeAreaView style={{flex:1,backgroundColor:COLORS.background}}><SkillLibraryScreen threadId={snapshot.threadId} registerLeave={registerSkillGuard} onClose={()=>setSkillsOpen(false)}/></SafeAreaView></Modal>:null}</AgentActivityProvider>
       </CopilotChat>
     </LocalCopilotKitProvider>
   );

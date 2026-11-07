@@ -121,7 +121,8 @@ test('history is an immediate view and local filter does not require traversing 
  act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='返回来源')!.props.onPress());
  act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='内置技能'&&n.props.onPress)[0].props.onPress());
  const builtin=()=>tree.root.findAll(n=>n.props.accessibilityLabel==='内置：品牌宣传短片生成器'&&n.props.onPress)[0];
- act(()=>builtin().props.onPress());expect(builtin().props.accessibilityState.expanded).toBe(true);expect(JSON.stringify(tree.toJSON())).toContain('包指纹');
+ act(()=>builtin().props.onPress());expect(builtin().props.accessibilityState.expanded).toBe(true);expect(JSON.stringify(tree.toJSON())).not.toContain('包指纹');
+ act(()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='查看原始文件与版本')!.props.onPress());expect(JSON.stringify(tree.toJSON())).toContain('包指纹');
  }finally{act(()=>tree.unmount());}
 });
 
