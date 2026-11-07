@@ -1656,25 +1656,30 @@
         "mobile/src/agent/skills/SkillRunHistory.tsx"
       ],
       "purpose": "找某次运行所用版本和实际读取",
-      "currentIssue": "N2 历史抽成独立 SkillRunHistory，范围标题与查询一致，空态明确仅覆盖技能证据运行。",
+      "currentIssue": "N2/R1 历史仅覆盖技能证据运行；查询身份隔离范围，读取中/失败/空态分开，失败可重试。系统与页内返回均恢复目录及滚动位置。",
       "recommendation": "保留游标、可信范围和原目录状态，不暗示覆盖所有对话。",
       "entry": "技能历史图标、助手运行记录",
-      "back": "返回原筛选和范围",
+      "back": "历史内部层先返回原目录、筛选与滚动位置；独立历史入口回实际来源",
       "primaryAction": "打开该次运行",
       "states": [
         "空",
         "当前范围",
         "全部",
-        "分页"
+        "分页",
+        "读取中",
+        "读取失败可重试"
       ],
       "priority": "P1",
       "references": [
         "B1"
       ],
-      "evidenceLevel": "source-reviewed; final offline directory/history/unsaved return sampled; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified",
+      "evidenceLevel": "source-reviewed; final offline directory/history/unsaved return sampled; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified; R1 query failure regression and embedded/route Android Back + directory offset sampled",
       "evidence": [
         "docs/design/evidence/2026-11-05-agent-roadmap/history-draft-return-final.png",
-        "docs/design/evidence/2026-11-07-agent-refactor/n2-history.png"
+        "docs/design/evidence/2026-11-07-agent-refactor/n2-history.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/r1-back-comparison.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/r1-scroll-comparison.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/r1-fixed-global-return.png"
       ],
       "proposalStatus": "implemented (Agent N0–N5 UI scope; coverage in implementation record)",
       "targetOwner": "agent"
@@ -3020,10 +3025,10 @@
     "mobile/app/settings-panel.tsx": "a7a4149ef6a30f63977a6c02af421d8d0b2854bd6e4ad89989dea09f80a8ccba",
     "mobile/app/shot-request-setup.tsx": "018897b819a6dd434362b7b45863878a02b430fa788ea7ed57cc0fc4048c3fe8",
     "mobile/app/video/[id].tsx": "8abbd333bbb3c04591bf0e95a867ea06c4f57b3710c0812e6e37b99dabce4e8c",
-    "mobile/src/agent/AgentScreen.tsx": "55ab5e7a748d5f77af3aa85efeab1523a55c319b7932835f76dd62990fc0cfab",
+    "mobile/src/agent/AgentScreen.tsx": "670dcb01875237fe70db034ba2f0740cb70fa5ae4d85b203f9b1d35b8370c6ed",
     "mobile/src/agent/PromptVersionPanel.tsx": "cbde8767fcef977122b8aaeee0c34a0f93ca8f1d007924852cb200df3e0100ba",
     "mobile/src/agent/skills/SkillExtractionScreen.tsx": "0aba0f4deab6d6c11a2c253f2e26df03610d5fd312adcb788fc51112ea922647",
-    "mobile/src/agent/skills/SkillLibraryScreen.tsx": "640fbbd4e86e5c44680f3ce33a2526df5d5a5dc77733b3246708e77ed92f7906",
+    "mobile/src/agent/skills/SkillLibraryScreen.tsx": "7d2764701a16ea539f53c98556f0ba94b060342e0df73830fd62bf75811fd0c4",
     "mobile/src/agent/skills/SkillRunScreen.tsx": "f650a3d81d418b837f9e91c2ab11f449e5817be5dda97a00f4b5181ec5f5340b",
     "mobile/src/creative/AgentCreativePanel.tsx": "33ec6469d366205cc72fc8663f50ec07b737185ccca576b57eacb9484ccb5351",
     "mobile/src/creative/AgentWorkspace.tsx": "6a4bcb1a9f0ce9ac28ac7a65db57d09a52e53928bffb4c4f86dd797786460fcc",
@@ -3074,7 +3079,7 @@
     "mobile/src/creative/ProjectPermissions.tsx": "32ba42d6956412778e46a3ebb64cf975bec7953b3be8bb746d974ec754ece4f8",
     "mobile/src/creative/projectPermissionStore.ts": "3d5eb4a930b63acd39f80f059677cd271aba42c39018533c4f2c7f2c13310b90",
     "mobile/src/creative/planPresentation.ts": "0e9bb560bb579ab30518aea6353375502df08dbbae3d35d2818704d4e419c4d6",
-    "mobile/src/agent/skills/SkillRunHistory.tsx": "6175ba6d9e1ec02dee09b5f9c8ec3cf42f840ff416454fc93c71437c8a9ada8b",
+    "mobile/src/agent/skills/SkillRunHistory.tsx": "55b09dff5297b12259902ec35f8ee8555b11e3378b5cc6bf6890a7ec5945c9d2",
     "mobile/src/agent/PromptAssistantStyles.ts": "750e15b2ae3c93df618734aae31a94f18202beecd88f46e896293cbcfe404a42",
     "mobile/src/agent/ReadOnlyMessage.tsx": "9687a62fc6b9e5cad3c8ab12cc3cc76a38146ac632ec7591d694913f88e0fa5a",
     "mobile/src/ui/localTime.ts": "e3d17e9e69f136d57d2b4437db5e5340f168634999ccb384f698d6fea6e59732",
@@ -3225,6 +3230,17 @@
         "mobile/src/creative/ProjectPlans.tsx",
         "mobile/src/creative/planPresentation.ts",
         "mobile/src/creative/GenerationRequestReview.tsx"
+      ]
+    },
+    {
+      "date": "2026-11-07",
+      "sourceBase": "92f058f3 + R1 history review fixes",
+      "scope": "N0–N5 recheck; scoped history failure, layered Android Back and directory offset corrected; existing runtime render warning retained",
+      "evidence": "docs/design/agent-mobile-recheck-2026-11-07.md",
+      "reviewedSources": [
+        "mobile/src/agent/AgentScreen.tsx",
+        "mobile/src/agent/skills/SkillLibraryScreen.tsx",
+        "mobile/src/agent/skills/SkillRunHistory.tsx"
       ]
     }
   ]

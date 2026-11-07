@@ -376,6 +376,8 @@ function AgentSession({
   const [focusDismissed,setFocusDismissed]=useState(false);
   const [focusExpanded,setFocusExpanded]=useState(false);
   useEffect(()=>setFocusDismissed(false),[focus?.shotId]);
+  const skillBack=useRef<(()=>void)|undefined>(undefined);
+  const registerSkillBack=useCallback((handler:(()=>void)|undefined)=>{skillBack.current=handler;},[]);
   const skillGuard=useRef<((proceed:()=>void)=>void)|undefined>(undefined);
   const registerSkillGuard=useCallback((guard:((proceed:()=>void)=>void)|undefined)=>{skillGuard.current=guard;},[]);
   const leaveSkills=(proceed:()=>void)=>skillGuard.current?skillGuard.current(proceed):proceed();
@@ -459,7 +461,7 @@ function AgentSession({
               });
             }
           }}
-        />{skillsOpen?<Modal visible animationType="slide" onRequestClose={()=>leaveSkills(()=>setSkillsOpen(false))}><SafeAreaView style={{flex:1,backgroundColor:COLORS.background}}><SkillLibraryScreen threadId={snapshot.threadId} registerLeave={registerSkillGuard} onClose={()=>setSkillsOpen(false)}/></SafeAreaView></Modal>:null}</AgentActivityProvider>
+        />{skillsOpen?<Modal visible animationType="slide" onRequestClose={()=>{if(skillBack.current)skillBack.current();else leaveSkills(()=>setSkillsOpen(false));}}><SafeAreaView style={{flex:1,backgroundColor:COLORS.background}}><SkillLibraryScreen threadId={snapshot.threadId} registerLeave={registerSkillGuard} registerBack={registerSkillBack} onClose={()=>setSkillsOpen(false)}/></SafeAreaView></Modal>:null}</AgentActivityProvider>
       </CopilotChat>
     </LocalCopilotKitProvider>
   );

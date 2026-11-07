@@ -1,7 +1,7 @@
 const mockReadNext=jest.fn(async()=>null as any),mockSelectNext=jest.fn(async()=>{});
 jest.mock('./nextRun',()=>({readNextRunSkills:(...args:unknown[])=>mockReadNext(...args as []),selectNextRunSkills:(...args:unknown[])=>mockSelectNext(...args as [])}));
 jest.mock('expo-router/react-navigation',()=>({useNavigation:()=>({dispatch:jest.fn()}),usePreventRemove:jest.fn()}));
-import { Alert, TextInput, Switch } from 'react-native';
+import { Alert, BackHandler, TextInput, Switch } from 'react-native';
 import { IconAction } from '../../creative/WorkbenchUI';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
@@ -117,6 +117,8 @@ test('history is an immediate view and local filter does not require traversing 
  expect(JSON.stringify(tree.toJSON())).toContain('my-local');expect(JSON.stringify(tree.toJSON())).not.toContain('品牌宣传短片生成器');
  act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());
  expect(JSON.stringify(tree.toJSON())).toContain('全部技能运行记录');
+ expect(JSON.stringify(tree.toJSON())).toContain('正在读取此范围的技能运行记录');
+ await act(async()=>{});
  expect(JSON.stringify(tree.toJSON())).toContain('此范围还没有技能运行记录');expect(tree.root.findAllByProps({accessibilityLabel:'搜索技能'})).toHaveLength(0);
  act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='返回来源')!.props.onPress());
  act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='内置技能'&&n.props.onPress)[0].props.onPress());
@@ -186,4 +188,46 @@ test('conversation history intent shows read-only scoped history without library
  expect(mockStore.runs).toHaveBeenLastCalledWith(expect.objectContaining({threadId:'t',limit:21}));expect(tree.root.findAllByType(Switch)).toHaveLength(0);expect(tree.root.findAllByProps({accessibilityLabel:'搜索技能'})).toHaveLength(0);
  await act(async()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='查看全部范围')!.props.onPress());expect(mockStore.runs).toHaveBeenLastCalledWith({after:undefined,limit:21});
  }finally{act(()=>tree.unmount());}
+});
+
+test('a failed return to conversation scope never relabels all-scope rows as this conversation',async()=>{
+ const record={threadId:'other-thread',runId:'other-run',createdAt:1,threadTitle:'其他项目会话',status:'completed',skillNames:{},snapshot:{versions:[]}};
+ mockStore.runs.mockResolvedValue([]);let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<SkillLibraryScreen intent="history" threadId="t"/>);});
+  mockStore.runs.mockResolvedValueOnce([record]);
+  await act(async()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='查看全部范围')!.props.onPress());
+  expect(JSON.stringify(tree.toJSON())).toContain('其他项目会话');
+  mockStore.runs.mockRejectedValueOnce(Error('offline read'));
+  await act(async()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='返回当前范围')!.props.onPress());
+  expect(JSON.stringify(tree.toJSON())).not.toContain('其他项目会话');
+  expect(JSON.stringify(tree.toJSON())).not.toContain('此范围还没有技能运行记录');
+  expect(tree.root.findAllByType(ListAction).some(n=>n.props.label==='重试读取运行记录')).toBe(true);
+  await act(async()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='重试读取运行记录')!.props.onPress());
+  expect(mockStore.runs).toHaveBeenLastCalledWith(expect.objectContaining({threadId:'t',limit:21}));
+  expect(JSON.stringify(tree.toJSON())).toContain('此范围还没有技能运行记录');
+  expect(JSON.stringify(tree.toJSON())).not.toContain('运行记录读取失败');
+ }finally{act(()=>tree?.unmount());mockStore.runs.mockResolvedValue([]);}
+});
+
+test('embedded Android back returns from history to the directory before closing management',async()=>{
+ let back:(()=>void)|undefined,tree!:ReturnType<typeof create>;const close=jest.fn();
+ try{
+  await act(async()=>{tree=create(<SkillLibraryScreen threadId="t" onClose={close} registerBack={handler=>{back=handler;}}/>);});
+  act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());
+  act(()=>back!());
+  expect(close).not.toHaveBeenCalled();expect(tree.root.findByProps({accessibilityLabel:'搜索技能'})).toBeDefined();
+  act(()=>back!());expect(close).toHaveBeenCalledTimes(1);
+ }finally{act(()=>tree?.unmount());}
+});
+
+test('route Android back consumes the history layer even when a navigation stack exists',async()=>{
+ const listen=jest.spyOn(BackHandler,'addEventListener');let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<SkillLibraryScreen/>);});
+  act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());
+  const hardware=listen.mock.calls.filter(([name])=>name==='hardwareBackPress').at(-1)![1] as ()=>boolean;let consumed;
+  act(()=>{consumed=hardware();});
+  expect(consumed).toBe(true);expect(tree.root.findByProps({accessibilityLabel:'搜索技能'})).toBeDefined();
+ }finally{act(()=>tree?.unmount());listen.mockRestore();}
 });

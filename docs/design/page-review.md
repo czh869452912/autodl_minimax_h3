@@ -1039,19 +1039,19 @@ flowchart LR
 
 **任务**：找某次运行所用版本和实际读取。
 
-**现状问题**：N2 历史抽成独立 SkillRunHistory，范围标题与查询一致，空态明确仅覆盖技能证据运行。
+**现状问题**：N2/R1 历史仅覆盖技能证据运行；查询身份隔离范围，读取中/失败/空态分开，失败可重试。系统与页内返回均恢复目录及滚动位置。
 
 **展示与交互建议**：保留游标、可信范围和原目录状态，不暗示覆盖所有对话。
 
-**实施状态**：implemented (Agent N0–N5 UI scope; coverage in implementation record)。**证据范围**：source-reviewed; final offline directory/history/unsaved return sampled; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified。
+**实施状态**：implemented (Agent N0–N5 UI scope; coverage in implementation record)。**证据范围**：source-reviewed; final offline directory/history/unsaved return sampled; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified; R1 query failure regression and embedded/route Android Back + directory offset sampled。
 
 **主操作**：打开该次运行。**目标归属**：项目助手。
 
-**进入与返回**：技能历史图标、助手运行记录 → 本表面；返回原筛选和范围。
+**进入与返回**：技能历史图标、助手运行记录 → 本表面；历史内部层先返回原目录、筛选与滚动位置；独立历史入口回实际来源。
 
-**应覆盖状态**：空 / 当前范围 / 全部 / 分页。
+**应覆盖状态**：空 / 当前范围 / 全部 / 分页 / 读取中 / 读取失败可重试。
 
-**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)、[src/agent/skills/SkillRunHistory.tsx](../../mobile/src/agent/skills/SkillRunHistory.tsx)；对照 B1（见 [调研](research.md)）。本轮截图：[history-draft-return-final.png](../../docs/design/evidence/2026-11-05-agent-roadmap/history-draft-return-final.png)、[n2-history.png](../../docs/design/evidence/2026-11-07-agent-refactor/n2-history.png)。
+**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)、[src/agent/skills/SkillRunHistory.tsx](../../mobile/src/agent/skills/SkillRunHistory.tsx)；对照 B1（见 [调研](research.md)）。本轮截图：[history-draft-return-final.png](../../docs/design/evidence/2026-11-05-agent-roadmap/history-draft-return-final.png)、[n2-history.png](../../docs/design/evidence/2026-11-07-agent-refactor/n2-history.png)、[r1-back-comparison.png](../../docs/design/evidence/2026-11-07-agent-refactor/r1-back-comparison.png)、[r1-scroll-comparison.png](../../docs/design/evidence/2026-11-07-agent-refactor/r1-scroll-comparison.png)、[r1-fixed-global-return.png](../../docs/design/evidence/2026-11-07-agent-refactor/r1-fixed-global-return.png)。
 
 <a id="prompt-versions"></a>
 ### 提示词版本面板 · prompt-versions · P2

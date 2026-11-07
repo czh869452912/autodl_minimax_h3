@@ -8,7 +8,7 @@ import { usePrimaryNavigationGuard } from '../../navigation/PrimaryNavigation';
 import { CompactWorkbench, IconAction } from '../../creative/WorkbenchUI';
 import { COLORS } from '../../ui/theme';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Modal, Pressable, Switch, Text, TextInput, View } from 'react-native';
+import { Alert, BackHandler, KeyboardAvoidingView, Platform, ScrollView, Modal, Pressable, Switch, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getDatabase } from '../../storage/databaseClient';
@@ -16,9 +16,8 @@ import { createSkillStore, type SkillVersion } from './store';
 import { SkillAddFlow, type SkillAddStatus } from './SkillAddFlow';
 import { ListAction } from '../../ui/ListPageUI';
 import { creativeUI as s } from '../../creative/creativeUI';
-import { useFallbackBack } from '../../navigation/useFallbackBack';
 
-export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: requestedProjectId, threadId, returnThreadId,initialVersionId }: { initialVersionId?:string; threadId?:string; returnThreadId?:string; projectId?:string; intent?:string; onClose?: () => void; registerLeave?:(guard:((proceed:()=>void)=>void)|undefined)=>void } = {}) {
+export function SkillLibraryScreen({ onClose, registerLeave, registerBack, intent, projectId: requestedProjectId, threadId, returnThreadId,initialVersionId }: { initialVersionId?:string; threadId?:string; returnThreadId?:string; projectId?:string; intent?:string; onClose?: () => void; registerLeave?:(guard:((proceed:()=>void)=>void)|undefined)=>void; registerBack?:(handler:(()=>void)|undefined)=>void } = {}) {
   const router = useRouter();
   const builtins=useMemo(builtinSkillCatalog,[]);
   const [projectId,setProjectId]=useState(requestedProjectId);
@@ -28,6 +27,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
   const [once,setOnce]=useState<string[]|null>(null);
   const [versions, setVersions] = useState<SkillVersion[]>([]);
   const [runs, setRuns] = useState<Awaited<ReturnType<typeof store.runs>>>([]);
+  const [loadedHistoryKey,setLoadedHistoryKey]=useState(''),[historyPending,setHistoryPending]=useState(true),[historyError,setHistoryError]=useState('');
   const [historyScope,setHistoryScope]=useState<'current'|'all'>('current');
   const [historyAfter,setHistoryAfter]=useState<{createdAt:number;threadId:string;runId:string}>();
   const [addStatus,setAddStatus]=useState<SkillAddStatus>({dirty:false,busy:false});
@@ -36,6 +36,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
   const [importOpen,setImportOpen]=useState(intent==='add'),[historyOpen,setHistoryOpen]=useState(intent==='history'),[expanded,setExpanded]=useState<string|undefined>(initialVersionId),[query,setQuery]=useState('');
   const [rawOpen,setRawOpen]=useState(false);
   const scroll=useRef<ScrollView>(null);
+  const directoryOffset=useRef(0);
   const [filter,setFilter]=useState<'all'|'local'|'builtin'|'selected'>('all');
   const lock = useRef(false);
   const confirmLeave=useUnsavedChanges(once!==null || addStatus.dirty,busy || addStatus.busy);
@@ -43,11 +44,24 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
   const latestLeave=useRef(confirmLeave);latestLeave.current=confirmLeave;
   useEffect(()=>{registerLeave?.(proceed=>latestLeave.current(proceed));return()=>registerLeave?.(undefined);},[registerLeave]);
   const back=()=>confirmLeave(()=>onClose?onClose():router.canGoBack()?router.back():router.replace('/(tabs)/agent'));
-  useFallbackBack(()=>expanded?setExpanded(undefined):historyOpen&&intent!=='history'?setHistoryOpen(false):back());
+  const handleBack=()=>expanded?setExpanded(undefined):historyOpen&&intent!=='history'?setHistoryOpen(false):back();
+  const backState=useRef({handleBack,hasLayer:false});backState.current={handleBack,hasLayer:Boolean(expanded||(historyOpen&&intent!=='history'))};
+  // Android Modal Back is delivered to its owner, not to BackHandler listeners.
+  useEffect(()=>{registerBack?.(()=>backState.current.handleBack());return()=>registerBack?.(undefined);},[registerBack]);
+  useFocusEffect(useCallback(()=>{
+    const sub=BackHandler.addEventListener('hardwareBackPress',()=>{
+      if(!backState.current.hasLayer&&router.canGoBack())return false;
+      backState.current.handleBack();return true;
+    });return()=>sub.remove();
+  },[router]));
   const readGeneration=useRef(0);
+  const historyKey=(effective:string|undefined)=>JSON.stringify([threadId,requestedProjectId,effective,historyScope,historyAfter]);
+  const historyMatches=loadedHistoryKey===historyKey(projectId);
   const refresh = useCallback(async (background = false) => {
     const generation = ++readGeneration.current;
     if (!background) setScopeReady(false);
+    setHistoryPending(true);setHistoryError('');
+    try {
     const scope = threadId ? await getDatabase().getFirstAsync<{project_id:string|null}>(
       'SELECT project_id FROM creative_agent_scopes WHERE thread_id=?', threadId) : undefined;
     if (threadId && !scope) throw Error('会话范围不可用，请返回后重试');
@@ -63,7 +77,12 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
     setProjectId(effective);
     setVersions(items);
     setRuns(history);
+    setLoadedHistoryKey(JSON.stringify([threadId,requestedProjectId,effective,historyScope,historyAfter]));
     setScopeReady(true);
+    }catch(error){
+      if(generation!==readGeneration.current)return;
+      setHistoryError('运行记录读取失败，请重试。');throw error;
+    }finally{if(generation===readGeneration.current)setHistoryPending(false);}
   }, [store, requestedProjectId, threadId, historyScope, historyAfter]);
   useFocusEffect(useCallback(() => { void refresh(true).catch(error => setNotice(String(error.message))); }, [refresh]));
   useEffect(() => {
@@ -87,11 +106,11 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
   if(!scopeReady)return <View><Text>{notice||'正在核对会话技能范围…'}</Text><ListAction label="返回" onPress={back}/></View>;
   if(importOpen && !onClose)return <CompactWorkbench><SafeAreaView style={s.screen}><SkillAddFlow projectId={projectId} threadId={threadId??returnThreadId} onStatus={setAddStatus}
     onCancel={()=>confirmLeave(()=>{setImportOpen(false);setAddStatus({dirty:false,busy:false});})} onReturn={back}
-    onDone={id=>{setImportOpen(false);setAddStatus({dirty:false,busy:false});setHighlighted(id);setExpanded(id);setFilter('local');setQuery('');setHistoryOpen(false);setNotice('版本已安装，默认选择保持原样。');void refresh(true).catch(()=>setNotice('已安装，但目录刷新失败，请返回后重新打开。'));scroll.current?.scrollTo({y:0,animated:false});}}/></SafeAreaView></CompactWorkbench>;
+    onDone={id=>{directoryOffset.current=0;setImportOpen(false);setAddStatus({dirty:false,busy:false});setHighlighted(id);setExpanded(id);setFilter('local');setQuery('');setHistoryOpen(false);setNotice('版本已安装，默认选择保持原样。');void refresh(true).catch(()=>setNotice('已安装，但目录刷新失败，请返回后重新打开。'));scroll.current?.scrollTo({y:0,animated:false});}}/></SafeAreaView></CompactWorkbench>;
   if(historyOpen){
     const closeHistory=()=>intent==='history'?back():setHistoryOpen(false);
     const scope=historyScope==='all'||(!threadId&&!projectId)?'全部范围':threadId?'本会话':'本项目';
-    const history=<View style={{flex:1}}><View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,borderBottomWidth:1,borderColor:COLORS.border}}><IconAction label="返回来源" icon="arrow_back" onPress={closeHistory}/><Text accessibilityRole="header" style={s.title}>{`${scope==='本会话'?'会话':scope==='本项目'?'项目':'全部'}技能运行记录`}</Text></View><ScrollView contentContainerStyle={{padding:16,gap:12}}>{notice?<Text accessibilityRole="alert">{notice}</Text>:null}<SkillRunHistory runs={runs} scope={scope} canChangeScope={Boolean(threadId||projectId)} onChangeScope={()=>{setHistoryScope(value=>value==='all'?'current':'all');setHistoryAfter(undefined);}} onOpen={(threadId,runId)=>confirmLeave(()=>router.push({pathname:'/agent-run',params:{threadId,runId}}))} onOlder={runs.length>20?()=>{const last=runs[19];setHistoryAfter({createdAt:last.createdAt,threadId:last.threadId,runId:last.runId});}:undefined} onLatest={historyAfter?()=>setHistoryAfter(undefined):undefined}/></ScrollView></View>;
+    const history=<View style={{flex:1}}><View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:8,borderBottomWidth:1,borderColor:COLORS.border}}><IconAction label="返回来源" icon="arrow_back" onPress={closeHistory}/><Text accessibilityRole="header" style={s.title}>{`${scope==='本会话'?'会话':scope==='本项目'?'项目':'全部'}技能运行记录`}</Text></View><ScrollView contentContainerStyle={{padding:16,gap:12}}><SkillRunHistory runs={historyMatches?runs:[]} loading={historyPending||(!historyMatches&&!historyError)} error={historyError} onRetry={()=>{void refresh(true).catch(()=>{});}} scope={scope} canChangeScope={Boolean(threadId||projectId)} onChangeScope={()=>{setHistoryScope(value=>value==='all'?'current':'all');setHistoryAfter(undefined);}} onOpen={(threadId,runId)=>confirmLeave(()=>router.push({pathname:'/agent-run',params:{threadId,runId}}))} onOlder={historyMatches&&runs.length>20?()=>{const last=runs[19];setHistoryAfter({createdAt:last.createdAt,threadId:last.threadId,runId:last.runId});}:undefined} onLatest={historyAfter?()=>setHistoryAfter(undefined):undefined}/></ScrollView></View>;
     return <CompactWorkbench>{onClose?history:<SafeAreaView style={s.screen}>{history}</SafeAreaView>}</CompactWorkbench>;
   }
   const orderedVersions=highlighted?[...versions.filter(v=>v.id===highlighted),...versions.filter(v=>v.id!==highlighted)]:versions;
@@ -102,7 +121,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
       <IconAction label="添加技能" icon="add" onPress={()=>{if(onClose){confirmLeave(()=>{onClose();router.push({pathname:'/agent-skills',params:{intent:'add',projectId,threadId}});});}else {setHistoryOpen(false);setImportOpen(true);scroll.current?.scrollTo({y:0,animated:false});}}}/>
       <IconAction label="技能运行记录" icon="history" selected={historyOpen} onPress={()=>{void refresh(true).catch(error=>setNotice('运行记录刷新失败：'+error.message));setHistoryOpen(true);}}/>
     </View>
-    <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:12,gap:10}}>
+    <ScrollView ref={scroll} contentOffset={{x:0,y:directoryOffset.current}} onScroll={event=>{directoryOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:12,gap:10}}>
       {notice ? <Text accessibilityRole="alert" style={s.body}>{notice}</Text> : null}
 
       {!historyOpen?<>
