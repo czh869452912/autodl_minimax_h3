@@ -116,8 +116,8 @@ test('history is an immediate view and local filter does not require traversing 
  act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='本地导入'&&n.props.onPress)[0].props.onPress());
  expect(JSON.stringify(tree.toJSON())).toContain('my-local');expect(JSON.stringify(tree.toJSON())).not.toContain('品牌宣传短片生成器');
  act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='技能运行记录')!.props.onPress());
- expect(JSON.stringify(tree.toJSON())).toContain('会话运行历史');
- expect(JSON.stringify(tree.toJSON())).toContain('还没有运行记录');expect(tree.root.findAllByProps({accessibilityLabel:'搜索技能'})).toHaveLength(0);
+ expect(JSON.stringify(tree.toJSON())).toContain('全部技能运行记录');
+ expect(JSON.stringify(tree.toJSON())).toContain('此范围还没有技能运行记录');expect(tree.root.findAllByProps({accessibilityLabel:'搜索技能'})).toHaveLength(0);
  act(()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='返回来源')!.props.onPress());
  act(()=>tree.root.findAll(n=>n.props.accessibilityLabel==='内置技能'&&n.props.onPress)[0].props.onPress());
  const builtin=()=>tree.root.findAll(n=>n.props.accessibilityLabel==='内置：品牌宣传短片生成器'&&n.props.onPress)[0];

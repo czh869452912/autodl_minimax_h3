@@ -5,6 +5,7 @@ import {ImagePreview} from '../../ui/ImagePreview';
 import React from 'react';
 import {act,create} from 'react-test-renderer';
 import {ListAction} from '../../ui/ListPageUI';
+import {IconAction} from '../../creative/WorkbenchUI';
 const mockLoad=jest.fn(),mockRuns=jest.fn(async()=>[] as any[]);
 jest.mock('./store',()=>({createSkillStore:()=>({runs:mockRuns})}));
 let mockParams={threadId:'t',runId:'r'};
@@ -45,7 +46,7 @@ test('failed refresh retains evidence and scope; manual retry and refocus recove
  act(()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='查看原会话全部消息')!.props.onPress());
  mockLoad.mockRejectedValueOnce(Error('database busy'));await act(async()=>runEvents.publish({threadId:'t',kind:'status-changed'}));
  expect(JSON.stringify(tree.toJSON())).toContain('original');expect(JSON.stringify(tree.toJSON())).toContain('database busy');expect(tree.root.findAllByType(ListAction).some(n=>n.props.label==='仅看此运行消息')).toBe(true);
- mockLoad.mockResolvedValue(record('recovered'));await act(async()=>tree.root.findAllByType(ListAction).find(n=>n.props.label==='获取最新记录')!.props.onPress());
+ mockLoad.mockResolvedValue(record('recovered'));await act(async()=>tree.root.findAllByType(IconAction).find(n=>n.props.label==='获取最新记录')!.props.onPress());
  expect(JSON.stringify(tree.toJSON())).toContain('recovered');expect(JSON.stringify(tree.toJSON())).not.toContain('database busy');
  mockLoad.mockResolvedValue(record('refocused'));await act(async()=>{for(const effect of mockFocus)effect();});expect(JSON.stringify(tree.toJSON())).toContain('refocused');
  }finally{act(()=>tree.unmount());}

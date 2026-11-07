@@ -11,5 +11,5 @@ function EvidenceImage({attachment}:{attachment:PresentationAttachment}){
 /** Reuse the conversation's text/content-array/attachment normalization, without run actions. */
 export function ReadOnlyMessage({message}:{message:{id:string;role:string;content?:unknown;attachments?:unknown[]}}){
  const normalized=normalizeMessages([message])[0];
- return <View style={s.card}><Text selectable style={s.muted}>{message.role} · {message.id}</Text><Text selectable style={s.body}>{normalized?.text??(typeof message.content==='string'?message.content:JSON.stringify(message.content))}</Text>{normalized?.kind==='user'?normalized.attachments.map((attachment,index)=><EvidenceImage key={attachment.uri+':'+index} attachment={attachment}/>):null}</View>;
+ return <View style={s.card}><Text selectable style={s.muted}>{({user:'你',assistant:'助手',tool:'工具记录',system:'系统说明'} as Record<string,string>)[message.role]??'消息'}</Text><Text selectable style={s.body}>{normalized?.text??(typeof message.content==='string'?message.content:JSON.stringify(message.content))}</Text>{normalized?.kind==='user'?normalized.attachments.map((attachment,index)=><EvidenceImage key={attachment.uri+':'+index} attachment={attachment}/>):null}</View>;
 }
