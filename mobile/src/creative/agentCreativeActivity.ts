@@ -5,7 +5,7 @@ import type { AssetVersion } from './types';
 import type {ChangeProposal} from './changeReview';
 import {proposalChanges,proposalState,proposalSubject} from './proposalPresentation';
 
-export type AgentCreativeActivity = { id:string;kind:'draft'|'plan'|'proposal'; runId?:string; name:string; draft?:CreativeDraft; proposal?:ChangeProposal; jobId?:string; status?:string; projectId?:string; outputs:AssetVersion[] };
+export type AgentCreativeActivity = { id:string;kind:'draft'|'plan'|'proposal'; runId?:string; name:string; draft?:CreativeDraft; proposal?:ChangeProposal; jobId?:string; status?:string; projectId?:string; outputs:AssetVersion[]; adoptedVersionIds?:string[] };
 
 /** Read durable command receipts and archived outputs, never the assistant's claim of completion. */
 export async function readAgentCreativeActivity(db:AppDatabase,threadId:string):Promise<AgentCreativeActivity[]> {
@@ -26,7 +26,12 @@ export async function readAgentCreativeActivity(db:AppDatabase,threadId:string):
       const links=draft.job_id?await db.getAllAsync<{version_id:string}>('SELECT version_id FROM creative_output_links WHERE job_id=? ORDER BY artifact_id',draft.job_id):[];
       const ids=new Set(links.map(link=>link.version_id));
       const outputs=(await service.versionsByIds([...ids])).filter(version=>version.assetId===draft.target_asset_id);
-      cards.push({kind:'draft',id:draft.id,runId:row.run_id,name:draft.provider_id==='novelai'?'图片创作':'视频创作',draft,jobId:draft.job_id??undefined,status:job?.status,outputs});
+      // Adoption is an explicit shot selection or project pin, not an asset's
+      // automatically assigned default version when a file is first archived.
+      const adopted=outputs.length?draft.shot_id
+        ?await db.getAllAsync<{version_id:string}>("SELECT version_id FROM creative_shot_assets WHERE shot_id=? AND slot IN ('selected_image','selected_video')",draft.shot_id)
+        :await db.getAllAsync<{version_id:string}>('SELECT pinned_version_id AS version_id FROM creative_project_assets WHERE project_id=? AND asset_id=? AND pinned_version_id IS NOT NULL',draft.project_id,draft.target_asset_id):[];
+      cards.push({kind:'draft',id:draft.id,runId:row.run_id,name:draft.provider_id==='novelai'?'图片创作':'视频创作',draft,jobId:draft.job_id??undefined,status:job?.status,outputs,adoptedVersionIds:outputs.filter(output=>adopted.some(row=>row.version_id===output.id)).map(output=>output.id)});
     }else if(result.value?.planId || result.value?.proposalId){
       const id=result.value.planId??result.value.proposalId;
       if(seen.has(id))continue;
@@ -48,7 +53,10 @@ export function agentCreativeActivityLabel(card:AgentCreativeActivity):string {
   if(card.kind==='proposal')return `${proposalState(card.proposal?.state??card.status??'WAITING')}${card.proposal?` · ${proposalChanges(card.proposal).length} 项修改`:''}`;
   if(card.kind==='plan')return '计划 · 查看当前步骤与阻塞';
   const available=card.outputs.filter(output=>output.state==='AVAILABLE' && output.relativePath);
-  if(available.length)return `已有 ${available.length} 个成果可查看${card.status==='PARTIAL_SUCCEEDED'?' · 部分完成':card.status==='FAILED'?' · 任务失败':''}`;
+  if(available.length){
+    const adopted=available.filter(output=>card.adoptedVersionIds?.includes(output.id)).length;
+    return [available.length>adopted?`${available.length-adopted} 个候选待审阅`:'',adopted?`${adopted} 个版本已采用`:'',card.status==='PARTIAL_SUCCEEDED'?'部分完成':card.status==='FAILED'?'任务失败':''].filter(Boolean).join(' · ');
+  }
   if(card.status==='SUCCEEDED'||card.status==='PARTIAL_SUCCEEDED')return card.outputs.length?'生成已完成 · 原文件待恢复':'生成已完成 · 正在归档成果';
   if(card.status)return ({READY_TO_SUBMIT:'等待提交',SUBMITTING:'正在提交',QUEUED:'排队中',RUNNING:'正在生成',FAILED:'生成失败 · 查看原因',UNKNOWN:'结果不确定 · 需要核查',CANCELLED:'已取消'} as Record<string,string>)[card.status]??'正在读取生成状态';
   return card.draft?'仅保存草稿 · 尚未提交生成':card.name;
@@ -57,7 +65,7 @@ export function agentCreativeActivityLabel(card:AgentCreativeActivity):string {
 export function agentCreativeActivitySummary(cards:AgentCreativeActivity[]):string {
   const reviews=cards.filter(card=>card.kind==='proposal'&&(card.proposal?.state??card.status??'WAITING')==='WAITING').length;
   const drafts=cards.filter(card=>card.draft?.state==='EDITING').length;
-  const outputs=cards.reduce((count,card)=>count+card.outputs.filter(output=>output.state==='AVAILABLE' && output.relativePath).length,0);
+  const outputs=cards.reduce((count,card)=>count+card.outputs.filter(output=>output.state==='AVAILABLE' && output.relativePath&&!card.adoptedVersionIds?.includes(output.id)).length,0);
   const pending=cards.filter(card=>card.status && ['READY_TO_SUBMIT','SUBMITTING','QUEUED','RUNNING'].includes(card.status));
   const parts=[reviews?`待审阅 ${reviews} 项修改`:'',drafts?`${drafts} 份草稿待完善`:'',outputs?`${outputs} 个候选可查看`:'',pending.length?`${pending.length} 个任务进行中${pending.length===1?`（${agentCreativeActivityLabel(pending[0])}）`:''}`:''].filter(Boolean);
   if(parts.length)return parts.join(' · ');

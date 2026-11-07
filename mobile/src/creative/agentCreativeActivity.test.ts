@@ -25,6 +25,8 @@ async function fixture() {
     const asset=await service.execute({name:'asset.import',payload:{title:'已生成图片',kind:'image',blobSha256:hash,projectId}},'output');
     if(asset.status!=='completed')throw new Error('Expected output');
     db.runSync('UPDATE creative_generation_drafts SET target_asset_id=? WHERE id=?',asset.value.assetId,draftId);
+    // Generated archival preserves the asset's default but does not pin output.
+    db.runSync('UPDATE creative_project_assets SET pinned_version_id=NULL WHERE project_id=?',projectId);
     db.runSync("INSERT INTO creative_output_links VALUES('job','output',?)",asset.value.versionId);
     return asset.value.versionId;
   };
@@ -43,7 +45,11 @@ test('durable activity distinguishes draft, queued job, completed job and a view
     expect(activity).toHaveLength(1);
     expect(activity[0].jobId).toBe('job');
     expect(activity[0].outputs).toMatchObject([{id:versionId,relativePath:'cas/generated.png',mime:'image/png',state:'AVAILABLE'}]);
-    expect(agentCreativeActivityLabel(activity[0])).toBe('已有 1 个成果可查看');
+    expect(agentCreativeActivityLabel(activity[0])).toBe('1 个候选待审阅');
+    // Archival/default assignment is not adoption; an explicit project pin is.
+    expect(activity[0].adoptedVersionIds).toEqual([]);
+    f.db.runSync('UPDATE creative_project_assets SET pinned_version_id=? WHERE project_id=?',versionId,f.projectId);
+    expect(agentCreativeActivityLabel((await f.read())[0])).toBe('1 个版本已采用');
     f.db.runSync("UPDATE creative_file_resources SET state='MISSING'");
     expect(agentCreativeActivityLabel((await f.read())[0])).toBe('生成已完成 · 原文件待恢复');
     expect(f.db.getAllSync('PRAGMA foreign_key_check')).toEqual([]);

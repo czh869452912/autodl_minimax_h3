@@ -25,6 +25,22 @@ const draft={id:'draft',project_id:'project',shot_id:null,target_asset_id:'asset
 beforeEach(()=>{jest.useFakeTimers();jest.clearAllMocks();});
 afterEach(()=>{jest.useRealTimers();});
 
+test.each([
+ {status:'SUCCEEDED',outputs:[output],adoptedVersionIds:[],label:'审阅生成候选',path:'/image-draft/[id]',params:{id:'draft'}},
+ {status:'SUCCEEDED',outputs:[output],adoptedVersionIds:['output'],label:'查看当前采用版本',path:'/creative-asset/[id]',params:{id:'asset',versionId:'output',projectId:'project'}},
+ {status:'UNKNOWN',outputs:[],adoptedVersionIds:[],label:'查询原任务',path:'/creative-task/[id]',params:{id:'job'}},
+])('routes $label to the existing object without submitting',async({status,outputs,adoptedVersionIds,label,path,params})=>{
+ read.mockResolvedValue([{kind:'draft',id:'draft',name:'图片创作',draft,jobId:'job',status,outputs,adoptedVersionIds}]);
+ let tree!:ReturnType<typeof create>;
+ try{
+  await act(async()=>{tree=create(<AgentActivityProvider threadId="thread"><AgentCreativeCards threadId="thread" running={false}/></AgentActivityProvider>);});
+  act(()=>tree.root.findByProps({testID:'agent-creative-summary'}).props.onPress());
+  expect(button(tree,'核对这份草稿的生成请求')).toBeUndefined();
+  act(()=>button(tree,label).props.onPress());
+  expect(mockPush).toHaveBeenCalledWith({pathname:path,params});
+ }finally{act(()=>tree?.unmount());}
+});
+
 test('video candidate opens its exact output identity rather than the remembered draft round',async()=>{
   read.mockResolvedValue([{kind:'draft',id:'draft',name:'视频创作',draft:{...draft,provider_id:'autodl'},jobId:'job',outputs:[{...output,mime:'video/mp4',recipe:{jobId:'job'}}]}]);
   let tree!:ReturnType<typeof create>;
