@@ -24,3 +24,9 @@
 模拟器初次覆盖安装因剩余空间不足失败；清缓存不足以解决，随后用 `uninstall -k` 临时移除上一轮独立 QA 包的程序文件，保留其数据后重试成功。安装验证后，原 QA 包已重新安装。该操作没有清除 Beta 应用数据。此空间处理属于本机模拟器准备，不是测试 APK 的安装步骤。
 
 本地核验记录：`build/phone-beta/beta49-verification.json`、同目录 `.apk.sha256`；构建与安装日志：`build/beta49-build.log`、`build/beta49-install.log`；UI XML、截图与进程错误日志位于 `build/beta49-device/`。本次仅生成本地测试 APK，未发布 GitHub Release。
+
+## 后续 Pre-release 发布
+
+2026-11-07 按用户要求，已发布 [Beta.49 Pre-release](https://github.com/czh869452912/autodl_minimax_h3/releases/tag/preview/1.5.0-preview.4-beta.49)。标签 `preview/1.5.0-preview.4-beta.49` 指向 `8381ef78917786d5e7f94a9aca538fa50909e244`；相对 APK 构建源码仅增加核验文档，应用源码一致。
+
+公开附件为 APK、`SHA256SUMS.txt`、`beta49-verification.json`、`AutoDL-media-sources.zip` 及其核验 JSON，共 5 项。媒体源码沿用哈希/提交固定的载荷，重新核对来源修订后按当前 Gradle 配置、许可证及打包脚本生成。发布前后均核对远端附件大小与 SHA-256，全部与本地一致；确认非草稿且标记为 Pre-release，稳定版 latest 保持 `v1.4.28`。发布核验记录保存在 `build/preview-release-beta49/github-published-verified.json`。
