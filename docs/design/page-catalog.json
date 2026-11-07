@@ -156,8 +156,8 @@
         "mobile/src/creative/AgentCreativePanel.tsx"
       ],
       "purpose": "围绕项目对话、提出和执行创作方案",
-      "currentIssue": "M1–M5 Agent 操作重组已接入；缺模型可只读查看本项目本地记录。无项目就地建项目属于原全产品提案，非本轮 Agent 50 项范围。",
-      "recommendation": "空态提供就地轻量建项目；标题持久展示项目，镜头上下文显示可移除 chip；输入区以对话为主。不是新增无范围的执行会话。",
+      "currentIssue": "N0 恢复入口已接入；背景读取失败保留会话，显式范围可信才提供本地只读历史。N3 顶栏合并会话入口，N5 触控收尾。",
+      "recommendation": "保持项目/原会话身份；读取故障经重试或数据维护恢复，不创建无范围执行会话。",
       "entry": "底部、项目、镜头",
       "back": "主入口按导航历史；从镜头进入可回原镜头与位置",
       "primaryAction": "发送消息；运行时停止等待",
@@ -174,14 +174,16 @@
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper; M1 local fixture candidate sample; M5c disconnected scoped local history device sample",
+      "evidenceLevel": "source-reviewed; beta47-assets UI sample in x86_64 wrapper; M1 local fixture candidate sample; M5c disconnected scoped local history device sample; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified",
       "evidence": [
         "docs/design/evidence/2026-11-01/v47-11-assistant.png",
         "docs/design/evidence/2026-11-01/v47-13-assistant-return.png",
         "docs/design/evidence/2026-11-04-m1-skills/03-candidate-agent.png",
-        "docs/design/evidence/2026-11-05-agent-roadmap/local-history-entry-final.png"
+        "docs/design/evidence/2026-11-05-agent-roadmap/local-history-entry-final.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n0-normal-conversation.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n5-conversation.png"
       ],
-      "proposalStatus": "partially-implemented",
+      "proposalStatus": "implemented (Agent N0–N5 UI scope; coverage in implementation record)",
       "targetOwner": "tabs"
     },
     {
@@ -672,11 +674,12 @@
       "route": "mobile/app/agent-skills.tsx",
       "parent": "agent",
       "sources": [
-        "mobile/src/agent/skills/SkillLibraryScreen.tsx"
+        "mobile/src/agent/skills/SkillLibraryScreen.tsx",
+        "mobile/src/agent/skills/builtinCatalog.ts"
       ],
       "purpose": "查找、了解、管理技能及项目组合",
-      "currentIssue": "管理、添加、提炼及会话历史已按任务分工；历史快捷入口保留目录未保存选择。",
-      "recommendation": "保持用途/来源浏览和明确范围；历史详情不反推当前技能，完整设备矩阵另行验收。",
+      "currentIssue": "N1 范围、搜索、分类与用途行已收拢；中文详情为全屏，原始文件折叠。",
+      "recommendation": "保留版本身份、默认管理与未保存合同；详情返回保持目录状态。",
       "entry": "助手、项目技能、深链接",
       "back": "管理回实际来源；添加先处理未保存，完成可定位确切版本",
       "primaryAction": "浏览技能与管理默认；添加进入独立任务",
@@ -693,7 +696,7 @@
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed; device-sampled M1 project/global scopes and revoke; M2 add/install/highlighted version with defaults unchanged",
+      "evidenceLevel": "source-reviewed; device-sampled M1 project/global scopes and revoke; M2 add/install/highlighted version with defaults unchanged; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified",
       "evidence": [
         "docs/design/evidence/2026-11-01/v47-03-skills.png",
         "docs/design/evidence/2026-11-04-m1-skills/07-project-management.png",
@@ -701,9 +704,12 @@
         "docs/design/evidence/2026-11-04-m2-skills/12-located.png",
         "docs/design/evidence/2026-11-04-m2-skills/22-origin-management.png",
         "docs/design/evidence/2026-11-04-m2-skills/38-final-located.png",
-        "docs/design/evidence/2026-11-05-agent-roadmap/history-draft-return-final.png"
+        "docs/design/evidence/2026-11-05-agent-roadmap/history-draft-return-final.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n1-directory-comparison.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n1-detail-comparison.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n5-narrow-directory.png"
       ],
-      "proposalStatus": "implemented (Agent M1–M5 scope)",
+      "proposalStatus": "implemented (Agent N0–N5 UI scope; coverage in implementation record)",
       "targetOwner": "agent"
     },
     {
@@ -749,11 +755,13 @@
       "route": "mobile/app/agent-run.tsx",
       "parent": "agent",
       "sources": [
-        "mobile/src/agent/skills/SkillRunScreen.tsx"
+        "mobile/src/agent/skills/SkillRunScreen.tsx",
+        "mobile/src/agent/ReadOnlyMessage.tsx",
+        "mobile/src/ui/localTime.ts"
       ],
       "purpose": "只读核验某次运行实际发生的行为",
-      "currentIssue": "M5b 已按结果摘要、可展开阶段、固定版本与原始诊断组织；真实工具调用与辅助技术设备验收另列。",
-      "recommendation": "摘要显示结果/开始结束/模型/工具次数/技能实际读取；阶段时间线可展开；原始 JSON 和完整会话为诊断层。",
+      "currentIssue": "N2 事实状态和本轮消息前置，阶段可展开，诊断末置；N5 使用确定的本地数字时间。",
+      "recommendation": "只读刷新，不重跑或用当前配置解释缺失历史；实际任务状态以任务中心为准。",
       "entry": "技能运行记录、后续运行消息链接",
       "back": "返回实际来源；无导航栈通过 useSourceBack 回助手",
       "primaryAction": "查看某一步证据",
@@ -769,11 +777,13 @@
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed; offline same-run and synthetic-stage device samples; late-refresh/image/exact-lookup regressions",
+      "evidenceLevel": "source-reviewed; offline same-run and synthetic-stage device samples; late-refresh/image/exact-lookup regressions; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified",
       "evidence": [
-        "docs/design/evidence/2026-11-05-agent-roadmap/run-comparison.jpg"
+        "docs/design/evidence/2026-11-05-agent-roadmap/run-comparison.jpg",
+        "docs/design/evidence/2026-11-07-agent-refactor/n5-run-final.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n5-font2-run.png"
       ],
-      "proposalStatus": "implemented; acceptance coverage recorded separately",
+      "proposalStatus": "implemented (Agent N0–N5 UI scope; coverage in implementation record)",
       "targetOwner": "agent"
     },
     {
@@ -1455,8 +1465,8 @@
         "mobile/src/agent/AgentScreen.tsx"
       ],
       "purpose": "选择对话所属项目",
-      "currentIssue": "M1 显示项目/镜头范围与运行锁定；第 43 项已将批量撤销移至项目权限，切换器只负责项目选择。",
-      "recommendation": "保持来源会话与输入保护；切换不撤销授权，不重新绑定原 transcript。",
+      "currentIssue": "N3 镜头上下文改为可展开单行摘要；移除独立可达，项目仍在顶栏。",
+      "recommendation": "保留原文本与运行锁定，切换不重新绑定旧会话。",
       "entry": "助手标题",
       "back": "关闭回原会话，不发送消息",
       "primaryAction": "选定一个项目",
@@ -1469,9 +1479,11 @@
       "references": [
         "B1"
       ],
-      "evidenceLevel": "source-reviewed",
-      "evidence": [],
-      "proposalStatus": "implemented (Agent scope)",
+      "evidenceLevel": "source-reviewed; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified",
+      "evidence": [
+        "docs/design/evidence/2026-11-07-agent-refactor/n3-conversation.png"
+      ],
+      "proposalStatus": "implemented (Agent N0–N5 UI scope; coverage in implementation record)",
       "targetOwner": "agent"
     },
     {
@@ -1483,11 +1495,12 @@
       "sources": [
         "mobile/src/agent/AgentScreen.tsx",
         "mobile/src/agent/PromptAssistantUi.tsx",
-        "mobile/src/agent/skills/SkillQuickPicker.tsx"
+        "mobile/src/agent/skills/SkillQuickPicker.tsx",
+        "mobile/src/agent/PromptAssistantStyles.ts"
       ],
       "purpose": "对话、审阅提议并跟踪运行",
-      "currentIssue": "M1–M5 已接入技能快速层、长输入就近展开、图片引用入口、追加简报与版本操作分层；发送/停止与过程折叠保留。",
-      "recommendation": "默认对话+项目/镜头 chips+输入；输入旁简短工具；提议用变更摘要/影响对象/确认动作；运行呈阶段和停止状态，日志再展开。",
+      "currentIssue": "N3 会话入口包含新建，管理全屏且保留底层会话；N5 主要触控48dp、元信息最低12sp。",
+      "recommendation": "保留输入、附件和范围；窄屏键盘下发送可达，其他异常边界按实施记录继续验收。",
       "entry": "助手主入口",
       "back": "子工具先关闭；跨项目时保护输入",
       "primaryAction": "发送或审阅待确认提议",
@@ -1505,15 +1518,17 @@
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed; offline composer/editor/version device samples; image identity regression-tested",
+      "evidenceLevel": "source-reviewed; offline composer/editor/version device samples; image identity regression-tested; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified",
       "evidence": [
         "docs/design/evidence/2026-11-04-m1-skills/05-cancel-return.png",
         "docs/design/evidence/2026-11-04-m1-skills/10-confirmed-return.png",
         "docs/design/evidence/2026-11-04-m1-skills/11-reopened.png",
         "docs/design/evidence/2026-11-04-m1-skills/12-first-completed.png",
-        "docs/design/evidence/2026-11-05-agent-roadmap/composer-comparison.jpg"
+        "docs/design/evidence/2026-11-05-agent-roadmap/composer-comparison.jpg",
+        "docs/design/evidence/2026-11-07-agent-refactor/n5-conversation-comparison.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n5-narrow-keyboard-final.png"
       ],
-      "proposalStatus": "implemented (Agent M1–M5 scope)",
+      "proposalStatus": "implemented (Agent N0–N5 UI scope; coverage in implementation record)",
       "targetOwner": "agent"
     },
     {
@@ -1529,8 +1544,8 @@
         "mobile/src/ui/DraggableSheet.tsx"
       ],
       "purpose": "为接下来一条消息选技能",
-      "currentIssue": "M1 已独立快速层；M2 管理明确提交新单次选择后会采用新结果，未提交仍保留未确认草稿。TalkBack、旋转及全部异常设备矩阵仍待补齐。",
-      "recommendation": "保持仅下次消息任务；项目/全局管理单独进入，来源身份用 returnThreadId，正文和附件留原会话。",
+      "currentIssue": "N3 使用技能语义图标，失效单次选择警示独立显示；管理往返保留草稿。",
+      "recommendation": "单次选用继续短抽屉；长管理进入全屏，明确确认才写入。",
       "entry": "会话输入旁“技能”",
       "back": "确认或取消回原输入；管理正常返回保留未确认草稿，明确提交新单次选择则采用新结果；进程重启仅恢复已确认选择",
       "primaryAction": "确认下次选用",
@@ -1549,7 +1564,7 @@
       "references": [
         "B1"
       ],
-      "evidenceLevel": "source-reviewed; device-sampled cancel/manage/confirm/reopen/send, keyboard confirm, 2x font narrow viewport with local model fixture; not full device matrix; M2 explicit install-and-select return sampled on initial candidate",
+      "evidenceLevel": "source-reviewed; device-sampled cancel/manage/confirm/reopen/send, keyboard confirm, 2x font narrow viewport with local model fixture; not full device matrix; M2 explicit install-and-select return sampled on initial candidate; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified",
       "evidence": [
         "docs/design/evidence/2026-11-04-m1-skills/04-picker-default.png",
         "docs/design/evidence/2026-11-04-m1-skills/06-picker-selected.png",
@@ -1563,9 +1578,11 @@
         "docs/design/evidence/2026-11-04-m1-skills/22-font2-final.png",
         "docs/design/evidence/2026-11-04-m1-skills/24-font2-scrolled-final.png",
         "docs/design/evidence/2026-11-04-m2-skills/25-origin-picker-return.png",
-        "docs/design/evidence/2026-11-04-m2-skills/26-origin-composer-return.png"
+        "docs/design/evidence/2026-11-04-m2-skills/26-origin-composer-return.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n3-draft-return.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n5-narrow-picker-expanded.png"
       ],
-      "proposalStatus": "implemented",
+      "proposalStatus": "implemented (Agent N0–N5 UI scope; coverage in implementation record)",
       "targetOwner": "agent"
     },
     {
@@ -1635,11 +1652,12 @@
       "route": null,
       "parent": "skills",
       "sources": [
-        "mobile/src/agent/skills/SkillLibraryScreen.tsx"
+        "mobile/src/agent/skills/SkillLibraryScreen.tsx",
+        "mobile/src/agent/skills/SkillRunHistory.tsx"
       ],
       "purpose": "找某次运行所用版本和实际读取",
-      "currentIssue": "M5b/M5c 已改为会话历史摘要表面；返回保留未保存单次选择及目录筛选。",
-      "recommendation": "沿用会话历史身份及分页，原始指纹/预算只在运行详情查看。",
+      "currentIssue": "N2 历史抽成独立 SkillRunHistory，范围标题与查询一致，空态明确仅覆盖技能证据运行。",
+      "recommendation": "保留游标、可信范围和原目录状态，不暗示覆盖所有对话。",
       "entry": "技能历史图标、助手运行记录",
       "back": "返回原筛选和范围",
       "primaryAction": "打开该次运行",
@@ -1653,11 +1671,12 @@
       "references": [
         "B1"
       ],
-      "evidenceLevel": "source-reviewed; final offline directory/history/unsaved return sampled",
+      "evidenceLevel": "source-reviewed; final offline directory/history/unsaved return sampled; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified",
       "evidence": [
-        "docs/design/evidence/2026-11-05-agent-roadmap/history-draft-return-final.png"
+        "docs/design/evidence/2026-11-05-agent-roadmap/history-draft-return-final.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n2-history.png"
       ],
-      "proposalStatus": "implemented (shortcut)",
+      "proposalStatus": "implemented (Agent N0–N5 UI scope; coverage in implementation record)",
       "targetOwner": "agent"
     },
     {
@@ -1950,8 +1969,8 @@
         "mobile/src/agent/skills/SkillLibraryScreen.tsx"
       ],
       "purpose": "兼容原菜单与会话内技能管理",
-      "currentIssue": "兼容管理入口保留原会话；添加为独立任务，历史为只读表面且返回保留未保存单次草案。",
-      "recommendation": "保持兼容返回与离开保护，高频单次选用使用快速层。",
+      "currentIssue": "N1 兼容管理改为全屏 Modal，底下会话保持挂载；系统返回复用离开保护。",
+      "recommendation": "保持添加/历史来源身份和未保存保护。",
       "entry": "助手菜单→技能管理",
       "back": "关闭管理回原会话；长编辑继续执行未保存保护",
       "primaryAction": "管理项目默认或打开完整添加",
@@ -1967,11 +1986,13 @@
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed; baseline device sample only",
+      "evidenceLevel": "source-reviewed; baseline device sample only; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified",
       "evidence": [
-        "docs/design/evidence/2026-11-04-m1-skills/02-baseline-skills.png"
+        "docs/design/evidence/2026-11-04-m1-skills/02-baseline-skills.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n1-directory.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n3-draft-return.png"
       ],
-      "proposalStatus": "implemented (compatibility scope)",
+      "proposalStatus": "implemented (Agent N0–N5 UI scope; coverage in implementation record)",
       "targetOwner": "skills"
     },
     {
@@ -1985,11 +2006,11 @@
         "mobile/src/creative/agentCreativeActivity.ts"
       ],
       "purpose": "从当前轮次找到修改建议、生成草稿、计划和候选的下一步",
-      "currentIssue": "本轮按提议/草稿/任务/候选呈现；请求审阅双许可、任务身份与未知结果恢复已接入，候选仍需明确采用。",
-      "recommendation": "保持 runId 与固定对象身份，不能把修改建议称作已生成成果；请求审阅继续复用原 prepare/confirm，不新建执行状态。",
+      "currentIssue": "N4b 真实候选与采用分开，UNKNOWN 查询原任务；停止助手不取消生成任务。",
+      "recommendation": "采用读取镜头选择/项目固定版本，不能用素材归档默认值推断。",
       "entry": "会话对应轮次的“本轮创作”摘要",
       "back": "关闭回当前会话；进入项目审阅/草稿详情再返回原轮次",
-      "primaryAction": "待审阅→审阅修改；已处理→查看修改结果；空描述草稿→完善；计划→查看步骤",
+      "primaryAction": "提议审阅/冲突核对；完善草稿；候选审阅；查看采用版本；UNKNOWN 查询原任务",
       "states": [
         "待审阅与草稿并存",
         "对象摘要",
@@ -2004,7 +2025,7 @@
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed; M3a synthetic Android sampled summary, priority, exact proposal navigation, terminal return, empty draft detail; full generation/authorization deferred",
+      "evidenceLevel": "source-reviewed; M3a synthetic Android sampled summary, priority, exact proposal navigation, terminal return, empty draft detail; full generation/authorization deferred; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified",
       "evidence": [
         "docs/design/evidence/2026-11-04-m3-review/01-baseline-conversation.png",
         "docs/design/evidence/2026-11-04-m3-review/02-baseline-cards.png",
@@ -2012,9 +2033,10 @@
         "docs/design/evidence/2026-11-04-m3-review/05-candidate-cards.png",
         "docs/design/evidence/2026-11-04-m3-review/08-return-conversation.png",
         "docs/design/evidence/2026-11-04-m3-review/14-resolved-cards.png",
-        "docs/design/evidence/2026-11-04-m3-review/15-open-draft.png"
+        "docs/design/evidence/2026-11-04-m3-review/15-open-draft.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n4-review-after.png"
       ],
-      "proposalStatus": "implemented (Agent M3 scope)",
+      "proposalStatus": "implemented (Agent N0–N5 UI scope; coverage in implementation record)",
       "targetOwner": "agent"
     },
     {
@@ -2032,8 +2054,8 @@
         "mobile/src/creative/planReviewTargets.ts"
       ],
       "purpose": "核对原草稿的确切请求并分别确认外发与消费许可",
-      "currentIssue": "单次、计划与批次共用请求审阅与双许可；图片含实际处理参数/蒙版来源/超分尺寸，编码不显示；真实供应商验证独立记录。",
-      "recommendation": "单次/计划/批次共用准确请求字段和 prepare/confirm；保存配置不提交，退出不写许可；真实供应商验收单独记录。",
+      "currentIssue": "N4a 费用与发送内容前置，素材名称与版本优先、技术证据折叠；请求身份变化重置两项许可。",
+      "recommendation": "继续共用单次/计划/批次 prepare/confirm，取消不提交；真实供应商另行验收。",
       "entry": "本轮创作中的固定草稿请求入口",
       "back": "关闭返回原本轮创作；编辑打开原固定草稿",
       "primaryAction": "确认两项许可后生成一次",
@@ -2050,14 +2072,16 @@
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed; offline request UI device samples, no real dispatch",
+      "evidenceLevel": "source-reviewed; offline request UI device samples, no real dispatch; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified",
       "evidence": [
         "docs/design/evidence/2026-11-05-m3b-request/01-baseline-alert.png",
         "docs/design/evidence/2026-11-05-m3b-request/02-request-top.png",
         "docs/design/evidence/2026-11-05-m3b-request/03-permission-default.png",
-        "docs/design/evidence/2026-11-05-m3b-request/05-both-checked.png"
+        "docs/design/evidence/2026-11-05-m3b-request/05-both-checked.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n4-review-comparison.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n4-single-consent.png"
       ],
-      "proposalStatus": "implemented (M3b UI; offline device sampling)",
+      "proposalStatus": "implemented (Agent N0–N5 UI scope; coverage in implementation record)",
       "targetOwner": "agent"
     },
     {
@@ -2197,16 +2221,17 @@
     },
     {
       "id": "conversation-run-history",
-      "name": "会话运行历史",
+      "name": "会话技能运行记录",
       "kind": "surface",
       "parent": "agent",
       "sources": [
         "mobile/src/agent/skills/SkillLibraryScreen.tsx",
-        "mobile/src/creative/AssistantActions.tsx"
+        "mobile/src/creative/AssistantActions.tsx",
+        "mobile/src/agent/skills/SkillRunHistory.tsx"
       ],
-      "purpose": "在会话或项目范围内只读追溯历史运行",
-      "currentIssue": "M5b 独立历史任务已接入会话菜单，技能目录保留快捷入口；分页和范围沿用原读取合同。",
-      "recommendation": "会话归属优先，行显示名称、时间、状态和固定技能摘要；指纹、预算、原始记录在运行详情。",
+      "purpose": "在可信范围内追溯保存了技能证据的运行",
+      "currentIssue": "N2/N5 菜单与标题明确技能运行记录；缺快照不反推，目录、会话和项目范围按真实查询展示。",
+      "recommendation": "原始指纹和预算只在详情；会话完整消息在原对话历史。",
       "entry": "助手菜单或技能目录历史快捷入口",
       "back": "回会话或原技能目录；目录未保存选择保留，详情返回保持历史范围与分页",
       "primaryAction": "查看所选运行",
@@ -2223,11 +2248,13 @@
         "B1",
         "B2"
       ],
-      "evidenceLevel": "source-reviewed; offline same-run and synthetic-stage device samples; late-refresh/image/exact-lookup regressions",
+      "evidenceLevel": "source-reviewed; offline same-run and synthetic-stage device samples; late-refresh/image/exact-lookup regressions; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified",
       "evidence": [
-        "docs/design/evidence/2026-11-05-agent-roadmap/history-after.png"
+        "docs/design/evidence/2026-11-05-agent-roadmap/history-after.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n2-history.png",
+        "docs/design/evidence/2026-11-07-agent-refactor/n5-run-final.png"
       ],
-      "proposalStatus": "implemented; acceptance coverage recorded separately",
+      "proposalStatus": "implemented (Agent N0–N5 UI scope; coverage in implementation record)",
       "targetOwner": "agent"
     },
     {
@@ -2993,13 +3020,13 @@
     "mobile/app/settings-panel.tsx": "a7a4149ef6a30f63977a6c02af421d8d0b2854bd6e4ad89989dea09f80a8ccba",
     "mobile/app/shot-request-setup.tsx": "018897b819a6dd434362b7b45863878a02b430fa788ea7ed57cc0fc4048c3fe8",
     "mobile/app/video/[id].tsx": "8abbd333bbb3c04591bf0e95a867ea06c4f57b3710c0812e6e37b99dabce4e8c",
-    "mobile/src/agent/AgentScreen.tsx": "911896d2417f0e5d36166e2fb5ca127f0bfe21e0fe969f46322a94ffb05cda20",
+    "mobile/src/agent/AgentScreen.tsx": "55ab5e7a748d5f77af3aa85efeab1523a55c319b7932835f76dd62990fc0cfab",
     "mobile/src/agent/PromptVersionPanel.tsx": "cbde8767fcef977122b8aaeee0c34a0f93ca8f1d007924852cb200df3e0100ba",
     "mobile/src/agent/skills/SkillExtractionScreen.tsx": "0aba0f4deab6d6c11a2c253f2e26df03610d5fd312adcb788fc51112ea922647",
-    "mobile/src/agent/skills/SkillLibraryScreen.tsx": "47cb8626a58ae5bba5915384b6d4df9fe3b3adbe1ca9d8d4e78f5b51622dbba4",
-    "mobile/src/agent/skills/SkillRunScreen.tsx": "0a6780529e1a0ff86e4c17cf487d3a002fde3ce61bd9842f173b95f5e0dfedd4",
+    "mobile/src/agent/skills/SkillLibraryScreen.tsx": "640fbbd4e86e5c44680f3ce33a2526df5d5a5dc77733b3246708e77ed92f7906",
+    "mobile/src/agent/skills/SkillRunScreen.tsx": "f650a3d81d418b837f9e91c2ab11f449e5817be5dda97a00f4b5181ec5f5340b",
     "mobile/src/creative/AgentCreativePanel.tsx": "33ec6469d366205cc72fc8663f50ec07b737185ccca576b57eacb9484ccb5351",
-    "mobile/src/creative/AgentWorkspace.tsx": "5927e3c94291e40b595b5f4de4efdc19eee27f53eaa9447de409e45d04081ea1",
+    "mobile/src/creative/AgentWorkspace.tsx": "6a4bcb1a9f0ce9ac28ac7a65db57d09a52e53928bffb4c4f86dd797786460fcc",
     "mobile/src/creative/CapabilityCatalogScreen.tsx": "22e2edce01cc1b9cc870b7e6290c8b46938184744aa67bcbc54b25b84e5094b7",
     "mobile/src/creative/CreativeAccountPanel.tsx": "8e678926536277d6e8b1653ebd96a8c44afdc9d1d1212cf7eef4161ef0794c31",
     "mobile/src/creative/CreativeAssetPicker.tsx": "152e4b4a835c3a3e5f9023392f8da1a45204bbee29381cc0658d5c641d8ee6a2",
@@ -3026,27 +3053,33 @@
     "mobile/src/settings/ModelConnectionsScreen.tsx": "3416f4606bae0147c3a14b53f94bc578898f44b8a11781442a5f8852fa2d5d5e",
     "mobile/src/settings/WorkflowSyncPanel.tsx": "686c03f780248005bafd60a0e80f3ae248bdfcf000d9e5ac8f5193174cb424ee",
     "mobile/src/tasks/TaskInboxButton.tsx": "898cadeead6b4923872354dc1d9791f1c821460e10753f411af4d3d849e016cb",
-    "mobile/src/agent/PromptAssistantUi.tsx": "51c5281ad5c0e4b0702cbf9022a10c492fa95764bddeb00af401bba346a3323b",
+    "mobile/src/agent/PromptAssistantUi.tsx": "c29a83ebd3fc0efbfcaf9189df70c969b2616b06e1b31d51eff20f0d7adb2799",
     "mobile/src/agent/skills/nextRun.ts": "bfec5dd50a8dc9102f3c4cc6f47649c813de588f2a45de5e346d2aa09fdd032e",
-    "mobile/src/agent/skills/SkillQuickPicker.tsx": "bef0a4631316b641b29f261dcdfe2db013d900da56845e79759c253d06846f0c",
+    "mobile/src/agent/skills/SkillQuickPicker.tsx": "da470da3bd3ce94d910f025060dc1e22d263d1735c6d906ffa852a6e89c55e3e",
     "mobile/src/ui/DraggableSheet.tsx": "33161904262afda9a7fb397ce4197c498e1f3b6c8aea0e19cb735c820699dab7",
     "mobile/src/agent/skills/SkillAddFlow.tsx": "5b854d79f280c8cf476ff1a71137dcd86b83e66eb43e25085631b2c714ef944e",
-    "mobile/src/creative/AgentCreativeCards.tsx": "45e597258555ba0a9a240e4f2e1d706c6cab5f3301fc37034cf166519b991b59",
-    "mobile/src/creative/agentCreativeActivity.ts": "d1ba46b1dff8370ce1525eb03391faf5e0d5b9f37a696fbf644b41e64339780c",
+    "mobile/src/creative/AgentCreativeCards.tsx": "077d09ab3f2a203196d4df09012853ef231259b98ece5100f4178e02bc95e4e8",
+    "mobile/src/creative/agentCreativeActivity.ts": "658deb2fe3e2a8cb5086ecb7c02708ae31e006a4ffa7d61940bcd3d1a4a09225",
     "mobile/src/creative/ProposalReviewCard.tsx": "675bde9e3fc801d3dd4d34a11ce06d9668f0c5e7e3890cd5b1474b2180293f61",
     "mobile/src/creative/proposalPresentation.ts": "36c3492fd2f44ad01c2d16b8fffb2264c1f2c908ce1ae5807d4226e8da2246c4",
     "mobile/src/creative/changeReview.ts": "6da71816f999e5c45644159849c7849cbd4c454376f7c6d1c07edf81f48702b7",
-    "mobile/src/creative/GenerationRequestReview.tsx": "78af1655dddc7b4e4f303cb1ab12eb92ee865db7bde5b1e1034ce130de9f8784",
-    "mobile/src/creative/PlanRequestReview.tsx": "c1c57eead16ba7757b6b2fe82986982fac24096268c5579b67319bd54e7d6a2c",
+    "mobile/src/creative/GenerationRequestReview.tsx": "1a7b7043827be579dc026a849f7b45043b15d427b89cd4231d67286bb5b24db4",
+    "mobile/src/creative/PlanRequestReview.tsx": "aabb16986f38607913392fe27bfda2d47e3f03fd7a36ee2a93b67f2bdd5e5e90",
     "mobile/src/creative/planReviewTargets.ts": "8132b83a14a49723800062f578bf6574bae614f33694935f9d35ebf9f58f7f88",
     "mobile/src/conversation/ConversationInput.tsx": "b0f1f36f7c6050f60c82aa73cf5141575a7aeeb9e762f71354f485212bcf7522",
     "mobile/src/creative/planReads.ts": "e4be01dc140f608a9ee02bea1f753a4b3e77be1955946449a5412f505ae78536",
-    "mobile/src/creative/AssistantActions.tsx": "23a6ea16c8b6224dd89f5648416f624dc17feb81357f7270ceb6fa62143cb1bf",
+    "mobile/src/creative/AssistantActions.tsx": "66fd9d62a4714690a09335a1ad5a33068b1459b5f04924aa6b9d8e673cea57b3",
     "mobile/src/agent/HistoryList.tsx": "f3ca133b4a36903b2cc567f90ac111b89628102da07a94367524440ad9b02584",
     "mobile/src/agent/LocalHistoryBrowser.tsx": "3b2915ce6ae58c2a5be273debb88f2ad416232658fa6b6155ca9012436533bd6",
     "mobile/src/creative/ProjectPermissions.tsx": "32ba42d6956412778e46a3ebb64cf975bec7953b3be8bb746d974ec754ece4f8",
     "mobile/src/creative/projectPermissionStore.ts": "3d5eb4a930b63acd39f80f059677cd271aba42c39018533c4f2c7f2c13310b90",
-    "mobile/src/creative/planPresentation.ts": "0e9bb560bb579ab30518aea6353375502df08dbbae3d35d2818704d4e419c4d6"
+    "mobile/src/creative/planPresentation.ts": "0e9bb560bb579ab30518aea6353375502df08dbbae3d35d2818704d4e419c4d6",
+    "mobile/src/agent/skills/SkillRunHistory.tsx": "6175ba6d9e1ec02dee09b5f9c8ec3cf42f840ff416454fc93c71437c8a9ada8b",
+    "mobile/src/agent/PromptAssistantStyles.ts": "750e15b2ae3c93df618734aae31a94f18202beecd88f46e896293cbcfe404a42",
+    "mobile/src/agent/ReadOnlyMessage.tsx": "9687a62fc6b9e5cad3c8ab12cc3cc76a38146ac632ec7591d694913f88e0fa5a",
+    "mobile/src/ui/localTime.ts": "e3d17e9e69f136d57d2b4437db5e5340f168634999ccb384f698d6fea6e59732",
+    "mobile/src/agent/skills/builtinCatalog.ts": "48bc555e87c8c446e7d6f436d0157159b6fe2966c8ab2e2966db1a2fa758ff6c",
+    "mobile/src/ui/icons.tsx": "9a517974d925e9225c35fd8d7e9e242716601244246de65976a12d2e3a1c50a5"
   },
   "revisions": [
     {

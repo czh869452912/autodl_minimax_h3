@@ -113,7 +113,7 @@ export function SkillLibraryScreen({ onClose, registerLeave, intent, projectId: 
       {!versions.length ? <Text style={s.muted}>还没有本地技能，点击右上角 + 导入。内置技能随应用提供。</Text> : null}
       {orderedVersions.filter(v=>filter!=='builtin'&&(filter!=='selected'||v.enabled)).filter(v=>`${v.name} ${v.description}`.toLowerCase().includes(query.trim().toLowerCase())).map(version=><View key={version.id} style={[s.card,{padding:10,gap:8}]}>
         <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`查看 ${version.name} ${version.id.slice(0,8)}`} accessibilityState={{expanded:expanded===version.id}} onPress={()=>{setRawOpen(false);setExpanded(version.id);}} style={{flex:1,minHeight:44,justifyContent:'center',gap:3}}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`查看 ${version.name} ${version.id.slice(0,8)}`} accessibilityState={{expanded:expanded===version.id}} onPress={()=>{setRawOpen(false);setExpanded(version.id);}} style={{flex:1,minHeight:48,justifyContent:'center',gap:3}}>
             {version.id===highlighted?<Text style={s.muted}>{initialVersionId===version.id?'当前发布版本':'刚安装的版本'}</Text>:null}<Text style={s.title}>{version.name}</Text><Text numberOfLines={expanded===version.id?undefined:2} style={{fontSize:13,lineHeight:18,color:COLORS.textMuted}}>{version.description}</Text>
             <Text style={{fontSize:12,color:COLORS.textMuted}}>{projectId?(version.projectOverride?'此项目单独设置':'继承全局默认'):'全局默认'} · 查看详情</Text>
           </Pressable>

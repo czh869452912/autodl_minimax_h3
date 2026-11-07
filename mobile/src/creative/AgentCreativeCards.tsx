@@ -1,3 +1,4 @@
+import {localTime} from '../ui/localTime';
 import {GenerationRequestReview,type GenerationPreview} from './GenerationRequestReview';
 import {CreativeAccountPanel} from './CreativeAccountPanel';
 import {prepareCreativeVideo,confirmCreativeVideo} from './videoRuntime';
@@ -125,7 +126,7 @@ export function AgentCreativeCards({ threadId, running, runId }: { threadId: str
           {card.jobId?<ListAction label={card.status==='UNKNOWN'?'查询原任务':'查看生成任务详情'} secondary onPress={()=>{setOpen(false);router.push({pathname:'/creative-task/[id]',params:{id:card.jobId!}});}}/>:null}
           {card.jobId&&['READY_TO_SUBMIT','SUBMITTING','QUEUED','RUNNING','UNKNOWN'].includes(card.status??'')?<Text style={s.muted}>生成任务独立执行；停止助手不会取消该任务。</Text>:null}
           {card.draft.state==='EDITING'&&hasDraftDescription(card.draft)?<ListAction label="核对这份草稿的生成请求" secondary disabled={busy||running} onPress={()=>void grant(card.draft!)}/>:null}
-        </>:<>{card.proposal?<Text style={s.body} numberOfLines={2}>{proposalChanges(card.proposal).map(change=>change.label).join('、')||'内容一致'}{card.proposal.resolved_at?` · ${new Date(card.proposal.resolved_at).toLocaleString()}`:''}</Text>:null}<ListAction label={card.kind==='proposal'?(card.proposal?.state??card.status??'WAITING')==='WAITING'?'审阅修改':(card.proposal?.state??card.status)==='CONFLICT'?'核对版本差异':'查看修改结果':'查看计划步骤'} onPress={()=>{setOpen(false);router.push({pathname:'/creative-project/[id]',params:{id:card.projectId!,tab:card.kind==='proposal'?'activity':'plans',...(card.kind==='proposal'?{proposalId:card.id}:{planId:card.id}),requestId:String(Date.now())}});}}/></>}
+        </>:<>{card.proposal?<Text style={s.body} numberOfLines={2}>{proposalChanges(card.proposal).map(change=>change.label).join('、')||'内容一致'}{card.proposal.resolved_at?` · ${localTime(card.proposal.resolved_at)}`:''}</Text>:null}<ListAction label={card.kind==='proposal'?(card.proposal?.state??card.status??'WAITING')==='WAITING'?'审阅修改':(card.proposal?.state??card.status)==='CONFLICT'?'核对版本差异':'查看修改结果':'查看计划步骤'} onPress={()=>{setOpen(false);router.push({pathname:'/creative-project/[id]',params:{id:card.projectId!,tab:card.kind==='proposal'?'activity':'plans',...(card.kind==='proposal'?{proposalId:card.id}:{planId:card.id}),requestId:String(Date.now())}});}}/></>}
       </View>)}
       {notice?<Text accessibilityLiveRegion="polite" style={s.muted}>{notice}</Text>:null}
       {error||readError?<Text accessibilityRole="alert" style={s.error}>{error||readError}</Text>:null}

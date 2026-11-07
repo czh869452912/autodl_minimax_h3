@@ -1,3 +1,4 @@
+import {localTime} from '../../ui/localTime';
 import {Text,View} from 'react-native';
 import {ListAction} from '../../ui/ListPageUI';
 import {creativeUI as s} from '../../creative/creativeUI';
@@ -12,7 +13,7 @@ export function SkillRunHistory({runs,scope,canChangeScope,onChangeScope,onOpen,
   <Text style={s.muted}>只显示保存了技能证据的运行。未记录技能快照的会话运行不会出现在此列表；可从对话历史查看原消息。</Text>
   {canChangeScope?<ListAction label={scope==='全部范围'?'返回当前范围':'查看全部范围'} secondary onPress={onChangeScope}/>:null}
   {!runs.length?<View style={s.card}><Text style={s.title}>此范围还没有技能运行记录</Text><Text style={s.muted}>这不表示没有对话或生成任务。</Text></View>:runs.slice(0,20).map(item=><View key={`${item.threadId}:${item.runId}`} style={s.card}>
-   <ListAction label={'查看运行：'+(item.threadTitle??'未命名会话')+' · '+new Date(item.createdAt).toLocaleString('zh-CN')} secondary onPress={()=>onOpen(item.threadId,item.runId)}/>
+   <ListAction label={'查看运行：'+(item.threadTitle??'未命名会话')+' · '+localTime(item.createdAt)} secondary onPress={()=>onOpen(item.threadId,item.runId)}/>
    <Text style={s.body}>{RUN_LABELS[item.status as keyof typeof RUN_LABELS]??'状态未记录'} · {item.projectTitle??'未关联项目'}</Text>
    <Text style={s.muted}>固定技能：{item.snapshot.versions.length?item.snapshot.versions.map(ref=>item.skillNames?.[ref.id]??'版本不可用').join('、'):'仅内置技能'}</Text>
   </View>)}

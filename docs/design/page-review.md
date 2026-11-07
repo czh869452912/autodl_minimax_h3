@@ -96,7 +96,7 @@ flowchart LR
       助手本轮创作对象卡 [surface; assistant-creative-cards]
         生成请求审阅 [surface; generation-request-review]
         单次请求准备恢复 [surface; generation-request-recovery]
-      会话运行历史 [surface; conversation-run-history]
+      会话技能运行记录 [surface; conversation-run-history]
       未连接模型的本地对话 [surface; local-history-browser]
     项目列表 [route; projects]
       项目工作区 [route; project]
@@ -222,11 +222,11 @@ flowchart LR
 
 **任务**：围绕项目对话、提出和执行创作方案。
 
-**现状问题**：M1–M5 Agent 操作重组已接入；缺模型可只读查看本项目本地记录。无项目就地建项目属于原全产品提案，非本轮 Agent 50 项范围。
+**现状问题**：N0 恢复入口已接入；背景读取失败保留会话，显式范围可信才提供本地只读历史。N3 顶栏合并会话入口，N5 触控收尾。
 
-**展示与交互建议**：空态提供就地轻量建项目；标题持久展示项目，镜头上下文显示可移除 chip；输入区以对话为主。不是新增无范围的执行会话。
+**展示与交互建议**：保持项目/原会话身份；读取故障经重试或数据维护恢复，不创建无范围执行会话。
 
-**实施状态**：partially-implemented。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper; M1 local fixture candidate sample; M5c disconnected scoped local history device sample。
+**实施状态**：implemented (Agent N0–N5 UI scope; coverage in implementation record)。**证据范围**：source-reviewed; beta47-assets UI sample in x86_64 wrapper; M1 local fixture candidate sample; M5c disconnected scoped local history device sample; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified。
 
 **主操作**：发送消息；运行时停止等待。**目标归属**：工作台导航壳。
 
@@ -234,7 +234,7 @@ flowchart LR
 
 **应覆盖状态**：无项目 / 未配模型 / 会话 / 运行 / 待审批 / 异常。
 
-**依据**：[src/creative/AgentWorkspace.tsx](../../mobile/src/creative/AgentWorkspace.tsx)、[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/creative/AgentCreativePanel.tsx](../../mobile/src/creative/AgentCreativePanel.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[v47-11-assistant.png](../../docs/design/evidence/2026-11-01/v47-11-assistant.png)、[v47-13-assistant-return.png](../../docs/design/evidence/2026-11-01/v47-13-assistant-return.png)、[03-candidate-agent.png](../../docs/design/evidence/2026-11-04-m1-skills/03-candidate-agent.png)、[local-history-entry-final.png](../../docs/design/evidence/2026-11-05-agent-roadmap/local-history-entry-final.png)。
+**依据**：[src/creative/AgentWorkspace.tsx](../../mobile/src/creative/AgentWorkspace.tsx)、[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/creative/AgentCreativePanel.tsx](../../mobile/src/creative/AgentCreativePanel.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[v47-11-assistant.png](../../docs/design/evidence/2026-11-01/v47-11-assistant.png)、[v47-13-assistant-return.png](../../docs/design/evidence/2026-11-01/v47-13-assistant-return.png)、[03-candidate-agent.png](../../docs/design/evidence/2026-11-04-m1-skills/03-candidate-agent.png)、[local-history-entry-final.png](../../docs/design/evidence/2026-11-05-agent-roadmap/local-history-entry-final.png)、[n0-normal-conversation.png](../../docs/design/evidence/2026-11-07-agent-refactor/n0-normal-conversation.png)、[n5-conversation.png](../../docs/design/evidence/2026-11-07-agent-refactor/n5-conversation.png)。
 
 <a id="projects"></a>
 ### 项目列表 · projects · P2
@@ -526,11 +526,11 @@ flowchart LR
 
 **任务**：查找、了解、管理技能及项目组合。
 
-**现状问题**：管理、添加、提炼及会话历史已按任务分工；历史快捷入口保留目录未保存选择。
+**现状问题**：N1 范围、搜索、分类与用途行已收拢；中文详情为全屏，原始文件折叠。
 
-**展示与交互建议**：保持用途/来源浏览和明确范围；历史详情不反推当前技能，完整设备矩阵另行验收。
+**展示与交互建议**：保留版本身份、默认管理与未保存合同；详情返回保持目录状态。
 
-**实施状态**：implemented (Agent M1–M5 scope)。**证据范围**：source-reviewed; device-sampled M1 project/global scopes and revoke; M2 add/install/highlighted version with defaults unchanged。
+**实施状态**：implemented (Agent N0–N5 UI scope; coverage in implementation record)。**证据范围**：source-reviewed; device-sampled M1 project/global scopes and revoke; M2 add/install/highlighted version with defaults unchanged; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified。
 
 **主操作**：浏览技能与管理默认；添加进入独立任务。**目标归属**：项目助手。
 
@@ -538,7 +538,7 @@ flowchart LR
 
 **应覆盖状态**：全局 / 项目 / 单次 / 内置只读 / 无匹配 / 版本详情。
 
-**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[v47-03-skills.png](../../docs/design/evidence/2026-11-01/v47-03-skills.png)、[07-project-management.png](../../docs/design/evidence/2026-11-04-m1-skills/07-project-management.png)、[08-global-confirmation.png](../../docs/design/evidence/2026-11-04-m1-skills/08-global-confirmation.png)、[12-located.png](../../docs/design/evidence/2026-11-04-m2-skills/12-located.png)、[22-origin-management.png](../../docs/design/evidence/2026-11-04-m2-skills/22-origin-management.png)、[38-final-located.png](../../docs/design/evidence/2026-11-04-m2-skills/38-final-located.png)、[history-draft-return-final.png](../../docs/design/evidence/2026-11-05-agent-roadmap/history-draft-return-final.png)。
+**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)、[src/agent/skills/builtinCatalog.ts](../../mobile/src/agent/skills/builtinCatalog.ts)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[v47-03-skills.png](../../docs/design/evidence/2026-11-01/v47-03-skills.png)、[07-project-management.png](../../docs/design/evidence/2026-11-04-m1-skills/07-project-management.png)、[08-global-confirmation.png](../../docs/design/evidence/2026-11-04-m1-skills/08-global-confirmation.png)、[12-located.png](../../docs/design/evidence/2026-11-04-m2-skills/12-located.png)、[22-origin-management.png](../../docs/design/evidence/2026-11-04-m2-skills/22-origin-management.png)、[38-final-located.png](../../docs/design/evidence/2026-11-04-m2-skills/38-final-located.png)、[history-draft-return-final.png](../../docs/design/evidence/2026-11-05-agent-roadmap/history-draft-return-final.png)、[n1-directory-comparison.png](../../docs/design/evidence/2026-11-07-agent-refactor/n1-directory-comparison.png)、[n1-detail-comparison.png](../../docs/design/evidence/2026-11-07-agent-refactor/n1-detail-comparison.png)、[n5-narrow-directory.png](../../docs/design/evidence/2026-11-07-agent-refactor/n5-narrow-directory.png)。
 
 <a id="skill-extract"></a>
 ### 对话提炼技能 · skill-extract · P1
@@ -564,11 +564,11 @@ flowchart LR
 
 **任务**：只读核验某次运行实际发生的行为。
 
-**现状问题**：M5b 已按结果摘要、可展开阶段、固定版本与原始诊断组织；真实工具调用与辅助技术设备验收另列。
+**现状问题**：N2 事实状态和本轮消息前置，阶段可展开，诊断末置；N5 使用确定的本地数字时间。
 
-**展示与交互建议**：摘要显示结果/开始结束/模型/工具次数/技能实际读取；阶段时间线可展开；原始 JSON 和完整会话为诊断层。
+**展示与交互建议**：只读刷新，不重跑或用当前配置解释缺失历史；实际任务状态以任务中心为准。
 
-**实施状态**：implemented; acceptance coverage recorded separately。**证据范围**：source-reviewed; offline same-run and synthetic-stage device samples; late-refresh/image/exact-lookup regressions。
+**实施状态**：implemented (Agent N0–N5 UI scope; coverage in implementation record)。**证据范围**：source-reviewed; offline same-run and synthetic-stage device samples; late-refresh/image/exact-lookup regressions; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified。
 
 **主操作**：查看某一步证据。**目标归属**：项目助手。
 
@@ -576,7 +576,7 @@ flowchart LR
 
 **应覆盖状态**：运行中 / 完成 / 失败 / 刷新失败 / 历史不完整。
 
-**依据**：[src/agent/skills/SkillRunScreen.tsx](../../mobile/src/agent/skills/SkillRunScreen.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[run-comparison.jpg](../../docs/design/evidence/2026-11-05-agent-roadmap/run-comparison.jpg)。
+**依据**：[src/agent/skills/SkillRunScreen.tsx](../../mobile/src/agent/skills/SkillRunScreen.tsx)、[src/agent/ReadOnlyMessage.tsx](../../mobile/src/agent/ReadOnlyMessage.tsx)、[src/ui/localTime.ts](../../mobile/src/ui/localTime.ts)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[run-comparison.jpg](../../docs/design/evidence/2026-11-05-agent-roadmap/run-comparison.jpg)、[n5-run-final.png](../../docs/design/evidence/2026-11-07-agent-refactor/n5-run-final.png)、[n5-font2-run.png](../../docs/design/evidence/2026-11-07-agent-refactor/n5-font2-run.png)。
 
 <a id="capabilities"></a>
 ### 制作能力目录 · capabilities · P1
@@ -963,11 +963,11 @@ flowchart LR
 
 **任务**：选择对话所属项目。
 
-**现状问题**：M1 显示项目/镜头范围与运行锁定；第 43 项已将批量撤销移至项目权限，切换器只负责项目选择。
+**现状问题**：N3 镜头上下文改为可展开单行摘要；移除独立可达，项目仍在顶栏。
 
-**展示与交互建议**：保持来源会话与输入保护；切换不撤销授权，不重新绑定原 transcript。
+**展示与交互建议**：保留原文本与运行锁定，切换不重新绑定旧会话。
 
-**实施状态**：implemented (Agent scope)。**证据范围**：source-reviewed。
+**实施状态**：implemented (Agent N0–N5 UI scope; coverage in implementation record)。**证据范围**：source-reviewed; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified。
 
 **主操作**：选定一个项目。**目标归属**：项目助手。
 
@@ -975,18 +975,18 @@ flowchart LR
 
 **应覆盖状态**：可选 / 运行锁定 / 项目失效。
 
-**依据**：[src/creative/AgentCreativePanel.tsx](../../mobile/src/creative/AgentCreativePanel.tsx)、[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)；对照 B1（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
+**依据**：[src/creative/AgentCreativePanel.tsx](../../mobile/src/creative/AgentCreativePanel.tsx)、[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)；对照 B1（见 [调研](research.md)）。本轮截图：[n3-conversation.png](../../docs/design/evidence/2026-11-07-agent-refactor/n3-conversation.png)。
 
 <a id="assistant-conversation"></a>
 ### 助手会话与运行交互 · assistant-conversation · P1
 
 **任务**：对话、审阅提议并跟踪运行。
 
-**现状问题**：M1–M5 已接入技能快速层、长输入就近展开、图片引用入口、追加简报与版本操作分层；发送/停止与过程折叠保留。
+**现状问题**：N3 会话入口包含新建，管理全屏且保留底层会话；N5 主要触控48dp、元信息最低12sp。
 
-**展示与交互建议**：默认对话+项目/镜头 chips+输入；输入旁简短工具；提议用变更摘要/影响对象/确认动作；运行呈阶段和停止状态，日志再展开。
+**展示与交互建议**：保留输入、附件和范围；窄屏键盘下发送可达，其他异常边界按实施记录继续验收。
 
-**实施状态**：implemented (Agent M1–M5 scope)。**证据范围**：source-reviewed; offline composer/editor/version device samples; image identity regression-tested。
+**实施状态**：implemented (Agent N0–N5 UI scope; coverage in implementation record)。**证据范围**：source-reviewed; offline composer/editor/version device samples; image identity regression-tested; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified。
 
 **主操作**：发送或审阅待确认提议。**目标归属**：项目助手。
 
@@ -994,18 +994,18 @@ flowchart LR
 
 **应覆盖状态**：空会话 / 编辑 / 运行 / 提议 / 待授权 / 停止 / 失败。
 
-**依据**：[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/agent/PromptAssistantUi.tsx](../../mobile/src/agent/PromptAssistantUi.tsx)、[src/agent/skills/SkillQuickPicker.tsx](../../mobile/src/agent/skills/SkillQuickPicker.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[05-cancel-return.png](../../docs/design/evidence/2026-11-04-m1-skills/05-cancel-return.png)、[10-confirmed-return.png](../../docs/design/evidence/2026-11-04-m1-skills/10-confirmed-return.png)、[11-reopened.png](../../docs/design/evidence/2026-11-04-m1-skills/11-reopened.png)、[12-first-completed.png](../../docs/design/evidence/2026-11-04-m1-skills/12-first-completed.png)、[composer-comparison.jpg](../../docs/design/evidence/2026-11-05-agent-roadmap/composer-comparison.jpg)。
+**依据**：[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/agent/PromptAssistantUi.tsx](../../mobile/src/agent/PromptAssistantUi.tsx)、[src/agent/skills/SkillQuickPicker.tsx](../../mobile/src/agent/skills/SkillQuickPicker.tsx)、[src/agent/PromptAssistantStyles.ts](../../mobile/src/agent/PromptAssistantStyles.ts)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[05-cancel-return.png](../../docs/design/evidence/2026-11-04-m1-skills/05-cancel-return.png)、[10-confirmed-return.png](../../docs/design/evidence/2026-11-04-m1-skills/10-confirmed-return.png)、[11-reopened.png](../../docs/design/evidence/2026-11-04-m1-skills/11-reopened.png)、[12-first-completed.png](../../docs/design/evidence/2026-11-04-m1-skills/12-first-completed.png)、[composer-comparison.jpg](../../docs/design/evidence/2026-11-05-agent-roadmap/composer-comparison.jpg)、[n5-conversation-comparison.png](../../docs/design/evidence/2026-11-07-agent-refactor/n5-conversation-comparison.png)、[n5-narrow-keyboard-final.png](../../docs/design/evidence/2026-11-07-agent-refactor/n5-narrow-keyboard-final.png)。
 
 <a id="skill-quick"></a>
 ### 会话内技能快速层 · skill-quick · P1
 
 **任务**：为接下来一条消息选技能。
 
-**现状问题**：M1 已独立快速层；M2 管理明确提交新单次选择后会采用新结果，未提交仍保留未确认草稿。TalkBack、旋转及全部异常设备矩阵仍待补齐。
+**现状问题**：N3 使用技能语义图标，失效单次选择警示独立显示；管理往返保留草稿。
 
-**展示与交互建议**：保持仅下次消息任务；项目/全局管理单独进入，来源身份用 returnThreadId，正文和附件留原会话。
+**展示与交互建议**：单次选用继续短抽屉；长管理进入全屏，明确确认才写入。
 
-**实施状态**：implemented。**证据范围**：source-reviewed; device-sampled cancel/manage/confirm/reopen/send, keyboard confirm, 2x font narrow viewport with local model fixture; not full device matrix; M2 explicit install-and-select return sampled on initial candidate。
+**实施状态**：implemented (Agent N0–N5 UI scope; coverage in implementation record)。**证据范围**：source-reviewed; device-sampled cancel/manage/confirm/reopen/send, keyboard confirm, 2x font narrow viewport with local model fixture; not full device matrix; M2 explicit install-and-select return sampled on initial candidate; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified。
 
 **主操作**：确认下次选用。**目标归属**：项目助手。
 
@@ -1013,7 +1013,7 @@ flowchart LR
 
 **应覆盖状态**：项目继承 / 编辑未确认 / 空选仅内置 / 已固定单次 / 版本失效 / 管理返回 / 运行锁定 / 范围变化 / 读取失败。
 
-**依据**：[src/agent/skills/SkillQuickPicker.tsx](../../mobile/src/agent/skills/SkillQuickPicker.tsx)、[src/agent/skills/nextRun.ts](../../mobile/src/agent/skills/nextRun.ts)、[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/ui/DraggableSheet.tsx](../../mobile/src/ui/DraggableSheet.tsx)；对照 B1（见 [调研](research.md)）。本轮截图：[04-picker-default.png](../../docs/design/evidence/2026-11-04-m1-skills/04-picker-default.png)、[06-picker-selected.png](../../docs/design/evidence/2026-11-04-m1-skills/06-picker-selected.png)、[09-management-return.png](../../docs/design/evidence/2026-11-04-m1-skills/09-management-return.png)、[10-confirmed-return.png](../../docs/design/evidence/2026-11-04-m1-skills/10-confirmed-return.png)、[11-reopened.png](../../docs/design/evidence/2026-11-04-m1-skills/11-reopened.png)、[12-first-completed.png](../../docs/design/evidence/2026-11-04-m1-skills/12-first-completed.png)、[15-search-fixed.png](../../docs/design/evidence/2026-11-04-m1-skills/15-search-fixed.png)、[17-final-completed.png](../../docs/design/evidence/2026-11-04-m1-skills/17-final-completed.png)、[21-final-picker.png](../../docs/design/evidence/2026-11-04-m1-skills/21-final-picker.png)、[22-font2-final.png](../../docs/design/evidence/2026-11-04-m1-skills/22-font2-final.png)、[24-font2-scrolled-final.png](../../docs/design/evidence/2026-11-04-m1-skills/24-font2-scrolled-final.png)、[25-origin-picker-return.png](../../docs/design/evidence/2026-11-04-m2-skills/25-origin-picker-return.png)、[26-origin-composer-return.png](../../docs/design/evidence/2026-11-04-m2-skills/26-origin-composer-return.png)。
+**依据**：[src/agent/skills/SkillQuickPicker.tsx](../../mobile/src/agent/skills/SkillQuickPicker.tsx)、[src/agent/skills/nextRun.ts](../../mobile/src/agent/skills/nextRun.ts)、[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/ui/DraggableSheet.tsx](../../mobile/src/ui/DraggableSheet.tsx)；对照 B1（见 [调研](research.md)）。本轮截图：[04-picker-default.png](../../docs/design/evidence/2026-11-04-m1-skills/04-picker-default.png)、[06-picker-selected.png](../../docs/design/evidence/2026-11-04-m1-skills/06-picker-selected.png)、[09-management-return.png](../../docs/design/evidence/2026-11-04-m1-skills/09-management-return.png)、[10-confirmed-return.png](../../docs/design/evidence/2026-11-04-m1-skills/10-confirmed-return.png)、[11-reopened.png](../../docs/design/evidence/2026-11-04-m1-skills/11-reopened.png)、[12-first-completed.png](../../docs/design/evidence/2026-11-04-m1-skills/12-first-completed.png)、[15-search-fixed.png](../../docs/design/evidence/2026-11-04-m1-skills/15-search-fixed.png)、[17-final-completed.png](../../docs/design/evidence/2026-11-04-m1-skills/17-final-completed.png)、[21-final-picker.png](../../docs/design/evidence/2026-11-04-m1-skills/21-final-picker.png)、[22-font2-final.png](../../docs/design/evidence/2026-11-04-m1-skills/22-font2-final.png)、[24-font2-scrolled-final.png](../../docs/design/evidence/2026-11-04-m1-skills/24-font2-scrolled-final.png)、[25-origin-picker-return.png](../../docs/design/evidence/2026-11-04-m2-skills/25-origin-picker-return.png)、[26-origin-composer-return.png](../../docs/design/evidence/2026-11-04-m2-skills/26-origin-composer-return.png)、[n3-draft-return.png](../../docs/design/evidence/2026-11-07-agent-refactor/n3-draft-return.png)、[n5-narrow-picker-expanded.png](../../docs/design/evidence/2026-11-07-agent-refactor/n5-narrow-picker-expanded.png)。
 
 <a id="skill-add"></a>
 ### 技能添加与安装预览 · skill-add · P1
@@ -1039,11 +1039,11 @@ flowchart LR
 
 **任务**：找某次运行所用版本和实际读取。
 
-**现状问题**：M5b/M5c 已改为会话历史摘要表面；返回保留未保存单次选择及目录筛选。
+**现状问题**：N2 历史抽成独立 SkillRunHistory，范围标题与查询一致，空态明确仅覆盖技能证据运行。
 
-**展示与交互建议**：沿用会话历史身份及分页，原始指纹/预算只在运行详情查看。
+**展示与交互建议**：保留游标、可信范围和原目录状态，不暗示覆盖所有对话。
 
-**实施状态**：implemented (shortcut)。**证据范围**：source-reviewed; final offline directory/history/unsaved return sampled。
+**实施状态**：implemented (Agent N0–N5 UI scope; coverage in implementation record)。**证据范围**：source-reviewed; final offline directory/history/unsaved return sampled; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified。
 
 **主操作**：打开该次运行。**目标归属**：项目助手。
 
@@ -1051,7 +1051,7 @@ flowchart LR
 
 **应覆盖状态**：空 / 当前范围 / 全部 / 分页。
 
-**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)；对照 B1（见 [调研](research.md)）。本轮截图：[history-draft-return-final.png](../../docs/design/evidence/2026-11-05-agent-roadmap/history-draft-return-final.png)。
+**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)、[src/agent/skills/SkillRunHistory.tsx](../../mobile/src/agent/skills/SkillRunHistory.tsx)；对照 B1（见 [调研](research.md)）。本轮截图：[history-draft-return-final.png](../../docs/design/evidence/2026-11-05-agent-roadmap/history-draft-return-final.png)、[n2-history.png](../../docs/design/evidence/2026-11-07-agent-refactor/n2-history.png)。
 
 <a id="prompt-versions"></a>
 ### 提示词版本面板 · prompt-versions · P2
@@ -1229,11 +1229,11 @@ flowchart LR
 
 **任务**：兼容原菜单与会话内技能管理。
 
-**现状问题**：兼容管理入口保留原会话；添加为独立任务，历史为只读表面且返回保留未保存单次草案。
+**现状问题**：N1 兼容管理改为全屏 Modal，底下会话保持挂载；系统返回复用离开保护。
 
-**展示与交互建议**：保持兼容返回与离开保护，高频单次选用使用快速层。
+**展示与交互建议**：保持添加/历史来源身份和未保存保护。
 
-**实施状态**：implemented (compatibility scope)。**证据范围**：source-reviewed; baseline device sample only。
+**实施状态**：implemented (Agent N0–N5 UI scope; coverage in implementation record)。**证据范围**：source-reviewed; baseline device sample only; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified。
 
 **主操作**：管理项目默认或打开完整添加。**目标归属**：技能目录。
 
@@ -1241,37 +1241,37 @@ flowchart LR
 
 **应覆盖状态**：目录 / 单次兼容 / 未保存 / 添加 / 历史。
 
-**依据**：[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[02-baseline-skills.png](../../docs/design/evidence/2026-11-04-m1-skills/02-baseline-skills.png)。
+**依据**：[src/agent/AgentScreen.tsx](../../mobile/src/agent/AgentScreen.tsx)、[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[02-baseline-skills.png](../../docs/design/evidence/2026-11-04-m1-skills/02-baseline-skills.png)、[n1-directory.png](../../docs/design/evidence/2026-11-07-agent-refactor/n1-directory.png)、[n3-draft-return.png](../../docs/design/evidence/2026-11-07-agent-refactor/n3-draft-return.png)。
 
 <a id="assistant-creative-cards"></a>
 ### 助手本轮创作对象卡 · assistant-creative-cards · P1
 
 **任务**：从当前轮次找到修改建议、生成草稿、计划和候选的下一步。
 
-**现状问题**：本轮按提议/草稿/任务/候选呈现；请求审阅双许可、任务身份与未知结果恢复已接入，候选仍需明确采用。
+**现状问题**：N4b 真实候选与采用分开，UNKNOWN 查询原任务；停止助手不取消生成任务。
 
-**展示与交互建议**：保持 runId 与固定对象身份，不能把修改建议称作已生成成果；请求审阅继续复用原 prepare/confirm，不新建执行状态。
+**展示与交互建议**：采用读取镜头选择/项目固定版本，不能用素材归档默认值推断。
 
-**实施状态**：implemented (Agent M3 scope)。**证据范围**：source-reviewed; M3a synthetic Android sampled summary, priority, exact proposal navigation, terminal return, empty draft detail; full generation/authorization deferred。
+**实施状态**：implemented (Agent N0–N5 UI scope; coverage in implementation record)。**证据范围**：source-reviewed; M3a synthetic Android sampled summary, priority, exact proposal navigation, terminal return, empty draft detail; full generation/authorization deferred; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified。
 
-**主操作**：待审阅→审阅修改；已处理→查看修改结果；空描述草稿→完善；计划→查看步骤。**目标归属**：项目助手。
+**主操作**：提议审阅/冲突核对；完善草稿；候选审阅；查看采用版本；UNKNOWN 查询原任务。**目标归属**：项目助手。
 
 **进入与返回**：会话对应轮次的“本轮创作”摘要 → 本表面；关闭回当前会话；进入项目审阅/草稿详情再返回原轮次。
 
 **应覆盖状态**：待审阅与草稿并存 / 对象摘要 / 原始轮次 / 已采用/拒绝 / 空描述草稿 / 读取失败 / 任务与候选（既有路径，M3a未重测完整生成）。
 
-**依据**：[src/creative/AgentCreativeCards.tsx](../../mobile/src/creative/AgentCreativeCards.tsx)、[src/creative/agentCreativeActivity.ts](../../mobile/src/creative/agentCreativeActivity.ts)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[01-baseline-conversation.png](../../docs/design/evidence/2026-11-04-m3-review/01-baseline-conversation.png)、[02-baseline-cards.png](../../docs/design/evidence/2026-11-04-m3-review/02-baseline-cards.png)、[04-candidate-conversation.png](../../docs/design/evidence/2026-11-04-m3-review/04-candidate-conversation.png)、[05-candidate-cards.png](../../docs/design/evidence/2026-11-04-m3-review/05-candidate-cards.png)、[08-return-conversation.png](../../docs/design/evidence/2026-11-04-m3-review/08-return-conversation.png)、[14-resolved-cards.png](../../docs/design/evidence/2026-11-04-m3-review/14-resolved-cards.png)、[15-open-draft.png](../../docs/design/evidence/2026-11-04-m3-review/15-open-draft.png)。
+**依据**：[src/creative/AgentCreativeCards.tsx](../../mobile/src/creative/AgentCreativeCards.tsx)、[src/creative/agentCreativeActivity.ts](../../mobile/src/creative/agentCreativeActivity.ts)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[01-baseline-conversation.png](../../docs/design/evidence/2026-11-04-m3-review/01-baseline-conversation.png)、[02-baseline-cards.png](../../docs/design/evidence/2026-11-04-m3-review/02-baseline-cards.png)、[04-candidate-conversation.png](../../docs/design/evidence/2026-11-04-m3-review/04-candidate-conversation.png)、[05-candidate-cards.png](../../docs/design/evidence/2026-11-04-m3-review/05-candidate-cards.png)、[08-return-conversation.png](../../docs/design/evidence/2026-11-04-m3-review/08-return-conversation.png)、[14-resolved-cards.png](../../docs/design/evidence/2026-11-04-m3-review/14-resolved-cards.png)、[15-open-draft.png](../../docs/design/evidence/2026-11-04-m3-review/15-open-draft.png)、[n4-review-after.png](../../docs/design/evidence/2026-11-07-agent-refactor/n4-review-after.png)。
 
 <a id="generation-request-review"></a>
 ### 生成请求审阅 · generation-request-review · P1
 
 **任务**：核对原草稿的确切请求并分别确认外发与消费许可。
 
-**现状问题**：单次、计划与批次共用请求审阅与双许可；图片含实际处理参数/蒙版来源/超分尺寸，编码不显示；真实供应商验证独立记录。
+**现状问题**：N4a 费用与发送内容前置，素材名称与版本优先、技术证据折叠；请求身份变化重置两项许可。
 
-**展示与交互建议**：单次/计划/批次共用准确请求字段和 prepare/confirm；保存配置不提交，退出不写许可；真实供应商验收单独记录。
+**展示与交互建议**：继续共用单次/计划/批次 prepare/confirm，取消不提交；真实供应商另行验收。
 
-**实施状态**：implemented (M3b UI; offline device sampling)。**证据范围**：source-reviewed; offline request UI device samples, no real dispatch。
+**实施状态**：implemented (Agent N0–N5 UI scope; coverage in implementation record)。**证据范围**：source-reviewed; offline request UI device samples, no real dispatch; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified。
 
 **主操作**：确认两项许可后生成一次。**目标归属**：项目助手。
 
@@ -1279,7 +1279,7 @@ flowchart LR
 
 **应覆盖状态**：准备中 / 待确认外发 / 待确认消费 / 正在提交 / 范围变化 / 提交失败。
 
-**依据**：[src/creative/AgentCreativeCards.tsx](../../mobile/src/creative/AgentCreativeCards.tsx)、[src/creative/GenerationRequestReview.tsx](../../mobile/src/creative/GenerationRequestReview.tsx)、[src/creative/CreativeAccountPanel.tsx](../../mobile/src/creative/CreativeAccountPanel.tsx)、[src/creative/ProjectPlans.tsx](../../mobile/src/creative/ProjectPlans.tsx)、[src/creative/PlanRequestReview.tsx](../../mobile/src/creative/PlanRequestReview.tsx)、[src/creative/planReviewTargets.ts](../../mobile/src/creative/planReviewTargets.ts)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[01-baseline-alert.png](../../docs/design/evidence/2026-11-05-m3b-request/01-baseline-alert.png)、[02-request-top.png](../../docs/design/evidence/2026-11-05-m3b-request/02-request-top.png)、[03-permission-default.png](../../docs/design/evidence/2026-11-05-m3b-request/03-permission-default.png)、[05-both-checked.png](../../docs/design/evidence/2026-11-05-m3b-request/05-both-checked.png)。
+**依据**：[src/creative/AgentCreativeCards.tsx](../../mobile/src/creative/AgentCreativeCards.tsx)、[src/creative/GenerationRequestReview.tsx](../../mobile/src/creative/GenerationRequestReview.tsx)、[src/creative/CreativeAccountPanel.tsx](../../mobile/src/creative/CreativeAccountPanel.tsx)、[src/creative/ProjectPlans.tsx](../../mobile/src/creative/ProjectPlans.tsx)、[src/creative/PlanRequestReview.tsx](../../mobile/src/creative/PlanRequestReview.tsx)、[src/creative/planReviewTargets.ts](../../mobile/src/creative/planReviewTargets.ts)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[01-baseline-alert.png](../../docs/design/evidence/2026-11-05-m3b-request/01-baseline-alert.png)、[02-request-top.png](../../docs/design/evidence/2026-11-05-m3b-request/02-request-top.png)、[03-permission-default.png](../../docs/design/evidence/2026-11-05-m3b-request/03-permission-default.png)、[05-both-checked.png](../../docs/design/evidence/2026-11-05-m3b-request/05-both-checked.png)、[n4-review-comparison.png](../../docs/design/evidence/2026-11-07-agent-refactor/n4-review-comparison.png)、[n4-single-consent.png](../../docs/design/evidence/2026-11-07-agent-refactor/n4-single-consent.png)。
 
 <a id="generation-request-recovery"></a>
 ### 单次请求准备恢复 · generation-request-recovery · P1
@@ -1358,15 +1358,15 @@ flowchart LR
 **依据**：[src/creative/ProjectPlans.tsx](../../mobile/src/creative/ProjectPlans.tsx)、[src/creative/PlanRequestReview.tsx](../../mobile/src/creative/PlanRequestReview.tsx)；对照 B2（见 [调研](research.md)）。本表面未单独完成本轮设备采样，结论以源码结构为限。
 
 <a id="conversation-run-history"></a>
-### 会话运行历史 · conversation-run-history · P1
+### 会话技能运行记录 · conversation-run-history · P1
 
-**任务**：在会话或项目范围内只读追溯历史运行。
+**任务**：在可信范围内追溯保存了技能证据的运行。
 
-**现状问题**：M5b 独立历史任务已接入会话菜单，技能目录保留快捷入口；分页和范围沿用原读取合同。
+**现状问题**：N2/N5 菜单与标题明确技能运行记录；缺快照不反推，目录、会话和项目范围按真实查询展示。
 
-**展示与交互建议**：会话归属优先，行显示名称、时间、状态和固定技能摘要；指纹、预算、原始记录在运行详情。
+**展示与交互建议**：原始指纹和预算只在详情；会话完整消息在原对话历史。
 
-**实施状态**：implemented; acceptance coverage recorded separately。**证据范围**：source-reviewed; offline same-run and synthetic-stage device samples; late-refresh/image/exact-lookup regressions。
+**实施状态**：implemented (Agent N0–N5 UI scope; coverage in implementation record)。**证据范围**：source-reviewed; offline same-run and synthetic-stage device samples; late-refresh/image/exact-lookup regressions; N0–N5 matching x86_64 native shell + current Android JS synthetic device sampling; scoped tests; full provider and accessibility matrix not certified。
 
 **主操作**：查看所选运行。**目标归属**：项目助手。
 
@@ -1374,7 +1374,7 @@ flowchart LR
 
 **应覆盖状态**：本会话 / 本项目 / 全部范围 / 空记录 / 更早运行 / 读取失败。
 
-**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)、[src/creative/AssistantActions.tsx](../../mobile/src/creative/AssistantActions.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[history-after.png](../../docs/design/evidence/2026-11-05-agent-roadmap/history-after.png)。
+**依据**：[src/agent/skills/SkillLibraryScreen.tsx](../../mobile/src/agent/skills/SkillLibraryScreen.tsx)、[src/creative/AssistantActions.tsx](../../mobile/src/creative/AssistantActions.tsx)、[src/agent/skills/SkillRunHistory.tsx](../../mobile/src/agent/skills/SkillRunHistory.tsx)；对照 B1、B2（见 [调研](research.md)）。本轮截图：[history-after.png](../../docs/design/evidence/2026-11-05-agent-roadmap/history-after.png)、[n2-history.png](../../docs/design/evidence/2026-11-07-agent-refactor/n2-history.png)、[n5-run-final.png](../../docs/design/evidence/2026-11-07-agent-refactor/n5-run-final.png)。
 
 <a id="local-history-browser"></a>
 ### 未连接模型的本地对话 · local-history-browser · P2
@@ -1489,9 +1489,9 @@ flowchart LR
 | 项目 / 计划 | 打开具体计划 | 计划详情 | 固定 projectId/planId；列表上下文保持挂载 | open-surface |
 | 项目 / 计划 | 新建计划 | 准备计划 | 固定 projectId/planId；列表上下文保持挂载 | open-surface |
 | 项目 / 计划 | 范围选择 | 计划范围选择 | 只在确认时更改 batchId；切项目清理范围 | open-surface |
-| 项目助手 | 查看会话运行历史 | 会话运行历史 | 可信 threadId 推导项目范围；离开保护；只读不创建运行、不消费单次技能 | navigate |
-| 技能目录 | 运行记录快捷入口 | 会话运行历史 | 固定 threadId/runId；只读，不消费单次技能或创建运行 | open-surface |
-| 会话运行历史 | 查看原运行 | 运行证据 | 固定 threadId/runId；只读，不消费单次技能或创建运行 | navigate |
+| 项目助手 | 查看会话运行历史 | 会话技能运行记录 | 可信 threadId 推导项目范围；离开保护；只读不创建运行、不消费单次技能 | navigate |
+| 技能目录 | 运行记录快捷入口 | 会话技能运行记录 | 固定 threadId/runId；只读，不消费单次技能或创建运行 | open-surface |
+| 会话技能运行记录 | 查看原运行 | 运行证据 | 固定 threadId/runId；只读，不消费单次技能或创建运行 | navigate |
 | 项目助手 | 缺模型时查看本地对话 | 未连接模型的本地对话 | projectId；只读，无模型运行，无创建/删除/重命名 | open-surface |
 | 项目权限与生成授权 | 管理素材外发许可 | 素材外发许可记录 | projectId；独立记录；返回同一权限表面 | navigate |
 

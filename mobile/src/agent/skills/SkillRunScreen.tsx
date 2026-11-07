@@ -1,3 +1,4 @@
+import {localTime} from '../../ui/localTime';
 import {IconAction} from '../../creative/WorkbenchUI';
 import {COLORS} from '../../ui/theme';
 import {ReadOnlyMessage} from '../ReadOnlyMessage';
@@ -47,7 +48,7 @@ export function SkillRunScreen(){
   {loading?<Text accessibilityLiveRegion="polite">正在读取最新记录…</Text>:null}{error?<Text accessibilityRole="alert">{error}</Text>:null}
   {snapshot&&!run?<Text>运行记录不可用；保留的技能快照不代表实际执行。</Text>:null}
   {run?<View style={s.card}>
-   <Text style={s.title}>{RUN_LABELS[run.status]}</Text><Text style={s.body}>开始：{new Date(run.startedAt).toLocaleString('zh-CN')}{run.endedAt?'\n结束：'+new Date(run.endedAt).toLocaleString('zh-CN'):''}</Text>
+   <Text style={s.title}>{RUN_LABELS[run.status]}</Text><Text style={s.body}>开始：{localTime(run.startedAt)}{run.endedAt?'\n结束：'+localTime(run.endedAt):''}</Text>
    {run.error?<Text accessibilityRole="alert" selectable style={s.body}>{run.error}</Text>:null}
    <Text style={s.muted}>这是已保存的助手运行记录。查看或刷新不会重新运行；生成任务仍以任务中心状态为准。</Text>
   </View>:null}
@@ -55,7 +56,7 @@ export function SkillRunScreen(){
   {run&&!run.tools.length?<Text style={s.muted}>此运行没有已记录的工具阶段，请查看下方对话内容。</Text>:null}
   {run?.tools.map(tool=><View key={tool.id} style={s.card}>
    <Pressable accessibilityRole="button" accessibilityLabel={'阶段：'+toolActivity(tool.name)} accessibilityState={{expanded:expanded===tool.id}} onPress={()=>setExpanded(expanded===tool.id?undefined:tool.id)} style={{minHeight:48,justifyContent:'center',gap:6}}>
-    <Text style={s.title}>{toolActivity(tool.name)} · {toolStates[tool.status]}</Text><Text style={s.muted}>{new Date(tool.startedAt).toLocaleTimeString('zh-CN')}{tool.endedAt?' → '+new Date(tool.endedAt).toLocaleTimeString('zh-CN'):''} · {expanded===tool.id?'收起证据':'查看证据'}</Text>
+    <Text style={s.title}>{toolActivity(tool.name)} · {toolStates[tool.status]}</Text><Text style={s.muted}>{localTime(tool.startedAt,true)}{tool.endedAt?' → '+localTime(tool.endedAt,true):''} · {expanded===tool.id?'收起证据':'查看证据'}</Text>
    </Pressable>
    {expanded===tool.id?<><Text selectable style={s.body}>{tool.summary||'没有阶段摘要'}</Text>{tool.output?<Text selectable style={s.body}>{tool.output}</Text>:null}</>:null}
   </View>)}

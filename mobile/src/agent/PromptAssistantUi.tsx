@@ -741,7 +741,7 @@ function EmptyTimeline({
     <Text style={{fontSize:13,color:COLORS.textMuted}}>选择建议填入输入框，修改后发送。</Text>
     <View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{EMPTY_SUGGESTIONS.map(suggestion =>
       <Pressable key={suggestion} accessibilityRole="button" accessibilityLabel={`使用建议 ${suggestion}`} accessibilityHint="填入输入框，可修改后发送" onPress={()=>onSelectSuggestion(suggestion)}
-        style={({pressed})=>({flexGrow:1,flexBasis:150,padding:12,minHeight:44,borderWidth:1,borderColor:COLORS.border,borderRadius:10,backgroundColor:COLORS.surface,opacity:pressed?0.7:1})}>
+        style={({pressed})=>({flexGrow:1,flexBasis:150,padding:12,minHeight:48,borderWidth:1,borderColor:COLORS.border,borderRadius:10,backgroundColor:COLORS.surface,opacity:pressed?0.7:1})}>
         <Text style={{fontSize:13,lineHeight:20,color:COLORS.text}}>{suggestion}</Text>
       </Pressable>)}</View>
   </View>;
@@ -814,7 +814,7 @@ export function PromptResultCard({
     <View style={styles.promptCard}>
       <View style={styles.promptCardHeader}>
         <View>
-          <Text style={styles.promptCardEyebrow}>{ready ? 'FINAL H3 PROMPT' : 'H3 PROMPT 草稿'}</Text>
+          <Text style={styles.promptCardEyebrow}>{ready ? 'H3 提示词 · 定稿' : 'H3 提示词 · 草稿'}</Text>
           <Text style={styles.promptCardTitle}>{ready ? `${latest === undefined ? '' : latest ? '最新版本 · ' : '历史版本 · '}已完成，可导出` : '尚未确认生成完成，可复制保留'}</Text>
         </View>
         <AppIcon
