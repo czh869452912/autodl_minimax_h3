@@ -101,8 +101,9 @@ export function SkillQuickPicker({threadId, running, onReturn}: {threadId: strin
   const selected = draft ?? versions.filter(v => v.enabled).map(v => v.id);
   return <View>
     <Pressable accessibilityRole="button" accessibilityLabel={summary} accessibilityHint={running ? '运行中不能更改下次技能' : '选择下一条消息使用的技能'} accessibilityState={{disabled: running || !ready, expanded: open}} disabled={running || !ready} onPress={begin} style={s.trigger}>
-      <AppIcon name="auto_awesome" size={16} color={COLORS.primary}/><Text numberOfLines={1} style={[s.summary, pending?.valid === false && {color: COLORS.danger}]}>{summary}</Text><AppIcon name="expand_more" size={18}/>
+      <AppIcon name="extension" size={16} color={COLORS.primary}/><Text numberOfLines={1} style={[s.summary, pending?.valid === false && {color: COLORS.danger}]}>{summary}</Text><AppIcon name="expand_more" size={18}/>
     </Pressable>
+    {pending?.valid===false&&!open?<Text accessibilityRole="alert" style={s.error}>下次技能已失效，请重新选择后发送。</Text>:null}
     {running ? <Text style={s.caption}>运行中，完成后可更改下次技能</Text> : null}
     {!open && error ? <View><Text accessibilityRole="alert" style={s.error}>{error}</Text><ListAction label="重新读取技能" secondary onPress={() => void refresh()}/></View> : null}
     <DraggableBottomSheet visible={open} keyboardAvoidance="layout" title="下次消息技能" onClose={close} footer={<View style={{gap: 4}}>

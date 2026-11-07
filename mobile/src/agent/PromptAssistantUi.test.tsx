@@ -714,7 +714,7 @@ describe('Prompt assistant UI primitives', () => {
         />,
       );
     });
-    act(() => tree.root.findByProps({ accessibilityLabel: '打开对话历史' }).props.onPress());
+    act(() => tree.root.findByProps({ accessibilityLabel: '打开会话' }).props.onPress());
     const manageAlert = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => undefined);
     act(() => tree.root.findAll(node => String(node.props.accessibilityLabel).startsWith('管理会话 '))[0].props.onPress());
     act(() => { (manageAlert.mock.calls.at(-1)?.[2] as any[]).find(button => button.text === '重命名').onPress(); });
@@ -859,7 +859,7 @@ describe('Prompt assistant UI primitives', () => {
       act(() => { tree = create(<PromptAssistantUi threads={[]} activeThreadId="t1" onSelect={() => undefined} onNew={() => undefined} onDelete={() => undefined} onRename={() => undefined} onExportPrompt={async () => undefined} />); });
       const root = tree.root.findByType(KeyboardSurface);
       expect(root.props.enabled).toBe(true);
-      act(() => tree.root.findByProps({ accessibilityLabel: '打开对话历史' }).props.onPress());
+      act(() => tree.root.findByProps({ accessibilityLabel: '打开会话' }).props.onPress());
       expect(tree.root.findAllByType(KeyboardSurface)[0].props.enabled).toBe(false);
     } finally {
       act(() => tree?.unmount());
@@ -872,7 +872,7 @@ describe('Prompt assistant UI primitives', () => {
     let tree!: ReturnType<typeof create>;
     try {
       act(() => { tree = create(<PromptAssistantUi threads={[]} activeThreadId="t1" onSelect={() => undefined} onNew={() => undefined} onDelete={() => undefined} onRename={() => undefined} onExportPrompt={async () => undefined} />); });
-      act(() => tree.root.findByProps({ accessibilityLabel: '打开对话历史' }).props.onPress());
+      act(() => tree.root.findByProps({ accessibilityLabel: '打开会话' }).props.onPress());
       expect(tree.root.findAllByType(KeyboardSurface)[0].props.enabled).toBe(true);
     } finally { act(() => tree?.unmount()); dimensions.mockRestore(); }
   });

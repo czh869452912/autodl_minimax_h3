@@ -335,24 +335,18 @@ export function PromptAssistantUi({
           {headerContext ?? <Text style={styles.title} numberOfLines={1}>{threads.find(item=>item.threadId===activeThreadId)?sessionTitle(threads.find(item=>item.threadId===activeThreadId)!):'创作助手'}</Text>}
         </View>
         <Pressable
-          accessibilityLabel="打开对话历史"
+          accessibilityRole="button"
+          accessibilityLabel="打开会话"
           onPress={() => { if (!wide || toolPanel) setHistoryOpen(true); }}
           style={styles.headerButton}
         >
           <AppIcon
-            name="history"
+            name="chat_bubble_outline"
             size={20}
             color={LIGHT_PROMPT_COLORS.muted}
           />
         </Pressable>
 
-        <Pressable
-          accessibilityLabel="新建对话"
-          onPress={onNewThread}
-          style={styles.headerButton}
-        >
-          <AppIcon name="add" size={22} color={LIGHT_PROMPT_COLORS.ink} />
-        </Pressable>
         {headerActions}
       </View>
       <View style={[styles.body,Boolean(toolPanel) && !wide && {flexDirection:"column"}]}>
@@ -419,7 +413,7 @@ export function PromptAssistantUi({
       {!wide || toolPanel ? (
         <DraggableBottomSheet
           visible={historyOpen}
-          title="对话历史"
+          title="会话"
           onClose={() => setHistoryOpen(false)}
         >
           {history}

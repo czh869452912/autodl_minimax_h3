@@ -374,6 +374,7 @@ function AgentSession({
   const [notice, setNotice] = useState<string | undefined>();
   const [skillsOpen,setSkillsOpen]=useState(false);
   const [focusDismissed,setFocusDismissed]=useState(false);
+  const [focusExpanded,setFocusExpanded]=useState(false);
   useEffect(()=>setFocusDismissed(false),[focus?.shotId]);
   const skillGuard=useRef<((proceed:()=>void)=>void)|undefined>(undefined);
   const registerSkillGuard=useCallback((guard:((proceed:()=>void)=>void)|undefined)=>{skillGuard.current=guard;},[]);
@@ -426,7 +427,7 @@ function AgentSession({
           headerActions={<AssistantActions threadId={snapshot.threadId} beforeNavigate={leaveSkills} onOpenSkills={()=>setSkillsOpen(true)}/>}
           headerContext={<AgentCreativePanel beforeNavigate={leaveSkills} compact threadId={snapshot.threadId} running={Boolean(agent.isRunning)} />}
           renderComposerContext={returnToInput=><View>
-            {focus&&!focusDismissed?<View style={{paddingHorizontal:12,flexDirection:'row',alignItems:'center',gap:8}}><View style={{flex:1}}><Text numberOfLines={2} style={{color:COLORS.text,fontSize:13}}>当前镜头：{focus.title}</Text><Text style={{color:COLORS.textMuted,fontSize:12}}>发送时核对镜头版本</Text></View><Pressable accessibilityRole="button" accessibilityLabel="移除镜头上下文" disabled={Boolean(agent.isRunning)} accessibilityState={{disabled:Boolean(agent.isRunning)}} onPress={()=>setFocusDismissed(true)} style={{minHeight:48,minWidth:48,justifyContent:'center'}}><Text style={{color:COLORS.primaryActive}}>移除</Text></Pressable></View>:null}
+            {focus&&!focusDismissed?<View style={{paddingHorizontal:12,flexDirection:'row',alignItems:'center',gap:8}}><View style={{flex:1}}><Pressable accessibilityRole="button" accessibilityLabel="查看当前镜头上下文" accessibilityState={{expanded:focusExpanded}} onPress={()=>setFocusExpanded(value=>!value)} style={{minHeight:48,justifyContent:'center'}}><Text numberOfLines={focusExpanded?undefined:1} style={{color:COLORS.text,fontSize:13}}>当前镜头：{focus.title}</Text>{focusExpanded?<Text style={{color:COLORS.textMuted,fontSize:12}}>发送时核对镜头版本</Text>:null}</Pressable></View><Pressable accessibilityRole="button" accessibilityLabel="移除镜头上下文" disabled={Boolean(agent.isRunning)} accessibilityState={{disabled:Boolean(agent.isRunning)}} onPress={()=>setFocusDismissed(true)} style={{minHeight:48,minWidth:48,justifyContent:'center'}}><Text style={{color:COLORS.primaryActive}}>移除</Text></Pressable></View>:null}
             <SkillQuickPicker threadId={snapshot.threadId} running={Boolean(agent.isRunning)} onReturn={returnToInput}/>
           </View>}
           renderRunArtifacts={runId=><AgentCreativeCards threadId={snapshot.threadId} running={Boolean(agent.isRunning)} runId={runId}/>}
